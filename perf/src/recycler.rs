@@ -1,3 +1,4 @@
+use log::*;
 use rand::{thread_rng, Rng};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, Weak};
@@ -42,6 +43,9 @@ pub trait Reset {
     fn set_recycler(&mut self, recycler: Weak<RecyclerX<Self>>)
     where
         Self: std::marker::Sized;
+    fn unset_recycler(&mut self)
+    where
+        Self: std::marker::Sized;
 }
 
 lazy_static! {
@@ -55,6 +59,9 @@ pub fn enable_recycler_warming() {
 fn warm_recyclers() -> bool {
     WARM_RECYCLERS.load(Ordering::Relaxed)
 }
+
+pub const MAX_INVENTORY_COUNT_WITHOUT_EXPIRATION: usize = 10;
+pub const EXPIRATION_TTL_SECONDS: u64 = 3600;
 
 impl<T: Default + Reset + Sized> Recycler<T> {
     pub fn warmed(num: usize, size_hint: usize) -> Self {
@@ -76,14 +83,21 @@ impl<T: Default + Reset + Sized> Recycler<T> {
 
     pub fn allocate(&self, name: &'static str) -> T {
         let new = {
-            let mut gc = self
-                .recycler
-                .gc
-                .lock()
-                .expect("recycler lock in pb fn allocate");
-            if let Some((oldest_time, _old_item)) = gc.front() {
-                if oldest_time.elapsed().as_secs() > 3600 {
-                    gc.pop_front().unwrap();
+            let mut gc = self.recycler.gc.lock().unwrap();
+
+            // Don't expire when inventory is rather small. At least,
+            // we shouldn't expire (= drop) the last inventory; we can just
+            // return it from here.  Also add some buffer. Thus, we don't
+            // expire if less than 10.
+            if gc.len() > MAX_INVENTORY_COUNT_WITHOUT_EXPIRATION {
+                if let Some((oldest_time, _old_item)) = gc.front() {
+                    if oldest_time.elapsed().as_secs() >= EXPIRATION_TTL_SECONDS {
+                        let (_, mut expired) = gc.pop_front().unwrap();
+                        // unref-ing recycler here is crucial to prevent
+                        // the expired from being recycled again via Drop,
+                        // lading to dead lock!
+                        expired.unset_recycler();
+                    }
                 }
             }
             gc.pop_back().map(|(_added_time, item)| item)
@@ -108,6 +122,10 @@ impl<T: Default + Reset + Sized> Recycler<T> {
         let mut t = T::default();
         t.set_recycler(Arc::downgrade(&self.recycler));
         t
+    }
+
+    pub fn recycle_for_test(&self, x: T) {
+        self.recycler.recycle(x);
     }
 }
 
@@ -145,14 +163,16 @@ impl<T: Default + Reset> RecyclerX<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
 
     const RESET_VALUE: u64 = 10;
     impl Reset for u64 {
         fn reset(&mut self) {
-            *self = RESET_VALUE;
+            *self += RESET_VALUE;
         }
         fn warm(&mut self, _size_hint: usize) {}
         fn set_recycler(&mut self, _recycler: Weak<RecyclerX<Self>>) {}
+        fn unset_recycler(&mut self) {}
     }
 
     #[test]
@@ -162,25 +182,63 @@ mod tests {
         assert_eq!(y, 0);
         y = 20;
         let recycler2 = recycler.clone();
-        recycler2.recycler.recycle(y);
+        recycler2.recycle_for_test(y);
         assert_eq!(recycler.recycler.gc.lock().unwrap().len(), 1);
         let z = recycler.allocate("test_recycler2");
-        assert_eq!(z, RESET_VALUE);
+        assert_eq!(z, 20 + RESET_VALUE);
         assert_eq!(recycler.recycler.gc.lock().unwrap().len(), 0);
     }
 
     #[test]
     fn test_recycler_ttl() {
         let recycler = Recycler::default();
-        recycler.recycler.recycle(42);
-        recycler.recycler.recycle(42);
+        recycler.recycle_for_test(42);
+        recycler.recycle_for_test(43);
+        assert_eq!(recycler.recycler.gc.lock().unwrap().len(), 2);
+
+        // meddle to make the first element to expire
+        recycler.recycler.gc.lock().unwrap().front_mut().unwrap().0 =
+            Instant::now() - Duration::from_secs(EXPIRATION_TTL_SECONDS + 1);
 
         let y: u64 = recycler.allocate("test_recycler1");
-        assert_eq!(y, RESET_VALUE);
+        assert_eq!(y, 43 + RESET_VALUE);
+        assert_eq!(recycler.recycler.gc.lock().unwrap().len(), 1);
+
+        // create enough inventory to trigger expiration
+        for i in 44..44 + MAX_INVENTORY_COUNT_WITHOUT_EXPIRATION as u64 {
+            recycler.recycle_for_test(i);
+        }
+        assert_eq!(recycler.recycler.gc.lock().unwrap().len(), 11);
+
+        // allocate with expiration causes len to be reduced by 2
+        let y: u64 = recycler.allocate("test_recycler1");
+        assert_eq!(y, 53 + RESET_VALUE);
+        assert_eq!(recycler.recycler.gc.lock().unwrap().len(), 9);
+
+        // allocate without expiration causes len to be reduced by 2
+        let y: u64 = recycler.allocate("test_recycler1");
+        assert_eq!(y, 52 + RESET_VALUE);
+        assert_eq!(recycler.recycler.gc.lock().unwrap().len(), 8);
+    }
+
+    #[test]
+    fn test_recycler_no_deadlock() {
+        solana_logger::setup();
+
+        let recycler =
+            Recycler::<crate::cuda_runtime::PinnedVec<solana_sdk::packet::Packet>>::default();
+
+        // create bunch of packets and drop at once to force enough inventory
+        let packets = (0..=MAX_INVENTORY_COUNT_WITHOUT_EXPIRATION)
+            .into_iter()
+            .map(|_| recycler.allocate("me"))
+            .collect::<Vec<_>>();
+        drop(packets);
 
         recycler.recycler.gc.lock().unwrap().front_mut().unwrap().0 =
-            Instant::now() - std::time::Duration::from_secs(7200);
-        let y: u64 = recycler.allocate("test_recycler1");
-        assert_eq!(y, u64::default());
+            Instant::now() - Duration::from_secs(7200);
+
+        // this drops the first inventory item but shouldn't cause recycling of it!
+        recycler.recycle_for_test(recycler.allocate("me"));
     }
 }
