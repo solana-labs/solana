@@ -20,7 +20,6 @@ use solana_ledger::{
     blockstore::{create_new_ledger, Blockstore, PurgeType},
     blockstore_db::{self, AccessType, BlockstoreRecoveryMode, Column, Database},
     blockstore_processor::ProcessOptions,
-    rooted_slot_iterator::RootedSlotIterator,
     shred::Shred,
 };
 use solana_runtime::{
@@ -209,6 +208,7 @@ fn output_slot(
 fn output_ledger(
     blockstore: Blockstore,
     starting_slot: Slot,
+    ending_slot: Slot,
     allow_dead_slots: bool,
     method: LedgerOutputMethod,
     num_slots: Option<Slot>,
@@ -229,11 +229,14 @@ fn output_ledger(
         stdout().write_all(b"{\"ledger\":[\n").expect("open array");
     }
 
-    let num_slots = num_slots.unwrap_or(std::u64::MAX);
+    let num_slots = num_slots.unwrap_or(Slot::MAX);
     let mut num_printed = 0;
     for (slot, slot_meta) in slot_iterator {
         if only_rooted && !blockstore.is_root(slot) {
             continue;
+        }
+        if slot > ending_slot {
+            break;
         }
 
         match method {
@@ -845,6 +848,7 @@ fn main() {
             .about("Print the ledger")
             .arg(&starting_slot_arg)
             .arg(&allow_dead_slots_arg)
+            .arg(&ending_slot_arg)
             .arg(
                 Arg::with_name("num_slots")
                     .long("num-slots")
@@ -872,14 +876,7 @@ fn main() {
             SubCommand::with_name("copy")
             .about("Copy the ledger")
             .arg(&starting_slot_arg)
-            .arg(
-                Arg::with_name("ending_slot")
-                    .long("ending-slot")
-                    .value_name("SLOT")
-                    .validator(is_slot)
-                    .takes_value(true)
-                    .help("Slot to stop copy"),
-            )
+            .arg(&ending_slot_arg)
             .arg(
                 Arg::with_name("target_db")
                     .long("target-db")
@@ -1009,6 +1006,7 @@ fn main() {
             .arg(&hard_forks_arg)
             .arg(&no_accounts_db_caching_arg)
             .arg(&bpf_jit_arg)
+            .arg(&allow_dead_slots_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
             .arg(
                 Arg::with_name("skip_poh_verify")
@@ -1281,7 +1279,6 @@ fn main() {
                     .long("max-height")
                     .value_name("NUM")
                     .takes_value(true)
-                    .required(true)
                     .help("Maximum block height")
             )
             .arg(
@@ -1338,6 +1335,7 @@ fn main() {
         ("bigtable", Some(arg_matches)) => bigtable_process_command(&ledger_path, arg_matches),
         ("print", Some(arg_matches)) => {
             let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
+            let ending_slot = value_t!(arg_matches, "ending_slot", Slot).unwrap_or(Slot::MAX);
             let num_slots = value_t!(arg_matches, "num_slots", Slot).ok();
             let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
             let only_rooted = arg_matches.is_present("only_rooted");
@@ -1349,6 +1347,7 @@ fn main() {
                     wal_recovery_mode,
                 ),
                 starting_slot,
+                ending_slot,
                 allow_dead_slots,
                 LedgerOutputMethod::Print,
                 num_slots,
@@ -1540,6 +1539,7 @@ fn main() {
                     wal_recovery_mode,
                 ),
                 starting_slot,
+                Slot::MAX,
                 allow_dead_slots,
                 LedgerOutputMethod::Json,
                 None,
@@ -1644,6 +1644,7 @@ fn main() {
                 poh_verify: !arg_matches.is_present("skip_poh_verify"),
                 bpf_jit: arg_matches.is_present("bpf_jit"),
                 accounts_db_caching_enabled: !arg_matches.is_present("no_accounts_db_caching"),
+                allow_dead_slots: arg_matches.is_present("allow_dead_slots"),
                 ..ProcessOptions::default()
             };
             let print_accounts_stats = arg_matches.is_present("print_accounts_stats");
@@ -2675,7 +2676,7 @@ fn main() {
             let max_height = if let Some(height) = arg_matches.value_of("max_height") {
                 usize::from_str(height).expect("Maximum height must be a number")
             } else {
-                panic!("Maximum height must be provided");
+                usize::MAX
             };
             let num_roots = if let Some(roots) = arg_matches.value_of("num_roots") {
                 usize::from_str(roots).expect("Number of roots must be a number")
@@ -2683,23 +2684,27 @@ fn main() {
                 usize::from_str(DEFAULT_ROOT_COUNT).unwrap()
             };
 
-            let iter = RootedSlotIterator::new(0, &blockstore).expect("Failed to get rooted slot");
+            let iter = blockstore
+                .rooted_slot_iterator(0)
+                .expect("Failed to get rooted slot");
 
-            let slot_hash: Vec<_> = iter
-                .filter_map(|(slot, _meta)| {
-                    if slot <= max_height as u64 {
-                        let blockhash = blockstore
-                            .get_slot_entries(slot, 0)
-                            .unwrap()
-                            .last()
-                            .unwrap()
-                            .hash;
-                        Some((slot, blockhash))
-                    } else {
-                        None
-                    }
-                })
-                .collect();
+            let mut slot_hash = Vec::new();
+            for (i, slot) in iter.into_iter().enumerate() {
+                if i > num_roots {
+                    break;
+                }
+                if slot <= max_height as u64 {
+                    let blockhash = blockstore
+                        .get_slot_entries(slot, 0)
+                        .unwrap()
+                        .last()
+                        .unwrap()
+                        .hash;
+                    slot_hash.push((slot, blockhash));
+                } else {
+                    break;
+                }
+            }
 
             let mut output_file: Box<dyn Write> =
                 if let Some(path) = arg_matches.value_of("slot_list") {
@@ -2724,13 +2729,12 @@ fn main() {
                 });
         }
         ("bounds", Some(arg_matches)) => {
-            match open_blockstore(
+            let blockstore = open_blockstore(
                 &ledger_path,
                 AccessType::TryPrimaryThenSecondary,
                 wal_recovery_mode,
-            )
-            .slot_meta_iterator(0)
-            {
+            );
+            match blockstore.slot_meta_iterator(0) {
                 Ok(metas) => {
                     let all = arg_matches.is_present("all");
 
@@ -2741,7 +2745,12 @@ fn main() {
                         let first = slots.first().unwrap();
                         let last = slots.last().unwrap_or(first);
                         if first != last {
-                            println!("Ledger has data for slots {:?} to {:?}", first, last);
+                            println!(
+                                "Ledger has data for {} slots {:?} to {:?}",
+                                slots.len(),
+                                first,
+                                last
+                            );
                             if all {
                                 println!("Non-empty slots: {:?}", slots);
                             }
@@ -2749,12 +2758,39 @@ fn main() {
                             println!("Ledger has data for slot {:?}", first);
                         }
                     }
+                    if let Ok(rooted) = blockstore.rooted_slot_iterator(0) {
+                        let mut first_rooted = 0;
+                        let mut last_rooted = 0;
+                        let mut total_rooted = 0;
+                        for (i, slot) in rooted.into_iter().enumerate() {
+                            if i == 0 {
+                                first_rooted = slot;
+                            }
+                            last_rooted = slot;
+                            total_rooted += 1;
+                        }
+                        let mut count_past_root = 0;
+                        for slot in slots.iter().rev() {
+                            if *slot > last_rooted {
+                                count_past_root += 1;
+                            } else {
+                                break;
+                            }
+                        }
+                        println!(
+                            "  with {} rooted slots from {:?} to {:?}",
+                            total_rooted, first_rooted, last_rooted
+                        );
+                        println!("  and {} slots past the last root", count_past_root);
+                    } else {
+                        println!("  with no rooted slots");
+                    }
                 }
                 Err(err) => {
                     eprintln!("Unable to read the Ledger: {:?}", err);
                     exit(1);
                 }
-            }
+            };
         }
         ("analyze-storage", _) => {
             analyze_storage(&open_database(
