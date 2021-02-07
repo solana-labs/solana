@@ -3,6 +3,7 @@
 import {Client as LiveClient} from 'rpc-websockets';
 import {expect} from 'chai';
 import sinon from 'sinon';
+
 import {Connection} from '../../src';
 
 type RpcRequest = {
@@ -62,6 +63,7 @@ export const restoreRpcWebSocket = (connection: Connection) => {
 };
 
 class MockClient {
+  client: LiveClient;
   mockOpen = false;
   subscriptionCounter = 0;
 

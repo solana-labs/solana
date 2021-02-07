@@ -1,7 +1,7 @@
 // @flow
 
 import {Buffer} from 'buffer';
-import createKeccakHash from 'keccak';
+import {keccak_256} from 'js-sha3';
 import {privateKeyVerify, ecdsaSign, publicKeyCreate} from 'secp256k1';
 
 import {
@@ -13,7 +13,7 @@ import {
   Secp256k1Program,
 } from '../src';
 import {url} from './url';
-import {helpers} from './mocks/rpc-http';
+import {toBuffer} from '../src/util/to-buffer';
 
 const randomPrivateKey = () => {
   let privateKey;
@@ -29,9 +29,9 @@ if (process.env.TEST_LIVE) {
       const privateKey = randomPrivateKey();
       const publicKey = publicKeyCreate(privateKey, false);
       const message = Buffer.from('This is a message');
-      const messageHash = createKeccakHash('keccak256')
-        .update(message)
-        .digest();
+      const messageHash = Buffer.from(
+        keccak_256.update(toBuffer(message)).digest(),
+      );
       const {signature, recid: recoveryId} = ecdsaSign(messageHash, privateKey);
       const connection = new Connection(url, 'singleGossip');
 

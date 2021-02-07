@@ -10,11 +10,6 @@ import replace from '@rollup/plugin-replace';
 
 export default {
   input: {
-    // include: [
-    //   'test/account.test.js',
-    //   'test/cluster.test.js',
-    //   'test/stake-program.test.js',
-    // ],
     include: ['test/**/*.test.js'],
     exclude: ['test/agent-manager.test.js', 'test/bpf-loader.test.js'],
   },

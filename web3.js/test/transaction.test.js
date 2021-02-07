@@ -2,7 +2,7 @@
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
 import nacl from 'tweetnacl';
-import {expect, use} from 'chai';
+import {expect} from 'chai';
 
 import {Account} from '../src/account';
 import {PublicKey} from '../src/publickey';

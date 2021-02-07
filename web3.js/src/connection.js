@@ -1423,7 +1423,7 @@ const SendTransactionRpcResult = jsonRpcResult('string');
  * @property {number} parent Parent of the current slot
  * @property {number} root The root block of the current slot's fork
  */
-type SlotInfo = {
+export type SlotInfo = {
   slot: number,
   parent: number,
   root: number,
@@ -1480,7 +1480,7 @@ type AccountInfo<T> = {
  * @property {PublicKey} accountId
  * @property {AccountInfo<Buffer>} accountInfo
  */
-type KeyedAccountInfo = {
+export type KeyedAccountInfo = {
   accountId: PublicKey,
   accountInfo: AccountInfo<Buffer>,
 };

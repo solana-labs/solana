@@ -1,6 +1,8 @@
 // @flow
-import {clusterApiUrl} from '../src/util/cluster';
+
 import {expect} from 'chai';
+
+import {clusterApiUrl} from '../src/util/cluster';
 
 describe('Cluster Util', () => {
   it('invalid', () => {

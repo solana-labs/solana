@@ -21,29 +21,20 @@ import {DEFAULT_TICKS_PER_SLOT, NUM_TICKS_PER_SECOND} from '../src/timing';
 import {MOCK_PORT, url} from './url';
 import {BLOCKHASH_CACHE_TIMEOUT_MS} from '../src/connection';
 import {sleep} from '../src/util/sleep';
-import type {TransactionSignature} from '../src/transaction';
-import type {
-  Commitment,
-  SignatureStatus,
-  TransactionError,
-  KeyedAccountInfo,
-  SlotInfo,
-} from '../src/connection';
-
 import {
   helpers,
   mockErrorMessage,
   mockErrorResponse,
-  uniqueSignature,
-  uniqueBlockhash,
   mockRpcResponse,
   mockServer,
 } from './mocks/rpc-http';
-import {
-  stubRpcWebSocket,
-  restoreRpcWebSocket,
-  mockRpcMessage,
-} from './mocks/rpc-websockets';
+import {stubRpcWebSocket, restoreRpcWebSocket} from './mocks/rpc-websockets';
+import type {TransactionSignature} from '../src/transaction';
+import type {
+  SignatureStatus,
+  TransactionError,
+  KeyedAccountInfo,
+} from '../src/connection';
 
 use(chaiAsPromised);
 
@@ -1712,12 +1703,9 @@ describe('Connection', () => {
           lamports: 9,
         }),
       );
-      const signature3 = await sendAndConfirmTransaction(
-        connection,
-        transaction3,
-        [accountFrom],
-        {preflightCommitment: 'singleGossip'},
-      );
+      await sendAndConfirmTransaction(connection, transaction3, [accountFrom], {
+        preflightCommitment: 'singleGossip',
+      });
       expect(transaction2.recentBlockhash).to.eq(transaction3.recentBlockhash);
 
       // Sleep until blockhash cache times out
@@ -1956,7 +1944,7 @@ describe('Connection', () => {
     });
 
     it('slot notification', async () => {
-      let notifiedSlotInfo: SlotInfo;
+      let notifiedSlotInfo;
       const subscriptionId = connection.onSlotChange(slotInfo => {
         notifiedSlotInfo = slotInfo;
       });

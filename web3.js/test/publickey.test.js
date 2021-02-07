@@ -1,9 +1,10 @@
 // @flow
 import BN from 'bn.js';
 import {Buffer} from 'buffer';
-import {PublicKey, MAX_SEED_LENGTH} from '../src/publickey';
 import {expect, use} from 'chai';
 import chaiAsPromised from 'chai-as-promised';
+
+import {PublicKey, MAX_SEED_LENGTH} from '../src/publickey';
 
 use(chaiAsPromised);
 
