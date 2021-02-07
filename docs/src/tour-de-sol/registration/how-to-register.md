@@ -8,7 +8,7 @@ title: How To Register
 
 #### 2) KYC/AML (via Coinlist)
 
-[Register for KYC/AML + Participation Agreement here](https://tsm.coinlist.co/safecoin-staking)
+[Register for KYC/AML + Participation Agreement here](https://tsm.coinlist.co/solana-staking)
 
 _If you’ve completed KYC/AML previously for either SLP or TdS with the same
 entity/individual then you will not need to go through this again.
@@ -16,7 +16,7 @@ We do not accept U.S. entities or individuals._
 
 #### 3) Join Our Discord
 
-**Required** for all Tour de SAFE validators, as this is our primary
+**Required** for all Tour de SOL validators, as this is our primary
 communication channel: https://discord.gg/N3mqAfa
 
 ### Next Steps

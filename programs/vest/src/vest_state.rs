@@ -7,7 +7,7 @@ use chrono::{
     serde::ts_seconds,
 };
 use serde_derive::{Deserialize, Serialize};
-use safecoin_sdk::{account::Account, instruction::InstructionError, pubkey::Pubkey};
+use solana_sdk::{account::Account, instruction::InstructionError, pubkey::Pubkey};
 use std::cmp::min;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -119,8 +119,8 @@ impl VestState {
 mod test {
     use super::*;
     use crate::id;
-    use safecoin_sdk::account::Account;
-    use safecoin_sdk::system_program;
+    use solana_sdk::account::Account;
+    use solana_sdk::system_program;
 
     #[test]
     fn test_serializer() {

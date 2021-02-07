@@ -2,7 +2,7 @@
 title: Send and Receive Tokens
 ---
 
-This page decribes how to receive and send SAFE tokens using the command line
+This page decribes how to receive and send SOL tokens using the command line
 tools with a command line wallet such as a [paper wallet](../wallet-guide/paper-wallet.md),
 a [file system wallet](../wallet-guide/file-system-wallet.md), or a
 [hardware wallet](../wallet-guide/hardware-wallets.md). Before you begin, make sure
@@ -27,7 +27,7 @@ on devnet have **no** value, so don't worry if you lose them.
 First, _airdrop_ yourself some play tokens on the devnet.
 
 ```bash
-safecoin airdrop 10 <RECIPIENT_ACCOUNT_ADDRESS> --url https://devnet.safecoin.org
+solana airdrop 10 <RECIPIENT_ACCOUNT_ADDRESS> --url https://devnet.solana.com
 ```
 
 where you replace the text `<RECIPIENT_ACCOUNT_ADDRESS>` with your base58-encoded
@@ -36,10 +36,10 @@ public key/wallet address.
 #### Check your balance
 
 Confirm the airdrop was successful by checking the account's balance.
-It should output `10 SAFE`:
+It should output `10 SOL`:
 
 ```bash
-safecoin balance <ACCOUNT_ADDRESS> --url https://devnet.safecoin.org
+solana balance <ACCOUNT_ADDRESS> --url https://devnet.solana.com
 ```
 
 #### Create a second wallet address
@@ -48,7 +48,7 @@ We will need a new address to receive our tokens. Create a second
 keypair and record its pubkey:
 
 ```bash
-safecoin-keygen new --no-passphrase --no-outfile
+solana-keygen new --no-passphrase --no-outfile
 ```
 
 The output will contain the address after the text `pubkey:`. Copy the
@@ -71,17 +71,17 @@ with the private keypair corresponding to the sender's public key in the
 transaction.
 
 ```bash
-safecoin transfer --from <KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> 5 --url https://devnet.safecoin.org --fee-payer <KEYPAIR>
+solana transfer --from <KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> 5 --url https://devnet.solana.com --fee-payer <KEYPAIR>
 ```
 
 where you replace `<KEYPAIR>` with the path to a keypair in your first wallet,
 and replace `<RECIPIENT_ACCOUNT_ADDRESS>` with the address of your second
 wallet.
 
-Confirm the updated balances with `safecoin balance`:
+Confirm the updated balances with `solana balance`:
 
 ```bash
-safecoin balance <ACCOUNT_ADDRESS> --url http://devnet.safecoin.org
+solana balance <ACCOUNT_ADDRESS> --url http://devnet.solana.com
 ```
 
 where `<ACCOUNT_ADDRESS>` is either the public key from your keypair or the
@@ -90,10 +90,10 @@ recipient's public key.
 #### Full example of test transfer
 
 ```bash
-$ safecoin-keygen new --outfile my_safecoin_wallet.json   # Creating my first wallet, a file system wallet
+$ solana-keygen new --outfile my_solana_wallet.json   # Creating my first wallet, a file system wallet
 Generating a new keypair
 For added security, enter a passphrase (empty for no passphrase):
-Wrote new keypair to my_safecoin_wallet.json
+Wrote new keypair to my_solana_wallet.json
 ==========================================================================
 pubkey: DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK                          # Here is the address of the first wallet
 ==========================================================================
@@ -101,14 +101,14 @@ Save this seed phrase to recover your new keypair:
 width enhance concert vacant ketchup eternal spy craft spy guard tag punch    # If this was a real wallet, never share these words on the internet like this!
 ==========================================================================
 
-$ safecoin airdrop 10 DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.safecoin.org  # Airdropping 10 SAFE to my wallet's address/pubkey
-Requesting airdrop of 10 SAFE from 35.233.193.70:9900
-10 SAFE
+$ solana airdrop 10 DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com  # Airdropping 10 SOL to my wallet's address/pubkey
+Requesting airdrop of 10 SOL from 35.233.193.70:9900
+10 SOL
 
-$ safecoin balance DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.safecoin.org # Check the address's balance
-10 SAFE
+$ solana balance DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com # Check the address's balance
+10 SOL
 
-$ safecoin-keygen new --no-outfile  # Creating a second wallet, a paper wallet
+$ solana-keygen new --no-outfile  # Creating a second wallet, a paper wallet
 Generating a new keypair
 For added security, enter a passphrase (empty for no passphrase):
 ====================================================================
@@ -118,14 +118,14 @@ Save this seed phrase to recover your new keypair:
 clump panic cousin hurt coast charge engage fall eager urge win love   # If this was a real wallet, never share these words on the internet like this!
 ====================================================================
 
-$ safecoin transfer --from my_safecoin_wallet.json 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv 5 --url https://devnet.safecoin.org --fee-payer my_safecoin_wallet.json  # Transferring tokens to the public address of the paper wallet
+$ solana transfer --from my_solana_wallet.json 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv 5 --url https://devnet.solana.com --fee-payer my_solana_wallet.json  # Transferring tokens to the public address of the paper wallet
 3gmXvykAd1nCQQ7MjosaHLf69Xyaqyq1qw2eu1mgPyYXd5G4v1rihhg1CiRw35b9fHzcftGKKEu4mbUeXY2pEX2z  # This is the transaction signature
 
-$ safecoin balance DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.safecoin.org
-4.999995 SAFE  # The sending account has slightly less than 5 SAFE remaining due to the 0.000005 SAFE transaction fee payment
+$ solana balance DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com
+4.999995 SOL  # The sending account has slightly less than 5 SOL remaining due to the 0.000005 SOL transaction fee payment
 
-$ safecoin balance 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv --url https://devnet.safecoin.org
-5 SAFE  # The second wallet has now received the 5 SAFE transfer from the first wallet
+$ solana balance 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv --url https://devnet.solana.com
+5 SOL  # The second wallet has now received the 5 SOL transfer from the first wallet
 
 ```
 
@@ -142,17 +142,17 @@ characters. Its length varies from 32 to 44 characters.
 
 ## Send Tokens
 
-If you already hold SAFE and want to send tokens to someone, you will need
+If you already hold SOL and want to send tokens to someone, you will need
 a path to your keypair, their base58-encoded public key, and a number of
 tokens to transfer. Once you have that collected, you can transfer tokens
-with the `safecoin transfer` command:
+with the `solana transfer` command:
 
 ```bash
-safecoin transfer --from <KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> <AMOUNT> --fee-payer <KEYPAIR>
+solana transfer --from <KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> <AMOUNT> --fee-payer <KEYPAIR>
 ```
 
-Confirm the updated balances with `safecoin balance`:
+Confirm the updated balances with `solana balance`:
 
 ```bash
-safecoin balance <ACCOUNT_ADDRESS>
+solana balance <ACCOUNT_ADDRESS>
 ```

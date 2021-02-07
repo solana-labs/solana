@@ -37,16 +37,16 @@ use log::*;
 use rand::{prelude::SliceRandom, thread_rng, Rng};
 use rayon::{prelude::*, ThreadPool};
 use serde::{Deserialize, Serialize};
-use safecoin_measure::measure::Measure;
-use safecoin_rayon_threadlimit::get_thread_count;
-use safecoin_sdk::{
+use solana_measure::measure::Measure;
+use solana_rayon_threadlimit::get_thread_count;
+use solana_sdk::{
     account::Account,
     clock::{Epoch, Slot},
     genesis_config::ClusterType,
     hash::{Hash, Hasher},
     pubkey::Pubkey,
 };
-use safecoin_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
+use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::{
     borrow::Cow,
     boxed::Box,
@@ -747,7 +747,7 @@ impl PurgeStats {
         let should_report = report_interval_ms
             .map(|report_interval_ms| {
                 let last = self.last_report.load(Ordering::Relaxed);
-                let now = safecoin_sdk::timing::timestamp();
+                let now = solana_sdk::timing::timestamp();
                 now.saturating_sub(last) > report_interval_ms
                     && self.last_report.compare_exchange(
                         last,
@@ -892,7 +892,7 @@ struct ShrinkStats {
 impl ShrinkStats {
     fn report(&self) {
         let last = self.last_report.load(Ordering::Relaxed);
-        let now = safecoin_sdk::timing::timestamp();
+        let now = solana_sdk::timing::timestamp();
 
         let should_report = now.saturating_sub(last) > 1000
             && self
@@ -983,14 +983,14 @@ pub fn make_min_priority_thread_pool() -> ThreadPool {
     // Use lower thread count to reduce priority.
     let num_threads = std::cmp::max(2, num_cpus::get() / 4);
     rayon::ThreadPoolBuilder::new()
-        .thread_name(|i| format!("safecoin-accounts-cleanup-{}", i))
+        .thread_name(|i| format!("solana-accounts-cleanup-{}", i))
         .num_threads(num_threads)
         .build()
         .unwrap()
 }
 
 #[cfg(all(test, RUSTC_WITH_SPECIALIZATION))]
-impl safecoin_frozen_abi::abi_example::AbiExample for AccountsDB {
+impl solana_frozen_abi::abi_example::AbiExample for AccountsDB {
     fn example() -> Self {
         let accounts_db = AccountsDB::new_single();
         let key = Pubkey::default();
@@ -1026,7 +1026,7 @@ impl Default for AccountsDB {
             file_size: DEFAULT_FILE_SIZE,
             thread_pool: rayon::ThreadPoolBuilder::new()
                 .num_threads(num_threads)
-                .thread_name(|i| format!("safecoin-accounts-db-{}", i))
+                .thread_name(|i| format!("solana-accounts-db-{}", i))
                 .build()
                 .unwrap(),
             thread_pool_clean: make_min_priority_thread_pool(),
@@ -2877,7 +2877,7 @@ impl AccountsDB {
         }
         hasher.update(&pubkey.as_ref());
 
-        Hash(<[u8; safecoin_sdk::hash::HASH_BYTES]>::try_from(hasher.finalize().as_slice()).unwrap())
+        Hash(<[u8; solana_sdk::hash::HASH_BYTES]>::try_from(hasher.finalize().as_slice()).unwrap())
     }
 
     fn get_blake3_slot(cluster_type: &ClusterType) -> Slot {
@@ -3506,8 +3506,8 @@ impl AccountsDB {
             return lamports;
         }
 
-        let is_specially_retained = (safecoin_sdk::native_loader::check_id(owner) && executable)
-            || safecoin_sdk::sysvar::check_id(owner);
+        let is_specially_retained = (solana_sdk::native_loader::check_id(owner) && executable)
+            || solana_sdk::sysvar::check_id(owner);
 
         if is_specially_retained {
             // specially retained accounts always have an initial 1 lamport
@@ -4372,7 +4372,7 @@ impl AccountsDB {
 
     fn report_store_timings(&self) {
         let last = self.stats.last_store_report.load(Ordering::Relaxed);
-        let now = safecoin_sdk::timing::timestamp();
+        let now = solana_sdk::timing::timestamp();
 
         if now.saturating_sub(last) > 1000
             && self.stats.last_store_report.compare_exchange(
@@ -5185,7 +5185,7 @@ pub mod tests {
     };
     use assert_matches::assert_matches;
     use rand::{thread_rng, Rng};
-    use safecoin_sdk::{account::Account, hash::HASH_BYTES, pubkey::PUBKEY_BYTES};
+    use solana_sdk::{account::Account, hash::HASH_BYTES, pubkey::PUBKEY_BYTES};
     use std::{
         iter::FromIterator,
         str::FromStr,
@@ -5203,7 +5203,7 @@ pub mod tests {
 
     #[test]
     fn test_accountsdb_rest_of_hash_calculation() {
-        safecoin_logger::setup();
+        solana_logger::setup();
 
         let mut account_maps: Vec<CalculateHashIntermediate> = Vec::new();
 
@@ -5253,7 +5253,7 @@ pub mod tests {
 
     #[test]
     fn test_accountsdb_de_dup_accounts_from_stores() {
-        safecoin_logger::setup();
+        solana_logger::setup();
 
         let key_a = Pubkey::new(&[1u8; 32]);
         let key_b = Pubkey::new(&[2u8; 32]);
@@ -5407,7 +5407,7 @@ pub mod tests {
 
     #[test]
     fn test_accountsdb_flatten_hashes() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         const COUNT: usize = 4;
         let hashes: Vec<_> = (0..COUNT)
             .into_iter()
@@ -5430,7 +5430,7 @@ pub mod tests {
 
     #[test]
     fn test_accountsdb_compare_two_hash_entries() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let key = Pubkey::new_unique();
         let hash = Hash::new_unique();
         let val = CalculateHashIntermediate::new(1, hash, 1, 1, key);
@@ -5482,7 +5482,7 @@ pub mod tests {
 
     #[test]
     fn test_accountsdb_remove_zero_balance_accounts() {
-        safecoin_logger::setup();
+        solana_logger::setup();
 
         let key = Pubkey::new_unique();
         let hash = Hash::new_unique();
@@ -5509,7 +5509,7 @@ pub mod tests {
 
     #[test]
     fn test_accountsdb_calculate_accounts_hash_without_index_simple() {
-        safecoin_logger::setup();
+        solana_logger::setup();
 
         let (storages, _size, _slot_expected) = sample_storage();
         let result = AccountsDB::calculate_accounts_hash_without_index(&storages, true, None);
@@ -5530,7 +5530,7 @@ pub mod tests {
 
     #[test]
     fn test_accountsdb_scan_account_storage_no_bank() {
-        safecoin_logger::setup();
+        solana_logger::setup();
 
         let expected = 1;
         let tf = crate::append_vec::test_utils::get_append_vec_path(
@@ -5545,7 +5545,7 @@ pub mod tests {
 
         let arc = Arc::new(data);
         let storages = vec![vec![arc]];
-        let pubkey = safecoin_sdk::pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let acc = Account::new(1, 48, &Account::default().owner);
         let sm = StoredMeta {
             data_len: 1,
@@ -5572,7 +5572,7 @@ pub mod tests {
 
     #[test]
     fn test_accountsdb_flatten_hash_intermediate() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let test = vec![vec![CalculateHashIntermediate::new(
             1,
             Hash::new_unique(),
@@ -5611,7 +5611,7 @@ pub mod tests {
 
     #[test]
     fn test_accountsdb_compute_merkle_root_and_capitalization() {
-        safecoin_logger::setup();
+        solana_logger::setup();
 
         let expected_results = vec![
             (0, 0, "GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn", 0),
@@ -5705,7 +5705,7 @@ pub mod tests {
     #[test]
     #[should_panic(expected = "overflow is detected while summing capitalization")]
     fn test_accountsdb_compute_merkle_root_and_capitalization_overflow() {
-        safecoin_logger::setup();
+        solana_logger::setup();
 
         let fanout = 2;
         let input = vec![
@@ -5717,7 +5717,7 @@ pub mod tests {
 
     #[test]
     fn test_accountsdb_add_root() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let db = AccountsDB::new(Vec::new(), &ClusterType::Development);
         let key = Pubkey::default();
         let account0 = Account::new(1, 0, &key);
@@ -5730,7 +5730,7 @@ pub mod tests {
 
     #[test]
     fn test_accountsdb_latest_ancestor() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let db = AccountsDB::new(Vec::new(), &ClusterType::Development);
         let key = Pubkey::default();
         let account0 = Account::new(1, 0, &key);
@@ -5755,7 +5755,7 @@ pub mod tests {
 
     #[test]
     fn test_accountsdb_latest_ancestor_with_root() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let db = AccountsDB::new(Vec::new(), &ClusterType::Development);
         let key = Pubkey::default();
         let account0 = Account::new(1, 0, &key);
@@ -5775,7 +5775,7 @@ pub mod tests {
 
     #[test]
     fn test_accountsdb_root_one_slot() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let db = AccountsDB::new(Vec::new(), &ClusterType::Development);
 
         let key = Pubkey::default();
@@ -5852,14 +5852,14 @@ pub mod tests {
 
     #[test]
     fn test_accountsdb_count_stores() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let db = AccountsDB::new_single();
 
         let mut pubkeys: Vec<Pubkey> = vec![];
         create_account(&db, &mut pubkeys, 0, 2, DEFAULT_FILE_SIZE as usize / 3, 0);
         assert!(check_storage(&db, 0, 2));
 
-        let pubkey = safecoin_sdk::pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let account = Account::new(1, DEFAULT_FILE_SIZE as usize / 3, &pubkey);
         db.store_uncached(1, &[(&pubkey, &account)]);
         db.store_uncached(1, &[(&pubkeys[0], &account)]);
@@ -5973,10 +5973,10 @@ pub mod tests {
 
     #[test]
     fn test_remove_unrooted_slot_snapshot() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let unrooted_slot = 9;
         let db = AccountsDB::new(Vec::new(), &ClusterType::Development);
-        let key = safecoin_sdk::pubkey::new_rand();
+        let key = solana_sdk::pubkey::new_rand();
         let account0 = Account::new(1, 0, &key);
         db.store_uncached(unrooted_slot, &[(&key, &account0)]);
 
@@ -5984,7 +5984,7 @@ pub mod tests {
         db.remove_unrooted_slot(unrooted_slot);
 
         // Add a new root
-        let key2 = safecoin_sdk::pubkey::new_rand();
+        let key2 = solana_sdk::pubkey::new_rand();
         let new_root = unrooted_slot + 1;
         db.store_uncached(new_root, &[(&key2, &account0)]);
         db.add_root(new_root);
@@ -6010,15 +6010,15 @@ pub mod tests {
     ) {
         let ancestors = vec![(slot, 0)].into_iter().collect();
         for t in 0..num {
-            let pubkey = safecoin_sdk::pubkey::new_rand();
+            let pubkey = solana_sdk::pubkey::new_rand();
             let account = Account::new((t + 1) as u64, space, &Account::default().owner);
             pubkeys.push(pubkey);
             assert!(accounts.load_slow(&ancestors, &pubkey).is_none());
             accounts.store_uncached(slot, &[(&pubkey, &account)]);
         }
         for t in 0..num_vote {
-            let pubkey = safecoin_sdk::pubkey::new_rand();
-            let account = Account::new((num + t + 1) as u64, space, &safecoin_vote_program::id());
+            let pubkey = solana_sdk::pubkey::new_rand();
+            let account = Account::new((num + t + 1) as u64, space, &solana_vote_program::id());
             pubkeys.push(pubkey);
             let ancestors = vec![(slot, 0)].into_iter().collect();
             assert!(accounts.load_slow(&ancestors, &pubkey).is_none());
@@ -6153,7 +6153,7 @@ pub mod tests {
         let accounts = AccountsDB::new_sized(paths, size);
         let mut keys = vec![];
         for i in 0..9 {
-            let key = safecoin_sdk::pubkey::new_rand();
+            let key = solana_sdk::pubkey::new_rand();
             let account = Account::new(i + 1, size as usize / 4, &key);
             accounts.store_uncached(0, &[(&key, &account)]);
             keys.push(key);
@@ -6184,7 +6184,7 @@ pub mod tests {
         let accounts = AccountsDB::new_single();
 
         let status = [AccountStorageStatus::Available, AccountStorageStatus::Full];
-        let pubkey1 = safecoin_sdk::pubkey::new_rand();
+        let pubkey1 = solana_sdk::pubkey::new_rand();
         let account1 = Account::new(1, DEFAULT_FILE_SIZE as usize / 2, &pubkey1);
         accounts.store_uncached(0, &[(&pubkey1, &account1)]);
         {
@@ -6195,7 +6195,7 @@ pub mod tests {
             assert_eq!(r_stores[&0].status(), AccountStorageStatus::Available);
         }
 
-        let pubkey2 = safecoin_sdk::pubkey::new_rand();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
         let account2 = Account::new(1, DEFAULT_FILE_SIZE as usize / 2, &pubkey2);
         accounts.store_uncached(0, &[(&pubkey2, &account2)]);
         {
@@ -6242,12 +6242,12 @@ pub mod tests {
 
     #[test]
     fn test_lazy_gc_slot() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         //This test is pedantic
         //A slot is purged when a non root bank is cleaned up.  If a slot is behind root but it is
         //not root, it means we are retaining dead banks.
         let accounts = AccountsDB::new(Vec::new(), &ClusterType::Development);
-        let pubkey = safecoin_sdk::pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let account = Account::new(1, 0, &Account::default().owner);
         //store an account
         accounts.store_uncached(0, &[(&pubkey, &account)]);
@@ -6315,11 +6315,11 @@ pub mod tests {
 
     #[test]
     fn test_clean_zero_lamport_and_dead_slot() {
-        safecoin_logger::setup();
+        solana_logger::setup();
 
         let accounts = AccountsDB::new(Vec::new(), &ClusterType::Development);
-        let pubkey1 = safecoin_sdk::pubkey::new_rand();
-        let pubkey2 = safecoin_sdk::pubkey::new_rand();
+        let pubkey1 = solana_sdk::pubkey::new_rand();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
         let account = Account::new(1, 1, &Account::default().owner);
         let zero_lamport_account = Account::new(0, 0, &Account::default().owner);
 
@@ -6371,10 +6371,10 @@ pub mod tests {
 
     #[test]
     fn test_clean_zero_lamport_and_old_roots() {
-        safecoin_logger::setup();
+        solana_logger::setup();
 
         let accounts = AccountsDB::new(Vec::new(), &ClusterType::Development);
-        let pubkey = safecoin_sdk::pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let account = Account::new(1, 0, &Account::default().owner);
         let zero_lamport_account = Account::new(0, 0, &Account::default().owner);
 
@@ -6410,10 +6410,10 @@ pub mod tests {
 
     #[test]
     fn test_clean_old_with_normal_account() {
-        safecoin_logger::setup();
+        solana_logger::setup();
 
         let accounts = AccountsDB::new(Vec::new(), &ClusterType::Development);
-        let pubkey = safecoin_sdk::pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let account = Account::new(1, 0, &Account::default().owner);
         //store an account
         accounts.store_uncached(0, &[(&pubkey, &account)]);
@@ -6438,11 +6438,11 @@ pub mod tests {
 
     #[test]
     fn test_clean_old_with_zero_lamport_account() {
-        safecoin_logger::setup();
+        solana_logger::setup();
 
         let accounts = AccountsDB::new(Vec::new(), &ClusterType::Development);
-        let pubkey1 = safecoin_sdk::pubkey::new_rand();
-        let pubkey2 = safecoin_sdk::pubkey::new_rand();
+        let pubkey1 = solana_sdk::pubkey::new_rand();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
         let normal_account = Account::new(1, 0, &Account::default().owner);
         let zero_account = Account::new(0, 0, &Account::default().owner);
         //store an account
@@ -6472,7 +6472,7 @@ pub mod tests {
 
     #[test]
     fn test_clean_old_with_both_normal_and_zero_lamport_accounts() {
-        safecoin_logger::setup();
+        solana_logger::setup();
 
         let accounts = AccountsDB::new_with_config(
             Vec::new(),
@@ -6480,8 +6480,8 @@ pub mod tests {
             spl_token_mint_index_enabled(),
             false,
         );
-        let pubkey1 = safecoin_sdk::pubkey::new_rand();
-        let pubkey2 = safecoin_sdk::pubkey::new_rand();
+        let pubkey1 = solana_sdk::pubkey::new_rand();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
 
         // Set up account to be added to secondary index
         let mint_key = Pubkey::new_unique();
@@ -6555,10 +6555,10 @@ pub mod tests {
 
     #[test]
     fn test_clean_max_slot_zero_lamport_account() {
-        safecoin_logger::setup();
+        solana_logger::setup();
 
         let accounts = AccountsDB::new(Vec::new(), &ClusterType::Development);
-        let pubkey = safecoin_sdk::pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let account = Account::new(1, 0, &Account::default().owner);
         let zero_account = Account::new(0, 0, &Account::default().owner);
 
@@ -6592,10 +6592,10 @@ pub mod tests {
 
     #[test]
     fn test_uncleaned_roots_with_account() {
-        safecoin_logger::setup();
+        solana_logger::setup();
 
         let accounts = AccountsDB::new(Vec::new(), &ClusterType::Development);
-        let pubkey = safecoin_sdk::pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let account = Account::new(1, 0, &Account::default().owner);
         //store an account
         accounts.store_uncached(0, &[(&pubkey, &account)]);
@@ -6612,7 +6612,7 @@ pub mod tests {
 
     #[test]
     fn test_uncleaned_roots_with_no_account() {
-        safecoin_logger::setup();
+        solana_logger::setup();
 
         let accounts = AccountsDB::new(Vec::new(), &ClusterType::Development);
 
@@ -6629,7 +6629,7 @@ pub mod tests {
 
     #[test]
     fn test_accounts_db_serialize1() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let accounts = AccountsDB::new_single();
         let mut pubkeys: Vec<Pubkey> = vec![];
 
@@ -6766,17 +6766,17 @@ pub mod tests {
 
     #[test]
     fn test_accounts_db_purge_keep_live() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let some_lamport = 223;
         let zero_lamport = 0;
         let no_data = 0;
         let owner = Account::default().owner;
 
         let account = Account::new(some_lamport, no_data, &owner);
-        let pubkey = safecoin_sdk::pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
 
         let account2 = Account::new(some_lamport, no_data, &owner);
-        let pubkey2 = safecoin_sdk::pubkey::new_rand();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
 
         let zero_lamport_account = Account::new(zero_lamport, no_data, &owner);
 
@@ -6845,14 +6845,14 @@ pub mod tests {
 
     #[test]
     fn test_accounts_db_purge1() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let some_lamport = 223;
         let zero_lamport = 0;
         let no_data = 0;
         let owner = Account::default().owner;
 
         let account = Account::new(some_lamport, no_data, &owner);
-        let pubkey = safecoin_sdk::pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
 
         let zero_lamport_account = Account::new(zero_lamport, no_data, &owner);
 
@@ -6904,7 +6904,7 @@ pub mod tests {
 
     #[test]
     fn test_accounts_db_serialize_zero_and_free() {
-        safecoin_logger::setup();
+        solana_logger::setup();
 
         let some_lamport = 223;
         let zero_lamport = 0;
@@ -6912,14 +6912,14 @@ pub mod tests {
         let owner = Account::default().owner;
 
         let account = Account::new(some_lamport, no_data, &owner);
-        let pubkey = safecoin_sdk::pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let zero_lamport_account = Account::new(zero_lamport, no_data, &owner);
 
         let account2 = Account::new(some_lamport + 1, no_data, &owner);
-        let pubkey2 = safecoin_sdk::pubkey::new_rand();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
 
         let filler_account = Account::new(some_lamport, no_data, &owner);
-        let filler_account_pubkey = safecoin_sdk::pubkey::new_rand();
+        let filler_account_pubkey = solana_sdk::pubkey::new_rand();
 
         let accounts = AccountsDB::new_single();
 
@@ -6974,9 +6974,9 @@ pub mod tests {
         let account3 = Account::new(some_lamport + 100_002, no_data, &owner);
         let zero_lamport_account = Account::new(zero_lamport, no_data, &owner);
 
-        let pubkey = safecoin_sdk::pubkey::new_rand();
-        let purged_pubkey1 = safecoin_sdk::pubkey::new_rand();
-        let purged_pubkey2 = safecoin_sdk::pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let purged_pubkey1 = solana_sdk::pubkey::new_rand();
+        let purged_pubkey2 = solana_sdk::pubkey::new_rand();
 
         let dummy_account = Account::new(dummy_lamport, no_data, &owner);
         let dummy_pubkey = Pubkey::default();
@@ -7020,7 +7020,7 @@ pub mod tests {
 
     #[test]
     fn test_accounts_purge_chained_purge_before_snapshot_restore() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         with_chained_zero_lamport_accounts(|accounts, current_slot| {
             accounts.clean_accounts(None);
             reconstruct_accounts_db_via_serialization(&accounts, current_slot)
@@ -7029,7 +7029,7 @@ pub mod tests {
 
     #[test]
     fn test_accounts_purge_chained_purge_after_snapshot_restore() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         with_chained_zero_lamport_accounts(|accounts, current_slot| {
             let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
             accounts.print_accounts_stats("after_reconstruct");
@@ -7056,7 +7056,7 @@ pub mod tests {
                 std::thread::Builder::new()
                     .name("account-writers".to_string())
                     .spawn(move || {
-                        let pubkey = safecoin_sdk::pubkey::new_rand();
+                        let pubkey = solana_sdk::pubkey::new_rand();
                         let mut account = Account::new(1, 0, &pubkey);
                         let mut i = 0;
                         loop {
@@ -7084,15 +7084,15 @@ pub mod tests {
 
     #[test]
     fn test_accountsdb_scan_accounts() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let db = AccountsDB::new(Vec::new(), &ClusterType::Development);
         let key = Pubkey::default();
-        let key0 = safecoin_sdk::pubkey::new_rand();
+        let key0 = solana_sdk::pubkey::new_rand();
         let account0 = Account::new(1, 0, &key);
 
         db.store_uncached(0, &[(&key0, &account0)]);
 
-        let key1 = safecoin_sdk::pubkey::new_rand();
+        let key1 = solana_sdk::pubkey::new_rand();
         let account1 = Account::new(2, 0, &key);
         db.store_uncached(1, &[(&key1, &account1)]);
 
@@ -7113,16 +7113,16 @@ pub mod tests {
 
     #[test]
     fn test_cleanup_key_not_removed() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let db = AccountsDB::new_single();
 
         let key = Pubkey::default();
-        let key0 = safecoin_sdk::pubkey::new_rand();
+        let key0 = solana_sdk::pubkey::new_rand();
         let account0 = Account::new(1, 0, &key);
 
         db.store_uncached(0, &[(&key0, &account0)]);
 
-        let key1 = safecoin_sdk::pubkey::new_rand();
+        let key1 = solana_sdk::pubkey::new_rand();
         let account1 = Account::new(2, 0, &key);
         db.store_uncached(1, &[(&key1, &account1)]);
 
@@ -7142,7 +7142,7 @@ pub mod tests {
 
     #[test]
     fn test_store_large_account() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let db = AccountsDB::new(Vec::new(), &ClusterType::Development);
 
         let key = Pubkey::default();
@@ -7349,7 +7349,7 @@ pub mod tests {
 
     #[test]
     fn test_bank_hash_stats() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let db = AccountsDB::new(Vec::new(), &ClusterType::Development);
 
         let key = Pubkey::default();
@@ -7377,10 +7377,10 @@ pub mod tests {
     #[test]
     fn test_verify_bank_hash() {
         use BankHashVerificationError::*;
-        safecoin_logger::setup();
+        solana_logger::setup();
         let db = AccountsDB::new(Vec::new(), &ClusterType::Development);
 
-        let key = safecoin_sdk::pubkey::new_rand();
+        let key = solana_sdk::pubkey::new_rand();
         let some_data_len = 0;
         let some_slot: Slot = 0;
         let account = Account::new(1, some_data_len, &key);
@@ -7419,10 +7419,10 @@ pub mod tests {
     #[test]
     fn test_verify_bank_capitalization() {
         use BankHashVerificationError::*;
-        safecoin_logger::setup();
+        solana_logger::setup();
         let db = AccountsDB::new(Vec::new(), &ClusterType::Development);
 
-        let key = safecoin_sdk::pubkey::new_rand();
+        let key = solana_sdk::pubkey::new_rand();
         let some_data_len = 0;
         let some_slot: Slot = 0;
         let account = Account::new(1, some_data_len, &key);
@@ -7436,12 +7436,12 @@ pub mod tests {
             Ok(_)
         );
 
-        let native_account_pubkey = safecoin_sdk::pubkey::new_rand();
+        let native_account_pubkey = solana_sdk::pubkey::new_rand();
         db.store_uncached(
             some_slot,
             &[(
                 &native_account_pubkey,
-                &safecoin_sdk::native_loader::create_loadable_account("foo", 1),
+                &solana_sdk::native_loader::create_loadable_account("foo", 1),
             )],
         );
         db.update_accounts_hash_test(some_slot, &ancestors, true);
@@ -7462,7 +7462,7 @@ pub mod tests {
 
     #[test]
     fn test_verify_bank_hash_no_account() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let db = AccountsDB::new(Vec::new(), &ClusterType::Development);
 
         let some_slot: Slot = 0;
@@ -7483,7 +7483,7 @@ pub mod tests {
     #[test]
     fn test_verify_bank_hash_bad_account_hash() {
         use BankHashVerificationError::*;
-        safecoin_logger::setup();
+        solana_logger::setup();
         let db = AccountsDB::new(Vec::new(), &ClusterType::Development);
 
         let key = Pubkey::default();
@@ -7507,12 +7507,12 @@ pub mod tests {
 
     #[test]
     fn test_storage_finder() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let db = AccountsDB::new_sized(Vec::new(), 16 * 1024);
-        let key = safecoin_sdk::pubkey::new_rand();
+        let key = solana_sdk::pubkey::new_rand();
         let lamports = 100;
         let data_len = 8190;
-        let account = Account::new(lamports, data_len, &safecoin_sdk::pubkey::new_rand());
+        let account = Account::new(lamports, data_len, &solana_sdk::pubkey::new_rand());
         // pre-populate with a smaller empty store
         db.create_and_insert_store(1, 8192, "test_storage_finder");
         db.store_uncached(1, &[(&key, &account)]);
@@ -7610,7 +7610,7 @@ pub mod tests {
     #[should_panic(expected = "double remove of account in slot: 0/store: 0!!")]
     fn test_storage_remove_account_double_remove() {
         let accounts = AccountsDB::new(Vec::new(), &ClusterType::Development);
-        let pubkey = safecoin_sdk::pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let account = Account::new(1, 0, &Account::default().owner);
         accounts.store_uncached(0, &[(&pubkey, &account)]);
         let storage_entry = accounts
@@ -7629,7 +7629,7 @@ pub mod tests {
 
     #[test]
     fn test_accounts_purge_long_chained_after_snapshot_restore() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let old_lamport = 223;
         let zero_lamport = 0;
         let no_data = 0;
@@ -7641,10 +7641,10 @@ pub mod tests {
         let dummy_account = Account::new(99_999_999, no_data, &owner);
         let zero_lamport_account = Account::new(zero_lamport, no_data, &owner);
 
-        let pubkey = safecoin_sdk::pubkey::new_rand();
-        let dummy_pubkey = safecoin_sdk::pubkey::new_rand();
-        let purged_pubkey1 = safecoin_sdk::pubkey::new_rand();
-        let purged_pubkey2 = safecoin_sdk::pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let dummy_pubkey = solana_sdk::pubkey::new_rand();
+        let purged_pubkey1 = solana_sdk::pubkey::new_rand();
+        let purged_pubkey2 = solana_sdk::pubkey::new_rand();
 
         let mut current_slot = 0;
         let accounts = AccountsDB::new_single();
@@ -7800,7 +7800,7 @@ pub mod tests {
 
     #[test]
     fn test_full_clean_refcount() {
-        safecoin_logger::setup();
+        solana_logger::setup();
 
         // Setup 3 scenarios which try to differentiate between pubkey1 being in an
         // Available slot or a Full slot which would cause a different reset behavior
@@ -7819,7 +7819,7 @@ pub mod tests {
 
     #[test]
     fn test_accounts_clean_after_snapshot_restore_then_old_revives() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let old_lamport = 223;
         let zero_lamport = 0;
         let no_data = 0;
@@ -7832,9 +7832,9 @@ pub mod tests {
         let dummy_account = Account::new(dummy_lamport, no_data, &owner);
         let zero_lamport_account = Account::new(zero_lamport, no_data, &owner);
 
-        let pubkey1 = safecoin_sdk::pubkey::new_rand();
-        let pubkey2 = safecoin_sdk::pubkey::new_rand();
-        let dummy_pubkey = safecoin_sdk::pubkey::new_rand();
+        let pubkey1 = solana_sdk::pubkey::new_rand();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
+        let dummy_pubkey = solana_sdk::pubkey::new_rand();
 
         let mut current_slot = 0;
         let accounts = AccountsDB::new_single();
@@ -8016,13 +8016,13 @@ pub mod tests {
 
     #[test]
     fn test_shrink_stale_slots_processed() {
-        safecoin_logger::setup();
+        solana_logger::setup();
 
         let accounts = AccountsDB::new_single();
 
         let pubkey_count = 100;
         let pubkeys: Vec<_> = (0..pubkey_count)
-            .map(|_| safecoin_sdk::pubkey::new_rand())
+            .map(|_| solana_sdk::pubkey::new_rand())
             .collect();
 
         let some_lamport = 223;
@@ -8084,13 +8084,13 @@ pub mod tests {
 
     #[test]
     fn test_shrink_candidate_slots() {
-        safecoin_logger::setup();
+        solana_logger::setup();
 
         let accounts = AccountsDB::new_single();
 
         let pubkey_count = 30000;
         let pubkeys: Vec<_> = (0..pubkey_count)
-            .map(|_| safecoin_sdk::pubkey::new_rand())
+            .map(|_| solana_sdk::pubkey::new_rand())
             .collect();
 
         let some_lamport = 223;
@@ -8143,14 +8143,14 @@ pub mod tests {
 
     #[test]
     fn test_shrink_stale_slots_skipped() {
-        safecoin_logger::setup();
+        solana_logger::setup();
 
         let mut accounts = AccountsDB::new_single();
         accounts.caching_enabled = false;
 
         let pubkey_count = 30000;
         let pubkeys: Vec<_> = (0..pubkey_count)
-            .map(|_| safecoin_sdk::pubkey::new_rand())
+            .map(|_| solana_sdk::pubkey::new_rand())
             .collect();
 
         let some_lamport = 223;
@@ -8203,7 +8203,7 @@ pub mod tests {
 
     #[test]
     fn test_delete_dependencies() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let accounts_index = AccountsIndex::default();
         let key0 = Pubkey::new_from_array([0u8; 32]);
         let key1 = Pubkey::new_from_array([1u8; 32]);
@@ -8336,7 +8336,7 @@ pub mod tests {
         assert_eq!(
             AccountsDB::account_balance_for_capitalization(
                 10,
-                &safecoin_sdk::pubkey::new_rand(),
+                &solana_sdk::pubkey::new_rand(),
                 false,
                 true,
             ),
@@ -8345,7 +8345,7 @@ pub mod tests {
         assert_eq!(
             AccountsDB::account_balance_for_capitalization(
                 10,
-                &safecoin_sdk::pubkey::new_rand(),
+                &solana_sdk::pubkey::new_rand(),
                 false,
                 false,
             ),
@@ -8355,8 +8355,8 @@ pub mod tests {
 
     #[test]
     fn test_account_balance_for_capitalization_sysvar() {
-        let normal_sysvar = safecoin_sdk::account::create_account(
-            &safecoin_sdk::slot_history::SlotHistory::default(),
+        let normal_sysvar = solana_sdk::account::create_account(
+            &solana_sdk::slot_history::SlotHistory::default(),
             1,
         );
         assert_eq!(
@@ -8382,7 +8382,7 @@ pub mod tests {
         assert_eq!(
             AccountsDB::account_balance_for_capitalization(
                 10,
-                &safecoin_sdk::sysvar::id(),
+                &solana_sdk::sysvar::id(),
                 false,
                 false
             ),
@@ -8391,7 +8391,7 @@ pub mod tests {
         assert_eq!(
             AccountsDB::account_balance_for_capitalization(
                 10,
-                &safecoin_sdk::sysvar::id(),
+                &solana_sdk::sysvar::id(),
                 false,
                 true
             ),
@@ -8401,7 +8401,7 @@ pub mod tests {
 
     #[test]
     fn test_account_balance_for_capitalization_native_program() {
-        let normal_native_program = safecoin_sdk::native_loader::create_loadable_account("foo", 1);
+        let normal_native_program = solana_sdk::native_loader::create_loadable_account("foo", 1);
         assert_eq!(
             AccountsDB::account_balance_for_capitalization(
                 normal_native_program.lamports,
@@ -8425,7 +8425,7 @@ pub mod tests {
         assert_eq!(
             AccountsDB::account_balance_for_capitalization(
                 1,
-                &safecoin_sdk::native_loader::id(),
+                &solana_sdk::native_loader::id(),
                 false,
                 false,
             ),
@@ -8434,7 +8434,7 @@ pub mod tests {
         assert_eq!(
             AccountsDB::account_balance_for_capitalization(
                 1,
-                &safecoin_sdk::native_loader::id(),
+                &solana_sdk::native_loader::id(),
                 false,
                 true,
             ),
@@ -8461,10 +8461,10 @@ pub mod tests {
 
     #[test]
     fn test_store_overhead() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let accounts = AccountsDB::new_single();
         let account = Account::default();
-        let pubkey = safecoin_sdk::pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         accounts.store_uncached(0, &[(&pubkey, &account)]);
         let slot_stores = accounts.storage.get_slot_stores(0).unwrap();
         let mut total_len = 0;
@@ -8477,7 +8477,7 @@ pub mod tests {
 
     #[test]
     fn test_store_reuse() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let accounts = AccountsDB::new_sized(vec![], 4096);
 
         let size = 100;
@@ -8485,7 +8485,7 @@ pub mod tests {
         let mut keys = Vec::new();
         for i in 0..num_accounts {
             let account = Account::new((i + 1) as u64, size, &Pubkey::default());
-            let pubkey = safecoin_sdk::pubkey::new_rand();
+            let pubkey = solana_sdk::pubkey::new_rand();
             accounts.store_uncached(0, &[(&pubkey, &account)]);
             keys.push(pubkey);
         }
@@ -8611,9 +8611,9 @@ pub mod tests {
         let unrooted_slot = 4;
         let root5 = 5;
         let root6 = 6;
-        let unrooted_key = safecoin_sdk::pubkey::new_rand();
-        let key5 = safecoin_sdk::pubkey::new_rand();
-        let key6 = safecoin_sdk::pubkey::new_rand();
+        let unrooted_key = solana_sdk::pubkey::new_rand();
+        let key5 = solana_sdk::pubkey::new_rand();
+        let key6 = solana_sdk::pubkey::new_rand();
         db.store_cached(unrooted_slot, &[(&unrooted_key, &account0)]);
         db.store_cached(root5, &[(&key5, &account0)]);
         db.store_cached(root6, &[(&key6, &account0)]);
@@ -9410,7 +9410,7 @@ pub mod tests {
 
     #[test]
     fn test_partial_clean() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let db = AccountsDB::new(Vec::new(), &ClusterType::Development);
         let account_key1 = Pubkey::new_unique();
         let account_key2 = Pubkey::new_unique();

@@ -1,7 +1,7 @@
 #![feature(test)]
 
 extern crate test;
-use safecoin_sdk::{
+use solana_sdk::{
     account::{create_account, from_account},
     hash::Hash,
     slot_hashes::{Slot, SlotHashes, MAX_ENTRIES},

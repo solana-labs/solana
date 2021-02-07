@@ -4,9 +4,9 @@ use crate::{
     vest_state::VestState,
 };
 use chrono::prelude::*;
-use safecoin_config_program::date_instruction::DateConfig;
-use safecoin_config_program::get_config_data;
-use safecoin_sdk::{
+use solana_config_program::date_instruction::DateConfig;
+use solana_config_program::get_config_data;
+use solana_sdk::{
     account::Account,
     instruction::InstructionError,
     keyed_account::{next_keyed_account, KeyedAccount},
@@ -20,7 +20,7 @@ fn verify_date_account(
     keyed_account: &KeyedAccount,
     expected_pubkey: &Pubkey,
 ) -> Result<Date<Utc>, InstructionError> {
-    if keyed_account.owner()? != safecoin_config_program::id() {
+    if keyed_account.owner()? != solana_config_program::id() {
         return Err(InstructionError::IncorrectProgramId);
     }
 
@@ -149,16 +149,16 @@ mod tests {
     use super::*;
     use crate::id;
     use crate::vest_instruction;
-    use safecoin_config_program::date_instruction;
-    use safecoin_runtime::bank::Bank;
-    use safecoin_runtime::bank_client::BankClient;
-    use safecoin_sdk::client::SyncClient;
-    use safecoin_sdk::genesis_config::create_genesis_config;
-    use safecoin_sdk::hash::hash;
-    use safecoin_sdk::message::Message;
-    use safecoin_sdk::signature::{Keypair, Signature, Signer};
-    use safecoin_sdk::transaction::TransactionError;
-    use safecoin_sdk::transport::Result;
+    use solana_config_program::date_instruction;
+    use solana_runtime::bank::Bank;
+    use solana_runtime::bank_client::BankClient;
+    use solana_sdk::client::SyncClient;
+    use solana_sdk::genesis_config::create_genesis_config;
+    use solana_sdk::hash::hash;
+    use solana_sdk::message::Message;
+    use solana_sdk::signature::{Keypair, Signature, Signer};
+    use solana_sdk::transaction::TransactionError;
+    use solana_sdk::transport::Result;
     use std::sync::Arc;
 
     fn create_bank(lamports: u64) -> (Bank, Keypair) {
@@ -263,11 +263,11 @@ mod tests {
     #[test]
     fn test_verify_account_unauthorized() {
         // Ensure client can't sneak in with an untrusted date account.
-        let date_pubkey = safecoin_sdk::pubkey::new_rand();
-        let account = Account::new_ref(1, 0, &safecoin_config_program::id());
+        let date_pubkey = solana_sdk::pubkey::new_rand();
+        let account = Account::new_ref(1, 0, &solana_config_program::id());
         let keyed_account = KeyedAccount::new(&date_pubkey, false, &account);
 
-        let mallory_pubkey = safecoin_sdk::pubkey::new_rand(); // <-- Attack! Not the expected account.
+        let mallory_pubkey = solana_sdk::pubkey::new_rand(); // <-- Attack! Not the expected account.
         assert_eq!(
             verify_account(&keyed_account, &mallory_pubkey).unwrap_err(),
             VestError::Unauthorized.into()
@@ -277,8 +277,8 @@ mod tests {
     #[test]
     fn test_verify_signed_account_missing_signature() {
         // Ensure client can't sneak in with an unsigned account.
-        let date_pubkey = safecoin_sdk::pubkey::new_rand();
-        let account = Account::new_ref(1, 0, &safecoin_config_program::id());
+        let date_pubkey = solana_sdk::pubkey::new_rand();
+        let account = Account::new_ref(1, 0, &solana_config_program::id());
         let keyed_account = KeyedAccount::new(&date_pubkey, false, &account); // <-- Attack! Unsigned transaction.
 
         assert_eq!(
@@ -290,7 +290,7 @@ mod tests {
     #[test]
     fn test_verify_date_account_incorrect_program_id() {
         // Ensure client can't sneak in with a non-Config account.
-        let date_pubkey = safecoin_sdk::pubkey::new_rand();
+        let date_pubkey = solana_sdk::pubkey::new_rand();
         let account = Account::new_ref(1, 0, &id()); // <-- Attack! Pass Vest account where Config account is expected.
         let keyed_account = KeyedAccount::new(&date_pubkey, false, &account);
         assert_eq!(
@@ -302,8 +302,8 @@ mod tests {
     #[test]
     fn test_verify_date_account_uninitialized_config() {
         // Ensure no panic when `get_config_data()` returns an error.
-        let date_pubkey = safecoin_sdk::pubkey::new_rand();
-        let account = Account::new_ref(1, 0, &safecoin_config_program::id()); // <-- Attack! Zero space.
+        let date_pubkey = solana_sdk::pubkey::new_rand();
+        let account = Account::new_ref(1, 0, &solana_config_program::id()); // <-- Attack! Zero space.
         let keyed_account = KeyedAccount::new(&date_pubkey, false, &account);
         assert_eq!(
             verify_date_account(&keyed_account, &date_pubkey).unwrap_err(),
@@ -314,8 +314,8 @@ mod tests {
     #[test]
     fn test_verify_date_account_invalid_date_config() {
         // Ensure no panic when `deserialize::<DateConfig>()` returns an error.
-        let date_pubkey = safecoin_sdk::pubkey::new_rand();
-        let account = Account::new_ref(1, 1, &safecoin_config_program::id()); // Attack! 1 byte, enough to sneak by `get_config_data()`, but not DateConfig deserialize.
+        let date_pubkey = solana_sdk::pubkey::new_rand();
+        let account = Account::new_ref(1, 1, &solana_config_program::id()); // Attack! 1 byte, enough to sneak by `get_config_data()`, but not DateConfig deserialize.
         let keyed_account = KeyedAccount::new(&date_pubkey, false, &account);
         assert_eq!(
             verify_date_account(&keyed_account, &date_pubkey).unwrap_err(),
@@ -326,8 +326,8 @@ mod tests {
     #[test]
     fn test_verify_date_account_deserialize() {
         // Ensure no panic when `deserialize::<DateConfig>()` returns an error.
-        let date_pubkey = safecoin_sdk::pubkey::new_rand();
-        let account = Account::new_ref(1, 1, &safecoin_config_program::id()); // Attack! 1 byte, enough to sneak by `get_config_data()`, but not DateConfig deserialize.
+        let date_pubkey = solana_sdk::pubkey::new_rand();
+        let account = Account::new_ref(1, 1, &solana_config_program::id()); // Attack! 1 byte, enough to sneak by `get_config_data()`, but not DateConfig deserialize.
         let keyed_account = KeyedAccount::new(&date_pubkey, false, &account);
         assert_eq!(
             verify_date_account(&keyed_account, &date_pubkey).unwrap_err(),
@@ -343,11 +343,11 @@ mod tests {
 
         let mut instructions = vest_instruction::create_account(
             &alice_keypair.pubkey(),
-            &safecoin_sdk::pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             &contract_keypair.pubkey(),
-            &safecoin_sdk::pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             Utc::now().date(),
-            &safecoin_sdk::pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             1,
         );
         instructions[1].accounts = vec![]; // <!-- Attack! Prevent accounts from being passed into processor.
@@ -365,7 +365,7 @@ mod tests {
     fn test_set_payee_and_terminator() {
         let (bank_client, alice_keypair) = create_bank_client(39);
         let alice_pubkey = alice_keypair.pubkey();
-        let date_pubkey = safecoin_sdk::pubkey::new_rand();
+        let date_pubkey = solana_sdk::pubkey::new_rand();
         let contract_keypair = Keypair::new();
         let contract_pubkey = contract_keypair.pubkey();
         let bob_keypair = Keypair::new();
@@ -384,7 +384,7 @@ mod tests {
         )
         .unwrap();
 
-        let new_bob_pubkey = safecoin_sdk::pubkey::new_rand();
+        let new_bob_pubkey = solana_sdk::pubkey::new_rand();
 
         // Ensure some rando can't change the payee.
         // Transfer bob a token to pay the transaction fee.
@@ -413,7 +413,7 @@ mod tests {
         .unwrap();
 
         // Ensure the rando can't change the terminator either.
-        let new_alice_pubkey = safecoin_sdk::pubkey::new_rand();
+        let new_alice_pubkey = solana_sdk::pubkey::new_rand();
         send_set_terminator(
             &bank_client,
             &contract_pubkey,
@@ -436,7 +436,7 @@ mod tests {
     fn test_set_payee() {
         let (bank_client, alice_keypair) = create_bank_client(38);
         let alice_pubkey = alice_keypair.pubkey();
-        let date_pubkey = safecoin_sdk::pubkey::new_rand();
+        let date_pubkey = solana_sdk::pubkey::new_rand();
         let contract_keypair = Keypair::new();
         let contract_pubkey = contract_keypair.pubkey();
         let bob_keypair = Keypair::new();
@@ -455,7 +455,7 @@ mod tests {
         )
         .unwrap();
 
-        let new_bob_pubkey = safecoin_sdk::pubkey::new_rand();
+        let new_bob_pubkey = solana_sdk::pubkey::new_rand();
 
         // Ensure some rando can't change the payee.
         // Transfer bob a token to pay the transaction fee.
@@ -499,7 +499,7 @@ mod tests {
 
         let contract_keypair = Keypair::new();
         let contract_pubkey = contract_keypair.pubkey();
-        let bob_pubkey = safecoin_sdk::pubkey::new_rand();
+        let bob_pubkey = solana_sdk::pubkey::new_rand();
         let start_date = Utc.ymd(2018, 1, 1);
 
         create_vest_account(
@@ -561,7 +561,7 @@ mod tests {
         let alice_pubkey = alice_keypair.pubkey();
         let contract_keypair = Keypair::new();
         let contract_pubkey = contract_keypair.pubkey();
-        let bob_pubkey = safecoin_sdk::pubkey::new_rand();
+        let bob_pubkey = solana_sdk::pubkey::new_rand();
         let start_date = Utc::now().date();
 
         let date_keypair = Keypair::new();
@@ -605,7 +605,7 @@ mod tests {
         let alice_pubkey = alice_keypair.pubkey();
         let contract_keypair = Keypair::new();
         let contract_pubkey = contract_keypair.pubkey();
-        let bob_pubkey = safecoin_sdk::pubkey::new_rand();
+        let bob_pubkey = solana_sdk::pubkey::new_rand();
         let start_date = Utc::now().date();
 
         let date_keypair = Keypair::new();
@@ -629,7 +629,7 @@ mod tests {
         assert_eq!(bank_client.get_balance(&contract_pubkey).unwrap(), 1);
 
         // Now, terminate the transaction. carol gets the funds.
-        let carol_pubkey = safecoin_sdk::pubkey::new_rand();
+        let carol_pubkey = solana_sdk::pubkey::new_rand();
         let instruction =
             vest_instruction::terminate(&contract_pubkey, &alice_pubkey, &carol_pubkey);
         bank_client
@@ -650,7 +650,7 @@ mod tests {
         let alice_pubkey = alice_keypair.pubkey();
         let contract_keypair = Keypair::new();
         let contract_pubkey = contract_keypair.pubkey();
-        let bob_pubkey = safecoin_sdk::pubkey::new_rand();
+        let bob_pubkey = solana_sdk::pubkey::new_rand();
         let start_date = Utc::now().date();
 
         let date_keypair = Keypair::new();
@@ -674,7 +674,7 @@ mod tests {
         assert_eq!(bank_client.get_balance(&contract_pubkey).unwrap(), 1);
 
         // Now, renege on a token. carol gets it.
-        let carol_pubkey = safecoin_sdk::pubkey::new_rand();
+        let carol_pubkey = solana_sdk::pubkey::new_rand();
         let instruction =
             vest_instruction::renege(&contract_pubkey, &alice_pubkey, &carol_pubkey, 1);
         bank_client

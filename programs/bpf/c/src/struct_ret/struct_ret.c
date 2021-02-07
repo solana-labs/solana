@@ -1,4 +1,4 @@
-#include <safecoin_sdk.h>
+#include <solana_sdk.h>
 
 /**
  * Custom error for when struct doesn't add to 12
@@ -17,7 +17,7 @@ static struct test_struct __attribute__ ((noinline)) test_function(void) {
 
 extern uint64_t entrypoint(const uint8_t* input) {
   struct test_struct s = test_function();
-  safe_log("foobar");
+  sol_log("foobar");
   if (s.x + s.y + s.z == 12 ) {
     return SUCCESS;
   }

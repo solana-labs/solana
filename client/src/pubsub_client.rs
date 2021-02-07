@@ -9,7 +9,7 @@ use serde_json::{
     value::Value::{Number, Object},
     Map, Value,
 };
-use safecoin_sdk::signature::Signature;
+use solana_sdk::signature::Signature;
 use std::{
     marker::PhantomData,
     sync::{

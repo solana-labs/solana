@@ -1,10 +1,10 @@
 //! Stakes serve as a cache of stake and vote accounts to derive
 //! node stakes
 use crate::vote_account::{ArcVoteAccount, VoteAccounts};
-use safecoin_sdk::{
+use solana_sdk::{
     account::Account, clock::Epoch, pubkey::Pubkey, sysvar::stake_history::StakeHistory,
 };
-use safecoin_stake_program::stake_state::{new_stake_history_entry, Delegation, StakeState};
+use solana_stake_program::stake_state::{new_stake_history_entry, Delegation, StakeState};
 use std::{borrow::Borrow, collections::HashMap};
 
 #[derive(Default, Clone, PartialEq, Debug, Deserialize, Serialize, AbiExample)]
@@ -106,8 +106,8 @@ impl Stakes {
     }
 
     pub fn is_stake(account: &Account) -> bool {
-        safecoin_vote_program::check_id(&account.owner)
-            || safecoin_stake_program::check_id(&account.owner)
+        solana_vote_program::check_id(&account.owner)
+            || solana_stake_program::check_id(&account.owner)
                 && account.data.len() >= std::mem::size_of::<StakeState>()
     }
 
@@ -117,7 +117,7 @@ impl Stakes {
         account: &Account,
         fix_stake_deactivate: bool,
     ) -> Option<ArcVoteAccount> {
-        if safecoin_vote_program::check_id(&account.owner) {
+        if solana_vote_program::check_id(&account.owner) {
             // unconditionally remove existing at first; there is no dependent calculated state for
             // votes, not like stakes (stake codepath maintains calculated stake value grouped by
             // delegated vote pubkey)
@@ -142,7 +142,7 @@ impl Stakes {
                     .insert(*pubkey, (stake, ArcVoteAccount::from(account.clone())));
             }
             old.map(|(_, account)| account)
-        } else if safecoin_stake_program::check_id(&account.owner) {
+        } else if solana_stake_program::check_id(&account.owner) {
             //  old_stake is stake lamports and voter_pubkey from the pre-store() version
             let old_stake = self.stake_delegations.get(pubkey).map(|delegation| {
                 (
@@ -224,15 +224,15 @@ impl Stakes {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use safecoin_sdk::{pubkey::Pubkey, rent::Rent};
-    use safecoin_stake_program::stake_state;
-    use safecoin_vote_program::vote_state::{self, VoteState};
+    use solana_sdk::{pubkey::Pubkey, rent::Rent};
+    use solana_stake_program::stake_state;
+    use solana_vote_program::vote_state::{self, VoteState};
 
     //  set up some dummies for a staked node     ((     vote      )  (     stake     ))
     pub fn create_staked_node_accounts(stake: u64) -> ((Pubkey, Account), (Pubkey, Account)) {
-        let vote_pubkey = safecoin_sdk::pubkey::new_rand();
+        let vote_pubkey = solana_sdk::pubkey::new_rand();
         let vote_account =
-            vote_state::create_account(&vote_pubkey, &safecoin_sdk::pubkey::new_rand(), 0, 1);
+            vote_state::create_account(&vote_pubkey, &solana_sdk::pubkey::new_rand(), 0, 1);
         (
             (vote_pubkey, vote_account),
             create_stake_account(stake, &vote_pubkey),
@@ -241,13 +241,13 @@ pub mod tests {
 
     //   add stake to a vote_pubkey                               (   stake    )
     pub fn create_stake_account(stake: u64, vote_pubkey: &Pubkey) -> (Pubkey, Account) {
-        let stake_pubkey = safecoin_sdk::pubkey::new_rand();
+        let stake_pubkey = solana_sdk::pubkey::new_rand();
         (
             stake_pubkey,
             stake_state::create_account(
                 &stake_pubkey,
                 &vote_pubkey,
-                &vote_state::create_account(&vote_pubkey, &safecoin_sdk::pubkey::new_rand(), 0, 1),
+                &vote_state::create_account(&vote_pubkey, &solana_sdk::pubkey::new_rand(), 0, 1),
                 &Rent::free(),
                 stake,
             ),
@@ -258,9 +258,9 @@ pub mod tests {
         stake: u64,
         epoch: Epoch,
     ) -> ((Pubkey, Account), (Pubkey, Account)) {
-        let vote_pubkey = safecoin_sdk::pubkey::new_rand();
+        let vote_pubkey = solana_sdk::pubkey::new_rand();
         let vote_account =
-            vote_state::create_account(&vote_pubkey, &safecoin_sdk::pubkey::new_rand(), 0, 1);
+            vote_state::create_account(&vote_pubkey, &solana_sdk::pubkey::new_rand(), 0, 1);
         (
             (vote_pubkey, vote_account),
             create_warming_stake_account(stake, epoch, &vote_pubkey),
@@ -273,13 +273,13 @@ pub mod tests {
         epoch: Epoch,
         vote_pubkey: &Pubkey,
     ) -> (Pubkey, Account) {
-        let stake_pubkey = safecoin_sdk::pubkey::new_rand();
+        let stake_pubkey = solana_sdk::pubkey::new_rand();
         (
             stake_pubkey,
             stake_state::create_account_with_activation_epoch(
                 &stake_pubkey,
                 &vote_pubkey,
-                &vote_state::create_account(&vote_pubkey, &safecoin_sdk::pubkey::new_rand(), 0, 1),
+                &vote_state::create_account(&vote_pubkey, &solana_sdk::pubkey::new_rand(), 0, 1),
                 &Rent::free(),
                 stake,
                 epoch,
@@ -523,7 +523,7 @@ pub mod tests {
         // not a stake account, and whacks above entry
         stakes.store(
             &stake_pubkey,
-            &Account::new(1, 0, &safecoin_stake_program::id()),
+            &Account::new(1, 0, &solana_stake_program::id()),
             true,
         );
         {

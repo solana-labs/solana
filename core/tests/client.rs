@@ -1,19 +1,19 @@
-use safecoin_client::{pubsub_client::PubsubClient, rpc_client::RpcClient, rpc_response::SlotInfo};
-use safecoin_core::{
+use solana_client::{pubsub_client::PubsubClient, rpc_client::RpcClient, rpc_response::SlotInfo};
+use solana_core::{
     optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
     rpc_pubsub_service::{PubSubConfig, PubSubService},
     rpc_subscriptions::RpcSubscriptions,
     test_validator::TestValidator,
 };
-use safecoin_runtime::{
+use solana_runtime::{
     bank::Bank,
     bank_forks::BankForks,
     commitment::BlockCommitmentCache,
     genesis_utils::{create_genesis_config, GenesisConfigInfo},
 };
-use safecoin_sdk::{
+use solana_sdk::{
     commitment_config::CommitmentConfig,
-    native_token::safe_to_lamports,
+    native_token::sol_to_lamports,
     rpc_port,
     signature::{Keypair, Signer},
     system_transaction,
@@ -31,18 +31,18 @@ use systemstat::Ipv4Addr;
 
 #[test]
 fn test_rpc_client() {
-    safecoin_logger::setup();
+    solana_logger::setup();
 
     let alice = Keypair::new();
     let test_validator = TestValidator::with_no_fees(alice.pubkey());
 
-    let bob_pubkey = safecoin_sdk::pubkey::new_rand();
+    let bob_pubkey = solana_sdk::pubkey::new_rand();
 
     let client = RpcClient::new(test_validator.rpc_url());
 
     assert_eq!(
-        client.get_version().unwrap().safecoin_core,
-        safecoin_version::semver!()
+        client.get_version().unwrap().solana_core,
+        solana_version::semver!()
     );
 
     assert!(client.get_account(&bob_pubkey).is_err());
@@ -53,7 +53,7 @@ fn test_rpc_client() {
 
     let (blockhash, _fee_calculator) = client.get_recent_blockhash().unwrap();
 
-    let tx = system_transaction::transfer(&alice, &bob_pubkey, safe_to_lamports(20.0), blockhash);
+    let tx = system_transaction::transfer(&alice, &bob_pubkey, sol_to_lamports(20.0), blockhash);
     let signature = client.send_transaction(&tx).unwrap();
 
     let mut confirmed_tx = false;
@@ -76,11 +76,11 @@ fn test_rpc_client() {
 
     assert_eq!(
         client.get_balance(&bob_pubkey).unwrap(),
-        safe_to_lamports(20.0)
+        sol_to_lamports(20.0)
     );
     assert_eq!(
         client.get_balance(&alice.pubkey()).unwrap(),
-        original_alice_balance - safe_to_lamports(20.0)
+        original_alice_balance - sol_to_lamports(20.0)
     );
 }
 

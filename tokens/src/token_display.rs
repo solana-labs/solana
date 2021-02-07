@@ -1,15 +1,15 @@
-use safecoin_account_decoder::parse_token::token_amount_to_ui_amount;
-use safecoin_sdk::native_token::lamports_to_safe ;
+use solana_account_decoder::parse_token::token_amount_to_ui_amount;
+use solana_sdk::native_token::lamports_to_sol;
 use std::{
     fmt::{Debug, Display, Formatter, Result},
     ops::Add,
 };
 
-const SAFE_SYMBOL: &str = "◎";
+const SOL_SYMBOL: &str = "◎";
 
 #[derive(PartialEq)]
 pub enum TokenType {
-    Safe,
+    Sol,
     SplToken,
 }
 
@@ -22,9 +22,9 @@ pub struct Token {
 impl Token {
     fn write_with_symbol(&self, f: &mut Formatter) -> Result {
         match &self.token_type {
-            TokenType::Safe => {
-                let amount = lamports_to_safe (self.amount);
-                write!(f, "{}{}", SAFE_SYMBOL, amount)
+            TokenType::Sol => {
+                let amount = lamports_to_sol(self.amount);
+                write!(f, "{}{}", SOL_SYMBOL, amount)
             }
             TokenType::SplToken => {
                 let amount = token_amount_to_ui_amount(self.amount, self.decimals).ui_amount;
@@ -37,7 +37,7 @@ impl Token {
         Self {
             amount,
             decimals: 9,
-            token_type: TokenType::Safe,
+            token_type: TokenType::Sol,
         }
     }
 

@@ -4,8 +4,8 @@
 
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender};
-use safecoin_runtime::{bank::Bank, bank_forks::BankForks};
-use safecoin_sdk::clock::Slot;
+use solana_runtime::{bank::Bank, bank_forks::BankForks};
+use solana_sdk::clock::Slot;
 use std::{
     collections::HashSet,
     sync::{
@@ -64,7 +64,7 @@ impl OptimisticallyConfirmedBankTracker {
         let exit_ = exit.clone();
         let mut pending_optimistically_confirmed_banks = HashSet::new();
         let thread_hdl = Builder::new()
-            .name("safecoin-optimistic-bank-tracker".to_string())
+            .name("solana-optimistic-bank-tracker".to_string())
             .spawn(move || loop {
                 if exit_.load(Ordering::Relaxed) {
                     break;
@@ -166,11 +166,11 @@ impl OptimisticallyConfirmedBankTracker {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use safecoin_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
-    use safecoin_runtime::{
+    use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
+    use solana_runtime::{
         accounts_background_service::ABSRequestSender, commitment::BlockCommitmentCache,
     };
-    use safecoin_sdk::pubkey::Pubkey;
+    use solana_sdk::pubkey::Pubkey;
 
     #[test]
     fn test_process_notification() {

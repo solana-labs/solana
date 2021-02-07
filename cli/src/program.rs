@@ -10,19 +10,19 @@ use bincode::serialize;
 use bip39::{Language, Mnemonic, MnemonicType, Seed};
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 use log::*;
-use safecoin_bpf_loader_program::{bpf_verifier, BPFError, ThisInstructionMeter};
-use safecoin_clap_utils::{self, input_parsers::*, input_validators::*, keypair::*};
-use safecoin_cli_output::{
+use solana_bpf_loader_program::{bpf_verifier, BPFError, ThisInstructionMeter};
+use solana_clap_utils::{self, input_parsers::*, input_validators::*, keypair::*};
+use solana_cli_output::{
     display::new_spinner_progress_bar, CliProgramAccountType, CliProgramAuthority,
     CliProgramBuffer, CliProgramId, CliUpgradeableBuffer, CliUpgradeableProgram,
 };
-use safecoin_client::{
+use solana_client::{
     rpc_client::RpcClient, rpc_config::RpcSendTransactionConfig,
     rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS, rpc_response::RpcLeaderSchedule,
 };
 use solana_rbpf::vm::{Config, Executable};
-use safecoin_remote_wallet::remote_wallet::RemoteWalletManager;
-use safecoin_sdk::{
+use solana_remote_wallet::remote_wallet::RemoteWalletManager;
+use solana_sdk::{
     account::Account,
     account_utils::StateMut,
     bpf_loader, bpf_loader_deprecated,
@@ -32,7 +32,7 @@ use safecoin_sdk::{
     instruction::Instruction,
     loader_instruction,
     message::Message,
-    native_token::Safe,
+    native_token::Sol,
     pubkey::Pubkey,
     signature::{keypair_from_seed, read_keypair_file, Keypair, Signer},
     signers::Signers,
@@ -40,7 +40,7 @@ use safecoin_sdk::{
     system_program,
     transaction::Transaction,
 };
-use safecoin_transaction_status::TransactionConfirmationStatus;
+use solana_transaction_status::TransactionConfirmationStatus;
 use std::{
     cmp::min,
     collections::HashMap,
@@ -158,7 +158,7 @@ impl ProgramSubCommands for App<'_, '_> {
                             Arg::with_name("allow_excessive_balance")
                                 .long("allow-excessive-deploy-account-balance")
                                 .takes_value(false)
-                                .help("Use the designated program id even if the account already holds a large balance of SAFE")
+                                .help("Use the designated program id even if the account already holds a large balance of SOL")
                         ),
                 )
                 .subcommand(
@@ -1423,7 +1423,7 @@ fn complete_partial_program_init(
     {
         return Err(format!(
             "Buffer account has a balance: {:?}; it may already be in use",
-            Safe(account.lamports)
+            Sol(account.lamports)
         )
         .into());
     }
@@ -1553,11 +1553,11 @@ fn report_ephemeral_mnemonic(words: usize, mnemonic: bip39::Mnemonic) {
         divider
     );
     eprintln!(
-        "`safecoin-keygen recover` and the following {}-word seed phrase,",
+        "`solana-keygen recover` and the following {}-word seed phrase,",
         words
     );
     eprintln!(
-        "then pass it as the [BUFFER_SIGNER] argument to `safecoin deploy` or `safecoin write-buffer`\n{}\n{}\n{}",
+        "then pass it as the [BUFFER_SIGNER] argument to `solana deploy` or `solana write-buffer`\n{}\n{}\n{}",
         divider, phrase, divider
     );
 }
@@ -1732,8 +1732,8 @@ mod tests {
     use super::*;
     use crate::cli::{app, parse_command, process_command};
     use serde_json::Value;
-    use safecoin_cli_output::OutputFormat;
-    use safecoin_sdk::signature::write_keypair_file;
+    use solana_cli_output::OutputFormat;
+    use solana_sdk::signature::write_keypair_file;
 
     fn make_tmp_path(name: &str) -> String {
         let out_dir = std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
@@ -2287,7 +2287,7 @@ mod tests {
 
     #[test]
     fn test_cli_keypair_file() {
-        safecoin_logger::setup();
+        solana_logger::setup();
 
         let default_keypair = Keypair::new();
         let program_pubkey = Keypair::new();

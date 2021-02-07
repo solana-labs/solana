@@ -1,8 +1,8 @@
 use log::*;
-use safecoin_client::perf_utils::{sample_txs, SampleStats};
-use safecoin_client::thin_client::ThinClient;
-use safecoin_notifier::Notifier;
-use safecoin_sdk::timing::duration_as_s;
+use solana_client::perf_utils::{sample_txs, SampleStats};
+use solana_client::thin_client::ThinClient;
+use solana_notifier::Notifier;
+use solana_sdk::timing::duration_as_s;
 use std::{
     net::SocketAddr,
     sync::{
@@ -22,7 +22,7 @@ pub struct Sampler {
 impl Sampler {
     pub fn new(rpc_addr: &SocketAddr) -> Self {
         let (_, dummy_socket) =
-            safecoin_net_utils::bind_in_range(rpc_addr.ip(), (8000, 10_000)).unwrap();
+            solana_net_utils::bind_in_range(rpc_addr.ip(), (8000, 10_000)).unwrap();
         let dummy_tpu_addr = *rpc_addr;
         let client = Arc::new(ThinClient::new(*rpc_addr, dummy_tpu_addr, dummy_socket));
 
@@ -47,7 +47,7 @@ impl Sampler {
         let maxes = self.maxes.clone();
         let client = self.client.clone();
         let handle = Builder::new()
-            .name("safecoin-client-sample".to_string())
+            .name("solana-client-sample".to_string())
             .spawn(move || {
                 sample_txs(&exit_signal, &maxes, sample_period, &client);
             })

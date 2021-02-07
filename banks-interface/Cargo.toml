@@ -1,17 +1,17 @@
 [package]
-name = "safecoin-banks-interface"
+name = "solana-banks-interface"
 version = "1.6.0"
 description = "Safecoin banks RPC interface"
 authors = ["Safecoin Maintainers <maintainers@solana.foundation>"]
-repository = "https://github.com/solana-labs/safecoin"
+repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
-homepage = "https://safecoin.org/"
+homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
 mio = "0.7.6"
 serde = { version = "1.0.122", features = ["derive"] }
-safecoin-sdk = { path = "../sdk", version = "1.6.0" }
+solana-sdk = { path = "../sdk", version = "1.6.0" }
 tarpc = { version = "0.24.1", features = ["full"] }
 
 [dev-dependencies]
@@ -19,7 +19,7 @@ tokio = { version = "1.1", features = ["full"] }
 
 [lib]
 crate-type = ["lib"]
-name = "safecoin_banks_interface"
+name = "solana_banks_interface"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

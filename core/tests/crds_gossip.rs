@@ -3,18 +3,18 @@ use log::*;
 use rayon::prelude::*;
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use serial_test::serial;
-use safecoin_core::cluster_info;
-use safecoin_core::contact_info::ContactInfo;
-use safecoin_core::crds_gossip::*;
-use safecoin_core::crds_gossip_error::CrdsGossipError;
-use safecoin_core::crds_gossip_pull::{ProcessPullStats, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS};
-use safecoin_core::crds_gossip_push::CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS;
-use safecoin_core::crds_value::CrdsValueLabel;
-use safecoin_core::crds_value::{CrdsData, CrdsValue};
-use safecoin_rayon_threadlimit::get_thread_count;
-use safecoin_sdk::hash::hash;
-use safecoin_sdk::pubkey::Pubkey;
-use safecoin_sdk::timing::timestamp;
+use solana_core::cluster_info;
+use solana_core::contact_info::ContactInfo;
+use solana_core::crds_gossip::*;
+use solana_core::crds_gossip_error::CrdsGossipError;
+use solana_core::crds_gossip_pull::{ProcessPullStats, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS};
+use solana_core::crds_gossip_push::CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS;
+use solana_core::crds_value::CrdsValueLabel;
+use solana_core::crds_value::{CrdsData, CrdsValue};
+use solana_rayon_threadlimit::get_thread_count;
+use solana_sdk::hash::hash;
+use solana_sdk::pubkey::Pubkey;
+use solana_sdk::timing::timestamp;
 use std::collections::{HashMap, HashSet};
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
@@ -77,13 +77,13 @@ fn stakes(network: &Network) -> HashMap<Pubkey, u64> {
 
 fn star_network_create(num: usize) -> Network {
     let entry = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-        &safecoin_sdk::pubkey::new_rand(),
+        &solana_sdk::pubkey::new_rand(),
         0,
     )));
     let mut network: HashMap<_, _> = (1..num)
         .map(|_| {
             let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-                &safecoin_sdk::pubkey::new_rand(),
+                &solana_sdk::pubkey::new_rand(),
                 0,
             )));
             let id = new.label().pubkey();
@@ -104,7 +104,7 @@ fn star_network_create(num: usize) -> Network {
 
 fn rstar_network_create(num: usize) -> Network {
     let entry = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-        &safecoin_sdk::pubkey::new_rand(),
+        &solana_sdk::pubkey::new_rand(),
         0,
     )));
     let mut origin = CrdsGossip::default();
@@ -114,7 +114,7 @@ fn rstar_network_create(num: usize) -> Network {
     let mut network: HashMap<_, _> = (1..num)
         .map(|_| {
             let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-                &safecoin_sdk::pubkey::new_rand(),
+                &solana_sdk::pubkey::new_rand(),
                 0,
             )));
             let id = new.label().pubkey();
@@ -133,7 +133,7 @@ fn ring_network_create(num: usize) -> Network {
     let mut network: HashMap<_, _> = (0..num)
         .map(|_| {
             let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-                &safecoin_sdk::pubkey::new_rand(),
+                &solana_sdk::pubkey::new_rand(),
                 0,
             )));
             let id = new.label().pubkey();
@@ -171,7 +171,7 @@ fn connected_staked_network_create(stakes: &[u64]) -> Network {
     let mut network: HashMap<_, _> = (0..num)
         .map(|n| {
             let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-                &safecoin_sdk::pubkey::new_rand(),
+                &solana_sdk::pubkey::new_rand(),
                 0,
             )));
             let id = new.label().pubkey();
@@ -568,7 +568,7 @@ fn test_star_network_push_ring_200() {
 #[test]
 #[serial]
 fn test_connected_staked_network() {
-    safecoin_logger::setup();
+    solana_logger::setup();
     let thread_pool = build_gossip_thread_pool();
     let stakes = [
         [1000; 2].to_vec(),
@@ -597,7 +597,7 @@ fn test_connected_staked_network() {
 #[test]
 #[ignore]
 fn test_star_network_large_pull() {
-    safecoin_logger::setup();
+    solana_logger::setup();
     let mut network = star_network_create(2000);
     let thread_pool = build_gossip_thread_pool();
     network_simulator_pull_only(&thread_pool, &mut network);
@@ -605,7 +605,7 @@ fn test_star_network_large_pull() {
 #[test]
 #[ignore]
 fn test_rstar_network_large_push() {
-    safecoin_logger::setup();
+    solana_logger::setup();
     let mut network = rstar_network_create(4000);
     let thread_pool = build_gossip_thread_pool();
     network_simulator(&thread_pool, &mut network, 0.9);
@@ -613,7 +613,7 @@ fn test_rstar_network_large_push() {
 #[test]
 #[ignore]
 fn test_ring_network_large_push() {
-    safecoin_logger::setup();
+    solana_logger::setup();
     let mut network = ring_network_create(4001);
     let thread_pool = build_gossip_thread_pool();
     network_simulator(&thread_pool, &mut network, 0.9);
@@ -621,7 +621,7 @@ fn test_ring_network_large_push() {
 #[test]
 #[ignore]
 fn test_star_network_large_push() {
-    safecoin_logger::setup();
+    solana_logger::setup();
     let mut network = star_network_create(4002);
     let thread_pool = build_gossip_thread_pool();
     network_simulator(&thread_pool, &mut network, 0.9);

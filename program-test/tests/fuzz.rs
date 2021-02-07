@@ -1,11 +1,11 @@
 use {
-    safecoin_banks_client::BanksClient,
+    solana_banks_client::BanksClient,
     solana_program::{
         account_info::AccountInfo, entrypoint::ProgramResult, hash::Hash, instruction::Instruction,
         msg, pubkey::Pubkey, rent::Rent, system_instruction,
     },
     solana_program_test::{processor, ProgramTest},
-    safecoin_sdk::{signature::Keypair, signature::Signer, transaction::Transaction},
+    solana_sdk::{signature::Keypair, signature::Signer, transaction::Transaction},
 };
 
 #[allow(clippy::unnecessary_wraps)]

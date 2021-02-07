@@ -9,8 +9,8 @@ test('invalid', () => {
 });
 
 test('devnet', () => {
-  expect(clusterApiUrl()).toEqual('https://devnet.safecoin.org');
-  expect(clusterApiUrl('devnet')).toEqual('https://devnet.safecoin.org');
-  expect(clusterApiUrl('devnet', true)).toEqual('https://devnet.safecoin.org');
-  expect(clusterApiUrl('devnet', false)).toEqual('http://devnet.safecoin.org');
+  expect(clusterApiUrl()).toEqual('https://devnet.solana.com');
+  expect(clusterApiUrl('devnet')).toEqual('https://devnet.solana.com');
+  expect(clusterApiUrl('devnet', true)).toEqual('https://devnet.solana.com');
+  expect(clusterApiUrl('devnet', false)).toEqual('http://devnet.solana.com');
 });

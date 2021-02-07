@@ -1,8 +1,8 @@
 use crate::poh_recorder::WorkingBankEntry;
 use crate::result::Result;
-use safecoin_ledger::entry::Entry;
-use safecoin_runtime::bank::Bank;
-use safecoin_sdk::clock::Slot;
+use solana_ledger::entry::Entry;
+use solana_runtime::bank::Bank;
+use solana_sdk::clock::Slot;
 use std::{
     sync::mpsc::Receiver,
     sync::Arc,
@@ -76,11 +76,11 @@ pub(super) fn recv_slot_entries(receiver: &Receiver<WorkingBankEntry>) -> Result
 #[cfg(test)]
 mod tests {
     use super::*;
-    use safecoin_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
-    use safecoin_sdk::genesis_config::GenesisConfig;
-    use safecoin_sdk::pubkey::Pubkey;
-    use safecoin_sdk::system_transaction;
-    use safecoin_sdk::transaction::Transaction;
+    use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
+    use solana_sdk::genesis_config::GenesisConfig;
+    use solana_sdk::pubkey::Pubkey;
+    use solana_sdk::system_transaction;
+    use solana_sdk::transaction::Transaction;
     use std::sync::mpsc::channel;
 
     fn setup_test() -> (GenesisConfig, Arc<Bank>, Transaction) {
@@ -92,7 +92,7 @@ mod tests {
         let bank0 = Arc::new(Bank::new(&genesis_config));
         let tx = system_transaction::transfer(
             &mint_keypair,
-            &safecoin_sdk::pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             1,
             genesis_config.hash(),
         );

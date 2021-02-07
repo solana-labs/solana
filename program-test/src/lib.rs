@@ -4,21 +4,21 @@ use {
     async_trait::async_trait,
     chrono_humanize::{Accuracy, HumanTime, Tense},
     log::*,
-    safecoin_banks_client::start_client,
-    safecoin_banks_server::banks_server::start_local_server,
+    solana_banks_client::start_client,
+    solana_banks_server::banks_server::start_local_server,
     solana_program::{
         account_info::AccountInfo, entrypoint::ProgramResult, fee_calculator::FeeCalculator,
         hash::Hash, instruction::Instruction, instruction::InstructionError, message::Message,
-        native_token::safe_to_lamports, program_error::ProgramError, program_stubs, pubkey::Pubkey,
+        native_token::sol_to_lamports, program_error::ProgramError, program_stubs, pubkey::Pubkey,
         rent::Rent,
     },
-    safecoin_runtime::{
+    solana_runtime::{
         bank::{Bank, Builtin, ExecuteTimings},
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
         genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
     },
-    safecoin_sdk::{
+    solana_sdk::{
         account::Account,
         clock::Slot,
         genesis_config::GenesisConfig,
@@ -28,7 +28,7 @@ use {
         },
         signature::{Keypair, Signer},
     },
-    safecoin_vote_program::vote_state::{VoteState, VoteStateVersions},
+    solana_vote_program::vote_state::{VoteState, VoteStateVersions},
     std::{
         cell::RefCell,
         collections::HashMap,
@@ -48,12 +48,12 @@ use {
     tokio::task::JoinHandle,
 };
 
-// Export types so test clients can limit their safecoin crate dependencies
-pub use safecoin_banks_client::BanksClient;
+// Export types so test clients can limit their solana crate dependencies
+pub use solana_banks_client::BanksClient;
 pub mod programs;
 
 #[macro_use]
-extern crate safecoin_bpf_loader_program;
+extern crate solana_bpf_loader_program;
 
 pub fn to_instruction_error(error: ProgramError) -> InstructionError {
     match error {
@@ -172,9 +172,9 @@ macro_rules! processor {
     ($process_instruction:expr) => {
         Some(
             |program_id: &Pubkey,
-             keyed_accounts: &[safecoin_sdk::keyed_account::KeyedAccount],
+             keyed_accounts: &[solana_sdk::keyed_account::KeyedAccount],
              input: &[u8],
-             invoke_context: &mut dyn safecoin_sdk::process_instruction::InvokeContext| {
+             invoke_context: &mut dyn solana_sdk::process_instruction::InvokeContext| {
                 $crate::builtin_process_instruction(
                     $process_instruction,
                     program_id,
@@ -189,7 +189,7 @@ macro_rules! processor {
 
 struct SyscallStubs {}
 impl program_stubs::SyscallStubs for SyscallStubs {
-    fn safe_log(&self, message: &str) {
+    fn sol_log(&self, message: &str) {
         let invoke_context = get_invoke_context();
         let logger = invoke_context.get_logger();
         let logger = logger.borrow_mut();
@@ -198,7 +198,7 @@ impl program_stubs::SyscallStubs for SyscallStubs {
         }
     }
 
-    fn safe_invoke_signed(
+    fn sol_invoke_signed(
         &self,
         instruction: &Instruction,
         account_infos: &[AccountInfo],
@@ -286,7 +286,7 @@ impl program_stubs::SyscallStubs for SyscallStubs {
 
         invoke_context.record_instruction(&instruction);
 
-        safecoin_runtime::message_processor::MessageProcessor::process_cross_program_instruction(
+        solana_runtime::message_processor::MessageProcessor::process_cross_program_instruction(
             &message,
             &executables,
             &accounts,
@@ -426,11 +426,11 @@ impl Default for ProgramTest {
     /// * the current working directory
     ///
     fn default() -> Self {
-        safecoin_logger::setup_with_default(
-            "safecoin_bpf_loader=debug,\
+        solana_logger::setup_with_default(
+            "solana_bpf_loader=debug,\
              solana_rbpf::vm=debug,\
-             safecoin_runtime::message_processor=debug,\
-             safecoin_runtime::system_instruction_processor=trace,\
+             solana_runtime::message_processor=debug,\
+             solana_runtime::system_instruction_processor=trace,\
              solana_program_test=info",
         );
         let prefer_bpf = std::env::var("BPF_OUT_DIR").is_ok();
@@ -611,7 +611,7 @@ impl ProgramTest {
         let bootstrap_validator_lamports = rent.minimum_balance(VoteState::size_of());
 
         let mut gci = create_genesis_config_with_leader(
-            safe_to_lamports(1_000_000.0),
+            sol_to_lamports(1_000_000.0),
             &bootstrap_validator_pubkey,
             bootstrap_validator_lamports,
         );
@@ -625,8 +625,8 @@ impl ProgramTest {
         let mut bank = Bank::new(&genesis_config);
 
         for loader in &[
-            safecoin_bpf_loader_deprecated_program!(),
-            safecoin_bpf_loader_program!(),
+            solana_bpf_loader_deprecated_program!(),
+            solana_bpf_loader_program!(),
         ] {
             bank.add_builtin(&loader.0, loader.1, loader.2);
         }
@@ -698,7 +698,7 @@ impl ProgramTest {
     /// Start the test client
     ///
     /// Returns a `BanksClient` interface into the test environment as well as a payer `Keypair`
-    /// with SAFE for sending transactions
+    /// with SOL for sending transactions
     pub async fn start_with_context(self) -> ProgramTestContext {
         let (bank_forks, block_commitment_cache, last_blockhash, gci) = self.setup_bank();
         let transport =
@@ -870,7 +870,7 @@ impl ProgramTestContext {
         ));
         bank_forks.set_root(
             pre_warp_slot,
-            &safecoin_runtime::accounts_background_service::ABSRequestSender::default(),
+            &solana_runtime::accounts_background_service::ABSRequestSender::default(),
             Some(warp_slot),
         );
 

@@ -1,13 +1,13 @@
 use serde_json::Value;
-use safecoin_cli::{
+use solana_cli::{
     cli::{process_command, CliCommand, CliConfig},
     program::ProgramCliCommand,
 };
-use safecoin_cli_output::OutputFormat;
-use safecoin_client::rpc_client::RpcClient;
-use safecoin_core::test_validator::TestValidator;
-use safecoin_faucet::faucet::run_local_faucet;
-use safecoin_sdk::{
+use solana_cli_output::OutputFormat;
+use solana_client::rpc_client::RpcClient;
+use solana_core::test_validator::TestValidator;
+use solana_faucet::faucet::run_local_faucet;
+use solana_sdk::{
     account_utils::StateMut,
     bpf_loader,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
@@ -19,7 +19,7 @@ use std::{env, fs::File, io::Read, path::PathBuf, str::FromStr};
 
 #[test]
 fn test_cli_program_deploy_non_upgradeable() {
-    safecoin_logger::setup();
+    solana_logger::setup();
 
     let mut pathbuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     pathbuf.push("tests");
@@ -138,7 +138,7 @@ fn test_cli_program_deploy_non_upgradeable() {
 
 #[test]
 fn test_cli_program_deploy_no_authority() {
-    safecoin_logger::setup();
+    solana_logger::setup();
 
     let mut pathbuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     pathbuf.push("tests");
@@ -222,7 +222,7 @@ fn test_cli_program_deploy_no_authority() {
 
 #[test]
 fn test_cli_program_deploy_with_authority() {
-    safecoin_logger::setup();
+    solana_logger::setup();
 
     let mut pathbuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     pathbuf.push("tests");
@@ -545,7 +545,7 @@ fn test_cli_program_deploy_with_authority() {
 
 #[test]
 fn test_cli_program_write_buffer() {
-    safecoin_logger::setup();
+    solana_logger::setup();
 
     let mut pathbuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     pathbuf.push("tests");
@@ -768,7 +768,7 @@ fn test_cli_program_write_buffer() {
 
 #[test]
 fn test_cli_program_set_buffer_authority() {
-    safecoin_logger::setup();
+    solana_logger::setup();
 
     let mut pathbuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     pathbuf.push("tests");
@@ -882,7 +882,7 @@ fn test_cli_program_set_buffer_authority() {
 
 #[test]
 fn test_cli_program_mismatch_buffer_authority() {
-    safecoin_logger::setup();
+    solana_logger::setup();
 
     let mut pathbuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     pathbuf.push("tests");
@@ -972,7 +972,7 @@ fn test_cli_program_mismatch_buffer_authority() {
 
 #[test]
 fn test_cli_program_show() {
-    safecoin_logger::setup();
+    solana_logger::setup();
 
     let mut pathbuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     pathbuf.push("tests");
@@ -1145,7 +1145,7 @@ fn test_cli_program_show() {
 
 #[test]
 fn test_cli_program_dump() {
-    safecoin_logger::setup();
+    solana_logger::setup();
 
     let mut pathbuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     pathbuf.push("tests");

@@ -4,7 +4,7 @@ import {
   ParsedInstruction,
   ParsedTransaction,
   BPF_LOADER_PROGRAM_ID,
-} from "@safecoin/web3.js";
+} from "@solana/web3.js";
 import { InstructionCard } from "../InstructionCard";
 import { coerce } from "superstruct";
 import { ParsedInfo } from "validators";

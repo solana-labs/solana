@@ -1,4 +1,4 @@
-declare module '@safecoin/web3.js' {
+declare module '@solana/web3.js' {
   import * as BufferLayout from 'buffer-layout';
 
   // === src/publickey.js ===
@@ -263,7 +263,7 @@ declare module '@safecoin/web3.js' {
   };
 
   export type Version = {
-    'safecoin-core': string;
+    'solana-core': string;
     'feature-set'?: number;
   };
 
@@ -1108,5 +1108,5 @@ declare module '@safecoin/web3.js' {
   export function clusterApiUrl(cluster?: Cluster, tls?: boolean): string;
 
   // === src/index.js ===
-  export const LAMPORTS_PER_SAFE: number;
+  export const LAMPORTS_PER_SOL: number;
 }

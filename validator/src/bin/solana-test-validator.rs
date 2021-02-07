@@ -1,26 +1,26 @@
 use {
     clap::{value_t, value_t_or_exit, App, Arg},
     fd_lock::FdLock,
-    safecoin_clap_utils::{
+    solana_clap_utils::{
         input_parsers::{pubkey_of, pubkeys_of},
         input_validators::{
             is_pubkey, is_pubkey_or_keypair, is_slot, is_url_or_moniker,
             normalize_to_url_if_moniker,
         },
     },
-    safecoin_client::rpc_client::RpcClient,
-    safecoin_core::rpc::JsonRpcConfig,
-    safecoin_faucet::faucet::{run_local_faucet_with_port, FAUCET_PORT},
-    safecoin_sdk::{
+    solana_client::rpc_client::RpcClient,
+    solana_core::rpc::JsonRpcConfig,
+    solana_faucet::faucet::{run_local_faucet_with_port, FAUCET_PORT},
+    solana_sdk::{
         account::Account,
         clock::Slot,
-        native_token::safe_to_lamports,
+        native_token::sol_to_lamports,
         pubkey::Pubkey,
         rpc_port,
         signature::{read_keypair_file, write_keypair_file, Keypair, Signer},
         system_program,
     },
-    safecoin_validator::{
+    solana_validator::{
         dashboard::Dashboard, record_start, redirect_stderr_to_file, test_validator::*,
     },
     std::{
@@ -44,9 +44,9 @@ enum Output {
 fn main() {
     let default_rpc_port = rpc_port::DEFAULT_RPC_PORT.to_string();
 
-    let matches = App::new("safecoin-test-validator")
+    let matches = App::new("solana-test-validator")
         .about("Test Validator")
-        .version(safecoin_version::version!())
+        .version(solana_version::version!())
         .arg({
             let arg = Arg::with_name("config_file")
                 .short("C")
@@ -54,7 +54,7 @@ fn main() {
                 .value_name("PATH")
                 .takes_value(true)
                 .help("Configuration file to use");
-            if let Some(ref config_file) = *safecoin_cli_config::CONFIG_FILE {
+            if let Some(ref config_file) = *solana_cli_config::CONFIG_FILE {
                 arg.default_value(&config_file)
             } else {
                 arg
@@ -125,7 +125,7 @@ fn main() {
                 .value_name("PORT")
                 .takes_value(true)
                 .default_value(&default_rpc_port)
-                .validator(safecoin_validator::port_validator)
+                .validator(solana_validator::port_validator)
                 .help("Use this port for JSON RPC and the next port for the RPC websocket"),
         )
         .arg(
@@ -174,9 +174,9 @@ fn main() {
         .get_matches();
 
     let cli_config = if let Some(config_file) = matches.value_of("config_file") {
-        safecoin_cli_config::Config::load(config_file).unwrap_or_default()
+        solana_cli_config::Config::load(config_file).unwrap_or_default()
     } else {
-        safecoin_cli_config::Config::default()
+        solana_cli_config::Config::default()
     };
 
     let cluster_rpc_client = value_t!(matches, "json_rpc_url", String)
@@ -226,7 +226,7 @@ fn main() {
 
                     programs.push(ProgramInfo {
                         program_id: address,
-                        loader: safecoin_sdk::bpf_loader::id(),
+                        loader: solana_sdk::bpf_loader::id(),
                         program_path,
                     });
                 }
@@ -284,7 +284,7 @@ fn main() {
             exit(1);
         })
     }
-    safecoin_runtime::snapshot_utils::remove_tmp_snapshot_archives(&ledger_path);
+    solana_runtime::snapshot_utils::remove_tmp_snapshot_archives(&ledger_path);
 
     let validator_log_symlink = ledger_path.join("validator.log");
     let logfile = if output != Output::Log {
@@ -311,7 +311,7 @@ fn main() {
     };
     let _logger_thread = redirect_stderr_to_file(logfile);
 
-    let faucet_lamports = safe_to_lamports(1_000_000.);
+    let faucet_lamports = sol_to_lamports(1_000_000.);
     let faucet_keypair_file = ledger_path.join("faucet-keypair.json");
     if !faucet_keypair_file.exists() {
         write_keypair_file(&Keypair::new(), faucet_keypair_file.to_str().unwrap()).unwrap_or_else(

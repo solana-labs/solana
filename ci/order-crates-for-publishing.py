@@ -22,11 +22,11 @@ def get_packages():
 
     manifest_path = dict()
 
-    # Build dictionary of packages and their immediate safecoin-only dependencies
+    # Build dictionary of packages and their immediate solana-only dependencies
     dependency_graph = dict()
     for pkg in metadata['packages']:
         manifest_path[pkg['name']] = pkg['manifest_path'];
-        dependency_graph[pkg['name']] = [x['name'] for x in pkg['dependencies'] if x['name'].startswith('safecoin')];
+        dependency_graph[pkg['name']] = [x['name'] for x in pkg['dependencies'] if x['name'].startswith('solana')];
 
     # Check for direct circular dependencies
     circular_dependencies = set()

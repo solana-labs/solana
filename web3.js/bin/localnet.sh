@@ -6,8 +6,8 @@ channel=$(
   node -p '
     let p = [
       "../../package.json",
-      "../lib/node_modules/@safecoin/web3.js/package.json",
-      "../@safecoin/web3.js/package.json",
+      "../lib/node_modules/@solana/web3.js/package.json",
+      "../@solana/web3.js/package.json",
       "../package.json"
     ].find(require("fs").existsSync);
     if (!p) throw new Error("Unable to locate package.json");
@@ -62,7 +62,7 @@ update)
   fi
   (
     set -x
-    docker pull safecoinlabs/safecoin:"$channel"
+    docker pull solanalabs/solana:"$channel"
   )
   ;;
 up)
@@ -79,10 +79,10 @@ up)
 
   (
     set -x
-    RUST_LOG=${RUST_LOG:-safecoin=info,safecoin_runtime::message_processor=debug}
+    RUST_LOG=${RUST_LOG:-solana=info,solana_runtime::message_processor=debug}
     ARGS=(
       --detach
-      --name safecoin-localnet
+      --name solana-localnet
       --rm
       --publish 8001:8001/tcp # entrypoint
       --publish 8899:8899/tcp # rpc http
@@ -107,7 +107,7 @@ up)
       ARGS+=(--network "$network")
     fi
 
-    docker run "${ARGS[@]}" safecoinlabs/safecoin:"$channel"
+    docker run "${ARGS[@]}" solanalabs/solana:"$channel"
 
     for _ in 1 2 3 4 5; do
       if curl \
@@ -124,8 +124,8 @@ up)
 down)
   (
     set -x
-    if [[ $(docker ps --filter "name=^/safecoin-localnet$" -q) ]]; then
-      docker stop --time 0 safecoin-localnet
+    if [[ $(docker ps --filter "name=^/solana-localnet$" -q) ]]; then
+      docker stop --time 0 solana-localnet
     fi
   )
   ;;
@@ -140,10 +140,10 @@ logs)
   fi
 
   while $follow; do
-    if [[ $(docker ps -q -f "name=^/safecoin-localnet$") ]]; then
+    if [[ $(docker ps -q -f "name=^/solana-localnet$") ]]; then
       (
         set -x
-        docker logs safecoin-localnet -f
+        docker logs solana-localnet -f
       ) || true
     fi
     sleep 1
@@ -151,7 +151,7 @@ logs)
 
   (
     set -x
-    docker logs safecoin-localnet
+    docker logs solana-localnet
   )
   ;;
 *)

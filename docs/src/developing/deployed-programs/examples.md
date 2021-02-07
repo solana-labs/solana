@@ -29,7 +29,7 @@ Next, follow the steps in the git repository's
 
 ## Break
 
-[Break](https://break.safecoin.org/) is a React app that gives users a visceral
+[Break](https://break.solana.com/) is a React app that gives users a visceral
 feeling for just how fast and high-performance the Safecoin network really is. Can
 you _break_ the Safecoin blockchain? During a 15 second play-though, each click of
 a button or keystroke sends a new transaction to the cluster. Smash the keyboard
@@ -38,11 +38,11 @@ the network takes it all in stride!
 
 Break can be played on our Devnet, Testnet and Mainnet Beta networks. Plays are
 free on Devnet and Testnet, where the session is funded by a network faucet. On
-Mainnet Beta, users pay to play 0.08 SAFE per game. The session account can be
+Mainnet Beta, users pay to play 0.08 SOL per game. The session account can be
 funded by a local keystore wallet or by scanning a QR code from Trust Wallet to
 transfer the tokens.
 
-[Click here to play Break](https://break.safecoin.org/)
+[Click here to play Break](https://break.solana.com/)
 
 ### Build and Run
 

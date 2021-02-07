@@ -5,8 +5,8 @@ title: Terminology
 
 Many terms are thrown around when discussing inflation and the related components (e.g. rewards/yield/interest), we try to define and clarify some commonly used concept here:
 
-### Total Current Supply [SAFE]
-The total amount of tokens (locked or unlocked) that have been generated (via genesis block or protocol inflation) minus any tokens that have been burnt (via transaction fees or other mechanism) or slashed. At network launch, 500,000,000 SAFE were instantiated in the genesis block. Since then the Total Current Supply has been reduced by the burning of transaction fees and a planned token reduction event. Safecoin’s *Total Current Supply* can be found at https://explorer.safecoin.org/supply
+### Total Current Supply [SOL]
+The total amount of tokens (locked or unlocked) that have been generated (via genesis block or protocol inflation) minus any tokens that have been burnt (via transaction fees or other mechanism) or slashed. At network launch, 500,000,000 SOL were instantiated in the genesis block. Since then the Total Current Supply has been reduced by the burning of transaction fees and a planned token reduction event. Safecoin’s *Total Current Supply* can be found at https://explorer.solana.com/supply
 
 
 ### Inflation Rate [%]
@@ -14,7 +14,7 @@ The Safecoin protocol will automatically create new tokens on a predetermined in
 
 
 ### Inflation Schedule
-A deterministic description of token issuance over time. The Solana Foundation is proposing a dis-inflationary *Inflation Schedule*. I.e. Inflation starts at its highest value, the rate reduces over time until stabilizing at a predetermined long-term inflation rate (see discussion below). This schedule is completely and uniquely parameterized by three numbers:
+A deterministic description of token issuance over time. The Safecoin Foundation is proposing a dis-inflationary *Inflation Schedule*. I.e. Inflation starts at its highest value, the rate reduces over time until stabilizing at a predetermined long-term inflation rate (see discussion below). This schedule is completely and uniquely parameterized by three numbers:
 
 - **Initial Inflation Rate [%]**: The starting *Inflation Rate* for when inflation is first enabled. Token issuance rate can only decrease from this point.
 - **Dis-inflation Rate [%]**: The rate at which the *Inflation Rate* is reduced.
@@ -25,13 +25,13 @@ A deterministic description of token issuance over time. The Solana Foundation i
 
 The inflation rate actually observed on the Safecoin network after accounting for other factors that might decrease the *Total Current Supply*. Note that it is not possible for tokens to be created outside of what is described by the *Inflation Schedule*.
 
-- While the *Inflation Schedule* determines how the protocol issues SAFE, this neglects the concurrent elimination of tokens in the ecosystem due to various factors. The primary token burning mechanism is the burning of a portion of each transaction fee. While $100\%$ of each transaction fee is currently being destroyed, it is planned on reducing this burn rate to $50\%$ of each transaction fee, with the remaining fee to be retained by the validator that processes the transaction.
+- While the *Inflation Schedule* determines how the protocol issues SOL, this neglects the concurrent elimination of tokens in the ecosystem due to various factors. The primary token burning mechanism is the burning of a portion of each transaction fee. While $100\%$ of each transaction fee is currently being destroyed, it is planned on reducing this burn rate to $50\%$ of each transaction fee, with the remaining fee to be retained by the validator that processes the transaction.
 - Additional factors such as loss of private keys and slashing events should also be considered in a holistic analysis of the *Effective Inflation Rate*. For example, it’s estimated that $10-20\%$ of all BTC have been lost and are unrecoverable and that networks may experience similar yearly losses at the rate of $1-2\%$.
 
 ### Staking Yield [%]
-The rate of return (aka *interest*) earned on SAFE staked on the network. It is often quoted as an annualized rate (e.g. "the network *staking yield* is currently $10\%$ per year").
+The rate of return (aka *interest*) earned on SOL staked on the network. It is often quoted as an annualized rate (e.g. "the network *staking yield* is currently $10\%$ per year").
 - *Staking yield* is of great interest to validators and token-holders holders who wish to delegate their tokens to avoid token dilution due to inflation (the extent of which is discussed below).
-- $100\%$ of inflationary issuances are to be distributed to staked token-holders in proportion to their staked SAFE and to validators who charge a commission on the rewards earned by their delegated SAFE..
+- $100\%$ of inflationary issuances are to be distributed to staked token-holders in proportion to their staked SOL and to validators who charge a commission on the rewards earned by their delegated SOL..
     - There may be future consideration for an additional split of inflation issuance with the introduction of *Archivers* into the economy. *Archivers* are network participants who provide a decentralized storage service and should also be incentivized with token distribution from inflation issuances for this service.
 	- Similarly, early designs specified a fixed percentage of inflationary issuance to be delivered to the Foundation treasury for operational expenses and future grants. However, inflation will be launching without any portion allocated to the Foundation.
 - *Staking yield* can be calculated from the *Inflation Schedule* along with the fraction of the *Total Current Supply* that is staked at any given time. The explicit relationship is given by:
@@ -39,9 +39,9 @@ The rate of return (aka *interest*) earned on SAFE staked on the network. It is 
 $$
 \begin{aligned}
 \text{Staking Yield} =~&\text{Inflation Rate}\times\text{Validator Uptime}~\times \\
-&\left( 1 - \text{Validator Fee} \right) \times \left( \frac{1}{\%~\text{SAFE Staked}} \right) \\
+&\left( 1 - \text{Validator Fee} \right) \times \left( \frac{1}{\%~\text{SOL Staked}} \right) \\
 \text{where:}\\
-\%~\text{SAFE Staked} &= \frac{\text{Total SAFE Staked}}{\text{Total Current Supply}}
+\%~\text{SOL Staked} &= \frac{\text{Total SOL Staked}}{\text{Total Current Supply}}
 \end{aligned}
 $$
 

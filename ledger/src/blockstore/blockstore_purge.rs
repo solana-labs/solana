@@ -349,7 +349,7 @@ pub mod tests {
         get_tmp_ledger_path,
     };
     use bincode::serialize;
-    use safecoin_sdk::{
+    use solana_sdk::{
         hash::{hash, Hash},
         message::Message,
     };

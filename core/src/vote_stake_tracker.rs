@@ -1,5 +1,5 @@
-use safecoin_runtime::commitment::VOTE_THRESHOLD_SIZE;
-use safecoin_sdk::pubkey::Pubkey;
+use solana_runtime::commitment::VOTE_THRESHOLD_SIZE;
+use solana_sdk::pubkey::Pubkey;
 use std::{collections::HashSet, sync::Arc};
 
 #[derive(Default)]
@@ -53,7 +53,7 @@ mod test {
         let total_epoch_stake = 10;
         let mut vote_stake_tracker = VoteStakeTracker::default();
         for i in 0..10 {
-            let pubkey = Arc::new(safecoin_sdk::pubkey::new_rand());
+            let pubkey = Arc::new(solana_sdk::pubkey::new_rand());
             let (is_confirmed, is_new) =
                 vote_stake_tracker.add_vote_pubkey(pubkey.clone(), 1, total_epoch_stake);
             let stake = vote_stake_tracker.stake();

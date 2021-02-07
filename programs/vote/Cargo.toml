@@ -1,11 +1,11 @@
 [package]
-name = "safecoin-vote-program"
+name = "solana-vote-program"
 version = "1.6.0"
 description = "Safecoin Vote program"
 authors = ["Safecoin Maintainers <maintainers@solana.foundation>"]
-repository = "https://github.com/solana-labs/safecoin"
+repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
-homepage = "https://safecoin.org/"
+homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
@@ -15,11 +15,11 @@ num-derive = "0.3"
 num-traits = "0.2"
 serde = "1.0.122"
 serde_derive = "1.0.103"
-safecoin-frozen-abi = { path = "../../frozen-abi", version = "1.6.0" }
-safecoin-frozen-abi-macro = { path = "../../frozen-abi/macro", version = "1.6.0" }
-safecoin-logger = { path = "../../logger", version = "1.6.0" }
-safecoin-metrics = { path = "../../metrics", version = "1.6.0" }
-safecoin-sdk = { path = "../../sdk", version = "1.6.0" }
+solana-frozen-abi = { path = "../../frozen-abi", version = "1.6.0" }
+solana-frozen-abi-macro = { path = "../../frozen-abi/macro", version = "1.6.0" }
+solana-logger = { path = "../../logger", version = "1.6.0" }
+solana-metrics = { path = "../../metrics", version = "1.6.0" }
+solana-sdk = { path = "../../sdk", version = "1.6.0" }
 thiserror = "1.0"
 
 [build-dependencies]
@@ -27,7 +27,7 @@ rustc_version = "0.2"
 
 [lib]
 crate-type = ["lib"]
-name = "safecoin_vote_program"
+name = "solana_vote_program"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

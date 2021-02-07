@@ -56,7 +56,7 @@ fi
 set -x
 
 : "${INFLUXDB_IMAGE:=influxdb:1.7}"
-: "${GRAFANA_IMAGE:=safecoinlabs/grafana:stable}"
+: "${GRAFANA_IMAGE:=solanalabs/grafana:stable}"
 : "${GRAFANA_IMAGE:=grafana/grafana:5.2.3}"
 
 docker pull $INFLUXDB_IMAGE

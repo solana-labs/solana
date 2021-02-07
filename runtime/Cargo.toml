@@ -1,11 +1,11 @@
 [package]
-name = "safecoin-runtime"
+name = "solana-runtime"
 version = "1.6.0"
 description = "Safecoin runtime"
 authors = ["Safecoin Maintainers <maintainers@solana.foundation>"]
-repository = "https://github.com/solana-labs/safecoin"
+repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
-homepage = "https://safecoin.org/"
+homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
@@ -35,17 +35,17 @@ rayon = "1.5.0"
 regex = "1.3.9"
 serde = { version = "1.0.122", features = ["rc"] }
 serde_derive = "1.0.103"
-safecoin-config-program = { path = "../programs/config", version = "1.6.0" }
-safecoin-frozen-abi = { path = "../frozen-abi", version = "1.6.0" }
-safecoin-frozen-abi-macro = { path = "../frozen-abi/macro", version = "1.6.0" }
-safecoin-logger = { path = "../logger", version = "1.6.0" }
-safecoin-measure = { path = "../measure", version = "1.6.0" }
-safecoin-metrics = { path = "../metrics", version = "1.6.0" }
-safecoin-rayon-threadlimit = { path = "../rayon-threadlimit", version = "1.6.0" }
-safecoin-sdk = { path = "../sdk", version = "1.6.0" }
-safecoin-stake-program = { path = "../programs/stake", version = "1.6.0" }
-safecoin-vote-program = { path = "../programs/vote", version = "1.6.0" }
-safecoin-secp256k1-program = { path = "../programs/secp256k1", version = "1.6.0" }
+solana-config-program = { path = "../programs/config", version = "1.6.0" }
+solana-frozen-abi = { path = "../frozen-abi", version = "1.6.0" }
+solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "1.6.0" }
+solana-logger = { path = "../logger", version = "1.6.0" }
+solana-measure = { path = "../measure", version = "1.6.0" }
+solana-metrics = { path = "../metrics", version = "1.6.0" }
+solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "1.6.0" }
+solana-sdk = { path = "../sdk", version = "1.6.0" }
+solana-stake-program = { path = "../programs/stake", version = "1.6.0" }
+solana-vote-program = { path = "../programs/vote", version = "1.6.0" }
+solana-secp256k1-program = { path = "../programs/secp256k1", version = "1.6.0" }
 symlink = "0.1.0"
 tar = "0.4.28"
 tempfile = "3.1.0"
@@ -54,11 +54,11 @@ zstd = "0.5.1"
 
 [lib]
 crate-type = ["lib"]
-name = "safecoin_runtime"
+name = "solana_runtime"
 
 [dev-dependencies]
 assert_matches = "1.3.0"
-safecoin-noop-program = { path = "../programs/noop", version = "1.6.0" }
+solana-noop-program = { path = "../programs/noop", version = "1.6.0" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

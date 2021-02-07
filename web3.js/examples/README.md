@@ -5,6 +5,6 @@ directory by running `npm install`.
 Additionally most of the examples attempt to connect to a local cluster.  Start
 your local cluster first by running:
 ```bash
-$ npx safecoin-localnet update
-$ npx safecoin-localnet up
+$ npx solana-localnet update
+$ npx solana-localnet up
 ```

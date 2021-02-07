@@ -12,7 +12,7 @@
 @import '~bootstrap/scss/functions.scss';
 
 // Custom variables
-@import 'safecoin-variables';
+@import 'solana-variables';
 
 // Dashkit variables
 @import 'dashkit/variables';
@@ -24,4 +24,4 @@
 @import 'dashkit/dashkit';
 
 // Custom core
-@import 'safecoin';
+@import 'solana';

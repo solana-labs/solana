@@ -1,7 +1,7 @@
 use crate::parse_instruction::{ParsableProgram, ParseInstructionError, ParsedInstructionEnum};
 use bincode::deserialize;
 use serde_json::json;
-use safecoin_sdk::{
+use solana_sdk::{
     instruction::CompiledInstruction, loader_instruction::LoaderInstruction, pubkey::Pubkey,
 };
 
@@ -37,7 +37,7 @@ pub fn parse_bpf_loader(
 #[cfg(test)]
 mod test {
     use super::*;
-    use safecoin_sdk::{message::Message, pubkey};
+    use solana_sdk::{message::Message, pubkey};
 
     #[test]
     fn test_parse_bpf_loader_instructions() {
@@ -49,7 +49,7 @@ mod test {
         let account_keys = vec![fee_payer, account_pubkey];
         let missing_account_keys = vec![account_pubkey];
 
-        let instruction = safecoin_sdk::loader_instruction::write(
+        let instruction = solana_sdk::loader_instruction::write(
             &account_pubkey,
             &program_id,
             offset,
@@ -69,7 +69,7 @@ mod test {
         );
         assert!(parse_bpf_loader(&message.instructions[0], &missing_account_keys).is_err());
 
-        let instruction = safecoin_sdk::loader_instruction::finalize(&account_pubkey, &program_id);
+        let instruction = solana_sdk::loader_instruction::finalize(&account_pubkey, &program_id);
         let message = Message::new(&[instruction], Some(&fee_payer));
         assert_eq!(
             parse_bpf_loader(&message.instructions[0], &account_keys).unwrap(),

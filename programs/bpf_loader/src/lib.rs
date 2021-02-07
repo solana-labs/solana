@@ -19,8 +19,8 @@ use solana_rbpf::{
     memory_region::MemoryRegion,
     vm::{Config, EbpfVm, Executable, InstructionMeter},
 };
-use safecoin_runtime::message_processor::MessageProcessor;
-use safecoin_sdk::{
+use solana_runtime::message_processor::MessageProcessor;
+use solana_sdk::{
     account_utils::State,
     bpf_loader, bpf_loader_deprecated,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
@@ -44,10 +44,10 @@ use safecoin_sdk::{
 use std::{cell::RefCell, fmt::Debug, rc::Rc, sync::Arc};
 use thiserror::Error;
 
-safecoin_sdk::declare_builtin!(
-    safecoin_sdk::bpf_loader::ID,
-    safecoin_bpf_loader_program,
-    safecoin_bpf_loader_program::process_instruction
+solana_sdk::declare_builtin!(
+    solana_sdk::bpf_loader::ID,
+    solana_bpf_loader_program,
+    solana_bpf_loader_program::process_instruction
 );
 
 /// Errors returned by functions the BPF Loader registers with the VM
@@ -754,7 +754,7 @@ pub struct BPFExecutor {
     program: Box<dyn Executable<BPFError, ThisInstructionMeter>>,
 }
 
-// Well, implement Debug for solana_rbpf::vm::Executable in safecoin-rbpf...
+// Well, implement Debug for solana_rbpf::vm::Executable in solana-rbpf...
 impl Debug for BPFExecutor {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "BPFExecutor({:p})", self)
@@ -844,12 +844,12 @@ impl Executor for BPFExecutor {
 mod tests {
     use super::*;
     use rand::Rng;
-    use safecoin_runtime::{
+    use solana_runtime::{
         bank::Bank,
         bank_client::BankClient,
         message_processor::{Executors, ThisInvokeContext},
     };
-    use safecoin_sdk::{
+    use solana_sdk::{
         account::{create_account, Account},
         account_utils::StateMut,
         client::SyncClient,
@@ -916,7 +916,7 @@ mod tests {
     #[test]
     fn test_bpf_loader_write() {
         let program_id = bpf_loader::id();
-        let program_key = safecoin_sdk::pubkey::new_rand();
+        let program_key = solana_sdk::pubkey::new_rand();
         let program_account = Account::new_ref(1, 0, &program_id);
         let keyed_accounts = vec![KeyedAccount::new(&program_key, false, &program_account)];
         let instruction_data = bincode::serialize(&LoaderInstruction::Write {
@@ -983,7 +983,7 @@ mod tests {
     #[test]
     fn test_bpf_loader_finalize() {
         let program_id = bpf_loader::id();
-        let program_key = safecoin_sdk::pubkey::new_rand();
+        let program_key = solana_sdk::pubkey::new_rand();
         let mut file = File::open("test_elfs/noop_aligned.so").expect("file open failed");
         let mut elf = Vec::new();
         let rent = Rent::default();
@@ -1047,7 +1047,7 @@ mod tests {
     #[test]
     fn test_bpf_loader_invoke_main() {
         let program_id = bpf_loader::id();
-        let program_key = safecoin_sdk::pubkey::new_rand();
+        let program_key = solana_sdk::pubkey::new_rand();
 
         // Create program account
         let mut file = File::open("test_elfs/noop_aligned.so").expect("file open failed");
@@ -1122,7 +1122,7 @@ mod tests {
         );
 
         // Case: With duplicate accounts
-        let duplicate_key = safecoin_sdk::pubkey::new_rand();
+        let duplicate_key = solana_sdk::pubkey::new_rand();
         let parameter_account = Account::new_ref(1, 0, &program_id);
         let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &program_account)];
         keyed_accounts.push(KeyedAccount::new(&duplicate_key, false, &parameter_account));
@@ -1141,7 +1141,7 @@ mod tests {
     #[test]
     fn test_bpf_loader_serialize_unaligned() {
         let program_id = bpf_loader_deprecated::id();
-        let program_key = safecoin_sdk::pubkey::new_rand();
+        let program_key = solana_sdk::pubkey::new_rand();
 
         // Create program account
         let mut file = File::open("test_elfs/noop_unaligned.so").expect("file open failed");
@@ -1166,7 +1166,7 @@ mod tests {
         );
 
         // Case: With duplicate accounts
-        let duplicate_key = safecoin_sdk::pubkey::new_rand();
+        let duplicate_key = solana_sdk::pubkey::new_rand();
         let parameter_account = Account::new_ref(1, 0, &program_id);
         let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &program_account)];
         keyed_accounts.push(KeyedAccount::new(&duplicate_key, false, &parameter_account));
@@ -1185,7 +1185,7 @@ mod tests {
     #[test]
     fn test_bpf_loader_serialize_aligned() {
         let program_id = bpf_loader::id();
-        let program_key = safecoin_sdk::pubkey::new_rand();
+        let program_key = solana_sdk::pubkey::new_rand();
 
         // Create program account
         let mut file = File::open("test_elfs/noop_aligned.so").expect("file open failed");
@@ -1210,7 +1210,7 @@ mod tests {
         );
 
         // Case: With duplicate accounts
-        let duplicate_key = safecoin_sdk::pubkey::new_rand();
+        let duplicate_key = solana_sdk::pubkey::new_rand();
         let parameter_account = Account::new_ref(1, 0, &program_id);
         let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &program_account)];
         keyed_accounts.push(KeyedAccount::new(&duplicate_key, false, &parameter_account));
@@ -1525,7 +1525,7 @@ mod tests {
         let mut bank = Bank::new(&genesis_config);
         bank.feature_set = Arc::new(FeatureSet::all_enabled());
         bank.add_builtin(
-            "safecoin_bpf_loader_upgradeable_program",
+            "solana_bpf_loader_upgradeable_program",
             bpf_loader_upgradeable::id(),
             process_instruction,
         );
@@ -3232,8 +3232,8 @@ mod tests {
     #[test]
     #[ignore]
     fn test_fuzz() {
-        let program_id = safecoin_sdk::pubkey::new_rand();
-        let program_key = safecoin_sdk::pubkey::new_rand();
+        let program_id = solana_sdk::pubkey::new_rand();
+        let program_key = solana_sdk::pubkey::new_rand();
 
         // Create program account
         let mut file = File::open("test_elfs/noop_aligned.so").expect("file open failed");

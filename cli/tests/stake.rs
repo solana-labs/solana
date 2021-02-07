@@ -1,24 +1,24 @@
-use safecoin_cli::{
+use solana_cli::{
     cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
     spend_utils::SpendAmount,
     test_utils::{check_ready, check_recent_balance},
 };
-use safecoin_cli_output::{parse_sign_only_reply_string, OutputFormat};
-use safecoin_client::{
+use solana_cli_output::{parse_sign_only_reply_string, OutputFormat};
+use solana_client::{
     blockhash_query::{self, BlockhashQuery},
     nonce_utils,
     rpc_client::RpcClient,
 };
-use safecoin_core::test_validator::TestValidator;
-use safecoin_faucet::faucet::run_local_faucet;
-use safecoin_sdk::{
+use solana_core::test_validator::TestValidator;
+use solana_faucet::faucet::run_local_faucet;
+use solana_sdk::{
     account_utils::StateMut,
     commitment_config::CommitmentConfig,
     nonce::State as NonceState,
     pubkey::Pubkey,
     signature::{keypair_from_seed, Keypair, Signer},
 };
-use safecoin_stake_program::{
+use solana_stake_program::{
     stake_instruction::LockupArgs,
     stake_state::{Lockup, StakeAuthorize, StakeState},
 };
@@ -110,7 +110,7 @@ fn test_stake_delegation_force() {
 
 #[test]
 fn test_seed_stake_delegation_and_deactivation() {
-    safecoin_logger::setup();
+    solana_logger::setup();
 
     let mint_keypair = Keypair::new();
     let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
@@ -137,7 +137,7 @@ fn test_seed_stake_delegation_and_deactivation() {
     let stake_address = Pubkey::create_with_seed(
         &config_validator.signers[0].pubkey(),
         "hi there",
-        &safecoin_stake_program::id(),
+        &solana_stake_program::id(),
     )
     .expect("bad seed");
 
@@ -188,7 +188,7 @@ fn test_seed_stake_delegation_and_deactivation() {
 
 #[test]
 fn test_stake_delegation_and_deactivation() {
-    safecoin_logger::setup();
+    solana_logger::setup();
 
     let mint_keypair = Keypair::new();
     let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
@@ -262,7 +262,7 @@ fn test_stake_delegation_and_deactivation() {
 
 #[test]
 fn test_offline_stake_delegation_and_deactivation() {
-    safecoin_logger::setup();
+    solana_logger::setup();
 
     let mint_keypair = Keypair::new();
     let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
@@ -393,7 +393,7 @@ fn test_offline_stake_delegation_and_deactivation() {
 
 #[test]
 fn test_nonced_stake_delegation_and_deactivation() {
-    safecoin_logger::setup();
+    solana_logger::setup();
 
     let mint_keypair = Keypair::new();
     let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
@@ -506,7 +506,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
 
 #[test]
 fn test_stake_authorize() {
-    safecoin_logger::setup();
+    solana_logger::setup();
 
     let mint_keypair = Keypair::new();
     let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
@@ -760,7 +760,7 @@ fn test_stake_authorize() {
 
 #[test]
 fn test_stake_authorize_with_fee_payer() {
-    safecoin_logger::setup();
+    solana_logger::setup();
     const SIG_FEE: u64 = 42;
 
     let mint_keypair = Keypair::new();
@@ -884,7 +884,7 @@ fn test_stake_authorize_with_fee_payer() {
 
 #[test]
 fn test_stake_split() {
-    safecoin_logger::setup();
+    solana_logger::setup();
 
     let mint_keypair = Keypair::new();
     let test_validator = TestValidator::with_custom_fees(mint_keypair.pubkey(), 1);
@@ -1026,7 +1026,7 @@ fn test_stake_split() {
 
 #[test]
 fn test_stake_set_lockup() {
-    safecoin_logger::setup();
+    solana_logger::setup();
 
     let mint_keypair = Keypair::new();
     let test_validator = TestValidator::with_custom_fees(mint_keypair.pubkey(), 1);
@@ -1276,7 +1276,7 @@ fn test_stake_set_lockup() {
 
 #[test]
 fn test_offline_nonced_create_stake_account_and_withdraw() {
-    safecoin_logger::setup();
+    solana_logger::setup();
 
     let mint_keypair = Keypair::new();
     let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
@@ -1481,6 +1481,6 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     };
     process_command(&config).unwrap();
     let seed_address =
-        Pubkey::create_with_seed(&stake_pubkey, seed, &safecoin_stake_program::id()).unwrap();
+        Pubkey::create_with_seed(&stake_pubkey, seed, &solana_stake_program::id()).unwrap();
     check_recent_balance(50_000, &rpc_client, &seed_address);
 }

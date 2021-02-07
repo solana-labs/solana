@@ -4,9 +4,9 @@ pub mod date_instruction;
 
 use bincode::{deserialize, serialize, serialized_size};
 use serde_derive::{Deserialize, Serialize};
-use safecoin_sdk::{account::Account, pubkey::Pubkey, short_vec};
+use solana_sdk::{account::Account, pubkey::Pubkey, short_vec};
 
-safecoin_sdk::declare_id!("Config1111111111111111111111111111111111111");
+solana_sdk::declare_id!("Config1111111111111111111111111111111111111");
 
 pub trait ConfigState: serde::Serialize + Default {
     /// Maximum space that the serialized representation will require

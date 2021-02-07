@@ -6,5 +6,5 @@
 
 export const url = 'http://localhost:8899/';
 
-//export const url = 'https://devnet.safecoin.org/';
-//export const url = 'http://devnet.safecoin.org/';
+//export const url = 'https://devnet.solana.com/';
+//export const url = 'http://devnet.solana.com/';

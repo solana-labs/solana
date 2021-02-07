@@ -1,5 +1,5 @@
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
-use safecoin_sdk::{
+use solana_sdk::{
     bpf_loader_deprecated, entrypoint::MAX_PERMITTED_DATA_INCREASE, instruction::InstructionError,
     keyed_account::KeyedAccount, pubkey::Pubkey,
 };
@@ -242,7 +242,7 @@ pub fn deserialize_parameters_aligned(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use safecoin_sdk::{
+    use solana_sdk::{
         account::Account, account_info::AccountInfo, bpf_loader, entrypoint::deserialize,
     };
     use std::{
@@ -254,13 +254,13 @@ mod tests {
 
     #[test]
     fn test_serialize_parameters() {
-        let program_id = safecoin_sdk::pubkey::new_rand();
-        let dup_key = safecoin_sdk::pubkey::new_rand();
+        let program_id = solana_sdk::pubkey::new_rand();
+        let dup_key = solana_sdk::pubkey::new_rand();
         let keys = vec![
             dup_key,
             dup_key,
-            safecoin_sdk::pubkey::new_rand(),
-            safecoin_sdk::pubkey::new_rand(),
+            solana_sdk::pubkey::new_rand(),
+            solana_sdk::pubkey::new_rand(),
         ];
         let accounts = [
             RefCell::new(Account {

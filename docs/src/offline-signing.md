@@ -18,14 +18,14 @@ transaction.
 
 At present, the following commands support offline signing:
 
-- [`create-stake-account`](cli/usage.md#safecoin-create-stake-account)
-- [`deactivate-stake`](cli/usage.md#safecoin-deactivate-stake)
-- [`delegate-stake`](cli/usage.md#safecoin-delegate-stake)
-- [`split-stake`](cli/usage.md#safecoin-split-stake)
-- [`stake-authorize`](cli/usage.md#safecoin-stake-authorize)
-- [`stake-set-lockup`](cli/usage.md#safecoin-stake-set-lockup)
-- [`transfer`](cli/usage.md#safecoin-transfer)
-- [`withdraw-stake`](cli/usage.md#safecoin-withdraw-stake)
+- [`create-stake-account`](cli/usage.md#solana-create-stake-account)
+- [`deactivate-stake`](cli/usage.md#solana-deactivate-stake)
+- [`delegate-stake`](cli/usage.md#solana-delegate-stake)
+- [`split-stake`](cli/usage.md#solana-split-stake)
+- [`stake-authorize`](cli/usage.md#solana-stake-authorize)
+- [`stake-set-lockup`](cli/usage.md#solana-stake-set-lockup)
+- [`transfer`](cli/usage.md#solana-transfer)
+- [`withdraw-stake`](cli/usage.md#solana-withdraw-stake)
 
 ## Signing Transactions Offline
 
@@ -46,7 +46,7 @@ To sign a transaction offline, pass the following arguments on the command line
 Command
 
 ```bash
-safecoin@offline$ safecoin pay --sign-only --blockhash 5Tx8F3jgSHx21CbtjwmdaKPLM5tWmreWAnPrbqHomSJF \
+solana@offline$ solana pay --sign-only --blockhash 5Tx8F3jgSHx21CbtjwmdaKPLM5tWmreWAnPrbqHomSJF \
     recipient-keypair.json 1
 ```
 
@@ -76,7 +76,7 @@ following arguments on the command line
 Command
 
 ```bash
-safecoin@online$ safecoin pay --blockhash 5Tx8F3jgSHx21CbtjwmdaKPLM5tWmreWAnPrbqHomSJF \
+solana@online$ solana pay --blockhash 5Tx8F3jgSHx21CbtjwmdaKPLM5tWmreWAnPrbqHomSJF \
     --signer FhtzLVsmcV7S5XqGD79ErgoseCLhZYmEZnz9kQg1Rp7j=4vC38p4bz7XyiXrk6HtaooUqwxTWKocf45cstASGtmrD398biNJnmTcUCVEojE7wVQvgdYbjHJqRFZPpzfCQpmUN
     recipient-keypair.json 1
 ```
@@ -99,7 +99,7 @@ output
 Command (Offline Session #1)
 
 ```text
-safecoin@offline1$ safecoin transfer Fdri24WUGtrCXZ55nXiewAj6RM18hRHPGAjZk3o6vBut 10 \
+solana@offline1$ solana transfer Fdri24WUGtrCXZ55nXiewAj6RM18hRHPGAjZk3o6vBut 10 \
     --blockhash 7ALDjLv56a8f6sH6upAZALQKkXyjAwwENH9GomyM8Dbc \
     --sign-only \
     --keypair fee_payer.json \
@@ -119,7 +119,7 @@ Absent Signers (Pubkey):
 Command (Offline Session #2)
 
 ```text
-safecoin@offline2$ safecoin transfer Fdri24WUGtrCXZ55nXiewAj6RM18hRHPGAjZk3o6vBut 10 \
+solana@offline2$ solana transfer Fdri24WUGtrCXZ55nXiewAj6RM18hRHPGAjZk3o6vBut 10 \
     --blockhash 7ALDjLv56a8f6sH6upAZALQKkXyjAwwENH9GomyM8Dbc \
     --sign-only \
     --keypair from.json \
@@ -139,7 +139,7 @@ Absent Signers (Pubkey):
 Command (Online Submission)
 
 ```text
-safecoin@online$ safecoin transfer Fdri24WUGtrCXZ55nXiewAj6RM18hRHPGAjZk3o6vBut 10 \
+solana@online$ solana transfer Fdri24WUGtrCXZ55nXiewAj6RM18hRHPGAjZk3o6vBut 10 \
     --blockhash 7ALDjLv56a8f6sH6upAZALQKkXyjAwwENH9GomyM8Dbc \
     --from 674RgFMgdqdRoVtMqSBg7mHFbrrNm1h1r721H1ZMquHL \
     --signer 674RgFMgdqdRoVtMqSBg7mHFbrrNm1h1r721H1ZMquHL=3vJtnba4dKQmEAieAekC1rJnPUndBcpvqRPRMoPWqhLEMCty2SdUxt2yvC1wQW6wVUa5putZMt6kdwCaTv8gk7sQ \

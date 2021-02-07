@@ -1,9 +1,9 @@
 use console::Emoji;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::*;
-use safecoin_runtime::{bank_forks::ArchiveFormat, snapshot_utils};
-use safecoin_sdk::clock::Slot;
-use safecoin_sdk::hash::Hash;
+use solana_runtime::{bank_forks::ArchiveFormat, snapshot_utils};
+use solana_sdk::clock::Slot;
+use solana_sdk::hash::Hash;
 use std::fs::{self, File};
 use std::io;
 use std::io::Read;

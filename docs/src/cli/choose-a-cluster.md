@@ -11,17 +11,17 @@ You can check what cluster the Safecoin command-line tool (CLI) is currently tar
 running the following command:
 
 ```bash
-safecoin config get
+solana config get
 ```
 
-Use `safecoin config set` command to target a particular cluster. After setting
+Use `solana config set` command to target a particular cluster. After setting
 a cluster target, any future subcommands will send/receive information from that
 cluster.
 
 For example to target the Devnet cluster, run:
 
 ```bash
-safecoin config set --url https://devnet.safecoin.org
+solana config set --url https://devnet.solana.com
 ```
 
 ## Ensure Versions Match
@@ -31,13 +31,13 @@ matches the software version running on the cluster. To get the locally-installe
 CLI version, run:
 
 ```bash
-safecoin --version
+solana --version
 ```
 
 To get the cluster version, run:
 
 ```bash
-safecoin cluster-version
+solana cluster-version
 ```
 
 Ensure the local CLI version is greater than or equal to the cluster version.

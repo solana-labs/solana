@@ -1,9 +1,9 @@
-use safecoin_runtime::{
+use solana_runtime::{
     accounts_index::{AccountIndex, IndexKey},
     bank::Bank,
 };
-use safecoin_sdk::pubkey::Pubkey;
-use safecoin_stake_program::stake_state::StakeState;
+use solana_sdk::pubkey::Pubkey;
+use solana_stake_program::stake_state::StakeState;
 use std::{collections::HashSet, sync::Arc};
 
 pub struct NonCirculatingSupply {
@@ -29,15 +29,15 @@ pub fn calculate_non_circulating_supply(bank: &Arc<Bank>) -> NonCirculatingSuppl
         .contains(&AccountIndex::ProgramId)
     {
         bank.get_filtered_indexed_accounts(
-            &IndexKey::ProgramId(safecoin_stake_program::id()),
+            &IndexKey::ProgramId(solana_stake_program::id()),
             // The program-id account index checks for Account owner on inclusion. However, due to
             // the current AccountsDB implementation, an account may remain in storage as a
             // zero-lamport Account::Default() after being wiped and reinitialized in later
             // updates. We include the redundant filter here to avoid returning these accounts.
-            |account| account.owner == safecoin_stake_program::id(),
+            |account| account.owner == solana_stake_program::id(),
         )
     } else {
-        bank.get_program_accounts(&safecoin_stake_program::id())
+        bank.get_program_accounts(&solana_stake_program::id())
     };
     for (pubkey, account) in stake_accounts.iter() {
         let stake_account = StakeState::from(&account).unwrap_or_default();
@@ -72,7 +72,7 @@ pub fn calculate_non_circulating_supply(bank: &Arc<Bank>) -> NonCirculatingSuppl
 }
 
 // Mainnet-beta accounts that should be considered non-circulating
-safecoin_sdk::pubkeys!(
+solana_sdk::pubkeys!(
     non_circulating_accounts,
     [
         "9huDUZfxoJ7wGMTffUE7vh1xePqef7gyrLJu9NApncqA",
@@ -123,7 +123,7 @@ safecoin_sdk::pubkeys!(
 );
 
 // Withdraw authority for autostaked accounts on mainnet-beta
-safecoin_sdk::pubkeys!(
+solana_sdk::pubkeys!(
     withdraw_authority,
     [
         "8CUUMKYNGxdgYio5CLHRHyzMEhhVRMcqefgE6dLqnVRK",
@@ -136,12 +136,12 @@ safecoin_sdk::pubkeys!(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use safecoin_sdk::{
+    use solana_sdk::{
         account::Account,
         epoch_schedule::EpochSchedule,
         genesis_config::{ClusterType, GenesisConfig},
     };
-    use safecoin_stake_program::stake_state::{Authorized, Lockup, Meta, StakeState};
+    use solana_stake_program::stake_state::{Authorized, Lockup, Meta, StakeState};
     use std::{collections::BTreeMap, sync::Arc};
 
     fn new_from_parent(parent: &Arc<Bank>) -> Bank {
@@ -155,7 +155,7 @@ mod tests {
         let num_genesis_accounts = 10;
         for _ in 0..num_genesis_accounts {
             accounts.insert(
-                safecoin_sdk::pubkey::new_rand(),
+                solana_sdk::pubkey::new_rand(),
                 Account::new(balance, 0, &Pubkey::default()),
             );
         }
@@ -167,7 +167,7 @@ mod tests {
 
         let num_stake_accounts = 3;
         for _ in 0..num_stake_accounts {
-            let pubkey = safecoin_sdk::pubkey::new_rand();
+            let pubkey = solana_sdk::pubkey::new_rand();
             let meta = Meta {
                 authorized: Authorized::auto(&pubkey),
                 lockup: Lockup {
@@ -180,7 +180,7 @@ mod tests {
                 balance,
                 &StakeState::Initialized(meta),
                 std::mem::size_of::<StakeState>(),
-                &safecoin_stake_program::id(),
+                &solana_stake_program::id(),
             )
             .unwrap();
             accounts.insert(pubkey, stake_account);

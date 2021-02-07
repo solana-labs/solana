@@ -10,17 +10,17 @@ use rand::{thread_rng, Rng};
 use rayon::prelude::*;
 use rayon::ThreadPool;
 use serde::{Deserialize, Serialize};
-use safecoin_measure::measure::Measure;
-use safecoin_merkle_tree::MerkleTree;
-use safecoin_metrics::*;
-use safecoin_perf::cuda_runtime::PinnedVec;
-use safecoin_perf::perf_libs;
-use safecoin_perf::recycler::Recycler;
-use safecoin_rayon_threadlimit::get_thread_count;
-use safecoin_sdk::hash::Hash;
-use safecoin_sdk::packet::PACKET_DATA_SIZE;
-use safecoin_sdk::timing;
-use safecoin_sdk::transaction::Transaction;
+use solana_measure::measure::Measure;
+use solana_merkle_tree::MerkleTree;
+use solana_metrics::*;
+use solana_perf::cuda_runtime::PinnedVec;
+use solana_perf::perf_libs;
+use solana_perf::recycler::Recycler;
+use solana_rayon_threadlimit::get_thread_count;
+use solana_sdk::hash::Hash;
+use solana_sdk::packet::PACKET_DATA_SIZE;
+use solana_sdk::timing;
+use solana_sdk::transaction::Transaction;
 use std::cell::RefCell;
 use std::ffi::OsStr;
 use std::sync::mpsc::{Receiver, Sender};
@@ -52,9 +52,9 @@ fn init(name: &OsStr) {
     unsafe {
         INIT_HOOK.call_once(|| {
             let path;
-            let lib_name = if let Some(perf_libs_path) = safecoin_perf::perf_libs::locate_perf_libs()
+            let lib_name = if let Some(perf_libs_path) = solana_perf::perf_libs::locate_perf_libs()
             {
-                safecoin_perf::perf_libs::append_to_ld_library_path(
+                solana_perf::perf_libs::append_to_ld_library_path(
                     perf_libs_path.to_str().unwrap_or("").to_string(),
                 );
                 path = perf_libs_path.join(name);
@@ -385,7 +385,7 @@ impl EntrySlice for [Entry] {
     }
 
     fn verify_cpu_x86_simd(&self, start_hash: &Hash, simd_len: usize) -> EntryVerificationState {
-        use safecoin_sdk::hash::HASH_BYTES;
+        use solana_sdk::hash::HASH_BYTES;
         let now = Instant::now();
         let genesis = [Entry {
             num_hashes: 0,
@@ -693,8 +693,8 @@ mod tests {
     use super::*;
     use crate::entry::Entry;
     use chrono::prelude::Utc;
-    use safecoin_budget_program::budget_instruction;
-    use safecoin_sdk::{
+    use solana_budget_program::budget_instruction;
+    use solana_sdk::{
         hash::{hash, new_rand as hash_new_rand, Hash},
         message::Message,
         signature::{Keypair, Signer},
@@ -754,7 +754,7 @@ mod tests {
 
     #[test]
     fn test_transaction_signing() {
-        use safecoin_sdk::signature::Signature;
+        use solana_sdk::signature::Signature;
         let zero = Hash::default();
 
         let keypair = Keypair::new();
@@ -832,7 +832,7 @@ mod tests {
 
     #[test]
     fn test_verify_slice1() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let zero = Hash::default();
         let one = hash(&zero.as_ref());
         assert_eq!(vec![][..].verify(&zero), true); // base case
@@ -850,7 +850,7 @@ mod tests {
 
     #[test]
     fn test_verify_slice_with_hashes1() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let zero = Hash::default();
         let one = hash(&zero.as_ref());
         let two = hash(&one.as_ref());
@@ -870,7 +870,7 @@ mod tests {
 
     #[test]
     fn test_verify_slice_with_hashes_and_transactions() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let zero = Hash::default();
         let one = hash(&zero.as_ref());
         let two = hash(&one.as_ref());
@@ -1064,7 +1064,7 @@ mod tests {
 
     #[test]
     fn test_poh_verify_fuzz() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         for _ in 0..100 {
             let mut time = Measure::start("ticks");
             let num_ticks = thread_rng().gen_range(1, 100);

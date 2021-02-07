@@ -31,10 +31,10 @@ use bincode::serialize;
 use indexmap::map::{rayon::ParValues, Entry, IndexMap, Values};
 use indexmap::set::IndexSet;
 use rayon::{prelude::*, ThreadPool};
-use safecoin_sdk::hash::{hash, Hash};
-use safecoin_sdk::pubkey::Pubkey;
-use safecoin_sdk::signature::Keypair;
-use safecoin_sdk::timing::timestamp;
+use solana_sdk::hash::{hash, Hash};
+use solana_sdk::pubkey::Pubkey;
+use solana_sdk::signature::Keypair;
+use solana_sdk::timing::timestamp;
 use std::cmp;
 use std::collections::{hash_map, HashMap};
 use std::ops::{Index, IndexMut};
@@ -841,14 +841,14 @@ mod test {
         let v1 = VersionedCrdsValue::new(
             1,
             CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-                &safecoin_sdk::pubkey::new_rand(),
+                &solana_sdk::pubkey::new_rand(),
                 0,
             ))),
         );
         let v2 = VersionedCrdsValue::new(
             1,
             CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-                &safecoin_sdk::pubkey::new_rand(),
+                &solana_sdk::pubkey::new_rand(),
                 0,
             ))),
         );

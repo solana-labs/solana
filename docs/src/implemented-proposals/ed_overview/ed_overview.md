@@ -2,7 +2,7 @@
 title: Cluster Economics
 ---
 
-**Subject to change. Follow most recent economic discussions in the Safecoin forums: https://forums.safecoin.org**
+**Subject to change. Follow most recent economic discussions in the Safecoin forums: https://forums.solana.com**
 
 Safecoin’s crypto-economic system is designed to promote a healthy, long term self-sustaining economy with participant incentives aligned to the security and decentralization of the network. The main participants in this economy are validation-clients. Their contributions to the network, state validation, and their requisite incentive mechanisms are discussed below.
 

@@ -1,12 +1,12 @@
 //! The `packet` module defines data structures and methods to pull data from the network.
 use crate::recvmmsg::{recv_mmsg, NUM_RCVMMSGS};
-pub use safecoin_perf::packet::{
+pub use solana_perf::packet::{
     limited_deserialize, to_packets_chunked, Packets, PacketsRecycler, NUM_PACKETS,
     PACKETS_BATCH_SIZE, PACKETS_PER_BATCH,
 };
 
-use safecoin_metrics::inc_new_counter_debug;
-pub use safecoin_sdk::packet::{Meta, Packet, PACKET_DATA_SIZE};
+use solana_metrics::inc_new_counter_debug;
+pub use solana_sdk::packet::{Meta, Packet, PACKET_DATA_SIZE};
 use std::{io::Result, net::UdpSocket, time::Instant};
 
 pub fn recv_from(obj: &mut Packets, socket: &UdpSocket, max_wait_ms: usize) -> Result<usize> {
@@ -81,7 +81,7 @@ mod tests {
 
     #[test]
     pub fn packet_send_recv() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let recv_socket = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let addr = recv_socket.local_addr().unwrap();
         let send_socket = UdpSocket::bind("127.0.0.1:0").expect("bind");
@@ -131,7 +131,7 @@ mod tests {
 
     #[test]
     fn test_packet_resize() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let recv_socket = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let addr = recv_socket.local_addr().unwrap();
         let send_socket = UdpSocket::bind("127.0.0.1:0").expect("bind");

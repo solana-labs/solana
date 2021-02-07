@@ -1,8 +1,8 @@
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender};
-use safecoin_ledger::blockstore::Blockstore;
-use safecoin_measure::measure::Measure;
-use safecoin_runtime::bank::Bank;
-use safecoin_sdk::{feature_set, timing::slot_duration_from_slots_per_year};
+use solana_ledger::blockstore::Blockstore;
+use solana_measure::measure::Measure;
+use solana_runtime::bank::Bank;
+use solana_sdk::{feature_set, timing::slot_duration_from_slots_per_year};
 use std::{
     collections::HashMap,
     sync::{
@@ -31,7 +31,7 @@ impl CacheBlockTimeService {
     ) -> Self {
         let exit = exit.clone();
         let thread_hdl = Builder::new()
-            .name("safecoin-cache-block-time".to_string())
+            .name("solana-cache-block-time".to_string())
             .spawn(move || loop {
                 if exit.load(Ordering::Relaxed) {
                     break;

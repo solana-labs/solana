@@ -1,7 +1,7 @@
 use crate::contains::Contains;
 use dashmap::{mapref::entry::Entry::Occupied, DashMap};
 use log::*;
-use safecoin_sdk::{clock::Slot, pubkey::Pubkey};
+use solana_sdk::{clock::Slot, pubkey::Pubkey};
 use std::{
     borrow::Borrow,
     collections::{hash_map, HashMap, HashSet},

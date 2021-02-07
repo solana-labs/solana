@@ -4,7 +4,7 @@ import {
   Connection,
   Transaction,
   SystemProgram,
-  LAMPORTS_PER_SAFE,
+  LAMPORTS_PER_SOL,
 } from '../src';
 import {mockRpc, mockRpcEnabled} from './__mocks__/node-fetch';
 import {mockGetRecentBlockhash} from './mockrpc/get-recent-blockhash';
@@ -43,7 +43,7 @@ test('transaction-payer', async () => {
     url,
     {
       method: 'requestAirdrop',
-      params: [accountPayer.publicKey.toBase58(), LAMPORTS_PER_SAFE],
+      params: [accountPayer.publicKey.toBase58(), LAMPORTS_PER_SOL],
     },
     {
       error: null,
@@ -53,7 +53,7 @@ test('transaction-payer', async () => {
   ]);
   let signature = await connection.requestAirdrop(
     accountPayer.publicKey,
-    LAMPORTS_PER_SAFE,
+    LAMPORTS_PER_SOL,
   );
   mockConfirmTransaction(signature);
   await connection.confirmTransaction(signature, 'singleGossip');
@@ -173,16 +173,16 @@ test('transaction-payer', async () => {
         context: {
           slot: 11,
         },
-        value: LAMPORTS_PER_SAFE - 1,
+        value: LAMPORTS_PER_SOL - 1,
       },
     },
   ]);
 
-  // accountPayer should be less than LAMPORTS_PER_SAFE as it paid for the transaction
+  // accountPayer should be less than LAMPORTS_PER_SOL as it paid for the transaction
   // (exact amount less depends on the current cluster fees)
   const balance = await connection.getBalance(accountPayer.publicKey);
   expect(balance).toBeGreaterThan(0);
-  expect(balance).toBeLessThanOrEqual(LAMPORTS_PER_SAFE);
+  expect(balance).toBeLessThanOrEqual(LAMPORTS_PER_SOL);
 
   // accountFrom should have exactly 2, since it didn't pay for the transaction
   mockRpc.push([

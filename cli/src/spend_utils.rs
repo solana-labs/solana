@@ -3,11 +3,11 @@ use crate::{
     cli::CliError,
 };
 use clap::ArgMatches;
-use safecoin_clap_utils::{input_parsers::lamports_of_safe , offline::SIGN_ONLY_ARG};
-use safecoin_client::rpc_client::RpcClient;
-use safecoin_sdk::{
+use solana_clap_utils::{input_parsers::lamports_of_sol, offline::SIGN_ONLY_ARG};
+use solana_client::rpc_client::RpcClient;
+use solana_sdk::{
     commitment_config::CommitmentConfig, fee_calculator::FeeCalculator, message::Message,
-    native_token::lamports_to_safe , pubkey::Pubkey,
+    native_token::lamports_to_sol, pubkey::Pubkey,
 };
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -32,7 +32,7 @@ impl SpendAmount {
     }
 
     pub fn new_from_matches(matches: &ArgMatches<'_>, name: &str) -> Self {
-        let amount = lamports_of_safe (matches, name);
+        let amount = lamports_of_sol(matches, name);
         let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
         SpendAmount::new(amount, sign_only)
     }
@@ -105,17 +105,17 @@ where
         if from_pubkey == fee_pubkey {
             if from_balance == 0 || from_balance < spend + fee {
                 return Err(CliError::InsufficientFundsForSpendAndFee(
-                    lamports_to_safe (spend),
-                    lamports_to_safe (fee),
+                    lamports_to_sol(spend),
+                    lamports_to_sol(fee),
                 ));
             }
         } else {
             if from_balance < spend {
-                return Err(CliError::InsufficientFundsForSpend(lamports_to_safe (spend)));
+                return Err(CliError::InsufficientFundsForSpend(lamports_to_sol(spend)));
             }
             if !check_account_for_balance_with_commitment(rpc_client, fee_pubkey, fee, commitment)?
             {
-                return Err(CliError::InsufficientFundsForFee(lamports_to_safe (fee)));
+                return Err(CliError::InsufficientFundsForFee(lamports_to_sol(fee)));
             }
         }
         Ok((message, spend))

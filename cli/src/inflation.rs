@@ -1,9 +1,9 @@
 use crate::cli::{CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult};
 use clap::{App, ArgMatches, SubCommand};
-use safecoin_clap_utils::keypair::*;
-use safecoin_cli_output::CliInflation;
-use safecoin_client::rpc_client::RpcClient;
-use safecoin_remote_wallet::remote_wallet::RemoteWalletManager;
+use solana_clap_utils::keypair::*;
+use solana_cli_output::CliInflation;
+use solana_client::rpc_client::RpcClient;
+use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use std::sync::Arc;
 
 #[derive(Debug, PartialEq)]

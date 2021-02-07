@@ -1,8 +1,8 @@
 use crate::{cluster_info::ClusterInfo, cluster_slots::ClusterSlots};
-use safecoin_ledger::blockstore::{Blockstore, CompletedSlotsReceiver};
-use safecoin_measure::measure::Measure;
-use safecoin_runtime::bank_forks::BankForks;
-use safecoin_sdk::{clock::Slot, pubkey::Pubkey};
+use solana_ledger::blockstore::{Blockstore, CompletedSlotsReceiver};
+use solana_measure::measure::Measure;
+use solana_runtime::bank_forks::BankForks;
+use solana_sdk::{clock::Slot, pubkey::Pubkey};
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -43,7 +43,7 @@ impl ClusterSlotsService {
         Self::initialize_lowest_slot(id, &blockstore, &cluster_info);
         Self::initialize_epoch_slots(&blockstore, &cluster_info, &completed_slots_receiver);
         let t_cluster_slots_service = Builder::new()
-            .name("safecoin-cluster-slots-service".to_string())
+            .name("solana-cluster-slots-service".to_string())
             .spawn(move || {
                 Self::run(
                     blockstore,

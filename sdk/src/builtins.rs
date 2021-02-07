@@ -30,14 +30,14 @@ macro_rules! declare_builtin_name {
                 // See the `respan!` macro for more details.
                 // This should use `crate::respan!` once
                 // https://github.com/rust-lang/rust/pull/72121 is merged:
-                // see https://github.com/solana-labs/safecoin/issues/10933.
-                // For now, we need to use `::safecoin_sdk`
+                // see https://github.com/solana-labs/solana/issues/10933.
+                // For now, we need to use `::solana_sdk`
                 //
                 // `respan!` respans the path `$crate::id`, which we then call (hence the extra
                 // parens)
                 (
                     stringify!($name).to_string(),
-                    ::safecoin_sdk::respan!($crate::$id, $name)(),
+                    ::solana_sdk::respan!($crate::$id, $name)(),
                     $entrypoint,
                 )
             };
@@ -73,10 +73,10 @@ macro_rules! declare_builtin_name {
 /// // wrapper is used so that the macro invocation occurs in the item position
 /// // rather than in the statement position which isn't allowed.
 /// mod item_wrapper {
-/// use safecoin_sdk::keyed_account::KeyedAccount;
-/// use safecoin_sdk::instruction::InstructionError;
-/// use safecoin_sdk::pubkey::Pubkey;
-/// use safecoin_sdk::declare_builtin;
+/// use solana_sdk::keyed_account::KeyedAccount;
+/// use solana_sdk::instruction::InstructionError;
+/// use solana_sdk::pubkey::Pubkey;
+/// use solana_sdk::declare_builtin;
 ///
 /// fn my_process_instruction(
 ///     program_id: &Pubkey,
@@ -89,12 +89,12 @@ macro_rules! declare_builtin_name {
 ///
 /// declare_builtin!(
 ///     "My11111111111111111111111111111111111111111",
-///     safecoin_my_program,
+///     solana_my_program,
 ///     my_process_instruction
 /// );
 ///
 /// # }
-/// # use safecoin_sdk::pubkey::Pubkey;
+/// # use solana_sdk::pubkey::Pubkey;
 /// # use item_wrapper::id;
 /// let my_id = Pubkey::from_str("My11111111111111111111111111111111111111111").unwrap();
 /// assert_eq!(id(), my_id);
@@ -104,10 +104,10 @@ macro_rules! declare_builtin_name {
 /// # // wrapper is used so that the macro invocation occurs in the item position
 /// # // rather than in the statement position which isn't allowed.
 /// # mod item_wrapper {
-/// use safecoin_sdk::keyed_account::KeyedAccount;
-/// use safecoin_sdk::instruction::InstructionError;
-/// use safecoin_sdk::pubkey::Pubkey;
-/// use safecoin_sdk::declare_builtin;
+/// use solana_sdk::keyed_account::KeyedAccount;
+/// use solana_sdk::instruction::InstructionError;
+/// use solana_sdk::pubkey::Pubkey;
+/// use solana_sdk::declare_builtin;
 ///
 /// fn my_process_instruction(
 ///     program_id: &Pubkey,
@@ -119,14 +119,14 @@ macro_rules! declare_builtin_name {
 /// }
 ///
 /// declare_builtin!(
-///     safecoin_sdk::system_program::ID,
-///     safecoin_my_program,
+///     solana_sdk::system_program::ID,
+///     solana_my_program,
 ///     my_process_instruction
 /// );
 /// }
 ///
 /// # use item_wrapper::id;
-/// assert_eq!(id(), safecoin_sdk::system_program::ID);
+/// assert_eq!(id(), solana_sdk::system_program::ID);
 /// ```
 #[macro_export]
 macro_rules! declare_builtin {

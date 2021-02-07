@@ -4,14 +4,14 @@ use crate::args::{
 use clap::{
     crate_description, crate_name, value_t, value_t_or_exit, App, Arg, ArgMatches, SubCommand,
 };
-use safecoin_clap_utils::{
+use solana_clap_utils::{
     input_parsers::{pubkey_of_signer, value_of},
     input_validators::{is_amount, is_valid_pubkey, is_valid_signer},
     keypair::{pubkey_from_path, signer_from_path},
 };
-use safecoin_cli_config::CONFIG_FILE;
-use safecoin_remote_wallet::remote_wallet::maybe_wallet_manager;
-use safecoin_sdk::native_token::safe_to_lamports;
+use solana_cli_config::CONFIG_FILE;
+use solana_remote_wallet::remote_wallet::maybe_wallet_manager;
+use solana_sdk::native_token::sol_to_lamports;
 use std::{error::Error, ffi::OsString, process::exit};
 
 fn get_matches<'a, I, T>(args: I) -> ArgMatches<'a>
@@ -22,7 +22,7 @@ where
     let default_config_file = CONFIG_FILE.as_ref().unwrap();
     App::new(crate_name!())
         .about(crate_description!())
-        .version(safecoin_version::version!())
+        .version(solana_version::version!())
         .arg(
             Arg::with_name("config_file")
                 .long("config")
@@ -37,11 +37,11 @@ where
                 .global(true)
                 .takes_value(true)
                 .value_name("URL")
-                .help("RPC entrypoint address. i.e. http://devnet.safecoin.org"),
+                .help("RPC entrypoint address. i.e. http://devnet.solana.com"),
         )
         .subcommand(
             SubCommand::with_name("distribute-tokens")
-                .about("Distribute SAFE")
+                .about("Distribute SOL")
                 .arg(
                     Arg::with_name("db_path")
                         .long("db-path")
@@ -68,7 +68,7 @@ where
                         .takes_value(true)
                         .value_name("AMOUNT")
                         .validator(is_amount)
-                        .help("The amount to send to each recipient, in SAFE"),
+                        .help("The amount to send to each recipient, in SOL"),
                 )
                 .arg(
                     Arg::with_name("dry_run")
@@ -157,12 +157,12 @@ where
                         .help("Stake Account Address"),
                 )
                 .arg(
-                    Arg::with_name("unlocked_safe ")
+                    Arg::with_name("unlocked_sol")
                         .default_value("1.0")
                         .long("unlocked-sol")
                         .takes_value(true)
-                        .value_name("SAFE_AMOUNT")
-                        .help("Amount of SAFE to put in system account to pay for fees"),
+                        .value_name("SOL_AMOUNT")
+                        .help("Amount of SOL to put in system account to pay for fees"),
                 )
                 .arg(
                     Arg::with_name("stake_authority")
@@ -359,7 +359,7 @@ fn parse_distribute_tokens_args(
         fee_payer,
         stake_args: None,
         spl_token_args: None,
-        transfer_amount: value_of(matches, "transfer_amount").map(safe_to_lamports),
+        transfer_amount: value_of(matches, "transfer_amount").map(sol_to_lamports),
     })
 }
 
@@ -422,7 +422,7 @@ fn parse_distribute_stake_args(
 
     let stake_args = StakeArgs {
         stake_account_address,
-        unlocked_safe : safe_to_lamports(value_t_or_exit!(matches, "unlocked_safe ", f64)),
+        unlocked_sol: sol_to_lamports(value_t_or_exit!(matches, "unlocked_sol", f64)),
         stake_authority,
         withdraw_authority,
         lockup_authority,

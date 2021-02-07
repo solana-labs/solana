@@ -1,8 +1,8 @@
-use safecoin_runtime::{
+use solana_runtime::{
     bank::{Builtin, Builtins},
     builtins::ActivationType,
 };
-use safecoin_sdk::{feature_set, pubkey::Pubkey};
+use solana_sdk::{feature_set, pubkey::Pubkey};
 
 macro_rules! to_builtin {
     ($b:expr) => {
@@ -13,11 +13,11 @@ macro_rules! to_builtin {
 /// Builtin programs that are always available
 fn genesis_builtins(bpf_jit: bool) -> Vec<Builtin> {
     vec![
-        to_builtin!(safecoin_bpf_loader_deprecated_program!()),
+        to_builtin!(solana_bpf_loader_deprecated_program!()),
         if bpf_jit {
-            to_builtin!(safecoin_bpf_loader_program_with_jit!())
+            to_builtin!(solana_bpf_loader_program_with_jit!())
         } else {
-            to_builtin!(safecoin_bpf_loader_program!())
+            to_builtin!(solana_bpf_loader_program!())
         },
     ]
 }
@@ -26,9 +26,9 @@ fn genesis_builtins(bpf_jit: bool) -> Vec<Builtin> {
 fn feature_builtins(bpf_jit: bool) -> Vec<(Builtin, Pubkey, ActivationType)> {
     vec![(
         if bpf_jit {
-            to_builtin!(safecoin_bpf_loader_upgradeable_program_with_jit!())
+            to_builtin!(solana_bpf_loader_upgradeable_program_with_jit!())
         } else {
-            to_builtin!(safecoin_bpf_loader_upgradeable_program!())
+            to_builtin!(solana_bpf_loader_upgradeable_program!())
         },
         feature_set::bpf_loader_upgradeable_program::id(),
         ActivationType::NewProgram,

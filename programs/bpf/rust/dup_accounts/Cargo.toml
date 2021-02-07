@@ -1,11 +1,11 @@
 [package]
-name = "safecoin-bpf-rust-dup-accounts"
+name = "solana-bpf-rust-dup-accounts"
 version = "1.6.0"
 description = "Safecoin BPF test program written in Rust"
 authors = ["Safecoin Maintainers <maintainers@solana.foundation>"]
-repository = "https://github.com/solana-labs/safecoin"
+repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
-homepage = "https://safecoin.org/"
+homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]

@@ -1,11 +1,11 @@
 [package]
-name = "safecoin-budget-program"
+name = "solana-budget-program"
 version = "1.6.0"
 description = "Safecoin Budget program"
 authors = ["Safecoin Maintainers <maintainers@solana.foundation>"]
-repository = "https://github.com/solana-labs/safecoin"
+repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
-homepage = "https://safecoin.org/"
+homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
@@ -16,15 +16,15 @@ num-derive = "0.3"
 num-traits = "0.2"
 serde = "1.0.122"
 serde_derive = "1.0.103"
-safecoin-sdk = { path = "../../sdk", version = "1.6.0" }
+solana-sdk = { path = "../../sdk", version = "1.6.0" }
 thiserror = "1.0"
 
 [dev-dependencies]
-safecoin-runtime = { path = "../../runtime", version = "1.6.0" }
+solana-runtime = { path = "../../runtime", version = "1.6.0" }
 
 [lib]
 crate-type = ["lib", "cdylib"]
-name = "safecoin_budget_program"
+name = "solana_budget_program"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

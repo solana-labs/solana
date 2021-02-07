@@ -2,7 +2,7 @@
 extern crate lazy_static;
 
 use clap::{crate_description, crate_name, App, AppSettings, Arg, ArgMatches, SubCommand};
-use safecoin_clap_utils::{
+use solana_clap_utils::{
     input_parsers::pubkey_of,
     input_validators::{is_pubkey, is_url},
 };
@@ -80,11 +80,11 @@ fn handle_init(matches: &ArgMatches<'_>, config_file: &str) -> Result<(), String
 }
 
 pub fn main() -> Result<(), String> {
-    safecoin_logger::setup();
+    solana_logger::setup();
 
     let matches = App::new(crate_name!())
         .about(crate_description!())
-        .version(safecoin_version::version!())
+        .version(solana_version::version!())
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .arg({
             let arg = Arg::with_name("config_file")
@@ -124,7 +124,7 @@ pub fn main() -> Result<(), String> {
                         .takes_value(true)
                         .default_value(defaults::JSON_RPC_URL)
                         .validator(is_url)
-                        .help("JSON RPC URL for the safecoin cluster"),
+                        .help("JSON RPC URL for the solana cluster"),
                 )
                 .arg(
                     Arg::with_name("no_modify_path")
@@ -192,14 +192,14 @@ pub fn main() -> Result<(), String> {
                         .takes_value(true)
                         .default_value(defaults::JSON_RPC_URL)
                         .validator(is_url)
-                        .help("JSON RPC URL for the safecoin cluster"),
+                        .help("JSON RPC URL for the solana cluster"),
                 )
                 .arg(
                     Arg::with_name("download_url")
                         .index(1)
                         .required(true)
                         .validator(is_url)
-                        .help("URL to the safecoin release archive"),
+                        .help("URL to the solana release archive"),
                 )
                 .arg(
                     Arg::with_name("update_manifest_keypair_file")
@@ -276,11 +276,11 @@ pub fn main() -> Result<(), String> {
 }
 
 pub fn main_init() -> Result<(), String> {
-    safecoin_logger::setup();
+    solana_logger::setup();
 
-    let matches = App::new("safecoin-install-init")
+    let matches = App::new("solana-install-init")
         .about("Initializes a new installation")
-        .version(safecoin_version::version!())
+        .version(solana_version::version!())
         .arg({
             let arg = Arg::with_name("config_file")
                 .short("c")
@@ -314,7 +314,7 @@ pub fn main_init() -> Result<(), String> {
                 .takes_value(true)
                 .default_value(defaults::JSON_RPC_URL)
                 .validator(is_url)
-                .help("JSON RPC URL for the safecoin cluster"),
+                .help("JSON RPC URL for the solana cluster"),
         )
         .arg(
             Arg::with_name("no_modify_path")

@@ -68,7 +68,7 @@ For example:
 First setup the environment:
 - Install the latest Rust stable from https://rustup.rs/
 - Install the latest Safecoin command-line tools from
-  https://docs.safecoin.org/cli/install-safecoin-cli-tools
+  https://docs.solana.com/cli/install-solana-cli-tools
 
 The normal cargo build is available for building programs against your host
 machine which can be used for unit testing:
@@ -110,9 +110,9 @@ Programs must be written for and deployed to the same loader.  For more details
 see the [overview](overview#loaders).
 
 Currently there are two supported loaders [BPF
-Loader](https://github.com/solana-labs/safecoin/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/bpf_loader.rs#L17)
+Loader](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/bpf_loader.rs#L17)
 and [BPF loader
-deprecated](https://github.com/solana-labs/safecoin/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/bpf_loader_deprecated.rs#L14)
+deprecated](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/bpf_loader_deprecated.rs#L14)
 
 They both have the same raw entrypoint definition, the following is the raw
 symbol that the runtime looks up and calls:
@@ -130,9 +130,9 @@ processing function, and returns the results.
 
 You can find the entrypoint macros here:
 - [BPF Loader's entrypoint
-  macro](https://github.com/solana-labs/safecoin/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/entrypoint.rs#L46)
+  macro](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/entrypoint.rs#L46)
 - [BPF Loader deprecated's entrypoint
-  macro](https://github.com/solana-labs/safecoin/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/entrypoint_deprecated.rs#L37)
+  macro](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/entrypoint_deprecated.rs#L37)
 
 The program defined instruction processing function that the entrypoint macros
 call must be of this form:
@@ -152,9 +152,9 @@ Each loader provides a helper function that deserializes the program's input
 parameters into Rust types.  The entrypoint macros automatically calls the
 deserialization helper:
 - [BPF Loader
-  deserialization](https://github.com/solana-labs/safecoin/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/entrypoint.rs#L104)
+  deserialization](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/entrypoint.rs#L104)
 - [BPF Loader deprecated
-  deserialization](https://github.com/solana-labs/safecoin/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/entrypoint_deprecated.rs#L56)
+  deserialization](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/entrypoint_deprecated.rs#L56)
 
 Some programs may want to perform deserialization themselves and they can by
 providing their own implementation of the [raw entrypoint](#program-entrypoint).
@@ -183,7 +183,7 @@ The program id is the public key of the currently executing program.
 
 The accounts is an ordered slice of the accounts referenced by the instruction
 and represented as an
-[AccountInfo](https://github.com/solana-labs/safecoin/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/account_info.rs#L10)
+[AccountInfo](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/account_info.rs#L10)
 structures.  An account's place in the array signifies its meaning, for example,
 when transferring lamports an instruction may define the first account as the
 source and the second as the destination.
@@ -207,7 +207,7 @@ being processed.
 ## Heap
 
 Rust programs implement the heap directly by defining a custom
-[`global_allocator`](https://github.com/solana-labs/safecoin/blob/8330123861a719cd7a79af0544617896e7f00ce3/sdk/program/src/entrypoint.rs#L50)
+[`global_allocator`](https://github.com/solana-labs/solana/blob/8330123861a719cd7a79af0544617896e7f00ce3/sdk/program/src/entrypoint.rs#L50)
 
 Programs may implement their own `global_allocator` based on its specific needs.
 Refer to the [custom heap example](#examples) for more information.
@@ -276,7 +276,7 @@ getrandom = { version = "0.1.14", features = ["dummy"] }
 
 Rust's `println!` macro is computationally expensive and not supported.  Instead
 the helper macro
-[`msg!`](https://github.com/solana-labs/safecoin/blob/6705b5a98c076ac08f3991bb8a6f9fcb280bf51e/sdk/program/src/log.rs#L33)
+[`msg!`](https://github.com/solana-labs/solana/blob/6705b5a98c076ac08f3991bb8a6f9fcb280bf51e/sdk/program/src/log.rs#L33)
 is provided.
 
 `msg!` has two forms:
@@ -305,13 +305,13 @@ Rust's `panic!`, `assert!`, and internal panic results are printed to the
 [program logs](debugging.md#logging) by default.
 
 ```
-INFO  safecoin_runtime::message_processor] Finalized account CGLhHSuWsp1gT4B7MY2KACqp9RUwQRhcUFfVSuxpSajZ
-INFO  safecoin_runtime::message_processor] Call BPF program CGLhHSuWsp1gT4B7MY2KACqp9RUwQRhcUFfVSuxpSajZ
-INFO  safecoin_runtime::message_processor] Program log: Panicked at: 'assertion failed: `(left == right)`
+INFO  solana_runtime::message_processor] Finalized account CGLhHSuWsp1gT4B7MY2KACqp9RUwQRhcUFfVSuxpSajZ
+INFO  solana_runtime::message_processor] Call BPF program CGLhHSuWsp1gT4B7MY2KACqp9RUwQRhcUFfVSuxpSajZ
+INFO  solana_runtime::message_processor] Program log: Panicked at: 'assertion failed: `(left == right)`
       left: `1`,
      right: `2`', rust/panic/src/lib.rs:22:5
-INFO  safecoin_runtime::message_processor] BPF program consumed 5453 of 200000 units
-INFO  safecoin_runtime::message_processor] BPF program CGLhHSuWsp1gT4B7MY2KACqp9RUwQRhcUFfVSuxpSajZ failed: BPF program panicked
+INFO  solana_runtime::message_processor] BPF program consumed 5453 of 200000 units
+INFO  solana_runtime::message_processor] BPF program CGLhHSuWsp1gT4B7MY2KACqp9RUwQRhcUFfVSuxpSajZ failed: BPF program panicked
 ```
 
 ### Custom Panic Handler
@@ -361,7 +361,7 @@ fn custom_panic(info: &core::panic::PanicInfo<'_>) {
 ## Compute Budget
 
 Use the system call
-[`safe_log_compute_units()`](https://github.com/solana-labs/safecoin/blob/d3a3a7548c857f26ec2cb10e270da72d373020ec/sdk/program/src/log.rs#L102)
+[`sol_log_compute_units()`](https://github.com/solana-labs/solana/blob/d3a3a7548c857f26ec2cb10e270da72d373020ec/sdk/program/src/log.rs#L102)
 to log a message containing the remaining number of compute units the program
 may consume before execution is halted
 

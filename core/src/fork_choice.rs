@@ -3,7 +3,7 @@ use crate::{
     progress_map::ProgressMap,
     replay_stage::HeaviestForkFailures,
 };
-use safecoin_runtime::{bank::Bank, bank_forks::BankForks};
+use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use std::{
     collections::{HashMap, HashSet},
     sync::{Arc, RwLock},

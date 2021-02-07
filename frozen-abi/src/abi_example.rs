@@ -264,7 +264,7 @@ impl<T: Default + Serialize> TypeErasedExample<T> for Placeholder {
         let original_type_name = type_name::<T>();
         let normalized_type_name = normalize_type_name(original_type_name);
 
-        if normalized_type_name.starts_with("safecoin") {
+        if normalized_type_name.starts_with("solana") {
             panic!(
                 "derive or implement AbiExample/AbiEnumVisitor for {}",
                 original_type_name

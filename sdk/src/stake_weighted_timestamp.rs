@@ -1,6 +1,6 @@
 /// A helper for calculating a stake-weighted timestamp estimate from a set of timestamps and epoch
 /// stake.
-use safecoin_sdk::{
+use solana_sdk::{
     clock::{Slot, UnixTimestamp},
     pubkey::Pubkey,
 };
@@ -155,7 +155,7 @@ where
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use safecoin_sdk::{account::Account, native_token::safe_to_lamports};
+    use solana_sdk::{account::Account, native_token::sol_to_lamports};
 
     #[test]
     fn test_calculate_stake_weighted_timestamp() {
@@ -163,10 +163,10 @@ pub mod tests {
         let slot = 5;
         let slot_duration = Duration::from_millis(400);
         let expected_offset = (slot * slot_duration).as_secs();
-        let pubkey0 = safecoin_sdk::pubkey::new_rand();
-        let pubkey1 = safecoin_sdk::pubkey::new_rand();
-        let pubkey2 = safecoin_sdk::pubkey::new_rand();
-        let pubkey3 = safecoin_sdk::pubkey::new_rand();
+        let pubkey0 = solana_sdk::pubkey::new_rand();
+        let pubkey1 = solana_sdk::pubkey::new_rand();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
+        let pubkey3 = solana_sdk::pubkey::new_rand();
         let unique_timestamps: HashMap<Pubkey, (Slot, UnixTimestamp)> = [
             (pubkey0, (0, recent_timestamp)),
             (pubkey1, (0, recent_timestamp)),
@@ -181,28 +181,28 @@ pub mod tests {
             (
                 pubkey0,
                 (
-                    safe_to_lamports(4_500_000_000.0),
+                    sol_to_lamports(4_500_000_000.0),
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey1,
                 (
-                    safe_to_lamports(4_500_000_000.0),
+                    sol_to_lamports(4_500_000_000.0),
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey2,
                 (
-                    safe_to_lamports(4_500_000_000.0),
+                    sol_to_lamports(4_500_000_000.0),
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey3,
                 (
-                    safe_to_lamports(4_500_000_000.0),
+                    sol_to_lamports(4_500_000_000.0),
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),
@@ -224,28 +224,28 @@ pub mod tests {
             (
                 pubkey0,
                 (
-                    safe_to_lamports(15_000_000_000.0),
+                    sol_to_lamports(15_000_000_000.0),
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey1,
                 (
-                    safe_to_lamports(1_000_000_000.0),
+                    sol_to_lamports(1_000_000_000.0),
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey2,
                 (
-                    safe_to_lamports(1_000_000_000.0),
+                    sol_to_lamports(1_000_000_000.0),
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey3,
                 (
-                    safe_to_lamports(1_000_000_000.0),
+                    sol_to_lamports(1_000_000_000.0),
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),
@@ -269,41 +269,41 @@ pub mod tests {
         let recent_timestamp: UnixTimestamp = 1_578_909_061;
         let slot = 5;
         let slot_duration = Duration::from_millis(400);
-        let pubkey0 = safecoin_sdk::pubkey::new_rand();
-        let pubkey1 = safecoin_sdk::pubkey::new_rand();
-        let pubkey2 = safecoin_sdk::pubkey::new_rand();
-        let pubkey3 = safecoin_sdk::pubkey::new_rand();
-        let pubkey4 = safecoin_sdk::pubkey::new_rand();
+        let pubkey0 = solana_sdk::pubkey::new_rand();
+        let pubkey1 = solana_sdk::pubkey::new_rand();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
+        let pubkey3 = solana_sdk::pubkey::new_rand();
+        let pubkey4 = solana_sdk::pubkey::new_rand();
         let max_allowable_drift = 25;
 
         // Test low-staked outlier(s)
         let stakes: HashMap<Pubkey, (u64, Account)> = [
             (
                 pubkey0,
-                (safe_to_lamports(1.0), Account::new(1, 0, &Pubkey::default())),
+                (sol_to_lamports(1.0), Account::new(1, 0, &Pubkey::default())),
             ),
             (
                 pubkey1,
-                (safe_to_lamports(1.0), Account::new(1, 0, &Pubkey::default())),
+                (sol_to_lamports(1.0), Account::new(1, 0, &Pubkey::default())),
             ),
             (
                 pubkey2,
                 (
-                    safe_to_lamports(1_000_000.0),
+                    sol_to_lamports(1_000_000.0),
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey3,
                 (
-                    safe_to_lamports(1_000_000.0),
+                    sol_to_lamports(1_000_000.0),
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey4,
                 (
-                    safe_to_lamports(1_000_000.0),
+                    sol_to_lamports(1_000_000.0),
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),
@@ -401,21 +401,21 @@ pub mod tests {
             (
                 pubkey0,
                 (
-                    safe_to_lamports(1_000_000.0), // 1/3 stake
+                    sol_to_lamports(1_000_000.0), // 1/3 stake
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey1,
                 (
-                    safe_to_lamports(1_000_000.0),
+                    sol_to_lamports(1_000_000.0),
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey2,
                 (
-                    safe_to_lamports(1_000_000.0),
+                    sol_to_lamports(1_000_000.0),
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),
@@ -448,14 +448,14 @@ pub mod tests {
             (
                 pubkey0,
                 (
-                    safe_to_lamports(1_000_001.0), // 1/3 stake
+                    sol_to_lamports(1_000_001.0), // 1/3 stake
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey1,
                 (
-                    safe_to_lamports(1_000_000.0),
+                    sol_to_lamports(1_000_000.0),
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),
@@ -491,29 +491,29 @@ pub mod tests {
         let max_allowable_drift = 25;
         let acceptable_delta = (max_allowable_drift * poh_offset as u32 / 100) as i64;
         let poh_estimate = epoch_start_timestamp + poh_offset as i64;
-        let pubkey0 = safecoin_sdk::pubkey::new_rand();
-        let pubkey1 = safecoin_sdk::pubkey::new_rand();
-        let pubkey2 = safecoin_sdk::pubkey::new_rand();
+        let pubkey0 = solana_sdk::pubkey::new_rand();
+        let pubkey1 = solana_sdk::pubkey::new_rand();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
 
         let stakes: HashMap<Pubkey, (u64, Account)> = [
             (
                 pubkey0,
                 (
-                    safe_to_lamports(1_000_000.0),
+                    sol_to_lamports(1_000_000.0),
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey1,
                 (
-                    safe_to_lamports(1_000_000.0),
+                    sol_to_lamports(1_000_000.0),
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey2,
                 (
-                    safe_to_lamports(1_000_000.0),
+                    sol_to_lamports(1_000_000.0),
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),
@@ -618,29 +618,29 @@ pub mod tests {
         let acceptable_delta_50 = (allowable_drift_50 * poh_offset as u32 / 100) as i64;
         assert!(acceptable_delta_50 > acceptable_delta_25 + 1);
         let poh_estimate = epoch_start_timestamp + poh_offset as i64;
-        let pubkey0 = safecoin_sdk::pubkey::new_rand();
-        let pubkey1 = safecoin_sdk::pubkey::new_rand();
-        let pubkey2 = safecoin_sdk::pubkey::new_rand();
+        let pubkey0 = solana_sdk::pubkey::new_rand();
+        let pubkey1 = solana_sdk::pubkey::new_rand();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
 
         let stakes: HashMap<Pubkey, (u64, Account)> = [
             (
                 pubkey0,
                 (
-                    safe_to_lamports(1_000_000.0),
+                    sol_to_lamports(1_000_000.0),
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey1,
                 (
-                    safe_to_lamports(1_000_000.0),
+                    sol_to_lamports(1_000_000.0),
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey2,
                 (
-                    safe_to_lamports(1_000_000.0),
+                    sol_to_lamports(1_000_000.0),
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),

@@ -4,11 +4,11 @@ module.exports = {
     title: "Safecoin Docs",
     tagline:
     "Safecoin is an open source project implementing a new, high-performance, permissionless blockchain.",
-    url: "https://docs.safecoin.org",
+    url: "https://docs.solana.com",
     baseUrl: "/",
     favicon: "img/favicon.ico",
     organizationName: "solana-labs", // Usually your GitHub org/user name.
-	projectName: "safecoin", // Usually your repo name.
+	projectName: "solana", // Usually your repo name.
 	onBrokenLinks: 'throw',
     stylesheets: [
 	{
@@ -28,7 +28,7 @@ module.exports = {
 	    },
 	    items: [
 		{
-		    href: "https://spl.safecoin.org",
+		    href: "https://spl.solana.com",
 		    label: "Program Library »",
 		    position: "left",
 		},
@@ -58,7 +58,7 @@ module.exports = {
 		    position: "right",
 		},
 		{
-		    href: "https://github.com/solana-labs/safecoin",
+		    href: "https://github.com/solana-labs/solana",
 		    label: "GitHub",
 		    position: "right",
 		},
@@ -67,7 +67,7 @@ module.exports = {
 	algolia: {
 	    // This API key is "search-only" and safe to be published
 	    apiKey: "d58e0d68c875346d52645d68b13f3ac0",
-	    indexName: "safecoin",
+	    indexName: "solana",
 	},
 	footer: {
 	    style: "dark",
@@ -80,7 +80,7 @@ module.exports = {
 			    to: "introduction",
 			},
 			{
-			    label: "Tour de SAFE",
+			    label: "Tour de SOL",
 			    to: "tour-de-sol",
 			},
 		    ],
@@ -94,11 +94,11 @@ module.exports = {
 			},
 			{
 			    label: "Twitter",
-			    href: "https://twitter.com/safecoin",
+			    href: "https://twitter.com/solana",
 			},
 			{
 			    label: "Forums",
-			    href: "https://forums.safecoin.org",
+			    href: "https://forums.solana.com",
 			},
 		    ],
 		},
@@ -107,12 +107,12 @@ module.exports = {
 		    items: [
 			{
 			    label: "GitHub",
-			    href: "https://github.com/solana-labs/safecoin",
+			    href: "https://github.com/solana-labs/solana",
 			},
 		    ],
 		},
 	    ],
-	    copyright: `Copyright © ${new Date().getFullYear()} Solana Foundation`,
+	    copyright: `Copyright © ${new Date().getFullYear()} Safecoin Foundation`,
 	},
     },
     presets: [

@@ -1,9 +1,9 @@
 use log::*;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
-use safecoin_runtime::{accounts_db::AccountsDB, accounts_index::Ancestors};
-use safecoin_sdk::genesis_config::ClusterType;
-use safecoin_sdk::{account::Account, clock::Slot, pubkey::Pubkey};
+use solana_runtime::{accounts_db::AccountsDB, accounts_index::Ancestors};
+use solana_sdk::genesis_config::ClusterType;
+use solana_sdk::{account::Account, clock::Slot, pubkey::Pubkey};
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -11,7 +11,7 @@ use std::time::Instant;
 
 #[test]
 fn test_shrink_and_clean() {
-    safecoin_logger::setup();
+    solana_logger::setup();
 
     // repeat the whole test scenario
     for _ in 0..5 {
@@ -36,7 +36,7 @@ fn test_shrink_and_clean() {
         for current_slot in 0..100 {
             while alive_accounts.len() <= 10 {
                 alive_accounts.push((
-                    safecoin_sdk::pubkey::new_rand(),
+                    solana_sdk::pubkey::new_rand(),
                     Account::new(thread_rng().gen_range(0, 50), 0, &owner),
                 ));
             }
@@ -64,8 +64,8 @@ fn test_shrink_and_clean() {
 
 #[test]
 fn test_bad_bank_hash() {
-    safecoin_logger::setup();
-    use safecoin_sdk::signature::{Keypair, Signer};
+    solana_logger::setup();
+    use solana_sdk::signature::{Keypair, Signer};
     let db = AccountsDB::new(Vec::new(), &ClusterType::Development);
 
     let some_slot: Slot = 0;

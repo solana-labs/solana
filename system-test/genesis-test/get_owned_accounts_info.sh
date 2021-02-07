@@ -29,7 +29,7 @@ function parse_stake_account_data_to_file {
   filter_key="$2"
   csvfile="$3"
 
-  account_data="$(safecoin --url "$url" show-stake-account "$account_key")"
+  account_data="$(solana --url "$url" show-stake-account "$account_key")"
   staker="$(echo "$account_data" | grep -i 'authorized staker' | cut -f3 -d " ")"
   lockup_epoch="$(echo "$account_data" | grep -i 'lockup epoch' | cut -f3 -d " ")"
   if [[ "$staker" == "$filter_key" ]] ; then
@@ -59,11 +59,11 @@ function display_results_summary {
   done
   } < "$results_file"
 
-  stake_account_balance_total_safe ="$(bc <<< "scale=3; $stake_account_balance_total/$LAMPORTS_PER_SAFE")"
-  system_account_balance_safe ="$(bc <<< "scale=3; $system_account_balance/$LAMPORTS_PER_SAFE")"
+  stake_account_balance_total_sol="$(bc <<< "scale=3; $stake_account_balance_total/$LAMPORTS_PER_SOL")"
+  system_account_balance_sol="$(bc <<< "scale=3; $system_account_balance/$LAMPORTS_PER_SOL")"
 
   all_account_total_balance="$(bc <<< "scale=3; $system_account_balance+$stake_account_balance_total")"
-  all_account_total_balance_safe ="$(bc <<< "scale=3; ($system_account_balance+$stake_account_balance_total)/$LAMPORTS_PER_SAFE")"
+  all_account_total_balance_sol="$(bc <<< "scale=3; ($system_account_balance+$stake_account_balance_total)/$LAMPORTS_PER_SOL")"
 
   echo "--------------------------------------------------------------------------------------"
   echo "Results written to: $results_file"
@@ -72,13 +72,13 @@ function display_results_summary {
   echo ""
   printf "Number of STAKE accounts: %'d\n" "$num_stake_accounts"
   printf "Balance of all STAKE accounts: %'d lamports\n" "$stake_account_balance_total"
-  printf "Balance of all STAKE accounts: %'.3f SAFE\n" "$stake_account_balance_total_safe "
+  printf "Balance of all STAKE accounts: %'.3f SOL\n" "$stake_account_balance_total_sol"
   printf "\n"
   printf "Balance of SYSTEM account: %'d lamports\n" "$system_account_balance"
-  printf "Balance of SYSTEM account: %'.3f SAFE\n" "$system_account_balance_safe "
+  printf "Balance of SYSTEM account: %'.3f SOL\n" "$system_account_balance_sol"
   printf "\n"
   printf "Total Balance of ALL accounts: %'d lamports\n" "$all_account_total_balance"
-  printf "Total Balance of ALL accounts: %'.3f SAFE\n" "$all_account_total_balance_safe "
+  printf "Total Balance of ALL accounts: %'.3f SOL\n" "$all_account_total_balance_sol"
   echo "--------------------------------------------------------------------------------------"
 }
 
@@ -87,7 +87,7 @@ function display_results_details {
   cat "$results_file" | column -t -s,
 }
 
-LAMPORTS_PER_SAFE=1000000000 # 1 billion
+LAMPORTS_PER_SOL=1000000000 # 1 billion
 all_stake_accounts_json_file=all_stake_accounts_data.json
 all_stake_accounts_csv_file=all_stake_accounts_data.csv
 

@@ -1,11 +1,11 @@
 [package]
-name = "safecoin-perf"
+name = "solana-perf"
 version = "1.6.0"
 description = "Safecoin Performance APIs"
 authors = ["Safecoin Maintainers <maintainers@solana.foundation>"]
-repository = "https://github.com/solana-labs/safecoin"
+repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
-homepage = "https://safecoin.org/"
+homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
@@ -17,15 +17,15 @@ serde = "1.0.122"
 dlopen_derive = "0.1.4"
 lazy_static = "1.4.0"
 log = "0.4.11"
-safecoin-sdk = { path = "../sdk", version = "1.6.0" }
-safecoin-rayon-threadlimit = { path = "../rayon-threadlimit", version = "1.6.0" }
-safecoin-budget-program = { path = "../programs/budget", version = "1.6.0" }
-safecoin-logger = { path = "../logger", version = "1.6.0" }
-safecoin-metrics = { path = "../metrics", version = "1.6.0" }
+solana-sdk = { path = "../sdk", version = "1.6.0" }
+solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "1.6.0" }
+solana-budget-program = { path = "../programs/budget", version = "1.6.0" }
+solana-logger = { path = "../logger", version = "1.6.0" }
+solana-metrics = { path = "../metrics", version = "1.6.0" }
 curve25519-dalek = { version = "2" }
 
 [lib]
-name = "safecoin_perf"
+name = "solana_perf"
 
 [dev-dependencies]
 matches = "0.1.6"

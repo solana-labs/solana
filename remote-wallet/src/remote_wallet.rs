@@ -4,7 +4,7 @@ use crate::{
 };
 use log::*;
 use parking_lot::{Mutex, RwLock};
-use safecoin_sdk::{
+use solana_sdk::{
     pubkey::Pubkey,
     signature::{Signature, SignerError},
 };
@@ -202,7 +202,7 @@ pub trait RemoteWallet {
         dev_info: &hidapi::DeviceInfo,
     ) -> Result<RemoteWalletInfo, RemoteWalletError>;
 
-    /// Get safecoin pubkey from a RemoteWallet
+    /// Get solana pubkey from a RemoteWallet
     fn get_pubkey(
         &self,
         derivation_path: &DerivationPath,
@@ -449,7 +449,7 @@ mod tests {
 
     #[test]
     fn test_parse_path() {
-        let pubkey = safecoin_sdk::pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let (wallet_info, derivation_path) =
             RemoteWalletInfo::parse_path(format!("usb://ledger/{:?}?key=1/2", pubkey)).unwrap();
         assert!(wallet_info.matches(&RemoteWalletInfo {
@@ -590,7 +590,7 @@ mod tests {
 
     #[test]
     fn test_remote_wallet_info_matches() {
-        let pubkey = safecoin_sdk::pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let info = RemoteWalletInfo {
             manufacturer: "Ledger".to_string(),
             model: "Nano S".to_string(),
@@ -612,7 +612,7 @@ mod tests {
         assert!(info.matches(&test_info));
         test_info.host_device_path = "/host/device/path".to_string();
         assert!(info.matches(&test_info));
-        let another_pubkey = safecoin_sdk::pubkey::new_rand();
+        let another_pubkey = solana_sdk::pubkey::new_rand();
         test_info.pubkey = another_pubkey;
         assert!(!info.matches(&test_info));
         test_info.pubkey = pubkey;
@@ -621,7 +621,7 @@ mod tests {
 
     #[test]
     fn test_get_pretty_path() {
-        let pubkey = safecoin_sdk::pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let pubkey_str = pubkey.to_string();
         let remote_wallet_info = RemoteWalletInfo {
             model: "nano-s".to_string(),

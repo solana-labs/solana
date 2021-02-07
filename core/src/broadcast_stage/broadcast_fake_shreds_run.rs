@@ -1,8 +1,8 @@
 use super::*;
-use safecoin_ledger::entry::Entry;
-use safecoin_ledger::shred::{Shredder, RECOMMENDED_FEC_RATE};
-use safecoin_sdk::hash::Hash;
-use safecoin_sdk::signature::Keypair;
+use solana_ledger::entry::Entry;
+use solana_ledger::shred::{Shredder, RECOMMENDED_FEC_RATE};
+use solana_sdk::hash::Hash;
+use solana_sdk::signature::Keypair;
 
 #[derive(Clone)]
 pub(super) struct BroadcastFakeShredsRun {
@@ -145,7 +145,7 @@ mod tests {
     #[test]
     fn test_tvu_peers_ordering() {
         let cluster = ClusterInfo::new_with_invalid_keypair(ContactInfo::new_localhost(
-            &safecoin_sdk::pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             0,
         ));
         cluster.insert_info(ContactInfo::new_with_socketaddr(&SocketAddr::new(

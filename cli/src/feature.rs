@@ -5,11 +5,11 @@ use crate::{
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 use console::style;
 use serde::{Deserialize, Serialize};
-use safecoin_clap_utils::{input_parsers::*, input_validators::*, keypair::*};
-use safecoin_cli_output::{QuietDisplay, VerboseDisplay};
-use safecoin_client::{client_error::ClientError, rpc_client::RpcClient};
-use safecoin_remote_wallet::remote_wallet::RemoteWalletManager;
-use safecoin_sdk::{
+use solana_clap_utils::{input_parsers::*, input_validators::*, keypair::*};
+use solana_cli_output::{QuietDisplay, VerboseDisplay};
+use solana_client::{client_error::ClientError, rpc_client::RpcClient};
+use solana_remote_wallet::remote_wallet::RemoteWalletManager;
+use solana_sdk::{
     clock::Slot,
     feature::{self, Feature},
     feature_set::FEATURE_NAMES,
@@ -260,7 +260,7 @@ fn active_stake_by_feature_set(rpc_client: &RpcClient) -> Result<HashMap<u32, u6
 
 // Feature activation is only allowed when 95% of the active stake is on the current feature set
 fn feature_activation_allowed(rpc_client: &RpcClient, quiet: bool) -> Result<bool, ClientError> {
-    let my_feature_set = safecoin_version::Version::default().feature_set;
+    let my_feature_set = solana_version::Version::default().feature_set;
 
     let active_stake_by_feature_set = active_stake_by_feature_set(rpc_client)?;
 

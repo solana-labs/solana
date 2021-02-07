@@ -1,11 +1,11 @@
 [package]
-name = "safecoin-keygen"
+name = "solana-keygen"
 version = "1.6.0"
 description = "Safecoin key generation utility"
 authors = ["Safecoin Maintainers <maintainers@solana.foundation>"]
-repository = "https://github.com/solana-labs/safecoin"
+repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
-homepage = "https://safecoin.org/"
+homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
@@ -13,15 +13,15 @@ bs58 = "0.3.1"
 clap = "2.33"
 dirs-next = "2.0.0"
 num_cpus = "1.13.0"
-safecoin-clap-utils = { path = "../clap-utils", version = "1.6.0" }
-safecoin-cli-config = { path = "../cli-config", version = "1.6.0" }
-safecoin-remote-wallet = { path = "../remote-wallet", version = "1.6.0" }
-safecoin-sdk = { path = "../sdk", version = "1.6.0" }
-safecoin-version = { path = "../version", version = "1.6.0" }
+solana-clap-utils = { path = "../clap-utils", version = "1.6.0" }
+solana-cli-config = { path = "../cli-config", version = "1.6.0" }
+solana-remote-wallet = { path = "../remote-wallet", version = "1.6.0" }
+solana-sdk = { path = "../sdk", version = "1.6.0" }
+solana-version = { path = "../version", version = "1.6.0" }
 tiny-bip39 = "0.7.0"
 
 [[bin]]
-name = "safecoin-keygen"
+name = "solana-keygen"
 path = "src/keygen.rs"
 
 [package.metadata.docs.rs]

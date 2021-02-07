@@ -11,8 +11,8 @@ use crate::{
 use crossbeam_channel::{Receiver, SendError, Sender};
 use log::*;
 use rand::{thread_rng, Rng};
-use safecoin_measure::measure::Measure;
-use safecoin_sdk::clock::Slot;
+use solana_measure::measure::Measure;
+use solana_sdk::clock::Slot;
 use std::{
     boxed::Box,
     fmt::{Debug, Formatter},
@@ -269,7 +269,7 @@ impl AccountsBackgroundService {
         let mut removed_slots_count = 0;
         let mut total_remove_slots_time = 0;
         let t_background = Builder::new()
-            .name("safecoin-accounts-background".to_string())
+            .name("solana-accounts-background".to_string())
             .spawn(move || loop {
                 if exit.load(Ordering::Relaxed) {
                     break;
@@ -383,7 +383,7 @@ mod test {
     use super::*;
     use crate::genesis_utils::create_genesis_config;
     use crossbeam_channel::unbounded;
-    use safecoin_sdk::{account::Account, pubkey::Pubkey};
+    use solana_sdk::{account::Account, pubkey::Pubkey};
 
     #[test]
     fn test_accounts_background_service_remove_dead_slots() {

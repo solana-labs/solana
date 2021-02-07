@@ -12,10 +12,10 @@ use rayon::{
     ThreadPool,
 };
 use serde::{Deserialize, Serialize};
-use safecoin_measure::measure::Measure;
-use safecoin_perf::packet::{limited_deserialize, Packet};
-use safecoin_rayon_threadlimit::get_thread_count;
-use safecoin_sdk::{
+use solana_measure::measure::Measure;
+use solana_perf::packet::{limited_deserialize, Packet};
+use solana_rayon_threadlimit::get_thread_count;
+use solana_sdk::{
     clock::Slot,
     hash::Hash,
     packet::PACKET_DATA_SIZE,
@@ -817,7 +817,7 @@ impl Shredder {
         first_index: usize,
         first_code_index: usize,
         slot: Slot,
-    ) -> std::result::Result<Vec<Shred>, reed_safe omon_erasure::Error> {
+    ) -> std::result::Result<Vec<Shred>, reed_solomon_erasure::Error> {
         Self::verify_consistent_shred_payload_sizes(&"try_recovery()", &shreds)?;
         let mut recovered_data = vec![];
         let fec_set_size = num_data + num_coding;
@@ -859,7 +859,7 @@ impl Shredder {
             shred_bufs.append(&mut pending_shreds);
 
             if shred_bufs.len() != fec_set_size {
-                return Err(reed_safe omon_erasure::Error::TooFewShardsPresent);
+                return Err(reed_solomon_erasure::Error::TooFewShardsPresent);
             }
 
             let session = Session::new(num_data, num_coding)?;
@@ -907,7 +907,7 @@ impl Shredder {
     }
 
     /// Combines all shreds to recreate the original buffer
-    pub fn deshred(shreds: &[Shred]) -> std::result::Result<Vec<u8>, reed_safe omon_erasure::Error> {
+    pub fn deshred(shreds: &[Shred]) -> std::result::Result<Vec<u8>, reed_solomon_erasure::Error> {
         let num_data = shreds.len();
         Self::verify_consistent_shred_payload_sizes(&"deshred()", shreds)?;
         let data_shred_bufs = {
@@ -920,7 +920,7 @@ impl Shredder {
             };
 
             if num_data.saturating_add(first_index) != last_index.saturating_add(1) {
-                return Err(reed_safe omon_erasure::Error::TooFewDataShards);
+                return Err(reed_solomon_erasure::Error::TooFewDataShards);
             }
 
             shreds.iter().map(|shred| &shred.payload).collect()
@@ -957,9 +957,9 @@ impl Shredder {
     fn verify_consistent_shred_payload_sizes(
         caller: &str,
         shreds: &[Shred],
-    ) -> std::result::Result<(), reed_safe omon_erasure::Error> {
+    ) -> std::result::Result<(), reed_solomon_erasure::Error> {
         if shreds.is_empty() {
-            return Err(reed_safe omon_erasure::Error::TooFewShardsPresent);
+            return Err(reed_solomon_erasure::Error::TooFewShardsPresent);
         }
         let slot = shreds[0].slot();
         for shred in shreds {
@@ -971,7 +971,7 @@ impl Shredder {
                     SHRED_PAYLOAD_SIZE,
                     shred.payload.len()
                 );
-                return Err(reed_safe omon_erasure::Error::IncorrectShardSize);
+                return Err(reed_solomon_erasure::Error::IncorrectShardSize);
             }
         }
 
@@ -1095,7 +1095,7 @@ pub mod tests {
     use super::*;
     use bincode::serialized_size;
     use matches::assert_matches;
-    use safecoin_sdk::{hash::hash, shred_version, system_transaction};
+    use solana_sdk::{hash::hash, shred_version, system_transaction};
     use std::{collections::HashSet, convert::TryInto};
 
     #[test]
@@ -1434,7 +1434,7 @@ pub mod tests {
                 0,
                 slot
             ),
-            Err(reed_safe omon_erasure::Error::TooFewShardsPresent)
+            Err(reed_solomon_erasure::Error::TooFewShardsPresent)
         );
 
         // Test1: Try recovery/reassembly with only data shreds. Hint: should work
@@ -1553,7 +1553,7 @@ pub mod tests {
         assert_eq!(shreds.len(), 3);
         assert_matches!(
             Shredder::deshred(&shreds),
-            Err(reed_safe omon_erasure::Error::TooFewDataShards)
+            Err(reed_solomon_erasure::Error::TooFewDataShards)
         );
 
         // Test5: Try recovery/reassembly with non zero index full slot with 3 missing data shreds
@@ -1629,13 +1629,13 @@ pub mod tests {
                 15,
                 slot,
             ),
-            Err(reed_safe omon_erasure::Error::TooFewShardsPresent)
+            Err(reed_solomon_erasure::Error::TooFewShardsPresent)
         );
 
         // Test8: Try recovery/reassembly with incorrect index. Hint: does not recover any shreds
         assert_matches!(
             Shredder::try_recovery(shred_info, num_data_shreds, num_coding_shreds, 35, 35, slot,),
-            Err(reed_safe omon_erasure::Error::TooFewShardsPresent)
+            Err(reed_solomon_erasure::Error::TooFewShardsPresent)
         );
     }
 
@@ -1791,7 +1791,7 @@ pub mod tests {
 
     #[test]
     fn test_shred_offsets() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let mut packet = Packet::default();
         let shred = Shred::new_from_data(1, 3, 0, None, true, true, 0, 0, 0);
         shred.copy_to_packet(&mut packet);

@@ -22,13 +22,13 @@ done
 snapshot_slot=1
 
 # wait a bit longer than snapshot_slot
-while [[ $($safecoin_cli --url http://localhost:8899 slot --commitment recent) -le $((snapshot_slot + 1)) ]]; do
+while [[ $($solana_cli --url http://localhost:8899 slot --commitment recent) -le $((snapshot_slot + 1)) ]]; do
   sleep 1
 done
 curl -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1, "method":"validatorExit"}' http://localhost:8899
 
 wait $pid
 
-$safecoin_ledger_tool create-snapshot --ledger config/ledger "$snapshot_slot" config/snapshot-ledger
+$solana_ledger_tool create-snapshot --ledger config/ledger "$snapshot_slot" config/snapshot-ledger
 cp config/ledger/genesis.tar.bz2 config/snapshot-ledger
-$safecoin_ledger_tool verify --ledger config/snapshot-ledger
+$solana_ledger_tool verify --ledger config/snapshot-ledger

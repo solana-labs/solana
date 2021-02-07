@@ -11,7 +11,7 @@ import {
   Connection,
   Account,
   sendAndConfirmTransaction,
-  LAMPORTS_PER_SAFE,
+  LAMPORTS_PER_SOL,
   Transaction,
 } from '../src';
 
@@ -50,7 +50,7 @@ test('live create secp256k1 instruction with public key', async () => {
 
   const connection = new Connection(url, 'recent');
   const from = new Account();
-  await connection.requestAirdrop(from.publicKey, 2 * LAMPORTS_PER_SAFE);
+  await connection.requestAirdrop(from.publicKey, 2 * LAMPORTS_PER_SOL);
 
   await sendAndConfirmTransaction(connection, transaction, [from], {
     commitment: 'single',
@@ -79,7 +79,7 @@ test('live create secp256k1 instruction with private key', async () => {
 
   const connection = new Connection(url, 'recent');
   const from = new Account();
-  await connection.requestAirdrop(from.publicKey, 2 * LAMPORTS_PER_SAFE);
+  await connection.requestAirdrop(from.publicKey, 2 * LAMPORTS_PER_SOL);
 
   await sendAndConfirmTransaction(connection, transaction, [from], {
     commitment: 'single',

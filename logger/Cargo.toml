@@ -1,11 +1,11 @@
 [package]
-name = "safecoin-logger"
+name = "solana-logger"
 version = "1.6.0"
 description = "Safecoin Logger"
 authors = ["Safecoin Maintainers <maintainers@solana.foundation>"]
-repository = "https://github.com/solana-labs/safecoin"
+repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
-homepage = "https://safecoin.org/"
+homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
@@ -14,7 +14,7 @@ lazy_static = "1.4.0"
 log = "0.4.11"
 
 [lib]
-name = "safecoin_logger"
+name = "solana_logger"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

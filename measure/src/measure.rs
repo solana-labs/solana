@@ -1,4 +1,4 @@
-use safecoin_sdk::timing::duration_as_ns;
+use solana_sdk::timing::duration_as_ns;
 use std::{fmt, time::Instant};
 
 pub struct Measure {

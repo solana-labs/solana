@@ -151,7 +151,7 @@ mod tests {
     use crate::packet::Packet;
     use crate::recvmmsg::recv_mmsg;
     use crate::sendmmsg::{multicast, send_mmsg};
-    use safecoin_sdk::packet::PACKET_DATA_SIZE;
+    use solana_sdk::packet::PACKET_DATA_SIZE;
     use std::net::UdpSocket;
 
     #[test]

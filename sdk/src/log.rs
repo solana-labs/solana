@@ -6,10 +6,10 @@ pub use solana_program::log::*;
 #[deprecated(since = "1.4.3", note = "solana_program::log::info instead")]
 macro_rules! info {
     ($msg:expr) => {
-        $crate::log::safe_log($msg)
+        $crate::log::sol_log($msg)
     };
     ($arg1:expr, $arg2:expr, $arg3:expr, $arg4:expr, $arg5:expr) => {
-        $crate::log::safe_log_64(
+        $crate::log::sol_log_64(
             $arg1 as u64,
             $arg2 as u64,
             $arg3 as u64,

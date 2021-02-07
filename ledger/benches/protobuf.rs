@@ -2,14 +2,14 @@
 extern crate test;
 
 use bincode::{deserialize, serialize};
-use safecoin_ledger::{
+use solana_ledger::{
     blockstore::Blockstore,
     blockstore_db::{columns as cf, LedgerColumn},
     get_tmp_ledger_path,
 };
-use safecoin_runtime::bank::RewardType;
-use safecoin_sdk::{clock::Slot, pubkey};
-use safecoin_transaction_status::{Reward, Rewards};
+use solana_runtime::bank::RewardType;
+use solana_sdk::{clock::Slot, pubkey};
+use solana_transaction_status::{Reward, Rewards};
 use std::path::Path;
 use test::Bencher;
 

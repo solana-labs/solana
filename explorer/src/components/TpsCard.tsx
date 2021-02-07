@@ -5,11 +5,11 @@ import {
   usePerformanceInfo,
   PERF_UPDATE_SEC,
   ClusterStatsStatus,
-} from "providers/stats/safecoinClusterStats";
+} from "providers/stats/solanaClusterStats";
 import classNames from "classnames";
 import { TableCardBody } from "components/common/TableCardBody";
 import { ChartOptions, ChartTooltipModel } from "chart.js";
-import { PerformanceInfo } from "providers/stats/safecoinPerformanceInfo";
+import { PerformanceInfo } from "providers/stats/solanaPerformanceInfo";
 import { StatsNotReady } from "pages/ClusterStatsPage";
 
 export function TpsCard() {

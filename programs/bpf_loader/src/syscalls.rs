@@ -8,8 +8,8 @@ use solana_rbpf::{
     question_mark,
     vm::{EbpfVm, SyscallObject, SyscallRegistry},
 };
-use safecoin_runtime::message_processor::MessageProcessor;
-use safecoin_sdk::{
+use solana_runtime::message_processor::MessageProcessor;
+use solana_sdk::{
     account::Account,
     account_info::AccountInfo,
     account_utils::StateMut,
@@ -18,7 +18,7 @@ use safecoin_sdk::{
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     feature_set::{
         abort_on_all_cpi_failures, limit_cpi_loader_invoke, pubkey_log_syscall_enabled,
-        ristretto_mul_syscall_enabled, sha256_syscall_enabled, safe_log_compute_units_syscall,
+        ristretto_mul_syscall_enabled, sha256_syscall_enabled, sol_log_compute_units_syscall,
         try_find_program_address_syscall_enabled, use_loaded_executables,
         use_loaded_program_accounts,
     },
@@ -107,42 +107,42 @@ pub fn register_syscalls(
 
     syscall_registry.register_syscall_by_name(b"abort", SyscallAbort::call)?;
     syscall_registry.register_syscall_by_name(b"sol_panic_", SyscallPanic::call)?;
-    syscall_registry.register_syscall_by_name(b"safe_log_", SyscallLog::call)?;
-    syscall_registry.register_syscall_by_name(b"safe_log_64_", SyscallLogU64::call)?;
+    syscall_registry.register_syscall_by_name(b"sol_log_", SyscallLog::call)?;
+    syscall_registry.register_syscall_by_name(b"sol_log_64_", SyscallLogU64::call)?;
 
-    if invoke_context.is_feature_active(&safe_log_compute_units_syscall::id()) {
+    if invoke_context.is_feature_active(&sol_log_compute_units_syscall::id()) {
         syscall_registry
-            .register_syscall_by_name(b"safe_log_compute_units_", SyscallLogBpfComputeUnits::call)?;
+            .register_syscall_by_name(b"sol_log_compute_units_", SyscallLogBpfComputeUnits::call)?;
     }
 
     if invoke_context.is_feature_active(&pubkey_log_syscall_enabled::id()) {
-        syscall_registry.register_syscall_by_name(b"safe_log_pubkey", SyscallLogPubkey::call)?;
+        syscall_registry.register_syscall_by_name(b"sol_log_pubkey", SyscallLogPubkey::call)?;
     }
 
     if invoke_context.is_feature_active(&sha256_syscall_enabled::id()) {
-        syscall_registry.register_syscall_by_name(b"safe_sha256", SyscallSha256::call)?;
+        syscall_registry.register_syscall_by_name(b"sol_sha256", SyscallSha256::call)?;
     }
 
     if invoke_context.is_feature_active(&ristretto_mul_syscall_enabled::id()) {
         syscall_registry
-            .register_syscall_by_name(b"safe_ristretto_mul", SyscallRistrettoMul::call)?;
+            .register_syscall_by_name(b"sol_ristretto_mul", SyscallRistrettoMul::call)?;
     }
 
     syscall_registry.register_syscall_by_name(
-        b"safe_create_program_address",
+        b"sol_create_program_address",
         SyscallCreateProgramAddress::call,
     )?;
     if invoke_context.is_feature_active(&try_find_program_address_syscall_enabled::id()) {
         syscall_registry.register_syscall_by_name(
-            b"safe_try_find_program_address",
+            b"sol_try_find_program_address",
             SyscallTryFindProgramAddress::call,
         )?;
     }
     syscall_registry
-        .register_syscall_by_name(b"safe_invoke_signed_c", SyscallInvokeSignedC::call)?;
+        .register_syscall_by_name(b"sol_invoke_signed_c", SyscallInvokeSignedC::call)?;
     syscall_registry
-        .register_syscall_by_name(b"safe_invoke_signed_rust", SyscallInvokeSignedRust::call)?;
-    syscall_registry.register_syscall_by_name(b"safe_alloc_free_", SyscallAllocFree::call)?;
+        .register_syscall_by_name(b"sol_invoke_signed_rust", SyscallInvokeSignedRust::call)?;
+    syscall_registry.register_syscall_by_name(b"sol_alloc_free_", SyscallAllocFree::call)?;
 
     Ok(syscall_registry)
 }
@@ -194,7 +194,7 @@ pub fn bind_syscall_context_objects<'a>(
     bind_feature_gated_syscall_context_object!(
         vm,
         invoke_context,
-        &safe_log_compute_units_syscall::id(),
+        &sol_log_compute_units_syscall::id(),
         Box::new(SyscallLogBpfComputeUnits {
             cost: 0,
             compute_meter: invoke_context.get_compute_meter(),
@@ -576,7 +576,7 @@ impl<'a> SyscallObject<BPFError> for SyscallLogPubkey<'a> {
 }
 
 /// Dynamic memory allocation syscall called when the BPF program calls
-/// `safe_alloc_free_()`.  The allocator is expected to allocate/free
+/// `sol_alloc_free_()`.  The allocator is expected to allocate/free
 /// from/to a given chunk of memory and enforce size restrictions.  The
 /// memory chunk is given to the allocator during allocator creation and
 /// information about that memory (start address and size) is passed
@@ -1124,9 +1124,9 @@ impl<'a> SyscallObject<BPFError> for SyscallInvokeSignedRust<'a> {
     }
 }
 
-/// Rust representation of C's SafeInstruction
+/// Rust representation of C's SolInstruction
 #[derive(Debug)]
-struct SafeInstruction {
+struct SolInstruction {
     program_id_addr: u64,
     accounts_addr: u64,
     accounts_len: usize,
@@ -1134,17 +1134,17 @@ struct SafeInstruction {
     data_len: usize,
 }
 
-/// Rust representation of C's SafeAccountMeta
+/// Rust representation of C's SolAccountMeta
 #[derive(Debug)]
-struct SafeAccountMeta {
+struct SolAccountMeta {
     pubkey_addr: u64,
     is_writable: bool,
     is_signer: bool,
 }
 
-/// Rust representation of C's SafeAccountInfo
+/// Rust representation of C's SolAccountInfo
 #[derive(Debug)]
-struct SafeAccountInfo {
+struct SolAccountInfo {
     key_addr: u64,
     lamports_addr: u64,
     data_len: u64,
@@ -1156,16 +1156,16 @@ struct SafeAccountInfo {
     executable: bool,
 }
 
-/// Rust representation of C's SafeSignerSeed
+/// Rust representation of C's SolSignerSeed
 #[derive(Debug)]
-struct SafeSignerSeedC {
+struct SolSignerSeedC {
     addr: u64,
     len: u64,
 }
 
-/// Rust representation of C's SafeSignerSeeds
+/// Rust representation of C's SolSignerSeeds
 #[derive(Debug)]
-struct SafeSignerSeedsC {
+struct SolSignerSeedsC {
     addr: u64,
     len: u64,
 }
@@ -1197,7 +1197,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
         addr: u64,
         memory_mapping: &MemoryMapping,
     ) -> Result<Instruction, EbpfError<BPFError>> {
-        let ix_c = translate_type::<SafeInstruction>(memory_mapping, addr, self.loader_id)?;
+        let ix_c = translate_type::<SolInstruction>(memory_mapping, addr, self.loader_id)?;
 
         check_instruction_size(
             ix_c.accounts_len,
@@ -1206,7 +1206,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
         )?;
         let program_id =
             translate_type::<Pubkey>(memory_mapping, ix_c.program_id_addr, self.loader_id)?;
-        let meta_cs = translate_slice::<SafeAccountMeta>(
+        let meta_cs = translate_slice::<SolAccountMeta>(
             memory_mapping,
             ix_c.accounts_addr,
             ix_c.accounts_len as u64,
@@ -1249,7 +1249,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
     ) -> Result<TranslatedAccounts<'a>, EbpfError<BPFError>> {
         let invoke_context = self.invoke_context.borrow();
 
-        let account_infos = translate_slice::<SafeAccountInfo>(
+        let account_infos = translate_slice::<SolAccountInfo>(
             memory_mapping,
             account_infos_addr,
             account_infos_len,
@@ -1263,7 +1263,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
             })
             .collect::<Result<Vec<_>, EbpfError<BPFError>>>()?;
 
-        let translate = |account_info: &SafeAccountInfo| {
+        let translate = |account_info: &SolAccountInfo| {
             // Translate the account from user space
 
             let lamports = translate_type_mut::<u64>(
@@ -1340,7 +1340,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
         memory_mapping: &MemoryMapping,
     ) -> Result<Vec<Pubkey>, EbpfError<BPFError>> {
         if signers_seeds_len > 0 {
-            let signers_seeds = translate_slice::<SafeSignerSeedC>(
+            let signers_seeds = translate_slice::<SolSignerSeedC>(
                 memory_mapping,
                 signers_seeds_addr,
                 signers_seeds_len,
@@ -1352,7 +1352,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
             Ok(signers_seeds
                 .iter()
                 .map(|signer_seeds| {
-                    let seeds = translate_slice::<SafeSignerSeedC>(
+                    let seeds = translate_slice::<SolSignerSeedC>(
                         memory_mapping,
                         signer_seeds.addr,
                         signer_seeds.len,
@@ -1733,7 +1733,7 @@ fn call<'a>(
 mod tests {
     use super::*;
     use solana_rbpf::{memory_region::MemoryRegion, vm::Config};
-    use safecoin_sdk::{
+    use solana_sdk::{
         bpf_loader,
         hash::hashv,
         process_instruction::{MockComputeMeter, MockLogger},
@@ -1798,7 +1798,7 @@ mod tests {
     #[test]
     fn test_translate_type() {
         // Pubkey
-        let pubkey = safecoin_sdk::pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let addr = &pubkey as *const _ as u64;
         let memory_mapping = MemoryMapping::new(
             vec![MemoryRegion {
@@ -1816,9 +1816,9 @@ mod tests {
 
         // Instruction
         let instruction = Instruction::new(
-            safecoin_sdk::pubkey::new_rand(),
+            solana_sdk::pubkey::new_rand(),
             &"foobar",
-            vec![AccountMeta::new(safecoin_sdk::pubkey::new_rand(), false)],
+            vec![AccountMeta::new(solana_sdk::pubkey::new_rand(), false)],
         );
         let addr = &instruction as *const _ as u64;
         let mut memory_mapping = MemoryMapping::new(
@@ -1918,7 +1918,7 @@ mod tests {
         assert!(translate_slice::<u64>(&memory_mapping, 96, u64::MAX, &bpf_loader::id(),).is_err());
 
         // Pubkeys
-        let mut data = vec![safecoin_sdk::pubkey::new_rand(); 5];
+        let mut data = vec![solana_sdk::pubkey::new_rand(); 5];
         let addr = data.as_ptr() as *const _ as u64;
         let memory_mapping = MemoryMapping::new(
             vec![MemoryRegion {
@@ -1934,7 +1934,7 @@ mod tests {
             translate_slice::<Pubkey>(&memory_mapping, 100, data.len() as u64, &bpf_loader::id())
                 .unwrap();
         assert_eq!(data, translated_data);
-        data[0] = safecoin_sdk::pubkey::new_rand(); // Both should point to same place
+        data[0] = solana_sdk::pubkey::new_rand(); // Both should point to same place
         assert_eq!(data, translated_data);
     }
 
@@ -1988,7 +1988,7 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "UserError(SyscallError(Panic(\"Gaggablaghblagh!\", 42, 84)))")]
-    fn test_syscall_sol _panic() {
+    fn test_syscall_sol_panic() {
         let string = "Gaggablaghblagh!";
         let addr = string.as_ptr() as *const _ as u64;
         let memory_mapping = MemoryMapping::new(
@@ -2018,7 +2018,7 @@ mod tests {
     }
 
     #[test]
-    fn test_syscall_sol _log() {
+    fn test_syscall_sol_log() {
         let string = "Gaggablaghblagh!";
         let addr = string.as_ptr() as *const _ as u64;
 
@@ -2027,7 +2027,7 @@ mod tests {
         let log = Rc::new(RefCell::new(vec![]));
         let logger: Rc<RefCell<dyn Logger>> =
             Rc::new(RefCell::new(MockLogger { log: log.clone() }));
-        let mut syscall_sol _log = SyscallLog {
+        let mut syscall_sol_log = SyscallLog {
             cost: 1,
             compute_meter,
             logger,
@@ -2045,7 +2045,7 @@ mod tests {
         );
 
         let mut result: Result<u64, EbpfError<BPFError>> = Ok(0);
-        syscall_sol _log.call(
+        syscall_sol_log.call(
             100,
             string.len() as u64,
             0,
@@ -2059,7 +2059,7 @@ mod tests {
         assert_eq!(log.borrow()[0], "Program log: Gaggablaghblagh!");
 
         let mut result: Result<u64, EbpfError<BPFError>> = Ok(0);
-        syscall_sol _log.call(
+        syscall_sol_log.call(
             101, // AccessViolation
             string.len() as u64,
             0,
@@ -2070,7 +2070,7 @@ mod tests {
         );
         assert_access_violation!(result, 101, string.len() as u64);
         let mut result: Result<u64, EbpfError<BPFError>> = Ok(0);
-        syscall_sol _log.call(
+        syscall_sol_log.call(
             100,
             string.len() as u64 * 2, // AccessViolation
             0,
@@ -2081,7 +2081,7 @@ mod tests {
         );
         assert_access_violation!(result, 100, string.len() as u64 * 2);
         let mut result: Result<u64, EbpfError<BPFError>> = Ok(0);
-        syscall_sol _log.call(
+        syscall_sol_log.call(
             100,
             string.len() as u64,
             0,
@@ -2099,7 +2099,7 @@ mod tests {
     }
 
     #[test]
-    fn test_syscall_sol _log_u64() {
+    fn test_syscall_sol_log_u64() {
         let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
             Rc::new(RefCell::new(MockComputeMeter {
                 remaining: std::u64::MAX,
@@ -2107,7 +2107,7 @@ mod tests {
         let log = Rc::new(RefCell::new(vec![]));
         let logger: Rc<RefCell<dyn Logger>> =
             Rc::new(RefCell::new(MockLogger { log: log.clone() }));
-        let mut syscall_sol _log_u64 = SyscallLogU64 {
+        let mut syscall_sol_log_u64 = SyscallLogU64 {
             cost: 0,
             compute_meter,
             logger,
@@ -2115,7 +2115,7 @@ mod tests {
         let memory_mapping = MemoryMapping::new(vec![], &DEFAULT_CONFIG);
 
         let mut result: Result<u64, EbpfError<BPFError>> = Ok(0);
-        syscall_sol _log_u64.call(1, 2, 3, 4, 5, &memory_mapping, &mut result);
+        syscall_sol_log_u64.call(1, 2, 3, 4, 5, &memory_mapping, &mut result);
         result.unwrap();
 
         assert_eq!(log.borrow().len(), 1);
@@ -2123,7 +2123,7 @@ mod tests {
     }
 
     #[test]
-    fn test_syscall_sol _pubkey() {
+    fn test_syscall_sol_pubkey() {
         let pubkey = Pubkey::from_str("MoqiU1vryuCGQSxFKA1SZ316JdLEFFhoAu6cKUNk7dN").unwrap();
         let addr = &pubkey.as_ref()[0] as *const _ as u64;
 
@@ -2132,7 +2132,7 @@ mod tests {
         let log = Rc::new(RefCell::new(vec![]));
         let logger: Rc<RefCell<dyn Logger>> =
             Rc::new(RefCell::new(MockLogger { log: log.clone() }));
-        let mut syscall_sol _pubkey = SyscallLogPubkey {
+        let mut syscall_sol_pubkey = SyscallLogPubkey {
             cost: 1,
             compute_meter,
             logger,
@@ -2150,7 +2150,7 @@ mod tests {
         );
 
         let mut result: Result<u64, EbpfError<BPFError>> = Ok(0);
-        syscall_sol _pubkey.call(100, 0, 0, 0, 0, &memory_mapping, &mut result);
+        syscall_sol_pubkey.call(100, 0, 0, 0, 0, &memory_mapping, &mut result);
         result.unwrap();
         assert_eq!(log.borrow().len(), 1);
         assert_eq!(
@@ -2158,7 +2158,7 @@ mod tests {
             "Program log: MoqiU1vryuCGQSxFKA1SZ316JdLEFFhoAu6cKUNk7dN"
         );
         let mut result: Result<u64, EbpfError<BPFError>> = Ok(0);
-        syscall_sol _pubkey.call(
+        syscall_sol_pubkey.call(
             101, // AccessViolation
             32,
             0,
@@ -2169,7 +2169,7 @@ mod tests {
         );
         assert_access_violation!(result, 101, 32);
         let mut result: Result<u64, EbpfError<BPFError>> = Ok(0);
-        syscall_sol _pubkey.call(100, 32, 0, 0, 0, &memory_mapping, &mut result);
+        syscall_sol_pubkey.call(100, 32, 0, 0, 0, &memory_mapping, &mut result);
         assert_eq!(
             Err(EbpfError::UserError(BPFError::SyscallError(
                 SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded)
@@ -2179,7 +2179,7 @@ mod tests {
     }
 
     #[test]
-    fn test_syscall_sol _alloc_free() {
+    fn test_syscall_sol_alloc_free() {
         // large alloc
         {
             let heap = vec![0_u8; 100];

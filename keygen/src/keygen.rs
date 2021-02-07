@@ -3,7 +3,7 @@ use clap::{
     crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App, AppSettings,
     Arg, ArgMatches, SubCommand,
 };
-use safecoin_clap_utils::{
+use solana_clap_utils::{
     input_validators::is_parsable,
     keypair::{
         keypair_from_seed_phrase, prompt_passphrase, signer_from_path,
@@ -11,9 +11,9 @@ use safecoin_clap_utils::{
     },
     DisplayError,
 };
-use safecoin_cli_config::{Config, CONFIG_FILE};
-use safecoin_remote_wallet::remote_wallet::RemoteWalletManager;
-use safecoin_sdk::{
+use solana_cli_config::{Config, CONFIG_FILE};
+use solana_remote_wallet::remote_wallet::RemoteWalletManager;
+use solana_sdk::{
     instruction::{AccountMeta, Instruction},
     message::Message,
     pubkey::{write_pubkey_file, Pubkey},
@@ -59,7 +59,7 @@ fn get_keypair_from_matches(
     } else if !config.keypair_path.is_empty() {
         &config.keypair_path
     } else {
-        path.extend(&[".config", "safecoin", "id.json"]);
+        path.extend(&[".config", "solana", "id.json"]);
         path.to_str().unwrap()
     };
     signer_from_path(matches, path, "pubkey recovery", wallet_manager)
@@ -211,7 +211,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let default_num_threads = num_cpus::get().to_string();
     let matches = App::new(crate_name!())
         .about(crate_description!())
-        .version(safecoin_version::version!())
+        .version(solana_version::version!())
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .arg({
             let arg = Arg::with_name("config_file")
@@ -440,7 +440,7 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
             } else if matches.is_present("no_outfile") {
                 None
             } else {
-                path.extend(&[".config", "safecoin", "id.json"]);
+                path.extend(&[".config", "solana", "id.json"]);
                 Some(path.to_str().unwrap())
             };
 
@@ -510,7 +510,7 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
             let outfile = if matches.is_present("outfile") {
                 matches.value_of("outfile").unwrap()
             } else {
-                path.extend(&[".config", "safecoin", "id.json"]);
+                path.extend(&[".config", "solana", "id.json"]);
                 path.to_str().unwrap()
             };
 

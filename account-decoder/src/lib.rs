@@ -14,7 +14,7 @@ pub mod validator_info;
 
 use {
     crate::parse_account_data::{parse_account_data, AccountAdditionalData, ParsedAccount},
-    safecoin_sdk::{account::Account, clock::Epoch, fee_calculator::FeeCalculator, pubkey::Pubkey},
+    solana_sdk::{account::Account, clock::Epoch, fee_calculator::FeeCalculator, pubkey::Pubkey},
     std::{
         io::{Read, Write},
         str::FromStr,

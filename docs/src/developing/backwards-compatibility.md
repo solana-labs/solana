@@ -31,7 +31,7 @@ updates of a particular `MINOR` version release.
 #### Release Channels
 
 - `edge` software that contains cutting-edge features with no backward compatibility policy
-- `beta` software that runs on the Safecoin Tour de SAFE testnet cluster
+- `beta` software that runs on the Safecoin Tour de SOL testnet cluster
 - `stable` software that run on the Safecoin Mainnet Beta and Devnet clusters
 
 #### Major Releases (x.0.0)
@@ -43,7 +43,7 @@ that were enabled in the previous `MAJOR` version.
 #### Minor Releases (1.x.0)
 
 New features and proposal implementations are added to _new_ `MINOR` version
-releases (e.g. 1.4.0) and are first run on Safecoin's Tour de SAFE testnet cluster. While running
+releases (e.g. 1.4.0) and are first run on Safecoin's Tour de SOL testnet cluster. While running
 on the testnet, `MINOR` versions are considered to be in the `beta` release channel. After
 those changes have been patched as needed and proven to be reliable, the `MINOR` version will
 be upgraded to the `stable` release channel and deployed to the Mainnet Beta cluster.
@@ -69,10 +69,10 @@ Major releases:
 
 ### Rust Crates
 
-* [`safecoin-sdk`](https://docs.rs/safecoin-sdk/) - Rust SDK for creating transactions and parsing account state
+* [`solana-sdk`](https://docs.rs/solana-sdk/) - Rust SDK for creating transactions and parsing account state
 * [`solana-program`](https://docs.rs/solana-program/) - Rust SDK for writing programs
-* [`safecoin-client`](https://docs.rs/safecoin-client/) - Rust client for connecting to RPC API
-* [`safecoin-cli-config`](https://docs.rs/safecoin-cli-config/) - Rust client for managing Safecoin CLI config files
+* [`solana-client`](https://docs.rs/solana-client/) - Rust client for connecting to RPC API
+* [`solana-cli-config`](https://docs.rs/solana-cli-config/) - Rust client for managing Safecoin CLI config files
 
 Patch releases:
 - Bug fixes

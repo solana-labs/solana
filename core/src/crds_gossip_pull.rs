@@ -18,9 +18,9 @@ use itertools::Itertools;
 use rand::distributions::{Distribution, WeightedIndex};
 use rand::Rng;
 use rayon::{prelude::*, ThreadPool};
-use safecoin_runtime::bloom::{AtomicBloom, Bloom};
-use safecoin_sdk::hash::Hash;
-use safecoin_sdk::pubkey::Pubkey;
+use solana_runtime::bloom::{AtomicBloom, Bloom};
+use solana_sdk::hash::Hash;
+use solana_sdk::pubkey::Pubkey;
 use std::cmp;
 use std::collections::VecDeque;
 use std::collections::{HashMap, HashSet};
@@ -53,8 +53,8 @@ impl Default for CrdsFilter {
     }
 }
 
-impl safecoin_sdk::sanitize::Sanitize for CrdsFilter {
-    fn sanitize(&self) -> std::result::Result<(), safecoin_sdk::sanitize::SanitizeError> {
+impl solana_sdk::sanitize::Sanitize for CrdsFilter {
+    fn sanitize(&self) -> std::result::Result<(), solana_sdk::sanitize::SanitizeError> {
         self.filter.sanitize()?;
         Ok(())
     }
@@ -616,9 +616,9 @@ mod test {
     use itertools::Itertools;
     use rand::thread_rng;
     use rayon::ThreadPoolBuilder;
-    use safecoin_perf::test_tx::test_tx;
-    use safecoin_sdk::hash::{hash, HASH_BYTES};
-    use safecoin_sdk::packet::PACKET_DATA_SIZE;
+    use solana_perf::test_tx::test_tx;
+    use solana_sdk::hash::{hash, HASH_BYTES};
+    use solana_sdk::packet::PACKET_DATA_SIZE;
 
     #[test]
     fn test_hash_as_u64() {
@@ -638,7 +638,7 @@ mod test {
         }
         let mut rng = thread_rng();
         for _ in 0..100 {
-            let hash = safecoin_sdk::hash::new_rand(&mut rng);
+            let hash = solana_sdk::hash::new_rand(&mut rng);
             assert_eq!(CrdsFilter::hash_as_u64(&hash), hash_as_u64_bitops(&hash));
         }
     }
@@ -650,7 +650,7 @@ mod test {
         assert_eq!(filter.mask, mask);
         let mut rng = thread_rng();
         for _ in 0..10 {
-            let hash = safecoin_sdk::hash::new_rand(&mut rng);
+            let hash = solana_sdk::hash::new_rand(&mut rng);
             assert!(filter.test_mask(&hash));
         }
     }
@@ -661,13 +661,13 @@ mod test {
         let mut stakes = HashMap::new();
         let node = CrdsGossipPull::default();
         let me = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &safecoin_sdk::pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             0,
         )));
         crds.insert(me.clone(), 0).unwrap();
         for i in 1..=30 {
             let entry = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-                &safecoin_sdk::pubkey::new_rand(),
+                &solana_sdk::pubkey::new_rand(),
                 0,
             )));
             let id = entry.label().pubkey();
@@ -694,25 +694,25 @@ mod test {
         let gossip = socketaddr!("127.0.0.1:1234");
 
         let me = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo {
-            id: safecoin_sdk::pubkey::new_rand(),
+            id: solana_sdk::pubkey::new_rand(),
             shred_version: 123,
             gossip,
             ..ContactInfo::default()
         }));
         let spy = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo {
-            id: safecoin_sdk::pubkey::new_rand(),
+            id: solana_sdk::pubkey::new_rand(),
             shred_version: 0,
             gossip,
             ..ContactInfo::default()
         }));
         let node_123 = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo {
-            id: safecoin_sdk::pubkey::new_rand(),
+            id: solana_sdk::pubkey::new_rand(),
             shred_version: 123,
             gossip,
             ..ContactInfo::default()
         }));
         let node_456 = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo {
-            id: safecoin_sdk::pubkey::new_rand(),
+            id: solana_sdk::pubkey::new_rand(),
             shred_version: 456,
             gossip,
             ..ContactInfo::default()
@@ -753,12 +753,12 @@ mod test {
         let gossip = socketaddr!("127.0.0.1:1234");
 
         let me = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo {
-            id: safecoin_sdk::pubkey::new_rand(),
+            id: solana_sdk::pubkey::new_rand(),
             gossip,
             ..ContactInfo::default()
         }));
         let node_123 = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo {
-            id: safecoin_sdk::pubkey::new_rand(),
+            id: solana_sdk::pubkey::new_rand(),
             gossip,
             ..ContactInfo::default()
         }));
@@ -779,7 +779,7 @@ mod test {
         assert!(options.is_empty());
 
         // Unknown pubkey in gossip_validators -- will pull from nobody
-        gossip_validators.insert(safecoin_sdk::pubkey::new_rand());
+        gossip_validators.insert(solana_sdk::pubkey::new_rand());
         let options = node.pull_options(
             &crds,
             &me.label().pubkey(),
@@ -809,7 +809,7 @@ mod test {
         let mut rng = thread_rng();
         let crds_filter_set =
             CrdsFilterSet::new(/*num_items=*/ 9672788, /*max_bytes=*/ 8196);
-        let hash_values: Vec<_> = std::iter::repeat_with(|| safecoin_sdk::hash::new_rand(&mut rng))
+        let hash_values: Vec<_> = std::iter::repeat_with(|| solana_sdk::hash::new_rand(&mut rng))
             .take(1024)
             .collect();
         for hash_value in &hash_values {
@@ -861,7 +861,7 @@ mod test {
         for _ in 0..10_000 {
             crds_gossip_pull
                 .purged_values
-                .push_back((safecoin_sdk::hash::new_rand(&mut rng), rng.gen()));
+                .push_back((solana_sdk::hash::new_rand(&mut rng), rng.gen()));
         }
         let mut num_inserts = 0;
         for _ in 0..20_000 {
@@ -909,7 +909,7 @@ mod test {
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         let mut crds = Crds::default();
         let entry = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &safecoin_sdk::pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             0,
         )));
         let id = entry.label().pubkey();
@@ -944,7 +944,7 @@ mod test {
         );
 
         let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &safecoin_sdk::pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             0,
         )));
         crds.insert(new.clone(), 0).unwrap();
@@ -969,19 +969,19 @@ mod test {
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         let mut crds = Crds::default();
         let entry = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &safecoin_sdk::pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             0,
         )));
         let node_pubkey = entry.label().pubkey();
         let mut node = CrdsGossipPull::default();
         crds.insert(entry.clone(), now).unwrap();
         let old = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &safecoin_sdk::pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             0,
         )));
         crds.insert(old.clone(), now).unwrap();
         let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &safecoin_sdk::pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             0,
         )));
         crds.insert(new.clone(), now).unwrap();
@@ -1014,14 +1014,14 @@ mod test {
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         let mut node_crds = Crds::default();
         let entry = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &safecoin_sdk::pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             0,
         )));
         let node_pubkey = entry.label().pubkey();
         let node = CrdsGossipPull::default();
         node_crds.insert(entry, 0).unwrap();
         let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &safecoin_sdk::pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             0,
         )));
         node_crds.insert(new, 0).unwrap();
@@ -1050,7 +1050,7 @@ mod test {
         assert_eq!(rsp[0].len(), 0);
 
         let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &safecoin_sdk::pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS,
         )));
         dest_crds
@@ -1070,7 +1070,7 @@ mod test {
         filters.push(filters[0].clone());
         //should return new value since caller is new
         filters[1].0 = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &safecoin_sdk::pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS + 1,
         )));
 
@@ -1090,14 +1090,14 @@ mod test {
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         let mut node_crds = Crds::default();
         let entry = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &safecoin_sdk::pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             0,
         )));
         let node_pubkey = entry.label().pubkey();
         let node = CrdsGossipPull::default();
         node_crds.insert(entry, 0).unwrap();
         let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &safecoin_sdk::pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             0,
         )));
         node_crds.insert(new, 0).unwrap();
@@ -1149,7 +1149,7 @@ mod test {
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         let mut node_crds = Crds::default();
         let entry = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &safecoin_sdk::pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             1,
         )));
         let node_pubkey = entry.label().pubkey();
@@ -1157,14 +1157,14 @@ mod test {
         node_crds.insert(entry, 0).unwrap();
 
         let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &safecoin_sdk::pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             1,
         )));
         node_crds.insert(new, 0).unwrap();
 
         let mut dest = CrdsGossipPull::default();
         let mut dest_crds = Crds::default();
-        let new_id = safecoin_sdk::pubkey::new_rand();
+        let new_id = solana_sdk::pubkey::new_rand();
         let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
             &new_id, 1,
         )));
@@ -1255,7 +1255,7 @@ mod test {
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         let mut node_crds = Crds::default();
         let entry = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &safecoin_sdk::pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             0,
         )));
         let node_label = entry.label();
@@ -1263,7 +1263,7 @@ mod test {
         let mut node = CrdsGossipPull::default();
         node_crds.insert(entry, 0).unwrap();
         let old = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &safecoin_sdk::pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             0,
         )));
         node_crds.insert(old.clone(), 0).unwrap();
@@ -1375,7 +1375,7 @@ mod test {
         let mut node_crds = Crds::default();
         let mut node = CrdsGossipPull::default();
 
-        let peer_pubkey = safecoin_sdk::pubkey::new_rand();
+        let peer_pubkey = solana_sdk::pubkey::new_rand();
         let peer_entry = CrdsValue::new_unsigned(CrdsData::ContactInfo(
             ContactInfo::new_localhost(&peer_pubkey, 0),
         ));

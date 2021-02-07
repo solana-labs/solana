@@ -2,10 +2,10 @@
 
 extern crate test;
 
-use safecoin_perf::packet::to_packets_chunked;
-use safecoin_perf::recycler::Recycler;
-use safecoin_perf::sigverify;
-use safecoin_perf::test_tx::test_tx;
+use solana_perf::packet::to_packets_chunked;
+use solana_perf::recycler::Recycler;
+use solana_perf::sigverify;
+use solana_perf::test_tx::test_tx;
 use test::Bencher;
 
 #[bench]

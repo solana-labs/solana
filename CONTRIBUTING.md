@@ -232,7 +232,7 @@ confused with 3-letter acronyms.
 Safecoin's architecture is described by docs generated from markdown files in
 the `docs/src/` directory, maintained by an *editor* (currently @garious). To
 add a design proposal, you'll need to include it in the
-[Accepted Design Proposals](https://docs.safecoin.org/proposals/accepted-design-proposals)
+[Accepted Design Proposals](https://docs.solana.com/proposals/accepted-design-proposals)
 section of the Safecoin docs.  Here's the full process:
 
 1. Propose a design by creating a PR that adds a markdown document to the

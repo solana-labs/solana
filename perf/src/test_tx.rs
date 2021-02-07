@@ -1,10 +1,10 @@
-use safecoin_sdk::hash::Hash;
-use safecoin_sdk::instruction::CompiledInstruction;
-use safecoin_sdk::signature::{Keypair, Signer};
-use safecoin_sdk::system_instruction::SystemInstruction;
-use safecoin_sdk::system_program;
-use safecoin_sdk::system_transaction;
-use safecoin_sdk::transaction::Transaction;
+use solana_sdk::hash::Hash;
+use solana_sdk::instruction::CompiledInstruction;
+use solana_sdk::signature::{Keypair, Signer};
+use solana_sdk::system_instruction::SystemInstruction;
+use solana_sdk::system_program;
+use solana_sdk::system_transaction;
+use solana_sdk::transaction::Transaction;
 
 pub fn test_tx() -> Transaction {
     let keypair1 = Keypair::new();
@@ -22,7 +22,7 @@ pub fn test_multisig_tx() -> Transaction {
 
     let transfer_instruction = SystemInstruction::Transfer { lamports };
 
-    let program_ids = vec![system_program::id(), safecoin_budget_program::id()];
+    let program_ids = vec![system_program::id(), solana_budget_program::id()];
 
     let instructions = vec![CompiledInstruction::new(
         0,

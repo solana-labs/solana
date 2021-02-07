@@ -9,7 +9,7 @@ steps:
     timeout_in_minutes: 5
     name: "publish bpf sdk"
   - wait
-  - command: "sdk/docker-safecoin/build.sh"
+  - command: "sdk/docker-solana/build.sh"
     timeout_in_minutes: 60
     name: "publish docker"
   - command: "ci/publish-crate.sh"

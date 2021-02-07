@@ -1,12 +1,12 @@
 [package]
 authors = ["Safecoin Maintainers <maintainers@solana.foundation>"]
 edition = "2018"
-name = "safecoin-stake-monitor"
+name = "solana-stake-monitor"
 description = "Blockchain, Rebuilt for Scale"
 version = "1.6.0"
-repository = "https://github.com/solana-labs/safecoin"
+repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
-homepage = "https://safecoin.org/"
+homepage = "https://solana.com/"
 
 [dependencies]
 clap = "2.33.1"
@@ -14,24 +14,24 @@ console = "0.11.3"
 log = "0.4.11"
 serde = "1.0.122"
 serde_yaml = "0.8.13"
-safecoin-clap-utils = { path = "../clap-utils", version = "1.6.0" }
-safecoin-cli-config = { path = "../cli-config", version = "1.6.0" }
-safecoin-client = { path = "../client", version = "1.6.0" }
-safecoin-logger = { path = "../logger", version = "1.6.0" }
-safecoin-metrics = { path = "../metrics", version = "1.6.0" }
-safecoin-sdk = { path = "../sdk", version = "1.6.0" }
-safecoin-stake-program = { path = "../programs/stake", version = "1.6.0" }
-safecoin-transaction-status = { path = "../transaction-status", version = "1.6.0" }
-safecoin-version = { path = "../version", version = "1.6.0" }
+solana-clap-utils = { path = "../clap-utils", version = "1.6.0" }
+solana-cli-config = { path = "../cli-config", version = "1.6.0" }
+solana-client = { path = "../client", version = "1.6.0" }
+solana-logger = { path = "../logger", version = "1.6.0" }
+solana-metrics = { path = "../metrics", version = "1.6.0" }
+solana-sdk = { path = "../sdk", version = "1.6.0" }
+solana-stake-program = { path = "../programs/stake", version = "1.6.0" }
+solana-transaction-status = { path = "../transaction-status", version = "1.6.0" }
+solana-version = { path = "../version", version = "1.6.0" }
 
 [dev-dependencies]
 serial_test = "0.4.0"
-safecoin-local-cluster = { path = "../local-cluster", version = "1.6.0" }
-safecoin-core = { path = "../core", version = "1.6.0" }
+solana-local-cluster = { path = "../local-cluster", version = "1.6.0" }
+solana-core = { path = "../core", version = "1.6.0" }
 tempfile = "3.1.0"
 
 [[bin]]
-name = "safecoin-stake-monitor"
+name = "solana-stake-monitor"
 path = "src/main.rs"
 
 [package.metadata.docs.rs]

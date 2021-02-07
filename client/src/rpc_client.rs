@@ -16,11 +16,11 @@ use bincode::serialize;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::*;
 use serde_json::{json, Value};
-use safecoin_account_decoder::{
+use solana_account_decoder::{
     parse_token::{TokenAccountType, UiTokenAccount, UiTokenAmount},
     UiAccount, UiAccountData, UiAccountEncoding,
 };
-use safecoin_sdk::{
+use solana_sdk::{
     account::Account,
     clock::{Slot, UnixTimestamp, DEFAULT_MS_PER_SLOT, MAX_HASH_AGE_IN_SECONDS},
     commitment_config::{CommitmentConfig, CommitmentLevel},
@@ -32,10 +32,10 @@ use safecoin_sdk::{
     signature::Signature,
     transaction::{self, uses_durable_nonce, Transaction},
 };
-use safecoin_transaction_status::{
+use solana_transaction_status::{
     EncodedConfirmedBlock, EncodedConfirmedTransaction, TransactionStatus, UiTransactionEncoding,
 };
-use safecoin_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
+use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::{
     cmp::min,
     net::SocketAddr,
@@ -138,7 +138,7 @@ impl RpcClient {
             let node_version = self.get_version().map_err(|e| {
                 RpcError::RpcRequestError(format!("cluster version query failed: {}", e))
             })?;
-            let node_version = semver::Version::parse(&node_version.safecoin_core).map_err(|e| {
+            let node_version = semver::Version::parse(&node_version.solana_core).map_err(|e| {
                 RpcError::RpcRequestError(format!("failed to parse cluster version: {}", e))
             })?;
             *w_node_version = Some(node_version.clone());
@@ -1572,7 +1572,7 @@ mod tests {
     use jsonrpc_core::{futures::prelude::*, Error, IoHandler, Params};
     use jsonrpc_http_server::{AccessControlAllowOrigin, DomainsValidation, ServerBuilder};
     use serde_json::Number;
-    use safecoin_sdk::{
+    use solana_sdk::{
         instruction::InstructionError, signature::Keypair, system_transaction,
         transaction::TransactionError,
     };
@@ -1637,7 +1637,7 @@ mod tests {
         let rpc_client = RpcClient::new_mock("succeeds".to_string());
 
         let key = Keypair::new();
-        let to = safecoin_sdk::pubkey::new_rand();
+        let to = solana_sdk::pubkey::new_rand();
         let blockhash = Hash::default();
         let tx = system_transaction::transfer(&key, &to, 50, blockhash);
 
@@ -1690,7 +1690,7 @@ mod tests {
         let rpc_client = RpcClient::new_mock("succeeds".to_string());
 
         let key = Keypair::new();
-        let to = safecoin_sdk::pubkey::new_rand();
+        let to = solana_sdk::pubkey::new_rand();
         let blockhash = Hash::default();
         let tx = system_transaction::transfer(&key, &to, 50, blockhash);
         let result = rpc_client.send_and_confirm_transaction(&tx);

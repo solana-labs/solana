@@ -1,5 +1,5 @@
 use crate::{parse_account_data::ParseAccountError, UiFeeCalculator};
-use safecoin_sdk::{
+use solana_sdk::{
     instruction::InstructionError,
     nonce::{state::Versions, State},
 };
@@ -37,7 +37,7 @@ pub struct UiNonceData {
 #[cfg(test)]
 mod test {
     use super::*;
-    use safecoin_sdk::{
+    use solana_sdk::{
         hash::Hash,
         nonce::{
             state::{Data, Versions},

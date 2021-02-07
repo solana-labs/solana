@@ -7,4 +7,4 @@ pub mod streamer;
 extern crate log;
 
 #[macro_use]
-extern crate safecoin_metrics;
+extern crate solana_metrics;

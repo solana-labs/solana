@@ -115,9 +115,9 @@ Adding a signed division instruction is a consideration.
 
 Programs are deployed with and executed by runtime loaders, currently there are
 two supported loaders [BPF
-Loader](https://github.com/solana-labs/safecoin/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/bpf_loader.rs#L17)
+Loader](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/bpf_loader.rs#L17)
 and [BPF loader
-deprecated](https://github.com/solana-labs/safecoin/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/bpf_loader_deprecated.rs#L14)
+deprecated](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/bpf_loader_deprecated.rs#L14)
 
 Loaders may support different application binary interfaces so developers must
 write their programs for and deploy them to the same loader.  If a program
@@ -139,10 +139,10 @@ loader see:
 BPF program deployment is the process of uploading a BPF shared object into a
 program account's data and marking the account executable.  A client breaks the
 BPF shared object into smaller pieces and sends them as the instruction data of
-[`Write`](https://github.com/solana-labs/safecoin/blob/bc7133d7526a041d1aaee807b80922baa89b6f90/sdk/program/src/loader_instruction.rs#L13)
+[`Write`](https://github.com/solana-labs/solana/blob/bc7133d7526a041d1aaee807b80922baa89b6f90/sdk/program/src/loader_instruction.rs#L13)
 instructions to the loader where loader writes that data into the program's
 account data.  Once all the pieces are received the client sends a
-[`Finalize`](https://github.com/solana-labs/safecoin/blob/bc7133d7526a041d1aaee807b80922baa89b6f90/sdk/program/src/loader_instruction.rs#L30)
+[`Finalize`](https://github.com/solana-labs/solana/blob/bc7133d7526a041d1aaee807b80922baa89b6f90/sdk/program/src/loader_instruction.rs#L30)
 instruction to the loader, the loader then validates that the BPF data is valid
 and marks the program account as _executable_.  Once the program account is
 marked executable, subsequent transactions may issue instructions for that

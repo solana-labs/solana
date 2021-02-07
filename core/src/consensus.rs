@@ -1,12 +1,12 @@
 use crate::progress_map::{LockoutIntervals, ProgressMap};
 use chrono::prelude::*;
-use safecoin_ledger::{ancestor_iterator::AncestorIterator, blockstore::Blockstore, blockstore_db};
-use safecoin_measure::measure::Measure;
-use safecoin_runtime::{
+use solana_ledger::{ancestor_iterator::AncestorIterator, blockstore::Blockstore, blockstore_db};
+use solana_measure::measure::Measure;
+use solana_runtime::{
     bank::Bank, bank_forks::BankForks, commitment::VOTE_THRESHOLD_SIZE,
     vote_account::ArcVoteAccount,
 };
-use safecoin_sdk::{
+use solana_sdk::{
     clock::{Slot, UnixTimestamp},
     hash::Hash,
     instruction::Instruction,
@@ -14,7 +14,7 @@ use safecoin_sdk::{
     signature::{Keypair, Signature, Signer},
     slot_history::{Check, SlotHistory},
 };
-use safecoin_vote_program::{
+use solana_vote_program::{
     vote_instruction,
     vote_state::{BlockTimestamp, Lockout, Vote, VoteState, MAX_LOCKOUT_HISTORY},
 };
@@ -565,7 +565,7 @@ impl Tower {
                     // So, don't re-vote on it by returning pseudo FailedSwitchThreshold, otherwise
                     // there would be slashing because of double vote on one of last_vote_ancestors.
                     // (Well, needless to say, re-creating the duplicate block must be handled properly
-                    // at the banking stage: https://github.com/solana-labs/safecoin/issues/8232)
+                    // at the banking stage: https://github.com/solana-labs/solana/issues/8232)
                     //
                     // To be specific, the replay stage is tricked into a false perception where
                     // last_vote_ancestors is AVAILABLE for descendant-of-`switch_slot`,  stale, and
@@ -1244,8 +1244,8 @@ pub mod test {
         progress_map::ForkProgress,
         replay_stage::{HeaviestForkFailures, ReplayStage},
     };
-    use safecoin_ledger::{blockstore::make_slot_entries, get_tmp_ledger_path};
-    use safecoin_runtime::{
+    use solana_ledger::{blockstore::make_slot_entries, get_tmp_ledger_path};
+    use solana_runtime::{
         accounts_background_service::ABSRequestSender,
         bank::Bank,
         bank_forks::BankForks,
@@ -1253,11 +1253,11 @@ pub mod test {
             create_genesis_config_with_vote_accounts, GenesisConfigInfo, ValidatorVoteKeypairs,
         },
     };
-    use safecoin_sdk::{
+    use solana_sdk::{
         account::Account, clock::Slot, hash::Hash, pubkey::Pubkey, signature::Signer,
         slot_history::SlotHistory,
     };
-    use safecoin_vote_program::{
+    use solana_vote_program::{
         vote_state::{Vote, VoteStateVersions, MAX_LOCKOUT_HISTORY},
         vote_transaction,
     };
@@ -1587,7 +1587,7 @@ pub mod test {
             )
             .expect("serialize state");
             stakes.push((
-                safecoin_sdk::pubkey::new_rand(),
+                solana_sdk::pubkey::new_rand(),
                 (*lamports, ArcVoteAccount::from(account)),
             ));
         }
@@ -2068,7 +2068,7 @@ pub mod test {
 
     #[test]
     fn test_check_vote_threshold_no_skip_lockout_with_new_root() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let mut tower = Tower::new_for_tests(4, 0.67);
         let mut stakes = HashMap::new();
         for i in 0..(MAX_LOCKOUT_HISTORY as u64 + 1) {
@@ -2240,7 +2240,7 @@ pub mod test {
 
     #[test]
     fn test_check_vote_threshold_lockouts_not_updated() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let mut tower = Tower::new_for_tests(1, 0.67);
         let stakes = vec![(0, 1), (1, 2)].into_iter().collect();
         tower.record_vote(0, Hash::default());
@@ -2444,7 +2444,7 @@ pub mod test {
 
     #[test]
     fn test_switch_threshold_across_tower_reload() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         // Init state
         let mut vote_simulator = VoteSimulator::new(2);
         let my_pubkey = vote_simulator.node_pubkeys[0];
@@ -2709,7 +2709,7 @@ pub mod test {
 
     #[test]
     fn test_reconcile_blockstore_roots_with_tower_normal() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let blockstore_path = get_tmp_ledger_path!();
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
@@ -2740,7 +2740,7 @@ pub mod test {
     #[test]
     #[should_panic(expected = "couldn't find a last_blockstore_root upwards from: 4!?")]
     fn test_reconcile_blockstore_roots_with_tower_panic_no_common_root() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let blockstore_path = get_tmp_ledger_path!();
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
@@ -2766,7 +2766,7 @@ pub mod test {
 
     #[test]
     fn test_reconcile_blockstore_roots_with_tower_nop_no_parent() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let blockstore_path = get_tmp_ledger_path!();
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
@@ -2790,7 +2790,7 @@ pub mod test {
 
     #[test]
     fn test_adjust_lockouts_after_replay_future_slots() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let mut tower = Tower::new_for_tests(10, 0.9);
         tower.record_vote(0, Hash::default());
         tower.record_vote(1, Hash::default());
@@ -2865,7 +2865,7 @@ pub mod test {
 
     #[test]
     fn test_adjust_lockouts_after_replay_all_rooted_with_too_old() {
-        use safecoin_sdk::slot_history::MAX_ENTRIES;
+        use solana_sdk::slot_history::MAX_ENTRIES;
 
         let mut tower = Tower::new_for_tests(10, 0.9);
         tower.record_vote(0, Hash::default());
@@ -2991,7 +2991,7 @@ pub mod test {
 
     #[test]
     fn test_adjust_lockouts_after_replay_too_old_tower() {
-        use safecoin_sdk::slot_history::MAX_ENTRIES;
+        use solana_sdk::slot_history::MAX_ENTRIES;
 
         let mut tower = Tower::new_for_tests(10, 0.9);
         tower.record_vote(0, Hash::default());
@@ -3046,7 +3046,7 @@ pub mod test {
 
     #[test]
     fn test_adjust_lockouts_after_replay_out_of_order() {
-        use safecoin_sdk::slot_history::MAX_ENTRIES;
+        use solana_sdk::slot_history::MAX_ENTRIES;
 
         let mut tower = Tower::new_for_tests(10, 0.9);
         tower

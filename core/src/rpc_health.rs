@@ -1,6 +1,6 @@
 use {
     crate::cluster_info::ClusterInfo,
-    safecoin_sdk::{clock::Slot, pubkey::Pubkey},
+    solana_sdk::{clock::Slot, pubkey::Pubkey},
     std::{
         collections::HashSet,
         sync::atomic::{AtomicBool, Ordering},

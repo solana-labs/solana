@@ -26,16 +26,16 @@ EOF
 }
 
 function get_cluster_version {
-  clusterVersion="$(curl -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getVersion"}' "$url" | jq '.result | ."safecoin-core" ')"
+  clusterVersion="$(curl -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getVersion"}' "$url" | jq '.result | ."solana-core" ')"
   echo Cluster software version: "$clusterVersion"
 }
 
 function get_token_capitalization {
   totalSupplyLamports="$(curl -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getTotalSupply"}' "$url" | cut -d , -f 2 | cut -d : -f 2)"
-  totalSupplySafe=$((totalSupplyLamports / LAMPORTS_PER_SAFE))
+  totalSupplySol=$((totalSupplyLamports / LAMPORTS_PER_SOL))
 
   printf "\n--- Token Capitalization ---\n"
-  printf "Total token capitalization %'d SAFE\n" "$totalSupplySafe"
+  printf "Total token capitalization %'d SOL\n" "$totalSupplySol"
   printf "Total token capitalization %'d Lamports\n" "$totalSupplyLamports"
 
 }
@@ -55,28 +55,28 @@ function get_program_account_balance_totals {
     totalAccountBalancesLamports=$((totalAccountBalancesLamports + account))
     numberOfAccounts=$((numberOfAccounts + 1))
   done
-  totalAccountBalancesSafe=$((totalAccountBalancesLamports / LAMPORTS_PER_SAFE))
+  totalAccountBalancesSol=$((totalAccountBalancesLamports / LAMPORTS_PER_SOL))
 
   printf "\n--- %s Account Balance Totals ---\n" "$PROGRAM_NAME"
   printf "Number of %s Program accounts: %'.f\n" "$PROGRAM_NAME" "$numberOfAccounts"
-  printf "Total token balance in all %s accounts: %'d SAFE\n" "$PROGRAM_NAME" "$totalAccountBalancesSafe"
+  printf "Total token balance in all %s accounts: %'d SOL\n" "$PROGRAM_NAME" "$totalAccountBalancesSol"
   printf "Total token balance in all %s accounts: %'d Lamports\n" "$PROGRAM_NAME" "$totalAccountBalancesLamports"
 
   case $PROGRAM_NAME in
     SYSTEM)
-      systemAccountBalanceTotalSafe=$totalAccountBalancesSafe
+      systemAccountBalanceTotalSol=$totalAccountBalancesSol
       systemAccountBalanceTotalLamports=$totalAccountBalancesLamports
       ;;
     STAKE)
-      stakeAccountBalanceTotalSafe=$totalAccountBalancesSafe
+      stakeAccountBalanceTotalSol=$totalAccountBalancesSol
       stakeAccountBalanceTotalLamports=$totalAccountBalancesLamports
       ;;
     VOTE)
-      voteAccountBalanceTotalSafe=$totalAccountBalancesSafe
+      voteAccountBalanceTotalSol=$totalAccountBalancesSol
       voteAccountBalanceTotalLamports=$totalAccountBalancesLamports
       ;;
     CONFIG)
-      configAccountBalanceTotalSafe=$totalAccountBalancesSafe
+      configAccountBalanceTotalSol=$totalAccountBalancesSol
       configAccountBalanceTotalLamports=$totalAccountBalancesLamports
       ;;
     *)
@@ -87,11 +87,11 @@ function get_program_account_balance_totals {
 }
 
 function sum_account_balances_totals {
-  grandTotalAccountBalancesSafe=$((systemAccountBalanceTotalSafe + stakeAccountBalanceTotalSafe + voteAccountBalanceTotalSafe + configAccountBalanceTotalSafe))
+  grandTotalAccountBalancesSol=$((systemAccountBalanceTotalSol + stakeAccountBalanceTotalSol + voteAccountBalanceTotalSol + configAccountBalanceTotalSol))
   grandTotalAccountBalancesLamports=$((systemAccountBalanceTotalLamports + stakeAccountBalanceTotalLamports + voteAccountBalanceTotalLamports + configAccountBalanceTotalLamports))
 
   printf "\n--- Total Token Distribution in all Account Balances ---\n"
-  printf "Total SAFE in all Account Balances: %'d\n" "$grandTotalAccountBalancesSafe"
+  printf "Total SOL in all Account Balances: %'d\n" "$grandTotalAccountBalancesSol"
   printf "Total Lamports in all Account Balances: %'d\n" "$grandTotalAccountBalancesLamports"
 }
 
@@ -99,12 +99,12 @@ url=$1
 [[ -n $url ]] || usage "Missing required RPC URL"
 shift
 
-LAMPORTS_PER_SAFE=1000000000 # 1 billion
+LAMPORTS_PER_SOL=1000000000 # 1 billion
 
-stakeAccountBalanceTotalSafe=
-systemAccountBalanceTotalSafe=
-voteAccountBalanceTotalSafe=
-configAccountBalanceTotalSafe=
+stakeAccountBalanceTotalSol=
+systemAccountBalanceTotalSol=
+voteAccountBalanceTotalSol=
+configAccountBalanceTotalSol=
 
 stakeAccountBalanceTotalLamports=
 systemAccountBalanceTotalLamports=

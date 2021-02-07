@@ -13,6 +13,6 @@ curl https://sh.rustup.rs -sSf | sh -s -- -y
 PATH=$HOME/.cargo/bin:$PATH
 rustup --version
 
-sh -c "$(curl -sSfL https://release.safecoin.org/edge/install)"
-PATH="$HOME/.local/share/safecoin/install/active_release/bin:$PATH"
-safecoin --version
+sh -c "$(curl -sSfL https://release.solana.com/edge/install)"
+PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
+solana --version

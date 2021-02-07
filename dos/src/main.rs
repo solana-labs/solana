@@ -1,11 +1,11 @@
 use clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg};
 use log::*;
 use rand::{thread_rng, Rng};
-use safecoin_client::rpc_client::RpcClient;
-use safecoin_core::{
+use solana_client::rpc_client::RpcClient;
+use solana_core::{
     contact_info::ContactInfo, gossip_service::discover, serve_repair::RepairProtocol,
 };
-use safecoin_sdk::pubkey::Pubkey;
+use solana_sdk::pubkey::Pubkey;
 use std::net::{SocketAddr, UdpSocket};
 use std::process::exit;
 use std::str::FromStr;
@@ -58,7 +58,7 @@ fn run_dos(
     if !nodes.is_empty() {
         let source = thread_rng().gen_range(0, nodes.len());
         let mut contact = nodes[source].clone();
-        contact.id = safecoin_sdk::pubkey::new_rand();
+        contact.id = solana_sdk::pubkey::new_rand();
         match data_type.as_str() {
             "repair_highest" => {
                 let slot = 100;
@@ -135,10 +135,10 @@ fn run_dos(
 }
 
 fn main() {
-    safecoin_logger::setup_with_default("safecoin=info");
+    solana_logger::setup_with_default("solana=info");
     let matches = App::new(crate_name!())
         .about(crate_description!())
-        .version(safecoin_version::version!())
+        .version(solana_version::version!())
         .arg(
             Arg::with_name("entrypoint")
                 .long("entrypoint")
@@ -201,7 +201,7 @@ fn main() {
 
     let mut entrypoint_addr = SocketAddr::from(([127, 0, 0, 1], 8001));
     if let Some(addr) = matches.value_of("entrypoint") {
-        entrypoint_addr = safecoin_net_utils::parse_host_port(addr).unwrap_or_else(|e| {
+        entrypoint_addr = solana_net_utils::parse_host_port(addr).unwrap_or_else(|e| {
             eprintln!("failed to parse entrypoint address: {}", e);
             exit(1)
         });
@@ -249,12 +249,12 @@ fn main() {
 #[cfg(test)]
 pub mod test {
     use super::*;
-    use safecoin_sdk::timing::timestamp;
+    use solana_sdk::timing::timestamp;
 
     #[test]
     fn test_dos() {
         let nodes = [ContactInfo::new_localhost(
-            &safecoin_sdk::pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             timestamp(),
         )];
         let entrypoint_addr = nodes[0].gossip;

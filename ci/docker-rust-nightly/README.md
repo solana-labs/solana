@@ -1,7 +1,7 @@
 Docker image containing rust nightly and some preinstalled crates used in CI.
 
 This image may be manually updated by running `CI=true ./build.sh` if you are a member
-of the [Safecoin Labs](https://hub.docker.com/u/safecoinlabs/) Docker Hub
+of the [Safecoin Labs](https://hub.docker.com/u/solanalabs/) Docker Hub
 organization.
 
 ## Moving to a newer nightly
@@ -21,8 +21,8 @@ To update the pinned version:
    Check https://rust-lang.github.io/rustup-components-history/ for build
    status
 1. Update `ci/rust-version.sh` to reflect the new nightly `YYYY-MM-DD`
-1. Run `SAFECOIN_ALLOCATE_TTY=1 SAFECOIN_DOCKER_RUN_NOSETUID=1 ci/docker-run.sh --nopull safecoinlabs/rust-nightly:YYYY-MM-DD ci/test-checks.sh`
-   and `SAFECOIN_ALLOCATE_TTY=1 SAFECOIN_DOCKER_RUN_NOSETUID=1 ci/docker-run.sh --nopull safecoinlabs/rust-nightly:YYYY-MM-DD ci/test-coverage.sh [args]...`
+1. Run `SOLANA_ALLOCATE_TTY=1 SOLANA_DOCKER_RUN_NOSETUID=1 ci/docker-run.sh --nopull solanalabs/rust-nightly:YYYY-MM-DD ci/test-checks.sh`
+   and `SOLANA_ALLOCATE_TTY=1 SOLANA_DOCKER_RUN_NOSETUID=1 ci/docker-run.sh --nopull solanalabs/rust-nightly:YYYY-MM-DD ci/test-coverage.sh [args]...`
    to confirm the new nightly image builds.  Fix any issues as needed
 1. Run `docker login` to enable pushing images to Docker Hub, if you're authorized.
 1. Run `CI=true ci/docker-rust-nightly/build.sh YYYY-MM-DD` to push the new nightly image to dockerhub.com.

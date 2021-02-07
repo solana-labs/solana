@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package safecoin.storage.ConfirmedBlock;
+package solana.storage.ConfirmedBlock;
 
 message ConfirmedBlock {
     string previous_blockhash = 1;

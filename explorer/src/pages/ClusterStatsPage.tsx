@@ -6,7 +6,7 @@ import {
   useDashboardInfo,
   usePerformanceInfo,
   useStatsProvider,
-} from "providers/stats/safecoinClusterStats";
+} from "providers/stats/solanaClusterStats";
 import { slotsToHumanString } from "utils";
 import { useCluster } from "providers/cluster";
 import { TpsCard } from "components/TpsCard";

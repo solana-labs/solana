@@ -4,12 +4,12 @@ title: Ledger Nano
 
 This page describes how to use a Ledger Nano S or Nano X to interact with Safecoin
 using the command line tools.  To see other solutions to interact with Safecoin with
-your Nano, [click here](../ledger-live.md#interact-with-the-safecoin-network).
+your Nano, [click here](../ledger-live.md#interact-with-the-solana-network).
 
 ## Before You Begin
 
 - [Set up a Nano with the Safecoin App](../ledger-live.md)
-- [Install the Safecoin command-line tools](../../cli/install-safecoin-cli-tools.md)
+- [Install the Safecoin command-line tools](../../cli/install-solana-cli-tools.md)
 
 ## Use Ledger Nano with Safecoin CLI
 
@@ -23,7 +23,7 @@ your Nano, [click here](../ledger-live.md#interact-with-the-safecoin-network).
 On your computer, run:
 
 ```bash
-safecoin-keygen pubkey usb://ledger
+solana-keygen pubkey usb://ledger
 ```
 
 This confirms your Ledger device is connected properly and in the correct state
@@ -38,7 +38,7 @@ using the wallet ID to use a specific Ledger, see
 ### View your Wallet Addresses
 
 Your Nano supports an arbitrary number of valid wallet addresses and signers.
-To view any address, use the `safecoin-keygen pubkey` command, as shown below,
+To view any address, use the `solana-keygen pubkey` command, as shown below,
 followed by a valid [keypair URL](../hardware-wallets.md#specify-a-keypair-url).
 
 Multiple wallet addresses can be useful if you want to transfer tokens between
@@ -49,10 +49,10 @@ All of the following commands will display different addresses, associated with
 the keypair path given. Try them out!
 
 ```bash
-safecoin-keygen pubkey usb://ledger
-safecoin-keygen pubkey usb://ledger?key=0
-safecoin-keygen pubkey usb://ledger?key=1
-safecoin-keygen pubkey usb://ledger?key=2
+solana-keygen pubkey usb://ledger
+solana-keygen pubkey usb://ledger?key=0
+solana-keygen pubkey usb://ledger?key=1
+solana-keygen pubkey usb://ledger?key=2
 ```
 
 * NOTE: keypair url parameters are ignored in **zsh**
@@ -70,7 +70,7 @@ easy-to-remember path might be to use the address at `key=0`. View this address
 with:
 
 ```bash
-safecoin-keygen pubkey usb://ledger?key=0
+solana-keygen pubkey usb://ledger?key=0
 ```
 
 Now you have a wallet address (or multiple addresses), you can share any of
@@ -80,29 +80,29 @@ associated keypair URL as the signer for transactions from that address.
 ### View your Balance
 
 To view the balance of any account, regardless of which wallet it uses, use the
-`safecoin balance` command:
+`solana balance` command:
 
 ```bash
-safecoin balance SOME_WALLET_ADDRESS
+solana balance SOME_WALLET_ADDRESS
 ```
 
 For example, if your address is `7cvkjYAkUYs4W8XcXsca7cBrEGFeSUjeZmKoNBvEwyri`,
 then enter the following command to view the balance:
 
 ```bash
-safecoin balance 7cvkjYAkUYs4W8XcXsca7cBrEGFeSUjeZmKoNBvEwyri
+solana balance 7cvkjYAkUYs4W8XcXsca7cBrEGFeSUjeZmKoNBvEwyri
 ```
 
 You can also view the balance of any account address on the Accounts tab in the
-[Explorer](https://explorer.safecoin.org/accounts)
+[Explorer](https://explorer.solana.com/accounts)
 and paste the address in the box to view the balance in you web browser.
 
-Note: Any address with a balance of 0 SAFE, such as a newly created one on your
+Note: Any address with a balance of 0 SOL, such as a newly created one on your
 Ledger, will show as "Not Found" in the explorer. Empty accounts and non-existent
 accounts are treated the same in Safecoin. This will change when your account
-address has some SAFE in it.
+address has some SOL in it.
 
-### Send SAFE from a Nano
+### Send SOL from a Nano
 
 To send some tokens from an address controlled by your Nano, you will
 need to use the device to sign a transaction, using the same keypair URL you
@@ -110,18 +110,18 @@ used to derive the address. To do this, make sure your Nano is plugged in,
 unlocked with the PIN, Ledger Live is not running, and the Safecoin App is open
 on the device, showing "Application is Ready".
 
-The `safecoin transfer` command is used to specify to which address to send tokens,
+The `solana transfer` command is used to specify to which address to send tokens,
 how many tokens to send, and uses the `--keypair` argument to specify which
 keypair is sending the tokens, which will sign the transaction, and the balance
 from the associated address will decrease.
 
 ```bash
-safecoin transfer RECIPIENT_ADDRESS AMOUNT --keypair KEYPAIR_URL_OF_SENDER
+solana transfer RECIPIENT_ADDRESS AMOUNT --keypair KEYPAIR_URL_OF_SENDER
 ```
 
 Below is a full example. First, an address is viewed at a certain keypair URL.
 Second, the balance of tht address is checked. Lastly, a transfer transaction
-is entered to send `1` SAFE to the recipient address `7cvkjYAkUYs4W8XcXsca7cBrEGFeSUjeZmKoNBvEwyri`.
+is entered to send `1` SOL to the recipient address `7cvkjYAkUYs4W8XcXsca7cBrEGFeSUjeZmKoNBvEwyri`.
 When you hit Enter for a transfer command, you will be prompted to approve the
 transaction details on your Ledger device. On the device, use the right and
 left buttons to review the transaction details. If they look correct, click
@@ -129,13 +129,13 @@ both buttons on the "Approve" screen, otherwise push both buttons on the "Reject
 screen.
 
 ```bash
-~$ safecoin-keygen pubkey usb://ledger?key=42
+~$ solana-keygen pubkey usb://ledger?key=42
 CjeqzArkZt6xwdnZ9NZSf8D1CNJN1rjeFiyd8q7iLWAV
 
-~$ safecoin balance CjeqzArkZt6xwdnZ9NZSf8D1CNJN1rjeFiyd8q7iLWAV
-1.000005 SAFE
+~$ solana balance CjeqzArkZt6xwdnZ9NZSf8D1CNJN1rjeFiyd8q7iLWAV
+1.000005 SOL
 
-~$ safecoin transfer 7cvkjYAkUYs4W8XcXsca7cBrEGFeSUjeZmKoNBvEwyri 1 --keypair usb://ledger?key=42
+~$ solana transfer 7cvkjYAkUYs4W8XcXsca7cBrEGFeSUjeZmKoNBvEwyri 1 --keypair usb://ledger?key=42
 Waiting for your approval on Ledger hardware wallet usb://ledger/2JT2Xvy6T8hSmT8g6WdeDbHUgoeGdj6bE2VueCZUJmyN
 ✅ Approved
 
@@ -147,7 +147,7 @@ transaction signature, and wait for the maximum number of confirmations (32)
 before returning. This only takes a few seconds, and then the transaction is
 finalized on the Safecoin network. You can view details of this or any other
 transaction by going to the Transaction tab in the
-[Explorer](https://explorer.safecoin.org/transactions)
+[Explorer](https://explorer.solana.com/transactions)
 and paste in the transaction signature.
 
 ## Advanced Operations
@@ -166,7 +166,7 @@ connecting a Nano to USB, unlock it with your pin, and running the
 following command:
 
 ```text
-safecoin resolve-signer usb://ledger?key=0/0
+solana resolve-signer usb://ledger?key=0/0
 ```
 
 You will see output similar to:
@@ -179,7 +179,7 @@ but where `BsNsvfXqQTtJnagwFWdBS7FBXgnsK8VZ5CmuznN85swK` is your `WALLET_ID`.
 
 With your fully qualified URL, you can connect multiple hardware wallets to
 the same computer and uniquely identify a keypair from any of them.
-Use the output from the `resolve-signer` command anywhere a `safecoin` command
+Use the output from the `resolve-signer` command anywhere a `solana` command
 expects a `<KEYPAIR>` entry to use that resolved path as the signer for that
 part of the given transaction.
 
@@ -206,7 +206,7 @@ character, you can disable it explictly with a backslash in your keypair URLs.
 For example:
 
 ```bash
-safecoin-keygen pubkey usb://ledger\?key=0
+solana-keygen pubkey usb://ledger\?key=0
 ```
 
 ## Support

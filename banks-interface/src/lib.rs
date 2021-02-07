@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use safecoin_sdk::{
+use solana_sdk::{
     account::Account,
     clock::Slot,
     commitment_config::CommitmentLevel,

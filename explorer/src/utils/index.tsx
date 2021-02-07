@@ -6,7 +6,7 @@ import {
 } from "humanize-duration-ts";
 
 // Switch to web3 constant when web3 updates superstruct
-export const LAMPORTS_PER_SAFE = 1000000000;
+export const LAMPORTS_PER_SOL = 1000000000;
 
 export const NUM_TICKS_PER_SECOND = 160;
 export const DEFAULT_TICKS_PER_SLOT = 64;
@@ -28,9 +28,9 @@ export function normalizeTokenAmount(
   return rawTokens / Math.pow(10, decimals);
 }
 
-export function lamportsToSafe(lamports: number | BN): number {
+export function lamportsToSol(lamports: number | BN): number {
   if (typeof lamports === "number") {
-    return Math.abs(lamports) / LAMPORTS_PER_SAFE;
+    return Math.abs(lamports) / LAMPORTS_PER_SOL;
   }
 
   let signMultiplier = 1;
@@ -48,11 +48,11 @@ export function lamportsToSafe(lamports: number | BN): number {
   return signMultiplier * parseFloat(solString);
 }
 
-export function lamportsToSafeString(
+export function lamportsToSolString(
   lamports: number | BN,
   maximumFractionDigits: number = 9
 ): ReactNode {
-  const sol = lamportsToSafe(lamports);
+  const sol = lamportsToSol(lamports);
   return (
     <>
       ◎

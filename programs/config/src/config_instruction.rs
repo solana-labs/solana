@@ -1,6 +1,6 @@
 use crate::id;
 use crate::{ConfigKeys, ConfigState};
-use safecoin_sdk::{
+use solana_sdk::{
     instruction::{AccountMeta, Instruction},
     pubkey::Pubkey,
     system_instruction,

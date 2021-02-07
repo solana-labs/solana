@@ -4,7 +4,7 @@
 
 extern crate solana_program;
 
-use safecoin_bpf_rust_invoked::instruction::*;
+use solana_bpf_rust_invoked::instruction::*;
 use solana_program::{
     account_info::AccountInfo,
     entrypoint,

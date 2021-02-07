@@ -33,7 +33,7 @@ use crate::{
 };
 use crossbeam_channel::{bounded, unbounded};
 use rand::{thread_rng, Rng};
-use safecoin_ledger::{
+use solana_ledger::{
     bank_forks_utils,
     blockstore::{Blockstore, BlockstoreSignals, CompletedSlotsReceiver, PurgeType},
     blockstore_db::BlockstoreRecoveryMode,
@@ -42,16 +42,16 @@ use safecoin_ledger::{
     leader_schedule_cache::LeaderScheduleCache,
     poh::compute_hash_time_ns,
 };
-use safecoin_measure::measure::Measure;
-use safecoin_metrics::datapoint_info;
-use safecoin_runtime::{
+use solana_measure::measure::Measure;
+use solana_metrics::datapoint_info;
+use solana_runtime::{
     accounts_index::AccountIndex,
     bank::Bank,
     bank_forks::{BankForks, SnapshotConfig},
     commitment::BlockCommitmentCache,
     hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
 };
-use safecoin_sdk::{
+use solana_sdk::{
     clock::Slot,
     epoch_schedule::MAX_LEADER_SCHEDULE_EPOCH_OFFSET,
     genesis_config::GenesisConfig,
@@ -61,7 +61,7 @@ use safecoin_sdk::{
     signature::{Keypair, Signer},
     timing::timestamp,
 };
-use safecoin_vote_program::vote_state::VoteState;
+use solana_vote_program::vote_state::VoteState;
 use std::time::Instant;
 use std::{
     collections::HashSet,
@@ -223,7 +223,7 @@ pub struct Validator {
     poh_service: PohService,
     tpu: Tpu,
     tvu: Tvu,
-    ip_echo_server: safecoin_net_utils::IpEchoServer,
+    ip_echo_server: solana_net_utils::IpEchoServer,
 }
 
 // in the distant future, get rid of ::new()/exit() and use Result properly...
@@ -271,7 +271,7 @@ impl Validator {
             info!("entrypoint: {:?}", cluster_entrypoint);
         }
 
-        if safecoin_perf::perf_libs::api().is_some() {
+        if solana_perf::perf_libs::api().is_some() {
             info!("Initializing sigverify, this could take a while...");
         } else {
             info!("Initializing sigverify...");
@@ -513,7 +513,7 @@ impl Validator {
             std::thread::park();
         }
 
-        let ip_echo_server = safecoin_net_utils::ip_echo_server(node.sockets.ip_echo.unwrap());
+        let ip_echo_server = solana_net_utils::ip_echo_server(node.sockets.ip_echo.unwrap());
 
         let gossip_service = GossipService::new(
             &cluster_info,
@@ -1039,12 +1039,12 @@ fn new_banks_from_ledger(
         ));
         bank_forks.set_root(
             warp_slot,
-            &safecoin_runtime::accounts_background_service::ABSRequestSender::default(),
+            &solana_runtime::accounts_background_service::ABSRequestSender::default(),
             Some(warp_slot),
         );
         leader_schedule_cache.set_root(&bank_forks.root_bank());
 
-        let archive_file = safecoin_runtime::snapshot_utils::bank_to_snapshot_archive(
+        let archive_file = solana_runtime::snapshot_utils::bank_to_snapshot_archive(
             ledger_path,
             &bank_forks.root_bank(),
             None,
@@ -1258,7 +1258,7 @@ fn wait_for_supermajority(
 fn report_target_features() {
     warn!(
         "CUDA is {}abled",
-        if safecoin_perf::perf_libs::api().is_some() {
+        if solana_perf::perf_libs::api().is_some() {
             "en"
         } else {
             "dis"
@@ -1394,14 +1394,14 @@ pub fn is_snapshot_config_invalid(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use safecoin_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader};
-    use safecoin_sdk::genesis_config::create_genesis_config;
-    use safecoin_sdk::poh_config::PohConfig;
+    use solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader};
+    use solana_sdk::genesis_config::create_genesis_config;
+    use solana_sdk::poh_config::PohConfig;
     use std::fs::remove_dir_all;
 
     #[test]
     fn validator_exit() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let leader_keypair = Keypair::new();
         let leader_node = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
 
@@ -1434,9 +1434,9 @@ mod tests {
     #[test]
     fn test_backup_and_clear_blockstore() {
         use std::time::Instant;
-        safecoin_logger::setup();
-        use safecoin_ledger::get_tmp_ledger_path;
-        use safecoin_ledger::{blockstore, entry};
+        solana_logger::setup();
+        use solana_ledger::get_tmp_ledger_path;
+        use solana_ledger::{blockstore, entry};
         let blockstore_path = get_tmp_ledger_path!();
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
@@ -1516,8 +1516,8 @@ mod tests {
 
     #[test]
     fn test_wait_for_supermajority() {
-        safecoin_logger::setup();
-        use safecoin_sdk::hash::hash;
+        solana_logger::setup();
+        use solana_sdk::hash::hash;
         let node_keypair = Arc::new(Keypair::new());
         let cluster_info = ClusterInfo::new(
             ContactInfo::new_localhost(&node_keypair.pubkey(), timestamp()),
@@ -1577,11 +1577,11 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_poh_speed() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let poh_config = PohConfig {
-            target_tick_duration: Duration::from_millis(safecoin_sdk::clock::MS_PER_TICK),
+            target_tick_duration: Duration::from_millis(solana_sdk::clock::MS_PER_TICK),
             // make PoH rate really fast to cause the panic condition
-            hashes_per_tick: Some(100 * safecoin_sdk::clock::DEFAULT_HASHES_PER_TICK),
+            hashes_per_tick: Some(100 * solana_sdk::clock::DEFAULT_HASHES_PER_TICK),
             ..PohConfig::default()
         };
         let genesis_config = GenesisConfig {
@@ -1594,7 +1594,7 @@ mod tests {
     #[test]
     fn test_poh_speed_no_hashes_per_tick() {
         let poh_config = PohConfig {
-            target_tick_duration: Duration::from_millis(safecoin_sdk::clock::MS_PER_TICK),
+            target_tick_duration: Duration::from_millis(solana_sdk::clock::MS_PER_TICK),
             hashes_per_tick: None,
             ..PohConfig::default()
         };

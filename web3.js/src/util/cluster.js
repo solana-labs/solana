@@ -5,14 +5,14 @@
  */
 const endpoint = {
   http: {
-    devnet: 'http://devnet.safecoin.org',
-    testnet: 'http://testnet.safecoin.org',
-    'mainnet-beta': 'http://api.mainnet-beta.safecoin.org',
+    devnet: 'http://devnet.solana.com',
+    testnet: 'http://testnet.solana.com',
+    'mainnet-beta': 'http://api.mainnet-beta.solana.com',
   },
   https: {
-    devnet: 'https://devnet.safecoin.org',
-    testnet: 'https://testnet.safecoin.org',
-    'mainnet-beta': 'https://api.mainnet-beta.safecoin.org',
+    devnet: 'https://devnet.solana.com',
+    testnet: 'https://testnet.solana.com',
+    'mainnet-beta': 'https://api.mainnet-beta.solana.com',
   },
 };
 

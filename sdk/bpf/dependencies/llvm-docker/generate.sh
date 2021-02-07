@@ -10,7 +10,7 @@ exec docker run \
   --workdir "$PWD" \
   --volume "$PWD:$PWD" \
   --volume "$SDKROOT:$SDKROOT" \
-  --rm safecoinlabs/llvm \
+  --rm solanalabs/llvm \
   "$PROGRAM" "$@"
 EOM
 

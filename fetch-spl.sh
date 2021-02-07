@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Fetches the latest SPL programs and produces the safecoin-genesis command-line
+# Fetches the latest SPL programs and produces the solana-genesis command-line
 # arguments needed to install them
 #
 
@@ -20,8 +20,8 @@ fetch_program() {
     return
   fi
 
-  if [[ -r ~/.cache/safecoin-spl/$so ]]; then
-    cp ~/.cache/safecoin-spl/"$so" "$so"
+  if [[ -r ~/.cache/solana-spl/$so ]]; then
+    cp ~/.cache/solana-spl/"$so" "$so"
   else
     echo "Downloading $name $version"
     so_name="spl_${name//-/_}.so"
@@ -32,8 +32,8 @@ fetch_program() {
         "https://github.com/solana-labs/solana-program-library/releases/download/$name-v$version/$so_name"
     )
 
-    mkdir -p ~/.cache/safecoin-spl
-    cp "$so" ~/.cache/safecoin-spl/"$so"
+    mkdir -p ~/.cache/solana-spl
+    cp "$so" ~/.cache/solana-spl/"$so"
   fi
 
 }
@@ -50,5 +50,5 @@ echo "Available SPL programs:"
 ls -l spl_*.so
 
 echo
-echo "safecoin-genesis command-line arguments (spl-genesis-args.sh):"
+echo "solana-genesis command-line arguments (spl-genesis-args.sh):"
 cat spl-genesis-args.sh

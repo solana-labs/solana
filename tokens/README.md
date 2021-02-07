@@ -18,7 +18,7 @@ CYRJWqiSjLitBAcRxPvWpgX3s5TvmN2SuRY3eEYypFvT,43.0,
 ```
 
 ```bash
-safecoin-tokens distribute-tokens --from <KEYPAIR> --input-csv <RECIPIENTS_CSV> --fee-payer <KEYPAIR>
+solana-tokens distribute-tokens --from <KEYPAIR> --input-csv <RECIPIENTS_CSV> --fee-payer <KEYPAIR>
 ```
 
 Example transaction log before:
@@ -32,7 +32,7 @@ Send tokens to the recipients in `<RECIPIENTS_CSV>` if the distribution is
 not already recorded in the transaction log.
 
 ```bash
-safecoin-tokens distribute-tokens --from <KEYPAIR> --input-csv <RECIPIENTS_CSV> --fee-payer <KEYPAIR>
+solana-tokens distribute-tokens --from <KEYPAIR> --input-csv <RECIPIENTS_CSV> --fee-payer <KEYPAIR>
 ```
 
 Example output:
@@ -47,7 +47,7 @@ UKUcTXgbeTYh65RaVV5gSf6xBHevqHvAXMo3e8Q6np8k  43
 Example transaction log after:
 
 ```bash
-safecoin-tokens transaction-log --output-path transactions.csv
+solana-tokens transaction-log --output-path transactions.csv
 ```
 
 ```text
@@ -63,7 +63,7 @@ List the differences between a list of expected distributions and the record of 
 transactions have already been sent.
 
 ```bash
-safecoin-tokens distribute-tokens --dry-run --input-csv <RECIPIENTS_CSV>
+solana-tokens distribute-tokens --dry-run --input-csv <RECIPIENTS_CSV>
 ```
 
 Example recipients.csv:
@@ -96,7 +96,7 @@ CYRJWqiSjLitBAcRxPvWpgX3s5TvmN2SuRY3eEYypFvT
 ```
 
 ```bash
-safecoin-tokens distribute-tokens --transfer-amount 10 --from <KEYPAIR> --input-csv <RECIPIENTS_CSV> --fee-payer <KEYPAIR>
+solana-tokens distribute-tokens --transfer-amount 10 --from <KEYPAIR> --input-csv <RECIPIENTS_CSV> --fee-payer <KEYPAIR>
 ```
 
 Example output:
@@ -115,20 +115,20 @@ big difference is that new stake accounts are split from existing ones. By split
 the new accounts inherit any lockup or custodian settings of the original.
 
 ```bash
-safecoin-tokens distribute-stake --stake-account-address <ACCOUNT_ADDRESS> \
+solana-tokens distribute-stake --stake-account-address <ACCOUNT_ADDRESS> \
     --input-csv <ALLOCATIONS_CSV> \
     --stake-authority <KEYPAIR> --withdraw-authority <KEYPAIR> --fee-payer <KEYPAIR>
 ```
 
-Currently, this will subtract 1 SAFE from each allocation and store it the
-recipient address. That SAFE can be used to pay transaction fees on staking
+Currently, this will subtract 1 SOL from each allocation and store it the
+recipient address. That SOL can be used to pay transaction fees on staking
 operations such as delegating stake. The rest of the allocation is put in
 a stake account. The new stake account address is output in the transaction
 log.
 
 ## Distribute SPL tokens
 
-Distributing SPL Tokens works very similarly to distributing SAFE, but requires
+Distributing SPL Tokens works very similarly to distributing SOL, but requires
 the `--owner` parameter to sign transactions. Each recipient account must be an
 system account that will own an Associated Token Account for the SPL Token mint.
 The Associated Token Account will be created, and funded by the fee_payer, if it
@@ -151,7 +151,7 @@ You can check the status of the recipients before beginning a distribution. You
 must include the SPL Token mint address:
 
 ```bash
-safecoin-tokens spl-token-balances --mint <ADDRESS> --input-csv <RECIPIENTS_CSV>
+solana-tokens spl-token-balances --mint <ADDRESS> --input-csv <RECIPIENTS_CSV>
 ```
 
 Example output:
@@ -168,7 +168,7 @@ C56nwrDVFpPrqwGYsTgQxv1ZraTh81H14PV4RHvZe36s                    10.000  Associat
 To run the distribution:
 
 ```bash
-safecoin-tokens distribute-spl-tokens --from <ADDRESS> --owner <KEYPAIR> \
+solana-tokens distribute-spl-tokens --from <ADDRESS> --owner <KEYPAIR> \
     --input-csv <RECIPIENTS_CSV> --fee-payer <KEYPAIR>
 ```
 
@@ -188,9 +188,9 @@ C56nwrDVFpPrqwGYsTgQxv1ZraTh81H14PV4RHvZe36s                    10.000
 
 ### Calculate what tokens should be sent
 
-As with SAFE, you can List the differences between a list of expected
+As with SOL, you can List the differences between a list of expected
 distributions and the record of what transactions have already been sent using
-the `--dry-run` parameter, or `safecoin-tokens balances`.
+the `--dry-run` parameter, or `solana-tokens balances`.
 
 Example updated recipients.csv:
 
@@ -205,7 +205,7 @@ C56nwrDVFpPrqwGYsTgQxv1ZraTh81H14PV4RHvZe36s,100000
 Using dry-run:
 
 ```bash
-safecoin-tokens distribute-tokens --dry-run --input-csv <RECIPIENTS_CSV>
+solana-tokens distribute-tokens --dry-run --input-csv <RECIPIENTS_CSV>
 ```
 
 Example output:
@@ -225,7 +225,7 @@ C56nwrDVFpPrqwGYsTgQxv1ZraTh81H14PV4RHvZe36s                    90.000
 Or:
 
 ```bash
-safecoin-tokens balances --mint <ADDRESS> --input-csv <RECIPIENTS_CSV>
+solana-tokens balances --mint <ADDRESS> --input-csv <RECIPIENTS_CSV>
 ```
 
 Example output:

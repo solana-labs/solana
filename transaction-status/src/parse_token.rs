@@ -2,8 +2,8 @@ use crate::parse_instruction::{
     check_num_accounts, ParsableProgram, ParseInstructionError, ParsedInstructionEnum,
 };
 use serde_json::{json, Map, Value};
-use safecoin_account_decoder::parse_token::{pubkey_from_spl_token_v2_0, token_amount_to_ui_amount};
-use safecoin_sdk::{
+use solana_account_decoder::parse_token::{pubkey_from_spl_token_v2_0, token_amount_to_ui_amount};
+use solana_sdk::{
     instruction::{AccountMeta, CompiledInstruction, Instruction},
     pubkey::Pubkey,
 };
@@ -432,7 +432,7 @@ pub fn spl_token_v2_0_instruction(instruction: SplTokenInstruction) -> Instructi
 #[cfg(test)]
 mod test {
     use super::*;
-    use safecoin_sdk::instruction::CompiledInstruction;
+    use solana_sdk::instruction::CompiledInstruction;
     use spl_token_v2_0::{
         instruction::*,
         solana_program::{
@@ -461,7 +461,7 @@ mod test {
     fn test_parse_token() {
         let mut keys: Vec<Pubkey> = vec![];
         for _ in 0..10 {
-            keys.push(safecoin_sdk::pubkey::new_rand());
+            keys.push(solana_sdk::pubkey::new_rand());
         }
 
         // Test InitializeMint variations
@@ -1046,7 +1046,7 @@ mod test {
     fn test_token_ix_not_enough_keys() {
         let mut keys: Vec<Pubkey> = vec![];
         for _ in 0..10 {
-            keys.push(safecoin_sdk::pubkey::new_rand());
+            keys.push(solana_sdk::pubkey::new_rand());
         }
 
         // Test InitializeMint variations

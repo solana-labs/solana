@@ -3,19 +3,19 @@ use clap::{
     SubCommand,
 };
 use console::style;
-use safecoin_clap_utils::{
+use solana_clap_utils::{
     input_validators::{is_url, is_url_or_moniker, normalize_to_url_if_moniker},
     keypair::{CliSigners, DefaultSigner, SKIP_SEED_PHRASE_VALIDATION_ARG},
     DisplayError,
 };
-use safecoin_cli::cli::{
+use solana_cli::cli::{
     app, parse_command, process_command, CliCommandInfo, CliConfig, SettingType,
     DEFAULT_RPC_TIMEOUT_SECONDS,
 };
-use safecoin_cli_config::{Config, CONFIG_FILE};
-use safecoin_cli_output::{display::println_name_value, OutputFormat};
-use safecoin_client::rpc_config::RpcSendTransactionConfig;
-use safecoin_remote_wallet::remote_wallet::RemoteWalletManager;
+use solana_cli_config::{Config, CONFIG_FILE};
+use solana_cli_output::{display::println_name_value, OutputFormat};
+use solana_client::rpc_config::RpcSendTransactionConfig;
+use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use std::{collections::HashMap, error, path::PathBuf, sync::Arc, time::Duration};
 
 pub fn println_name_value_or(name: &str, value: &str, setting_type: SettingType) {
@@ -245,11 +245,11 @@ pub fn parse_args<'a>(
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
-    safecoin_logger::setup_with_default("off");
+    solana_logger::setup_with_default("off");
     let matches = app(
         crate_name!(),
         crate_description!(),
-        safecoin_version::version!(),
+        solana_version::version!(),
     )
     .arg({
         let arg = Arg::with_name("config_file")
@@ -285,7 +285,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             .takes_value(true)
             .global(true)
             .validator(is_url)
-            .help("WebSocket URL for the safecoin cluster"),
+            .help("WebSocket URL for the solana cluster"),
     )
     .arg(
         Arg::with_name("keypair")

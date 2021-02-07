@@ -1,25 +1,25 @@
 #![feature(test)]
 
-extern crate safecoin_core;
+extern crate solana_core;
 extern crate test;
 
 use log::*;
-use safecoin_core::cluster_info::{ClusterInfo, Node};
-use safecoin_core::contact_info::ContactInfo;
-use safecoin_core::retransmit_stage::retransmitter;
-use safecoin_ledger::entry::Entry;
-use safecoin_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
-use safecoin_ledger::leader_schedule_cache::LeaderScheduleCache;
-use safecoin_ledger::shred::Shredder;
-use safecoin_measure::measure::Measure;
-use safecoin_perf::packet::{Packet, Packets};
-use safecoin_runtime::bank::Bank;
-use safecoin_runtime::bank_forks::BankForks;
-use safecoin_sdk::hash::Hash;
-use safecoin_sdk::pubkey;
-use safecoin_sdk::signature::{Keypair, Signer};
-use safecoin_sdk::system_transaction;
-use safecoin_sdk::timing::timestamp;
+use solana_core::cluster_info::{ClusterInfo, Node};
+use solana_core::contact_info::ContactInfo;
+use solana_core::retransmit_stage::retransmitter;
+use solana_ledger::entry::Entry;
+use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
+use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
+use solana_ledger::shred::Shredder;
+use solana_measure::measure::Measure;
+use solana_perf::packet::{Packet, Packets};
+use solana_runtime::bank::Bank;
+use solana_runtime::bank_forks::BankForks;
+use solana_sdk::hash::Hash;
+use solana_sdk::pubkey;
+use solana_sdk::signature::{Keypair, Signer};
+use solana_sdk::system_transaction;
+use solana_sdk::timing::timestamp;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::channel;
@@ -33,7 +33,7 @@ use test::Bencher;
 #[bench]
 #[allow(clippy::same_item_push)]
 fn bench_retransmitter(bencher: &mut Bencher) {
-    safecoin_logger::setup();
+    solana_logger::setup();
     let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
     const NUM_PEERS: usize = 4;
     let mut peer_sockets = Vec::new();

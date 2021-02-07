@@ -6,16 +6,16 @@ The Safecoin git repository contains all the scripts you might need to spin up y
 
 For all four variations, you'd need the latest Rust toolchain and the Safecoin source code:
 
-First, setup Rust, Cargo and system packages as described in the Safecoin [README](https://github.com/solana-labs/safecoin#1-install-rustc-cargo-and-rustfmt)
+First, setup Rust, Cargo and system packages as described in the Safecoin [README](https://github.com/solana-labs/solana#1-install-rustc-cargo-and-rustfmt)
 
 Now checkout the code from github:
 
 ```bash
-git clone https://github.com/solana-labs/safecoin.git
-cd safecoin
+git clone https://github.com/solana-labs/solana.git
+cd solana
 ```
 
-The demo code is sometimes broken between releases as we add new low-level features, so if this is your first time running the demo, you'll improve your odds of success if you check out the [latest release](https://github.com/solana-labs/safecoin/releases) before proceeding:
+The demo code is sometimes broken between releases as we add new low-level features, so if this is your first time running the demo, you'll improve your odds of success if you check out the [latest release](https://github.com/solana-labs/solana/releases) before proceeding:
 
 ```bash
 TAG=$(git describe --tags $(git rev-list --tags --max-count=1))
@@ -71,8 +71,8 @@ To run a performance-enhanced validator on Linux, [CUDA 10.0](https://developer.
 
 ```bash
 ./fetch-perf-libs.sh
-NDEBUG=1 SAFECOIN_CUDA=1 ./multinode-demo/bootstrap-validator.sh
-NDEBUG=1 SAFECOIN_CUDA=1 ./multinode-demo/validator.sh
+NDEBUG=1 SOLANA_CUDA=1 ./multinode-demo/bootstrap-validator.sh
+NDEBUG=1 SOLANA_CUDA=1 ./multinode-demo/validator.sh
 ```
 
 ### Testnet Client Demo
@@ -93,21 +93,21 @@ There are some useful debug messages in the code, you can enable them on a per-m
 
 For example
 
-- To enable `info` everywhere and `debug` only in the safecoin::banking_stage module:
+- To enable `info` everywhere and `debug` only in the solana::banking_stage module:
 
   ```bash
-export RUST_LOG=safecoin=info,safecoin::banking_stage=debug
+export RUST_LOG=solana=info,solana::banking_stage=debug
   ```
 
 - To enable BPF program logging:
 
   ```bash
-export RUST_LOG=safecoin_bpf_loader=trace
+export RUST_LOG=solana_bpf_loader=trace
   ```
 
 Generally we are using `debug` for infrequent debug messages, `trace` for potentially frequent messages and `info` for performance-related logging.
 
-You can also attach to a running process with GDB. The leader's process is named _safecoin-validator_:
+You can also attach to a running process with GDB. The leader's process is named _solana-validator_:
 
 ```bash
 sudo gdb
@@ -123,7 +123,7 @@ This will dump all the threads stack traces into gdb.txt
 In this example the client connects to our public testnet. To run validators on the testnet you would need to open udp ports `8000-10000`.
 
 ```bash
-NDEBUG=1 ./multinode-demo/bench-tps.sh --entrypoint devnet.safecoin.org:8001 --faucet devnet.safecoin.org:9900 --duration 60 --tx_count 50
+NDEBUG=1 ./multinode-demo/bench-tps.sh --entrypoint devnet.solana.com:8001 --faucet devnet.solana.com:9900 --duration 60 --tx_count 50
 ```
 
-You can observe the effects of your client's transactions on our [metrics dashboard](https://metrics.safecoin.org:3000/d/monitor/cluster-telemetry?var-testnet=devnet)
+You can observe the effects of your client's transactions on our [metrics dashboard](https://metrics.solana.com:3000/d/monitor/cluster-telemetry?var-testnet=devnet)

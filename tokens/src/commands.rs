@@ -11,30 +11,30 @@ use indexmap::IndexMap;
 use indicatif::{ProgressBar, ProgressStyle};
 use pickledb::PickleDb;
 use serde::{Deserialize, Serialize};
-use safecoin_account_decoder::parse_token::{
+use solana_account_decoder::parse_token::{
     pubkey_from_spl_token_v2_0, spl_token_v2_0_pubkey, token_amount_to_ui_amount,
 };
-use safecoin_client::{
+use solana_client::{
     client_error::{ClientError, Result as ClientResult},
     rpc_client::RpcClient,
     rpc_config::RpcSendTransactionConfig,
     rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
 };
-use safecoin_sdk::{
+use solana_sdk::{
     clock::Slot,
     commitment_config::CommitmentConfig,
     instruction::Instruction,
     message::Message,
-    native_token::{lamports_to_safe , safe_to_lamports},
+    native_token::{lamports_to_sol, sol_to_lamports},
     signature::{unique_signers, Signature, Signer},
     system_instruction,
     transaction::Transaction,
 };
-use safecoin_stake_program::{
+use solana_stake_program::{
     stake_instruction::{self, LockupArgs},
     stake_state::{Authorized, Lockup, StakeAuthorize},
 };
-use safecoin_transaction_status::TransactionStatus;
+use solana_transaction_status::TransactionStatus;
 use spl_associated_token_account_v1_0::get_associated_token_address;
 use spl_token_v2_0::solana_program::program_error::ProgramError;
 use std::{
@@ -103,7 +103,7 @@ pub enum Error {
     ClientError(#[from] ClientError),
     #[error("Missing lockup authority")]
     MissingLockupAuthority,
-    #[error("insufficient funds in {0:?}, requires {1} SAFE")]
+    #[error("insufficient funds in {0:?}, requires {1} SOL")]
     InsufficientFunds(FundingSources, f64),
     #[error("Program error")]
     ProgramError(#[from] ProgramError),
@@ -191,7 +191,7 @@ fn distribution_instructions(
     }
 
     let stake_args = args.stake_args.as_ref().unwrap();
-    let unlocked_safe  = stake_args.unlocked_safe ;
+    let unlocked_sol = stake_args.unlocked_sol;
     let sender_pubkey = args.sender_keypair.pubkey();
     let stake_authority = stake_args.stake_authority.pubkey();
     let withdraw_authority = stake_args.withdraw_authority.pubkey();
@@ -199,7 +199,7 @@ fn distribution_instructions(
     let mut instructions = stake_instruction::split(
         &stake_args.stake_account_address,
         &stake_authority,
-        allocation.amount - unlocked_safe ,
+        allocation.amount - unlocked_sol,
         &new_stake_account_address,
     );
 
@@ -245,7 +245,7 @@ fn distribution_instructions(
     instructions.push(system_instruction::transfer(
         &sender_pubkey,
         &recipient,
-        unlocked_safe ,
+        unlocked_sol,
     ));
 
     instructions
@@ -294,7 +294,7 @@ fn build_messages(
                     do_create_associated_token_account,
                 )
             } else {
-                (lamports_to_safe (allocation.amount), 9, false)
+                (lamports_to_sol(allocation.amount), 9, false)
             };
         println!(
             "{:<44}  {:>24.2$}",
@@ -451,7 +451,7 @@ fn read_allocations(
             .into_iter()
             .map(|(recipient, amount, lockup_date)| Allocation {
                 recipient,
-                amount: safe_to_lamports(amount),
+                amount: sol_to_lamports(amount),
                 lockup_date,
             })
             .collect()
@@ -477,7 +477,7 @@ fn read_allocations(
             .into_iter()
             .map(|(recipient, amount)| Allocation {
                 recipient,
-                amount: safe_to_lamports(amount),
+                amount: sol_to_lamports(amount),
                 lockup_date: "".to_string(),
             })
             .collect()
@@ -703,31 +703,31 @@ fn check_payer_balances(
         .checked_mul(num_signatures as u64)
         .unwrap();
 
-    let (distribution_source, unlocked_safe _source) = if let Some(stake_args) = &args.stake_args {
-        let total_unlocked_safe  = allocations.len() as u64 * stake_args.unlocked_safe ;
-        undistributed_tokens -= total_unlocked_safe ;
+    let (distribution_source, unlocked_sol_source) = if let Some(stake_args) = &args.stake_args {
+        let total_unlocked_sol = allocations.len() as u64 * stake_args.unlocked_sol;
+        undistributed_tokens -= total_unlocked_sol;
         (
             stake_args.stake_account_address,
-            Some((args.sender_keypair.pubkey(), total_unlocked_safe )),
+            Some((args.sender_keypair.pubkey(), total_unlocked_sol)),
         )
     } else {
         (args.sender_keypair.pubkey(), None)
     };
 
-    if let Some((unlocked_safe _source, total_unlocked_safe )) = unlocked_safe _source {
+    if let Some((unlocked_sol_source, total_unlocked_sol)) = unlocked_sol_source {
         let staker_balance = client.get_balance(&distribution_source)?;
         if staker_balance < undistributed_tokens {
             return Err(Error::InsufficientFunds(
                 vec![FundingSource::StakeAccount].into(),
-                lamports_to_safe (undistributed_tokens),
+                lamports_to_sol(undistributed_tokens),
             ));
         }
-        if args.fee_payer.pubkey() == unlocked_safe _source {
+        if args.fee_payer.pubkey() == unlocked_sol_source {
             let balance = client.get_balance(&args.fee_payer.pubkey())?;
-            if balance < fees + total_unlocked_safe  {
+            if balance < fees + total_unlocked_sol {
                 return Err(Error::InsufficientFunds(
                     vec![FundingSource::SystemAccount, FundingSource::FeePayer].into(),
-                    lamports_to_safe (fees + total_unlocked_safe ),
+                    lamports_to_sol(fees + total_unlocked_sol),
                 ));
             }
         } else {
@@ -735,14 +735,14 @@ fn check_payer_balances(
             if fee_payer_balance < fees {
                 return Err(Error::InsufficientFunds(
                     vec![FundingSource::FeePayer].into(),
-                    lamports_to_safe (fees),
+                    lamports_to_sol(fees),
                 ));
             }
-            let unlocked_safe _balance = client.get_balance(&unlocked_safe _source)?;
-            if unlocked_safe _balance < total_unlocked_safe  {
+            let unlocked_sol_balance = client.get_balance(&unlocked_sol_source)?;
+            if unlocked_sol_balance < total_unlocked_sol {
                 return Err(Error::InsufficientFunds(
                     vec![FundingSource::SystemAccount].into(),
-                    lamports_to_safe (total_unlocked_safe ),
+                    lamports_to_sol(total_unlocked_sol),
                 ));
             }
         }
@@ -751,7 +751,7 @@ fn check_payer_balances(
         if balance < fees + undistributed_tokens {
             return Err(Error::InsufficientFunds(
                 vec![FundingSource::SystemAccount, FundingSource::FeePayer].into(),
-                lamports_to_safe (fees + undistributed_tokens),
+                lamports_to_sol(fees + undistributed_tokens),
             ));
         }
     } else {
@@ -759,14 +759,14 @@ fn check_payer_balances(
         if fee_payer_balance < fees {
             return Err(Error::InsufficientFunds(
                 vec![FundingSource::FeePayer].into(),
-                lamports_to_safe (fees),
+                lamports_to_sol(fees),
             ));
         }
         let sender_balance = client.get_balance(&distribution_source)?;
         if sender_balance < undistributed_tokens {
             return Err(Error::InsufficientFunds(
                 vec![FundingSource::SystemAccount].into(),
-                lamports_to_safe (undistributed_tokens),
+                lamports_to_sol(undistributed_tokens),
             ));
         }
     }
@@ -799,8 +799,8 @@ pub fn process_balances(client: &RpcClient, args: &BalancesArgs) -> Result<(), E
             print_token_balances(client, allocation, spl_token_args)?;
         } else {
             let address: Pubkey = allocation.recipient.parse().unwrap();
-            let expected = lamports_to_safe (allocation.amount);
-            let actual = lamports_to_safe (client.get_balance(&address).unwrap());
+            let expected = lamports_to_sol(allocation.amount);
+            let actual = lamports_to_sol(client.get_balance(&address).unwrap());
             println!(
                 "{:<44}  {:>24.9}  {:>24.9}  {:>24.9}",
                 allocation.recipient,
@@ -821,7 +821,7 @@ pub fn process_transaction_log(args: &TransactionLogArgs) -> Result<(), Error> {
 }
 
 use crate::db::check_output_file;
-use safecoin_sdk::{pubkey::Pubkey, signature::Keypair};
+use solana_sdk::{pubkey::Pubkey, signature::Keypair};
 use tempfile::{tempdir, NamedTempFile};
 pub fn test_process_distribute_tokens_with_client(
     client: &RpcClient,
@@ -832,7 +832,7 @@ pub fn test_process_distribute_tokens_with_client(
     let fee_payer = Keypair::new();
     let transaction = transfer(
         client,
-        safe_to_lamports(1.0),
+        sol_to_lamports(1.0),
         &sender_keypair,
         &fee_payer.pubkey(),
     )
@@ -842,22 +842,22 @@ pub fn test_process_distribute_tokens_with_client(
         .unwrap();
     assert_eq!(
         client.get_balance(&fee_payer.pubkey()).unwrap(),
-        safe_to_lamports(1.0),
+        sol_to_lamports(1.0),
     );
 
     let expected_amount = if let Some(amount) = transfer_amount {
         amount
     } else {
-        safe_to_lamports(1000.0)
+        sol_to_lamports(1000.0)
     };
-    let alice_pubkey = safecoin_sdk::pubkey::new_rand();
+    let alice_pubkey = solana_sdk::pubkey::new_rand();
     let allocations_file = NamedTempFile::new().unwrap();
     let input_csv = allocations_file.path().to_str().unwrap().to_string();
     let mut wtr = csv::WriterBuilder::new().from_writer(allocations_file);
     wtr.write_record(&["recipient", "amount"]).unwrap();
     wtr.write_record(&[
         alice_pubkey.to_string(),
-        lamports_to_safe (expected_amount).to_string(),
+        lamports_to_sol(expected_amount).to_string(),
     ])
     .unwrap();
     wtr.flush().unwrap();
@@ -915,7 +915,7 @@ pub fn test_process_distribute_stake_with_client(client: &RpcClient, sender_keyp
     let fee_payer = Keypair::new();
     let transaction = transfer(
         client,
-        safe_to_lamports(1.0),
+        sol_to_lamports(1.0),
         &sender_keypair,
         &fee_payer.pubkey(),
     )
@@ -939,7 +939,7 @@ pub fn test_process_distribute_stake_with_client(client: &RpcClient, sender_keyp
         &stake_account_address,
         &authorized,
         &lockup,
-        safe_to_lamports(3000.0),
+        sol_to_lamports(3000.0),
     );
     let message = Message::new(&instructions, Some(&sender_keypair.pubkey()));
     let signers = [&sender_keypair, &stake_account_keypair];
@@ -949,8 +949,8 @@ pub fn test_process_distribute_stake_with_client(client: &RpcClient, sender_keyp
         .send_and_confirm_transaction_with_spinner(&transaction)
         .unwrap();
 
-    let expected_amount = safe_to_lamports(1000.0);
-    let alice_pubkey = safecoin_sdk::pubkey::new_rand();
+    let expected_amount = sol_to_lamports(1000.0);
+    let alice_pubkey = solana_sdk::pubkey::new_rand();
     let file = NamedTempFile::new().unwrap();
     let input_csv = file.path().to_str().unwrap().to_string();
     let mut wtr = csv::WriterBuilder::new().from_writer(file);
@@ -958,7 +958,7 @@ pub fn test_process_distribute_stake_with_client(client: &RpcClient, sender_keyp
         .unwrap();
     wtr.write_record(&[
         alice_pubkey.to_string(),
-        lamports_to_safe (expected_amount).to_string(),
+        lamports_to_sol(expected_amount).to_string(),
         "".to_string(),
     ])
     .unwrap();
@@ -980,7 +980,7 @@ pub fn test_process_distribute_stake_with_client(client: &RpcClient, sender_keyp
         stake_authority: Box::new(stake_authority),
         withdraw_authority: Box::new(withdraw_authority),
         lockup_authority: None,
-        unlocked_safe : safe_to_lamports(1.0),
+        unlocked_sol: sol_to_lamports(1.0),
     };
     let args = DistributeTokensArgs {
         fee_payer: Box::new(fee_payer),
@@ -1004,12 +1004,12 @@ pub fn test_process_distribute_stake_with_client(client: &RpcClient, sender_keyp
 
     assert_eq!(
         client.get_balance(&alice_pubkey).unwrap(),
-        safe_to_lamports(1.0),
+        sol_to_lamports(1.0),
     );
     let new_stake_account_address = transaction_infos[0].new_stake_account_address.unwrap();
     assert_eq!(
         client.get_balance(&new_stake_account_address).unwrap(),
-        expected_amount - safe_to_lamports(1.0),
+        expected_amount - sol_to_lamports(1.0),
     );
 
     check_output_file(&output_path, &db::open_db(&transaction_db, true).unwrap());
@@ -1024,11 +1024,11 @@ pub fn test_process_distribute_stake_with_client(client: &RpcClient, sender_keyp
 
     assert_eq!(
         client.get_balance(&alice_pubkey).unwrap(),
-        safe_to_lamports(1.0),
+        sol_to_lamports(1.0),
     );
     assert_eq!(
         client.get_balance(&new_stake_account_address).unwrap(),
-        expected_amount - safe_to_lamports(1.0),
+        expected_amount - sol_to_lamports(1.0),
     );
 
     check_output_file(&output_path, &db::open_db(&transaction_db, true).unwrap());
@@ -1037,10 +1037,10 @@ pub fn test_process_distribute_stake_with_client(client: &RpcClient, sender_keyp
 #[cfg(test)]
 mod tests {
     use super::*;
-    use safecoin_core::test_validator::TestValidator;
-    use safecoin_sdk::signature::{read_keypair_file, write_keypair_file, Signer};
-    use safecoin_stake_program::stake_instruction::StakeInstruction;
-    use safecoin_transaction_status::TransactionConfirmationStatus;
+    use solana_core::test_validator::TestValidator;
+    use solana_sdk::signature::{read_keypair_file, write_keypair_file, Signer};
+    use solana_stake_program::stake_instruction::StakeInstruction;
+    use solana_transaction_status::TransactionConfirmationStatus;
 
     #[test]
     fn test_process_token_allocations() {
@@ -1059,7 +1059,7 @@ mod tests {
         let url = test_validator.rpc_url();
 
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::processed());
-        test_process_distribute_tokens_with_client(&client, alice, Some(safe_to_lamports(1.5)));
+        test_process_distribute_tokens_with_client(&client, alice, Some(sol_to_lamports(1.5)));
     }
 
     #[test]
@@ -1074,7 +1074,7 @@ mod tests {
 
     #[test]
     fn test_read_allocations() {
-        let alice_pubkey = safecoin_sdk::pubkey::new_rand();
+        let alice_pubkey = solana_sdk::pubkey::new_rand();
         let allocation = Allocation {
             recipient: alice_pubkey.to_string(),
             amount: 42,
@@ -1091,30 +1091,30 @@ mod tests {
             vec![allocation]
         );
 
-        let allocation_safe  = Allocation {
+        let allocation_sol = Allocation {
             recipient: alice_pubkey.to_string(),
-            amount: safe_to_lamports(42.0),
+            amount: sol_to_lamports(42.0),
             lockup_date: "".to_string(),
         };
 
         assert_eq!(
             read_allocations(&input_csv, None, true, true).unwrap(),
-            vec![allocation_safe .clone()]
+            vec![allocation_sol.clone()]
         );
         assert_eq!(
             read_allocations(&input_csv, None, false, false).unwrap(),
-            vec![allocation_safe .clone()]
+            vec![allocation_sol.clone()]
         );
         assert_eq!(
             read_allocations(&input_csv, None, true, false).unwrap(),
-            vec![allocation_safe ]
+            vec![allocation_sol]
         );
     }
 
     #[test]
     fn test_read_allocations_no_lockup() {
-        let pubkey0 = safecoin_sdk::pubkey::new_rand();
-        let pubkey1 = safecoin_sdk::pubkey::new_rand();
+        let pubkey0 = solana_sdk::pubkey::new_rand();
+        let pubkey1 = solana_sdk::pubkey::new_rand();
         let file = NamedTempFile::new().unwrap();
         let input_csv = file.path().to_str().unwrap().to_string();
         let mut wtr = csv::WriterBuilder::new().from_writer(file);
@@ -1127,12 +1127,12 @@ mod tests {
         let expected_allocations = vec![
             Allocation {
                 recipient: pubkey0.to_string(),
-                amount: safe_to_lamports(42.0),
+                amount: sol_to_lamports(42.0),
                 lockup_date: "".to_string(),
             },
             Allocation {
                 recipient: pubkey1.to_string(),
-                amount: safe_to_lamports(43.0),
+                amount: sol_to_lamports(43.0),
                 lockup_date: "".to_string(),
             },
         ];
@@ -1145,8 +1145,8 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_read_allocations_malformed() {
-        let pubkey0 = safecoin_sdk::pubkey::new_rand();
-        let pubkey1 = safecoin_sdk::pubkey::new_rand();
+        let pubkey0 = solana_sdk::pubkey::new_rand();
+        let pubkey1 = solana_sdk::pubkey::new_rand();
         let file = NamedTempFile::new().unwrap();
         let input_csv = file.path().to_str().unwrap().to_string();
         let mut wtr = csv::WriterBuilder::new().from_writer(file);
@@ -1159,12 +1159,12 @@ mod tests {
         let expected_allocations = vec![
             Allocation {
                 recipient: pubkey0.to_string(),
-                amount: safe_to_lamports(42.0),
+                amount: sol_to_lamports(42.0),
                 lockup_date: "".to_string(),
             },
             Allocation {
                 recipient: pubkey1.to_string(),
-                amount: safe_to_lamports(43.0),
+                amount: sol_to_lamports(43.0),
                 lockup_date: "".to_string(),
             },
         ];
@@ -1176,9 +1176,9 @@ mod tests {
 
     #[test]
     fn test_read_allocations_transfer_amount() {
-        let pubkey0 = safecoin_sdk::pubkey::new_rand();
-        let pubkey1 = safecoin_sdk::pubkey::new_rand();
-        let pubkey2 = safecoin_sdk::pubkey::new_rand();
+        let pubkey0 = solana_sdk::pubkey::new_rand();
+        let pubkey1 = solana_sdk::pubkey::new_rand();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
         let file = NamedTempFile::new().unwrap();
         let input_csv = file.path().to_str().unwrap().to_string();
         let mut wtr = csv::WriterBuilder::new().from_writer(file);
@@ -1188,7 +1188,7 @@ mod tests {
         wtr.serialize(&pubkey2.to_string()).unwrap();
         wtr.flush().unwrap();
 
-        let amount = safe_to_lamports(1.5);
+        let amount = sol_to_lamports(1.5);
 
         let expected_allocations = vec![
             Allocation {
@@ -1215,23 +1215,23 @@ mod tests {
 
     #[test]
     fn test_apply_previous_transactions() {
-        let alice = safecoin_sdk::pubkey::new_rand();
-        let bob = safecoin_sdk::pubkey::new_rand();
+        let alice = solana_sdk::pubkey::new_rand();
+        let bob = solana_sdk::pubkey::new_rand();
         let mut allocations = vec![
             Allocation {
                 recipient: alice.to_string(),
-                amount: safe_to_lamports(1.0),
+                amount: sol_to_lamports(1.0),
                 lockup_date: "".to_string(),
             },
             Allocation {
                 recipient: bob.to_string(),
-                amount: safe_to_lamports(1.0),
+                amount: sol_to_lamports(1.0),
                 lockup_date: "".to_string(),
             },
         ];
         let transaction_infos = vec![TransactionInfo {
             recipient: bob,
-            amount: safe_to_lamports(1.0),
+            amount: sol_to_lamports(1.0),
             ..TransactionInfo::default()
         }];
         apply_previous_transactions(&mut allocations, &transaction_infos);
@@ -1244,18 +1244,18 @@ mod tests {
 
     #[test]
     fn test_has_same_recipient() {
-        let alice_pubkey = safecoin_sdk::pubkey::new_rand();
-        let bob_pubkey = safecoin_sdk::pubkey::new_rand();
+        let alice_pubkey = solana_sdk::pubkey::new_rand();
+        let bob_pubkey = solana_sdk::pubkey::new_rand();
         let lockup0 = "2021-01-07T00:00:00Z".to_string();
         let lockup1 = "9999-12-31T23:59:59Z".to_string();
         let alice_alloc = Allocation {
             recipient: alice_pubkey.to_string(),
-            amount: safe_to_lamports(1.0),
+            amount: sol_to_lamports(1.0),
             lockup_date: "".to_string(),
         };
         let alice_alloc_lockup0 = Allocation {
             recipient: alice_pubkey.to_string(),
-            amount: safe_to_lamports(1.0),
+            amount: sol_to_lamports(1.0),
             lockup_date: lockup0.clone(),
         };
         let alice_info = TransactionInfo {
@@ -1298,18 +1298,18 @@ mod tests {
         let lockup_date_str = "2021-01-07T00:00:00Z";
         let allocation = Allocation {
             recipient: Pubkey::default().to_string(),
-            amount: safe_to_lamports(1.0),
+            amount: sol_to_lamports(1.0),
             lockup_date: lockup_date_str.to_string(),
         };
-        let stake_account_address = safecoin_sdk::pubkey::new_rand();
-        let new_stake_account_address = safecoin_sdk::pubkey::new_rand();
+        let stake_account_address = solana_sdk::pubkey::new_rand();
+        let new_stake_account_address = solana_sdk::pubkey::new_rand();
         let lockup_authority = Keypair::new();
         let stake_args = StakeArgs {
             stake_account_address,
             stake_authority: Box::new(Keypair::new()),
             withdraw_authority: Box::new(Keypair::new()),
             lockup_authority: Some(Box::new(lockup_authority)),
-            unlocked_safe : safe_to_lamports(1.0),
+            unlocked_sol: sol_to_lamports(1.0),
         };
         let args = DistributeTokensArgs {
             fee_payer: Box::new(Keypair::new()),
@@ -1354,7 +1354,7 @@ mod tests {
         fee_payer: &str,
         stake_args: Option<StakeArgs>,
     ) -> (Vec<Allocation>, DistributeTokensArgs) {
-        let recipient = safecoin_sdk::pubkey::new_rand();
+        let recipient = solana_sdk::pubkey::new_rand();
         let allocations = vec![Allocation {
             recipient: recipient.to_string(),
             amount: allocation_amount,
@@ -1377,7 +1377,7 @@ mod tests {
     #[test]
     fn test_check_payer_balances_distribute_tokens_single_payer() {
         let fees = 10_000;
-        let fees_in_safe  = lamports_to_safe (fees);
+        let fees_in_sol = lamports_to_sol(fees);
 
         let alice = Keypair::new();
         let test_validator = TestValidator::with_custom_fees(alice.pubkey(), fees);
@@ -1391,7 +1391,7 @@ mod tests {
 
         // Fully funded payer
         let (allocations, mut args) = initialize_check_payer_balances_inputs(
-            safe_to_lamports(allocation_amount),
+            sol_to_lamports(allocation_amount),
             &sender_keypair_file,
             &sender_keypair_file,
             None,
@@ -1415,7 +1415,7 @@ mod tests {
                 sources,
                 vec![FundingSource::SystemAccount, FundingSource::FeePayer].into()
             );
-            assert!((amount - (allocation_amount + fees_in_safe )).abs() < f64::EPSILON);
+            assert!((amount - (allocation_amount + fees_in_sol)).abs() < f64::EPSILON);
         } else {
             panic!("check_payer_balances should have errored");
         }
@@ -1431,7 +1431,7 @@ mod tests {
         .unwrap();
         let transaction = transfer(
             &client,
-            safe_to_lamports(allocation_amount),
+            sol_to_lamports(allocation_amount),
             &alice,
             &partially_funded_payer.pubkey(),
         )
@@ -1452,7 +1452,7 @@ mod tests {
                 sources,
                 vec![FundingSource::SystemAccount, FundingSource::FeePayer].into()
             );
-            assert!((amount - (allocation_amount + fees_in_safe )).abs() < f64::EPSILON);
+            assert!((amount - (allocation_amount + fees_in_sol)).abs() < f64::EPSILON);
         } else {
             panic!("check_payer_balances should have errored");
         }
@@ -1461,7 +1461,7 @@ mod tests {
     #[test]
     fn test_check_payer_balances_distribute_tokens_separate_payers() {
         let fees = 10_000;
-        let fees_in_safe  = lamports_to_safe (fees);
+        let fees_in_sol = lamports_to_sol(fees);
         let alice = Keypair::new();
         let test_validator = TestValidator::with_custom_fees(alice.pubkey(), fees);
         let url = test_validator.rpc_url();
@@ -1478,7 +1478,7 @@ mod tests {
         write_keypair_file(&funded_payer, &funded_payer_keypair_file).unwrap();
         let transaction = transfer(
             &client,
-            safe_to_lamports(allocation_amount),
+            sol_to_lamports(allocation_amount),
             &alice,
             &funded_payer.pubkey(),
         )
@@ -1489,7 +1489,7 @@ mod tests {
 
         // Fully funded payers
         let (allocations, mut args) = initialize_check_payer_balances_inputs(
-            safe_to_lamports(allocation_amount),
+            sol_to_lamports(allocation_amount),
             &funded_payer_keypair_file,
             &sender_keypair_file,
             None,
@@ -1522,7 +1522,7 @@ mod tests {
         let err_result = check_payer_balances(1, &allocations, &client, &args).unwrap_err();
         if let Error::InsufficientFunds(sources, amount) = err_result {
             assert_eq!(sources, vec![FundingSource::FeePayer].into());
-            assert!((amount - fees_in_safe ).abs() < f64::EPSILON);
+            assert!((amount - fees_in_sol).abs() < f64::EPSILON);
         } else {
             panic!("check_payer_balances should have errored");
         }
@@ -1530,7 +1530,7 @@ mod tests {
 
     fn initialize_stake_account(
         stake_account_amount: u64,
-        unlocked_safe : u64,
+        unlocked_sol: u64,
         sender_keypair: &Keypair,
         client: &RpcClient,
     ) -> StakeArgs {
@@ -1564,14 +1564,14 @@ mod tests {
             stake_authority: Box::new(stake_authority),
             withdraw_authority: Box::new(withdraw_authority),
             lockup_authority: None,
-            unlocked_safe ,
+            unlocked_sol,
         }
     }
 
     #[test]
     fn test_check_payer_balances_distribute_stakes_single_payer() {
         let fees = 10_000;
-        let fees_in_safe  = lamports_to_safe (fees);
+        let fees_in_sol = lamports_to_sol(fees);
         let alice = Keypair::new();
         let test_validator = TestValidator::with_custom_fees(alice.pubkey(), fees);
         let url = test_validator.rpc_url();
@@ -1581,17 +1581,17 @@ mod tests {
         write_keypair_file(&alice, &sender_keypair_file).unwrap();
 
         let allocation_amount = 1000.0;
-        let unlocked_safe  = 1.0;
+        let unlocked_sol = 1.0;
         let stake_args = initialize_stake_account(
-            safe_to_lamports(allocation_amount),
-            safe_to_lamports(unlocked_safe ),
+            sol_to_lamports(allocation_amount),
+            sol_to_lamports(unlocked_sol),
             &alice,
             &client,
         );
 
         // Fully funded payer & stake account
         let (allocations, mut args) = initialize_check_payer_balances_inputs(
-            safe_to_lamports(allocation_amount),
+            sol_to_lamports(allocation_amount),
             &sender_keypair_file,
             &sender_keypair_file,
             Some(stake_args),
@@ -1601,15 +1601,15 @@ mod tests {
         // Underfunded stake-account
         let expensive_allocation_amount = 5000.0;
         let expensive_allocations = vec![Allocation {
-            recipient: safecoin_sdk::pubkey::new_rand().to_string(),
-            amount: safe_to_lamports(expensive_allocation_amount),
+            recipient: solana_sdk::pubkey::new_rand().to_string(),
+            amount: sol_to_lamports(expensive_allocation_amount),
             lockup_date: "".to_string(),
         }];
         let err_result =
             check_payer_balances(1, &expensive_allocations, &client, &args).unwrap_err();
         if let Error::InsufficientFunds(sources, amount) = err_result {
             assert_eq!(sources, vec![FundingSource::StakeAccount].into());
-            assert!((amount - (expensive_allocation_amount - unlocked_safe )).abs() < f64::EPSILON);
+            assert!((amount - (expensive_allocation_amount - unlocked_sol)).abs() < f64::EPSILON);
         } else {
             panic!("check_payer_balances should have errored");
         }
@@ -1631,7 +1631,7 @@ mod tests {
                 sources,
                 vec![FundingSource::SystemAccount, FundingSource::FeePayer].into()
             );
-            assert!((amount - (unlocked_safe  + fees_in_safe )).abs() < f64::EPSILON);
+            assert!((amount - (unlocked_sol + fees_in_sol)).abs() < f64::EPSILON);
         } else {
             panic!("check_payer_balances should have errored");
         }
@@ -1647,7 +1647,7 @@ mod tests {
         .unwrap();
         let transaction = transfer(
             &client,
-            safe_to_lamports(unlocked_safe ),
+            sol_to_lamports(unlocked_sol),
             &alice,
             &partially_funded_payer.pubkey(),
         )
@@ -1668,7 +1668,7 @@ mod tests {
                 sources,
                 vec![FundingSource::SystemAccount, FundingSource::FeePayer].into()
             );
-            assert!((amount - (unlocked_safe  + fees_in_safe )).abs() < f64::EPSILON);
+            assert!((amount - (unlocked_sol + fees_in_sol)).abs() < f64::EPSILON);
         } else {
             panic!("check_payer_balances should have errored");
         }
@@ -1677,7 +1677,7 @@ mod tests {
     #[test]
     fn test_check_payer_balances_distribute_stakes_separate_payers() {
         let fees = 10_000;
-        let fees_in_safe  = lamports_to_safe (fees);
+        let fees_in_sol = lamports_to_sol(fees);
         let alice = Keypair::new();
         let test_validator = TestValidator::with_custom_fees(alice.pubkey(), fees);
         let url = test_validator.rpc_url();
@@ -1688,10 +1688,10 @@ mod tests {
         write_keypair_file(&alice, &sender_keypair_file).unwrap();
 
         let allocation_amount = 1000.0;
-        let unlocked_safe  = 1.0;
+        let unlocked_sol = 1.0;
         let stake_args = initialize_stake_account(
-            safe_to_lamports(allocation_amount),
-            safe_to_lamports(unlocked_safe ),
+            sol_to_lamports(allocation_amount),
+            sol_to_lamports(unlocked_sol),
             &alice,
             &client,
         );
@@ -1701,7 +1701,7 @@ mod tests {
         write_keypair_file(&funded_payer, &funded_payer_keypair_file).unwrap();
         let transaction = transfer(
             &client,
-            safe_to_lamports(unlocked_safe ),
+            sol_to_lamports(unlocked_sol),
             &alice,
             &funded_payer.pubkey(),
         )
@@ -1712,7 +1712,7 @@ mod tests {
 
         // Fully funded payers
         let (allocations, mut args) = initialize_check_payer_balances_inputs(
-            safe_to_lamports(allocation_amount),
+            sol_to_lamports(allocation_amount),
             &funded_payer_keypair_file,
             &sender_keypair_file,
             Some(stake_args),
@@ -1731,7 +1731,7 @@ mod tests {
         let err_result = check_payer_balances(1, &allocations, &client, &args).unwrap_err();
         if let Error::InsufficientFunds(sources, amount) = err_result {
             assert_eq!(sources, vec![FundingSource::SystemAccount].into());
-            assert!((amount - unlocked_safe ).abs() < f64::EPSILON);
+            assert!((amount - unlocked_sol).abs() < f64::EPSILON);
         } else {
             panic!("check_payer_balances should have errored");
         }
@@ -1745,7 +1745,7 @@ mod tests {
         let err_result = check_payer_balances(1, &allocations, &client, &args).unwrap_err();
         if let Error::InsufficientFunds(sources, amount) = err_result {
             assert_eq!(sources, vec![FundingSource::FeePayer].into());
-            assert!((amount - fees_in_safe ).abs() < f64::EPSILON);
+            assert!((amount - fees_in_sol).abs() < f64::EPSILON);
         } else {
             panic!("check_payer_balances should have errored");
         }
@@ -1765,7 +1765,7 @@ mod tests {
 
         let sender = Keypair::new();
         let recipient = Pubkey::new_unique();
-        let amount = safe_to_lamports(1.0);
+        let amount = sol_to_lamports(1.0);
         let last_valid_slot = 222;
         let transaction = transfer(&client, amount, &sender, &recipient).unwrap();
 
@@ -1800,7 +1800,7 @@ mod tests {
         };
         let allocation = Allocation {
             recipient: recipient.to_string(),
-            amount: safe_to_lamports(1.0),
+            amount: sol_to_lamports(1.0),
             lockup_date: "".to_string(),
         };
 
@@ -1887,7 +1887,7 @@ mod tests {
 
         let sender = Keypair::new();
         let recipient = Pubkey::new_unique();
-        let amount = safe_to_lamports(1.0);
+        let amount = sol_to_lamports(1.0);
         let last_valid_slot = 222;
         let transaction = transfer(&client, amount, &sender, &recipient).unwrap();
 
@@ -1922,7 +1922,7 @@ mod tests {
         };
         let allocation = Allocation {
             recipient: recipient.to_string(),
-            amount: safe_to_lamports(1.0),
+            amount: sol_to_lamports(1.0),
             lockup_date: "".to_string(),
         };
         let message = transaction.message.clone();
@@ -2001,7 +2001,7 @@ mod tests {
         let fee_payer = Keypair::new();
         let transaction = transfer(
             &client,
-            safe_to_lamports(1.0),
+            sol_to_lamports(1.0),
             &sender_keypair,
             &fee_payer.pubkey(),
         )
@@ -2021,7 +2021,7 @@ mod tests {
         let recipient = Pubkey::new_unique();
         let allocation = Allocation {
             recipient: recipient.to_string(),
-            amount: safe_to_lamports(1.0),
+            amount: sol_to_lamports(1.0),
             lockup_date: "".to_string(),
         };
         // This is just dummy data; Args will not affect messages
@@ -2060,7 +2060,7 @@ mod tests {
 
         let sender = Keypair::new();
         let recipient = Pubkey::new_unique();
-        let amount = safe_to_lamports(1.0);
+        let amount = sol_to_lamports(1.0);
         let last_valid_slot = 222;
         let transaction = transfer(&client, amount, &sender, &recipient).unwrap();
 
@@ -2153,7 +2153,7 @@ mod tests {
 
         let sender = Keypair::new();
         let recipient = Pubkey::new_unique();
-        let amount = safe_to_lamports(1.0);
+        let amount = sol_to_lamports(1.0);
         let last_valid_slot = 222;
         let transaction = transfer(&client, amount, &sender, &recipient).unwrap();
 

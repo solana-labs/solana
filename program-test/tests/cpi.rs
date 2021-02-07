@@ -8,7 +8,7 @@ use {
         pubkey::Pubkey,
     },
     solana_program_test::{processor, ProgramTest},
-    safecoin_sdk::{signature::Signer, transaction::Transaction},
+    solana_sdk::{signature::Signer, transaction::Transaction},
 };
 
 // Process instruction to invoke into another program

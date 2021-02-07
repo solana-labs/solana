@@ -62,15 +62,15 @@ loadConfigFile
 
 initCompleteFile=init-complete-node.log
 
-cat > ~/safecoin/on-reboot <<EOF
+cat > ~/solana/on-reboot <<EOF
 #!/usr/bin/env bash
-cd ~/safecoin
+cd ~/solana
 source scripts/oom-score-adj.sh
 
 now=\$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 ln -sfT validator.log.\$now validator.log
 EOF
-chmod +x ~/safecoin/on-reboot
+chmod +x ~/solana/on-reboot
 
 GPU_CUDA_OK=false
 GPU_FAIL_IF_NONE=false
@@ -101,15 +101,15 @@ local|tar|skip)
 
   ./fetch-perf-libs.sh
 
-cat >> ~/safecoin/on-reboot <<EOF
+cat >> ~/solana/on-reboot <<EOF
   PATH="$HOME"/.cargo/bin:"$PATH"
   export USE_INSTALL=1
 
-  sudo RUST_LOG=info ~safecoin/.cargo/bin/safecoin-sys-tuner --user $(whoami) > sys-tuner.log 2>&1 &
+  sudo RUST_LOG=info ~solana/.cargo/bin/solana-sys-tuner --user $(whoami) > sys-tuner.log 2>&1 &
   echo \$! > sys-tuner.pid
 
   (
-    sudo SAFECOIN_METRICS_CONFIG="$SAFECOIN_METRICS_CONFIG" scripts/oom-monitor.sh
+    sudo SOLANA_METRICS_CONFIG="$SOLANA_METRICS_CONFIG" scripts/oom-monitor.sh
   ) > oom-monitor.log 2>&1 &
   echo \$! > oom-monitor.pid
   scripts/fd-monitor.sh > fd-monitor.log 2>&1 &
@@ -122,11 +122,11 @@ cat >> ~/safecoin/on-reboot <<EOF
   echo \$! > system-stats.pid
 
   if ${GPU_CUDA_OK} && [[ -e /dev/nvidia0 ]]; then
-    echo Selecting safecoin-validator-cuda
-    export SAFECOIN_CUDA=1
+    echo Selecting solana-validator-cuda
+    export SOLANA_CUDA=1
   elif ${GPU_FAIL_IF_NONE} ; then
     echo "Expected GPU, found none!"
-    export SAFECOIN_GPU_MISSING=1
+    export SOLANA_GPU_MISSING=1
   fi
 EOF
 
@@ -134,7 +134,7 @@ EOF
   bootstrap-validator)
     set -x
     if [[ $skipSetup != true ]]; then
-      clear_config_dir "$SAFECOIN_CONFIG_DIR"
+      clear_config_dir "$SOLANA_CONFIG_DIR"
 
       if [[ -n $internalNodesLamports ]]; then
         echo "---" >> config/validator-balances.yml
@@ -151,17 +151,17 @@ EOF
             cp net/keypairs/"$name".json config/"$name".json
           fi
         else
-          safecoin-keygen new --no-passphrase -so config/"$name".json
+          solana-keygen new --no-passphrase -so config/"$name".json
           if [[ "$name" =~ ^validator-identity- ]]; then
             name="${name//-identity-/-vote-}"
-            safecoin-keygen new --no-passphrase -so config/"$name".json
+            solana-keygen new --no-passphrase -so config/"$name".json
             name="${name//-vote-/-stake-}"
-            safecoin-keygen new --no-passphrase -so config/"$name".json
+            solana-keygen new --no-passphrase -so config/"$name".json
           fi
         fi
         if [[ -n $internalNodesLamports ]]; then
           declare pubkey
-          pubkey="$(safecoin-keygen pubkey config/"$name".json)"
+          pubkey="$(solana-keygen pubkey config/"$name".json)"
           cat >> config/validator-balances.yml <<EOF
 $pubkey:
   balance: $internalNodesLamports
@@ -188,7 +188,7 @@ EOF
 
       for i in $(seq 0 $((numBenchTpsClients-1))); do
         # shellcheck disable=SC2086 # Do not want to quote $benchTpsExtraArgs
-        safecoin-bench-tps --write-client-keys config/bench-tps"$i".yml \
+        solana-bench-tps --write-client-keys config/bench-tps"$i".yml \
           --target-lamports-per-signature "$lamports_per_signature" $benchTpsExtraArgs
         # Skip first line, as it contains header
         tail -n +2 -q config/bench-tps"$i".yml >> config/client-accounts.yml
@@ -196,7 +196,7 @@ EOF
       done
       for i in $(seq 0 $((numBenchExchangeClients-1))); do
         # shellcheck disable=SC2086 # Do not want to quote $benchExchangeExtraArgs
-        safecoin-bench-exchange --batch-size 1000 --fund-amount 20000 \
+        solana-bench-exchange --batch-size 1000 --fund-amount 20000 \
           --write-client-keys config/bench-exchange"$i".yml $benchExchangeExtraArgs
         tail -n +2 -q config/bench-exchange"$i".yml >> config/client-accounts.yml
         echo "" >> config/client-accounts.yml
@@ -233,9 +233,9 @@ EOF
           extraPrimordialStakes=$numNodes
         fi
         for i in $(seq "$extraPrimordialStakes"); do
-          args+=(--bootstrap-validator "$(safecoin-keygen pubkey "config/validator-identity-$i.json")"
-                                       "$(safecoin-keygen pubkey "config/validator-vote-$i.json")"
-                                       "$(safecoin-keygen pubkey "config/validator-stake-$i.json")"
+          args+=(--bootstrap-validator "$(solana-keygen pubkey "config/validator-identity-$i.json")"
+                                       "$(solana-keygen pubkey "config/validator-vote-$i.json")"
+                                       "$(solana-keygen pubkey "config/validator-stake-$i.json")"
           )
         done
       fi
@@ -259,13 +259,13 @@ EOF
 
       if [[ -n "$maybeWarpSlot" ]]; then
         # shellcheck disable=SC2086 # Do not want to quote $maybeWarSlot
-        safecoin-ledger-tool -l config/bootstrap-validator create-snapshot 0 config/bootstrap-validator $maybeWarpSlot
+        solana-ledger-tool -l config/bootstrap-validator create-snapshot 0 config/bootstrap-validator $maybeWarpSlot
       fi
 
-      safecoin-ledger-tool -l config/bootstrap-validator shred-version --max-genesis-archive-unpacked-size 1073741824 | tee config/shred-version
+      solana-ledger-tool -l config/bootstrap-validator shred-version --max-genesis-archive-unpacked-size 1073741824 | tee config/shred-version
 
       if [[ -n "$maybeWaitForSupermajority" ]]; then
-        bankHash=$(safecoin-ledger-tool -l config/bootstrap-validator bank-hash)
+        bankHash=$(solana-ledger-tool -l config/bootstrap-validator bank-hash)
         extraNodeArgs="$extraNodeArgs --expected-bank-hash $bankHash"
         echo "$bankHash" > config/bank-hash
       fi
@@ -277,24 +277,24 @@ EOF
     )
 
     if [[ "$tmpfsAccounts" = "true" ]]; then
-      args+=(--accounts /mnt/safecoin-accounts)
+      args+=(--accounts /mnt/solana-accounts)
     fi
 
     if [[ $airdropsEnabled = true ]]; then
-cat >> ~/safecoin/on-reboot <<EOF
+cat >> ~/solana/on-reboot <<EOF
       ./multinode-demo/faucet.sh > faucet.log 2>&1 &
 EOF
     fi
     # shellcheck disable=SC2206 # Don't want to double quote $extraNodeArgs
     args+=($extraNodeArgs)
 
-cat >> ~/safecoin/on-reboot <<EOF
+cat >> ~/solana/on-reboot <<EOF
     nohup ./multinode-demo/bootstrap-validator.sh ${args[@]} > validator.log.\$now 2>&1 &
     pid=\$!
     oom_score_adj "\$pid" 1000
     disown
 EOF
-    ~/safecoin/on-reboot
+    ~/solana/on-reboot
 
     if $waitForNodeInit; then
       net/remote/remote-node-wait-init.sh 600
@@ -307,38 +307,38 @@ EOF
       net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/version.yml ~/version.yml
     fi
     if [[ $skipSetup != true ]]; then
-      clear_config_dir "$SAFECOIN_CONFIG_DIR"
+      clear_config_dir "$SOLANA_CONFIG_DIR"
 
       if [[ $nodeType = blockstreamer ]]; then
         net/scripts/rsync-retry.sh -vPrc \
-          "$entrypointIp":~/safecoin/config/blockstreamer-identity.json "$SAFECOIN_CONFIG_DIR"/validator-identity.json
+          "$entrypointIp":~/solana/config/blockstreamer-identity.json "$SOLANA_CONFIG_DIR"/validator-identity.json
       else
         net/scripts/rsync-retry.sh -vPrc \
-          "$entrypointIp":~/safecoin/config/validator-identity-"$nodeIndex".json "$SAFECOIN_CONFIG_DIR"/validator-identity.json
+          "$entrypointIp":~/solana/config/validator-identity-"$nodeIndex".json "$SOLANA_CONFIG_DIR"/validator-identity.json
         net/scripts/rsync-retry.sh -vPrc \
-          "$entrypointIp":~/safecoin/config/validator-stake-"$nodeIndex".json "$SAFECOIN_CONFIG_DIR"/stake-account.json
+          "$entrypointIp":~/solana/config/validator-stake-"$nodeIndex".json "$SOLANA_CONFIG_DIR"/stake-account.json
         net/scripts/rsync-retry.sh -vPrc \
-          "$entrypointIp":~/safecoin/config/validator-vote-"$nodeIndex".json "$SAFECOIN_CONFIG_DIR"/vote-account.json
+          "$entrypointIp":~/solana/config/validator-vote-"$nodeIndex".json "$SOLANA_CONFIG_DIR"/vote-account.json
       fi
       net/scripts/rsync-retry.sh -vPrc \
-        "$entrypointIp":~/safecoin/config/shred-version "$SAFECOIN_CONFIG_DIR"/shred-version
+        "$entrypointIp":~/solana/config/shred-version "$SOLANA_CONFIG_DIR"/shred-version
 
       net/scripts/rsync-retry.sh -vPrc \
-        "$entrypointIp":~/safecoin/config/bank-hash "$SAFECOIN_CONFIG_DIR"/bank-hash || true
+        "$entrypointIp":~/solana/config/bank-hash "$SOLANA_CONFIG_DIR"/bank-hash || true
 
       net/scripts/rsync-retry.sh -vPrc \
-        "$entrypointIp":~/safecoin/config/faucet.json "$SAFECOIN_CONFIG_DIR"/faucet.json
+        "$entrypointIp":~/solana/config/faucet.json "$SOLANA_CONFIG_DIR"/faucet.json
     fi
 
     args=(
       --entrypoint "$entrypointIp:8001"
       --gossip-port 8001
       --rpc-port 8899
-      --expected-shred-version "$(cat "$SAFECOIN_CONFIG_DIR"/shred-version)"
+      --expected-shred-version "$(cat "$SOLANA_CONFIG_DIR"/shred-version)"
     )
     if [[ $nodeType = blockstreamer ]]; then
       args+=(
-        --blockstream /tmp/safecoin-blockstream.sock
+        --blockstream /tmp/solana-blockstream.sock
         --no-voting
         --dev-no-sigverify
         --enable-rpc-transaction-history
@@ -349,34 +349,34 @@ EOF
       fi
     fi
 
-    if [[ ! -f "$SAFECOIN_CONFIG_DIR"/validator-identity.json ]]; then
-      safecoin-keygen new --no-passphrase -so "$SAFECOIN_CONFIG_DIR"/validator-identity.json
+    if [[ ! -f "$SOLANA_CONFIG_DIR"/validator-identity.json ]]; then
+      solana-keygen new --no-passphrase -so "$SOLANA_CONFIG_DIR"/validator-identity.json
     fi
-    args+=(--identity "$SAFECOIN_CONFIG_DIR"/validator-identity.json)
-    if [[ ! -f "$SAFECOIN_CONFIG_DIR"/vote-account.json ]]; then
-      safecoin-keygen new --no-passphrase -so "$SAFECOIN_CONFIG_DIR"/vote-account.json
+    args+=(--identity "$SOLANA_CONFIG_DIR"/validator-identity.json)
+    if [[ ! -f "$SOLANA_CONFIG_DIR"/vote-account.json ]]; then
+      solana-keygen new --no-passphrase -so "$SOLANA_CONFIG_DIR"/vote-account.json
     fi
-    args+=(--vote-account "$SAFECOIN_CONFIG_DIR"/vote-account.json)
+    args+=(--vote-account "$SOLANA_CONFIG_DIR"/vote-account.json)
 
     if [[ $airdropsEnabled != true ]]; then
       args+=(--no-airdrop)
     fi
 
-    if [[ -r "$SAFECOIN_CONFIG_DIR"/bank-hash ]]; then
-      args+=(--expected-bank-hash "$(cat "$SAFECOIN_CONFIG_DIR"/bank-hash)")
+    if [[ -r "$SOLANA_CONFIG_DIR"/bank-hash ]]; then
+      args+=(--expected-bank-hash "$(cat "$SOLANA_CONFIG_DIR"/bank-hash)")
     fi
 
     set -x
     # Add the faucet keypair to validators for convenient access from tools
     # like bench-tps and add to blocktreamers to run a faucet
-    scp "$entrypointIp":~/safecoin/config/faucet.json "$SAFECOIN_CONFIG_DIR"/
+    scp "$entrypointIp":~/solana/config/faucet.json "$SOLANA_CONFIG_DIR"/
     if [[ $nodeType = blockstreamer ]]; then
       # Run another faucet with the same keypair on the blockstreamer node.
       # Typically the blockstreamer node has a static IP/DNS name for hosting
       # the blockexplorer web app, and is a location that somebody would expect
       # to be able to airdrop from
       if [[ $airdropsEnabled = true ]]; then
-cat >> ~/safecoin/on-reboot <<EOF
+cat >> ~/solana/on-reboot <<EOF
         multinode-demo/faucet.sh > faucet.log 2>&1 &
 EOF
       fi
@@ -398,17 +398,17 @@ EOF
     fi
 
     if [[ "$tmpfsAccounts" = "true" ]]; then
-      args+=(--accounts /mnt/safecoin-accounts)
+      args+=(--accounts /mnt/solana-accounts)
     fi
 
-cat >> ~/safecoin/on-reboot <<EOF
+cat >> ~/solana/on-reboot <<EOF
     $maybeSkipAccountsCreation
     nohup multinode-demo/validator.sh ${args[@]} > validator.log.\$now 2>&1 &
     pid=\$!
     oom_score_adj "\$pid" 1000
     disown
 EOF
-    ~/safecoin/on-reboot
+    ~/solana/on-reboot
 
     if $waitForNodeInit; then
       net/remote/remote-node-wait-init.sh 600
@@ -417,7 +417,7 @@ EOF
     if [[ $skipSetup != true && $nodeType != blockstreamer && -z $maybeSkipAccountsCreation ]]; then
       # Wait for the validator to catch up to the bootstrap validator before
       # delegating stake to it
-      safecoin --url http://"$entrypointIp":8899 catchup config/validator-identity.json
+      solana --url http://"$entrypointIp":8899 catchup config/validator-identity.json
 
       args=(
         --url http://"$entrypointIp":8899
@@ -431,8 +431,8 @@ EOF
 
       if [[ ${extraPrimordialStakes} -eq 0 ]]; then
         echo "0 Primordial stakes, staking with $internalNodesStakeLamports"
-        multinode-demo/delegate-stake.sh --vote-account "$SAFECOIN_CONFIG_DIR"/vote-account.json \
-                                         --stake-account "$SAFECOIN_CONFIG_DIR"/stake-account.json \
+        multinode-demo/delegate-stake.sh --vote-account "$SOLANA_CONFIG_DIR"/vote-account.json \
+                                         --stake-account "$SOLANA_CONFIG_DIR"/stake-account.json \
                                          "${args[@]}" "$internalNodesStakeLamports"
       else
         echo "Skipping staking with extra stakes: ${extraPrimordialStakes}"

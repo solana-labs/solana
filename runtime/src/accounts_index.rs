@@ -5,8 +5,8 @@ use crate::{
 };
 use dashmap::DashSet;
 use ouroboros::self_referencing;
-use safecoin_measure::measure::Measure;
-use safecoin_sdk::{
+use solana_measure::measure::Measure;
+use solana_sdk::{
     clock::Slot,
     pubkey::{Pubkey, PUBKEY_BYTES},
 };
@@ -1151,7 +1151,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use safecoin_sdk::signature::{Keypair, Signer};
+    use solana_sdk::signature::{Keypair, Signer};
 
     pub enum SecondaryIndexTypes<'a> {
         RwLock(&'a SecondaryIndex<RwLockSecondaryIndexEntry>),
@@ -1293,7 +1293,7 @@ pub mod tests {
         let root_slot = 0;
 
         let mut pubkeys: Vec<Pubkey> = std::iter::repeat_with(|| {
-            let new_pubkey = safecoin_sdk::pubkey::new_rand();
+            let new_pubkey = solana_sdk::pubkey::new_rand();
             index.upsert(
                 root_slot,
                 &new_pubkey,
@@ -1443,7 +1443,7 @@ pub mod tests {
         let mut gc = vec![];
         index.upsert(
             0,
-            &safecoin_sdk::pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             &Pubkey::default(),
             &[],
             &HashSet::new(),
@@ -1611,7 +1611,7 @@ pub mod tests {
 
     #[test]
     fn test_update_new_slot() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let key = Keypair::new();
         let index = AccountsIndex::<bool>::default();
         let ancestors = vec![(0, 0)].into_iter().collect();

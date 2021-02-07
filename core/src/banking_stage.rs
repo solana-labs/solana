@@ -8,20 +8,20 @@ use crate::{
 };
 use crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError};
 use itertools::Itertools;
-use safecoin_ledger::{
+use solana_ledger::{
     blockstore::Blockstore,
     blockstore_processor::{send_transaction_status_batch, TransactionStatusSender},
     entry::hash_transactions,
     leader_schedule_cache::LeaderScheduleCache,
 };
-use safecoin_measure::{measure::Measure, thread_mem_usage};
-use safecoin_metrics::{inc_new_counter_debug, inc_new_counter_info};
-use safecoin_perf::{
+use solana_measure::{measure::Measure, thread_mem_usage};
+use solana_metrics::{inc_new_counter_debug, inc_new_counter_info};
+use solana_perf::{
     cuda_runtime::PinnedVec,
     packet::{limited_deserialize, Packet, Packets, PACKETS_PER_BATCH},
     perf_libs,
 };
-use safecoin_runtime::{
+use solana_runtime::{
     accounts_db::ErrorCounters,
     bank::{
         Bank, ExecuteTimings, TransactionBalancesSet, TransactionCheckResult,
@@ -31,7 +31,7 @@ use safecoin_runtime::{
     transaction_batch::TransactionBatch,
     vote_sender_types::ReplayVoteSender,
 };
-use safecoin_sdk::{
+use solana_sdk::{
     clock::{
         Slot, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE, MAX_TRANSACTION_FORWARDING_DELAY,
         MAX_TRANSACTION_FORWARDING_DELAY_GPU,
@@ -41,7 +41,7 @@ use safecoin_sdk::{
     timing::{duration_as_ms, timestamp},
     transaction::{self, Transaction, TransactionError},
 };
-use safecoin_transaction_status::token_balances::{
+use solana_transaction_status::token_balances::{
     collect_token_balances, TransactionTokenBalancesSet,
 };
 use std::{
@@ -134,9 +134,9 @@ impl BankingStage {
                 let transaction_status_sender = transaction_status_sender.clone();
                 let gossip_vote_sender = gossip_vote_sender.clone();
                 Builder::new()
-                    .name("safecoin-banking-stage-tx".to_string())
+                    .name("solana-banking-stage-tx".to_string())
                     .spawn(move || {
-                        thread_mem_usage::datapoint("safecoin-banking-stage-tx");
+                        thread_mem_usage::datapoint("solana-banking-stage-tx");
                         Self::process_loop(
                             my_pubkey,
                             &verified_receiver,
@@ -449,7 +449,7 @@ impl BankingStage {
         const MIN_THREADS_VOTES: u32 = 1;
         const MIN_THREADS_BANKING: u32 = 1;
         cmp::max(
-            env::var("SAFECOIN_BANKING_THREADS")
+            env::var("SOLANA_BANKING_THREADS")
                 .map(|x| x.parse().unwrap_or(NUM_THREADS))
                 .unwrap_or(NUM_THREADS),
             MIN_THREADS_VOTES + MIN_THREADS_BANKING,
@@ -1115,21 +1115,21 @@ mod tests {
     };
     use crossbeam_channel::unbounded;
     use itertools::Itertools;
-    use safecoin_ledger::{
+    use solana_ledger::{
         blockstore::entries_to_test_shreds,
         entry::{next_entry, Entry, EntrySlice},
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         get_tmp_ledger_path,
     };
-    use safecoin_perf::packet::to_packets_chunked;
-    use safecoin_sdk::{
+    use solana_perf::packet::to_packets_chunked;
+    use solana_sdk::{
         instruction::InstructionError,
         signature::{Keypair, Signer},
         system_instruction::SystemError,
         system_transaction,
         transaction::TransactionError,
     };
-    use safecoin_transaction_status::TransactionWithStatusMeta;
+    use solana_transaction_status::TransactionWithStatusMeta;
     use std::{sync::atomic::Ordering, thread::sleep};
 
     #[test]
@@ -1168,7 +1168,7 @@ mod tests {
 
     #[test]
     fn test_banking_stage_tick() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let GenesisConfigInfo {
             mut genesis_config, ..
         } = create_genesis_config(2);
@@ -1235,7 +1235,7 @@ mod tests {
 
     #[test]
     fn test_banking_stage_entries_only() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let GenesisConfigInfo {
             genesis_config,
             mint_keypair,
@@ -1279,16 +1279,16 @@ mod tests {
             bank.process_transaction(&fund_tx).unwrap();
 
             // good tx
-            let to = safecoin_sdk::pubkey::new_rand();
+            let to = solana_sdk::pubkey::new_rand();
             let tx = system_transaction::transfer(&mint_keypair, &to, 1, start_hash);
 
             // good tx, but no verify
-            let to2 = safecoin_sdk::pubkey::new_rand();
+            let to2 = solana_sdk::pubkey::new_rand();
             let tx_no_ver = system_transaction::transfer(&keypair, &to2, 2, start_hash);
 
             // bad tx, AccountNotFound
             let keypair = Keypair::new();
-            let to3 = safecoin_sdk::pubkey::new_rand();
+            let to3 = solana_sdk::pubkey::new_rand();
             let tx_anf = system_transaction::transfer(&keypair, &to3, 1, start_hash);
 
             // send 'em over
@@ -1352,7 +1352,7 @@ mod tests {
 
     #[test]
     fn test_banking_stage_entryfication() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         // In this attack we'll demonstrate that a verifier can interpret the ledger
         // differently if either the server doesn't signal the ledger to add an
         // Entry OR if the verifier tries to parallelize across multiple Entries.
@@ -1484,9 +1484,9 @@ mod tests {
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
             poh_recorder.lock().unwrap().set_working_bank(working_bank);
-            let pubkey = safecoin_sdk::pubkey::new_rand();
+            let pubkey = solana_sdk::pubkey::new_rand();
             let keypair2 = Keypair::new();
-            let pubkey2 = safecoin_sdk::pubkey::new_rand();
+            let pubkey2 = solana_sdk::pubkey::new_rand();
 
             let transactions = vec![
                 system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash()),
@@ -1561,7 +1561,7 @@ mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(10_000);
-        let pubkey = safecoin_sdk::pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
 
         let transactions = vec![
             None,
@@ -1642,7 +1642,7 @@ mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(10_000);
-        let pubkey = safecoin_sdk::pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
 
         let transactions = vec![
             system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash()),
@@ -1713,8 +1713,8 @@ mod tests {
 
     #[test]
     fn test_should_process_or_forward_packets() {
-        let my_pubkey = safecoin_sdk::pubkey::new_rand();
-        let my_pubkey1 = safecoin_sdk::pubkey::new_rand();
+        let my_pubkey = solana_sdk::pubkey::new_rand();
+        let my_pubkey1 = solana_sdk::pubkey::new_rand();
 
         assert_eq!(
             BankingStage::consume_or_forward_packets(&my_pubkey, None, true, false,),
@@ -1753,14 +1753,14 @@ mod tests {
 
     #[test]
     fn test_bank_process_and_record_transactions() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let GenesisConfigInfo {
             genesis_config,
             mint_keypair,
             ..
         } = create_genesis_config(10_000);
         let bank = Arc::new(Bank::new(&genesis_config));
-        let pubkey = safecoin_sdk::pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
 
         let transactions = vec![system_transaction::transfer(
             &mint_keypair,
@@ -1850,15 +1850,15 @@ mod tests {
 
     #[test]
     fn test_bank_process_and_record_transactions_account_in_use() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let GenesisConfigInfo {
             genesis_config,
             mint_keypair,
             ..
         } = create_genesis_config(10_000);
         let bank = Arc::new(Bank::new(&genesis_config));
-        let pubkey = safecoin_sdk::pubkey::new_rand();
-        let pubkey1 = safecoin_sdk::pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let pubkey1 = solana_sdk::pubkey::new_rand();
 
         let transactions = vec![
             system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash()),
@@ -1908,7 +1908,7 @@ mod tests {
 
     #[test]
     fn test_filter_valid_packets() {
-        safecoin_logger::setup();
+        solana_logger::setup();
 
         let all_packets = (0..16)
             .map(|packets_id| {
@@ -1945,7 +1945,7 @@ mod tests {
 
     #[test]
     fn test_process_transactions_returns_unprocessed_txs() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let GenesisConfigInfo {
             genesis_config,
             mint_keypair,
@@ -1953,7 +1953,7 @@ mod tests {
         } = create_genesis_config(10_000);
         let bank = Arc::new(Bank::new(&genesis_config));
 
-        let pubkey = safecoin_sdk::pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
 
         let transactions =
             vec![
@@ -1971,7 +1971,7 @@ mod tests {
                 bank.slot(),
                 Some((4, 4)),
                 bank.ticks_per_slot(),
-                &safecoin_sdk::pubkey::new_rand(),
+                &solana_sdk::pubkey::new_rand(),
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
                 &Arc::new(PohConfig::default()),
@@ -2004,15 +2004,15 @@ mod tests {
 
     #[test]
     fn test_write_persist_transaction_status() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let GenesisConfigInfo {
             genesis_config,
             mint_keypair,
             ..
         } = create_genesis_config(10_000);
         let bank = Arc::new(Bank::new(&genesis_config));
-        let pubkey = safecoin_sdk::pubkey::new_rand();
-        let pubkey1 = safecoin_sdk::pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let pubkey1 = solana_sdk::pubkey::new_rand();
         let keypair1 = Keypair::new();
 
         let success_tx =

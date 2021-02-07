@@ -1,12 +1,12 @@
 #![allow(clippy::implicit_hasher)]
 use crate::sigverify;
 use crate::sigverify_stage::SigVerifier;
-use safecoin_ledger::leader_schedule_cache::LeaderScheduleCache;
-use safecoin_ledger::shred::{OFFSET_OF_SHRED_SLOT, SIZE_OF_SHRED_SLOT};
-use safecoin_ledger::sigverify_shreds::verify_shreds_gpu;
-use safecoin_perf::packet::{limited_deserialize, Packets};
-use safecoin_perf::recycler_cache::RecyclerCache;
-use safecoin_runtime::bank_forks::BankForks;
+use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
+use solana_ledger::shred::{OFFSET_OF_SHRED_SLOT, SIZE_OF_SHRED_SLOT};
+use solana_ledger::sigverify_shreds::verify_shreds_gpu;
+use solana_perf::packet::{limited_deserialize, Packets};
+use solana_perf::recycler_cache::RecyclerCache;
+use solana_runtime::bank_forks::BankForks;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, RwLock};
 
@@ -72,15 +72,15 @@ impl SigVerifier for ShredSigVerifier {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use safecoin_ledger::genesis_utils::create_genesis_config_with_leader;
-    use safecoin_ledger::shred::{Shred, Shredder};
-    use safecoin_perf::packet::Packet;
-    use safecoin_runtime::bank::Bank;
-    use safecoin_sdk::signature::{Keypair, Signer};
+    use solana_ledger::genesis_utils::create_genesis_config_with_leader;
+    use solana_ledger::shred::{Shred, Shredder};
+    use solana_perf::packet::Packet;
+    use solana_runtime::bank::Bank;
+    use solana_sdk::signature::{Keypair, Signer};
 
     #[test]
     fn test_sigverify_shreds_read_slots() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let mut shred = Shred::new_from_data(
             0xdead_c0de,
             0xc0de,

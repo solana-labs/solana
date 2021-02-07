@@ -6,7 +6,7 @@
 pull_request_rules:
   - name: automatic merge (squash) on CI success
     conditions:
-      - status-success=buildkite/safecoin
+      - status-success=buildkite/solana
       - status-success=Travis CI - Pull Request
       - status-success=ci-gate
       - label=automerge
@@ -17,7 +17,7 @@ pull_request_rules:
   # Join the dont-squash-my-commits group if you won't like your commits squashed
   - name: automatic merge (rebase) on CI success
     conditions:
-      - status-success=buildkite/safecoin
+      - status-success=buildkite/solana
       - status-success=Travis CI - Pull Request
       - status-success=ci-gate
       - label=automerge

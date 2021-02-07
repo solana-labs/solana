@@ -3,7 +3,7 @@ use bincode::serialized_size;
 use chrono::prelude::{Date, DateTime, Utc};
 use num_derive::FromPrimitive;
 use serde_derive::{Deserialize, Serialize};
-use safecoin_sdk::{
+use solana_sdk::{
     decode_error::DecodeError,
     instruction::{AccountMeta, Instruction, InstructionError},
     pubkey::Pubkey,

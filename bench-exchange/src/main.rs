@@ -4,14 +4,14 @@ pub mod order_book;
 
 use crate::bench::{airdrop_lamports, create_client_accounts_file, do_bench_exchange, Config};
 use log::*;
-use safecoin_core::gossip_service::{discover_cluster, get_multi_client};
-use safecoin_sdk::signature::Signer;
+use solana_core::gossip_service::{discover_cluster, get_multi_client};
+use solana_sdk::signature::Signer;
 
 fn main() {
-    safecoin_logger::setup();
-    safecoin_metrics::set_panic_hook("bench-exchange");
+    solana_logger::setup();
+    solana_metrics::set_panic_hook("bench-exchange");
 
-    let matches = cli::build_args(safecoin_version::version!()).get_matches();
+    let matches = cli::build_args(solana_version::version!()).get_matches();
     let cli_config = cli::extract_args(&matches);
 
     let cli::Config {

@@ -1,9 +1,9 @@
 use bzip2::bufread::BzDecoder;
 use log::*;
-use safecoin_client::rpc_client::RpcClient;
-use safecoin_net_utils::parse_host;
-use safecoin_notifier::Notifier;
-use safecoin_sdk::{
+use solana_client::rpc_client::RpcClient;
+use solana_net_utils::parse_host;
+use solana_notifier::Notifier;
+use solana_sdk::{
     clock::{Epoch, Slot},
     genesis_config::GenesisConfig,
     timing::duration_as_ms,
@@ -20,7 +20,7 @@ use tar::Archive;
 
 const GENESIS_ARCHIVE_NAME: &str = "genesis.tar.bz2";
 
-/// Inspired by safecoin_local_cluster::cluster_tests
+/// Inspired by solana_local_cluster::cluster_tests
 fn slots_to_secs(num_slots: u64, genesis_config: &GenesisConfig) -> u64 {
     let poh_config = &genesis_config.poh_config;
     let ticks_per_slot = genesis_config.ticks_per_slot;
@@ -95,7 +95,7 @@ pub fn bail(notifier: &Notifier, msg: &str) -> ! {
     std::process::exit(1);
 }
 
-/// Inspired by safecoin_validator::download_tar_bz2
+/// Inspired by solana_validator::download_tar_bz2
 pub fn download_genesis(rpc_addr: &SocketAddr, download_path: &Path) -> Result<(), String> {
     let archive_name = GENESIS_ARCHIVE_NAME;
     let archive_path = download_path.join(archive_name);

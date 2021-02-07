@@ -67,7 +67,7 @@ of confirmation.
 
 An Entry-Merkle is a Merkle Root including all transactions in a given entry,
 sorted by signature. Each transaction in an entry is already merkled here:
-https://github.com/solana-labs/safecoin/blob/b6bfed64cb159ee67bb6bdbaefc7f833bbed3563/ledger/src/entry.rs#L205.
+https://github.com/solana-labs/solana/blob/b6bfed64cb159ee67bb6bdbaefc7f833bbed3563/ledger/src/entry.rs#L205.
 This means we can show a transaction `T` was included in an entry `E`.
 
 A Block-Merkle is the Merkle Root of all the Entry-Merkles sequenced in the
@@ -110,7 +110,7 @@ Accounts-Hash described in the `Transaction Merkle` section above.
 
 In the code:
 
-https://github.com/solana-labs/safecoin/blob/b6bfed64cb159ee67bb6bdbaefc7f833bbed3563/runtime/src/bank.rs#L3468-L3473
+https://github.com/solana-labs/solana/blob/b6bfed64cb159ee67bb6bdbaefc7f833bbed3563/runtime/src/bank.rs#L3468-L3473
 
 ```
         let mut hash = hashv(&[
@@ -126,13 +126,13 @@ https://github.com/solana-labs/safecoin/blob/b6bfed64cb159ee67bb6bdbaefc7f833bbe
 ```
 
 A good place to implement this logic along existing streaming logic in the
-validator's replay logic: https://github.com/solana-labs/safecoin/blob/b6bfed64cb159ee67bb6bdbaefc7f833bbed3563/core/src/replay_stage.rs#L1092-L1096
+validator's replay logic: https://github.com/solana-labs/solana/blob/b6bfed64cb159ee67bb6bdbaefc7f833bbed3563/core/src/replay_stage.rs#L1092-L1096
 
 #### Optimistic Confirmation Proof
 
 Currently optimistic confirmation is detected via a listener that monitors
 gossip and the replay pipeline for votes:
-https://github.com/solana-labs/safecoin/blob/b6bfed64cb159ee67bb6bdbaefc7f833bbed3563/core/src/cluster_info_vote_listener.rs#L604-L614.
+https://github.com/solana-labs/solana/blob/b6bfed64cb159ee67bb6bdbaefc7f833bbed3563/core/src/cluster_info_vote_listener.rs#L604-L614.
 
 Each vote is a signed transaction that includes the bank hash of the block the
 validator voted for, i.e. the `B` from the `Transaction Merkle` section above.

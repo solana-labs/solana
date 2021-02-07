@@ -2,61 +2,61 @@
 
 set -e
 cd "$(dirname "$0")"
-SAFECOIN_ROOT="$(cd ../..; pwd)"
+SOLANA_ROOT="$(cd ../..; pwd)"
 
 logDir="$PWD"/logs
 rm -rf "$logDir"
 mkdir "$logDir"
 
-safecoinInstallDataDir=$PWD/releases
-safecoinInstallGlobalOpts=(
-  --data-dir "$safecoinInstallDataDir"
-  --config "$safecoinInstallDataDir"/config.yml
+solanaInstallDataDir=$PWD/releases
+solanaInstallGlobalOpts=(
+  --data-dir "$solanaInstallDataDir"
+  --config "$solanaInstallDataDir"/config.yml
   --no-modify-path
 )
 
-# Install all the safecoin versions
+# Install all the solana versions
 bootstrapInstall() {
   declare v=$1
-  if [[ ! -h $safecoinInstallDataDir/active_release ]]; then
-    sh "$SAFECOIN_ROOT"/install/safecoin-install-init.sh "$v" "${safecoinInstallGlobalOpts[@]}"
+  if [[ ! -h $solanaInstallDataDir/active_release ]]; then
+    sh "$SOLANA_ROOT"/install/solana-install-init.sh "$v" "${solanaInstallGlobalOpts[@]}"
   fi
-  export PATH="$safecoinInstallDataDir/active_release/bin/:$PATH"
+  export PATH="$solanaInstallDataDir/active_release/bin/:$PATH"
 }
 
 bootstrapInstall "edge"
-safecoin-install-init --version
-safecoin-install-init edge
-safecoin-gossip --version
-safecoin-dos --version
+solana-install-init --version
+solana-install-init edge
+solana-gossip --version
+solana-dos --version
 
-killall safecoin-gossip || true
-safecoin-gossip spy --gossip-port 8001 > "$logDir"/gossip.log 2>&1 &
-safecoinGossipPid=$!
-echo "safecoin-gossip pid: $safecoinGossipPid"
+killall solana-gossip || true
+solana-gossip spy --gossip-port 8001 > "$logDir"/gossip.log 2>&1 &
+solanaGossipPid=$!
+echo "solana-gossip pid: $solanaGossipPid"
 sleep 5
-safecoin-dos --mode gossip --data-type random --data-size 1232 &
+solana-dos --mode gossip --data-type random --data-size 1232 &
 dosPid=$!
-echo "safecoin-dos pid: $dosPid"
+echo "solana-dos pid: $dosPid"
 
 pass=true
 
 SECONDS=
 while ((SECONDS < 600)); do
-  if ! kill -0 $safecoinGossipPid; then
-    echo "safecoin-gossip is no longer running after $SECONDS seconds"
+  if ! kill -0 $solanaGossipPid; then
+    echo "solana-gossip is no longer running after $SECONDS seconds"
     pass=false
     break
   fi
   if ! kill -0 $dosPid; then
-    echo "safecoin-dos is no longer running after $SECONDS seconds"
+    echo "solana-dos is no longer running after $SECONDS seconds"
     pass=false
     break
   fi
   sleep 1
 done
 
-kill $safecoinGossipPid || true
+kill $solanaGossipPid || true
 kill $dosPid || true
 wait || true
 

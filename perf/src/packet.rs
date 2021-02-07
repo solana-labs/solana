@@ -2,7 +2,7 @@
 use crate::{cuda_runtime::PinnedVec, recycler::Recycler};
 use bincode::config::Options;
 use serde::Serialize;
-pub use safecoin_sdk::packet::{Meta, Packet, PACKET_DATA_SIZE};
+pub use solana_sdk::packet::{Meta, Packet, PACKET_DATA_SIZE};
 use std::net::SocketAddr;
 
 pub const NUM_PACKETS: usize = 1024 * 8;
@@ -112,9 +112,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use safecoin_sdk::hash::Hash;
-    use safecoin_sdk::signature::{Keypair, Signer};
-    use safecoin_sdk::system_transaction;
+    use solana_sdk::hash::Hash;
+    use solana_sdk::signature::{Keypair, Signer};
+    use solana_sdk::system_transaction;
 
     #[test]
     fn test_to_packets() {

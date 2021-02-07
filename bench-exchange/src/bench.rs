@@ -5,13 +5,13 @@ use itertools::izip;
 use log::*;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
-use safecoin_client::perf_utils::{sample_txs, SampleStats};
-use safecoin_core::gen_keys::GenKeys;
-use safecoin_exchange_program::{exchange_instruction, exchange_state::*, id};
-use safecoin_faucet::faucet::request_airdrop_transaction;
-use safecoin_genesis::Base64Account;
-use safecoin_metrics::datapoint_info;
-use safecoin_sdk::{
+use solana_client::perf_utils::{sample_txs, SampleStats};
+use solana_core::gen_keys::GenKeys;
+use solana_exchange_program::{exchange_instruction, exchange_state::*, id};
+use solana_faucet::faucet::request_airdrop_transaction;
+use solana_genesis::Base64Account;
+use solana_metrics::datapoint_info;
+use solana_sdk::{
     client::{Client, SyncClient},
     commitment_config::CommitmentConfig,
     message::Message,
@@ -215,7 +215,7 @@ where
             let total_txs_sent_count = total_txs_sent_count.clone();
             let client = clients[0].clone();
             Builder::new()
-                .name("safecoin-exchange-transfer".to_string())
+                .name("solana-exchange-transfer".to_string())
                 .spawn(move || {
                     do_tx_transfers(&exit_signal, &shared_txs, &total_txs_sent_count, &client)
                 })
@@ -230,7 +230,7 @@ where
         let shared_txs = shared_txs.clone();
         let client = clients[0].clone();
         Builder::new()
-            .name("safecoin-exchange-swapper".to_string())
+            .name("solana-exchange-swapper".to_string())
             .spawn(move || {
                 swapper(
                     &exit_signal,
@@ -254,7 +254,7 @@ where
 
         let client = clients[0].clone();
         Builder::new()
-            .name("safecoin-exchange-trader".to_string())
+            .name("solana-exchange-trader".to_string())
             .spawn(move || {
                 trader(
                     &exit_signal,
@@ -279,7 +279,7 @@ where
             let sample_stats = sample_stats.clone();
             let client = client.clone();
             Builder::new()
-                .name("safecoin-exchange-sample".to_string())
+                .name("solana-exchange-sample".to_string())
                 .spawn(move || sample_txs(&exit_signal, &sample_stats, sample_period, &client))
                 .unwrap()
         })

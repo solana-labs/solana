@@ -5,7 +5,7 @@ use crate::{
 use log::*;
 use num_derive::{FromPrimitive, ToPrimitive};
 use serde_derive::{Deserialize, Serialize};
-use safecoin_sdk::{
+use solana_sdk::{
     clock::{Epoch, UnixTimestamp},
     decode_error::DecodeError,
     feature_set,
@@ -602,7 +602,7 @@ pub fn process_instruction(
 mod tests {
     use super::*;
     use bincode::serialize;
-    use safecoin_sdk::{
+    use solana_sdk::{
         account::{self, Account},
         process_instruction::MockInvokeContext,
         rent::Rent,
@@ -660,7 +660,7 @@ mod tests {
                     }
                 } else if meta.pubkey == invalid_vote_state_pubkey() {
                     Account {
-                        owner: safecoin_vote_program::id(),
+                        owner: solana_vote_program::id(),
                         ..Account::default()
                     }
                 } else if meta.pubkey == spoofed_stake_state_pubkey() {
@@ -759,7 +759,7 @@ mod tests {
             process_instruction(&withdraw(
                 &Pubkey::default(),
                 &Pubkey::default(),
-                &safecoin_sdk::pubkey::new_rand(),
+                &solana_sdk::pubkey::new_rand(),
                 100,
                 None,
             )),
@@ -866,7 +866,7 @@ mod tests {
             process_instruction(&withdraw(
                 &spoofed_stake_state_pubkey(),
                 &Pubkey::default(),
-                &safecoin_sdk::pubkey::new_rand(),
+                &solana_sdk::pubkey::new_rand(),
                 100,
                 None,
             )),
@@ -999,7 +999,7 @@ mod tests {
 
         // gets the check non-deserialize-able account in delegate_stake
         let mut bad_vote_account = create_default_account();
-        bad_vote_account.get_mut().owner = safecoin_vote_program::id();
+        bad_vote_account.get_mut().owner = solana_vote_program::id();
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),

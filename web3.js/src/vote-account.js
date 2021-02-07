@@ -24,7 +24,7 @@ export type EpochCredits = {|
 |};
 
 /**
- * See https://github.com/solana-labs/safecoin/blob/8a12ed029cfa38d4a45400916c2463fb82bbec8c/programs/vote_api/src/vote_state.rs#L68-L88
+ * See https://github.com/solana-labs/solana/blob/8a12ed029cfa38d4a45400916c2463fb82bbec8c/programs/vote_api/src/vote_state.rs#L68-L88
  *
  * @private
  */

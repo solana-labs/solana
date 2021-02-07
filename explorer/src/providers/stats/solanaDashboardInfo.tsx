@@ -1,5 +1,5 @@
-import { EpochInfo, PerfSample } from "@safecoin/web3.js";
-import { ClusterStatsStatus } from "./safecoinClusterStats";
+import { EpochInfo, PerfSample } from "@solana/web3.js";
+import { ClusterStatsStatus } from "./solanaClusterStats";
 
 export type DashboardInfo = {
   status: ClusterStatsStatus;

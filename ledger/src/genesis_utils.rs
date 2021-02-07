@@ -1,4 +1,4 @@
-pub use safecoin_runtime::genesis_utils::{
+pub use solana_runtime::genesis_utils::{
     bootstrap_validator_stake_lamports, create_genesis_config_with_leader, GenesisConfigInfo,
 };
 
@@ -7,7 +7,7 @@ pub use safecoin_runtime::genesis_utils::{
 pub fn create_genesis_config(mint_lamports: u64) -> GenesisConfigInfo {
     create_genesis_config_with_leader(
         mint_lamports,
-        &safecoin_sdk::pubkey::new_rand(),
+        &solana_sdk::pubkey::new_rand(),
         bootstrap_validator_stake_lamports(),
     )
 }

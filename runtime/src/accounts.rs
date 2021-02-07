@@ -15,7 +15,7 @@ use dashmap::{
 };
 use log::*;
 use rand::{thread_rng, Rng};
-use safecoin_sdk::{
+use solana_sdk::{
     account::Account,
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
@@ -178,7 +178,7 @@ impl Accounts {
                         payer_index = Some(i);
                     }
 
-                    if safecoin_sdk::sysvar::instructions::check_id(key)
+                    if solana_sdk::sysvar::instructions::check_id(key)
                         && feature_set.is_active(&feature_set::instructions_sysvar_enabled::id())
                     {
                         if message.is_writable(i) {
@@ -819,7 +819,7 @@ impl Accounts {
         txs: &[Transaction],
         txs_iteration_order: Option<&[usize]>,
     ) -> Vec<Result<()>> {
-        use safecoin_sdk::sanitize::Sanitize;
+        use solana_sdk::sanitize::Sanitize;
         let keys: Vec<Result<_>> = OrderedIterator::new(txs, txs_iteration_order)
             .map(|(_, tx)| {
                 tx.sanitize().map_err(TransactionError::from)?;
@@ -1037,7 +1037,7 @@ pub fn create_test_accounts(
     slot: Slot,
 ) {
     for t in 0..num {
-        let pubkey = safecoin_sdk::pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let account = Account::new((t + 1) as u64, 0, &Account::default().owner);
         accounts.store_slow_uncached(slot, &pubkey, &account);
         pubkeys.push(pubkey);
@@ -1060,7 +1060,7 @@ mod tests {
 
     use super::*;
     use crate::rent_collector::RentCollector;
-    use safecoin_sdk::{
+    use solana_sdk::{
         account::Account,
         epoch_schedule::EpochSchedule,
         fee_calculator::FeeCalculator,
@@ -1251,7 +1251,7 @@ mod tests {
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
 
-        let account = Account::new(1, 1, &safecoin_sdk::pubkey::new_rand()); // <-- owner is not the system program
+        let account = Account::new(1, 1, &solana_sdk::pubkey::new_rand()); // <-- owner is not the system program
         accounts.push((key0, account));
 
         let instructions = vec![CompiledInstruction::new(1, &(), vec![0])];
@@ -1625,13 +1625,13 @@ mod tests {
             Accounts::new_with_config(Vec::new(), &ClusterType::Development, HashSet::new(), false);
 
         // Load accounts owned by various programs into AccountsDB
-        let pubkey0 = safecoin_sdk::pubkey::new_rand();
+        let pubkey0 = solana_sdk::pubkey::new_rand();
         let account0 = Account::new(1, 0, &Pubkey::new(&[2; 32]));
         accounts.store_slow_uncached(0, &pubkey0, &account0);
-        let pubkey1 = safecoin_sdk::pubkey::new_rand();
+        let pubkey1 = solana_sdk::pubkey::new_rand();
         let account1 = Account::new(1, 0, &Pubkey::new(&[2; 32]));
         accounts.store_slow_uncached(0, &pubkey1, &account1);
-        let pubkey2 = safecoin_sdk::pubkey::new_rand();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
         let account2 = Account::new(1, 0, &Pubkey::new(&[3; 32]));
         accounts.store_slow_uncached(0, &pubkey2, &account2);
 
@@ -1653,7 +1653,7 @@ mod tests {
         assert_eq!(
             accounts.load_executable_accounts(
                 &ancestors,
-                &safecoin_sdk::pubkey::new_rand(),
+                &solana_sdk::pubkey::new_rand(),
                 &mut error_counters
             ),
             Err(TransactionError::ProgramAccountNotFound)
@@ -1863,7 +1863,7 @@ mod tests {
     fn test_collect_accounts_to_store() {
         let keypair0 = Keypair::new();
         let keypair1 = Keypair::new();
-        let pubkey = safecoin_sdk::pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
 
         let rent_collector = RentCollector::default();
 
@@ -1976,14 +1976,14 @@ mod tests {
 
     #[test]
     fn huge_clean() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let accounts =
             Accounts::new_with_config(Vec::new(), &ClusterType::Development, HashSet::new(), false);
         let mut old_pubkey = Pubkey::default();
         let zero_account = Account::new(0, 0, &Account::default().owner);
         info!("storing..");
         for i in 0..2_000 {
-            let pubkey = safecoin_sdk::pubkey::new_rand();
+            let pubkey = solana_sdk::pubkey::new_rand();
             let account = Account::new((i + 1) as u64, 0, &Account::default().owner);
             accounts.store_slow_uncached(i, &pubkey, &account);
             accounts.store_slow_uncached(i, &old_pubkey, &zero_account);
@@ -2019,16 +2019,16 @@ mod tests {
 
     #[test]
     fn test_instructions() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let accounts =
             Accounts::new_with_config(Vec::new(), &ClusterType::Development, HashSet::new(), false);
 
-        let instructions_key = safecoin_sdk::sysvar::instructions::id();
+        let instructions_key = solana_sdk::sysvar::instructions::id();
         let keypair = Keypair::new();
         let instructions = vec![CompiledInstruction::new(1, &(), vec![0, 1])];
         let tx = Transaction::new_with_compiled_instructions(
             &[&keypair],
-            &[safecoin_sdk::pubkey::new_rand(), instructions_key],
+            &[solana_sdk::pubkey::new_rand(), instructions_key],
             Hash::default(),
             vec![native_loader::id()],
             instructions,

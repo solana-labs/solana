@@ -24,7 +24,7 @@ upload-s3-artifact() {
       --rm \
       --env AWS_ACCESS_KEY_ID \
       --env AWS_SECRET_ACCESS_KEY \
-      --volume "$PWD:/safecoin" \
+      --volume "$PWD:/solana" \
       eremite/aws-cli:2018.12.18 \
       /usr/bin/s3cmd --acl-public put "$1" "$2"
   )

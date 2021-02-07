@@ -72,7 +72,7 @@ describe('load BPF Rust program', () => {
 
   beforeAll(async () => {
     programData = await fs.readFile(
-      'test/fixtures/noop-rust/safecoin_bpf_rust_noop.so',
+      'test/fixtures/noop-rust/solana_bpf_rust_noop.so',
     );
 
     const {feeCalculator} = await connection.getRecentBlockhash();

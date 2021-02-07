@@ -1,7 +1,7 @@
 use serde::de::{Deserialize, Deserializer};
 use serde::ser::{Serialize, Serializer};
-use safecoin_sdk::{account::Account, instruction::InstructionError, pubkey::Pubkey};
-use safecoin_vote_program::vote_state::VoteState;
+use solana_sdk::{account::Account, instruction::InstructionError, pubkey::Pubkey};
+use solana_vote_program::vote_state::VoteState;
 use std::{
     borrow::Borrow,
     cmp::Ordering,
@@ -292,8 +292,8 @@ mod tests {
     use super::*;
     use bincode::Options;
     use rand::Rng;
-    use safecoin_sdk::{pubkey::Pubkey, sysvar::clock::Clock};
-    use safecoin_vote_program::vote_state::{VoteInit, VoteStateVersions};
+    use solana_sdk::{pubkey::Pubkey, sysvar::clock::Clock};
+    use solana_vote_program::vote_state::{VoteInit, VoteStateVersions};
     use std::iter::repeat_with;
 
     fn new_rand_vote_account<R: Rng>(

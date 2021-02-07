@@ -1,4 +1,4 @@
-use safecoin_sdk::{
+use solana_sdk::{
     account::Account,
     feature::{self, Feature},
     feature_set::FeatureSet,
@@ -9,9 +9,9 @@ use safecoin_sdk::{
     signature::{Keypair, Signer},
     system_program,
 };
-use safecoin_stake_program::stake_state;
-use safecoin_stake_program::stake_state::StakeState;
-use safecoin_vote_program::vote_state;
+use solana_stake_program::stake_state;
+use solana_stake_program::stake_state::StakeState;
+use solana_vote_program::vote_state;
 use std::borrow::Borrow;
 
 // Default amount received by the validator
@@ -53,7 +53,7 @@ pub struct GenesisConfigInfo {
 }
 
 pub fn create_genesis_config(mint_lamports: u64) -> GenesisConfigInfo {
-    create_genesis_config_with_leader(mint_lamports, &safecoin_sdk::pubkey::new_rand(), 0)
+    create_genesis_config_with_leader(mint_lamports, &solana_sdk::pubkey::new_rand(), 0)
 }
 
 pub fn create_genesis_config_with_vote_accounts(
@@ -142,7 +142,7 @@ pub fn create_genesis_config_with_leader(
         &mint_keypair.pubkey(),
         validator_pubkey,
         &voting_keypair.pubkey(),
-        &safecoin_sdk::pubkey::new_rand(),
+        &solana_sdk::pubkey::new_rand(),
         validator_stake_lamports,
         VALIDATOR_LAMPORTS,
         FeeRateGovernor::new(0, 0), // most tests can't handle transaction fees
@@ -221,7 +221,7 @@ pub fn create_genesis_config_with_leader_ex(
         ..GenesisConfig::default()
     };
 
-    safecoin_stake_program::add_genesis_accounts(&mut genesis_config);
+    solana_stake_program::add_genesis_accounts(&mut genesis_config);
     if genesis_config.cluster_type == ClusterType::Development {
         activate_all_features(&mut genesis_config);
     }

@@ -13,7 +13,7 @@
 ///
 /// To receive a Twilio SMS notification on failure, having a Twilio account,
 /// and a sending number owned by that account,
-/// define environment variable before running `safecoin-watchtower`:
+/// define environment variable before running `solana-watchtower`:
 /// ```bash
 /// export TWILIO_CONFIG='ACCOUNT=<account>,TOKEN=<securityToken>,TO=<receivingNumber>,FROM=<sendingNumber>'
 /// ```

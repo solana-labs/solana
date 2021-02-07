@@ -1,16 +1,16 @@
 use log::*;
-use safecoin_bench_exchange::bench::{airdrop_lamports, do_bench_exchange, Config};
-use safecoin_core::gossip_service::{discover_cluster, get_multi_client};
-use safecoin_core::validator::ValidatorConfig;
-use safecoin_exchange_program::exchange_processor::process_instruction;
-use safecoin_exchange_program::id;
-use safecoin_exchange_program::safecoin_exchange_program;
-use safecoin_faucet::faucet::run_local_faucet_with_port;
-use safecoin_local_cluster::local_cluster::{ClusterConfig, LocalCluster};
-use safecoin_runtime::bank::Bank;
-use safecoin_runtime::bank_client::BankClient;
-use safecoin_sdk::genesis_config::create_genesis_config;
-use safecoin_sdk::signature::{Keypair, Signer};
+use solana_bench_exchange::bench::{airdrop_lamports, do_bench_exchange, Config};
+use solana_core::gossip_service::{discover_cluster, get_multi_client};
+use solana_core::validator::ValidatorConfig;
+use solana_exchange_program::exchange_processor::process_instruction;
+use solana_exchange_program::id;
+use solana_exchange_program::solana_exchange_program;
+use solana_faucet::faucet::run_local_faucet_with_port;
+use solana_local_cluster::local_cluster::{ClusterConfig, LocalCluster};
+use solana_runtime::bank::Bank;
+use solana_runtime::bank_client::BankClient;
+use solana_sdk::genesis_config::create_genesis_config;
+use solana_sdk::signature::{Keypair, Signer};
 use std::process::exit;
 use std::sync::mpsc::channel;
 use std::time::Duration;
@@ -18,7 +18,7 @@ use std::time::Duration;
 #[test]
 #[ignore]
 fn test_exchange_local_cluster() {
-    safecoin_logger::setup();
+    solana_logger::setup();
 
     const NUM_NODES: usize = 1;
 
@@ -45,7 +45,7 @@ fn test_exchange_local_cluster() {
         node_stakes: vec![100_000; NUM_NODES],
         cluster_lamports: 100_000_000_000_000,
         validator_configs: vec![ValidatorConfig::default(); NUM_NODES],
-        native_instruction_processors: [safecoin_exchange_program!()].to_vec(),
+        native_instruction_processors: [solana_exchange_program!()].to_vec(),
         ..ClusterConfig::default()
     });
 
@@ -88,7 +88,7 @@ fn test_exchange_local_cluster() {
 
 #[test]
 fn test_exchange_bank_client() {
-    safecoin_logger::setup();
+    solana_logger::setup();
     let (genesis_config, identity) = create_genesis_config(100_000_000_000_000);
     let mut bank = Bank::new(&genesis_config);
     bank.add_builtin("exchange_program", id(), process_instruction);

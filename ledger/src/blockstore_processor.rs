@@ -12,10 +12,10 @@ use itertools::Itertools;
 use log::*;
 use rand::{seq::SliceRandom, thread_rng};
 use rayon::{prelude::*, ThreadPool};
-use safecoin_measure::{measure::Measure, thread_mem_usage};
-use safecoin_metrics::{datapoint_error, inc_new_counter_debug};
-use safecoin_rayon_threadlimit::get_thread_count;
-use safecoin_runtime::{
+use solana_measure::{measure::Measure, thread_mem_usage};
+use solana_metrics::{datapoint_error, inc_new_counter_debug};
+use solana_rayon_threadlimit::get_thread_count;
+use solana_runtime::{
     accounts_index::AccountIndex,
     bank::{
         Bank, ExecuteTimings, InnerInstructionsList, TransactionBalancesSet,
@@ -29,7 +29,7 @@ use safecoin_runtime::{
     vote_account::ArcVoteAccount,
     vote_sender_types::ReplayVoteSender,
 };
-use safecoin_sdk::{
+use solana_sdk::{
     clock::{Slot, MAX_PROCESSING_AGE},
     genesis_config::GenesisConfig,
     hash::Hash,
@@ -37,7 +37,7 @@ use safecoin_sdk::{
     signature::{Keypair, Signature},
     transaction::{Result, Transaction, TransactionError},
 };
-use safecoin_transaction_status::token_balances::{
+use solana_transaction_status::token_balances::{
     collect_token_balances, TransactionTokenBalancesSet,
 };
 
@@ -1189,10 +1189,10 @@ pub mod tests {
     use crossbeam_channel::unbounded;
     use matches::assert_matches;
     use rand::{thread_rng, Rng};
-    use safecoin_runtime::genesis_utils::{
+    use solana_runtime::genesis_utils::{
         self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
     };
-    use safecoin_sdk::{
+    use solana_sdk::{
         account::Account,
         epoch_schedule::EpochSchedule,
         hash::Hash,
@@ -1202,7 +1202,7 @@ pub mod tests {
         system_transaction,
         transaction::{Transaction, TransactionError},
     };
-    use safecoin_vote_program::{
+    use solana_vote_program::{
         self,
         vote_state::{VoteState, VoteStateVersions, MAX_LOCKOUT_HISTORY},
         vote_transaction,
@@ -1212,7 +1212,7 @@ pub mod tests {
 
     #[test]
     fn test_process_blockstore_with_missing_hashes() {
-        safecoin_logger::setup();
+        solana_logger::setup();
 
         let hashes_per_tick = 2;
         let GenesisConfigInfo {
@@ -1258,7 +1258,7 @@ pub mod tests {
 
     #[test]
     fn test_process_blockstore_with_invalid_slot_tick_count() {
-        safecoin_logger::setup();
+        solana_logger::setup();
 
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let ticks_per_slot = genesis_config.ticks_per_slot;
@@ -1322,7 +1322,7 @@ pub mod tests {
 
     #[test]
     fn test_process_blockstore_with_slot_with_trailing_entry() {
-        safecoin_logger::setup();
+        solana_logger::setup();
 
         let GenesisConfigInfo {
             mint_keypair,
@@ -1372,7 +1372,7 @@ pub mod tests {
 
     #[test]
     fn test_process_blockstore_with_incomplete_slot() {
-        safecoin_logger::setup();
+        solana_logger::setup();
 
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let ticks_per_slot = genesis_config.ticks_per_slot;
@@ -1458,7 +1458,7 @@ pub mod tests {
 
     #[test]
     fn test_process_blockstore_with_two_forks_and_squash() {
-        safecoin_logger::setup();
+        solana_logger::setup();
 
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let ticks_per_slot = genesis_config.ticks_per_slot;
@@ -1537,7 +1537,7 @@ pub mod tests {
 
     #[test]
     fn test_process_blockstore_with_two_forks() {
-        safecoin_logger::setup();
+        solana_logger::setup();
 
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let ticks_per_slot = genesis_config.ticks_per_slot;
@@ -1627,7 +1627,7 @@ pub mod tests {
 
     #[test]
     fn test_process_blockstore_with_dead_slot() {
-        safecoin_logger::setup();
+        solana_logger::setup();
 
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let ticks_per_slot = genesis_config.ticks_per_slot;
@@ -1674,7 +1674,7 @@ pub mod tests {
 
     #[test]
     fn test_process_blockstore_with_dead_child() {
-        safecoin_logger::setup();
+        solana_logger::setup();
 
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let ticks_per_slot = genesis_config.ticks_per_slot;
@@ -1734,7 +1734,7 @@ pub mod tests {
 
     #[test]
     fn test_root_with_all_dead_children() {
-        safecoin_logger::setup();
+        solana_logger::setup();
 
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let ticks_per_slot = genesis_config.ticks_per_slot;
@@ -1767,7 +1767,7 @@ pub mod tests {
 
     #[test]
     fn test_process_blockstore_epoch_boundary_root() {
-        safecoin_logger::setup();
+        solana_logger::setup();
 
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let ticks_per_slot = genesis_config.ticks_per_slot;
@@ -1856,7 +1856,7 @@ pub mod tests {
 
     #[test]
     fn test_process_empty_entry_is_registered() {
-        safecoin_logger::setup();
+        solana_logger::setup();
 
         let GenesisConfigInfo {
             genesis_config,
@@ -1886,8 +1886,8 @@ pub mod tests {
 
     #[test]
     fn test_process_ledger_simple() {
-        safecoin_logger::setup();
-        let leader_pubkey = safecoin_sdk::pubkey::new_rand();
+        solana_logger::setup();
+        let leader_pubkey = solana_sdk::pubkey::new_rand();
         let mint = 100;
         let hashes_per_tick = 10;
         let GenesisConfigInfo {
@@ -2276,7 +2276,7 @@ pub mod tests {
 
     #[test]
     fn test_process_entries_2nd_entry_collision_with_self_and_error() {
-        safecoin_logger::setup();
+        solana_logger::setup();
 
         let GenesisConfigInfo {
             genesis_config,
@@ -2465,7 +2465,7 @@ pub mod tests {
                     bank.last_blockhash(),
                     1,
                     0,
-                    &safecoin_sdk::pubkey::new_rand(),
+                    &solana_sdk::pubkey::new_rand(),
                 ));
 
                 next_entry_mut(&mut hash, 0, transactions)
@@ -2614,7 +2614,7 @@ pub mod tests {
             ..
         } = create_genesis_config(11_000);
         let bank = Arc::new(Bank::new(&genesis_config));
-        let pubkey = safecoin_sdk::pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         bank.transfer(1_000, &mint_keypair, &pubkey).unwrap();
         assert_eq!(bank.transaction_count(), 1);
         assert_eq!(bank.get_balance(&pubkey), 1_000);
@@ -2803,7 +2803,7 @@ pub mod tests {
     fn test_process_entries_stress() {
         // this test throws lots of rayon threads at process_entries()
         //  finds bugs in very low-layer stuff
-        safecoin_logger::setup();
+        solana_logger::setup();
         let GenesisConfigInfo {
             genesis_config,
             mint_keypair,
@@ -2851,7 +2851,7 @@ pub mod tests {
                             bank.last_blockhash(),
                             100,
                             100,
-                            &safecoin_sdk::pubkey::new_rand(),
+                            &solana_sdk::pubkey::new_rand(),
                         ));
                         transactions
                     })
@@ -3004,14 +3004,14 @@ pub mod tests {
         // Create array of two transactions which throw different errors
         let account_not_found_tx = system_transaction::transfer(
             &keypair,
-            &safecoin_sdk::pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             42,
             bank.last_blockhash(),
         );
         let account_not_found_sig = account_not_found_tx.signatures[0];
         let mut account_loaded_twice = system_transaction::transfer(
             &mint_keypair,
-            &safecoin_sdk::pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             42,
             bank.last_blockhash(),
         );
@@ -3062,7 +3062,7 @@ pub mod tests {
 
         let bank1 = Arc::new(Bank::new_from_parent(
             &bank0,
-            &safecoin_sdk::pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             1,
         ));
 
@@ -3154,7 +3154,7 @@ pub mod tests {
     }
 
     fn run_test_process_blockstore_with_supermajority_root(blockstore_root: Option<Slot>) {
-        safecoin_logger::setup();
+        solana_logger::setup();
         /*
             Build fork structure:
                  slot 0
@@ -3331,11 +3331,11 @@ pub mod tests {
                         let mut vote_state = VoteState::default();
                         vote_state.root_slot = Some(root);
                         let mut vote_account =
-                            Account::new(1, VoteState::size_of(), &safecoin_vote_program::id());
+                            Account::new(1, VoteState::size_of(), &solana_vote_program::id());
                         let versioned = VoteStateVersions::new_current(vote_state);
                         VoteState::serialize(&versioned, &mut vote_account.data).unwrap();
                         (
-                            safecoin_sdk::pubkey::new_rand(),
+                            solana_sdk::pubkey::new_rand(),
                             (stake, ArcVoteAccount::from(vote_account)),
                         )
                     })

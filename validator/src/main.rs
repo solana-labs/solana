@@ -5,18 +5,18 @@ use clap::{
 use fd_lock::FdLock;
 use log::*;
 use rand::{seq::SliceRandom, thread_rng, Rng};
-use safecoin_clap_utils::{
+use solana_clap_utils::{
     input_parsers::{keypair_of, keypairs_of, pubkey_of, value_of},
     input_validators::{
         is_keypair_or_ask_keyword, is_parsable, is_pubkey, is_pubkey_or_keypair, is_slot,
     },
     keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
 };
-use safecoin_client::{rpc_client::RpcClient, rpc_request::MAX_MULTIPLE_ACCOUNTS};
-use safecoin_core::ledger_cleanup_service::{
+use solana_client::{rpc_client::RpcClient, rpc_request::MAX_MULTIPLE_ACCOUNTS};
+use solana_core::ledger_cleanup_service::{
     DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS,
 };
-use safecoin_core::{
+use solana_core::{
     cluster_info::{ClusterInfo, Node, MINIMUM_VALIDATOR_PORT_RANGE_WIDTH, VALIDATOR_PORT_RANGE},
     contact_info::ContactInfo,
     gossip_service::GossipService,
@@ -25,16 +25,16 @@ use safecoin_core::{
     rpc_pubsub_service::PubSubConfig,
     validator::{is_snapshot_config_invalid, Validator, ValidatorConfig},
 };
-use safecoin_download_utils::{download_genesis_if_missing, download_snapshot};
-use safecoin_ledger::blockstore_db::BlockstoreRecoveryMode;
-use safecoin_perf::recycler::enable_recycler_warming;
-use safecoin_runtime::{
+use solana_download_utils::{download_genesis_if_missing, download_snapshot};
+use solana_ledger::blockstore_db::BlockstoreRecoveryMode;
+use solana_perf::recycler::enable_recycler_warming;
+use solana_runtime::{
     accounts_index::AccountIndex,
     bank_forks::{ArchiveFormat, SnapshotConfig, SnapshotVersion},
     hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     snapshot_utils::get_highest_snapshot_archive_path,
 };
-use safecoin_sdk::{
+use solana_sdk::{
     clock::Slot,
     commitment_config::CommitmentConfig,
     genesis_config::GenesisConfig,
@@ -42,7 +42,7 @@ use safecoin_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signer},
 };
-use safecoin_validator::{dashboard::Dashboard, record_start, redirect_stderr_to_file};
+use solana_validator::{dashboard::Dashboard, record_start, redirect_stderr_to_file};
 use std::{
     collections::HashSet,
     env,
@@ -67,7 +67,7 @@ enum Operation {
 }
 
 fn port_range_validator(port_range: String) -> Result<(), String> {
-    if let Some((start, end)) = safecoin_net_utils::parse_port_range(&port_range) {
+    if let Some((start, end)) = solana_net_utils::parse_port_range(&port_range) {
         if end - start < MINIMUM_VALIDATOR_PORT_RANGE_WIDTH {
             Err(format!(
                 "Port range is too small.  Try --dynamic-port-range {}-{}",
@@ -338,7 +338,7 @@ fn check_vote_account(
         .value
         .ok_or_else(|| format!("vote account does not exist: {}", vote_account_address))?;
 
-    if vote_account.owner != safecoin_vote_program::id() {
+    if vote_account.owner != solana_vote_program::id() {
         return Err(format!(
             "not a vote account (owned by {}): {}",
             vote_account.owner, vote_account_address
@@ -351,7 +351,7 @@ fn check_vote_account(
         .value
         .ok_or_else(|| format!("identity account does not exist: {}", identity_pubkey))?;
 
-    let vote_state = safecoin_vote_program::vote_state::VoteState::from(&vote_account);
+    let vote_state = solana_vote_program::vote_state::VoteState::from(&vote_account);
     if let Some(vote_state) = vote_state {
         if vote_state.authorized_voters().is_empty() {
             return Err("Vote account not yet initialized".to_string());
@@ -541,7 +541,7 @@ fn verify_reachable_ports(
         tcp_listeners.push((ip_echo.local_addr().unwrap().port(), ip_echo));
     }
 
-    safecoin_net_utils::verify_reachable_ports(
+    solana_net_utils::verify_reachable_ports(
         &cluster_entrypoint.gossip,
         tcp_listeners,
         &udp_sockets,
@@ -636,7 +636,7 @@ fn rpc_bootstrap(
 
         let result = match rpc_client.get_version() {
             Ok(rpc_version) => {
-                info!("RPC node version: {}", rpc_version.safecoin_core);
+                info!("RPC node version: {}", rpc_version.solana_core);
                 Ok(())
             }
             Err(err) => Err(format!("Failed to get RPC node version: {}", err)),
@@ -737,7 +737,7 @@ fn rpc_bootstrap(
                 )
                 .unwrap_or_else(|err| {
                     // Consider failures here to be more likely due to user error (eg,
-                    // incorrect `safecoin-validator` command-line arguments) rather than the
+                    // incorrect `solana-validator` command-line arguments) rather than the
                     // RPC node failing.
                     //
                     // Power users can always use the `--no-check-vote-account` option to
@@ -793,7 +793,7 @@ pub fn main() {
     let default_rpc_threads = num_cpus::get().to_string();
 
     let matches = App::new(crate_name!()).about(crate_description!())
-        .version(safecoin_version::version!())
+        .version(solana_version::version!())
         .setting(AppSettings::VersionlessSubcommands)
         .setting(AppSettings::InferSubcommands)
         .arg(
@@ -858,7 +858,7 @@ pub fn main() {
                 .value_name("HOST:PORT")
                 .takes_value(true)
                 .multiple(true)
-                .validator(safecoin_net_utils::is_host_port)
+                .validator(solana_net_utils::is_host_port)
                 .help("Rendezvous with the cluster at this gossip entrypoint"),
         )
         .arg(
@@ -912,7 +912,7 @@ pub fn main() {
                 .long("rpc-port")
                 .value_name("PORT")
                 .takes_value(true)
-                .validator(safecoin_validator::port_validator)
+                .validator(solana_validator::port_validator)
                 .help("Use this port for JSON RPC and the next port for the RPC websocket"),
         )
         .arg(
@@ -998,7 +998,7 @@ pub fn main() {
                 .long("rpc-faucet-address")
                 .value_name("HOST:PORT")
                 .takes_value(true)
-                .validator(safecoin_net_utils::is_host_port)
+                .validator(solana_net_utils::is_host_port)
                 .help("Enable the JSON RPC 'requestAirdrop' API with this faucet address."),
         )
         .arg(
@@ -1029,7 +1029,7 @@ pub fn main() {
                 .long("gossip-host")
                 .value_name("HOST")
                 .takes_value(true)
-                .validator(safecoin_net_utils::is_host)
+                .validator(solana_net_utils::is_host)
                 .help("Gossip DNS name or IP address for the validator to advertise in gossip \
                        [default: ask --entrypoint, or 127.0.0.1 when --entrypoint is not provided]"),
 
@@ -1040,7 +1040,7 @@ pub fn main() {
                 .value_name("HOST:PORT")
                 .takes_value(true)
                 .conflicts_with("private_rpc")
-                .validator(safecoin_net_utils::is_host_port)
+                .validator(solana_net_utils::is_host_port)
                 .help("RPC address for the validator to advertise publicly in gossip. \
                       Useful for validators running behind a load balancer or proxy \
                       [default: use --rpc-bind-address / --rpc-port]"),
@@ -1240,7 +1240,7 @@ pub fn main() {
                 .long("bind-address")
                 .value_name("HOST")
                 .takes_value(true)
-                .validator(safecoin_net_utils::is_host)
+                .validator(solana_net_utils::is_host)
                 .default_value("0.0.0.0")
                 .help("IP address to bind the validator ports"),
         )
@@ -1249,7 +1249,7 @@ pub fn main() {
                 .long("rpc-bind-address")
                 .value_name("HOST")
                 .takes_value(true)
-                .validator(safecoin_net_utils::is_host)
+                .validator(solana_net_utils::is_host)
                 .help("IP address to bind the RPC port [default: use --bind-address]"),
         )
         .arg(
@@ -1526,10 +1526,10 @@ pub fn main() {
         "--gossip-validator",
     );
 
-    let bind_address = safecoin_net_utils::parse_host(matches.value_of("bind_address").unwrap())
+    let bind_address = solana_net_utils::parse_host(matches.value_of("bind_address").unwrap())
         .expect("invalid bind_address");
     let rpc_bind_address = if matches.is_present("rpc_bind_address") {
-        safecoin_net_utils::parse_host(matches.value_of("rpc_bind_address").unwrap())
+        solana_net_utils::parse_host(matches.value_of("rpc_bind_address").unwrap())
             .expect("invalid rpc_bind_address")
     } else {
         bind_address
@@ -1571,7 +1571,7 @@ pub fn main() {
             enable_bigtable_ledger_upload: matches.is_present("enable_bigtable_ledger_upload"),
             identity_pubkey: identity_keypair.pubkey(),
             faucet_addr: matches.value_of("rpc_faucet_addr").map(|address| {
-                safecoin_net_utils::parse_host_port(address).expect("failed to parse faucet address")
+                solana_net_utils::parse_host_port(address).expect("failed to parse faucet address")
             }),
             max_multiple_accounts: Some(value_t_or_exit!(
                 matches,
@@ -1595,7 +1595,7 @@ pub fn main() {
                 SocketAddr::new(rpc_bind_address, rpc_port + 1),
                 // If additional ports are added, +2 needs to be skipped to avoid a conflict with
                 // the websocket port (which is +2) in web3.js This odd port shifting is tracked at
-                // https://github.com/solana-labs/safecoin/issues/12250
+                // https://github.com/solana-labs/solana/issues/12250
             )
         }),
         pubsub_config: PubSubConfig {
@@ -1649,7 +1649,7 @@ pub fn main() {
     });
 
     let dynamic_port_range =
-        safecoin_net_utils::parse_port_range(matches.value_of("dynamic_port_range").unwrap())
+        solana_net_utils::parse_port_range(matches.value_of("dynamic_port_range").unwrap())
             .expect("invalid dynamic_port_range");
 
     let account_paths: Vec<PathBuf> =
@@ -1787,7 +1787,7 @@ pub fn main() {
         .unwrap_or_default()
         .into_iter()
         .map(|entrypoint| {
-            safecoin_net_utils::parse_host_port(&entrypoint).unwrap_or_else(|e| {
+            solana_net_utils::parse_host_port(&entrypoint).unwrap_or_else(|e| {
                 eprintln!("failed to parse entrypoint address: {}", e);
                 exit(1);
             })
@@ -1797,7 +1797,7 @@ pub fn main() {
         .collect::<Vec<_>>();
 
     let public_rpc_addr = matches.value_of("public_rpc_addr").map(|addr| {
-        safecoin_net_utils::parse_host_port(addr).unwrap_or_else(|e| {
+        solana_net_utils::parse_host_port(addr).unwrap_or_else(|e| {
             eprintln!("failed to parse public rpc address: {}", e);
             exit(1);
         })
@@ -1837,7 +1837,7 @@ pub fn main() {
         let logfile = matches
             .value_of("logfile")
             .map(|s| s.into())
-            .unwrap_or_else(|| format!("safecoin-validator-{}.log", identity_keypair.pubkey()));
+            .unwrap_or_else(|| format!("solana-validator-{}.log", identity_keypair.pubkey()));
 
         if logfile == "-" {
             None
@@ -1849,13 +1849,13 @@ pub fn main() {
     let use_progress_bar = logfile.is_none();
     let _logger_thread = redirect_stderr_to_file(logfile);
 
-    info!("{} {}", crate_name!(), safecoin_version::version!());
+    info!("{} {}", crate_name!(), solana_version::version!());
     info!("Starting validator with: {:#?}", std::env::args_os());
 
     let gossip_host: IpAddr = matches
         .value_of("gossip_host")
         .map(|gossip_host| {
-            safecoin_net_utils::parse_host(gossip_host).unwrap_or_else(|err| {
+            solana_net_utils::parse_host(gossip_host).unwrap_or_else(|err| {
                 eprintln!("Failed to parse --gossip-host: {}", err);
                 exit(1);
             })
@@ -1871,7 +1871,7 @@ pub fn main() {
                         "Contacting {} to determine the validator's public IP address",
                         entrypoint_addr
                     );
-                    safecoin_net_utils::get_public_ip_addr(entrypoint_addr).map_or_else(
+                    solana_net_utils::get_public_ip_addr(entrypoint_addr).map_or_else(
                         |err| {
                             eprintln!(
                                 "Failed to contact cluster entrypoint {}: {}",
@@ -1895,7 +1895,7 @@ pub fn main() {
     let gossip_addr = SocketAddr::new(
         gossip_host,
         value_t!(matches, "gossip_port", u16).unwrap_or_else(|_| {
-            safecoin_net_utils::find_available_port_in_range(bind_address, (0, 1)).unwrap_or_else(
+            solana_net_utils::find_available_port_in_range(bind_address, (0, 1)).unwrap_or_else(
                 |err| {
                     eprintln!("Unable to find an available gossip port: {}", err);
                     exit(1);
@@ -1941,15 +1941,15 @@ pub fn main() {
         }
     }
 
-    safecoin_metrics::set_host_id(identity_keypair.pubkey().to_string());
-    safecoin_metrics::set_panic_hook("validator");
+    solana_metrics::set_host_id(identity_keypair.pubkey().to_string());
+    solana_metrics::set_panic_hook("validator");
 
     if validator_config.cuda {
-        safecoin_perf::perf_libs::init_cuda();
+        solana_perf::perf_libs::init_cuda();
         enable_recycler_warming();
     }
-    safecoin_ledger::entry::init_poh();
-    safecoin_runtime::snapshot_utils::remove_tmp_snapshot_archives(&ledger_path);
+    solana_ledger::entry::init_poh();
+    solana_runtime::snapshot_utils::remove_tmp_snapshot_archives(&ledger_path);
 
     let should_check_duplicate_instance = !matches.is_present("no_duplicate_instance_check");
     if !cluster_entrypoints.is_empty() {

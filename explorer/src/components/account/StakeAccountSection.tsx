@@ -1,6 +1,6 @@
 import React from "react";
 import { TableCardBody } from "components/common/TableCardBody";
-import { lamportsToSafeString } from "utils";
+import { lamportsToSolString } from "utils";
 import { displayTimestampUtc } from "utils/date";
 import { Account, useFetchAccountInfo } from "providers/accounts";
 import { Address } from "components/common/Address";
@@ -10,7 +10,7 @@ import {
   StakeAccountType,
 } from "validators/accounts/stake";
 import BN from "bn.js";
-import { StakeActivationData } from "@safecoin/web3.js";
+import { StakeActivationData } from "@solana/web3.js";
 
 const MAX_EPOCH = new BN(2).pow(new BN(64)).sub(new BN(1));
 
@@ -101,16 +101,16 @@ function OverviewCard({
           </td>
         </tr>
         <tr>
-          <td>Balance (SAFE)</td>
+          <td>Balance (SOL)</td>
           <td className="text-lg-right text-uppercase">
-            {lamportsToSafeString(account.lamports || 0)}
+            {lamportsToSolString(account.lamports || 0)}
           </td>
         </tr>
         {stakeAccount.meta && (
           <tr>
-            <td>Rent Reserve (SAFE)</td>
+            <td>Rent Reserve (SOL)</td>
             <td className="text-lg-right">
-              {lamportsToSafeString(stakeAccount.meta.rentExemptReserve)}
+              {lamportsToSolString(stakeAccount.meta.rentExemptReserve)}
             </td>
           </tr>
         )}
@@ -175,25 +175,25 @@ function DelegationCard({
         {stake && (
           <>
             <tr>
-              <td>Delegated Stake (SAFE)</td>
+              <td>Delegated Stake (SOL)</td>
               <td className="text-lg-right">
-                {lamportsToSafeString(stake.delegation.stake)}
+                {lamportsToSolString(stake.delegation.stake)}
               </td>
             </tr>
 
             {activation && (
               <>
                 <tr>
-                  <td>Active Stake (SAFE)</td>
+                  <td>Active Stake (SOL)</td>
                   <td className="text-lg-right">
-                    {lamportsToSafeString(activation.active)}
+                    {lamportsToSolString(activation.active)}
                   </td>
                 </tr>
 
                 <tr>
-                  <td>Inactive Stake (SAFE)</td>
+                  <td>Inactive Stake (SOL)</td>
                   <td className="text-lg-right">
-                    {lamportsToSafeString(activation.inactive)}
+                    {lamportsToSolString(activation.inactive)}
                   </td>
                 </tr>
               </>

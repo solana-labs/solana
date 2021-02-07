@@ -2,11 +2,11 @@
 extern crate test;
 
 use rand::{thread_rng, Rng};
-use safecoin_runtime::append_vec::{
+use solana_runtime::append_vec::{
     test_utils::{create_test_account, get_append_vec_path},
     AppendVec,
 };
-use safecoin_sdk::hash::Hash;
+use solana_sdk::hash::Hash;
 use std::{
     sync::{Arc, Mutex},
     thread::sleep,

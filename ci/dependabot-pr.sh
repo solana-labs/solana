@@ -21,12 +21,12 @@ fi
 echo --- "(FAILING) Backpropagating dependabot-triggered Cargo.lock updates"
 
 name="dependabot-buildkite"
-api_base="https://api.github.com/repos/solana-labs/safecoin/pulls"
+api_base="https://api.github.com/repos/solana-labs/solana/pulls"
 pr_num=$(echo "$BUILDKITE_BRANCH" | grep -Eo '[0-9]+')
 branch=$(curl -s "$api_base/$pr_num" | python -c 'import json,sys;print json.load(sys.stdin)["head"]["ref"]')
 
 git add :**/Cargo.lock
-EMAIL="dependabot-buildkite@noreply.safecoin.org" \
+EMAIL="dependabot-buildkite@noreply.solana.com" \
   GIT_AUTHOR_NAME="$name" \
   GIT_COMMITTER_NAME="$name" \
   git commit -m "[auto-commit] Update all Cargo lock files"

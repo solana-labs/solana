@@ -27,7 +27,7 @@ cargo="$(readlink -f "./cargo")"
 reportName="lcov-${CI_COMMIT:0:9}"
 
 if [[ -z $1 ]]; then
-  packages=(--lib --all --exclude safecoin-local-cluster)
+  packages=(--lib --all --exclude solana-local-cluster)
 else
   packages=("$@")
 fi
@@ -68,8 +68,8 @@ if [[ -n $CI || -z $1 ]]; then
     $(git grep -l "proc-macro.*true" :**/Cargo.toml | sed 's|Cargo.toml|src/lib.rs|')
 fi
 
-RUST_LOG=safecoin=trace _ "$cargo" nightly test --target-dir target/cov --no-run "${packages[@]}"
-if RUST_LOG=safecoin=trace _ "$cargo" nightly test --target-dir target/cov "${packages[@]}" 2> target/cov/coverage-stderr.log; then
+RUST_LOG=solana=trace _ "$cargo" nightly test --target-dir target/cov --no-run "${packages[@]}"
+if RUST_LOG=solana=trace _ "$cargo" nightly test --target-dir target/cov "${packages[@]}" 2> target/cov/coverage-stderr.log; then
   test_status=0
 else
   test_status=$?

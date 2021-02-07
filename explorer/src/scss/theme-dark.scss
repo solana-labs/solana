@@ -12,10 +12,10 @@
 @import '~bootstrap/scss/functions.scss';
 
 // Custom variables
-@import 'safecoin-variables-dark';
+@import 'solana-variables-dark';
 
 // Custom variables
-@import 'safecoin-variables';
+@import 'solana-variables';
 
 // Dark mode variables
 @import 'dashkit/dark/variables-dark';
@@ -33,7 +33,7 @@
 @import 'dashkit/dark/overrides-dark';
 
 // Custom core
-@import 'safecoin';
+@import 'solana';
 
 // Dark mode overrides
-@import 'safecoin-dark-overrides';
+@import 'solana-dark-overrides';

@@ -16,7 +16,7 @@ title: Validator Requirements
   - While a CPU-only node may be able to keep up with the initial idling network, once transaction throughput increases, GPUs will be necessary
   - What kind of GPU?
     - We recommend Nvidia Turing and volta family GPUs 1660ti to 2080ti series consumer GPU or Tesla series server GPUs.
-    - We do not currently support OpenCL and therefore do not support AMD GPUs. We have a bounty out for someone to port us to OpenCL. Interested? [Check out our GitHub.](https://github.com/solana-labs/safecoin)
+    - We do not currently support OpenCL and therefore do not support AMD GPUs. We have a bounty out for someone to port us to OpenCL. Interested? [Check out our GitHub.](https://github.com/solana-labs/solana)
 - Power Consumption
   - Approximate power consumption for a validator node running an AMD Threadripper 3950x and 2x 2080Ti GPUs is 800-1000W.
 
@@ -62,7 +62,7 @@ We use docker only for development purpose.
 ## Software
 
 - We build and run on Ubuntu 18.04. Some users have had trouble when running on Ubuntu 16.04
-- See [Installing Safecoin](../cli/install-safecoin-cli-tools.md) for the current Safecoin software release.
+- See [Installing Safecoin](../cli/install-solana-cli-tools.md) for the current Safecoin software release.
 
 Be sure to ensure that the machine used is not behind a residential NAT to avoid
 NAT traversal issues. A cloud-hosted machine works best. **Ensure that IP ports 8000 through 10000 are not blocked for Internet inbound and outbound traffic.**

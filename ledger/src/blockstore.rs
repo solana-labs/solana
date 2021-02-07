@@ -21,14 +21,14 @@ use rayon::{
     ThreadPool,
 };
 use rocksdb::DBRawIterator;
-use safecoin_measure::measure::Measure;
-use safecoin_metrics::{datapoint_debug, datapoint_error};
-use safecoin_rayon_threadlimit::get_thread_count;
-use safecoin_runtime::{
+use solana_measure::measure::Measure;
+use solana_metrics::{datapoint_debug, datapoint_error};
+use solana_rayon_threadlimit::get_thread_count;
+use solana_runtime::{
     hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     vote_account::ArcVoteAccount,
 };
-use safecoin_sdk::{
+use solana_sdk::{
     clock::{Slot, UnixTimestamp, DEFAULT_TICKS_PER_SECOND, MS_PER_TICK},
     genesis_config::GenesisConfig,
     hash::Hash,
@@ -41,12 +41,12 @@ use safecoin_sdk::{
     timing::timestamp,
     transaction::Transaction,
 };
-use safecoin_storage_proto::StoredExtendedRewards;
-use safecoin_transaction_status::{
+use solana_storage_proto::StoredExtendedRewards;
+use solana_transaction_status::{
     ConfirmedBlock, ConfirmedTransaction, ConfirmedTransactionStatusWithSignature, Rewards,
     TransactionStatusMeta, TransactionWithStatusMeta,
 };
-use safecoin_vote_program::vote_instruction::VoteInstruction;
+use solana_vote_program::vote_instruction::VoteInstruction;
 use std::{
     cell::RefCell,
     cmp,
@@ -1394,7 +1394,7 @@ impl Blockstore {
                 "shred_insert_is_full",
                 (
                     "total_time_ms",
-                    safecoin_sdk::timing::timestamp() - slot_meta.first_shred_timestamp,
+                    solana_sdk::timing::timestamp() - slot_meta.first_shred_timestamp,
                     i64
                 ),
                 ("slot", slot_meta.slot, i64),
@@ -2395,7 +2395,7 @@ impl Blockstore {
                 let mut timestamps: Vec<(Pubkey, (Slot, UnixTimestamp))> = Vec::new();
                 for instruction in transaction.message.instructions {
                     let program_id = instruction.program_id(&transaction.message.account_keys);
-                    if program_id == &safecoin_vote_program::id() {
+                    if program_id == &solana_vote_program::id() {
                         if let Ok(VoteInstruction::Vote(vote)) =
                             limited_deserialize(&instruction.data)
                         {
@@ -3113,7 +3113,7 @@ fn find_slot_meta_in_cached_state<'a>(
     }
 }
 
-// Chaining based on latest discussion here: https://github.com/solana-labs/safecoin/pull/2253
+// Chaining based on latest discussion here: https://github.com/solana-labs/solana/pull/2253
 fn handle_chaining(
     db: &Database,
     write_batch: &mut WriteBatch,
@@ -3305,7 +3305,7 @@ pub fn create_new_ledger(
     let hashes_per_tick = genesis_config.poh_config.hashes_per_tick.unwrap_or(0);
     let entries = create_ticks(ticks_per_slot, hashes_per_tick, genesis_config.hash());
     let last_hash = entries.last().unwrap().hash;
-    let version = safecoin_sdk::shred_version::version_from_hash(&last_hash);
+    let version = solana_sdk::shred_version::version_from_hash(&last_hash);
 
     let shredder = Shredder::new(0, 0, 0.0, Arc::new(Keypair::new()), 0, version)
         .expect("Failed to create entry shredder");
@@ -3605,8 +3605,8 @@ pub mod tests {
     use bincode::serialize;
     use itertools::Itertools;
     use rand::{seq::SliceRandom, thread_rng};
-    use safecoin_runtime::bank::{Bank, RewardType};
-    use safecoin_sdk::{
+    use solana_runtime::bank::{Bank, RewardType};
+    use solana_sdk::{
         hash::{self, hash, Hash},
         instruction::CompiledInstruction,
         message::Message,
@@ -3615,9 +3615,9 @@ pub mod tests {
         signature::Signature,
         transaction::TransactionError,
     };
-    use safecoin_storage_proto::convert::generated;
-    use safecoin_transaction_status::{InnerInstructions, Reward, Rewards};
-    use safecoin_vote_program::{vote_instruction, vote_state::Vote};
+    use solana_storage_proto::convert::generated;
+    use solana_transaction_status::{InnerInstructions, Reward, Rewards};
+    use solana_vote_program::{vote_instruction, vote_state::Vote};
     use std::time::Duration;
 
     // used for tests only
@@ -3626,9 +3626,9 @@ pub mod tests {
         for x in 0..num_entries {
             let transaction = Transaction::new_with_compiled_instructions(
                 &[&Keypair::new()],
-                &[safecoin_sdk::pubkey::new_rand()],
+                &[solana_sdk::pubkey::new_rand()],
                 Hash::default(),
-                vec![safecoin_sdk::pubkey::new_rand()],
+                vec![solana_sdk::pubkey::new_rand()],
                 vec![CompiledInstruction::new(1, &(), vec![0])],
             );
             entries.push(next_entry_mut(&mut Hash::default(), 0, vec![transaction]));
@@ -3688,7 +3688,7 @@ pub mod tests {
 
     #[test]
     fn test_write_entries() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let ledger_path = get_tmp_ledger_path!();
         {
             let ticks_per_slot = 10;
@@ -5198,7 +5198,7 @@ pub mod tests {
 
     #[test]
     pub fn test_should_insert_data_shred() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let (mut shreds, _) = make_slot_entries(0, 0, 200);
         let blockstore_path = get_tmp_ledger_path!();
         {
@@ -5480,7 +5480,7 @@ pub mod tests {
 
     #[test]
     pub fn test_insert_multiple_is_last() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let (shreds, _) = make_slot_entries(0, 0, 20);
         let num_shreds = shreds.len() as u64;
         let blockstore_path = get_tmp_ledger_path!();
@@ -6115,7 +6115,7 @@ pub mod tests {
                 .put(
                     (0, Signature::default(), 0),
                     &TransactionStatusMeta {
-                        status: safecoin_sdk::transaction::Result::<()>::Err(
+                        status: solana_sdk::transaction::Result::<()>::Err(
                             TransactionError::AccountNotFound
                         ),
                         fee: 5u64,
@@ -6157,7 +6157,7 @@ pub mod tests {
                 .put(
                     (0, Signature::new(&[2u8; 64]), 9),
                     &TransactionStatusMeta {
-                        status: safecoin_sdk::transaction::Result::<()>::Ok(()),
+                        status: solana_sdk::transaction::Result::<()>::Ok(()),
                         fee: 9u64,
                         pre_balances: pre_balances_vec.clone(),
                         post_balances: post_balances_vec.clone(),
@@ -6415,7 +6415,7 @@ pub mod tests {
             let pre_balances_vec = vec![1, 2, 3];
             let post_balances_vec = vec![3, 2, 1];
             let status = TransactionStatusMeta {
-                status: safecoin_sdk::transaction::Result::<()>::Ok(()),
+                status: solana_sdk::transaction::Result::<()>::Ok(()),
                 fee: 42u64,
                 pre_balances: pre_balances_vec,
                 post_balances: post_balances_vec,
@@ -6634,8 +6634,8 @@ pub mod tests {
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
 
-            let address0 = safecoin_sdk::pubkey::new_rand();
-            let address1 = safecoin_sdk::pubkey::new_rand();
+            let address0 = solana_sdk::pubkey::new_rand();
+            let address1 = solana_sdk::pubkey::new_rand();
 
             let slot0 = 10;
             for x in 1..5 {
@@ -6781,7 +6781,7 @@ pub mod tests {
                         &[&Keypair::new()],
                         &[*address],
                         Hash::default(),
-                        vec![safecoin_sdk::pubkey::new_rand()],
+                        vec![solana_sdk::pubkey::new_rand()],
                         vec![CompiledInstruction::new(1, &(), vec![0])],
                     );
                     entries.push(next_entry_mut(&mut Hash::default(), 0, vec![transaction]));
@@ -6791,8 +6791,8 @@ pub mod tests {
                 entries
             }
 
-            let address0 = safecoin_sdk::pubkey::new_rand();
-            let address1 = safecoin_sdk::pubkey::new_rand();
+            let address0 = solana_sdk::pubkey::new_rand();
+            let address1 = solana_sdk::pubkey::new_rand();
 
             for slot in 2..=8 {
                 let entries = make_slot_entries_with_transaction_addresses(&[
@@ -7015,16 +7015,16 @@ pub mod tests {
             for x in 0..4 {
                 let transaction = Transaction::new_with_compiled_instructions(
                     &[&Keypair::new()],
-                    &[safecoin_sdk::pubkey::new_rand()],
+                    &[solana_sdk::pubkey::new_rand()],
                     Hash::default(),
-                    vec![safecoin_sdk::pubkey::new_rand()],
+                    vec![solana_sdk::pubkey::new_rand()],
                     vec![CompiledInstruction::new(1, &(), vec![0])],
                 );
                 transaction_status_cf
                     .put(
                         (0, transaction.signatures[0], slot),
                         &TransactionStatusMeta {
-                            status: safecoin_sdk::transaction::Result::<()>::Err(
+                            status: solana_sdk::transaction::Result::<()>::Err(
                                 TransactionError::AccountNotFound,
                             ),
                             fee: x,
@@ -7042,9 +7042,9 @@ pub mod tests {
             // Push transaction that will not have matching status, as a test case
             transactions.push(Transaction::new_with_compiled_instructions(
                 &[&Keypair::new()],
-                &[safecoin_sdk::pubkey::new_rand()],
+                &[solana_sdk::pubkey::new_rand()],
                 Hash::default(),
-                vec![safecoin_sdk::pubkey::new_rand()],
+                vec![solana_sdk::pubkey::new_rand()],
                 vec![CompiledInstruction::new(1, &(), vec![0])],
             ));
 
@@ -7511,7 +7511,7 @@ pub mod tests {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
             let rewards: Rewards = (0..100)
                 .map(|i| Reward {
-                    pubkey: safecoin_sdk::pubkey::new_rand().to_string(),
+                    pubkey: solana_sdk::pubkey::new_rand().to_string(),
                     lamports: 42 + i,
                     post_balance: std::u64::MAX,
                     reward_type: Some(RewardType::Fee),
@@ -7569,8 +7569,8 @@ pub mod tests {
             .into_iter()
             .map(|_| {
                 let keypair0 = Keypair::new();
-                let to = safecoin_sdk::pubkey::new_rand();
-                safecoin_sdk::system_transaction::transfer(&keypair0, &to, 1, Hash::default())
+                let to = solana_sdk::pubkey::new_rand();
+                solana_sdk::system_transaction::transfer(&keypair0, &to, 1, Hash::default())
             })
             .collect();
 
@@ -7579,7 +7579,7 @@ pub mod tests {
 
     #[test]
     fn erasure_multiple_config() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let slot = 1;
         let parent = 0;
         let num_txs = 20;
@@ -7612,7 +7612,7 @@ pub mod tests {
 
     #[test]
     fn test_large_num_coding() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let slot = 1;
         let (_data_shreds, mut coding_shreds, leader_schedule_cache) =
             setup_erasure_shreds(slot, 0, 100, 1.0);

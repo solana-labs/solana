@@ -2,20 +2,20 @@
 extern crate log;
 use clap::{crate_description, crate_name, value_t, App, Arg};
 use rayon::prelude::*;
-use safecoin_measure::measure::Measure;
-use safecoin_runtime::{
+use solana_measure::measure::Measure;
+use solana_runtime::{
     accounts::{create_test_accounts, update_accounts_bench, Accounts},
     accounts_index::Ancestors,
 };
-use safecoin_sdk::{genesis_config::ClusterType, pubkey::Pubkey};
+use solana_sdk::{genesis_config::ClusterType, pubkey::Pubkey};
 use std::{collections::HashSet, env, fs, path::PathBuf};
 
 fn main() {
-    safecoin_logger::setup();
+    solana_logger::setup();
 
     let matches = App::new(crate_name!())
         .about(crate_description!())
-        .version(safecoin_version::version!())
+        .version(solana_version::version!())
         .arg(
             Arg::with_name("num_slots")
                 .long("num_slots")
@@ -110,7 +110,7 @@ fn main() {
             let results_store = accounts.accounts_db.update_accounts_hash_with_index_option(
                 true,
                 false,
-                safecoin_sdk::clock::Slot::default(),
+                solana_sdk::clock::Slot::default(),
                 &ancestors,
                 true,
             );

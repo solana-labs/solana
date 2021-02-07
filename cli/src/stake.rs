@@ -9,7 +9,7 @@ use crate::{
 };
 use chrono::{Local, TimeZone};
 use clap::{App, Arg, ArgGroup, ArgMatches, SubCommand};
-use safecoin_clap_utils::{
+use solana_clap_utils::{
     fee_payer::{fee_payer_arg, FEE_PAYER_ARG},
     input_parsers::*,
     input_validators::*,
@@ -18,11 +18,11 @@ use safecoin_clap_utils::{
     offline::*,
     ArgConstant,
 };
-use safecoin_cli_output::{
+use solana_cli_output::{
     return_signers, CliEpochReward, CliStakeHistory, CliStakeHistoryEntry, CliStakeState,
     CliStakeType,
 };
-use safecoin_client::{
+use solana_client::{
     blockhash_query::BlockhashQuery,
     client_error::{ClientError, ClientErrorKind},
     nonce_utils,
@@ -30,8 +30,8 @@ use safecoin_client::{
     rpc_custom_error,
     rpc_request::{self, DELINQUENT_VALIDATOR_SLOT_DISTANCE},
 };
-use safecoin_remote_wallet::remote_wallet::RemoteWalletManager;
-use safecoin_sdk::{
+use solana_remote_wallet::remote_wallet::RemoteWalletManager;
+use solana_sdk::{
     account::from_account,
     account_utils::StateMut,
     clock::{Clock, Epoch, Slot, UnixTimestamp, SECONDS_PER_DAY},
@@ -45,11 +45,11 @@ use safecoin_sdk::{
     },
     transaction::Transaction,
 };
-use safecoin_stake_program::{
+use solana_stake_program::{
     stake_instruction::{self, LockupArgs, StakeError},
     stake_state::{Authorized, Lockup, Meta, StakeAuthorize, StakeState},
 };
-use safecoin_vote_program::vote_state::VoteState;
+use solana_vote_program::vote_state::VoteState;
 use std::{convert::TryInto, ops::Deref, sync::Arc};
 
 pub const STAKE_AUTHORITY_ARG: ArgConstant<'static> = ArgConstant {
@@ -122,7 +122,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .validator(is_amount_or_all)
                         .required(true)
-                        .help("The amount to send to the stake account, in SAFE; accepts keyword ALL")
+                        .help("The amount to send to the stake account, in SOL; accepts keyword ALL")
                 )
                 .arg(
                     pubkey!(Arg::with_name("custodian")
@@ -281,7 +281,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .validator(is_amount)
                         .required(true)
-                        .help("The amount to move into the new stake account, in SAFE")
+                        .help("The amount to move into the new stake account, in SOL")
                 )
                 .arg(
                     Arg::with_name("seed")
@@ -319,7 +319,7 @@ impl StakeSubCommands for App<'_, '_> {
         )
         .subcommand(
             SubCommand::with_name("withdraw-stake")
-                .about("Withdraw the unstaked SAFE from the stake account")
+                .about("Withdraw the unstaked SOL from the stake account")
                 .arg(
                     pubkey!(Arg::with_name("stake_account_pubkey")
                         .index(1)
@@ -332,7 +332,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .index(2)
                         .value_name("RECIPIENT_ADDRESS")
                         .required(true),
-                        "Recipient of withdrawn SAFE")
+                        "Recipient of withdrawn SOL")
                 )
                 .arg(
                     Arg::with_name("amount")
@@ -341,7 +341,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .validator(is_amount)
                         .required(true)
-                        .help("The amount to withdraw from the stake account, in SAFE")
+                        .help("The amount to withdraw from the stake account, in SOL")
                 )
                 .arg(withdraw_authority_arg())
                 .offline_args()
@@ -411,7 +411,7 @@ impl StakeSubCommands for App<'_, '_> {
                     Arg::with_name("lamports")
                         .long("lamports")
                         .takes_value(false)
-                        .help("Display balance in lamports instead of SAFE")
+                        .help("Display balance in lamports instead of SOL")
                 ),
         )
         .subcommand(
@@ -422,7 +422,7 @@ impl StakeSubCommands for App<'_, '_> {
                     Arg::with_name("lamports")
                         .long("lamports")
                         .takes_value(false)
-                        .help("Display balance in lamports instead of SAFE")
+                        .help("Display balance in lamports instead of SOL")
                 )
         )
     }
@@ -619,7 +619,7 @@ pub fn parse_split_stake(
         pubkey_of_signer(matches, "stake_account_pubkey", wallet_manager)?.unwrap();
     let (split_stake_account, split_stake_account_pubkey) =
         signer_of(matches, "split_stake_account", wallet_manager)?;
-    let lamports = lamports_of_safe (matches, "amount").unwrap();
+    let lamports = lamports_of_sol(matches, "amount").unwrap();
     let seed = matches.value_of("seed").map(|s| s.to_string());
 
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
@@ -742,7 +742,7 @@ pub fn parse_stake_withdraw_stake(
         pubkey_of_signer(matches, "stake_account_pubkey", wallet_manager)?.unwrap();
     let destination_account_pubkey =
         pubkey_of_signer(matches, "destination_account_pubkey", wallet_manager)?.unwrap();
-    let lamports = lamports_of_safe (matches, "amount").unwrap();
+    let lamports = lamports_of_sol(matches, "amount").unwrap();
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let nonce_account = pubkey_of(matches, NONCE_ARG.name);
@@ -869,7 +869,7 @@ pub fn process_create_stake_account(
 ) -> ProcessResult {
     let stake_account = config.signers[stake_account];
     let stake_account_address = if let Some(seed) = seed {
-        Pubkey::create_with_seed(&stake_account.pubkey(), &seed, &safecoin_stake_program::id())?
+        Pubkey::create_with_seed(&stake_account.pubkey(), &seed, &solana_stake_program::id())?
     } else {
         stake_account.pubkey()
     };
@@ -935,7 +935,7 @@ pub fn process_create_stake_account(
 
     if !sign_only {
         if let Ok(stake_account) = rpc_client.get_account(&stake_account_address) {
-            let err_msg = if stake_account.owner == safecoin_stake_program::id() {
+            let err_msg = if stake_account.owner == solana_stake_program::id() {
                 format!("Stake account {} already exists", stake_account_address)
             } else {
                 format!(
@@ -1223,7 +1223,7 @@ pub fn process_split_stake(
         Pubkey::create_with_seed(
             &split_stake_account.pubkey(),
             &seed,
-            &safecoin_stake_program::id(),
+            &solana_stake_program::id(),
         )?
     } else {
         split_stake_account.pubkey()
@@ -1231,7 +1231,7 @@ pub fn process_split_stake(
 
     if !sign_only {
         if let Ok(stake_account) = rpc_client.get_account(&split_stake_account_address) {
-            let err_msg = if stake_account.owner == safecoin_stake_program::id() {
+            let err_msg = if stake_account.owner == solana_stake_program::id() {
                 format!(
                     "Stake account {} already exists",
                     split_stake_account_address
@@ -1356,7 +1356,7 @@ pub fn process_merge_stake(
     if !sign_only {
         for stake_account_address in &[stake_account_pubkey, source_stake_account_pubkey] {
             if let Ok(stake_account) = rpc_client.get_account(stake_account_address) {
-                if stake_account.owner != safecoin_stake_program::id() {
+                if stake_account.owner != solana_stake_program::id() {
                     return Err(CliError::BadParameter(format!(
                         "Account {} is not a stake account",
                         stake_account_address
@@ -1596,7 +1596,7 @@ pub(crate) fn fetch_epoch_rewards(
     let first_available_block = rpc_client.get_first_available_block()?;
 
     let mut epoch = epoch_schedule.get_epoch_and_slot_index(slot).0;
-    let mut epoch_info: Option<(Slot, UnixTimestamp, safecoin_transaction_status::Rewards)> = None;
+    let mut epoch_info: Option<(Slot, UnixTimestamp, solana_transaction_status::Rewards)> = None;
     while epoch > lowest_epoch {
         let first_slot_in_epoch = epoch_schedule.get_first_slot_in_epoch(epoch);
         if first_slot_in_epoch < first_available_block {
@@ -1611,7 +1611,7 @@ pub(crate) fn fetch_epoch_rewards(
 
         let first_confirmed_block = match rpc_client.get_confirmed_block_with_encoding(
             first_confirmed_block_in_epoch,
-            safecoin_transaction_status::UiTransactionEncoding::Base64,
+            solana_transaction_status::UiTransactionEncoding::Base64,
         ) {
             Ok(first_confirmed_block) => first_confirmed_block,
             Err(ClientError {
@@ -1694,7 +1694,7 @@ pub fn process_show_stake_account(
     use_lamports_unit: bool,
 ) -> ProcessResult {
     let stake_account = rpc_client.get_account(stake_account_address)?;
-    if stake_account.owner != safecoin_stake_program::id() {
+    if stake_account.owner != solana_stake_program::id() {
         return Err(CliError::RpcRequestError(format!(
             "{:?} is not a stake account",
             stake_account_address,
@@ -1891,8 +1891,8 @@ pub fn is_stake_program_v2_enabled(
 mod tests {
     use super::*;
     use crate::cli::{app, parse_command};
-    use safecoin_client::blockhash_query;
-    use safecoin_sdk::{
+    use solana_client::blockhash_query;
+    use solana_sdk::{
         hash::Hash,
         signature::{
             keypair_from_seed, read_keypair_file, write_keypair, Keypair, Presigner, Signer,
@@ -2447,9 +2447,9 @@ mod tests {
         );
 
         // Test CreateStakeAccount SubCommand
-        let custodian = safecoin_sdk::pubkey::new_rand();
+        let custodian = solana_sdk::pubkey::new_rand();
         let custodian_string = format!("{}", custodian);
-        let authorized = safecoin_sdk::pubkey::new_rand();
+        let authorized = solana_sdk::pubkey::new_rand();
         let authorized_string = format!("{}", authorized);
         let test_create_stake_account = test_commands.clone().get_matches_from(vec![
             "test",
@@ -2587,7 +2587,7 @@ mod tests {
         );
 
         // Test DelegateStake Subcommand
-        let vote_account_pubkey = safecoin_sdk::pubkey::new_rand();
+        let vote_account_pubkey = solana_sdk::pubkey::new_rand();
         let vote_account_string = vote_account_pubkey.to_string();
         let test_delegate_stake = test_commands.clone().get_matches_from(vec![
             "test",
@@ -2614,7 +2614,7 @@ mod tests {
         );
 
         // Test DelegateStake Subcommand w/ authority
-        let vote_account_pubkey = safecoin_sdk::pubkey::new_rand();
+        let vote_account_pubkey = solana_sdk::pubkey::new_rand();
         let vote_account_string = vote_account_pubkey.to_string();
         let test_delegate_stake = test_commands.clone().get_matches_from(vec![
             "test",
@@ -2733,7 +2733,7 @@ mod tests {
         );
 
         // Test Delegate Subcommand w/ absent fee payer
-        let key1 = safecoin_sdk::pubkey::new_rand();
+        let key1 = solana_sdk::pubkey::new_rand();
         let sig1 = Keypair::new().sign_message(&[0u8]);
         let signer1 = format!("{}={}", key1, sig1);
         let test_delegate_stake = test_commands.clone().get_matches_from(vec![
@@ -2773,7 +2773,7 @@ mod tests {
         );
 
         // Test Delegate Subcommand w/ absent fee payer and absent nonce authority
-        let key2 = safecoin_sdk::pubkey::new_rand();
+        let key2 = solana_sdk::pubkey::new_rand();
         let sig2 = Keypair::new().sign_message(&[0u8]);
         let signer2 = format!("{}={}", key2, sig2);
         let test_delegate_stake = test_commands.clone().get_matches_from(vec![
@@ -3101,7 +3101,7 @@ mod tests {
         );
 
         // Test Deactivate Subcommand w/ absent fee payer
-        let key1 = safecoin_sdk::pubkey::new_rand();
+        let key1 = solana_sdk::pubkey::new_rand();
         let sig1 = Keypair::new().sign_message(&[0u8]);
         let signer1 = format!("{}={}", key1, sig1);
         let test_deactivate_stake = test_commands.clone().get_matches_from(vec![
@@ -3138,7 +3138,7 @@ mod tests {
         );
 
         // Test Deactivate Subcommand w/ absent fee payer and nonce authority
-        let key2 = safecoin_sdk::pubkey::new_rand();
+        let key2 = solana_sdk::pubkey::new_rand();
         let sig2 = Keypair::new().sign_message(&[0u8]);
         let signer2 = format!("{}={}", key2, sig2);
         let test_deactivate_stake = test_commands.clone().get_matches_from(vec![
@@ -3317,7 +3317,7 @@ mod tests {
         let stake_account_keypair = Keypair::new();
         write_keypair(&stake_account_keypair, tmp_file.as_file_mut()).unwrap();
 
-        let source_stake_account_pubkey = safecoin_sdk::pubkey::new_rand();
+        let source_stake_account_pubkey = solana_sdk::pubkey::new_rand();
         let test_merge_stake_account = test_commands.clone().get_matches_from(vec![
             "test",
             "merge-stake",

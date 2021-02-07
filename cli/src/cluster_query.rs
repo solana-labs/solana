@@ -7,20 +7,20 @@ use chrono::{Local, TimeZone};
 use clap::{value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
 use console::{style, Emoji};
 use serde::{Deserialize, Serialize};
-use safecoin_clap_utils::{
+use solana_clap_utils::{
     input_parsers::*,
     input_validators::*,
     keypair::DefaultSigner,
     offline::{blockhash_arg, BLOCKHASH_ARG},
 };
-use safecoin_cli_output::{
+use solana_cli_output::{
     display::{
         build_balance_message, format_labeled_address, new_spinner_progress_bar,
         println_name_value, println_transaction, unix_timestamp_to_string, writeln_name_value,
     },
     *,
 };
-use safecoin_client::{
+use solana_client::{
     client_error::ClientErrorKind,
     pubsub_client::PubsubClient,
     rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClient},
@@ -31,8 +31,8 @@ use safecoin_client::{
     rpc_filter,
     rpc_response::SlotInfo,
 };
-use safecoin_remote_wallet::remote_wallet::RemoteWalletManager;
-use safecoin_sdk::{
+use solana_remote_wallet::remote_wallet::RemoteWalletManager;
+use solana_sdk::{
     account::from_account,
     account_utils::StateMut,
     clock::{self, Clock, Slot},
@@ -40,7 +40,7 @@ use safecoin_sdk::{
     epoch_schedule::Epoch,
     hash::Hash,
     message::Message,
-    native_token::lamports_to_safe ,
+    native_token::lamports_to_sol,
     pubkey::{self, Pubkey},
     rent::Rent,
     rpc_port::DEFAULT_RPC_PORT_STR,
@@ -53,7 +53,7 @@ use safecoin_sdk::{
     timing,
     transaction::Transaction,
 };
-use safecoin_transaction_status::UiTransactionEncoding;
+use solana_transaction_status::UiTransactionEncoding;
 use std::{
     collections::{BTreeMap, HashMap, VecDeque},
     fmt,
@@ -200,7 +200,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
             ),
         )
         .subcommand(
-            SubCommand::with_name("supply").about("Get information about the cluster supply of SAFE")
+            SubCommand::with_name("supply").about("Get information about the cluster supply of SOL")
             .arg(
                 Arg::with_name("print_accounts")
                     .long("print-accounts")
@@ -209,7 +209,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
             ),
         )
         .subcommand(
-            SubCommand::with_name("total-supply").about("Get total number of SAFE")
+            SubCommand::with_name("total-supply").about("Get total number of SOL")
             .setting(AppSettings::Hidden),
         )
         .subcommand(
@@ -322,7 +322,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                     Arg::with_name("lamports")
                         .long("lamports")
                         .takes_value(false)
-                        .help("Display balance in lamports instead of SAFE"),
+                        .help("Display balance in lamports instead of SOL"),
                 ),
         )
         .subcommand(
@@ -333,7 +333,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                     Arg::with_name("lamports")
                         .long("lamports")
                         .takes_value(false)
-                        .help("Display balance in lamports instead of SAFE"),
+                        .help("Display balance in lamports instead of SOL"),
                 ),
         )
         .subcommand(
@@ -395,7 +395,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                     Arg::with_name("lamports")
                         .long("lamports")
                         .takes_value(false)
-                        .help("Display rent in lamports instead of SAFE"),
+                        .help("Display rent in lamports instead of SOL"),
                 ),
         )
     }
@@ -735,7 +735,7 @@ pub fn process_catchup(
 
     loop {
         // humbly retry; the reference node (rpc_client) could be spotty,
-        // especially if pointing to api.meinnet-beta.safecoin.org at times
+        // especially if pointing to api.meinnet-beta.solana.com at times
         let rpc_slot = get_slot_while_retrying(rpc_client)?;
         let node_slot = get_slot_while_retrying(&node_client)?;
         if !follow && node_slot > std::cmp::min(previous_rpc_slot, rpc_slot) {
@@ -938,14 +938,14 @@ pub fn process_get_block(
                 format!(
                     "{}◎{:<14.9}",
                     sign,
-                    lamports_to_safe (reward.lamports.abs() as u64)
+                    lamports_to_sol(reward.lamports.abs() as u64)
                 ),
                 if reward.post_balance == 0 {
                     "          -                 -".to_string()
                 } else {
                     format!(
                         "◎{:<19.9}  {:>13.9}%",
-                        lamports_to_safe (reward.post_balance),
+                        lamports_to_sol(reward.post_balance),
                         (reward.lamports.abs() as f64
                             / (reward.post_balance as f64 - reward.lamports as f64))
                             * 100.0
@@ -958,7 +958,7 @@ pub fn process_get_block(
         println!(
             "Total Rewards: {}◎{:<12.9}",
             sign,
-            lamports_to_safe (total_rewards.abs() as u64)
+            lamports_to_sol(total_rewards.abs() as u64)
         );
     }
     for (index, transaction_with_meta) in block.transactions.iter().enumerate() {
@@ -1203,7 +1203,7 @@ pub fn process_supply(
 
 pub fn process_total_supply(rpc_client: &RpcClient, _config: &CliConfig) -> ProcessResult {
     let total_supply = rpc_client.total_supply()?;
-    Ok(format!("{} SAFE", lamports_to_safe (total_supply)))
+    Ok(format!("{} SOL", lamports_to_sol(total_supply)))
 }
 
 pub fn process_get_transaction_count(rpc_client: &RpcClient, _config: &CliConfig) -> ProcessResult {
@@ -1587,7 +1587,7 @@ pub fn process_show_stakes(
     vote_account_pubkeys: Option<&[Pubkey]>,
 ) -> ProcessResult {
     use crate::stake::build_stake_state;
-    use safecoin_stake_program::stake_state::StakeState;
+    use solana_stake_program::stake_state::StakeState;
 
     let progress_bar = new_spinner_progress_bar();
     progress_bar.set_message("Fetching stake accounts...");
@@ -1595,7 +1595,7 @@ pub fn process_show_stakes(
     let mut program_accounts_config = RpcProgramAccountsConfig {
         filters: None,
         account_config: RpcAccountInfoConfig {
-            encoding: Some(safecoin_account_decoder::UiAccountEncoding::Base64),
+            encoding: Some(solana_account_decoder::UiAccountEncoding::Base64),
             ..RpcAccountInfoConfig::default()
         },
     };
@@ -1624,7 +1624,7 @@ pub fn process_show_stakes(
         }
     }
     let all_stake_accounts = rpc_client
-        .get_program_accounts_with_config(&safecoin_stake_program::id(), program_accounts_config)?;
+        .get_program_accounts_with_config(&solana_stake_program::id(), program_accounts_config)?;
     let stake_history_account = rpc_client.get_account(&stake_history::id())?;
     let clock_account = rpc_client.get_account(&sysvar::clock::id())?;
     let clock: Clock = from_account(&clock_account).ok_or_else(|| {
@@ -1916,7 +1916,7 @@ pub fn process_calculate_rent(
 mod tests {
     use super::*;
     use crate::cli::{app, parse_command};
-    use safecoin_sdk::signature::{write_keypair, Keypair};
+    use solana_sdk::signature::{write_keypair, Keypair};
     use std::str::FromStr;
     use tempfile::NamedTempFile;
 

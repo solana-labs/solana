@@ -11,12 +11,12 @@
 
   <script src="../lib/index.iife.js"></script>
   <!--
-    <script src="https://github.com/solana-labs/safecoin-web3.js/releases/download/v0.11.10/safecoinWeb3.min.js"></script>
+    <script src="https://github.com/solana-labs/solana-web3.js/releases/download/v0.11.10/solanaWeb3.min.js"></script>
   -->
 
   <script>
     // Create a new account
-    const account = new safecoinWeb3.Account();
+    const account = new solanaWeb3.Account();
 
     // Display the account's public key
     const accountPublicKey = document.getElementById('accountPublicKey');
@@ -24,7 +24,7 @@
 
     // Fetch account balance
     let url = 'http://localhost:8899';
-    const connection = new safecoinWeb3.Connection(url);
+    const connection = new solanaWeb3.Connection(url);
 
     connection.getBalance(account.publicKey)
     .then((balance) => {

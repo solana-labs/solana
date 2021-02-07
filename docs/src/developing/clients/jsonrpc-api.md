@@ -5,7 +5,7 @@ title: JSON RPC API
 Safecoin nodes accept HTTP requests using the [JSON-RPC 2.0](https://www.jsonrpc.org/specification) specification.
 
 To interact with a Safecoin node inside a JavaScript application, use the
-[safecoin-web3.js](https://github.com/solana-labs/safecoin-web3.js) library, which
+[solana-web3.js](https://github.com/solana-labs/solana-web3.js) library, which
 gives a convenient interface for the RPC methods.
 
 ## RPC HTTP Endpoint
@@ -189,7 +189,7 @@ health-check mechanism for use by load balancers or other network
 infrastructure. This request will always return a HTTP 200 OK response with a body of
 "ok" or "behind" based on the following conditions:
 
-1. If one or more `--trusted-validator` arguments are provided to `safecoin-validator`, "ok" is returned
+1. If one or more `--trusted-validator` arguments are provided to `solana-validator`, "ok" is returned
    when the node has within `HEALTH_CHECK_SLOT_DISTANCE` slots of the highest trusted validator,
    otherwise "behind" is returned.
 2. "ok" is always returned if no trusted validators are provided.
@@ -481,7 +481,7 @@ The result field will be an object with the following fields:
   - `transactions: <array>` - an array of JSON objects containing:
     - `transaction: <object|[string,encoding]>` - [Transaction](#transaction-structure) object, either in JSON format or encoded binary data, depending on encoding parameter
     - `meta: <object>` - transaction status metadata object, containing `null` or:
-      - `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/safecoin/blob/master/sdk/src/transaction.rs#L24)
+      - `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
       - `fee: <u64>` - fee this transaction was charged, as u64 integer
       - `preBalances: <array>` - array of u64 account balances from before the transaction was processed
       - `postBalances: <array>` - array of u64 account balances after the transaction was processed
@@ -811,7 +811,7 @@ from newest to oldest transaction:
 * `<object>`
   * `signature: <string>` - transaction signature as base-58 encoded string
   * `slot: <u64>` - The slot that contains the block with the transaction
-  * `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/safecoin/blob/master/sdk/src/transaction.rs#L24)
+  * `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
   * `memo: <string |null>` - Memo associated with the transaction, null if no memo is present
   * `blockTime: <i64 | null>` - estimated production time, as Unix timestamp (seconds since the Unix epoch) of when transaction was processed. null if not available.
 
@@ -869,7 +869,7 @@ Returns transaction details for a confirmed transaction
   - `transaction: <object|[string,encoding]>` - [Transaction](#transaction-structure) object, either in JSON format or encoded binary data, depending on encoding parameter
   - `blockTime: <i64 | null>` - estimated production time, as Unix timestamp (seconds since the Unix epoch) of when the transaction was processed. null if not available
   - `meta: <object | null>` - transaction status metadata object:
-    - `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/safecoin/blob/master/sdk/src/transaction.rs#L24)
+    - `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
     - `fee: <u64>` - fee this transaction was charged, as u64 integer
     - `preBalances: <array>` - array of u64 account balances from before the transaction was processed
     - `postBalances: <array>` - array of u64 account balances after the transaction was processed
@@ -1308,7 +1308,7 @@ Result:
 Returns the current health of the node.
 
 If one or more `--trusted-validator` arguments are provided to
-`safecoin-validator`, "ok" is returned when the node has within
+`solana-validator`, "ok" is returned when the node has within
 `HEALTH_CHECK_SLOT_DISTANCE` slots of the highest trusted validator, otherwise
 an error is returned.  "ok" is always returned if no trusted validators are
 provided.
@@ -2066,7 +2066,7 @@ An array of:
 - `<object>`
   - `slot: <u64>` - The slot the transaction was processed
   - `confirmations: <usize | null>` - Number of blocks since signature confirmation, null if rooted, as well as finalized by a supermajority of the cluster
-  - `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/safecoin/blob/master/sdk/src/transaction.rs#L24)
+  - `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
   - `confirmationStatus: <string | null>` - The transaction's cluster confirmation status; either `processed`, `confirmed`, or `finalized`. See [Commitment](jsonrpc-api.md#configuring-state-commitment) for more on optimistic confirmation.
   - DEPRECATED: `status: <object>` - Transaction status
     - `"Ok": <null>` - Transaction was successful
@@ -2672,7 +2672,7 @@ Result:
 
 ### getVersion
 
-Returns the current safecoin versions running on the node
+Returns the current solana versions running on the node
 
 #### Parameters:
 
@@ -2682,7 +2682,7 @@ None
 
 The result field will be a JSON object with the following fields:
 
-- `safecoin-core`, software version of safecoin-core
+- `solana-core`, software version of solana-core
 - `feature-set`, unique identifier of the current software's feature set
 
 #### Example:
@@ -2696,7 +2696,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 Result:
 ```json
-{"jsonrpc":"2.0","result":{"safecoin-core": "1.6.0"},"id":1}
+{"jsonrpc":"2.0","result":{"solana-core": "1.6.0"},"id":1}
 ```
 
 ### getVoteAccounts
@@ -2898,7 +2898,7 @@ Simulate sending a transaction
 An RpcResponse containing a TransactionStatus object
 The result will be an RpcResponse JSON object with `value` set to a JSON object with the following fields:
 
-- `err: <object | string | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/safecoin/blob/master/sdk/src/transaction.rs#L24)
+- `err: <object | string | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
 - `logs: <array | null>` - Array of log messages the transaction instructions output during execution, null if simulation failed before the transaction was able to execute (for example due to an invalid blockhash or signature verification failure)
 
 #### Example:
@@ -2951,7 +2951,7 @@ Sets the log filter on the validator
 
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
-  {"jsonrpc":"2.0","id":1, "method":"setLogFilter", "params":["safecoin_core=debug"]}
+  {"jsonrpc":"2.0","id":1, "method":"setLogFilter", "params":["solana_core=debug"]}
 '
 ```
 

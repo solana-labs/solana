@@ -55,7 +55,7 @@ matching orders.  All the transactions can execute concurrently.
   -  An expression of the relative prices of two tokens. Calculated with the Base
      Asset as the numerator and the Quote Asset as the denominator. Ratios are 
      represented as fixed point numbers.  The fixed point scaler is defined in
-     [exchange_state.rs](https://github.com/solana-labs/safecoin/blob/c2fdd1362a029dcf89c8907c562d2079d977df11/programs/exchange_api/src/exchange_state.rs#L7)
+     [exchange_state.rs](https://github.com/solana-labs/solana/blob/c2fdd1362a029dcf89c8907c562d2079d977df11/programs/exchange_api/src/exchange_state.rs#L7)
 - Order request
   - A Safecoin transaction sent by a trader to the exchange to submit an order. 
     Order requests are made up of the token pair, the order side (bid or ask),
@@ -84,7 +84,7 @@ matching orders.  All the transactions can execute concurrently.
     orders in which case the orders are adjusted appropriately. Upon execution,
     tokens are distributed to the traders' accounts and any overlap or 
     "negative spread" between orders is deposited into the Matcher's profit
-    account.  All successful trades are recorded in the data of a new safecoin 
+    account.  All successful trades are recorded in the data of a new solana 
     account for posterity.
 - Investor
   - Individual investors who hold a number of tokens and wish to trade them on
@@ -469,11 +469,11 @@ in client_demo/src/demo.rs::test_exchange_local_cluster.
 The following command runs the bench:
 
 ```bash
-$ RUST_LOG=safecoin_bench_exchange=info cargo test --release -- --nocapture test_exchange_local_cluster
+$ RUST_LOG=solana_bench_exchange=info cargo test --release -- --nocapture test_exchange_local_cluster
 ```
 
 To also see the cluster messages:
 
 ```bash
-$ RUST_LOG=safecoin_bench_exchange=info,safecoin=info cargo test --release -- --nocapture test_exchange_local_cluster
+$ RUST_LOG=solana_bench_exchange=info,solana=info cargo test --release -- --nocapture test_exchange_local_cluster
 ```

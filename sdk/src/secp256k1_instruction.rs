@@ -77,7 +77,7 @@ pub fn new_secp256k1_instruction(
     bincode::serialize_into(writer, &offsets).unwrap();
 
     Instruction {
-        program_id: safecoin_sdk::secp256k1_program::id(),
+        program_id: solana_sdk::secp256k1_program::id(),
         accounts: vec![],
         data: instruction_data,
     }
@@ -197,7 +197,7 @@ pub mod test {
 
     #[test]
     fn test_invalid_offsets() {
-        safecoin_logger::setup();
+        solana_logger::setup();
 
         let mut instruction_data = vec![0u8; 1 + SIGNATURE_OFFSETS_SERIALIZED_SIZE];
         let offsets = SecpSignatureOffsets::default();

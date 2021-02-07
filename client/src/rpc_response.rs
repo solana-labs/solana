@@ -1,12 +1,12 @@
 use crate::client_error;
-use safecoin_account_decoder::{parse_token::UiTokenAmount, UiAccount};
-use safecoin_sdk::{
+use solana_account_decoder::{parse_token::UiTokenAmount, UiAccount};
+use solana_sdk::{
     clock::{Epoch, Slot, UnixTimestamp},
     fee_calculator::{FeeCalculator, FeeRateGovernor},
     inflation::Inflation,
     transaction::{Result, TransactionError},
 };
-use safecoin_transaction_status::ConfirmedTransactionStatusWithSignature;
+use solana_transaction_status::ConfirmedTransactionStatusWithSignature;
 use std::{collections::HashMap, fmt, net::SocketAddr};
 
 pub type RpcResult<T> = client_error::Result<Response<T>>;
@@ -151,25 +151,25 @@ pub type RpcLeaderSchedule = HashMap<String, Vec<usize>>;
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct RpcVersionInfo {
-    /// The current version of safecoin-core
-    pub safecoin_core: String,
+    /// The current version of solana-core
+    pub solana_core: String,
     /// first 4 bytes of the FeatureSet identifier
     pub feature_set: Option<u32>,
 }
 
 impl fmt::Debug for RpcVersionInfo {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.safecoin_core)
+        write!(f, "{}", self.solana_core)
     }
 }
 
 impl fmt::Display for RpcVersionInfo {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if let Some(version) = self.safecoin_core.split_whitespace().next() {
+        if let Some(version) = self.solana_core.split_whitespace().next() {
             // Display just the semver if possible
             write!(f, "{}", version)
         } else {
-            write!(f, "{}", self.safecoin_core)
+            write!(f, "{}", self.solana_core)
         }
     }
 }

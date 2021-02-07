@@ -9,7 +9,7 @@ use crate::{
     fee_calculator::FeeRateGovernor,
     hash::{hash, Hash},
     inflation::Inflation,
-    native_token::lamports_to_safe ,
+    native_token::lamports_to_sol,
     poh_config::PohConfig,
     pubkey::Pubkey,
     rent::Rent,
@@ -246,7 +246,7 @@ impl fmt::Display for GenesisConfig {
              {:?}\n\
              {:?}\n\
              {:?}\n\
-             Capitalization: {} SAFE in {} accounts\n\
+             Capitalization: {} SOL in {} accounts\n\
              Native instruction processors: {:#?}\n\
              Rewards pool: {:#?}\n\
              ",
@@ -265,7 +265,7 @@ impl fmt::Display for GenesisConfig {
             self.inflation,
             self.rent,
             self.fee_rate_governor,
-            lamports_to_safe (
+            lamports_to_sol(
                 self.accounts
                     .iter()
                     .map(|(pubkey, account)| {
@@ -318,10 +318,10 @@ mod tests {
             Account::new(10_000, 0, &Pubkey::default()),
         );
         config.add_account(
-            safecoin_sdk::pubkey::new_rand(),
+            solana_sdk::pubkey::new_rand(),
             Account::new(1, 0, &Pubkey::default()),
         );
-        config.add_native_instruction_processor("hi".to_string(), safecoin_sdk::pubkey::new_rand());
+        config.add_native_instruction_processor("hi".to_string(), solana_sdk::pubkey::new_rand());
 
         assert_eq!(config.accounts.len(), 2);
         assert!(config

@@ -44,11 +44,11 @@ schedule.
 
 - Hoist FetchStage and BroadcastStage out of TPU
 - BankForks renamed to Banktree
-- TPU moves to new socket-free crate called safecoin-tpu.
+- TPU moves to new socket-free crate called solana-tpu.
 - TPU's BankingStage absorbs ReplayStage
 - TVU goes away
 - New RepairStage absorbs Shred Fetch Stage and repair requests
 - JSON RPC Service is optional - used for debugging. It should instead be part
-  of a separate `safecoin-blockstreamer` executable.
+  of a separate `solana-blockstreamer` executable.
 - New MulticastStage absorbs retransmit part of RetransmitStage
 - MulticastStage downstream of Blockstore

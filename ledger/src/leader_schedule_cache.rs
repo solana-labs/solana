@@ -4,8 +4,8 @@ use crate::{
     leader_schedule_utils,
 };
 use log::*;
-use safecoin_runtime::bank::Bank;
-use safecoin_sdk::{
+use solana_runtime::bank::Bank;
+use solana_sdk::{
     clock::{Epoch, Slot},
     epoch_schedule::EpochSchedule,
     pubkey::Pubkey,
@@ -266,13 +266,13 @@ mod tests {
         get_tmp_ledger_path,
         staking_utils::tests::setup_vote_and_stake_accounts,
     };
-    use safecoin_runtime::bank::Bank;
-    use safecoin_sdk::clock::NUM_CONSECUTIVE_LEADER_SLOTS;
-    use safecoin_sdk::epoch_schedule::{
+    use solana_runtime::bank::Bank;
+    use solana_sdk::clock::NUM_CONSECUTIVE_LEADER_SLOTS;
+    use solana_sdk::epoch_schedule::{
         EpochSchedule, DEFAULT_LEADER_SCHEDULE_SLOT_OFFSET, DEFAULT_SLOTS_PER_EPOCH,
         MINIMUM_SLOTS_PER_EPOCH,
     };
-    use safecoin_sdk::signature::{Keypair, Signer};
+    use solana_sdk::signature::{Keypair, Signer};
     use std::{sync::mpsc::channel, sync::Arc, thread::Builder};
 
     #[test]
@@ -378,7 +378,7 @@ mod tests {
 
     #[test]
     fn test_next_leader_slot() {
-        let pubkey = safecoin_sdk::pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let mut genesis_config =
             create_genesis_config_with_leader(42, &pubkey, bootstrap_validator_stake_lamports())
                 .genesis_config;
@@ -416,7 +416,7 @@ mod tests {
 
         assert_eq!(
             cache.next_leader_slot(
-                &safecoin_sdk::pubkey::new_rand(), // not in leader_schedule
+                &solana_sdk::pubkey::new_rand(), // not in leader_schedule
                 0,
                 &bank,
                 None,
@@ -428,7 +428,7 @@ mod tests {
 
     #[test]
     fn test_next_leader_slot_blockstore() {
-        let pubkey = safecoin_sdk::pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let mut genesis_config =
             create_genesis_config_with_leader(42, &pubkey, bootstrap_validator_stake_lamports())
                 .genesis_config;
@@ -495,7 +495,7 @@ mod tests {
 
             assert_eq!(
                 cache.next_leader_slot(
-                    &safecoin_sdk::pubkey::new_rand(), // not in leader_schedule
+                    &solana_sdk::pubkey::new_rand(), // not in leader_schedule
                     0,
                     &bank,
                     Some(&blockstore),
@@ -599,7 +599,7 @@ mod tests {
         assert_eq!(bank.get_epoch_and_slot_index(96).0, 2);
         assert!(cache.slot_leader_at(96, Some(&bank)).is_none());
 
-        let bank2 = Bank::new_from_parent(&bank, &safecoin_sdk::pubkey::new_rand(), 95);
+        let bank2 = Bank::new_from_parent(&bank, &solana_sdk::pubkey::new_rand(), 95);
         assert!(bank2.epoch_vote_accounts(2).is_some());
 
         // Set root for a slot in epoch 1, so that epoch 2 is now confirmed

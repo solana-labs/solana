@@ -1,17 +1,17 @@
-use safecoin_cli::{
+use solana_cli::{
     cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
     spend_utils::SpendAmount,
     test_utils::{check_ready, check_recent_balance},
 };
-use safecoin_cli_output::{parse_sign_only_reply_string, OutputFormat};
-use safecoin_client::{
+use solana_cli_output::{parse_sign_only_reply_string, OutputFormat};
+use solana_client::{
     blockhash_query::{self, BlockhashQuery},
     nonce_utils,
     rpc_client::RpcClient,
 };
-use safecoin_core::test_validator::TestValidator;
-use safecoin_faucet::faucet::run_local_faucet;
-use safecoin_sdk::{
+use solana_core::test_validator::TestValidator;
+use solana_faucet::faucet::run_local_faucet;
+use solana_sdk::{
     commitment_config::CommitmentConfig,
     hash::Hash,
     pubkey::Pubkey,
@@ -153,7 +153,7 @@ fn full_battery_tests(
     assert_ne!(first_nonce, third_nonce);
 
     // Withdraw from nonce account
-    let payee_pubkey = safecoin_sdk::pubkey::new_rand();
+    let payee_pubkey = solana_sdk::pubkey::new_rand();
     config_payer.signers = authorized_signers;
     config_payer.command = CliCommand::WithdrawFromNonceAccount {
         nonce_account,
@@ -212,7 +212,7 @@ fn full_battery_tests(
 
 #[test]
 fn test_create_account_with_seed() {
-    safecoin_logger::setup();
+    solana_logger::setup();
     let mint_keypair = Keypair::new();
     let test_validator = TestValidator::with_custom_fees(mint_keypair.pubkey(), 1);
 

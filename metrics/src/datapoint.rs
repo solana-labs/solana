@@ -11,7 +11,7 @@ impl DataPoint {
     pub fn new(name: &'static str) -> Self {
         DataPoint {
             name,
-            timestamp: safecoin_sdk::timing::timestamp(),
+            timestamp: solana_sdk::timing::timestamp(),
             fields: vec![],
         }
     }

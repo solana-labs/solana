@@ -1,6 +1,6 @@
 use serde_derive::{Deserialize, Serialize};
-use safecoin_config_program::ConfigState;
-use safecoin_sdk::{
+use solana_config_program::ConfigState;
+use solana_sdk::{
     hash::Hash,
     pubkey::Pubkey,
     signature::{Signable, Signature},

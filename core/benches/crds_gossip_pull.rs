@@ -4,11 +4,11 @@ extern crate test;
 
 use rand::{thread_rng, Rng};
 use rayon::ThreadPoolBuilder;
-use safecoin_core::cluster_info::MAX_BLOOM_SIZE;
-use safecoin_core::crds::Crds;
-use safecoin_core::crds_gossip_pull::{CrdsFilter, CrdsGossipPull};
-use safecoin_core::crds_value::CrdsValue;
-use safecoin_sdk::hash;
+use solana_core::cluster_info::MAX_BLOOM_SIZE;
+use solana_core::crds::Crds;
+use solana_core::crds_gossip_pull::{CrdsFilter, CrdsGossipPull};
+use solana_core::crds_value::CrdsValue;
+use solana_sdk::hash;
 use test::Bencher;
 
 #[bench]
@@ -34,7 +34,7 @@ fn bench_build_crds_filters(bencher: &mut Bencher) {
     for _ in 0..50_000 {
         crds_gossip_pull
             .purged_values
-            .push_back((safecoin_sdk::hash::new_rand(&mut rng), rng.gen()));
+            .push_back((solana_sdk::hash::new_rand(&mut rng), rng.gen()));
     }
     let mut num_inserts = 0;
     for _ in 0..90_000 {

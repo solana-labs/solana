@@ -1,9 +1,13 @@
 <p align="center">
-  <a href="https://safecoin.org">
-    <img alt="Safecoin" src="https://raw.githubusercontent.com/Fair-Exchange/safecoinwiki/master/Logos/SafeCoin/SafeCoin-Logo-with-text.png" />
+  <a href="https://solana.com">
+    <img alt="Safecoin" src="https://i.imgur.com/OMnvVEz.png" width="250" />
   </a>
 </p>
 
+[![Safecoin crate](https://img.shields.io/crates/v/solana-core.svg)](https://crates.io/crates/solana-core)
+[![Safecoin documentation](https://docs.rs/solana-core/badge.svg)](https://docs.rs/solana-core)
+[![Build status](https://badge.buildkite.com/8cc350de251d61483db98bdfc895b9ea0ac8ffa4a32ee850ed.svg?branch=master)](https://buildkite.com/solana-labs/solana/builds?branch=master)
+[![codecov](https://codecov.io/gh/solana-labs/solana/branch/master/graph/badge.svg)](https://codecov.io/gh/solana-labs/solana)
 
 # Building
 
@@ -31,8 +35,8 @@ $ sudo apt-get install libssl-dev libudev-dev pkg-config zlib1g-dev llvm clang m
 ## **2. Download the source code.**
 
 ```bash
-$ git clone https://github.com/Fair-Exchange/SAFE.git
-$ cd SAFE
+$ git clone https://github.com/solana-labs/solana.git
+$ cd solana
 ```
 
 ## **3. Build.**
@@ -55,11 +59,11 @@ $ cargo test
 ```
 
 ### Starting a local testnet
-Start your own testnet locally, instructions are in the [online docs](https://docs.safecoin.org/cluster/bench-tps).
+Start your own testnet locally, instructions are in the [online docs](https://docs.solana.com/cluster/bench-tps).
 
 ### Accessing the remote development cluster
 * `devnet` - stable public cluster for development accessible via
-devnet.safecoin.org. Runs 24/7. Learn more about the [public clusters](https://docs.safecoin.org/clusters)
+devnet.solana.com. Runs 24/7. Learn more about the [public clusters](https://docs.solana.com/clusters)
 
 # Benchmarking
 
@@ -105,7 +109,7 @@ send us that patch!
 
 All claims, content, designs, algorithms, estimates, roadmaps,
 specifications, and performance measurements described in this project
-are done with the Solana Foundation's ("SF") best efforts. It is up to
+are done with the Safecoin Foundation's ("SF") best efforts. It is up to
 the reader to check and validate their accuracy and truthfulness.
 Furthermore nothing in this project constitutes a solicitation for
 investment.

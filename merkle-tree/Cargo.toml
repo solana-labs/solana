@@ -1,15 +1,15 @@
 [package]
-name = "safecoin-merkle-tree"
+name = "solana-merkle-tree"
 version = "1.6.0"
 description = "Safecoin Merkle Tree"
 authors = ["Safecoin Maintainers <maintainers@solana.foundation>"]
-repository = "https://github.com/solana-labs/safecoin"
+repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
-homepage = "https://safecoin.org/"
+homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
-safecoin-sdk = { path = "../sdk", version = "1.6.0" }
+solana-sdk = { path = "../sdk", version = "1.6.0" }
 fast-math = "0.1"
 
 [dev-dependencies]
@@ -17,7 +17,7 @@ hex = "0.4.2"
 
 [lib]
 crate-type = ["lib"]
-name = "safecoin_merkle_tree"
+name = "solana_merkle_tree"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

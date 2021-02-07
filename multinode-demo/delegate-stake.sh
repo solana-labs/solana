@@ -8,7 +8,7 @@ here=$(dirname "$0")
 # shellcheck source=multinode-demo/common.sh
 source "$here"/common.sh
 
-stake_safe =1   # default number of SAFE to assign as stake (1 SAFE)
+stake_sol=1   # default number of SOL to assign as stake (1 SOL)
 url=http://127.0.0.1:8899   # default RPC url
 
 usage() {
@@ -18,7 +18,7 @@ usage() {
   fi
   cat <<EOF
 
-usage: $0 [OPTIONS] <SAFE to stake ($stake_safe )>
+usage: $0 [OPTIONS] <SOL to stake ($stake_sol)>
 
 Add stake to a validator
 
@@ -85,10 +85,10 @@ if [[ ${#positional_args[@]} -gt 1 ]]; then
   usage "$@"
 fi
 if [[ -n ${positional_args[0]} ]]; then
-  stake_safe =${positional_args[0]}
+  stake_sol=${positional_args[0]}
 fi
 
-VALIDATOR_KEYS_DIR=$SAFECOIN_CONFIG_DIR/validator$label
+VALIDATOR_KEYS_DIR=$SOLANA_CONFIG_DIR/validator$label
 vote_account="${vote_account:-$VALIDATOR_KEYS_DIR/vote-account.json}"
 stake_account="${stake_account:-$VALIDATOR_KEYS_DIR/stake-account.json}"
 
@@ -102,7 +102,7 @@ if ((airdrops_enabled)); then
     echo "--keypair argument must be provided"
     exit 1
   fi
-  $safecoin_cli "${common_args[@]}" --keypair "$SAFECOIN_CONFIG_DIR/faucet.json" transfer "$keypair" "$stake_safe "
+  $solana_cli "${common_args[@]}" --keypair "$SOLANA_CONFIG_DIR/faucet.json" transfer "$keypair" "$stake_sol"
 fi
 
 if [[ -n $keypair ]]; then
@@ -110,16 +110,16 @@ if [[ -n $keypair ]]; then
 fi
 
 if ! [[ -f "$stake_account" ]]; then
-  $safecoin_keygen new --no-passphrase -so "$stake_account"
+  $solana_keygen new --no-passphrase -so "$stake_account"
 else
   echo "$stake_account already exists! Using it"
 fi
 
 set -x
-$safecoin_cli "${common_args[@]}" \
+$solana_cli "${common_args[@]}" \
   vote-account "$vote_account"
-$safecoin_cli "${common_args[@]}" \
-  create-stake-account "$stake_account" "$stake_safe "
-$safecoin_cli "${common_args[@]}" \
+$solana_cli "${common_args[@]}" \
+  create-stake-account "$stake_account" "$stake_sol"
+$solana_cli "${common_args[@]}" \
   delegate-stake $maybe_force "$stake_account" "$vote_account"
-$safecoin_cli "${common_args[@]}" stakes "$stake_account"
+$solana_cli "${common_args[@]}" stakes "$stake_account"

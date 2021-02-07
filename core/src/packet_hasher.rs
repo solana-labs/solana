@@ -3,7 +3,7 @@
 
 use ahash::AHasher;
 use rand::{thread_rng, Rng};
-use safecoin_perf::packet::Packet;
+use solana_perf::packet::Packet;
 use std::hash::Hasher;
 
 #[derive(Clone)]

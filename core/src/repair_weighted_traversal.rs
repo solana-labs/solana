@@ -2,9 +2,9 @@ use crate::{
     heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice, repair_service::RepairService,
     serve_repair::RepairType, tree_diff::TreeDiff,
 };
-use safecoin_ledger::blockstore::Blockstore;
-use safecoin_runtime::contains::Contains;
-use safecoin_sdk::clock::Slot;
+use solana_ledger::blockstore::Blockstore;
+use solana_runtime::contains::Contains;
+use solana_sdk::clock::Slot;
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, PartialEq)]
@@ -130,9 +130,9 @@ pub fn get_best_repair_shreds<'a>(
 #[cfg(test)]
 pub mod test {
     use super::*;
-    use safecoin_ledger::{get_tmp_ledger_path, shred::Shred};
-    use safecoin_runtime::bank_utils;
-    use safecoin_sdk::hash::Hash;
+    use solana_ledger::{get_tmp_ledger_path, shred::Shred};
+    use solana_runtime::bank_utils;
+    use solana_sdk::hash::Hash;
     use trees::tr;
 
     #[test]

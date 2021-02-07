@@ -18,7 +18,7 @@ use {
     log::{info, warn},
     rand::{thread_rng, Rng},
     serde::{de::DeserializeOwned, Deserialize, Serialize},
-    safecoin_sdk::{
+    solana_sdk::{
         clock::{Epoch, Slot, UnixTimestamp},
         epoch_schedule::EpochSchedule,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -40,7 +40,7 @@ use {
 };
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
-use safecoin_frozen_abi::abi_example::IgnoreAsHelper;
+use solana_frozen_abi::abi_example::IgnoreAsHelper;
 
 mod common;
 mod future;

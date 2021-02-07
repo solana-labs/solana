@@ -23,7 +23,7 @@ const features = [
   },
   {
     title: <>🏛 Create an SPL Token</>,
-    imageUrl: "https://spl.safecoin.org/token",
+    imageUrl: "https://spl.solana.com/token",
     description: <>Launch your own SPL Token, Safecoin's equivalent of ERC-20.</>,
   },
   {
@@ -112,7 +112,7 @@ function Home() {
                 and more!
                 <br />
                 <a
-                  href="https://safecoin.org/defi"
+                  href="https://solana.com/defi"
                   rel="noopener noreferrer"
                   target="_blank"
                 >

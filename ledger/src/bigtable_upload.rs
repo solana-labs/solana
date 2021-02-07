@@ -1,7 +1,7 @@
 use crate::blockstore::Blockstore;
 use log::*;
-use safecoin_measure::measure::Measure;
-use safecoin_sdk::clock::Slot;
+use solana_measure::measure::Measure;
+use solana_sdk::clock::Slot;
 use std::{
     collections::HashSet,
     result::Result,
@@ -20,7 +20,7 @@ const BLOCK_READ_AHEAD_DEPTH: usize = NUM_BLOCKS_TO_UPLOAD_IN_PARALLEL * 2;
 
 pub async fn upload_confirmed_blocks(
     blockstore: Arc<Blockstore>,
-    bigtable: safecoin_storage_bigtable::LedgerStorage,
+    bigtable: solana_storage_bigtable::LedgerStorage,
     starting_slot: Slot,
     ending_slot: Option<Slot>,
     allow_missing_metadata: bool,

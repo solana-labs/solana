@@ -3,8 +3,8 @@
 use crate::exchange_state::*;
 use crate::id;
 use serde_derive::{Deserialize, Serialize};
-use safecoin_sdk::instruction::{AccountMeta, Instruction};
-use safecoin_sdk::pubkey::Pubkey;
+use solana_sdk::instruction::{AccountMeta, Instruction};
+use solana_sdk::pubkey::Pubkey;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct OrderRequestInfo {

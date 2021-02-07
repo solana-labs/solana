@@ -27,7 +27,7 @@ infrastructure, which underlies both the Clang C/C++ compiler as well as the
 Rust compiler. Greg claimed that the language's safety guarantees would improve
 software productivity and that its lack of a garbage collector would allow
 programs to perform as well as those written in C. Anatoly gave it a shot and
-just two weeks later, had migrated his entire codebase to Rust. Safed. With
+just two weeks later, had migrated his entire codebase to Rust. Sold. With
 plans to weave all the world's transactions together on a single, scalable
 blockchain, Anatoly called the project Loom.
 

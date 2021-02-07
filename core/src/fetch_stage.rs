@@ -3,12 +3,12 @@
 use crate::banking_stage::FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET;
 use crate::poh_recorder::PohRecorder;
 use crate::result::{Error, Result};
-use safecoin_measure::thread_mem_usage;
-use safecoin_metrics::{inc_new_counter_debug, inc_new_counter_info};
-use safecoin_perf::packet::PacketsRecycler;
-use safecoin_perf::recycler::Recycler;
-use safecoin_sdk::clock::DEFAULT_TICKS_PER_SLOT;
-use safecoin_streamer::streamer::{self, PacketReceiver, PacketSender};
+use solana_measure::thread_mem_usage;
+use solana_metrics::{inc_new_counter_debug, inc_new_counter_info};
+use solana_perf::packet::PacketsRecycler;
+use solana_perf::recycler::Recycler;
+use solana_sdk::clock::DEFAULT_TICKS_PER_SLOT;
+use solana_streamer::streamer::{self, PacketReceiver, PacketSender};
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::{channel, RecvTimeoutError};
@@ -120,9 +120,9 @@ impl FetchStage {
         let poh_recorder = poh_recorder.clone();
 
         let fwd_thread_hdl = Builder::new()
-            .name("safecoin-fetch-stage-fwd-rcvr".to_string())
+            .name("solana-fetch-stage-fwd-rcvr".to_string())
             .spawn(move || loop {
-                thread_mem_usage::datapoint("safecoin-fetch-stage-fwd-rcvr");
+                thread_mem_usage::datapoint("solana-fetch-stage-fwd-rcvr");
                 if let Err(e) =
                     Self::handle_forwarded_packets(&forward_receiver, &sender, &poh_recorder)
                 {

@@ -38,5 +38,5 @@ else
   CI=true bash <(while ! curl -sS --retry 5 --retry-delay 2 --retry-connrefused https://codecov.io/bash; do sleep 10; done) -Z -X gcov -f target/cov/lcov.info
 
   annotate --style success --context codecov.io \
-    "CodeCov report: https://codecov.io/github/solana-labs/safecoin.orgmit/${CI_COMMIT:0:9}"
+    "CodeCov report: https://codecov.io/github/solana-labs/solana/commit/${CI_COMMIT:0:9}"
 fi

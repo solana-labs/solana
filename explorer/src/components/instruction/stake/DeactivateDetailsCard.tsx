@@ -3,7 +3,7 @@ import {
   SignatureResult,
   StakeProgram,
   ParsedInstruction,
-} from "@safecoin/web3.js";
+} from "@solana/web3.js";
 import { InstructionCard } from "../InstructionCard";
 import { Address } from "components/common/Address";
 import { DeactivateInfo } from "./types";

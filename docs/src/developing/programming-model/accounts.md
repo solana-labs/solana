@@ -110,7 +110,7 @@ One example is when programs read a sysvar.  Unless the program checks the
 address or owner, it's impossible to be sure whether it's a real and valid
 sysvar merely by successful deserialization. Accordingly, the Safecoin SDK [checks
 the sysvar's validity during
-deserialization](https://github.com/solana-labs/safecoin/blob/a95675a7ce1651f7b59443eb146b356bc4b3f374/sdk/program/src/sysvar/mod.rs#L65).
+deserialization](https://github.com/solana-labs/solana/blob/a95675a7ce1651f7b59443eb146b356bc4b3f374/sdk/program/src/sysvar/mod.rs#L65).
 
 If the program always modifies the account in question, the address/owner check
 isn't required because modifying an unowned (could be the malicious account with
@@ -151,11 +151,11 @@ on the testnet and mainnet-beta clusters. An [epoch](terminology.md#epoch) is
 targeted to be 2 days (For devnet, the rent fee is 0.3608183131797095 lamports
 per byte-epoch with its 54m36s-long epoch).
 
-This value is calculated to target 0.01 SAFE per mebibyte-day (exactly matching
-to 3.56 SAFE per mebibyte-year):
+This value is calculated to target 0.01 SOL per mebibyte-day (exactly matching
+to 3.56 SOL per mebibyte-year):
 
 ```text
-Rent fee: 19.055441478439427 = 10_000_000 (0.01 SAFE) * 365(approx. day in a year) / (1024 * 1024)(1 MiB) / (365.25/2)(epochs in 1 year)
+Rent fee: 19.055441478439427 = 10_000_000 (0.01 SOL) * 365(approx. day in a year) / (1024 * 1024)(1 MiB) / (365.25/2)(epochs in 1 year)
 ```
 
 And rent calculation is done with the `f64` precision and the final result is
@@ -201,7 +201,7 @@ minimum balance for a particular account size. The following calculation is
 illustrative only.
 
 For example, a program executable with the size of 15,000 bytes requires a
-balance of 105,290,880 lamports (=~ 0.105 SAFE) to be rent-exempt:
+balance of 105,290,880 lamports (=~ 0.105 SOL) to be rent-exempt:
 
 ```text
 105,290,880 = 19.055441478439427 (fee rate) * (128 + 15_000)(account size including metadata) * ((365.25/2) * 2)(epochs in 2 years)

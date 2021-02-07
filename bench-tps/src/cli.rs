@@ -1,13 +1,13 @@
 use clap::{crate_description, crate_name, App, Arg, ArgMatches};
-use safecoin_faucet::faucet::FAUCET_PORT;
-use safecoin_sdk::fee_calculator::FeeRateGovernor;
-use safecoin_sdk::{
+use solana_faucet::faucet::FAUCET_PORT;
+use solana_sdk::fee_calculator::FeeRateGovernor;
+use solana_sdk::{
     pubkey::Pubkey,
     signature::{read_keypair_file, Keypair},
 };
 use std::{net::SocketAddr, process::exit, time::Duration};
 
-const NUM_LAMPORTS_PER_ACCOUNT_DEFAULT: u64 = safecoin_sdk::native_token::LAMPORTS_PER_SAFE;
+const NUM_LAMPORTS_PER_ACCOUNT_DEFAULT: u64 = solana_sdk::native_token::LAMPORTS_PER_SOL;
 
 /// Holds the configuration for a single run of the benchmark
 pub struct Config {
@@ -200,14 +200,14 @@ pub fn extract_args(matches: &ArgMatches) -> Config {
     let mut args = Config::default();
 
     if let Some(addr) = matches.value_of("entrypoint") {
-        args.entrypoint_addr = safecoin_net_utils::parse_host_port(addr).unwrap_or_else(|e| {
+        args.entrypoint_addr = solana_net_utils::parse_host_port(addr).unwrap_or_else(|e| {
             eprintln!("failed to parse entrypoint address: {}", e);
             exit(1)
         });
     }
 
     if let Some(addr) = matches.value_of("faucet") {
-        args.faucet_addr = safecoin_net_utils::parse_host_port(addr).unwrap_or_else(|e| {
+        args.faucet_addr = solana_net_utils::parse_host_port(addr).unwrap_or_else(|e| {
             eprintln!("failed to parse faucet address: {}", e);
             exit(1)
         });

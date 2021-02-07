@@ -5,7 +5,7 @@ use crate::{
         RemoteWalletType,
     },
 };
-use safecoin_sdk::{
+use solana_sdk::{
     pubkey::Pubkey,
     signature::{Signature, Signer, SignerError},
 };

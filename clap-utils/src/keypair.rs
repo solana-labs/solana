@@ -6,11 +6,11 @@ use crate::{
 use bip39::{Language, Mnemonic, Seed};
 use clap::ArgMatches;
 use rpassword::prompt_password_stderr;
-use safecoin_remote_wallet::{
+use solana_remote_wallet::{
     remote_keypair::generate_remote_keypair,
     remote_wallet::{maybe_wallet_manager, RemoteWalletError, RemoteWalletManager},
 };
-use safecoin_sdk::{
+use solana_sdk::{
     hash::Hash,
     pubkey::Pubkey,
     signature::{
@@ -163,7 +163,7 @@ pub fn signer_from_path(
         KeypairUrl::Filepath(path) => match read_keypair_file(&path) {
             Err(e) => Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                format!("could not read keypair file \"{}\". Run \"safecoin-keygen new\" to create a keypair file: {}", path, e),
+                format!("could not read keypair file \"{}\". Run \"solana-keygen new\" to create a keypair file: {}", path, e),
             )
             .into()),
             Ok(file) => Ok(Box::new(file)),
@@ -234,7 +234,7 @@ pub fn resolve_signer_from_path(
         KeypairUrl::Filepath(path) => match read_keypair_file(&path) {
             Err(e) => Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                format!("could not read keypair file \"{}\". Run \"safecoin-keygen new\" to create a keypair file: {}", path, e),
+                format!("could not read keypair file \"{}\". Run \"solana-keygen new\" to create a keypair file: {}", path, e),
             )
             .into()),
             Ok(_) => Ok(Some(path.to_string())),

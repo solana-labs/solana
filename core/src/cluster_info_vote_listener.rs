@@ -16,24 +16,24 @@ use crossbeam_channel::{
 };
 use itertools::izip;
 use log::*;
-use safecoin_ledger::blockstore::Blockstore;
-use safecoin_metrics::inc_new_counter_debug;
-use safecoin_perf::packet::{self, Packets};
-use safecoin_runtime::{
+use solana_ledger::blockstore::Blockstore;
+use solana_metrics::inc_new_counter_debug;
+use solana_perf::packet::{self, Packets};
+use solana_runtime::{
     bank::Bank,
     bank_forks::BankForks,
     epoch_stakes::{EpochAuthorizedVoters, EpochStakes},
     stakes::Stakes,
     vote_sender_types::{ReplayVoteReceiver, ReplayedVote},
 };
-use safecoin_sdk::{
+use solana_sdk::{
     clock::{Epoch, Slot, DEFAULT_MS_PER_SLOT},
     epoch_schedule::EpochSchedule,
     hash::Hash,
     pubkey::Pubkey,
     transaction::Transaction,
 };
-use safecoin_vote_program::{self, vote_state::Vote, vote_transaction};
+use solana_vote_program::{self, vote_state::Vote, vote_transaction};
 use std::{
     collections::HashMap,
     sync::{
@@ -257,7 +257,7 @@ impl ClusterInfoVoteListener {
             unbounded();
         let (verified_vote_transactions_sender, verified_vote_transactions_receiver) = unbounded();
         let listen_thread = Builder::new()
-            .name("safecoin-cluster_info_vote_listener".to_string())
+            .name("solana-cluster_info_vote_listener".to_string())
             .spawn(move || {
                 let _ = Self::recv_loop(
                     exit_,
@@ -271,7 +271,7 @@ impl ClusterInfoVoteListener {
         let exit_ = exit.clone();
         let poh_recorder = poh_recorder.clone();
         let bank_send_thread = Builder::new()
-            .name("safecoin-cluster_info_bank_send".to_string())
+            .name("solana-cluster_info_bank_send".to_string())
             .spawn(move || {
                 let _ = Self::bank_send_loop(
                     exit_,
@@ -284,7 +284,7 @@ impl ClusterInfoVoteListener {
 
         let exit_ = exit.clone();
         let send_thread = Builder::new()
-            .name("safecoin-cluster_info_process_votes".to_string())
+            .name("solana-cluster_info_process_votes".to_string())
             .spawn(move || {
                 let _ = Self::process_votes_loop(
                     exit_,
@@ -791,23 +791,23 @@ impl ClusterInfoVoteListener {
 mod tests {
     use super::*;
     use crate::optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank;
-    use safecoin_perf::packet;
-    use safecoin_runtime::{
+    use solana_perf::packet;
+    use solana_runtime::{
         bank::Bank,
         commitment::BlockCommitmentCache,
         genesis_utils::{self, GenesisConfigInfo, ValidatorVoteKeypairs},
         vote_sender_types::ReplayVoteSender,
     };
-    use safecoin_sdk::{
+    use solana_sdk::{
         hash::Hash,
         signature::{Keypair, Signature, Signer},
     };
-    use safecoin_vote_program::vote_state::Vote;
+    use solana_vote_program::vote_state::Vote;
     use std::collections::BTreeSet;
 
     #[test]
     fn test_max_vote_tx_fits() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let node_keypair = Keypair::new();
         let vote_keypair = Keypair::new();
         let slots: Vec<_> = (0..31).collect();
@@ -902,7 +902,7 @@ mod tests {
         let (vote_tracker, bank, _, _) = setup();
 
         // Check outdated slots are purged with new root
-        let new_voter = Arc::new(safecoin_sdk::pubkey::new_rand());
+        let new_voter = Arc::new(solana_sdk::pubkey::new_rand());
         // Make separate copy so the original doesn't count toward
         // the ref count, which would prevent cleanup
         let new_voter_ = Arc::new(*new_voter);
@@ -1654,7 +1654,7 @@ mod tests {
 
     #[test]
     fn test_verify_votes_empty() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let votes = vec![];
         let labels = vec![];
         let (vote_txs, packets) = ClusterInfoVoteListener::verify_votes(votes, labels);
@@ -1685,7 +1685,7 @@ mod tests {
     fn run_test_verify_votes_1_pass(hash: Option<Hash>) {
         let vote_tx = test_vote_tx(hash);
         let votes = vec![vote_tx];
-        let labels = vec![CrdsValueLabel::Vote(0, safecoin_sdk::pubkey::new_rand())];
+        let labels = vec![CrdsValueLabel::Vote(0, solana_sdk::pubkey::new_rand())];
         let (vote_txs, packets) = ClusterInfoVoteListener::verify_votes(votes, labels);
         assert_eq!(vote_txs.len(), 1);
         verify_packets_len(&packets, 1);
@@ -1702,7 +1702,7 @@ mod tests {
         let mut bad_vote = vote_tx.clone();
         bad_vote.signatures[0] = Signature::default();
         let votes = vec![vote_tx.clone(), bad_vote, vote_tx];
-        let label = CrdsValueLabel::Vote(0, safecoin_sdk::pubkey::new_rand());
+        let label = CrdsValueLabel::Vote(0, solana_sdk::pubkey::new_rand());
         let labels: Vec<_> = (0..votes.len()).map(|_| label.clone()).collect();
         let (vote_txs, packets) = ClusterInfoVoteListener::verify_votes(votes, labels);
         assert_eq!(vote_txs.len(), 2);

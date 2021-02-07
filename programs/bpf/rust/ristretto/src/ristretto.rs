@@ -21,7 +21,7 @@ pub fn ristretto_mul(
     #[cfg(target_arch = "bpf")]
     {
         extern "C" {
-            fn safe_ristretto_mul(
+            fn sol_ristretto_mul(
                 point_addr: *const u8,
                 scalar_addr: *const u8,
                 result_addr: *mut u8,
@@ -30,7 +30,7 @@ pub fn ristretto_mul(
 
         let mut result = RistrettoPoint::default();
         let status = unsafe {
-            safe_ristretto_mul(
+            sol_ristretto_mul(
                 point as *const _ as *const u8,
                 scalar as *const _ as *const u8,
                 &mut result as *const _ as *mut u8,

@@ -1,8 +1,8 @@
 // TODO: Merge this implementation with the one at `core/src/send_transaction_service.rs`
 use log::*;
-use safecoin_metrics::{datapoint_warn, inc_new_counter_info};
-use safecoin_runtime::{bank::Bank, bank_forks::BankForks};
-use safecoin_sdk::{clock::Slot, signature::Signature};
+use solana_metrics::{datapoint_warn, inc_new_counter_info};
+use solana_runtime::{bank::Bank, bank_forks::BankForks};
+use solana_sdk::{clock::Slot, signature::Signature};
 use std::{
     collections::HashMap,
     net::{SocketAddr, UdpSocket},
@@ -180,7 +180,7 @@ impl SendTransactionService {
 #[cfg(test)]
 mod test {
     use super::*;
-    use safecoin_sdk::{
+    use solana_sdk::{
         genesis_config::create_genesis_config, pubkey::Pubkey, signature::Signer,
         system_transaction,
     };

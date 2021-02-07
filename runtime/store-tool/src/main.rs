@@ -1,12 +1,12 @@
 use clap::{crate_description, crate_name, value_t_or_exit, App, Arg};
 use log::*;
-use safecoin_runtime::append_vec::AppendVec;
+use solana_runtime::append_vec::AppendVec;
 
 fn main() {
-    safecoin_logger::setup_with_default("safecoin=info");
+    solana_logger::setup_with_default("solana=info");
     let matches = App::new(crate_name!())
         .about(crate_description!())
-        .version(safecoin_version::version!())
+        .version(solana_version::version!())
         .arg(
             Arg::with_name("file")
                 .long("file")

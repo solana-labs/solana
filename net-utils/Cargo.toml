@@ -1,11 +1,11 @@
 [package]
-name = "safecoin-net-utils"
+name = "solana-net-utils"
 version = "1.6.0"
 description = "Safecoin Network Utilities"
 authors = ["Safecoin Maintainers <maintainers@solana.foundation>"]
-repository = "https://github.com/solana-labs/safecoin"
+repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
-homepage = "https://safecoin.org/"
+homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
@@ -17,21 +17,21 @@ rand = "0.7.0"
 serde = "1.0.122"
 serde_derive = "1.0.103"
 socket2 = "0.3.17"
-safecoin-clap-utils = { path = "../clap-utils", version = "1.6.0" }
-safecoin-logger = { path = "../logger", version = "1.6.0" }
-safecoin-version = { path = "../version", version = "1.6.0" }
+solana-clap-utils = { path = "../clap-utils", version = "1.6.0" }
+solana-logger = { path = "../logger", version = "1.6.0" }
+solana-version = { path = "../version", version = "1.6.0" }
 tokio = { version = "1.1", features = ["full"] }
 url = "2.1.1"
 
 [lib]
-name = "safecoin_net_utils"
+name = "solana_net_utils"
 
 [[bin]]
-name = "safecoin-ip-address"
+name = "solana-ip-address"
 path = "src/bin/ip_address.rs"
 
 [[bin]]
-name = "safecoin-ip-address-server"
+name = "solana-ip-address-server"
 path = "src/bin/ip_address_server.rs"
 
 [package.metadata.docs.rs]

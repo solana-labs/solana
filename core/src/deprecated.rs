@@ -1,4 +1,4 @@
-use safecoin_sdk::clock::Slot;
+use solana_sdk::clock::Slot;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, AbiExample, AbiEnumVisitor)]
 enum CompressionType {

@@ -63,9 +63,9 @@ case $deployMethod in
 local|tar|skip)
   PATH="$HOME"/.cargo/bin:"$PATH"
   export USE_INSTALL=1
-  safecoin_cli=safecoin
-  safecoin_gossip=safecoin-gossip
-  safecoin_install=safecoin-install
+  solana_cli=solana
+  solana_gossip=solana-gossip
+  solana_install=solana-install
   ;;
 *)
   echo "Unknown deployment method: $deployMethod"
@@ -85,7 +85,7 @@ fi
 echo "--- $sanityTargetIp: validators"
 (
   set -x
-  $safecoin_cli --url http://"$sanityTargetIp":8899 validators
+  $solana_cli --url http://"$sanityTargetIp":8899 validators
 )
 
 echo "--- $sanityTargetIp: node count ($numSanityNodes expected)"
@@ -97,7 +97,7 @@ echo "--- $sanityTargetIp: node count ($numSanityNodes expected)"
     nodeArg="num-nodes-exactly"
   fi
 
-  $safecoin_gossip spy --entrypoint "$sanityTargetIp:8001" \
+  $solana_gossip spy --entrypoint "$sanityTargetIp:8001" \
     --$nodeArg "$numSanityNodes" --timeout 60 \
 )
 
@@ -122,17 +122,17 @@ else
 fi
 
 if $installCheck && [[ -r update_manifest_keypair.json ]]; then
-  echo "--- $sanityTargetIp: safecoin-install test"
+  echo "--- $sanityTargetIp: solana-install test"
 
   (
     set -x
     rm -rf install-data-dir
-    $safecoin_install init \
+    $solana_install init \
       --no-modify-path \
       --data-dir install-data-dir \
       --url http://"$sanityTargetIp":8899 \
 
-    $safecoin_install info
+    $solana_install info
   )
 fi
 

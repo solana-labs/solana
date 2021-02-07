@@ -5,12 +5,12 @@ title: Safecoin Clusters
 Safecoin maintains several different clusters with different purposes.
 
 Before you begin make sure you have first
-[installed the Safecoin command line tools](cli/install-safecoin-cli-tools.md)
+[installed the Safecoin command line tools](cli/install-solana-cli-tools.md)
 
 Explorers:
 
-- [http://explorer.safecoin.org/](https://explorer.safecoin.org/).
-- [http://safecoinbeach.io/](http://safecoinbeach.io/).
+- [http://explorer.solana.com/](https://explorer.solana.com/).
+- [http://solanabeach.io/](http://solanabeach.io/).
 
 ## Devnet
 
@@ -23,23 +23,23 @@ Explorers:
   - Devnet includes a token faucet for airdrops for application testing
   - Devnet may be subject to ledger resets
   - Devnet typically runs a newer software version than Mainnet Beta
-- Gossip entrypoint for Devnet: `entrypoint.devnet.safecoin.org:8001`
+- Gossip entrypoint for Devnet: `entrypoint.devnet.solana.com:8001`
 - Metrics environment variable for Devnet:
 ```bash
-export SAFECOIN_METRICS_CONFIG="host=https://metrics.safecoin.org:8086,db=devnet,u=scratch_writer,p=topsecret"
+export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=devnet,u=scratch_writer,p=topsecret"
 ```
-- RPC URL for Devnet: `https://devnet.safecoin.org`
+- RPC URL for Devnet: `https://devnet.solana.com`
 
-##### Example `safecoin` command-line configuration
+##### Example `solana` command-line configuration
 
 ```bash
-safecoin config set --url https://devnet.safecoin.org
+solana config set --url https://devnet.solana.com
 ```
 
-##### Example `safecoin-validator` command-line
+##### Example `solana-validator` command-line
 
 ```bash
-$ safecoin-validator \
+$ solana-validator \
     --identity ~/validator-keypair.json \
     --vote-account ~/vote-account-keypair.json \
     --trusted-validator dv1LfzJvDF7S1fBKpFgKoKXK5yoSosmkAdfbxBo1GqJ \
@@ -47,7 +47,7 @@ $ safecoin-validator \
     --ledger ~/validator-ledger \
     --rpc-port 8899 \
     --dynamic-port-range 8000-8010 \
-    --entrypoint entrypoint.devnet.safecoin.org:8001 \
+    --entrypoint entrypoint.devnet.solana.com:8001 \
     --expected-genesis-hash EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG \
     --wal-recovery-mode skip_any_corrupted_record \
     --limit-ledger-size
@@ -60,7 +60,7 @@ The `--trusted-validator`s is operated by Safecoin
 - Testnet is where we stress test recent release features on a live
   cluster, particularly focused on network performance, stability and validator
   behavior.
-- [Tour de SAFE](tour-de-sol.md) initiative runs on Testnet, where we
+- [Tour de SOL](tour-de-sol.md) initiative runs on Testnet, where we
   encourage malicious behavior and attacks on the network to help us find and
   squash bugs or network vulnerabilities.
 - Testnet tokens are **not real**
@@ -68,23 +68,23 @@ The `--trusted-validator`s is operated by Safecoin
 - Testnet includes a token faucet for airdrops for application testing
 - Testnet typically runs a newer software release than both Devnet and
   Mainnet Beta
-- Gossip entrypoint for Testnet: `entrypoint.testnet.safecoin.org:8001`
+- Gossip entrypoint for Testnet: `entrypoint.testnet.solana.com:8001`
 - Metrics environment variable for Testnet:
 ```bash
-export SAFECOIN_METRICS_CONFIG="host=https://metrics.safecoin.org:8086,db=tds,u=testnet_write,p=c4fa841aa918bf8274e3e2a44d77568d9861b3ea"
+export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=tds,u=testnet_write,p=c4fa841aa918bf8274e3e2a44d77568d9861b3ea"
 ```
-- RPC URL for Testnet: `https://testnet.safecoin.org`
+- RPC URL for Testnet: `https://testnet.solana.com`
 
-##### Example `safecoin` command-line configuration
+##### Example `solana` command-line configuration
 
 ```bash
-safecoin config set --url https://testnet.safecoin.org
+solana config set --url https://testnet.solana.com
 ```
 
-##### Example `safecoin-validator` command-line
+##### Example `solana-validator` command-line
 
 ```bash
-$ safecoin-validator \
+$ solana-validator \
     --identity ~/validator-keypair.json \
     --vote-account ~/vote-account-keypair.json \
     --trusted-validator 5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on \
@@ -95,7 +95,7 @@ $ safecoin-validator \
     --ledger ~/validator-ledger \
     --rpc-port 8899 \
     --dynamic-port-range 8000-8010 \
-    --entrypoint entrypoint.testnet.safecoin.org:8001 \
+    --entrypoint entrypoint.testnet.solana.com:8001 \
     --expected-genesis-hash 4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY \
     --wal-recovery-mode skip_any_corrupted_record \
     --limit-ledger-size
@@ -103,7 +103,7 @@ $ safecoin-validator \
 
 The identity of the `--trusted-validator`s are:
 
-- `5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on` - testnet.safecoin.org (Safecoin)
+- `5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on` - testnet.solana.com (Safecoin)
 - `ta1Uvfb7W5BRPrdGnhP9RmeCGKzBySGM1hTE4rBRy6T` - Break RPC node (Safecoin)
 - `Ft5fbkqNa76vnsjYNwjDZUXoTWpP7VYm3mtsaQckQADN` - Certus One
 - `9QxCLckBiJc783jnMvXZubK4wH86Eqqvashtrwvcsgkv` - Algo|Stake
@@ -113,29 +113,29 @@ The identity of the `--trusted-validator`s are:
 A permissionless, persistent cluster for early token holders and launch partners.
 Currently, rewards and inflation are disabled.
 
-- Tokens that are issued on Mainnet Beta are **real** SAFE
+- Tokens that are issued on Mainnet Beta are **real** SOL
 - If you have paid money to purchase/be issued tokens, such as through our
   CoinList auction, these tokens will be transferred on Mainnet Beta.
   - Note: If you are using a non-command-line wallet such as
-    [Safeflare](wallet-guide/solflare.md),
+    [Solflare](wallet-guide/solflare.md),
     the wallet will always be connecting to Mainnet Beta.
-- Gossip entrypoint for Mainnet Beta: `entrypoint.mainnet-beta.safecoin.org:8001`
+- Gossip entrypoint for Mainnet Beta: `entrypoint.mainnet-beta.solana.com:8001`
 - Metrics environment variable for Mainnet Beta:
 ```bash
-export SAFECOIN_METRICS_CONFIG="host=https://metrics.safecoin.org:8086,db=mainnet-beta,u=mainnet-beta_write,p=password"
+export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=mainnet-beta,u=mainnet-beta_write,p=password"
 ```
-- RPC URL for Mainnet Beta: `https://api.mainnet-beta.safecoin.org`
+- RPC URL for Mainnet Beta: `https://api.mainnet-beta.solana.com`
 
-##### Example `safecoin` command-line configuration
+##### Example `solana` command-line configuration
 
 ```bash
-safecoin config set --url https://api.mainnet-beta.safecoin.org
+solana config set --url https://api.mainnet-beta.solana.com
 ```
 
-##### Example `safecoin-validator` command-line
+##### Example `solana-validator` command-line
 
 ```bash
-$ safecoin-validator \
+$ solana-validator \
     --identity ~/validator-keypair.json \
     --vote-account ~/vote-account-keypair.json \
     --trusted-validator 7Np41oeYqPefeNQEHSv1UDhYrehxin3NStELsSKCT4K2 \
@@ -147,11 +147,11 @@ $ safecoin-validator \
     --rpc-port 8899 \
     --private-rpc \
     --dynamic-port-range 8000-8010 \
-    --entrypoint entrypoint.mainnet-beta.safecoin.org:8001 \
-    --entrypoint entrypoint2.mainnet-beta.safecoin.org:8001 \
-    --entrypoint entrypoint3.mainnet-beta.safecoin.org:8001 \
-    --entrypoint entrypoint4.mainnet-beta.safecoin.org:8001 \
-    --entrypoint entrypoint5.mainnet-beta.safecoin.org:8001 \
+    --entrypoint entrypoint.mainnet-beta.solana.com:8001 \
+    --entrypoint entrypoint2.mainnet-beta.solana.com:8001 \
+    --entrypoint entrypoint3.mainnet-beta.solana.com:8001 \
+    --entrypoint entrypoint4.mainnet-beta.solana.com:8001 \
+    --entrypoint entrypoint5.mainnet-beta.solana.com:8001 \
     --expected-genesis-hash 5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d \
     --wal-recovery-mode skip_any_corrupted_record \
     --limit-ledger-size

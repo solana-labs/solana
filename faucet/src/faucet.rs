@@ -8,8 +8,8 @@ use bincode::{deserialize, serialize, serialized_size};
 use byteorder::{ByteOrder, LittleEndian};
 use log::*;
 use serde_derive::{Deserialize, Serialize};
-use safecoin_metrics::datapoint_info;
-use safecoin_sdk::{
+use solana_metrics::datapoint_info;
+use solana_sdk::{
     hash::Hash,
     message::Message,
     packet::PACKET_DATA_SIZE,
@@ -43,7 +43,7 @@ macro_rules! socketaddr {
 }
 
 pub const TIME_SLICE: u64 = 60;
-pub const REQUEST_CAP: u64 = safecoin_sdk::native_token::LAMPORTS_PER_SAFE * 10_000_000;
+pub const REQUEST_CAP: u64 = solana_sdk::native_token::LAMPORTS_PER_SOL * 10_000_000;
 pub const FAUCET_PORT: u16 = 9900;
 pub const FAUCET_PORT_STR: &str = "9900";
 
@@ -198,7 +198,7 @@ impl Faucet {
 
 impl Drop for Faucet {
     fn drop(&mut self) {
-        safecoin_metrics::flush();
+        solana_metrics::flush();
     }
 }
 
@@ -366,7 +366,7 @@ async fn process(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use safecoin_sdk::system_instruction::SystemInstruction;
+    use solana_sdk::system_instruction::SystemInstruction;
     use std::time::Duration;
 
     #[test]
@@ -427,7 +427,7 @@ mod tests {
 
     #[test]
     fn test_faucet_build_airdrop_transaction() {
-        let to = safecoin_sdk::pubkey::new_rand();
+        let to = solana_sdk::pubkey::new_rand();
         let blockhash = Hash::default();
         let request = FaucetRequest::GetAirdrop {
             lamports: 2,
@@ -468,7 +468,7 @@ mod tests {
 
     #[test]
     fn test_process_faucet_request() {
-        let to = safecoin_sdk::pubkey::new_rand();
+        let to = solana_sdk::pubkey::new_rand();
         let blockhash = Hash::new(&to.as_ref());
         let lamports = 50;
         let req = FaucetRequest::GetAirdrop {

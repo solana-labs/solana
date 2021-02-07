@@ -2,7 +2,7 @@
 
 use crate::rpc_response::RpcSimulateTransactionResult;
 use jsonrpc_core::{Error, ErrorCode};
-use safecoin_sdk::clock::Slot;
+use solana_sdk::clock::Slot;
 
 pub const JSON_RPC_SERVER_ERROR_BLOCK_CLEANED_UP: i64 = -32001;
 pub const JSON_RPC_SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE: i64 = -32002;
@@ -30,7 +30,7 @@ pub enum RpcCustomError {
     NodeUnhealthy {
         num_slots_behind: Option<Slot>,
     },
-    TransactionPrecompileVerificationFailure(safecoin_sdk::transaction::TransactionError),
+    TransactionPrecompileVerificationFailure(solana_sdk::transaction::TransactionError),
     SlotSkipped {
         slot: Slot,
     },

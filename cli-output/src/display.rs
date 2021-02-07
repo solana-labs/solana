@@ -3,11 +3,11 @@ use {
     chrono::{DateTime, NaiveDateTime, SecondsFormat, Utc},
     console::style,
     indicatif::{ProgressBar, ProgressStyle},
-    safecoin_sdk::{
-        clock::UnixTimestamp, hash::Hash, native_token::lamports_to_safe ,
+    solana_sdk::{
+        clock::UnixTimestamp, hash::Hash, native_token::lamports_to_sol,
         program_utils::limited_deserialize, transaction::Transaction,
     },
-    safecoin_transaction_status::UiTransactionStatusMeta,
+    solana_transaction_status::UiTransactionStatusMeta,
     std::{collections::HashMap, fmt, io},
 };
 
@@ -35,15 +35,15 @@ pub fn build_balance_message_with_config(
     let value = if config.use_lamports_unit {
         lamports.to_string()
     } else {
-        let sol = lamports_to_safe (lamports);
-        let safe_str = format!("{:.9}", sol);
+        let sol = lamports_to_sol(lamports);
+        let sol_str = format!("{:.9}", sol);
         if config.trim_trailing_zeros {
-            safe_str
+            sol_str
                 .trim_end_matches('0')
                 .trim_end_matches('.')
                 .to_string()
         } else {
-            safe_str
+            sol_str
         }
     };
     let unit = if config.show_unit {
@@ -51,7 +51,7 @@ pub fn build_balance_message_with_config(
             let ess = if lamports == 1 { "" } else { "s" };
             format!(" lamport{}", ess)
         } else {
-            " SAFE".to_string()
+            " SOL".to_string()
         }
     } else {
         "".to_string()
@@ -180,25 +180,25 @@ pub fn write_transaction<W: io::Write>(
         }
 
         let mut raw = true;
-        if program_pubkey == safecoin_vote_program::id() {
+        if program_pubkey == solana_vote_program::id() {
             if let Ok(vote_instruction) = limited_deserialize::<
-                safecoin_vote_program::vote_instruction::VoteInstruction,
+                solana_vote_program::vote_instruction::VoteInstruction,
             >(&instruction.data)
             {
                 writeln!(w, "{}  {:?}", prefix, vote_instruction)?;
                 raw = false;
             }
-        } else if program_pubkey == safecoin_stake_program::id() {
+        } else if program_pubkey == solana_stake_program::id() {
             if let Ok(stake_instruction) = limited_deserialize::<
-                safecoin_stake_program::stake_instruction::StakeInstruction,
+                solana_stake_program::stake_instruction::StakeInstruction,
             >(&instruction.data)
             {
                 writeln!(w, "{}  {:?}", prefix, stake_instruction)?;
                 raw = false;
             }
-        } else if program_pubkey == safecoin_sdk::system_program::id() {
+        } else if program_pubkey == solana_sdk::system_program::id() {
             if let Ok(system_instruction) = limited_deserialize::<
-                safecoin_sdk::system_instruction::SystemInstruction,
+                solana_sdk::system_instruction::SystemInstruction,
             >(&instruction.data)
             {
                 writeln!(w, "{}  {:?}", prefix, system_instruction)?;
@@ -225,7 +225,7 @@ pub fn write_transaction<W: io::Write>(
             w,
             "{}  Fee: ◎{}",
             prefix,
-            lamports_to_safe (transaction_status.fee)
+            lamports_to_sol(transaction_status.fee)
         )?;
         assert_eq!(
             transaction_status.pre_balances.len(),
@@ -243,7 +243,7 @@ pub fn write_transaction<W: io::Write>(
                     "{}  Account {} balance: ◎{}",
                     prefix,
                     i,
-                    lamports_to_safe (*pre)
+                    lamports_to_sol(*pre)
                 )?;
             } else {
                 writeln!(
@@ -251,8 +251,8 @@ pub fn write_transaction<W: io::Write>(
                     "{}  Account {} balance: ◎{} -> ◎{}",
                     prefix,
                     i,
-                    lamports_to_safe (*pre),
-                    lamports_to_safe (*post)
+                    lamports_to_sol(*pre),
+                    lamports_to_sol(*post)
                 )?;
             }
         }
@@ -313,7 +313,7 @@ pub fn unix_timestamp_to_string(unix_timestamp: UnixTimestamp) -> String {
 #[cfg(test)]
 mod test {
     use super::*;
-    use safecoin_sdk::pubkey::Pubkey;
+    use solana_sdk::pubkey::Pubkey;
 
     #[test]
     fn test_format_labeled_address() {

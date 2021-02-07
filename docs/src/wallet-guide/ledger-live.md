@@ -9,7 +9,7 @@ with the [Ledger Live](https://www.ledger.com/ledger-live) software.
 
 Once the setup steps shown below are complete and the Safecoin app is installed
 on your Nano device, users have several options of how to
-[use the Nano to interact with the Safecoin Network](#interact-with-the-safecoin-network)
+[use the Nano to interact with the Safecoin Network](#interact-with-the-solana-network)
 
 ## Getting Started
 
@@ -56,10 +56,10 @@ re-installed with the latest version of the app.
 Users can use any of the following options to use their Nano to interact with
 Safecoin:
 
-- [SafeFlare.com](https://solflare.com/) is a non-custodial web wallet built
+- [SolFlare.com](https://solflare.com/) is a non-custodial web wallet built
 specifically for Safecoin and supports basic transfers and staking operations
 with the Ledger device.
-Check out our guide for [using a Nano with SafeFlare](solflare.md).
+Check out our guide for [using a Nano with SolFlare](solflare.md).
 
 - Developers and advanced users may
 [use a Nano with the Safecoin command line tools](hardware-wallets/ledger.md).

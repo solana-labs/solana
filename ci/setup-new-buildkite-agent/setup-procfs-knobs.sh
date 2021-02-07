@@ -8,7 +8,7 @@ source "$HERE"/utils.sh
 ensure_env || exit 1
 
 # Setup kernel constants
-cat > /etc/sysctl.d/20-safecoin-node.conf <<EOF
+cat > /etc/sysctl.d/20-solana-node.conf <<EOF
 
 # Safecoin networking requirements
 net.core.rmem_default=134217728

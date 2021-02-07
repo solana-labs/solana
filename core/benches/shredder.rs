@@ -4,15 +4,15 @@ extern crate test;
 
 use rand::seq::SliceRandom;
 use raptorq::{Decoder, Encoder};
-use safecoin_ledger::entry::{create_ticks, Entry};
-use safecoin_ledger::shred::{
+use solana_ledger::entry::{create_ticks, Entry};
+use solana_ledger::shred::{
     max_entries_per_n_shred, max_ticks_per_n_shreds, ProcessShredsStats, Shred, Shredder,
     MAX_DATA_SHREDS_PER_FEC_BLOCK, RECOMMENDED_FEC_RATE, SHRED_PAYLOAD_SIZE,
     SIZE_OF_DATA_SHRED_IGNORED_TAIL, SIZE_OF_DATA_SHRED_PAYLOAD,
 };
-use safecoin_perf::test_tx;
-use safecoin_sdk::hash::Hash;
-use safecoin_sdk::signature::Keypair;
+use solana_perf::test_tx;
+use solana_sdk::hash::Hash;
+use solana_sdk::signature::Keypair;
 use std::sync::Arc;
 use test::Bencher;
 

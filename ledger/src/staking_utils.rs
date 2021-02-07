@@ -1,5 +1,5 @@
-use safecoin_runtime::bank::Bank;
-use safecoin_sdk::{
+use solana_runtime::bank::Bank;
+use solana_sdk::{
     clock::{Epoch, Slot},
     pubkey::Pubkey,
 };
@@ -66,8 +66,8 @@ pub(crate) mod tests {
         bootstrap_validator_stake_lamports, create_genesis_config, GenesisConfigInfo,
     };
     use rand::Rng;
-    use safecoin_runtime::vote_account::{ArcVoteAccount, VoteAccounts};
-    use safecoin_sdk::{
+    use solana_runtime::vote_account::{ArcVoteAccount, VoteAccounts};
+    use solana_sdk::{
         account::{from_account, Account},
         clock::Clock,
         instruction::Instruction,
@@ -77,11 +77,11 @@ pub(crate) mod tests {
         sysvar::stake_history::{self, StakeHistory},
         transaction::Transaction,
     };
-    use safecoin_stake_program::{
+    use solana_stake_program::{
         stake_instruction,
         stake_state::{Authorized, Delegation, Lockup, Stake},
     };
-    use safecoin_vote_program::{
+    use solana_vote_program::{
         vote_instruction,
         vote_state::{VoteInit, VoteState, VoteStateVersions},
     };
@@ -144,7 +144,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_epoch_stakes_and_lockouts() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let stake = bootstrap_validator_stake_lamports();
         let leader_stake = Stake {
             delegation: Delegation {
@@ -278,7 +278,7 @@ pub(crate) mod tests {
     #[test]
     fn test_to_staked_nodes() {
         let mut stakes = Vec::new();
-        let node1 = safecoin_sdk::pubkey::new_rand();
+        let node1 = solana_sdk::pubkey::new_rand();
 
         // Node 1 has stake of 3
         for i in 0..3 {
@@ -295,7 +295,7 @@ pub(crate) mod tests {
         }
 
         // Node 1 has stake of 5
-        let node2 = safecoin_sdk::pubkey::new_rand();
+        let node2 = solana_sdk::pubkey::new_rand();
 
         stakes.push((
             5,

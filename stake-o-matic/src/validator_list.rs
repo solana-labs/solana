@@ -1,4 +1,4 @@
-safecoin_sdk::pubkeys!(
+solana_sdk::pubkeys!(
     testnet_validators,
     [
         "123vij84ecQEKUvQ7gYMKxKwKF6PbYSzCzzURYA4xULY",
@@ -795,7 +795,7 @@ safecoin_sdk::pubkeys!(
     ]
 );
 
-safecoin_sdk::pubkeys!(
+solana_sdk::pubkeys!(
     mainnet_beta_validators,
     [
         "12CUDzb3oe8RBQ4tYGqsuPsCbsVE4KWfktXRihXf8Ggq",

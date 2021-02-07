@@ -242,7 +242,7 @@ type VoteAccountStatus = {
 
 /**
  * Network Inflation
- * (see https://docs.safecoin.org/implemented-proposals/ed_overview)
+ * (see https://docs.solana.com/implemented-proposals/ed_overview)
  *
  * @typedef {Object} InflationGovernor
  * @property {number} foundation
@@ -298,7 +298,7 @@ const GetEpochInfoResult = struct({
 
 /**
  * Epoch schedule
- * (see https://docs.safecoin.org/terminology#epoch)
+ * (see https://docs.solana.com/terminology#epoch)
  *
  * @typedef {Object} EpochSchedule
  * @property {number} slotsPerEpoch The maximum number of slots in each epoch
@@ -325,7 +325,7 @@ const GetEpochScheduleResult = struct({
 
 /**
  * Leader schedule
- * (see https://docs.safecoin.org/terminology#leader-schedule)
+ * (see https://docs.solana.com/terminology#leader-schedule)
  *
  * @typedef {Object} LeaderSchedule
  */
@@ -352,10 +352,10 @@ const SignatureStatusResult = struct({err: TransactionErrorResult});
  * Version info for a node
  *
  * @typedef {Object} Version
- * @property {string} safecoin-core Version of safecoin-core
+ * @property {string} solana-core Version of solana-core
  */
 const Version = struct.pick({
-  'safecoin-core': 'string',
+  'solana-core': 'string',
   'feature-set': 'number?',
 });
 
@@ -1680,7 +1680,7 @@ export class Connection {
     url.host = '';
     // Only shift the port by +1 as a convention for ws(s) only if given endpoint
     // is explictly specifying the endpoint port (HTTP-based RPC), assuming
-    // we're directly trying to connect to safecoin-validator's ws listening port.
+    // we're directly trying to connect to solana-validator's ws listening port.
     // When the endpoint omits the port, we're connecting to the protocol
     // default ports: http(80) or https(443) and it's assumed we're behind a reverse
     // proxy which manages WebSocket upgrade and backend port redirection.

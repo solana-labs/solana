@@ -48,7 +48,7 @@ Vote vector (`Vote::slots.iter().max()`). It is signed by the validator's
 identity keypair as a usual Vote. In order to enable this reporting, the Vote
 struct needs to be extended to include a timestamp field, `timestamp: Option<UnixTimestamp>`, which will be set to `None` in most Votes.
 
-As of https://github.com/solana-labs/safecoin/pull/10630, validators submit a
+As of https://github.com/solana-labs/solana/pull/10630, validators submit a
 timestamp every vote. This enables implementation of a block time caching
 service that allows nodes to calculate the estimated timestamp immediately after
 the block is rooted, and cache that value in Blockstore. This provides

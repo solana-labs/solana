@@ -34,7 +34,7 @@ impl DataBudget {
     // Updates timestamp and returns true, if at least given milliseconds
     // has passed since last update. Otherwise returns false.
     fn can_update(&self, duration_millis: u64) -> bool {
-        let now = safecoin_sdk::timing::timestamp();
+        let now = solana_sdk::timing::timestamp();
         let mut last_timestamp = self.last_timestamp_ms.load(Ordering::Acquire);
         loop {
             if now < last_timestamp + duration_millis {

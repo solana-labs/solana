@@ -1,7 +1,7 @@
 use log::*;
 use memmap2::MmapMut;
 use serde::{Deserialize, Serialize};
-use safecoin_sdk::{
+use solana_sdk::{
     account::Account,
     clock::{Epoch, Slot},
     hash::Hash,
@@ -473,8 +473,8 @@ pub mod test_utils {
     use super::StoredMeta;
     use rand::distributions::Alphanumeric;
     use rand::{thread_rng, Rng};
-    use safecoin_sdk::account::Account;
-    use safecoin_sdk::pubkey::Pubkey;
+    use solana_sdk::account::Account;
+    use solana_sdk::pubkey::Pubkey;
     use std::fs::create_dir_all;
     use std::path::PathBuf;
 
@@ -523,7 +523,7 @@ pub mod tests {
     use super::*;
     use assert_matches::assert_matches;
     use rand::{thread_rng, Rng};
-    use safecoin_sdk::timing::duration_as_ms;
+    use solana_sdk::timing::duration_as_ms;
     use std::time::Instant;
 
     impl AppendVec {
@@ -698,7 +698,7 @@ pub mod tests {
         let mut av = AppendVec::new(&path, true, 1024 * 1024);
         av.set_no_remove_on_drop();
 
-        let pubkey = safecoin_sdk::pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let owner = Pubkey::default();
         let data_len = 3_u64;
         let mut account = Account::new(0, data_len as usize, &owner);

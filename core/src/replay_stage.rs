@@ -18,20 +18,20 @@ use crate::{
     rewards_recorder_service::RewardsRecorderSender,
     rpc_subscriptions::RpcSubscriptions,
 };
-use safecoin_ledger::{
+use solana_ledger::{
     block_error::BlockError,
     blockstore::Blockstore,
     blockstore_processor::{self, BlockstoreProcessorError, TransactionStatusSender},
     entry::VerifyRecyclers,
     leader_schedule_cache::LeaderScheduleCache,
 };
-use safecoin_measure::{measure::Measure, thread_mem_usage};
-use safecoin_metrics::inc_new_counter_info;
-use safecoin_runtime::{
+use solana_measure::{measure::Measure, thread_mem_usage};
+use solana_metrics::inc_new_counter_info;
+use solana_runtime::{
     accounts_background_service::ABSRequestSender, bank::Bank, bank_forks::BankForks,
     commitment::BlockCommitmentCache, vote_sender_types::ReplayVoteSender,
 };
-use safecoin_sdk::{
+use solana_sdk::{
     clock::{Slot, NUM_CONSECUTIVE_LEADER_SLOTS},
     genesis_config::ClusterType,
     hash::Hash,
@@ -40,7 +40,7 @@ use safecoin_sdk::{
     timing::timestamp,
     transaction::Transaction,
 };
-use safecoin_vote_program::{vote_instruction, vote_state::Vote};
+use solana_vote_program::{vote_instruction, vote_state::Vote};
 use std::{
     collections::{HashMap, HashSet},
     ops::Deref,
@@ -277,7 +277,7 @@ impl ReplayStage {
 
         #[allow(clippy::cognitive_complexity)]
         let t_replay = Builder::new()
-            .name("safecoin-replay-stage".to_string())
+            .name("solana-replay-stage".to_string())
             .spawn(move || {
                 let verify_recyclers = VerifyRecyclers::default();
                 let _exit = Finalizer::new(exit.clone());
@@ -297,7 +297,7 @@ impl ReplayStage {
                 loop {
                     let allocated = thread_mem_usage::Allocatedp::default();
 
-                    thread_mem_usage::datapoint("safecoin-replay-stage");
+                    thread_mem_usage::datapoint("solana-replay-stage");
                     // Stop getting entries if we get exit signal
                     if exit.load(Ordering::Relaxed) {
                         break;
@@ -693,7 +693,7 @@ impl ReplayStage {
     }
 
     fn report_memory(
-        allocated: &safecoin_measure::thread_mem_usage::Allocatedp,
+        allocated: &solana_measure::thread_mem_usage::Allocatedp,
         name: &'static str,
         start: u64,
     ) {
@@ -2001,7 +2001,7 @@ pub(crate) mod tests {
         transaction_status_service::TransactionStatusService,
     };
     use crossbeam_channel::unbounded;
-    use safecoin_ledger::{
+    use solana_ledger::{
         blockstore::make_slot_entries,
         blockstore::{entries_to_test_shreds, BlockstoreError},
         create_new_tmp_ledger,
@@ -2013,12 +2013,12 @@ pub(crate) mod tests {
             SIZE_OF_COMMON_SHRED_HEADER, SIZE_OF_DATA_SHRED_HEADER, SIZE_OF_DATA_SHRED_PAYLOAD,
         },
     };
-    use safecoin_runtime::{
+    use solana_runtime::{
         accounts_background_service::ABSRequestSender,
         commitment::BlockCommitment,
         genesis_utils::{self, GenesisConfigInfo, ValidatorVoteKeypairs},
     };
-    use safecoin_sdk::{
+    use solana_sdk::{
         clock::NUM_CONSECUTIVE_LEADER_SLOTS,
         genesis_config,
         hash::{hash, Hash},
@@ -2028,8 +2028,8 @@ pub(crate) mod tests {
         system_transaction,
         transaction::TransactionError,
     };
-    use safecoin_transaction_status::TransactionWithStatusMeta;
-    use safecoin_vote_program::{
+    use solana_transaction_status::TransactionWithStatusMeta;
+    use solana_vote_program::{
         vote_state::{VoteState, VoteStateVersions},
         vote_transaction,
     };
@@ -2575,7 +2575,7 @@ pub(crate) mod tests {
             bank.store_account(&pubkey, &leader_vote_account);
         }
 
-        let leader_pubkey = safecoin_sdk::pubkey::new_rand();
+        let leader_pubkey = solana_sdk::pubkey::new_rand();
         let leader_lamports = 3;
         let genesis_config_info =
             create_genesis_config_with_leader(50, &leader_pubkey, leader_lamports);
@@ -2619,7 +2619,7 @@ pub(crate) mod tests {
             let _res = bank.transfer(
                 10,
                 &genesis_config_info.mint_keypair,
-                &safecoin_sdk::pubkey::new_rand(),
+                &solana_sdk::pubkey::new_rand(),
             );
             for _ in 0..genesis_config.ticks_per_slot {
                 bank.register_tick(&Hash::default());

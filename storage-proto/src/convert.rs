@@ -1,6 +1,6 @@
 use crate::StoredExtendedRewards;
-use safecoin_account_decoder::parse_token::UiTokenAmount;
-use safecoin_sdk::{
+use solana_account_decoder::parse_token::UiTokenAmount;
+use solana_sdk::{
     hash::Hash,
     instruction::CompiledInstruction,
     instruction::InstructionError,
@@ -10,7 +10,7 @@ use safecoin_sdk::{
     transaction::Transaction,
     transaction::TransactionError,
 };
-use safecoin_transaction_status::{
+use solana_transaction_status::{
     ConfirmedBlock, InnerInstructions, Reward, RewardType, TransactionByAddrInfo,
     TransactionStatusMeta, TransactionTokenBalance, TransactionWithStatusMeta,
 };
@@ -19,14 +19,14 @@ use std::convert::{TryFrom, TryInto};
 pub mod generated {
     include!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        concat!("/proto/safecoin.storage.confirmed_block.rs")
+        concat!("/proto/solana.storage.confirmed_block.rs")
     ));
 }
 
 pub mod tx_by_addr {
     include!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        concat!("/proto/safecoin.storage.transaction_by_addr.rs")
+        concat!("/proto/solana.storage.transaction_by_addr.rs")
     ));
 }
 

@@ -1,10 +1,10 @@
 [package]
-name = "safecoin-crate-features"
+name = "solana-crate-features"
 version = "1.6.0"
 description = "Safecoin Crate Features"
 authors = ["Safecoin Maintainers <maintainers@solana.foundation>"]
-repository = "https://github.com/solana-labs/safecoin"
-homepage = "https://safecoin.org/"
+repository = "https://github.com/solana-labs/solana"
+homepage = "https://solana.com/"
 license = "Apache-2.0"
 edition = "2018"
 

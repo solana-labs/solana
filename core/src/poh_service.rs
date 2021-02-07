@@ -1,7 +1,7 @@
 //! The `poh_service` module implements a service that records the passing of
 //! "ticks", a measure of time in the PoH stream
 use crate::poh_recorder::PohRecorder;
-use safecoin_sdk::poh_config::PohConfig;
+use solana_sdk::poh_config::PohConfig;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, sleep, Builder, JoinHandle};
@@ -34,9 +34,9 @@ impl PohService {
         let poh_exit_ = poh_exit.clone();
         let poh_config = poh_config.clone();
         let tick_producer = Builder::new()
-            .name("safecoin-poh-service-tick_producer".to_string())
+            .name("solana-poh-service-tick_producer".to_string())
             .spawn(move || {
-                safecoin_sys_tuner::request_realtime_poh();
+                solana_sys_tuner::request_realtime_poh();
                 if poh_config.hashes_per_tick.is_none() {
                     if poh_config.target_tick_count.is_none() {
                         Self::sleepy_tick_producer(poh_recorder, &poh_config, &poh_exit_);
@@ -161,13 +161,13 @@ impl PohService {
 mod tests {
     use super::*;
     use crate::poh_recorder::WorkingBank;
-    use safecoin_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
-    use safecoin_ledger::leader_schedule_cache::LeaderScheduleCache;
-    use safecoin_ledger::{blockstore::Blockstore, get_tmp_ledger_path};
-    use safecoin_perf::test_tx::test_tx;
-    use safecoin_runtime::bank::Bank;
-    use safecoin_sdk::hash::hash;
-    use safecoin_sdk::pubkey::Pubkey;
+    use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
+    use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
+    use solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path};
+    use solana_perf::test_tx::test_tx;
+    use solana_runtime::bank::Bank;
+    use solana_sdk::hash::hash;
+    use solana_sdk::pubkey::Pubkey;
     use std::time::Duration;
 
     #[test]
@@ -208,7 +208,7 @@ mod tests {
                 let exit = exit.clone();
 
                 Builder::new()
-                    .name("safecoin-poh-service-entry_producer".to_string())
+                    .name("solana-poh-service-entry_producer".to_string())
                     .spawn(move || {
                         loop {
                             // send some data

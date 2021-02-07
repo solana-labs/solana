@@ -26,19 +26,19 @@ come to the right place.
 
 ## Before You Begin
 
-- [Install the Safecoin command-line tools](../cli/install-safecoin-cli-tools.md)
+- [Install the Safecoin command-line tools](../cli/install-solana-cli-tools.md)
 
 ### Check your installation
 
-Check that `safecoin-keygen` is installed correctly by running:
+Check that `solana-keygen` is installed correctly by running:
 
 ```bash
-safecoin-keygen --version
+solana-keygen --version
 ```
 
 ## Creating a Paper Wallet
 
-Using the `safecoin-keygen` tool, it is possible to generate new seed phrases as
+Using the `solana-keygen` tool, it is possible to generate new seed phrases as
 well as derive a keypair from an existing seed phrase and (optional) passphrase.
 The seed phrase and passphrase can be used together as a paper wallet. As long
 as you keep your seed phrase and passphrase stored safely, you can use them to
@@ -48,7 +48,7 @@ access your account.
 
 ### Seed Phrase Generation
 
-Generating a new keypair can be done using the `safecoin-keygen new` command. The
+Generating a new keypair can be done using the `solana-keygen new` command. The
 command will generate a random seed phrase, ask you to enter an optional
 passphrase, and then will display the derived public key and the generated seed
 phrase for your paper wallet.
@@ -58,10 +58,10 @@ After copying down your seed phrase, you can use the
 have not made any errors.
 
 ```bash
-safecoin-keygen new --no-outfile
+solana-keygen new --no-outfile
 ```
 
-> If the `--no-outfile` flag is **omitted**, the default behavior is to write the keypair to `~/.config/safecoin/id.json`, resulting in a [file system wallet](file-system-wallet.md)
+> If the `--no-outfile` flag is **omitted**, the default behavior is to write the keypair to `~/.config/solana/id.json`, resulting in a [file system wallet](file-system-wallet.md)
 
 The output of this command will display a line like this:
 
@@ -79,33 +79,33 @@ and "wallet address" are sometimes used interchangably.
 For full usage details run:
 
 ```bash
-safecoin-keygen new --help
+solana-keygen new --help
 ```
 
 ### Public Key Derivation
 
 Public keys can be derived from a seed phrase and a passphrase if you choose to
 use one. This is useful for using an offline-generated seed phrase to
-derive a valid public key. The `safecoin-keygen pubkey` command will walk you
+derive a valid public key. The `solana-keygen pubkey` command will walk you
 through entering your seed phrase and a passphrase if you chose to use one.
 
 ```bash
-safecoin-keygen pubkey ASK
+solana-keygen pubkey ASK
 ```
 
 > Note that you could potentially use different passphrases for the same seed phrase. Each unique passphrase will yield a different keypair.
 
-The `safecoin-keygen` tool uses the same BIP39 standard English word list as it
+The `solana-keygen` tool uses the same BIP39 standard English word list as it
 does to generate seed phrases. If your seed phrase was generated with another
-tool that uses a different word list, you can still use `safecoin-keygen`, but
+tool that uses a different word list, you can still use `solana-keygen`, but
 will need to pass the `--skip-seed-phrase-validation` argument and forego this
 validation.
 
 ```bash
-safecoin-keygen pubkey ASK --skip-seed-phrase-validation
+solana-keygen pubkey ASK --skip-seed-phrase-validation
 ```
 
-After entering your seed phrase with `safecoin-keygen pubkey ASK` the console
+After entering your seed phrase with `solana-keygen pubkey ASK` the console
 will display a string of base-58 character. This is the _wallet address_
 associated with your seed phrase.
 
@@ -116,16 +116,16 @@ associated with your seed phrase.
 For full usage details run:
 
 ```bash
-safecoin-keygen pubkey --help
+solana-keygen pubkey --help
 ```
 
 ## Verifying the Keypair
 
 To verify you control the private key of a paper wallet address, use
-`safecoin-keygen verify`:
+`solana-keygen verify`:
 
 ```bash
-safecoin-keygen verify <PUBKEY> ASK
+solana-keygen verify <PUBKEY> ASK
 ```
 
 where `<PUBKEY>` is replaced with the wallet address and they keyword `ASK` tells the
@@ -143,17 +143,17 @@ To retrieve public keys securely from a paper wallet, follow the
 Public keys can then be typed manually or transferred via a USB stick to a
 networked machine.
 
-Next, configure the `safecoin` CLI tool to
+Next, configure the `solana` CLI tool to
 [connect to a particular cluster](../cli/choose-a-cluster.md):
 
 ```bash
-safecoin config set --url <CLUSTER URL> # (i.e. https://api.mainnet-beta.safecoin.org)
+solana config set --url <CLUSTER URL> # (i.e. https://api.mainnet-beta.solana.com)
 ```
 
 Finally, to check the balance, run the following command:
 
 ```bash
-safecoin balance <PUBKEY>
+solana balance <PUBKEY>
 ```
 
 ## Creating Multiple Paper Wallet Addresses

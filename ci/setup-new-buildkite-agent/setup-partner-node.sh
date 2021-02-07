@@ -18,5 +18,5 @@ set -ex
 
 PASSWORD="$(dd if=/dev/urandom bs=1 count=9 status=none | base64)"
 echo "$PASSWORD"
-chpasswd <<< "safecoin:$PASSWORD"
+chpasswd <<< "solana:$PASSWORD"
 

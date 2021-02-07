@@ -4,11 +4,11 @@ use futures::{
     future,
     prelude::stream::{self, StreamExt},
 };
-use safecoin_banks_interface::{
+use solana_banks_interface::{
     Banks, BanksRequest, BanksResponse, TransactionConfirmationStatus, TransactionStatus,
 };
-use safecoin_runtime::{bank::Bank, bank_forks::BankForks, commitment::BlockCommitmentCache};
-use safecoin_sdk::{
+use solana_runtime::{bank::Bank, bank_forks::BankForks, commitment::BlockCommitmentCache};
+use solana_sdk::{
     account::Account,
     clock::Slot,
     commitment_config::CommitmentLevel,
@@ -92,7 +92,7 @@ impl BanksServer {
         }
         let server_bank_forks = bank_forks.clone();
         Builder::new()
-            .name("safecoin-bank-forks-client".to_string())
+            .name("solana-bank-forks-client".to_string())
             .spawn(move || Self::run(server_bank_forks, transaction_receiver))
             .unwrap();
         Self::new(bank_forks, block_commitment_cache, transaction_sender)

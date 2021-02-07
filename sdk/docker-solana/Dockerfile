@@ -8,5 +8,5 @@ RUN apt update && \
     rm -rf /var/lib/apt/lists/*
 
 COPY usr/bin /usr/bin/
-ENTRYPOINT [ "/usr/bin/safecoin-run.sh" ]
+ENTRYPOINT [ "/usr/bin/solana-run.sh" ]
 CMD [""]

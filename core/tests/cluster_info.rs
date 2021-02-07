@@ -1,9 +1,9 @@
 use rayon::iter::ParallelIterator;
 use rayon::prelude::*;
 use serial_test::serial;
-use safecoin_core::cluster_info::{compute_retransmit_peers, ClusterInfo};
-use safecoin_core::contact_info::ContactInfo;
-use safecoin_sdk::pubkey::Pubkey;
+use solana_core::cluster_info::{compute_retransmit_peers, ClusterInfo};
+use solana_core::contact_info::ContactInfo;
+use solana_sdk::pubkey::Pubkey;
 use std::collections::{HashMap, HashSet};
 use std::sync::mpsc::channel;
 use std::sync::mpsc::TryRecvError;
@@ -72,7 +72,7 @@ fn run_simulation(stakes: &[u64], fanout: usize) {
     let timeout = 60 * 5;
 
     // describe the leader
-    let leader_info = ContactInfo::new_localhost(&safecoin_sdk::pubkey::new_rand(), 0);
+    let leader_info = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0);
     let cluster_info = ClusterInfo::new_with_invalid_keypair(leader_info.clone());
 
     // setup staked nodes
@@ -95,7 +95,7 @@ fn run_simulation(stakes: &[u64], fanout: usize) {
         chunk.iter().for_each(|i| {
             //distribute neighbors across threads to maximize parallel compute
             let batch_ix = *i as usize % batches.len();
-            let node = ContactInfo::new_localhost(&safecoin_sdk::pubkey::new_rand(), 0);
+            let node = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0);
             staked_nodes.insert(node.id, stakes[*i - 1]);
             cluster_info.insert_info(node.clone());
             let (s, r) = channel();

@@ -7,20 +7,20 @@ use crate::{
     spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
 };
 use clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand};
-use safecoin_clap_utils::{
+use solana_clap_utils::{
     input_parsers::*,
     input_validators::*,
     keypair::{DefaultSigner, SignerIndex},
 };
-use safecoin_cli_output::{CliEpochVotingHistory, CliLockout, CliVoteAccount};
-use safecoin_client::rpc_client::RpcClient;
-use safecoin_remote_wallet::remote_wallet::RemoteWalletManager;
-use safecoin_sdk::{
+use solana_cli_output::{CliEpochVotingHistory, CliLockout, CliVoteAccount};
+use solana_client::rpc_client::RpcClient;
+use solana_remote_wallet::remote_wallet::RemoteWalletManager;
+use solana_sdk::{
     account::Account, commitment_config::CommitmentConfig, message::Message,
-    native_token::lamports_to_safe , pubkey::Pubkey, system_instruction::SystemError,
+    native_token::lamports_to_sol, pubkey::Pubkey, system_instruction::SystemError,
     transaction::Transaction,
 };
-use safecoin_vote_program::{
+use solana_vote_program::{
     vote_instruction::{self, withdraw, VoteError},
     vote_state::{VoteAuthorize, VoteInit, VoteState},
 };
@@ -206,7 +206,7 @@ impl VoteSubCommands for App<'_, '_> {
                     Arg::with_name("lamports")
                         .long("lamports")
                         .takes_value(false)
-                        .help("Display balance in lamports instead of SAFE"),
+                        .help("Display balance in lamports instead of SOL"),
                 ),
         )
         .subcommand(
@@ -224,7 +224,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .index(2)
                         .value_name("RECIPIENT_ADDRESS")
                         .required(true),
-                        "The recipient of withdrawn SAFE. "),
+                        "The recipient of withdrawn SOL. "),
                 )
                 .arg(
                     Arg::with_name("amount")
@@ -233,7 +233,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .required(true)
                         .validator(is_amount_or_all)
-                        .help("The amount to withdraw, in SAFE; accepts keyword ALL"),
+                        .help("The amount to withdraw, in SOL; accepts keyword ALL"),
                 )
                 .arg(
                     Arg::with_name("authorized_withdrawer")
@@ -427,7 +427,7 @@ pub fn process_create_vote_account(
     let vote_account = config.signers[vote_account];
     let vote_account_pubkey = vote_account.pubkey();
     let vote_account_address = if let Some(seed) = seed {
-        Pubkey::create_with_seed(&vote_account_pubkey, &seed, &safecoin_vote_program::id())?
+        Pubkey::create_with_seed(&vote_account_pubkey, &seed, &solana_vote_program::id())?
     } else {
         vote_account_pubkey
     };
@@ -480,7 +480,7 @@ pub fn process_create_vote_account(
         rpc_client.get_account_with_commitment(&vote_account_address, config.commitment)
     {
         if let Some(vote_account) = response.value {
-            let err_msg = if vote_account.owner == safecoin_vote_program::id() {
+            let err_msg = if vote_account.owner == solana_vote_program::id() {
                 format!("Vote account {} already exists", vote_account_address)
             } else {
                 format!(
@@ -626,7 +626,7 @@ fn get_vote_account(
             CliError::RpcRequestError(format!("{:?} account does not exist", vote_account_pubkey))
         })?;
 
-    if vote_account.owner != safecoin_vote_program::id() {
+    if vote_account.owner != solana_vote_program::id() {
         return Err(CliError::RpcRequestError(format!(
             "{:?} is not a vote account",
             vote_account_pubkey
@@ -718,7 +718,7 @@ pub fn process_withdraw_from_vote_account(
         SpendAmount::Some(withdraw_amount) => {
             if current_balance.saturating_sub(withdraw_amount) < minimum_balance {
                 return Err(CliError::BadParameter(format!(
-                    "Withdraw amount too large. The vote account balance must be at least {} SAFE to remain rent exempt", lamports_to_safe (minimum_balance)
+                    "Withdraw amount too large. The vote account balance must be at least {} SOL to remain rent exempt", lamports_to_sol(minimum_balance)
                 ))
                 .into());
             }
@@ -751,7 +751,7 @@ pub fn process_withdraw_from_vote_account(
 mod tests {
     use super::*;
     use crate::cli::{app, parse_command};
-    use safecoin_sdk::signature::{read_keypair_file, write_keypair, Keypair, Signer};
+    use solana_sdk::signature::{read_keypair_file, write_keypair, Keypair, Signer};
     use tempfile::NamedTempFile;
 
     fn make_tmp_file() -> (String, NamedTempFile) {
@@ -886,7 +886,7 @@ mod tests {
         );
 
         // test init with an authed voter
-        let authed = safecoin_sdk::pubkey::new_rand();
+        let authed = solana_sdk::pubkey::new_rand();
         let (keypair_file, mut tmp_file) = make_tmp_file();
         let keypair = Keypair::new();
         write_keypair(&keypair, tmp_file.as_file_mut()).unwrap();

@@ -55,7 +55,7 @@ padding between fields. If the program implements the Rust `Pack` trait then try
 packing and unpacking the instruction type `T` to determine the exact encoding
 the program expects:
 
-https://github.com/solana-labs/safecoin/blob/v1.4/sdk/program/src/program_pack.rs
+https://github.com/solana-labs/solana/blob/v1.4/sdk/program/src/program_pack.rs
 
 ## MissingRequiredSignature
 

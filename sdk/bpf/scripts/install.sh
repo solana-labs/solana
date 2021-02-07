@@ -61,7 +61,7 @@ get() {
   declare version=$1
   declare dirname=$2
   declare job=$3
-  declare cache_root=~/.cache/safecoin
+  declare cache_root=~/.cache/solana
   declare cache_dirname="$cache_root/$version/$dirname"
   declare cache_partial_dirname="$cache_dirname"_partial
 
@@ -138,7 +138,7 @@ if [[ ! -e llvm-native-$version.md || ! -e llvm-native ]]; then
     job="download \
            https://github.com/solana-labs/llvm-builder/releases/download \
            $version \
-           safecoin-llvm-$machine.tar.bz2 \
+           solana-llvm-$machine.tar.bz2 \
            llvm-native"
     get $version llvm-native "$job"
   )
@@ -159,7 +159,7 @@ if [[ ! -e rust-bpf-$machine-$version.md || ! -e rust-bpf-$machine ]]; then
     job="download \
            https://github.com/solana-labs/rust-bpf-builder/releases/download \
            $version \
-           safecoin-rust-bpf-$machine.tar.bz2 \
+           solana-rust-bpf-$machine.tar.bz2 \
            rust-bpf-$machine"
     get $version rust-bpf-$machine "$job"
 

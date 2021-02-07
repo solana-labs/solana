@@ -6,18 +6,18 @@ use crate::arg_parser::parse_args;
 use crate::args::{
     resolve_command, AuthorizeArgs, Command, MoveArgs, NewArgs, RebaseArgs, SetLockupArgs,
 };
-use safecoin_cli_config::Config;
-use safecoin_client::client_error::ClientError;
-use safecoin_client::rpc_client::RpcClient;
-use safecoin_sdk::{
+use solana_cli_config::Config;
+use solana_client::client_error::ClientError;
+use solana_client::rpc_client::RpcClient;
+use solana_sdk::{
     message::Message,
-    native_token::lamports_to_safe ,
+    native_token::lamports_to_sol,
     pubkey::Pubkey,
     signature::{unique_signers, Signature, Signer},
     signers::Signers,
     transaction::Transaction,
 };
-use safecoin_stake_program::{
+use solana_stake_program::{
     stake_instruction::LockupArgs,
     stake_state::{Lockup, StakeState},
 };
@@ -262,8 +262,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             );
             let balances = get_balances(&client, addresses)?;
             let lamports: u64 = balances.into_iter().map(|(_, bal)| bal).sum();
-            let sol = lamports_to_safe (lamports);
-            println!("{} SAFE", sol);
+            let sol = lamports_to_sol(lamports);
+            println!("{} SOL", sol);
         }
         Command::Authorize(args) => {
             process_authorize_stake_accounts(&client, &args)?;

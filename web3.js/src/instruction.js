@@ -6,7 +6,7 @@ import * as Layout from './layout';
 
 /**
  * @typedef {Object} InstructionType
- * @property (index} The Instruction index (from safecoin upstream program)
+ * @property (index} The Instruction index (from solana upstream program)
  * @property (BufferLayout} The BufferLayout to use to build data
  */
 export type InstructionType = {|

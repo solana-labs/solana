@@ -3,10 +3,10 @@ set -ex
 
 cd "$(dirname "$0")"
 
-docker build -t safecoinlabs/rust .
+docker build -t solanalabs/rust .
 
-read -r rustc version _ < <(docker run safecoinlabs/rust rustc --version)
+read -r rustc version _ < <(docker run solanalabs/rust rustc --version)
 [[ $rustc = rustc ]]
-docker tag safecoinlabs/rust:latest safecoinlabs/rust:"$version"
-docker push safecoinlabs/rust:"$version"
-docker push safecoinlabs/rust:latest
+docker tag solanalabs/rust:latest solanalabs/rust:"$version"
+docker push solanalabs/rust:"$version"
+docker push solanalabs/rust:latest

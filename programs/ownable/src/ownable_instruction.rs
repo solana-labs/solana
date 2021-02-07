@@ -1,5 +1,5 @@
 use num_derive::{FromPrimitive, ToPrimitive};
-use safecoin_sdk::{
+use solana_sdk::{
     decode_error::DecodeError,
     instruction::{AccountMeta, Instruction},
     pubkey::Pubkey,

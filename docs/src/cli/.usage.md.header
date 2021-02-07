@@ -2,7 +2,7 @@
 title: CLI Usage Reference
 ---
 
-The [safecoin-cli crate](https://crates.io/crates/safecoin-cli) provides a command-line interface tool for Safecoin
+The [solana-cli crate](https://crates.io/crates/solana-cli) provides a command-line interface tool for Safecoin
 
 ## Examples
 
@@ -10,37 +10,37 @@ The [safecoin-cli crate](https://crates.io/crates/safecoin-cli) provides a comma
 
 ```bash
 // Command
-$ safecoin-keygen pubkey
+$ solana-keygen pubkey
 
 // Return
 <PUBKEY>
 ```
 
-### Airdrop SAFE/Lamports
+### Airdrop SOL/Lamports
 
 ```bash
 // Command
-$ safecoin airdrop 2
+$ solana airdrop 2
 
 // Return
-"2.00000000 SAFE"
+"2.00000000 SOL"
 ```
 
 ### Get Balance
 
 ```bash
 // Command
-$ safecoin balance
+$ solana balance
 
 // Return
-"3.00050001 SAFE"
+"3.00050001 SOL"
 ```
 
 ### Confirm Transaction
 
 ```bash
 // Command
-$ safecoin confirm <TX_SIGNATURE>
+$ solana confirm <TX_SIGNATURE>
 
 // Return
 "Confirmed" / "Not found" / "Transaction failed with error <ERR>"
@@ -50,7 +50,7 @@ $ safecoin confirm <TX_SIGNATURE>
 
 ```bash
 // Command
-$ safecoin program deploy <PATH>
+$ solana program deploy <PATH>
 
 // Return
 <PROGRAM_ID>

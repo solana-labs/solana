@@ -785,7 +785,7 @@ mod tests {
 
     #[test]
     fn test_decompile_instructions() {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let program_id0 = Pubkey::new_unique();
         let program_id1 = Pubkey::new_unique();
         let id0 = Pubkey::new_unique();

@@ -11,8 +11,8 @@ channel=$(
   node -p '
     let p = [
       "../../package.json",
-      "../lib/node_modules/@safecoin/web3.js/package.json",
-      "../@safecoin/web3.js/package.json",
+      "../lib/node_modules/@solana/web3.js/package.json",
+      "../@solana/web3.js/package.json",
       "../package.json"
     ].find(require("fs").existsSync);
     if (!p) throw new Error("Unable to locate package.json");
@@ -29,7 +29,7 @@ echo "Installing $channel BPF SDK into $installDir"
 set -x
 cd "$installDir/"
 curl -L  --retry 5 --retry-delay 2 -o bpf-sdk.tar.bz2 \
-  https://safecoin-sdk.s3.amazonaws.com/"$channel"/bpf-sdk.tar.bz2
+  https://solana-sdk.s3.amazonaws.com/"$channel"/bpf-sdk.tar.bz2
 rm -rf bpf-sdk
 mkdir -p bpf-sdk
 tar jxf bpf-sdk.tar.bz2

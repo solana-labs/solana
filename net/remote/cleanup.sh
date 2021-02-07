@@ -8,18 +8,18 @@ if sudo true; then
 fi
 
 echo "pwd: $(pwd)"
-for pid in safecoin/*.pid; do
+for pid in solana/*.pid; do
   pgid=$(ps opgid= "$(cat "$pid")" | tr -d '[:space:]')
   if [[ -n $pgid ]]; then
     $sudo kill -- -"$pgid"
   fi
 done
-if [[ -f safecoin/netem.cfg ]]; then
-  safecoin/scripts/netem.sh delete < safecoin/netem.cfg
-  rm -f safecoin/netem.cfg
+if [[ -f solana/netem.cfg ]]; then
+  solana/scripts/netem.sh delete < solana/netem.cfg
+  rm -f solana/netem.cfg
 fi
-safecoin/scripts/net-shaper.sh cleanup
-for pattern in validator.sh boostrap-leader.sh safecoin- remote- iftop validator client node; do
+solana/scripts/net-shaper.sh cleanup
+for pattern in validator.sh boostrap-leader.sh solana- remote- iftop validator client node; do
   echo "killing $pattern"
   pkill -f $pattern
 done

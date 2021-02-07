@@ -7,7 +7,7 @@ import {
   Lockup,
   PublicKey,
   sendAndConfirmTransaction,
-  LAMPORTS_PER_SAFE,
+  LAMPORTS_PER_SOL,
   StakeAuthorizationLayout,
   StakeInstruction,
   StakeProgram,
@@ -333,10 +333,10 @@ test('live staking actions', async () => {
   const voteAccount = voteAccounts.current.concat(voteAccounts.delinquent)[0];
   const votePubkey = new PublicKey(voteAccount.votePubkey);
 
-  const from = await newAccountWithLamports(connection, 2 * LAMPORTS_PER_SAFE);
+  const from = await newAccountWithLamports(connection, 2 * LAMPORTS_PER_SOL);
   const authorized = await newAccountWithLamports(
     connection,
-    2 * LAMPORTS_PER_SAFE,
+    2 * LAMPORTS_PER_SOL,
   );
 
   const minimumAmount = await connection.getMinimumBalanceForRentExemption(
@@ -344,10 +344,10 @@ test('live staking actions', async () => {
   );
 
   expect(await connection.getBalance(from.publicKey)).toEqual(
-    2 * LAMPORTS_PER_SAFE,
+    2 * LAMPORTS_PER_SOL,
   );
   expect(await connection.getBalance(authorized.publicKey)).toEqual(
-    2 * LAMPORTS_PER_SAFE,
+    2 * LAMPORTS_PER_SOL,
   );
 
   {
@@ -477,7 +477,7 @@ test('live staking actions', async () => {
 
   // Authorize to new account
   const newAuthorized = new Account();
-  await connection.requestAirdrop(newAuthorized.publicKey, LAMPORTS_PER_SAFE);
+  await connection.requestAirdrop(newAuthorized.publicKey, LAMPORTS_PER_SOL);
 
   let authorize = StakeProgram.authorize({
     stakePubkey: newAccountPubkey,

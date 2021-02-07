@@ -1,9 +1,9 @@
-use safecoin_ledger::{
+use solana_ledger::{
     blockstore::Blockstore,
     shred::{Nonce, SIZE_OF_NONCE},
 };
-use safecoin_perf::packet::limited_deserialize;
-use safecoin_sdk::{clock::Slot, packet::Packet};
+use solana_perf::packet::limited_deserialize;
+use solana_sdk::{clock::Slot, packet::Packet};
 use std::{io, net::SocketAddr};
 
 pub fn repair_response_packet(
@@ -49,18 +49,18 @@ pub fn nonce(buf: &[u8]) -> Option<Nonce> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use safecoin_ledger::{
+    use solana_ledger::{
         shred::{Shred, Shredder},
         sigverify_shreds::verify_shred_cpu,
     };
-    use safecoin_sdk::signature::{Keypair, Signer};
+    use solana_sdk::signature::{Keypair, Signer};
     use std::{
         collections::HashMap,
         net::{IpAddr, Ipv4Addr},
     };
 
     fn run_test_sigverify_shred_cpu_repair(slot: Slot) {
-        safecoin_logger::setup();
+        solana_logger::setup();
         let mut shred = Shred::new_from_data(
             slot,
             0xc0de,

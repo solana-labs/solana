@@ -38,8 +38,8 @@ A nonce account is created by first generating a new keypair, then create the ac
 - Command
 
 ```bash
-safecoin-keygen new -o nonce-keypair.json
-safecoin create-nonce-account nonce-keypair.json 1
+solana-keygen new -o nonce-keypair.json
+solana create-nonce-account nonce-keypair.json 1
 ```
 
 - Output
@@ -50,7 +50,7 @@ safecoin create-nonce-account nonce-keypair.json 1
 
 > To keep the keypair entirely offline, use the [Paper Wallet](wallet-guide/paper-wallet.md) keypair generation [instructions](wallet-guide/paper-wallet.md#seed-phrase-generation) instead
 
-> [Full usage documentation](../cli/usage.md#safecoin-create-nonce-account)
+> [Full usage documentation](../cli/usage.md#solana-create-nonce-account)
 
 ### Querying the Stored Nonce Value
 
@@ -61,7 +61,7 @@ presently stored nonce value with
 - Command
 
 ```bash
-safecoin nonce nonce-keypair.json
+solana nonce nonce-keypair.json
 ```
 
 - Output
@@ -70,7 +70,7 @@ safecoin nonce nonce-keypair.json
 8GRipryfxcsxN8mAGjy8zbFo9ezaUsh47TsPzmZbuytU
 ```
 
-> [Full usage documentation](../cli/usage.md#safecoin-get-nonce)
+> [Full usage documentation](../cli/usage.md#solana-get-nonce)
 
 ### Advancing the Stored Nonce Value
 
@@ -80,7 +80,7 @@ value can be advanced by
 - Command
 
 ```bash
-safecoin new-nonce nonce-keypair.json
+solana new-nonce nonce-keypair.json
 ```
 
 - Output
@@ -89,7 +89,7 @@ safecoin new-nonce nonce-keypair.json
 44jYe1yPKrjuYDmoFTdgPjg8LFpYyh1PFKJqm5SC1PiSyAL8iw1bhadcAX1SL7KDmREEkmHpYvreKoNv6fZgfvUK
 ```
 
-> [Full usage documentation](../cli/usage.md#safecoin-new-nonce)
+> [Full usage documentation](../cli/usage.md#solana-new-nonce)
 
 ### Display Nonce Account
 
@@ -98,18 +98,18 @@ Inspect a nonce account in a more human friendly format with
 - Command
 
 ```bash
-safecoin nonce-account nonce-keypair.json
+solana nonce-account nonce-keypair.json
 ```
 
 - Output
 
 ```text
-balance: 0.5 SAFE
-minimum balance required: 0.00136416 SAFE
+balance: 0.5 SOL
+minimum balance required: 0.00136416 SOL
 nonce: DZar6t2EaCFQTbUP4DHKwZ1wT8gCPW2aRfkVWhydkBvS
 ```
 
-> [Full usage documentation](../cli/usage.md#safecoin-nonce-account)
+> [Full usage documentation](../cli/usage.md#solana-nonce-account)
 
 ### Withdraw Funds from a Nonce Account
 
@@ -118,7 +118,7 @@ Withdraw funds from a nonce account with
 - Command
 
 ```bash
-safecoin withdraw-from-nonce-account nonce-keypair.json ~/.config/safecoin/id.json 0.5
+solana withdraw-from-nonce-account nonce-keypair.json ~/.config/solana/id.json 0.5
 ```
 
 - Output
@@ -129,7 +129,7 @@ safecoin withdraw-from-nonce-account nonce-keypair.json ~/.config/safecoin/id.js
 
 > Close a nonce account by withdrawing the full balance
 
-> [Full usage documentation](../cli/usage.md#safecoin-withdraw-from-nonce-account)
+> [Full usage documentation](../cli/usage.md#solana-withdraw-from-nonce-account)
 
 ### Assign a New Authority to a Nonce Account
 
@@ -138,7 +138,7 @@ Reassign the authority of a nonce account after creation with
 - Command
 
 ```bash
-safecoin authorize-nonce-account nonce-keypair.json nonce-authority.json
+solana authorize-nonce-account nonce-keypair.json nonce-authority.json
 ```
 
 - Output
@@ -147,7 +147,7 @@ safecoin authorize-nonce-account nonce-keypair.json nonce-authority.json
 3F9cg4zN9wHxLGx4c3cUKmqpej4oa67QbALmChsJbfxTgTffRiL3iUehVhR9wQmWgPua66jPuAYeL1K2pYYjbNoT
 ```
 
-> [Full usage documentation](../cli/usage.md#safecoin-authorize-nonce-account)
+> [Full usage documentation](../cli/usage.md#solana-authorize-nonce-account)
 
 ## Other Commands Supporting Durable Nonces
 
@@ -159,13 +159,13 @@ supported.
 
 The following subcommands have received this treatment so far
 
-- [`pay`](../cli/usage.md#safecoin-pay)
-- [`delegate-stake`](../cli/usage.md#safecoin-delegate-stake)
-- [`deactivate-stake`](../cli/usage.md#safecoin-deactivate-stake)
+- [`pay`](../cli/usage.md#solana-pay)
+- [`delegate-stake`](../cli/usage.md#solana-delegate-stake)
+- [`deactivate-stake`](../cli/usage.md#solana-deactivate-stake)
 
 ### Example Pay Using Durable Nonce
 
-Here we demonstrate Alice paying Bob 1 SAFE using a durable nonce. The procedure
+Here we demonstrate Alice paying Bob 1 SOL using a durable nonce. The procedure
 is the same for all subcommands supporting durable nonces
 
 #### - Create accounts
@@ -173,19 +173,19 @@ is the same for all subcommands supporting durable nonces
 First we need some accounts for Alice, Alice's nonce and Bob
 
 ```bash
-$ safecoin-keygen new -o alice.json
-$ safecoin-keygen new -o nonce.json
-$ safecoin-keygen new -o bob.json
+$ solana-keygen new -o alice.json
+$ solana-keygen new -o nonce.json
+$ solana-keygen new -o bob.json
 ```
 
 #### - Fund Alice's account
 
 Alice will need some funds to create a nonce account and send to Bob. Airdrop
-her some SAFE
+her some SOL
 
 ```bash
-$ safecoin airdrop -k alice.json 10
-10 SAFE
+$ solana airdrop -k alice.json 10
+10 SOL
 ```
 
 #### - Create Alice's nonce account
@@ -195,7 +195,7 @@ Now Alice needs a nonce account. Create one
 > Here, no separate [nonce authority](#nonce-authority) is employed, so `alice.json` has full authority over the nonce account
 
 ```bash
-$ safecoin create-nonce-account -k alice.json nonce.json 1
+$ solana create-nonce-account -k alice.json nonce.json 1
 3KPZr96BTsL3hqera9up82KAU462Gz31xjqJ6eHUAjF935Yf8i1kmfEbo6SVbNaACKE5z6gySrNjVRvmS8DcPuwV
 ```
 
@@ -205,8 +205,8 @@ Alice attempts to pay Bob, but takes too long to sign. The specified blockhash
 expires and the transaction fails
 
 ```bash
-$ safecoin pay -k alice.json --blockhash expiredDTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7 bob.json 1
-[2020-01-02T18:48:28.462911000Z ERROR safecoin_cli::cli] Io(Custom { kind: Other, error: "Transaction \"33gQQaoPc9jWePMvDAeyJpcnSPiGUAdtVg8zREWv4GiKjkcGNufgpcbFyRKRrA25NkgjZySEeKue5rawyeH5TzsV\" failed: None" })
+$ solana pay -k alice.json --blockhash expiredDTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7 bob.json 1
+[2020-01-02T18:48:28.462911000Z ERROR solana_cli::cli] Io(Custom { kind: Other, error: "Transaction \"33gQQaoPc9jWePMvDAeyJpcnSPiGUAdtVg8zREWv4GiKjkcGNufgpcbFyRKRrA25NkgjZySEeKue5rawyeH5TzsV\" failed: None" })
 Error: Io(Custom { kind: Other, error: "Transaction \"33gQQaoPc9jWePMvDAeyJpcnSPiGUAdtVg8zREWv4GiKjkcGNufgpcbFyRKRrA25NkgjZySEeKue5rawyeH5TzsV\" failed: None" })
 ```
 
@@ -218,30 +218,30 @@ blockhash stored there
 > Remember, `alice.json` is the [nonce authority](#nonce-authority) in this example
 
 ```bash
-$ safecoin nonce-account nonce.json
-balance: 1 SAFE
-minimum balance required: 0.00136416 SAFE
+$ solana nonce-account nonce.json
+balance: 1 SOL
+minimum balance required: 0.00136416 SOL
 nonce: F7vmkY3DTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7
 ```
 
 ```bash
-$ safecoin pay -k alice.json --blockhash F7vmkY3DTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7 --nonce nonce.json bob.json 1
+$ solana pay -k alice.json --blockhash F7vmkY3DTaxfagttWjQweib42b6ZHADSx94Tw8gHx3W7 --nonce nonce.json bob.json 1
 HR1368UKHVZyenmH7yVz5sBAijV6XAPeWbEiXEGVYQorRMcoijeNAbzZqEZiH8cDB8tk65ckqeegFjK8dHwNFgQ
 ```
 
 #### - Success!
 
-The transaction succeeds! Bob receives 1 SAFE from Alice and Alice's stored
+The transaction succeeds! Bob receives 1 SOL from Alice and Alice's stored
 nonce advances to a new value
 
 ```bash
-$ safecoin balance -k bob.json
-1 SAFE
+$ solana balance -k bob.json
+1 SOL
 ```
 
 ```bash
-$ safecoin nonce-account nonce.json
-balance: 1 SAFE
-minimum balance required: 0.00136416 SAFE
+$ solana nonce-account nonce.json
+balance: 1 SOL
+minimum balance required: 0.00136416 SOL
 nonce: 6bjroqDcZgTv6Vavhqf81oBHTv3aMnX19UTB51YhAZnN
 ```

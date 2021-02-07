@@ -71,9 +71,9 @@ EOF
 systemctl daemon-reload
 systemctl enable --now /lib/systemd/system/docker.service
 
-# Grant the safecoin user access to docker
-if id safecoin; then
-  addgroup safecoin docker
+# Grant the solana user access to docker
+if id solana; then
+  addgroup solana docker
 fi
 
 docker run hello-world

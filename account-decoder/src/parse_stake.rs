@@ -3,8 +3,8 @@ use crate::{
     StringAmount,
 };
 use bincode::deserialize;
-use safecoin_sdk::clock::{Epoch, UnixTimestamp};
-use safecoin_stake_program::stake_state::{Authorized, Delegation, Lockup, Meta, Stake, StakeState};
+use solana_sdk::clock::{Epoch, UnixTimestamp};
+use solana_stake_program::stake_state::{Authorized, Delegation, Lockup, Meta, Stake, StakeState};
 
 pub fn parse_stake(data: &[u8]) -> Result<StakeAccountType, ParseAccountError> {
     let stake_state: StakeState = deserialize(data)
@@ -144,8 +144,8 @@ mod test {
             StakeAccountType::Uninitialized
         );
 
-        let pubkey = safecoin_sdk::pubkey::new_rand();
-        let custodian = safecoin_sdk::pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let custodian = solana_sdk::pubkey::new_rand();
         let authorized = Authorized::auto(&pubkey);
         let lockup = Lockup {
             unix_timestamp: 0,
@@ -179,7 +179,7 @@ mod test {
             })
         );
 
-        let voter_pubkey = safecoin_sdk::pubkey::new_rand();
+        let voter_pubkey = solana_sdk::pubkey::new_rand();
         let stake = Stake {
             delegation: Delegation {
                 voter_pubkey,

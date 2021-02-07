@@ -3,8 +3,8 @@
 extern crate test;
 
 use bincode::serialize;
-use safecoin_runtime::status_cache::*;
-use safecoin_sdk::{
+use solana_runtime::status_cache::*;
+use solana_sdk::{
     hash::{hash, Hash},
     signature::Signature,
 };

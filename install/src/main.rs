@@ -1,3 +1,3 @@
 fn main() -> Result<(), String> {
-    safecoin_install::main()
+    solana_install::main()
 }

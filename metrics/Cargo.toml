@@ -1,11 +1,11 @@
 [package]
-name = "safecoin-metrics"
+name = "solana-metrics"
 version = "1.6.0"
 description = "Safecoin Metrics"
 authors = ["Safecoin Maintainers <maintainers@solana.foundation>"]
-repository = "https://github.com/solana-labs/safecoin"
+repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
-homepage = "https://safecoin.org/"
+homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
@@ -14,14 +14,14 @@ gethostname = "0.2.1"
 lazy_static = "1.4.0"
 log = "0.4.11"
 reqwest = { version = "0.10.8", default-features = false, features = ["blocking", "rustls-tls", "json"] }
-safecoin-sdk = { path = "../sdk", version = "1.6.0" }
+solana-sdk = { path = "../sdk", version = "1.6.0" }
 
 [dev-dependencies]
 rand = "0.7.0"
 serial_test = "0.4.0"
 
 [lib]
-name = "safecoin_metrics"
+name = "solana_metrics"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

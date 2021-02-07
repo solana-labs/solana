@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::Rc};
 
-use safecoin_sdk::{
+use solana_sdk::{
     instruction::{CompiledInstruction, Instruction},
     message::Message,
 };

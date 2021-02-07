@@ -1,7 +1,7 @@
 use crate::cluster_info_vote_listener::VoteTracker;
-use safecoin_ledger::blockstore::Blockstore;
-use safecoin_runtime::bank::Bank;
-use safecoin_sdk::{clock::Slot, hash::Hash};
+use solana_ledger::blockstore::Blockstore;
+use solana_runtime::bank::Bank;
+use solana_sdk::{clock::Slot, hash::Hash};
 use std::{collections::BTreeSet, time::Instant};
 
 pub struct OptimisticConfirmationVerifier {
@@ -141,9 +141,9 @@ impl OptimisticConfirmationVerifier {
 mod test {
     use super::*;
     use crate::consensus::test::VoteSimulator;
-    use safecoin_ledger::get_tmp_ledger_path;
-    use safecoin_runtime::bank::Bank;
-    use safecoin_sdk::pubkey::Pubkey;
+    use solana_ledger::get_tmp_ledger_path;
+    use solana_runtime::bank::Bank;
+    use solana_sdk::pubkey::Pubkey;
     use std::collections::HashMap;
     use trees::tr;
 

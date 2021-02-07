@@ -6,9 +6,9 @@
 //! cumbersome to use.
 
 use futures::{future::join_all, Future, FutureExt};
-pub use safecoin_banks_interface::{BanksClient as TarpcClient, TransactionStatus};
-use safecoin_banks_interface::{BanksRequest, BanksResponse};
-use safecoin_sdk::{
+pub use solana_banks_interface::{BanksClient as TarpcClient, TransactionStatus};
+use solana_banks_interface::{BanksRequest, BanksResponse};
+use solana_sdk::{
     account::{from_account, Account},
     clock::Slot,
     commitment_config::CommitmentLevel,
@@ -288,12 +288,12 @@ pub async fn start_tcp_client<T: ToSocketAddrs>(addr: T) -> io::Result<BanksClie
 #[cfg(test)]
 mod tests {
     use super::*;
-    use safecoin_banks_server::banks_server::start_local_server;
-    use safecoin_runtime::{
+    use solana_banks_server::banks_server::start_local_server;
+    use solana_runtime::{
         bank::Bank, bank_forks::BankForks, commitment::BlockCommitmentCache,
         genesis_utils::create_genesis_config,
     };
-    use safecoin_sdk::{message::Message, signature::Signer, system_instruction};
+    use solana_sdk::{message::Message, signature::Signer, system_instruction};
     use std::sync::{Arc, RwLock};
     use tarpc::transport;
     use tokio::{runtime::Runtime, time::sleep};
@@ -318,7 +318,7 @@ mod tests {
         ));
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
 
-        let bob_pubkey = safecoin_sdk::pubkey::new_rand();
+        let bob_pubkey = solana_sdk::pubkey::new_rand();
         let mint_pubkey = genesis.mint_keypair.pubkey();
         let instruction = system_instruction::transfer(&mint_pubkey, &bob_pubkey, 1);
         let message = Message::new(&[instruction], Some(&mint_pubkey));
@@ -350,7 +350,7 @@ mod tests {
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
 
         let mint_pubkey = &genesis.mint_keypair.pubkey();
-        let bob_pubkey = safecoin_sdk::pubkey::new_rand();
+        let bob_pubkey = solana_sdk::pubkey::new_rand();
         let instruction = system_instruction::transfer(&mint_pubkey, &bob_pubkey, 1);
         let message = Message::new(&[instruction], Some(&mint_pubkey));
 
