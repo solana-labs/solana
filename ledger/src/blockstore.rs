@@ -1265,6 +1265,10 @@ impl Blockstore {
             false
         };
 
+        if shred.data_header.size == 0 {
+            return false;
+        }
+
         // Check that we do not receive shred_index >= than the last_index
         // for the slot
         let last_index = slot_meta.last_index;

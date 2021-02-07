@@ -359,6 +359,7 @@ impl Shred {
             )
             .expect("Failed to write data header into shred buffer");
         }
+        assert!(data_header.size as usize >= start);
         Shred {
             common_header,
             data_header,
