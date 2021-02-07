@@ -6,7 +6,7 @@ A stake account on Safecoin can be used to delegate tokens to validators on
 the network to potentially earn rewards for the owner of the stake account.
 Stake accounts are created and managed differently than a traditional wallet
 address, known as a *system account*.  A system account is only able to send and
-receive SOL from other accounts on the network, whereas a stake account supports
+receive SAFE from other accounts on the network, whereas a stake account supports
 more complex operations needed to manage a delegation of tokens.
 
 Stake accounts on Safecoin also work differently than those of other Proof-of-Stake
@@ -108,7 +108,7 @@ is also set when the account is created.
 
 #### Destroying a Stake Account
 Like other types of accounts on the Safecoin network, a stake account that has a
-balance of 0 SOL is no longer tracked.  If a stake account is not delegated
+balance of 0 SAFE is no longer tracked.  If a stake account is not delegated
 and all of the tokens it contains are withdrawn to a wallet address, the account
 at that address is effectively destroyed, and will need to be manually
 re-created for the address to be used again.

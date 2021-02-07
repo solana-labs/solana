@@ -1,7 +1,7 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
 use crate::{
-    rpc_pubsub::{RpcSolPubSub, RpcSolPubSubImpl},
+    rpc_pubsub::{RpcSafePubSub, RpcSafePubSubImpl},
     rpc_subscriptions::RpcSubscriptions,
 };
 use jsonrpc_pubsub::{PubSubHandler, Session};
@@ -53,7 +53,7 @@ impl PubSubService {
         exit: &Arc<AtomicBool>,
     ) -> Self {
         info!("rpc_pubsub bound to {:?}", pubsub_addr);
-        let rpc = RpcSolPubSubImpl::new(subscriptions.clone());
+        let rpc = RpcSafePubSubImpl::new(subscriptions.clone());
         let exit_ = exit.clone();
 
         // TODO: Once https://github.com/paritytech/jsonrpc/pull/594 lands, use

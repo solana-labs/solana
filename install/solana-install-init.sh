@@ -15,8 +15,8 @@
 
 { # this ensures the entire script is downloaded #
 
-if [ -z "$SOLANA_DOWNLOAD_ROOT" ]; then
-    SOLANA_DOWNLOAD_ROOT="https://github.com/solana-labs/solana/releases/download/"
+if [ -z "$SAFECOIN_DOWNLOAD_ROOT" ]; then
+    SAFECOIN_DOWNLOAD_ROOT="https://github.com/solana-labs/solana/releases/download/"
 fi
 GH_LATEST_RELEASE="https://api.github.com/repos/solana-labs/solana/releases/latest"
 
@@ -77,10 +77,10 @@ main() {
     temp_dir="$(mktemp -d 2>/dev/null || ensure mktemp -d -t solana-install-init)"
     ensure mkdir -p "$temp_dir"
 
-    # Check for SOLANA_RELEASE environment variable override.  Otherwise fetch
+    # Check for SAFECOIN_RELEASE environment variable override.  Otherwise fetch
     # the latest release tag from github
-    if [ -n "$SOLANA_RELEASE" ]; then
-      release="$SOLANA_RELEASE"
+    if [ -n "$SAFECOIN_RELEASE" ]; then
+      release="$SAFECOIN_RELEASE"
     else
       release_file="$temp_dir/release"
       printf 'looking for latest release\n' 1>&2
@@ -94,7 +94,7 @@ main() {
       fi
     fi
 
-    download_url="$SOLANA_DOWNLOAD_ROOT/$release/solana-install-init-$TARGET"
+    download_url="$SAFECOIN_DOWNLOAD_ROOT/$release/solana-install-init-$TARGET"
     solana_install_init="$temp_dir/solana-install-init"
 
     printf 'downloading %s installer\n' "$release" 1>&2
@@ -110,7 +110,7 @@ main() {
 
     if [ -z "$1" ]; then
       #shellcheck disable=SC2086
-      ignore "$solana_install_init" $SOLANA_INSTALL_INIT_ARGS
+      ignore "$solana_install_init" $SAFECOIN_INSTALL_INIT_ARGS
     else
       ignore "$solana_install_init" "$@"
     fi

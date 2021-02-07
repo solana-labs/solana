@@ -8,7 +8,7 @@ here=$(dirname "$0")
 # shellcheck source=multinode-demo/common.sh
 source "$here"/common.sh
 
-stake_sol=1   # default number of SOL to assign as stake (1 SOL)
+stake_sol=1   # default number of SAFE to assign as stake (1 SAFE)
 url=http://127.0.0.1:8899   # default RPC url
 
 usage() {
@@ -18,7 +18,7 @@ usage() {
   fi
   cat <<EOF
 
-usage: $0 [OPTIONS] <SOL to stake ($stake_sol)>
+usage: $0 [OPTIONS] <SAFE to stake ($stake_sol)>
 
 Add stake to a validator
 
@@ -88,7 +88,7 @@ if [[ -n ${positional_args[0]} ]]; then
   stake_sol=${positional_args[0]}
 fi
 
-VALIDATOR_KEYS_DIR=$SOLANA_CONFIG_DIR/validator$label
+VALIDATOR_KEYS_DIR=$SAFECOIN_CONFIG_DIR/validator$label
 vote_account="${vote_account:-$VALIDATOR_KEYS_DIR/vote-account.json}"
 stake_account="${stake_account:-$VALIDATOR_KEYS_DIR/stake-account.json}"
 
@@ -102,7 +102,7 @@ if ((airdrops_enabled)); then
     echo "--keypair argument must be provided"
     exit 1
   fi
-  $solana_cli "${common_args[@]}" --keypair "$SOLANA_CONFIG_DIR/faucet.json" transfer "$keypair" "$stake_sol"
+  $solana_cli "${common_args[@]}" --keypair "$SAFECOIN_CONFIG_DIR/faucet.json" transfer "$keypair" "$stake_sol"
 fi
 
 if [[ -n $keypair ]]; then

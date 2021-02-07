@@ -1,27 +1,27 @@
 import { expect } from "chai";
-import { lamportsToSol, LAMPORTS_PER_SOL } from "utils";
+import { lamportsToSafe, LAMPORTS_PER_SAFE } from "utils";
 import BN from "bn.js";
 
-describe("lamportsToSol", () => {
+describe("lamportsToSafe", () => {
   it("0 lamports", () => {
-    expect(lamportsToSol(new BN(0))).to.eq(0.0);
+    expect(lamportsToSafe(new BN(0))).to.eq(0.0);
   });
 
   it("1 lamport", () => {
-    expect(lamportsToSol(new BN(1))).to.eq(0.000000001);
-    expect(lamportsToSol(new BN(-1))).to.eq(-0.000000001);
+    expect(lamportsToSafe(new BN(1))).to.eq(0.000000001);
+    expect(lamportsToSafe(new BN(-1))).to.eq(-0.000000001);
   });
 
-  it("1 SOL", () => {
-    expect(lamportsToSol(new BN(LAMPORTS_PER_SOL))).to.eq(1.0);
-    expect(lamportsToSol(new BN(-LAMPORTS_PER_SOL))).to.eq(-1.0);
+  it("1 SAFE", () => {
+    expect(lamportsToSafe(new BN(LAMPORTS_PER_SAFE))).to.eq(1.0);
+    expect(lamportsToSafe(new BN(-LAMPORTS_PER_SAFE))).to.eq(-1.0);
   });
 
   it("u64::MAX lamports", () => {
-    expect(lamportsToSol(new BN(2).pow(new BN(64)))).to.eq(
+    expect(lamportsToSafe(new BN(2).pow(new BN(64)))).to.eq(
       18446744073.709551615
     );
-    expect(lamportsToSol(new BN(2).pow(new BN(64)).neg())).to.eq(
+    expect(lamportsToSafe(new BN(2).pow(new BN(64)).neg())).to.eq(
       -18446744073.709551615
     );
   });

@@ -16,7 +16,7 @@ We do not accept U.S. entities or individuals._
 
 #### 3) Join Our Discord
 
-**Required** for all Tour de SOL validators, as this is our primary
+**Required** for all Tour de SAFE validators, as this is our primary
 communication channel: https://discord.gg/N3mqAfa
 
 ### Next Steps

@@ -4,7 +4,7 @@ import {
   SignatureResult,
   ParsedInstruction,
 } from "@solana/web3.js";
-import { lamportsToSolString } from "utils";
+import { lamportsToSafeString } from "utils";
 import { InstructionCard } from "../InstructionCard";
 import { Copyable } from "components/common/Copyable";
 import { Address } from "components/common/Address";
@@ -67,8 +67,8 @@ export function CreateWithSeedDetailsCard(props: {
       </tr>
 
       <tr>
-        <td>Transfer Amount (SOL)</td>
-        <td className="text-lg-right">{lamportsToSolString(info.lamports)}</td>
+        <td>Transfer Amount (SAFE)</td>
+        <td className="text-lg-right">{lamportsToSafeString(info.lamports)}</td>
       </tr>
 
       <tr>

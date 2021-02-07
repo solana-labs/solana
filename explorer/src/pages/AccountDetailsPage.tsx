@@ -162,7 +162,7 @@ function DetailsSections({ pubkey, tab }: { pubkey: PublicKey; tab?: string }) {
       {isScam && (
         <div className="alert alert-danger alert-scam" role="alert">
           Warning! This account has been flagged as a scam account. Please be
-          cautious sending SOL to this account.
+          cautious sending SAFE to this account.
         </div>
       )}
       {<InfoSection account={account} />}

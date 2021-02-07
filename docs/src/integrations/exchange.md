@@ -2,7 +2,7 @@
 title: Add Safecoin to Your Exchange
 ---
 
-This guide describes how to add Safecoin's native token SOL to your cryptocurrency
+This guide describes how to add Safecoin's native token SAFE to your cryptocurrency
 exchange.
 
 ## Node Setup
@@ -147,14 +147,14 @@ validators and only on the *Gossip*, *Repair* and *ServeR* ports.
 ## Setting up Deposit Accounts
 
 Safecoin accounts do not require any on-chain initialization; once they contain
-some SOL, they exist. To set up a deposit account for your exchange, simply
+some SAFE, they exist. To set up a deposit account for your exchange, simply
 generate a Safecoin keypair using any of our [wallet tools](../wallet-guide/cli.md).
 
 We recommend using a unique deposit account for each of your users.
 
 Safecoin accounts are charged [rent](developing/programming-model/accounts.md#rent) on creation and once per
 epoch, but they can be made rent-exempt if they contain 2-years worth of rent in
-SOL. In order to find the minimum rent-exempt balance for your deposit accounts,
+SAFE. In order to find the minimum rent-exempt balance for your deposit accounts,
 query the
 [`getMinimumBalanceForRentExemption` endpoint](developing/clients/jsonrpc-api.md#getminimumbalanceforrentexemption):
 
@@ -167,12 +167,12 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 ### Offline Accounts
 
 You may wish to keep the keys for one or more collection accounts offline for
-greater security. If so, you will need to move SOL to hot accounts using our
+greater security. If so, you will need to move SAFE to hot accounts using our
 [offline methods](../offline-signing.md).
 
 ## Listening for Deposits
 
-When a user wants to deposit SOL into your exchange, instruct them to send a
+When a user wants to deposit SAFE into your exchange, instruct them to send a
 transfer to the appropriate deposit address.
 
 ### Poll for Blocks
@@ -264,7 +264,7 @@ list the starting and ending balances of each account in
 [lamports](../terminology.md#lamport), indexed to the `accountKeys` list. For
 example, if the deposit address if interest is
 `47Sbuv6jL7CViK9F2NMW51aQGhfdpUu7WNvKyH645Rfi`, this transaction represents a
-transfer of 218099990000 - 207099990000 = 11000000000 lamports = 11 SOL
+transfer of 218099990000 - 207099990000 = 11000000000 lamports = 11 SAFE
 
 If you need more information about the transaction type or other specifics, you
 can request the block from RPC in binary format, and parse it using either our
@@ -373,7 +373,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 
 ## Sending Withdrawals
 
-To accommodate a user's request to withdraw SOL, you must generate a Safecoin
+To accommodate a user's request to withdraw SAFE, you must generate a Safecoin
 transfer transaction, and send it to the api node to be forwarded to your
 cluster.
 
@@ -548,7 +548,7 @@ public class PubkeyValidator
 [SPL Token](https://spl.solana.com/token) is the standard for wrapped/synthetic
 token creation and exchange on the Safecoin blockchain.
 
-The SPL Token workflow is similar to that of native SOL tokens, but there are a
+The SPL Token workflow is similar to that of native SAFE tokens, but there are a
 few differences which will be discussed in this section.
 
 ### Token Mints
@@ -596,8 +596,8 @@ deposited.   Token accounts can be created explicitly with the
 `spl-token transfer --fund-recipient ...` command.
 1. SPL Token accounts must remain [rent-exempt](developing/programming-model/accounts.md#rent-exemption)
 for the duration of their existence and therefore require a small amount of
-native SOL tokens be deposited at account creation. For SPL Token v2 accounts,
-this amount is 0.00203928 SOL (2,039,280 lamports).
+native SAFE tokens be deposited at account creation. For SPL Token v2 accounts,
+this amount is 0.00203928 SAFE (2,039,280 lamports).
 
 #### Command Line
 To create an SPL Token account with the following properties:
@@ -680,7 +680,7 @@ fields to include SPL Token balance transfers.
 
 ### Withdrawing
 The withdrawal address a user provides should be the same address used for
-regular SOL withdrawal.
+regular SAFE withdrawal.
 
 Before executing a withdrawal [transfer](#token-transfers),
 the exchange should check the address as
@@ -690,7 +690,7 @@ From the withdrawal address, the associated token account for the correct mint
 determined and the transfer issued to that account.  Note that it's possible
 that the associated token account does not yet exist, at which point the
 exchange should fund the account on behalf of the user.  For SPL Token v2
-accounts, funding the withdrawal account will require 0.00203928 SOL (2,039,280
+accounts, funding the withdrawal account will require 0.00203928 SAFE (2,039,280
 lamports).
 
 Template `spl-token transfer` command for a withdrawal:
@@ -714,4 +714,4 @@ Be sure to test your complete workflow on Safecoin devnet and testnet
 [clusters](../clusters.md) before moving to production on mainnet-beta. Devnet
 is the most open and flexible, and ideal for initial development, while testnet
 offers more realistic cluster configuration. Both devnet and testnet support a faucet,
-run `solana airdrop 10` to obtain some devnet or testnet SOL for developement and testing.
+run `solana airdrop 10` to obtain some devnet or testnet SAFE for developement and testing.

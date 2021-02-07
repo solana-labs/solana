@@ -14,4 +14,4 @@ In terms of `solana` command-line subcommands:
 * `transfer`:  Any additional funds transferred after `create-stake-account` are excluded from the "compliant balance"
 
 System accounts can also be manually enrolled with the `solana-stake-monitor enroll` subcommand.
-An enrolled system account must always maintain a balance greater than the balance it had at enrollment minus 1 SOL.
+An enrolled system account must always maintain a balance greater than the balance it had at enrollment minus 1 SAFE.

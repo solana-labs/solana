@@ -279,7 +279,7 @@ verifyLedger() {
     echo "--- $ledger ledger verification"
     (
       set -x
-      $solana_ledger_tool --ledger "$SOLANA_CONFIG_DIR"/$ledger verify
+      $solana_ledger_tool --ledger "$SAFECOIN_CONFIG_DIR"/$ledger verify
     ) || flag_error
   done
 }
@@ -312,7 +312,7 @@ flag_error() {
 }
 
 if ! $skipSetup; then
-  clear_config_dir "$SOLANA_CONFIG_DIR"
+  clear_config_dir "$SAFECOIN_CONFIG_DIR"
   multinode-demo/setup.sh --hashes-per-tick sleep
 else
   verifyLedger

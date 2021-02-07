@@ -4,7 +4,7 @@ title: Safecoin Wallet Guide
 
 This document describes the different wallet options that are available to users
 of Safecoin who want to be able to send, receive and interact with
-SOL tokens on the Safecoin blockchain.
+SAFE tokens on the Safecoin blockchain.
 
 ## What is a Wallet?
 
@@ -44,7 +44,7 @@ Some store and back up private keys more securely.
 Safecoin supports multiple types of wallets so you can choose the right balance
 of security and convenience.
 
-**If you want to be able to receive SOL tokens on the Safecoin blockchain,
+**If you want to be able to receive SAFE tokens on the Safecoin blockchain,
 you first will need to create a wallet.**
 
 ## Supported Wallets

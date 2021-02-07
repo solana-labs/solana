@@ -4,7 +4,7 @@ title: Introduction
 
 ## What is Safecoin?
 
-Safecoin is an open source project implementing a new, high-performance, permissionless blockchain. The Safecoin Foundation is based in Geneva, Switzerland and maintains the open source project.
+Safecoin is an open source project implementing a new, high-performance, permissionless blockchain. The Solana Foundation is based in Geneva, Switzerland and maintains the open source project.
 
 ## Why Safecoin?
 
@@ -24,9 +24,9 @@ The architecture describes a theoretical upper bound of 710 thousand transaction
 
 A cluster is a set of computers that work together and can be viewed from the outside as a single system. A Safecoin cluster is a set of independently owned computers working together \(and sometimes against each other\) to verify the output of untrusted, user-submitted programs. A Safecoin cluster can be utilized any time a user wants to preserve an immutable record of events in time or programmatic interpretations of those events. One use is to track which of the computers did meaningful work to keep the cluster running. Another use might be to track the possession of real-world assets. In each case, the cluster produces a record of events called the ledger. It will be preserved for the lifetime of the cluster. As long as someone somewhere in the world maintains a copy of the ledger, the output of its programs \(which may contain a record of who possesses what\) will forever be reproducible, independent of the organization that launched it.
 
-## What are SOLs?
+## What are SAFEs?
 
-A SOL is the name of Safecoin's native token, which can be passed to nodes in a Safecoin cluster in exchange for running an on-chain program or validating its output. The system may perform micropayments of fractional SOLs, which are called _lamports_. They are named in honor of Safecoin's biggest technical influence, [Leslie Lamport](https://en.wikipedia.org/wiki/Leslie_Lamport). A lamport has a value of 0.000000001 SOL.
+A SAFE is the name of Safecoin's native token, which can be passed to nodes in a Safecoin cluster in exchange for running an on-chain program or validating its output. The system may perform micropayments of fractional SAFEs, which are called _lamports_. They are named in honor of Safecoin's biggest technical influence, [Leslie Lamport](https://en.wikipedia.org/wiki/Leslie_Lamport). A lamport has a value of 0.000000001 SAFE.
 
 ## Disclaimer
 

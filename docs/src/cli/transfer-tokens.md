@@ -2,7 +2,7 @@
 title: Send and Receive Tokens
 ---
 
-This page decribes how to receive and send SOL tokens using the command line
+This page decribes how to receive and send SAFE tokens using the command line
 tools with a command line wallet such as a [paper wallet](../wallet-guide/paper-wallet.md),
 a [file system wallet](../wallet-guide/file-system-wallet.md), or a
 [hardware wallet](../wallet-guide/hardware-wallets.md). Before you begin, make sure
@@ -36,7 +36,7 @@ public key/wallet address.
 #### Check your balance
 
 Confirm the airdrop was successful by checking the account's balance.
-It should output `10 SOL`:
+It should output `10 SAFE`:
 
 ```bash
 solana balance <ACCOUNT_ADDRESS> --url https://devnet.solana.com
@@ -101,12 +101,12 @@ Save this seed phrase to recover your new keypair:
 width enhance concert vacant ketchup eternal spy craft spy guard tag punch    # If this was a real wallet, never share these words on the internet like this!
 ==========================================================================
 
-$ solana airdrop 10 DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com  # Airdropping 10 SOL to my wallet's address/pubkey
-Requesting airdrop of 10 SOL from 35.233.193.70:9900
-10 SOL
+$ solana airdrop 10 DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com  # Airdropping 10 SAFE to my wallet's address/pubkey
+Requesting airdrop of 10 SAFE from 35.233.193.70:9900
+10 SAFE
 
 $ solana balance DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com # Check the address's balance
-10 SOL
+10 SAFE
 
 $ solana-keygen new --no-outfile  # Creating a second wallet, a paper wallet
 Generating a new keypair
@@ -122,10 +122,10 @@ $ solana transfer --from my_solana_wallet.json 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBM
 3gmXvykAd1nCQQ7MjosaHLf69Xyaqyq1qw2eu1mgPyYXd5G4v1rihhg1CiRw35b9fHzcftGKKEu4mbUeXY2pEX2z  # This is the transaction signature
 
 $ solana balance DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com
-4.999995 SOL  # The sending account has slightly less than 5 SOL remaining due to the 0.000005 SOL transaction fee payment
+4.999995 SAFE  # The sending account has slightly less than 5 SAFE remaining due to the 0.000005 SAFE transaction fee payment
 
 $ solana balance 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv --url https://devnet.solana.com
-5 SOL  # The second wallet has now received the 5 SOL transfer from the first wallet
+5 SAFE  # The second wallet has now received the 5 SAFE transfer from the first wallet
 
 ```
 
@@ -142,7 +142,7 @@ characters. Its length varies from 32 to 44 characters.
 
 ## Send Tokens
 
-If you already hold SOL and want to send tokens to someone, you will need
+If you already hold SAFE and want to send tokens to someone, you will need
 a path to your keypair, their base58-encoded public key, and a number of
 tokens to transfer. Once you have that collected, you can transfer tokens
 with the `solana transfer` command:

@@ -4,7 +4,7 @@ import {
   StakeProgram,
   ParsedInstruction,
 } from "@solana/web3.js";
-import { lamportsToSolString } from "utils";
+import { lamportsToSafeString } from "utils";
 import { InstructionCard } from "../InstructionCard";
 import { Address } from "components/common/Address";
 import { SplitInfo } from "./types";
@@ -57,8 +57,8 @@ export function SplitDetailsCard(props: {
       </tr>
 
       <tr>
-        <td>Split Amount (SOL)</td>
-        <td className="text-lg-right">{lamportsToSolString(info.lamports)}</td>
+        <td>Split Amount (SAFE)</td>
+        <td className="text-lg-right">{lamportsToSafeString(info.lamports)}</td>
       </tr>
     </InstructionCard>
   );

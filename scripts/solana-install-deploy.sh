@@ -3,7 +3,7 @@
 # Convenience script to easily deploy a software update to a testnet
 #
 set -e
-SOLANA_ROOT="$(cd "$(dirname "$0")"/..; pwd)"
+SAFECOIN_ROOT="$(cd "$(dirname "$0")"/..; pwd)"
 
 maybeKeypair=
 while [[ ${1:0:2} = -- ]]; do
@@ -26,7 +26,7 @@ if [[ -z $URL || -z $TAG ]]; then
 fi
 
 if [[ ! -f update_manifest_keypair.json ]]; then
-  "$SOLANA_ROOT"/scripts/solana-install-update-manifest-keypair.sh "$OS"
+  "$SAFECOIN_ROOT"/scripts/solana-install-update-manifest-keypair.sh "$OS"
 fi
 
 case "$OS" in
@@ -65,7 +65,7 @@ edge|beta)
 esac
 
 # Prefer possible `cargo build` binaries over PATH binaries
-PATH="$SOLANA_ROOT"/target/debug:$PATH
+PATH="$SAFECOIN_ROOT"/target/debug:$PATH
 
 set -x
 # shellcheck disable=SC2086 # Don't want to double quote $maybeKeypair

@@ -1,6 +1,6 @@
 import React from "react";
 import { Account } from "providers/accounts";
-import { lamportsToSolString } from "utils";
+import { lamportsToSafeString } from "utils";
 import { TableCardBody } from "components/common/TableCardBody";
 import { Address } from "components/common/Address";
 import { addressLabel } from "utils/tx";
@@ -32,9 +32,9 @@ export function UnknownAccountCard({ account }: { account: Account }) {
           </tr>
         )}
         <tr>
-          <td>Balance (SOL)</td>
+          <td>Balance (SAFE)</td>
           <td className="text-lg-right text-uppercase">
-            {lamportsToSolString(lamports)}
+            {lamportsToSafeString(lamports)}
           </td>
         </tr>
 

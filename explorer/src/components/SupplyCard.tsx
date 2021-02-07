@@ -2,7 +2,7 @@ import React from "react";
 import { useSupply, useFetchSupply, Status } from "providers/supply";
 import { LoadingCard } from "./common/LoadingCard";
 import { ErrorCard } from "./common/ErrorCard";
-import { lamportsToSolString } from "utils";
+import { lamportsToSafeString } from "utils";
 import { TableCardBody } from "./common/TableCardBody";
 
 export function SupplyCard() {
@@ -31,23 +31,23 @@ export function SupplyCard() {
 
       <TableCardBody>
         <tr>
-          <td className="w-100">Total Supply (SOL)</td>
+          <td className="w-100">Total Supply (SAFE)</td>
           <td className="text-lg-right">
-            {lamportsToSolString(supply.total, 0)}
+            {lamportsToSafeString(supply.total, 0)}
           </td>
         </tr>
 
         <tr>
-          <td className="w-100">Circulating Supply (SOL)</td>
+          <td className="w-100">Circulating Supply (SAFE)</td>
           <td className="text-lg-right">
-            {lamportsToSolString(supply.circulating, 0)}
+            {lamportsToSafeString(supply.circulating, 0)}
           </td>
         </tr>
 
         <tr>
-          <td className="w-100">Non-Circulating Supply (SOL)</td>
+          <td className="w-100">Non-Circulating Supply (SAFE)</td>
           <td className="text-lg-right">
-            {lamportsToSolString(supply.nonCirculating, 0)}
+            {lamportsToSafeString(supply.nonCirculating, 0)}
           </td>
         </tr>
       </TableCardBody>

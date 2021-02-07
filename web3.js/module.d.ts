@@ -1108,5 +1108,5 @@ declare module '@solana/web3.js' {
   export function clusterApiUrl(cluster?: Cluster, tls?: boolean): string;
 
   // === src/index.js ===
-  export const LAMPORTS_PER_SOL: number;
+  export const LAMPORTS_PER_SAFE: number;
 }

@@ -108,7 +108,7 @@ Details on how the loader serializes the program inputs can be found in the
 ## Data Types
 
 The loader's deserialization helper function populates the
-[SolParameters](https://github.com/solana-labs/solana/blob/8415c22b593f164020adc7afe782e8041d756ddf/sdk/bpf/c/inc/solana_sdk.h#L276)
+[SafeParameters](https://github.com/solana-labs/solana/blob/8415c22b593f164020adc7afe782e8041d756ddf/sdk/bpf/c/inc/solana_sdk.h#L276)
 structure:
 
 ```c
@@ -116,28 +116,28 @@ structure:
  * Structure that the program's entrypoint input data is deserialized into.
  */
 typedef struct {
-  SolAccountInfo* ka; /** Pointer to an array of SolAccountInfo, must already
-                          point to an array of SolAccountInfos */
-  uint64_t ka_num; /** Number of SolAccountInfo entries in `ka` */
+  SafeAccountInfo* ka; /** Pointer to an array of SafeAccountInfo, must already
+                          point to an array of SafeAccountInfos */
+  uint64_t ka_num; /** Number of SafeAccountInfo entries in `ka` */
   const uint8_t *data; /** pointer to the instruction data */
   uint64_t data_len; /** Length in bytes of the instruction data */
-  const SolPubkey *program_id; /** program_id of the currently executing program */
-} SolParameters;
+  const SafePubkey *program_id; /** program_id of the currently executing program */
+} SafeParameters;
 ```
 
 'ka' is an ordered array of the accounts referenced by the instruction and
 represented as a
-[SolAccountInfo](https://github.com/solana-labs/solana/blob/8415c22b593f164020adc7afe782e8041d756ddf/sdk/bpf/c/inc/solana_sdk.h#L173)
+[SafeAccountInfo](https://github.com/solana-labs/solana/blob/8415c22b593f164020adc7afe782e8041d756ddf/sdk/bpf/c/inc/solana_sdk.h#L173)
 structures.  An account's place in the array signifies its meaning, for example,
 when transferring lamports an instruction may define the first account as the
 source and the second as the destination.
 
-The members of the `SolAccountInfo` structure are read-only except for
+The members of the `SafeAccountInfo` structure are read-only except for
 `lamports` and `data`.  Both may be modified by the program in accordance with
 the [runtime enforcement
 policy](developing/programming-model/accounts.md#policy).  When an instruction
 reference the same account multiple times there may be duplicate
-`SolAccountInfo` entries in the array but they both point back to the original
+`SafeAccountInfo` entries in the array but they both point back to the original
 input byte array.  A program should handle these case delicately to avoid
 overlapping read/writes to the same buffer.  If a program implements their own
 deserialization function care should be taken to handle duplicate accounts

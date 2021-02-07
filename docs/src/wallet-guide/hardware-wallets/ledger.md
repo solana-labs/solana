@@ -97,12 +97,12 @@ You can also view the balance of any account address on the Accounts tab in the
 [Explorer](https://explorer.solana.com/accounts)
 and paste the address in the box to view the balance in you web browser.
 
-Note: Any address with a balance of 0 SOL, such as a newly created one on your
+Note: Any address with a balance of 0 SAFE, such as a newly created one on your
 Ledger, will show as "Not Found" in the explorer. Empty accounts and non-existent
 accounts are treated the same in Safecoin. This will change when your account
-address has some SOL in it.
+address has some SAFE in it.
 
-### Send SOL from a Nano
+### Send SAFE from a Nano
 
 To send some tokens from an address controlled by your Nano, you will
 need to use the device to sign a transaction, using the same keypair URL you
@@ -121,7 +121,7 @@ solana transfer RECIPIENT_ADDRESS AMOUNT --keypair KEYPAIR_URL_OF_SENDER
 
 Below is a full example. First, an address is viewed at a certain keypair URL.
 Second, the balance of tht address is checked. Lastly, a transfer transaction
-is entered to send `1` SOL to the recipient address `7cvkjYAkUYs4W8XcXsca7cBrEGFeSUjeZmKoNBvEwyri`.
+is entered to send `1` SAFE to the recipient address `7cvkjYAkUYs4W8XcXsca7cBrEGFeSUjeZmKoNBvEwyri`.
 When you hit Enter for a transfer command, you will be prompted to approve the
 transaction details on your Ledger device. On the device, use the right and
 left buttons to review the transaction details. If they look correct, click
@@ -133,7 +133,7 @@ screen.
 CjeqzArkZt6xwdnZ9NZSf8D1CNJN1rjeFiyd8q7iLWAV
 
 ~$ solana balance CjeqzArkZt6xwdnZ9NZSf8D1CNJN1rjeFiyd8q7iLWAV
-1.000005 SOL
+1.000005 SAFE
 
 ~$ solana transfer 7cvkjYAkUYs4W8XcXsca7cBrEGFeSUjeZmKoNBvEwyri 1 --keypair usb://ledger?key=42
 Waiting for your approval on Ledger hardware wallet usb://ledger/2JT2Xvy6T8hSmT8g6WdeDbHUgoeGdj6bE2VueCZUJmyN

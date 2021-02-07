@@ -120,15 +120,15 @@ solana-tokens distribute-stake --stake-account-address <ACCOUNT_ADDRESS> \
     --stake-authority <KEYPAIR> --withdraw-authority <KEYPAIR> --fee-payer <KEYPAIR>
 ```
 
-Currently, this will subtract 1 SOL from each allocation and store it the
-recipient address. That SOL can be used to pay transaction fees on staking
+Currently, this will subtract 1 SAFE from each allocation and store it the
+recipient address. That SAFE can be used to pay transaction fees on staking
 operations such as delegating stake. The rest of the allocation is put in
 a stake account. The new stake account address is output in the transaction
 log.
 
 ## Distribute SPL tokens
 
-Distributing SPL Tokens works very similarly to distributing SOL, but requires
+Distributing SPL Tokens works very similarly to distributing SAFE, but requires
 the `--owner` parameter to sign transactions. Each recipient account must be an
 system account that will own an Associated Token Account for the SPL Token mint.
 The Associated Token Account will be created, and funded by the fee_payer, if it
@@ -188,7 +188,7 @@ C56nwrDVFpPrqwGYsTgQxv1ZraTh81H14PV4RHvZe36s                    10.000
 
 ### Calculate what tokens should be sent
 
-As with SOL, you can List the differences between a list of expected
+As with SAFE, you can List the differences between a list of expected
 distributions and the record of what transactions have already been sent using
 the `--dry-run` parameter, or `solana-tokens balances`.
 

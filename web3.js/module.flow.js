@@ -1119,5 +1119,5 @@ declare module '@solana/web3.js' {
   ): string;
 
   // === src/index.js ===
-  declare export var LAMPORTS_PER_SOL: number;
+  declare export var LAMPORTS_PER_SAFE: number;
 }

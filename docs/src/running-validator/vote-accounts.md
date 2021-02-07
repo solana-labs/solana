@@ -49,7 +49,7 @@ stored as a "hot wallet" in a keypair file on the same system the validator
 process is running.
 
 Because a hot wallet is generally less secure than an offline or "cold" wallet,
-the validator operator may choose to store only enough SOL on the identity
+the validator operator may choose to store only enough SAFE on the identity
 account to cover voting fees for a limited amount of time, such as a few weeks
 or months.  The validator identity account could be periodically topped off
 from a more secure wallet.

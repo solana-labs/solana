@@ -26,7 +26,7 @@ Explorers:
 - Gossip entrypoint for Devnet: `entrypoint.devnet.solana.com:8001`
 - Metrics environment variable for Devnet:
 ```bash
-export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=devnet,u=scratch_writer,p=topsecret"
+export SAFECOIN_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=devnet,u=scratch_writer,p=topsecret"
 ```
 - RPC URL for Devnet: `https://devnet.solana.com`
 
@@ -60,7 +60,7 @@ The `--trusted-validator`s is operated by Safecoin
 - Testnet is where we stress test recent release features on a live
   cluster, particularly focused on network performance, stability and validator
   behavior.
-- [Tour de SOL](tour-de-sol.md) initiative runs on Testnet, where we
+- [Tour de SAFE](tour-de-sol.md) initiative runs on Testnet, where we
   encourage malicious behavior and attacks on the network to help us find and
   squash bugs or network vulnerabilities.
 - Testnet tokens are **not real**
@@ -71,7 +71,7 @@ The `--trusted-validator`s is operated by Safecoin
 - Gossip entrypoint for Testnet: `entrypoint.testnet.solana.com:8001`
 - Metrics environment variable for Testnet:
 ```bash
-export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=tds,u=testnet_write,p=c4fa841aa918bf8274e3e2a44d77568d9861b3ea"
+export SAFECOIN_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=tds,u=testnet_write,p=c4fa841aa918bf8274e3e2a44d77568d9861b3ea"
 ```
 - RPC URL for Testnet: `https://testnet.solana.com`
 
@@ -113,16 +113,16 @@ The identity of the `--trusted-validator`s are:
 A permissionless, persistent cluster for early token holders and launch partners.
 Currently, rewards and inflation are disabled.
 
-- Tokens that are issued on Mainnet Beta are **real** SOL
+- Tokens that are issued on Mainnet Beta are **real** SAFE
 - If you have paid money to purchase/be issued tokens, such as through our
   CoinList auction, these tokens will be transferred on Mainnet Beta.
   - Note: If you are using a non-command-line wallet such as
-    [Solflare](wallet-guide/solflare.md),
+    [Safeflare](wallet-guide/solflare.md),
     the wallet will always be connecting to Mainnet Beta.
 - Gossip entrypoint for Mainnet Beta: `entrypoint.mainnet-beta.solana.com:8001`
 - Metrics environment variable for Mainnet Beta:
 ```bash
-export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=mainnet-beta,u=mainnet-beta_write,p=password"
+export SAFECOIN_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=mainnet-beta,u=mainnet-beta_write,p=password"
 ```
 - RPC URL for Mainnet Beta: `https://api.mainnet-beta.solana.com`
 

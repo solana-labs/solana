@@ -71,8 +71,8 @@ To run a performance-enhanced validator on Linux, [CUDA 10.0](https://developer.
 
 ```bash
 ./fetch-perf-libs.sh
-NDEBUG=1 SOLANA_CUDA=1 ./multinode-demo/bootstrap-validator.sh
-NDEBUG=1 SOLANA_CUDA=1 ./multinode-demo/validator.sh
+NDEBUG=1 SAFECOIN_CUDA=1 ./multinode-demo/bootstrap-validator.sh
+NDEBUG=1 SAFECOIN_CUDA=1 ./multinode-demo/validator.sh
 ```
 
 ### Testnet Client Demo

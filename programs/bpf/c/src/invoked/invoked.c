@@ -7,8 +7,8 @@
 extern uint64_t entrypoint(const uint8_t *input) {
   sol_log("Invoked C program");
 
-  SolAccountInfo accounts[4];
-  SolParameters params = (SolParameters){.ka = accounts};
+  SafeAccountInfo accounts[4];
+  SafeParameters params = (SafeParameters){.ka = accounts};
 
   if (!sol_deserialize(input, &params, 0)) {
     return ERROR_INVALID_ARGUMENT;
@@ -28,13 +28,13 @@ extern uint64_t entrypoint(const uint8_t *input) {
     static const int INVOKED_PROGRAM_DUP_INDEX = 3;
     sol_assert(sol_deserialize(input, &params, 4));
 
-    SolPubkey bpf_loader_id =
-        (SolPubkey){.x = {2,  168, 246, 145, 78,  136, 161, 110, 57,  90, 225,
+    SafePubkey bpf_loader_id =
+        (SafePubkey){.x = {2,  168, 246, 145, 78,  136, 161, 110, 57,  90, 225,
                           40, 148, 143, 250, 105, 86,  147, 55,  104, 24, 221,
                           71, 67,  82,  33,  243, 198, 0,   0,   0,   0}};
 
-    SolPubkey bpf_loader_deprecated_id =
-        (SolPubkey){.x = {2,   168, 246, 145, 78,  136, 161, 107, 189, 35,  149,
+    SafePubkey bpf_loader_deprecated_id =
+        (SafePubkey){.x = {2,   168, 246, 145, 78,  136, 161, 107, 189, 35,  149,
                           133, 95,  100, 4,   217, 180, 244, 86,  183, 130, 27,
                           176, 20,  87,  73,  66,  140, 0,   0,   0,   0}};
 
@@ -53,7 +53,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
       sol_assert(accounts[ARGUMENT_INDEX].data[i] == i);
     }
 
-    sol_assert(SolPubkey_same(accounts[INVOKED_ARGUMENT_INDEX].owner,
+    sol_assert(SafePubkey_same(accounts[INVOKED_ARGUMENT_INDEX].owner,
                               accounts[INVOKED_PROGRAM_INDEX].key));
     sol_assert(*accounts[INVOKED_ARGUMENT_INDEX].lamports == 10);
     sol_assert(accounts[INVOKED_ARGUMENT_INDEX].data_len == 10);
@@ -63,17 +63,17 @@ extern uint64_t entrypoint(const uint8_t *input) {
     sol_assert(!accounts[INVOKED_ARGUMENT_INDEX].executable);
 
     sol_assert(
-        SolPubkey_same(accounts[INVOKED_PROGRAM_INDEX].key, params.program_id))
-        sol_assert(SolPubkey_same(accounts[INVOKED_PROGRAM_INDEX].owner,
+        SafePubkey_same(accounts[INVOKED_PROGRAM_INDEX].key, params.program_id))
+        sol_assert(SafePubkey_same(accounts[INVOKED_PROGRAM_INDEX].owner,
                                   &bpf_loader_id));
     sol_assert(!accounts[INVOKED_PROGRAM_INDEX].is_signer);
     sol_assert(!accounts[INVOKED_PROGRAM_INDEX].is_writable);
     sol_assert(accounts[INVOKED_PROGRAM_INDEX].rent_epoch == 0);
     sol_assert(accounts[INVOKED_PROGRAM_INDEX].executable);
 
-    sol_assert(SolPubkey_same(accounts[INVOKED_PROGRAM_INDEX].key,
+    sol_assert(SafePubkey_same(accounts[INVOKED_PROGRAM_INDEX].key,
                               accounts[INVOKED_PROGRAM_DUP_INDEX].key));
-    sol_assert(SolPubkey_same(accounts[INVOKED_PROGRAM_INDEX].owner,
+    sol_assert(SafePubkey_same(accounts[INVOKED_PROGRAM_INDEX].owner,
                               accounts[INVOKED_PROGRAM_DUP_INDEX].owner));
     sol_assert(*accounts[INVOKED_PROGRAM_INDEX].lamports ==
                *accounts[INVOKED_PROGRAM_DUP_INDEX].lamports);
@@ -110,28 +110,28 @@ extern uint64_t entrypoint(const uint8_t *input) {
     uint8_t bump_seed2 = params.data[1];
     uint8_t bump_seed3 = params.data[2];
 
-    SolAccountMeta arguments[] = {
+    SafeAccountMeta arguments[] = {
         {accounts[DERIVED_KEY1_INDEX].key, true, false},
         {accounts[DERIVED_KEY2_INDEX].key, true, true},
         {accounts[DERIVED_KEY3_INDEX].key, false, true}};
     uint8_t data[] = {VERIFY_NESTED_SIGNERS};
-    const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
-                                        arguments, SOL_ARRAY_SIZE(arguments),
-                                        data, SOL_ARRAY_SIZE(data)};
+    const SafeInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
+                                        arguments, SAFE_ARRAY_SIZE(arguments),
+                                        data, SAFE_ARRAY_SIZE(data)};
     uint8_t seed1[] = {'L', 'i', 'l', '\''};
     uint8_t seed2[] = {'B', 'i', 't', 's'};
-    const SolSignerSeed seeds1[] = {{seed1, SOL_ARRAY_SIZE(seed1)},
-                                    {seed2, SOL_ARRAY_SIZE(seed2)},
+    const SafeSignerSeed seeds1[] = {{seed1, SAFE_ARRAY_SIZE(seed1)},
+                                    {seed2, SAFE_ARRAY_SIZE(seed2)},
                                     {&bump_seed2, 1}};
-    const SolSignerSeed seeds2[] = {
+    const SafeSignerSeed seeds2[] = {
         {(uint8_t *)accounts[DERIVED_KEY2_INDEX].key, SIZE_PUBKEY},
         {&bump_seed3, 1}};
-    const SolSignerSeeds signers_seeds[] = {{seeds1, SOL_ARRAY_SIZE(seeds1)},
-                                            {seeds2, SOL_ARRAY_SIZE(seeds2)}};
+    const SafeSignerSeeds signers_seeds[] = {{seeds1, SAFE_ARRAY_SIZE(seeds1)},
+                                            {seeds2, SAFE_ARRAY_SIZE(seeds2)}};
 
     sol_assert(SUCCESS == sol_invoke_signed(&instruction, accounts,
                                             params.ka_num, signers_seeds,
-                                            SOL_ARRAY_SIZE(signers_seeds)));
+                                            SAFE_ARRAY_SIZE(signers_seeds)));
 
     break;
   }
@@ -179,14 +179,14 @@ extern uint64_t entrypoint(const uint8_t *input) {
 
     sol_assert(false == accounts[INVOKED_ARGUMENT_INDEX].is_signer);
     sol_assert(false == accounts[INVOKED_ARGUMENT_INDEX].is_writable);
-    SolAccountMeta arguments[] = {
+    SafeAccountMeta arguments[] = {
         {accounts[INVOKED_ARGUMENT_INDEX].key, true, false}};
     uint8_t data[] = {VERIFY_PRIVILEGE_ESCALATION};
-    const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
-                                        arguments, SOL_ARRAY_SIZE(arguments),
-                                        data, SOL_ARRAY_SIZE(data)};
+    const SafeInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
+                                        arguments, SAFE_ARRAY_SIZE(arguments),
+                                        data, SAFE_ARRAY_SIZE(data)};
     sol_assert(SUCCESS ==
-               sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts)));
+               sol_invoke(&instruction, accounts, SAFE_ARRAY_SIZE(accounts)));
     break;
   }
 
@@ -198,14 +198,14 @@ extern uint64_t entrypoint(const uint8_t *input) {
 
     sol_assert(false == accounts[INVOKED_ARGUMENT_INDEX].is_signer);
     sol_assert(false == accounts[INVOKED_ARGUMENT_INDEX].is_writable);
-    SolAccountMeta arguments[] = {
+    SafeAccountMeta arguments[] = {
         {accounts[INVOKED_ARGUMENT_INDEX].key, false, true}};
     uint8_t data[] = {VERIFY_PRIVILEGE_ESCALATION};
-    const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
-                                        arguments, SOL_ARRAY_SIZE(arguments),
-                                        data, SOL_ARRAY_SIZE(data)};
+    const SafeInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
+                                        arguments, SAFE_ARRAY_SIZE(arguments),
+                                        data, SAFE_ARRAY_SIZE(data)};
     sol_assert(SUCCESS ==
-               sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts)));
+               sol_invoke(&instruction, accounts, SAFE_ARRAY_SIZE(accounts)));
     break;
   }
 
@@ -229,13 +229,13 @@ extern uint64_t entrypoint(const uint8_t *input) {
     *accounts[ARGUMENT_INDEX].lamports += 1;
 
     if (params.ka_num == 3) {
-      SolAccountMeta arguments[] = {
+      SafeAccountMeta arguments[] = {
           {accounts[INVOKED_ARGUMENT_INDEX].key, true, true},
           {accounts[ARGUMENT_INDEX].key, true, true}};
       uint8_t data[] = {NESTED_INVOKE};
-      const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
-                                          arguments, SOL_ARRAY_SIZE(arguments),
-                                          data, SOL_ARRAY_SIZE(data)};
+      const SafeInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
+                                          arguments, SAFE_ARRAY_SIZE(arguments),
+                                          data, SAFE_ARRAY_SIZE(data)};
 
       sol_log("Invoke again");
       sol_assert(SUCCESS == sol_invoke(&instruction, accounts, params.ka_num));

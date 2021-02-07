@@ -449,7 +449,7 @@ impl BankingStage {
         const MIN_THREADS_VOTES: u32 = 1;
         const MIN_THREADS_BANKING: u32 = 1;
         cmp::max(
-            env::var("SOLANA_BANKING_THREADS")
+            env::var("SAFECOIN_BANKING_THREADS")
                 .map(|x| x.parse().unwrap_or(NUM_THREADS))
                 .unwrap_or(NUM_THREADS),
             MIN_THREADS_VOTES + MIN_THREADS_BANKING,

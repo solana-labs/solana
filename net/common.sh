@@ -14,9 +14,9 @@ netDir=$(
 netConfigDir="$netDir"/config
 mkdir -p "$netConfigDir"
 
-SOLANA_ROOT="$netDir"/..
+SAFECOIN_ROOT="$netDir"/..
 # shellcheck source=scripts/configure-metrics.sh
-source "$SOLANA_ROOT"/scripts/configure-metrics.sh
+source "$SAFECOIN_ROOT"/scripts/configure-metrics.sh
 
 configFile="$netConfigDir/config"
 geoipConfigFile="$netConfigDir/geoip.yml"
@@ -92,7 +92,7 @@ urlencode() {
   done
 }
 
-SOLANA_CONFIG_DIR=$SOLANA_ROOT/config
+SAFECOIN_CONFIG_DIR=$SAFECOIN_ROOT/config
 # Clear the current cluster configuration
 clear_config_dir() {
   declare config_dir="$1"
@@ -117,8 +117,8 @@ _setup_secondary_mount() {
     if [[ -d $SECONDARY_DISK_MOUNT_POINT ]] && \
       [[ -w $SECONDARY_DISK_MOUNT_POINT ]]; then
       mkdir -p $SECONDARY_DISK_MOUNT_POINT/config
-      rm -rf "$SOLANA_CONFIG_DIR"
-      ln -sfT $SECONDARY_DISK_MOUNT_POINT/config "$SOLANA_CONFIG_DIR"
+      rm -rf "$SAFECOIN_CONFIG_DIR"
+      ln -sfT $SECONDARY_DISK_MOUNT_POINT/config "$SAFECOIN_CONFIG_DIR"
     fi
   )
 }

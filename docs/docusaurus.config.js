@@ -80,7 +80,7 @@ module.exports = {
 			    to: "introduction",
 			},
 			{
-			    label: "Tour de SOL",
+			    label: "Tour de SAFE",
 			    to: "tour-de-sol",
 			},
 		    ],
@@ -112,7 +112,7 @@ module.exports = {
 		    ],
 		},
 	    ],
-	    copyright: `Copyright © ${new Date().getFullYear()} Safecoin Foundation`,
+	    copyright: `Copyright © ${new Date().getFullYear()} Solana Foundation`,
 	},
     },
     presets: [

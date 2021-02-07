@@ -103,7 +103,7 @@ pub enum Error {
     ClientError(#[from] ClientError),
     #[error("Missing lockup authority")]
     MissingLockupAuthority,
-    #[error("insufficient funds in {0:?}, requires {1} SOL")]
+    #[error("insufficient funds in {0:?}, requires {1} SAFE")]
     InsufficientFunds(FundingSources, f64),
     #[error("Program error")]
     ProgramError(#[from] ProgramError),

@@ -34,7 +34,7 @@ solana-keygen new -o ~/validator-stake-keypair.json
 
 ## Delegate Stake
 
-Now delegate 1 SOL to your validator by first creating your stake account:
+Now delegate 1 SAFE to your validator by first creating your stake account:
 
 ```bash
 solana create-stake-account ~/validator-stake-keypair.json 1
@@ -46,7 +46,7 @@ and then delegating that stake to your validator:
 solana delegate-stake ~/validator-stake-keypair.json ~/vote-account-keypair.json
 ```
 
-> Don’t delegate your remaining SOL, as your validator will use those tokens to vote.
+> Don’t delegate your remaining SAFE, as your validator will use those tokens to vote.
 
 Stakes can be re-delegated to another node at any time with the same command,
 but only one re-delegation is permitted per epoch:

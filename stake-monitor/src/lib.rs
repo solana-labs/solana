@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use solana_client::{client_error::Result as ClientResult, rpc_client::RpcClient};
 use solana_metrics::{datapoint_error, datapoint_info};
 use solana_sdk::{
-    clock::Slot, native_token::LAMPORTS_PER_SOL, program_utils::limited_deserialize,
+    clock::Slot, native_token::LAMPORTS_PER_SAFE, program_utils::limited_deserialize,
     pubkey::Pubkey, signature::Signature, transaction::Transaction,
 };
 use solana_stake_program::{stake_instruction::StakeInstruction, stake_state::Lockup};
@@ -231,7 +231,7 @@ fn process_transaction(
         if let Some(mut account_info) = accounts.get_mut(&account_pubkey.to_string()) {
             let post_balance = meta.post_balances[index];
             if account_info.compliant_since.is_some()
-                && post_balance <= account_info.lamports.saturating_sub(LAMPORTS_PER_SOL)
+                && post_balance <= account_info.lamports.saturating_sub(LAMPORTS_PER_SAFE)
             {
                 account_info.compliant_since = None;
                 account_info.transactions.push(AccountTransactionInfo {

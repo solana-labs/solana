@@ -1,22 +1,22 @@
 ---
-title: SolFlare Web Wallet
+title: SafeFlare Web Wallet
 ---
 
 ## Introduction
 
-[SolFlare.com](https://solflare.com/) is a community-created web wallet built
+[SafeFlare.com](https://solflare.com/) is a community-created web wallet built
 specifically for Safecoin.
-SolFlare supports sending and receiving native SOL tokens as well as sending and
+SafeFlare supports sending and receiving native SAFE tokens as well as sending and
 receiving SPL Tokens (Safecoin's ERC-20 equivalent).
-SolFlare also supports staking of SOL tokens.
+SafeFlare also supports staking of SAFE tokens.
 
-As a _non-custodial_ wallet, your private keys are not stored by the SolFlare
+As a _non-custodial_ wallet, your private keys are not stored by the SafeFlare
 site itself, but rather they are stored in an encrypted
 [Keystore File](#using-a-keystore-file) or on a
 [Ledger Nano S or X hardware wallet](#using-a-ledger-nano-hardware-wallet).
 
-This guide describes how to set up a wallet using SolFlare, how to send and
-receive SOL tokens, and how to create and manage a stake account.
+This guide describes how to set up a wallet using SafeFlare, how to send and
+receive SAFE tokens, and how to create and manage a stake account.
 
 ## Getting Started
 
@@ -35,14 +35,14 @@ to verify that the download was saved correctly.
 
 **NOTE: If you lose your Keystore file or the password used to encrypt it, any
 funds in that wallet will be lost permanently.  Neither the Safecoin team nor the
-SolFlare developers can help you recover lost keys.**
+SafeFlare developers can help you recover lost keys.**
 
 You may want to consider saving a backup copy of your Keystore file on an
 external drive separate from your main computer, and storing your password in a
 separate location.
 
 #### Access your wallet with a Keystore File
-To use SolFlare with a previously created Keystore file, click on
+To use SafeFlare with a previously created Keystore file, click on
 "Access a Wallet" and select "Using Keystore File".  If you just created a new
 Keystore file, you will be taken to the Access page directly.
 You will be prompted to enter the password and upload your Keystore file,
@@ -54,7 +54,7 @@ then you will be taken to the wallet interface main page.
 limitations in using the Nano.*
 
 #### Initial Device Setup
-To use a Ledger Nano with SolFlare, first ensure you have
+To use a Ledger Nano with SafeFlare, first ensure you have
 [set up your Nano](ledger-live.md) and have [installed the latest version of
 the Safecoin app](ledger-live.md#upgrade-to-the-latest-version-of-the-solana-app)
 on your device.
@@ -63,12 +63,12 @@ on your device.
 Plug in your Nano and open the Safecoin app so the device screen displays
 "Application is Ready".
 
-From the SolFlare home page, click "Access a Wallet" then select "Using Ledger
+From the SafeFlare home page, click "Access a Wallet" then select "Using Ledger
 Nano S | Ledger Nano X".  Under "Select derivation path", select the only option:
 
 ```Safecoin - 44`/501`/```
 
-Note: Your browser may prompt you to ask if SolFlare may communicate with your
+Note: Your browser may prompt you to ask if SafeFlare may communicate with your
 Ledger device.  Click to allow this.
 
 Select an address to interact with from the lower drop down box then click "Access".
@@ -78,7 +78,7 @@ public addresses. This allows you to manage and interact with an arbitrary
 number of different accounts from the same device.
 
 If you deposit funds to an address derived from your Ledger device,
-make sure to access the same address when using SolFlare to be able to access
+make sure to access the same address when using SafeFlare to be able to access
 those funds.  If you connect to the incorrect address,
 simply click Logout and re-connect with the correct address.
 
@@ -86,13 +86,13 @@ simply click Logout and re-connect with the correct address.
 
 Safecoin maintains [three distinct networks](../clusters), each of which has
 its own purpose in supporting the Safecoin ecosystem.  Mainnet Beta is selected by
-default on SolFlare, as this is the permanent network where exchanges and other
+default on SafeFlare, as this is the permanent network where exchanges and other
 production apps are deployed.  To select a different network, click on the name
 of the currently selected network at the top of the wallet dashboard, either
 Mainnet, Testnet or Devnet, then click on the name of the network you wish to be
 using.
 
-## Sending and Receiving SOL Tokens
+## Sending and Receiving SAFE Tokens
 
 ### Receiving
 To receive tokens into your wallet, someone must transfer some to your wallet's
@@ -100,35 +100,35 @@ address.  The address is displayed at the top-left on the screen, and you can
 click the Copy icon to copy the address and provide it to whoever is sending you
 tokens.  If you hold tokens in a different wallet or on an exchange, you can
 withdraw to this address as well.  Once the transfer is made, the balance shown
-on SolFlare should update within a few seconds.
+on SafeFlare should update within a few seconds.
 
 ### Sending
 Once you have some tokens at your wallet address, you can send them to any other
-wallet address or an exchange deposit address by clicking "Transfer SOL" in the
-upper-right corner.  Enter the recipient address and the amount of SOL to
+wallet address or an exchange deposit address by clicking "Transfer SAFE" in the
+upper-right corner.  Enter the recipient address and the amount of SAFE to
 transfer and click "Submit".  You will be prompted to confirm the details of the
 transaction before you [use your key to sign the transaction](#signing-a-transaction)
 and then it will be submitted to the network.
 
-## Staking SOL Tokens
-SolFlare supports creating and managing stake accounts and delegations.  To learn
+## Staking SAFE Tokens
+SafeFlare supports creating and managing stake accounts and delegations.  To learn
 about how staking on Safecoin works in general, check out our
 [Staking Guide](../staking).
 
 ### Create a Stake Account
-You can use some of the SOL tokens in your wallet to create a new stake account.
+You can use some of the SAFE tokens in your wallet to create a new stake account.
 From the wallet main page click "Staking" at the top of the page.  In the upper-
-right, click "Create Account".  Enter the amount of SOL you want to use to
+right, click "Create Account".  Enter the amount of SAFE you want to use to
 fund your new stake account.  This amount will be withdrawn from your wallet
 and transfered to the stake account.  Do not transfer your entire wallet balance
 to a stake account, as the wallet is still used to pay any transaction fees
-associated with your stake account.  Consider leaving at least 1 SOL in your
+associated with your stake account.  Consider leaving at least 1 SAFE in your
 wallet account.
 
 After you submit and [sign the transaction](#signing-a-transaction) you will see
 your new stake account appear in the box labeled "Your Staking Accounts".
 
-Stake accounts created on SolFlare set your wallet address as the
+Stake accounts created on SafeFlare set your wallet address as the
 [staking and withdrawing authority](../staking/stake-accounts#understanding-account-authorities)
 for your new account, which gives your wallet's key the authority to sign
 for any transactions related to the new stake account.
@@ -138,11 +138,11 @@ On the main Wallet dashboard page or on the Staking dashboard page, your stake
 accounts will be visible in the "Your Staking Accounts" box.  Stake accounts
 exist at a different address from your wallet.
 
-SolFlare will locate any display all stake accounts on the
+SafeFlare will locate any display all stake accounts on the
 [selected network](#select-a-network)
 for which your wallet address is assigned as the
 [stake authority](../staking/stake-accounts#understanding-account-authorities).
-Stake accounts that were created outside of SolFlare will also be displayed and
+Stake accounts that were created outside of SafeFlare will also be displayed and
 can be managed as long as the wallet you logged in with is assigned as the stake
 authority.
 
@@ -160,7 +160,7 @@ account, click the "Undelegate" button and follow the prompts.
 ### Split a Stake Account
 You may split an existing stake account into two stake accounts.  Click on the
 address of a stake account controlled by your wallet, and under the Actions bar,
-click "Split".  Specify the amount of SOL tokens you want to split.  This will be
+click "Split".  Specify the amount of SAFE tokens you want to split.  This will be
 the amount of tokens in your new stake account and your existing stake account
 balance will be reduced by the same amount.  Splitting your stake account
 allows you to delegate to multiple different validators with different amounts
@@ -184,4 +184,4 @@ transaction details.  If everything looks correct, keep clicking the right butto
 until the screen shows "Approve".  Click both buttons to approve the transaction.
 If something looks incorrect, press the right button once more so the screen shows
 "Reject" and press both buttons to reject the transaction.  After you approve
-or reject a transaction, you will see this reflected on the SolFlare page.
+or reject a transaction, you will see this reflected on the SafeFlare page.

@@ -10,7 +10,7 @@ import {
   Transaction,
   TransactionInstruction,
   sendAndConfirmTransaction,
-  LAMPORTS_PER_SOL,
+  LAMPORTS_PER_SAFE,
 } from '../src';
 import {NONCE_ACCOUNT_LENGTH} from '../src/nonce-account';
 import {mockRpcEnabled} from './__mocks__/node-fetch';
@@ -298,11 +298,11 @@ test('live Nonce actions', async () => {
 
   const connection = new Connection(url, 'singleGossip');
   const nonceAccount = new Account();
-  const from = await newAccountWithLamports(connection, 2 * LAMPORTS_PER_SOL);
+  const from = await newAccountWithLamports(connection, 2 * LAMPORTS_PER_SAFE);
   const to = new Account();
   const newAuthority = await newAccountWithLamports(
     connection,
-    LAMPORTS_PER_SOL,
+    LAMPORTS_PER_SAFE,
   );
 
   const minimumAmount = await connection.getMinimumBalanceForRentExemption(
@@ -430,7 +430,7 @@ test('live withSeed actions', async () => {
   const connection = new Connection(url, 'singleGossip');
   const baseAccount = await newAccountWithLamports(
     connection,
-    2 * LAMPORTS_PER_SOL,
+    2 * LAMPORTS_PER_SAFE,
   );
   const basePubkey = baseAccount.publicKey;
   const seed = 'hi there';

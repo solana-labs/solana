@@ -35,12 +35,12 @@ pub mod full_inflation {
     // inflation.  There are multiple references to `candidate_example` in this file that need to
     // be touched in addition to the following block.
     //
-    // The candidate provides the `enable::id` address and contacts the Safecoin Foundation to
+    // The candidate provides the `enable::id` address and contacts the Solana Foundation to
     // receive a `vote::id` address.
     //
     pub mod candidate_example {
         pub mod vote {
-            // The private key for this address is held by the Safecoin Foundation
+            // The private key for this address is held by the Solana Foundation
             solana_sdk::declare_id!("DummyVoteAddress111111111111111111111111111");
         }
         pub mod enable {

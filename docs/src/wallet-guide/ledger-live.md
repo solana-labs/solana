@@ -56,10 +56,10 @@ re-installed with the latest version of the app.
 Users can use any of the following options to use their Nano to interact with
 Safecoin:
 
-- [SolFlare.com](https://solflare.com/) is a non-custodial web wallet built
+- [SafeFlare.com](https://solflare.com/) is a non-custodial web wallet built
 specifically for Safecoin and supports basic transfers and staking operations
 with the Ledger device.
-Check out our guide for [using a Nano with SolFlare](solflare.md).
+Check out our guide for [using a Nano with SafeFlare](solflare.md).
 
 - Developers and advanced users may
 [use a Nano with the Safecoin command line tools](hardware-wallets/ledger.md).

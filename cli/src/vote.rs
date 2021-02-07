@@ -206,7 +206,7 @@ impl VoteSubCommands for App<'_, '_> {
                     Arg::with_name("lamports")
                         .long("lamports")
                         .takes_value(false)
-                        .help("Display balance in lamports instead of SOL"),
+                        .help("Display balance in lamports instead of SAFE"),
                 ),
         )
         .subcommand(
@@ -224,7 +224,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .index(2)
                         .value_name("RECIPIENT_ADDRESS")
                         .required(true),
-                        "The recipient of withdrawn SOL. "),
+                        "The recipient of withdrawn SAFE. "),
                 )
                 .arg(
                     Arg::with_name("amount")
@@ -233,7 +233,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .required(true)
                         .validator(is_amount_or_all)
-                        .help("The amount to withdraw, in SOL; accepts keyword ALL"),
+                        .help("The amount to withdraw, in SAFE; accepts keyword ALL"),
                 )
                 .arg(
                     Arg::with_name("authorized_withdrawer")
@@ -718,7 +718,7 @@ pub fn process_withdraw_from_vote_account(
         SpendAmount::Some(withdraw_amount) => {
             if current_balance.saturating_sub(withdraw_amount) < minimum_balance {
                 return Err(CliError::BadParameter(format!(
-                    "Withdraw amount too large. The vote account balance must be at least {} SOL to remain rent exempt", lamports_to_sol(minimum_balance)
+                    "Withdraw amount too large. The vote account balance must be at least {} SAFE to remain rent exempt", lamports_to_sol(minimum_balance)
                 ))
                 .into());
             }

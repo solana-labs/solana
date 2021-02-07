@@ -239,9 +239,9 @@ pub fn award_stake(
     let mut buffer = vec![];
 
     for (node_pubkey, vote_account_pubkey) in voters {
-        info!("Delegate {} SOL to {}", sol_gift, node_pubkey);
+        info!("Delegate {} SAFE to {}", sol_gift, node_pubkey);
         delegate_stake(rpc_client, faucet_keypair, vote_account_pubkey, sol_gift);
-        buffer.push(format!("Delegated {} SOL to {}", sol_gift, node_pubkey));
+        buffer.push(format!("Delegated {} SAFE to {}", sol_gift, node_pubkey));
     }
     notifier.send(&buffer.join("\n"));
 }

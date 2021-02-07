@@ -5,7 +5,7 @@ use solana_sdk::signature::Keypair;
 use std::{thread::sleep, time::Duration};
 
 pub const NUM_BAD_SLOTS: u64 = 10;
-pub const SLOT_TO_RESOLVE: u64 = 32;
+pub const SLOT_TO_RESAFEVE: u64 = 32;
 
 #[derive(Clone)]
 pub(super) struct FailEntryVerificationBroadcastRun {
@@ -46,9 +46,9 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             self.current_slot = bank.slot();
         }
 
-        // 2) If we're past SLOT_TO_RESOLVE, insert the correct shreds so validators can repair
+        // 2) If we're past SLOT_TO_RESAFEVE, insert the correct shreds so validators can repair
         // and make progress
-        if bank.slot() > SLOT_TO_RESOLVE && !self.good_shreds.is_empty() {
+        if bank.slot() > SLOT_TO_RESAFEVE && !self.good_shreds.is_empty() {
             info!("Resolving bad shreds");
             let mut shreds = vec![];
             std::mem::swap(&mut shreds, &mut self.good_shreds);

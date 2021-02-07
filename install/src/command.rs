@@ -591,7 +591,7 @@ pub fn info(
 
     if eval {
         println!(
-            "SOLANA_INSTALL_ACTIVE_RELEASE={}",
+            "SAFECOIN_INSTALL_ACTIVE_RELEASE={}",
             &config.active_release_dir().to_str().unwrap_or("")
         );
         config
@@ -601,7 +601,7 @@ pub fn info(
                 ExplicitRelease::Channel(channel) => channel,
             })
             .and_then(|channel| {
-                println!("SOLANA_INSTALL_ACTIVE_CHANNEL={}", channel,);
+                println!("SAFECOIN_INSTALL_ACTIVE_CHANNEL={}", channel,);
                 Option::<String>::None
             });
         return Ok(None);

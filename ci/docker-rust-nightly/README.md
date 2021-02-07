@@ -21,8 +21,8 @@ To update the pinned version:
    Check https://rust-lang.github.io/rustup-components-history/ for build
    status
 1. Update `ci/rust-version.sh` to reflect the new nightly `YYYY-MM-DD`
-1. Run `SOLANA_ALLOCATE_TTY=1 SOLANA_DOCKER_RUN_NOSETUID=1 ci/docker-run.sh --nopull solanalabs/rust-nightly:YYYY-MM-DD ci/test-checks.sh`
-   and `SOLANA_ALLOCATE_TTY=1 SOLANA_DOCKER_RUN_NOSETUID=1 ci/docker-run.sh --nopull solanalabs/rust-nightly:YYYY-MM-DD ci/test-coverage.sh [args]...`
+1. Run `SAFECOIN_ALLOCATE_TTY=1 SAFECOIN_DOCKER_RUN_NOSETUID=1 ci/docker-run.sh --nopull solanalabs/rust-nightly:YYYY-MM-DD ci/test-checks.sh`
+   and `SAFECOIN_ALLOCATE_TTY=1 SAFECOIN_DOCKER_RUN_NOSETUID=1 ci/docker-run.sh --nopull solanalabs/rust-nightly:YYYY-MM-DD ci/test-coverage.sh [args]...`
    to confirm the new nightly image builds.  Fix any issues as needed
 1. Run `docker login` to enable pushing images to Docker Hub, if you're authorized.
 1. Run `CI=true ci/docker-rust-nightly/build.sh YYYY-MM-DD` to push the new nightly image to dockerhub.com.

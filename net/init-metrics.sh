@@ -19,7 +19,7 @@ Creates a testnet dev metrics database
   username        InfluxDB user with access to create a new database
   -c              Manually specify a database to create, rather than read from config file
   -d              Delete the database instead of creating it
-  -e              Assume database already exists and SOLANA_METRICS_CONFIG is
+  -e              Assume database already exists and SAFECOIN_METRICS_CONFIG is
                   defined in the environment already
 
 EOF
@@ -54,8 +54,8 @@ done
 shift $((OPTIND - 1))
 
 if $useEnv; then
-  [[ -n $SOLANA_METRICS_CONFIG ]] ||
-    usage "SOLANA_METRICS_CONFIG is not defined in the environment"
+  [[ -n $SAFECOIN_METRICS_CONFIG ]] ||
+    usage "SAFECOIN_METRICS_CONFIG is not defined in the environment"
 else
   username=$1
   [[ -n "$username" ]] || usage "username not specified"
@@ -85,9 +85,9 @@ else
   query "GRANT READ ON \"$netBasename\" TO \"ro\""
   query "GRANT WRITE ON \"$netBasename\" TO \"scratch_writer\""
 
-  SOLANA_METRICS_CONFIG="host=$host,db=$netBasename,u=scratch_writer,p=topsecret"
+  SAFECOIN_METRICS_CONFIG="host=$host,db=$netBasename,u=scratch_writer,p=topsecret"
 fi
 
-echo "export SOLANA_METRICS_CONFIG=\"$SOLANA_METRICS_CONFIG\"" >> "$configFile"
+echo "export SAFECOIN_METRICS_CONFIG=\"$SAFECOIN_METRICS_CONFIG\"" >> "$configFile"
 
 exit 0

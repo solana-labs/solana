@@ -14,7 +14,7 @@ Validator-client rewards for these services are to be distributed at the end of 
 The effective protocol-based annual staking yield \(%\) per epoch received by validation-clients is to be a function of:
 
 - the current global inflation rate, derived from the pre-determined dis-inflationary issuance schedule \(see [Validation-client Economics](ed_vce_overview.md)\)
-- the fraction of staked SOLs out of the current total circulating supply,
+- the fraction of staked SAFEs out of the current total circulating supply,
 - the commission charged by the validation service,
 - the up-time/participation \[% of available slots that validator had opportunity to vote on\] of a given validator over the previous epoch.
 
@@ -37,23 +37,23 @@ From these simulated *Inflation Schedules*, we can also project ranges for token
 
 ![](/img/p_total_supply_ranges.png)
 
-Finally we can estimate the *Staked Yield* on staked SOL, if we introduce an additional parameter, previously discussed, *% of Staked SOL*:
+Finally we can estimate the *Staked Yield* on staked SAFE, if we introduce an additional parameter, previously discussed, *% of Staked SAFE*:
 
 
-%~\text{SOL Staked} = \frac{\text{Total SOL Staked}}{\text{Total Current Supply}}
+%~\text{SAFE Staked} = \frac{\text{Total SAFE Staked}}{\text{Total Current Supply}}
 
 
-In this case, because *% of Staked SOL* is a parameter that must be estimated (unlike the *Inflation Schedule* parameters), it is easier to use specific *Inflation Schedule* parameters and explore a range of *% of Staked SOL*. For the below example, we’ve chosen the middle of the parameter ranges explored above:
+In this case, because *% of Staked SAFE* is a parameter that must be estimated (unlike the *Inflation Schedule* parameters), it is easier to use specific *Inflation Schedule* parameters and explore a range of *% of Staked SAFE*. For the below example, we’ve chosen the middle of the parameter ranges explored above:
 
 - *Initial Inflation Rate*: 8%
 - *Dis-inflation Rate*: -15%
 - *Long-term Inflation Rate*: 1.5%
 
-The values of *% of Staked SOL* range from 60% - 90%, which we feel covers the likely range we expect to observe, based on feedback from the investor and validator communities as well as what is observed on comparable Proof-of-Stake protocols.
+The values of *% of Staked SAFE* range from 60% - 90%, which we feel covers the likely range we expect to observe, based on feedback from the investor and validator communities as well as what is observed on comparable Proof-of-Stake protocols.
 
 ![](/img/p_ex_staked_yields.png)
 
-Again, the above shows an example *Staked Yield* that a staker might expect over time on the Safecoin network with the *Inflation Schedule* as specified. This is an idealized *Staked Yield* as it neglects validator uptime impact on rewards, validator commissions, potential yield throttling  and potential slashing incidents. It additionally ignores that *% of Staked SOL* is dynamic by design - the economic incentives set up by this *Inflation Schedule*.
+Again, the above shows an example *Staked Yield* that a staker might expect over time on the Safecoin network with the *Inflation Schedule* as specified. This is an idealized *Staked Yield* as it neglects validator uptime impact on rewards, validator commissions, potential yield throttling  and potential slashing incidents. It additionally ignores that *% of Staked SAFE* is dynamic by design - the economic incentives set up by this *Inflation Schedule*.
 
 ### Adjusted Staking Yield
 

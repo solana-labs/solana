@@ -13,13 +13,13 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. || exit 1; pwd)"/net/common.sh
 if [[ $(uname) != Linux ]]; then
   # Protect against unsupported configurations to prevent non-obvious errors
   # later. Arguably these should be fatal errors but for now prefer tolerance.
-  if [[ -n $SOLANA_CUDA ]]; then
+  if [[ -n $SAFECOIN_CUDA ]]; then
     echo "Warning: CUDA is not supported on $(uname)"
-    SOLANA_CUDA=
+    SAFECOIN_CUDA=
   fi
 fi
 
-if [[ -n $USE_INSTALL || ! -f "$SOLANA_ROOT"/Cargo.toml ]]; then
+if [[ -n $USE_INSTALL || ! -f "$SAFECOIN_ROOT"/Cargo.toml ]]; then
   solana_program() {
     declare program="$1"
     if [[ -z $program ]]; then
@@ -39,13 +39,13 @@ else
       program="solana-$program"
     fi
 
-    if [[ -r "$SOLANA_ROOT/$crate"/Cargo.toml ]]; then
+    if [[ -r "$SAFECOIN_ROOT/$crate"/Cargo.toml ]]; then
       maybe_package="--package solana-$crate"
     fi
     if [[ -n $NDEBUG ]]; then
       maybe_release=--release
     fi
-    declare manifest_path="--manifest-path=$SOLANA_ROOT/$crate/Cargo.toml"
+    declare manifest_path="--manifest-path=$SAFECOIN_ROOT/$crate/Cargo.toml"
     printf "cargo $CARGO_TOOLCHAIN run $manifest_path $maybe_release $maybe_package --bin %s %s -- " "$program"
   }
 fi

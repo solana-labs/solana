@@ -2,7 +2,7 @@
 authors = ["Safecoin Maintainers <maintainers@solana.foundation>"]
 edition = "2018"
 name = "solana-ramp-tps"
-description = "Safecoin Tour de SOL - TPS ramp up"
+description = "Safecoin Tour de SAFE - TPS ramp up"
 version = "1.6.0"
 repository = "https://github.com/solana-labs/tour-de-sol"
 license = "Apache-2.0"

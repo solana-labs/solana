@@ -34,7 +34,7 @@ export RUST_BACKTRACE=1
 dataDir=$PWD/config/"$(basename "$0" .sh)"
 ledgerDir=$PWD/config/ledger
 
-SOLANA_RUN_SH_CLUSTER_TYPE=${SOLANA_RUN_SH_CLUSTER_TYPE:-development}
+SAFECOIN_RUN_SH_CLUSTER_TYPE=${SAFECOIN_RUN_SH_CLUSTER_TYPE:-development}
 
 set -x
 if ! solana address; then
@@ -77,9 +77,9 @@ else
       "$dataDir"/validator-vote-account.json \
       "$dataDir"/validator-stake-account.json \
     --ledger "$ledgerDir" \
-    --cluster-type "$SOLANA_RUN_SH_CLUSTER_TYPE" \
+    --cluster-type "$SAFECOIN_RUN_SH_CLUSTER_TYPE" \
     $SPL_GENESIS_ARGS \
-    $SOLANA_RUN_SH_GENESIS_ARGS
+    $SAFECOIN_RUN_SH_GENESIS_ARGS
 fi
 
 abort() {
@@ -108,7 +108,7 @@ args=(
   --require-tower
 )
 # shellcheck disable=SC2086
-solana-validator "${args[@]}" $SOLANA_RUN_SH_VALIDATOR_ARGS &
+solana-validator "${args[@]}" $SAFECOIN_RUN_SH_VALIDATOR_ARGS &
 validator=$!
 
 wait "$validator"

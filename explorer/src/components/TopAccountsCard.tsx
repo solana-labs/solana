@@ -5,7 +5,7 @@ import { AccountBalancePair } from "@solana/web3.js";
 import { useRichList, useFetchRichList, Status } from "providers/richList";
 import { LoadingCard } from "./common/LoadingCard";
 import { ErrorCard } from "./common/ErrorCard";
-import { lamportsToSolString } from "utils";
+import { lamportsToSafeString } from "utils";
 import { useQuery } from "utils/url";
 import { useSupply } from "providers/supply";
 import { Address } from "./common/Address";
@@ -101,7 +101,7 @@ export function TopAccountsCard() {
                 <tr>
                   <th className="text-muted">Rank</th>
                   <th className="text-muted">Address</th>
-                  <th className="text-muted text-right">Balance (SOL)</th>
+                  <th className="text-muted text-right">Balance (SAFE)</th>
                   <th className="text-muted text-right">
                     % of {header} Supply
                   </th>
@@ -133,7 +133,7 @@ const renderAccountRow = (
       <td>
         <Address pubkey={account.address} link />
       </td>
-      <td className="text-right">{lamportsToSolString(account.lamports, 0)}</td>
+      <td className="text-right">{lamportsToSafeString(account.lamports, 0)}</td>
       <td className="text-right">{`${(
         (100 * account.lamports) /
         supply

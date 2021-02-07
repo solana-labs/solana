@@ -80,7 +80,7 @@ fn command_enroll(data_file: &str, json_rpc_url: String, account_address: &Pubke
     accounts_info.enroll_system_account(account_address, slot, account.lamports);
     save_accounts_info(data_file, &accounts_info).unwrap();
     println!(
-        "Enrolled {} at slot {} with a balance of {} SOL",
+        "Enrolled {} at slot {} with a balance of {} SAFE",
         account_address,
         slot,
         lamports_to_sol(account.lamports)
@@ -93,7 +93,7 @@ fn command_check(data_file: &str, account_address: &Pubkey) {
     if let Some(account_info) = accounts_info.account_info.get(&account_address.to_string()) {
         if let Some(slot) = account_info.compliant_since {
             println!(
-                "{}Account compliant since slot {} with a balance of {} SOL",
+                "{}Account compliant since slot {} with a balance of {} SAFE",
                 Emoji("✅ ", ""),
                 slot,
                 lamports_to_sol(account_info.lamports)

@@ -4,7 +4,7 @@ title: Create a validator public key
 
 In order to participate you need to first register. See [Registration info](../registration/how-to-register.md).
 
-In order to obtain your allotment of SOL you need to publish your
+In order to obtain your allotment of SAFE you need to publish your
 validator's identity public key under your keybase.io account.
 
 ## **Generate Keypair**
@@ -25,7 +25,7 @@ validator's identity public key under your keybase.io account.
 
 Your validator identity keypair uniquely identifies your validator within the network. **It is crucial to back-up this information.**
 
-If you don’t back up this information, you WILL NOT BE ABLE TO RECOVER YOUR VALIDATOR, if you lose access to it. If this happens, YOU WILL LOSE YOUR ALLOCATION OF SOL TOO.
+If you don’t back up this information, you WILL NOT BE ABLE TO RECOVER YOUR VALIDATOR, if you lose access to it. If this happens, YOU WILL LOSE YOUR ALLOCATION OF SAFE TOO.
 
 To back-up your validator identify keypair, **back-up your "validator-keypair.json” file to a secure location.**
 

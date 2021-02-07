@@ -1124,9 +1124,9 @@ impl<'a> SyscallObject<BPFError> for SyscallInvokeSignedRust<'a> {
     }
 }
 
-/// Rust representation of C's SolInstruction
+/// Rust representation of C's SafeInstruction
 #[derive(Debug)]
-struct SolInstruction {
+struct SafeInstruction {
     program_id_addr: u64,
     accounts_addr: u64,
     accounts_len: usize,
@@ -1134,17 +1134,17 @@ struct SolInstruction {
     data_len: usize,
 }
 
-/// Rust representation of C's SolAccountMeta
+/// Rust representation of C's SafeAccountMeta
 #[derive(Debug)]
-struct SolAccountMeta {
+struct SafeAccountMeta {
     pubkey_addr: u64,
     is_writable: bool,
     is_signer: bool,
 }
 
-/// Rust representation of C's SolAccountInfo
+/// Rust representation of C's SafeAccountInfo
 #[derive(Debug)]
-struct SolAccountInfo {
+struct SafeAccountInfo {
     key_addr: u64,
     lamports_addr: u64,
     data_len: u64,
@@ -1156,16 +1156,16 @@ struct SolAccountInfo {
     executable: bool,
 }
 
-/// Rust representation of C's SolSignerSeed
+/// Rust representation of C's SafeSignerSeed
 #[derive(Debug)]
-struct SolSignerSeedC {
+struct SafeSignerSeedC {
     addr: u64,
     len: u64,
 }
 
-/// Rust representation of C's SolSignerSeeds
+/// Rust representation of C's SafeSignerSeeds
 #[derive(Debug)]
-struct SolSignerSeedsC {
+struct SafeSignerSeedsC {
     addr: u64,
     len: u64,
 }
@@ -1197,7 +1197,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
         addr: u64,
         memory_mapping: &MemoryMapping,
     ) -> Result<Instruction, EbpfError<BPFError>> {
-        let ix_c = translate_type::<SolInstruction>(memory_mapping, addr, self.loader_id)?;
+        let ix_c = translate_type::<SafeInstruction>(memory_mapping, addr, self.loader_id)?;
 
         check_instruction_size(
             ix_c.accounts_len,
@@ -1206,7 +1206,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
         )?;
         let program_id =
             translate_type::<Pubkey>(memory_mapping, ix_c.program_id_addr, self.loader_id)?;
-        let meta_cs = translate_slice::<SolAccountMeta>(
+        let meta_cs = translate_slice::<SafeAccountMeta>(
             memory_mapping,
             ix_c.accounts_addr,
             ix_c.accounts_len as u64,
@@ -1249,7 +1249,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
     ) -> Result<TranslatedAccounts<'a>, EbpfError<BPFError>> {
         let invoke_context = self.invoke_context.borrow();
 
-        let account_infos = translate_slice::<SolAccountInfo>(
+        let account_infos = translate_slice::<SafeAccountInfo>(
             memory_mapping,
             account_infos_addr,
             account_infos_len,
@@ -1263,7 +1263,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
             })
             .collect::<Result<Vec<_>, EbpfError<BPFError>>>()?;
 
-        let translate = |account_info: &SolAccountInfo| {
+        let translate = |account_info: &SafeAccountInfo| {
             // Translate the account from user space
 
             let lamports = translate_type_mut::<u64>(
@@ -1340,7 +1340,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
         memory_mapping: &MemoryMapping,
     ) -> Result<Vec<Pubkey>, EbpfError<BPFError>> {
         if signers_seeds_len > 0 {
-            let signers_seeds = translate_slice::<SolSignerSeedC>(
+            let signers_seeds = translate_slice::<SafeSignerSeedC>(
                 memory_mapping,
                 signers_seeds_addr,
                 signers_seeds_len,
@@ -1352,7 +1352,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
             Ok(signers_seeds
                 .iter()
                 .map(|signer_seeds| {
-                    let seeds = translate_slice::<SolSignerSeedC>(
+                    let seeds = translate_slice::<SafeSignerSeedC>(
                         memory_mapping,
                         signer_seeds.addr,
                         signer_seeds.len,
