@@ -1,5 +1,6 @@
 // @flow
 
+import base58 from 'bs58';
 import {expect} from 'chai';
 
 import {
@@ -10,22 +11,8 @@ import {
   LAMPORTS_PER_SOL,
 } from '../src';
 import {MOCK_PORT, url} from './url';
-
-import {
-  helpers,
-  mockErrorMessage,
-  mockErrorResponse,
-  uniqueSignature,
-  uniqueBlockhash,
-  mockRpcResponse,
-  mockServer,
-} from './mocks/rpc-http';
-import {
-  stubRpcWebSocket,
-  restoreRpcWebSocket,
-  mockRpcMessage,
-} from './mocks/rpc-websockets';
-import base58 from 'bs58';
+import {helpers, mockRpcResponse, mockServer} from './mocks/rpc-http';
+import {stubRpcWebSocket, restoreRpcWebSocket} from './mocks/rpc-websockets';
 
 describe('Transaction Payer', () => {
   let connection: Connection;

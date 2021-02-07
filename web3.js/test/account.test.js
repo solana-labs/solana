@@ -1,7 +1,8 @@
 // @flow
-import {Account} from '../src/account';
 import {expect} from 'chai';
 import {Buffer} from 'buffer';
+
+import {Account} from '../src/account';
 
 describe('Account', () => {
   it('generate new account', () => {

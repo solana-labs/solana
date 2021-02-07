@@ -3,12 +3,13 @@
 import bs58 from 'bs58';
 import BN from 'bn.js';
 import * as mockttp from 'mockttp';
-import {mockRpcMessage} from './rpc-websockets';
 
-import {Connection} from '../../src';
+import {mockRpcMessage} from './rpc-websockets';
+import {Account, Connection, PublicKey, Transaction} from '../../src';
 import type {Commitment} from '../../src/connection';
 
-export const mockServer = process.env.TEST_LIVE || mockttp.getLocal();
+export const mockServer: mockttp.Mockttp =
+  process.env.TEST_LIVE || mockttp.getLocal();
 
 let uniqueCounter = 0;
 export const uniqueSignature = () => {
@@ -33,19 +34,22 @@ export const mockRpcResponse = async ({
 }: {
   method: string,
   params: Array<any>,
-  value: any,
-  error: any,
+  value?: any,
+  error?: any,
   withContext?: boolean,
 }) => {
   if (process.env.TEST_LIVE) return;
-  let result = withContext
-    ? {
-        context: {
-          slot: 11,
-        },
-        value,
-      }
-    : value;
+
+  let result = value;
+  if (withContext) {
+    result = {
+      context: {
+        slot: 11,
+      },
+      value,
+    };
+  }
+
   await mockServer
     .post('/')
     .withJsonBodyIncluding({
@@ -69,7 +73,7 @@ const recentBlockhash = async ({
   commitment,
 }: {
   connection: Connection,
-  commitment: ?Commitment,
+  commitment?: Commitment,
 }) => {
   const blockhash = uniqueBlockhash();
   const params = [];
@@ -117,13 +121,16 @@ const processTransaction = async ({
     value: signature,
   });
 
-  const sendOptions = err
-    ? {
-        skipPreflight: true,
-      }
-    : {
-        preflightCommitment: commitment,
-      };
+  let sendOptions;
+  if (err) {
+    sendOptions = {
+      skipPreflight: true,
+    };
+  } else {
+    sendOptions = {
+      preflightCommitment: commitment,
+    };
+  }
 
   await connection.sendEncodedTransaction(encoded, sendOptions);
 

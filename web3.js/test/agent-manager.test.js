@@ -1,7 +1,8 @@
 // @flow
 
-import {AgentManager, DESTROY_TIMEOUT_MS} from '../src/agent-manager';
 import {expect} from 'chai';
+
+import {AgentManager, DESTROY_TIMEOUT_MS} from '../src/agent-manager';
 import {sleep} from '../src/util/sleep';
 
 describe('AgentManager', () => {

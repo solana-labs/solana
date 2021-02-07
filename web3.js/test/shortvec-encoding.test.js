@@ -1,6 +1,7 @@
 // @flow
 
 import {expect} from 'chai';
+
 import {decodeLength, encodeLength} from '../src/util/shortvec-encoding';
 
 function checkDecodedArray(array: Array<number>, expectedValue: number) {
