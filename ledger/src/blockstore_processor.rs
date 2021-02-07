@@ -367,6 +367,7 @@ pub struct ProcessOptions {
     pub debug_keys: Option<Arc<HashSet<Pubkey>>>,
     pub account_indexes: HashSet<AccountIndex>,
     pub accounts_db_caching_enabled: bool,
+    pub allow_dead_slots: bool,
 }
 
 pub fn process_blockstore(
@@ -596,6 +597,7 @@ fn confirm_full_slot(
         replay_vote_sender,
         opts.entry_callback.as_ref(),
         recyclers,
+        opts.allow_dead_slots,
     )?;
 
     if !bank.is_complete() {
@@ -649,6 +651,7 @@ impl ConfirmationProgress {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn confirm_slot(
     blockstore: &Blockstore,
     bank: &Arc<Bank>,
@@ -659,13 +662,14 @@ pub fn confirm_slot(
     replay_vote_sender: Option<&ReplayVoteSender>,
     entry_callback: Option<&ProcessCallback>,
     recyclers: &VerifyRecyclers,
+    allow_dead_slots: bool,
 ) -> result::Result<(), BlockstoreProcessorError> {
     let slot = bank.slot();
 
     let (entries, num_shreds, slot_full) = {
         let mut load_elapsed = Measure::start("load_elapsed");
         let load_result = blockstore
-            .get_slot_entries_with_shred_info(slot, progress.num_shreds, false)
+            .get_slot_entries_with_shred_info(slot, progress.num_shreds, allow_dead_slots)
             .map_err(BlockstoreProcessorError::FailedToLoadEntries);
         load_elapsed.stop();
         if load_result.is_err() {
