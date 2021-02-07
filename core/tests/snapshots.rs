@@ -38,12 +38,12 @@ mod tests {
     use crossbeam_channel::unbounded;
     use fs_extra::dir::CopyOptions;
     use itertools::Itertools;
-    use solana_core::{
+    use safecoin_core::{
         cluster_info::ClusterInfo,
         contact_info::ContactInfo,
         snapshot_packager_service::{PendingSnapshotPackage, SnapshotPackagerService},
     };
-    use solana_runtime::{
+    use safecoin_runtime::{
         accounts_background_service::{ABSRequestSender, SnapshotRequestHandler},
         accounts_db,
         bank::{Bank, BankSlotDelta},
@@ -53,7 +53,7 @@ mod tests {
         snapshot_utils::SnapshotVersion,
         status_cache::MAX_CACHE_ENTRIES,
     };
-    use solana_sdk::{
+    use safecoin_sdk::{
         clock::Slot,
         genesis_config::{ClusterType, GenesisConfig},
         hash::hashv,
@@ -193,7 +193,7 @@ mod tests {
     ) where
         F: Fn(&mut Bank, &Keypair),
     {
-        solana_logger::setup();
+        safecoin_logger::setup();
         // Set up snapshotting config
         let mut snapshot_test_config = SnapshotTestConfig::new(snapshot_version, cluster_type, 1);
 
@@ -297,7 +297,7 @@ mod tests {
         snapshot_version: SnapshotVersion,
         cluster_type: ClusterType,
     ) {
-        solana_logger::setup();
+        safecoin_logger::setup();
 
         // Set up snapshotting config
         let mut snapshot_test_config = SnapshotTestConfig::new(snapshot_version, cluster_type, 1);
@@ -435,7 +435,7 @@ mod tests {
                     }
 
                     let snapshot_package =
-                        solana_runtime::snapshot_utils::process_accounts_package_pre(
+                        safecoin_runtime::snapshot_utils::process_accounts_package_pre(
                             snapshot_package,
                             Some(&thread_pool),
                         );
@@ -488,7 +488,7 @@ mod tests {
     }
 
     fn run_test_slots_to_snapshot(snapshot_version: SnapshotVersion, cluster_type: ClusterType) {
-        solana_logger::setup();
+        safecoin_logger::setup();
         let num_set_roots = MAX_CACHE_ENTRIES * 2;
 
         for add_root_interval in &[1, 3, 9] {

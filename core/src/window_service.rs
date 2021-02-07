@@ -17,17 +17,17 @@ use crossbeam_channel::{
 use rayon::iter::IntoParallelRefMutIterator;
 use rayon::iter::ParallelIterator;
 use rayon::ThreadPool;
-use solana_ledger::{
+use safecoin_ledger::{
     blockstore::{self, Blockstore, BlockstoreInsertionMetrics, MAX_DATA_SHREDS_PER_SLOT},
     leader_schedule_cache::LeaderScheduleCache,
     shred::{Nonce, Shred},
 };
-use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};
-use solana_perf::packet::Packets;
-use solana_rayon_threadlimit::get_thread_count;
-use solana_runtime::{bank::Bank, bank_forks::BankForks};
-use solana_sdk::{packet::PACKET_DATA_SIZE, pubkey::Pubkey, timing::duration_as_ms};
-use solana_streamer::streamer::PacketSender;
+use safecoin_metrics::{inc_new_counter_debug, inc_new_counter_error};
+use safecoin_perf::packet::Packets;
+use safecoin_rayon_threadlimit::get_thread_count;
+use safecoin_runtime::{bank::Bank, bank_forks::BankForks};
+use safecoin_sdk::{packet::PACKET_DATA_SIZE, pubkey::Pubkey, timing::duration_as_ms};
+use safecoin_streamer::streamer::PacketSender;
 use std::{
     net::{SocketAddr, UdpSocket},
     sync::atomic::{AtomicBool, Ordering},
@@ -383,10 +383,10 @@ impl WindowService {
         duplicate_receiver: CrossbeamReceiver<Shred>,
     ) -> JoinHandle<()> {
         let handle_error = || {
-            inc_new_counter_error!("solana-check-duplicate-error", 1, 1);
+            inc_new_counter_error!("safecoin-check-duplicate-error", 1, 1);
         };
         Builder::new()
-            .name("solana-check-duplicate".to_string())
+            .name("safecoin-check-duplicate".to_string())
             .spawn(move || loop {
                 if exit.load(Ordering::Relaxed) {
                     break;
@@ -416,11 +416,11 @@ impl WindowService {
         let leader_schedule_cache = leader_schedule_cache.clone();
         let mut handle_timeout = || {};
         let handle_error = || {
-            inc_new_counter_error!("solana-window-insert-error", 1, 1);
+            inc_new_counter_error!("safecoin-window-insert-error", 1, 1);
         };
 
         Builder::new()
-            .name("solana-window-insert".to_string())
+            .name("safecoin-window-insert".to_string())
             .spawn(move || {
                 let handle_duplicate = |shred| {
                     let _ = duplicate_sender.send(shred);
@@ -474,7 +474,7 @@ impl WindowService {
         let exit = exit.clone();
         let blockstore = blockstore.clone();
         Builder::new()
-            .name("solana-window".to_string())
+            .name("safecoin-window".to_string())
             .spawn(move || {
                 let _exit = Finalizer::new(exit.clone());
                 trace!("{}: RECV_WINDOW started", id);
@@ -484,7 +484,7 @@ impl WindowService {
                     .unwrap();
                 let mut now = Instant::now();
                 let handle_error = || {
-                    inc_new_counter_error!("solana-window-error", 1, 1);
+                    inc_new_counter_error!("safecoin-window-error", 1, 1);
                 };
 
                 loop {
@@ -558,14 +558,14 @@ impl WindowService {
 mod test {
     use super::*;
     use crate::contact_info::ContactInfo;
-    use solana_ledger::{
+    use safecoin_ledger::{
         blockstore::{make_many_slot_entries, Blockstore},
         entry::{create_ticks, Entry},
         genesis_utils::create_genesis_config_with_leader,
         get_tmp_ledger_path,
         shred::{DataShredHeader, Shredder},
     };
-    use solana_sdk::{
+    use safecoin_sdk::{
         clock::Slot,
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         hash::Hash,
@@ -605,7 +605,7 @@ mod test {
 
     #[test]
     fn test_should_retransmit_and_persist() {
-        let me_id = solana_sdk::pubkey::new_rand();
+        let me_id = safecoin_sdk::pubkey::new_rand();
         let leader_keypair = Arc::new(Keypair::new());
         let leader_pubkey = leader_keypair.pubkey();
         let bank = Arc::new(Bank::new(

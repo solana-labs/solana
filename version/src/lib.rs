@@ -2,10 +2,10 @@
 
 extern crate serde_derive;
 use serde_derive::{Deserialize, Serialize};
-use solana_sdk::sanitize::Sanitize;
+use safecoin_sdk::sanitize::Sanitize;
 use std::{convert::TryInto, fmt};
 #[macro_use]
-extern crate solana_frozen_abi_macro;
+extern crate safecoin_frozen_abi_macro;
 
 // Older version structure used earlier 1.3.x releases
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, AbiExample)]
@@ -51,7 +51,7 @@ fn compute_commit(sha1: Option<&'static str>) -> Option<u32> {
 impl Default for Version {
     fn default() -> Self {
         let feature_set = u32::from_le_bytes(
-            solana_sdk::feature_set::ID.as_ref()[..4]
+            safecoin_sdk::feature_set::ID.as_ref()[..4]
                 .try_into()
                 .unwrap(),
         );

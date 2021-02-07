@@ -2,7 +2,7 @@
 use crate::budget_expr::BudgetExpr;
 use bincode::{self, deserialize, serialize_into};
 use serde_derive::{Deserialize, Serialize};
-use solana_sdk::instruction::InstructionError;
+use safecoin_sdk::instruction::InstructionError;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct BudgetState {
@@ -35,7 +35,7 @@ impl BudgetState {
 mod test {
     use super::*;
     use crate::id;
-    use solana_sdk::account::Account;
+    use safecoin_sdk::account::Account;
 
     #[test]
     fn test_serializer() {

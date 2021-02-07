@@ -1,5 +1,5 @@
 # token-exchange
-Solana Token Exchange Bench
+Safecoin Token Exchange Bench
 
 If you can't wait; jump to [Running the exchange](#Running-the-exchange) to
 learn how to start and interact with the exchange.
@@ -19,7 +19,7 @@ learn how to start and interact with the exchange.
 ## Overview
 
 An exchange is a marketplace where one asset can be traded for another.  This
-demo demonstrates one way to host an exchange on the Solana blockchain by
+demo demonstrates one way to host an exchange on the Safecoin blockchain by
 emulating a currency exchange.
 
 The assets are virtual tokens held by investors who may post order requests to
@@ -55,9 +55,9 @@ matching orders.  All the transactions can execute concurrently.
   -  An expression of the relative prices of two tokens. Calculated with the Base
      Asset as the numerator and the Quote Asset as the denominator. Ratios are 
      represented as fixed point numbers.  The fixed point scaler is defined in
-     [exchange_state.rs](https://github.com/solana-labs/solana/blob/c2fdd1362a029dcf89c8907c562d2079d977df11/programs/exchange_api/src/exchange_state.rs#L7)
+     [exchange_state.rs](https://github.com/solana-labs/safecoin/blob/c2fdd1362a029dcf89c8907c562d2079d977df11/programs/exchange_api/src/exchange_state.rs#L7)
 - Order request
-  - A Solana transaction sent by a trader to the exchange to submit an order. 
+  - A Safecoin transaction sent by a trader to the exchange to submit an order. 
     Order requests are made up of the token pair, the order side (bid or ask),
     quantity of the primary token, the price ratio, and the two token accounts
     to be credited/deducted.  An example trade request looks like "T AB 5 2" 
@@ -84,24 +84,24 @@ matching orders.  All the transactions can execute concurrently.
     orders in which case the orders are adjusted appropriately. Upon execution,
     tokens are distributed to the traders' accounts and any overlap or 
     "negative spread" between orders is deposited into the Matcher's profit
-    account.  All successful trades are recorded in the data of a new solana 
+    account.  All successful trades are recorded in the data of a new safecoin 
     account for posterity.
 - Investor
   - Individual investors who hold a number of tokens and wish to trade them on
-    the exchange.  Investors operate as Solana thin clients who own a set of
+    the exchange.  Investors operate as Safecoin thin clients who own a set of
     accounts containing tokens and/or order requests.  Investors post
     transactions to the exchange in order to request tokens and post or cancel
     order requests.
 - Matcher
   - An agent who facilitates trading between investors.  Matchers operate as
-    Solana thin clients who monitor all the orders looking for a trade
+    Safecoin thin clients who monitor all the orders looking for a trade
     match.  Once found, the Matcher issues a swap request to the exchange.
     Matchers are the engine of the exchange and are rewarded for their efforts by
     accumulating the price spreads of the swaps they initiate.  Matchers also
     provide current bid/ask price and OHLCV (Open, High, Low, Close, Volume)
     information on demand via a public network port.
 - Transaction fees
-  - Solana transaction fees are paid for by the transaction submitters who are
+  - Safecoin transaction fees are paid for by the transaction submitters who are
     the Investors and Matchers.
 
 ## Exchange startup
@@ -110,10 +110,10 @@ The exchange is up and running when it reaches a state where it can take
 investors' trades and Matchers' match requests.  To achieve this state the
 following must occur in order:
 
-- Start the Solana blockchain
+- Start the Safecoin blockchain
 - Start the  thin-client
 - The Matcher subscribes to change notifications for all the accounts owned by
-  the exchange program id.  The subscription is managed via Solana's JSON RPC
+  the exchange program id.  The subscription is managed via Safecoin's JSON RPC
   interface.
 - The Matcher starts responding to queries for bid/ask price and OHLCV
 
@@ -183,7 +183,7 @@ pub enum ExchangeInstruction {
 ## Order Requests
 
 When an investor decides to exchange a token of one type for another, they
-submit a transaction to the Solana Blockchain containing an order request, which,
+submit a transaction to the Safecoin Blockchain containing an order request, which,
 if successful, is turned into an order.  orders do not expire but are
 cancellable. <!-- orders should have a timestamp to enable trade
 expiration -->  When an order is created, tokens are deducted from a token
@@ -469,11 +469,11 @@ in client_demo/src/demo.rs::test_exchange_local_cluster.
 The following command runs the bench:
 
 ```bash
-$ RUST_LOG=solana_bench_exchange=info cargo test --release -- --nocapture test_exchange_local_cluster
+$ RUST_LOG=safecoin_bench_exchange=info cargo test --release -- --nocapture test_exchange_local_cluster
 ```
 
 To also see the cluster messages:
 
 ```bash
-$ RUST_LOG=solana_bench_exchange=info,solana=info cargo test --release -- --nocapture test_exchange_local_cluster
+$ RUST_LOG=safecoin_bench_exchange=info,safecoin=info cargo test --release -- --nocapture test_exchange_local_cluster
 ```

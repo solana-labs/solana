@@ -1,5 +1,5 @@
 import React from "react";
-import { PublicKey } from "@solana/web3.js";
+import { PublicKey } from "@safecoin/web3.js";
 import { FetchStatus } from "providers/cache";
 import { useAccountInfo, useAccountHistory } from "providers/accounts";
 import { useFetchAccountHistory } from "providers/accounts/history";

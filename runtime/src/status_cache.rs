@@ -3,7 +3,7 @@ use crate::accounts_index::Ancestors;
 use log::*;
 use rand::{thread_rng, Rng};
 use serde::Serialize;
-use solana_sdk::{
+use safecoin_sdk::{
     clock::{Slot, MAX_RECENT_BLOCKHASHES},
     hash::Hash,
     signature::Signature,
@@ -285,7 +285,7 @@ impl<T: Serialize + Clone> StatusCache<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::hash::hash;
+    use safecoin_sdk::hash::hash;
 
     type BankStatusCache = StatusCache<()>;
 

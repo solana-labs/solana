@@ -2,10 +2,10 @@
 title: Validator Timestamp Oracle
 ---
 
-Third-party users of Solana sometimes need to know the real-world time a block
+Third-party users of Safecoin sometimes need to know the real-world time a block
 was produced, generally to meet compliance requirements for external auditors or
 law enforcement. This proposal describes a validator timestamp oracle that
-would allow a Solana cluster to satisfy this need.
+would allow a Safecoin cluster to satisfy this need.
 
 The general outline of the proposed implementation is as follows:
 
@@ -48,7 +48,7 @@ Vote vector (`Vote::slots.iter().max()`). It is signed by the validator's
 identity keypair as a usual Vote. In order to enable this reporting, the Vote
 struct needs to be extended to include a timestamp field, `timestamp: Option<UnixTimestamp>`, which will be set to `None` in most Votes.
 
-As of https://github.com/solana-labs/solana/pull/10630, validators submit a
+As of https://github.com/solana-labs/safecoin/pull/10630, validators submit a
 timestamp every vote. This enables implementation of a block time caching
 service that allows nodes to calculate the estimated timestamp immediately after
 the block is rooted, and cache that value in Blockstore. This provides

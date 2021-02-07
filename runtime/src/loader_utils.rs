@@ -1,5 +1,5 @@
 use serde::Serialize;
-use solana_sdk::{
+use safecoin_sdk::{
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     client::Client,
     instruction::{AccountMeta, Instruction},

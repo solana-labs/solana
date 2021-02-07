@@ -1,11 +1,11 @@
-use solana_sdk::{
+use safecoin_sdk::{
     instruction::InstructionError, keyed_account::KeyedAccount, process_instruction::InvokeContext,
     pubkey::Pubkey,
 };
 
-solana_sdk::declare_program!(
+safecoin_sdk::declare_program!(
     "FaiLure111111111111111111111111111111111111",
-    solana_failure_program,
+    safecoin_failure_program,
     process_instruction
 );
 

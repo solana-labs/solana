@@ -35,7 +35,7 @@ function generateConfig(configType) {
         {
           file: 'lib/index.iife.js',
           format: 'iife',
-          name: 'solanaWeb3',
+          name: 'safecoinWeb3',
           sourcemap: true,
         },
       ];

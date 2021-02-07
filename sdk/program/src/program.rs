@@ -36,7 +36,7 @@ pub fn invoke_signed(
     #[cfg(target_arch = "bpf")]
     {
         let result = unsafe {
-            sol_invoke_signed_rust(
+            safe_invoke_signed_rust(
                 instruction as *const _ as *const u8,
                 account_infos as *const _ as *const u8,
                 account_infos.len() as u64,
@@ -51,12 +51,12 @@ pub fn invoke_signed(
     }
 
     #[cfg(not(target_arch = "bpf"))]
-    crate::program_stubs::sol_invoke_signed(instruction, account_infos, signers_seeds)
+    crate::program_stubs::safe_invoke_signed(instruction, account_infos, signers_seeds)
 }
 
 #[cfg(target_arch = "bpf")]
 extern "C" {
-    fn sol_invoke_signed_rust(
+    fn safe_invoke_signed_rust(
         instruction_addr: *const u8,
         account_infos_addr: *const u8,
         account_infos_len: u64,

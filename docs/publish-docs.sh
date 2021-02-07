@@ -9,15 +9,15 @@ fi
 CONFIG_FILE=vercel.json
 
 if [[ -n $CI_TAG ]]; then
-  PROJECT_NAME=docs-solana-com
+  PROJECT_NAME=docs-safecoin.org
 else
   eval "$(../ci/channel-info.sh)"
   case $CHANNEL in
   edge)
-    PROJECT_NAME=edge-docs-solana-com
+    PROJECT_NAME=edge-docs-safecoin.org
     ;;
   beta)
-    PROJECT_NAME=beta-docs-solana-com
+    PROJECT_NAME=beta-docs-safecoin.org
     ;;
   *)
     PROJECT_NAME=docs

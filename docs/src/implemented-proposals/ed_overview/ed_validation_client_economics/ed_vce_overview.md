@@ -2,7 +2,7 @@
 title: Validation-client Economics
 ---
 
-**Subject to change. Follow most recent economic discussions in the Solana forums: https://forums.solana.com**
+**Subject to change. Follow most recent economic discussions in the Safecoin forums: https://forums.safecoin.org**
 
 Validator-clients are eligible to charge commission on inflationary rewards distributed to staked tokens. This compensation is for providing compute \(CPU+GPU\) resources to validate and vote on a given PoH state. These protocol-based rewards are determined through an algorithmic disinflationary schedule as a function of total token supply. The network is expected to launch with an annual inflation rate around 8%, set to decrease by 15% per year until a long-term stable rate of 1.5% is reached, however these parameters are yet to be finalized by the community. These issuances are to be split and distributed to participating validators, with around 95% of the issued tokens allocated for validator rewards initiall (the remaining 5% reserved for Foundation operating expenses). Because the network will be distributing a fixed amount of inflation rewards across the stake-weighted validator set, the yield observed for staked tokens  will be primarily a function of the amount of staked tokens in relation to the total token supply.
 

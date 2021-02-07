@@ -196,11 +196,11 @@ fn analyze_logs(matches: &ArgMatches) {
 }
 
 fn main() {
-    solana_logger::setup();
+    safecoin_logger::setup();
 
     let matches = App::new(crate_name!())
         .about(crate_description!())
-        .version(solana_version::version!())
+        .version(safecoin_version::version!())
         .subcommand(
             SubCommand::with_name("iftop")
                 .about("Process iftop log file")

@@ -5,7 +5,7 @@ import {
   ParsedTransaction,
   PublicKey,
   ParsedInstruction,
-} from "@solana/web3.js";
+} from "@safecoin/web3.js";
 
 import { UnknownDetailsCard } from "../UnknownDetailsCard";
 import { InstructionCard } from "../InstructionCard";

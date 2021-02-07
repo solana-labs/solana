@@ -176,7 +176,7 @@ startNodes() {
 
       (
         set -x
-        $solana_cli --keypair config/bootstrap-validator/identity.json \
+        $safecoin_cli --keypair config/bootstrap-validator/identity.json \
           --url http://127.0.0.1:8899 genesis-hash
       ) | tee genesis-hash.log
       maybeExpectedGenesisHash="--expected-genesis-hash $(tail -n1 genesis-hash.log)"
@@ -279,7 +279,7 @@ verifyLedger() {
     echo "--- $ledger ledger verification"
     (
       set -x
-      $solana_ledger_tool --ledger "$SOLANA_CONFIG_DIR"/$ledger verify
+      $safecoin_ledger_tool --ledger "$SAFECOIN_CONFIG_DIR"/$ledger verify
     ) || flag_error
   done
 }
@@ -312,7 +312,7 @@ flag_error() {
 }
 
 if ! $skipSetup; then
-  clear_config_dir "$SOLANA_CONFIG_DIR"
+  clear_config_dir "$SAFECOIN_CONFIG_DIR"
   multinode-demo/setup.sh --hashes-per-tick sleep
 else
   verifyLedger
@@ -324,8 +324,8 @@ while [[ $iteration -le $iterations ]]; do
   (
     set -x
     client_keypair=/tmp/client-id.json-$$
-    $solana_keygen new --no-passphrase -fso $client_keypair || exit $?
-    $solana_gossip spy -n 127.0.0.1:8001 --num-nodes-exactly $numNodes || exit $?
+    $safecoin_keygen new --no-passphrase -fso $client_keypair || exit $?
+    $safecoin_gossip spy -n 127.0.0.1:8001 --num-nodes-exactly $numNodes || exit $?
     rm -rf $client_keypair
   ) || flag_error
 

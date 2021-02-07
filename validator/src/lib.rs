@@ -1,4 +1,4 @@
-pub use solana_core::test_validator;
+pub use safecoin_core::test_validator;
 use {
     log::*,
     serde_derive::{Deserialize, Serialize},
@@ -71,9 +71,9 @@ pub fn redirect_stderr_to_file(logfile: Option<String>) -> Option<JoinHandle<()>
         }
     };
 
-    solana_logger::setup_with_default(
+    safecoin_logger::setup_with_default(
         &[
-            "solana=info,solana_runtime::message_processor=error", /* info logging for all solana modules */
+            "safecoin=info,safecoin_runtime::message_processor=error", /* info logging for all safecoin modules */
             "rpc=trace",   /* json_rpc request/response logging */
         ]
         .join(","),

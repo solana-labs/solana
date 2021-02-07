@@ -2,7 +2,7 @@
 title: Storage Rent Economics
 ---
 
-Each transaction that is submitted to the Solana ledger imposes costs. Transaction fees paid by the submitter, and collected by a validator, in theory, account for the acute, transactional, costs of validating and adding that data to the ledger. Unaccounted in this process is the mid-term storage of active ledger state, necessarily maintained by the rotating validator set. This type of storage imposes costs not only to validators but also to the broader network as active state grows so does data transmission and validation overhead. To account for these costs, we describe here our preliminary design and implementation of storage rent.
+Each transaction that is submitted to the Safecoin ledger imposes costs. Transaction fees paid by the submitter, and collected by a validator, in theory, account for the acute, transactional, costs of validating and adding that data to the ledger. Unaccounted in this process is the mid-term storage of active ledger state, necessarily maintained by the rotating validator set. This type of storage imposes costs not only to validators but also to the broader network as active state grows so does data transmission and validation overhead. To account for these costs, we describe here our preliminary design and implementation of storage rent.
 
 Storage rent can be paid via one of two methods:
 

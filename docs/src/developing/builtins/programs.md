@@ -2,7 +2,7 @@
 title: "Builtin Programs"
 ---
 
-Solana contains a small handful of builtin programs, which are required to run
+Safecoin contains a small handful of builtin programs, which are required to run
 validator nodes. Unlike third-party programs, the builtin programs are part of
 the validator implementation and can be upgraded as part of cluster upgrades.
 Upgrades may occur to add features, fix bugs, or improve performance. Interface
@@ -20,14 +20,14 @@ programs, as well include instructions from deployed programs.
 Create accounts and transfer lamports between them
 
 - Program id: `11111111111111111111111111111111`
-- Instructions: [SystemInstruction](https://docs.rs/solana-sdk/VERSION_FOR_DOCS_RS/solana_sdk/system_instruction/enum.SystemInstruction.html)
+- Instructions: [SystemInstruction](https://docs.rs/safecoin-sdk/VERSION_FOR_DOCS_RS/safecoin_sdk/system_instruction/enum.SystemInstruction.html)
 
 ## Config Program
 
 Add configuration data to the chain and the list of public keys that are permitted to modify it
 
 - Program id: `Config1111111111111111111111111111111111111`
-- Instructions: [config_instruction](https://docs.rs/solana-config-program/VERSION_FOR_DOCS_RS/solana_config_program/config_instruction/index.html)
+- Instructions: [config_instruction](https://docs.rs/safecoin-config-program/VERSION_FOR_DOCS_RS/safecoin_config_program/config_instruction/index.html)
 
 Unlike the other programs, the Config program does not define any individual
 instructions. It has just one implicit instruction, a "store" instruction. Its
@@ -39,25 +39,25 @@ data to store in it.
 Create stake accounts and delegate it to validators
 
 - Program id: `Stake11111111111111111111111111111111111111`
-- Instructions: [StakeInstruction](https://docs.rs/solana-stake-program/VERSION_FOR_DOCS_RS/solana_stake_program/stake_instruction/enum.StakeInstruction.html)
+- Instructions: [StakeInstruction](https://docs.rs/safecoin-stake-program/VERSION_FOR_DOCS_RS/safecoin_stake_program/stake_instruction/enum.StakeInstruction.html)
 
 ## Vote Program
 
 Create vote accounts and vote on blocks
 
 - Program id: `Vote111111111111111111111111111111111111111`
-- Instructions: [VoteInstruction](https://docs.rs/solana-vote-program/VERSION_FOR_DOCS_RS/solana_vote_program/vote_instruction/enum.VoteInstruction.html)
+- Instructions: [VoteInstruction](https://docs.rs/safecoin-vote-program/VERSION_FOR_DOCS_RS/safecoin_vote_program/vote_instruction/enum.VoteInstruction.html)
 
 ## BPF Loader
 
 Add programs to the chain and execute them.
 
 - Program id: `BPFLoader1111111111111111111111111111111111`
-- Instructions: [LoaderInstruction](https://docs.rs/solana-sdk/VERSION_FOR_DOCS_RS/solana_sdk/loader_instruction/enum.LoaderInstruction.html)
+- Instructions: [LoaderInstruction](https://docs.rs/safecoin-sdk/VERSION_FOR_DOCS_RS/safecoin_sdk/loader_instruction/enum.LoaderInstruction.html)
 
 The BPF Loader marks itself as its "owner" of the executable account it
 creates to store your program. When a user invokes an instruction via a
-program id, the Solana runtime will load both your executable account and its
+program id, the Safecoin runtime will load both your executable account and its
 owner, the BPF Loader. The runtime then passes your program to the BPF Loader
 to process the instruction.
 
@@ -66,7 +66,7 @@ to process the instruction.
 Verify secp256k1 public key recovery operations (ecrecover).
 
 - Program id: `KeccakSecp256k11111111111111111111111111111`
-- Instructions: [new_secp256k1_instruction](https://github.com/solana-labs/solana/blob/c1f3f9d27b5f9534f9a37704bae1d690d4335b6b/programs/secp256k1/src/lib.rs#L18)
+- Instructions: [new_secp256k1_instruction](https://github.com/solana-labs/safecoin/blob/c1f3f9d27b5f9534f9a37704bae1d690d4335b6b/programs/secp256k1/src/lib.rs#L18)
 
 The secp256k1 program processes an instruction which takes in as the first byte
 a count of the following struct serialized in the instruction data:

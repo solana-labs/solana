@@ -5,8 +5,8 @@ pub mod vest_state;
 
 use crate::vest_processor::process_instruction;
 
-solana_sdk::declare_program!(
+safecoin_sdk::declare_program!(
     "Vest111111111111111111111111111111111111111",
-    solana_vest_program,
+    safecoin_vest_program,
     process_instruction
 );

@@ -1,5 +1,5 @@
 use dashmap::DashMap;
-use solana_sdk::{account::Account, clock::Slot, hash::Hash, pubkey::Pubkey};
+use safecoin_sdk::{account::Account, clock::Slot, hash::Hash, pubkey::Pubkey};
 use std::{
     collections::BTreeSet,
     ops::Deref,

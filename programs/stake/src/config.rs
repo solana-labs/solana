@@ -2,14 +2,14 @@
 //!  carries variables that the stake program cares about
 use bincode::{deserialize, serialized_size};
 use serde_derive::{Deserialize, Serialize};
-use solana_config_program::{create_config_account, get_config_data, ConfigState};
-use solana_sdk::{
+use safecoin_config_program::{create_config_account, get_config_data, ConfigState};
+use safecoin_sdk::{
     account::Account, genesis_config::GenesisConfig, instruction::InstructionError,
     keyed_account::KeyedAccount,
 };
 
 // stake config ID
-solana_sdk::declare_id!("StakeConfig11111111111111111111111111111111");
+safecoin_sdk::declare_id!("StakeConfig11111111111111111111111111111111");
 
 // means that no more than RATE of current effective stake may be added or subtracted per
 //  epoch
@@ -72,7 +72,7 @@ pub fn from_keyed_account(account: &KeyedAccount) -> Result<Config, InstructionE
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::pubkey::Pubkey;
+    use safecoin_sdk::pubkey::Pubkey;
     use std::cell::RefCell;
 
     #[test]

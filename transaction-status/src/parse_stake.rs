@@ -3,8 +3,8 @@ use crate::parse_instruction::{
 };
 use bincode::deserialize;
 use serde_json::{json, Map};
-use solana_sdk::{instruction::CompiledInstruction, pubkey::Pubkey};
-use solana_stake_program::stake_instruction::StakeInstruction;
+use safecoin_sdk::{instruction::CompiledInstruction, pubkey::Pubkey};
+use safecoin_stake_program::stake_instruction::StakeInstruction;
 
 pub fn parse_stake(
     instruction: &CompiledInstruction,
@@ -195,8 +195,8 @@ fn check_num_stake_accounts(accounts: &[u8], num: usize) -> Result<(), ParseInst
 #[cfg(test)]
 mod test {
     use super::*;
-    use solana_sdk::{message::Message, pubkey::Pubkey};
-    use solana_stake_program::{
+    use safecoin_sdk::{message::Message, pubkey::Pubkey};
+    use safecoin_stake_program::{
         stake_instruction::{self, LockupArgs},
         stake_state::{Authorized, Lockup, StakeAuthorize},
     };

@@ -10,25 +10,25 @@
 # except according to those terms.
 
 # This is just a little script that can be downloaded from the internet to
-# install solana-install. It just does platform detection, downloads the installer
+# install safecoin-install. It just does platform detection, downloads the installer
 # and runs it.
 
 { # this ensures the entire script is downloaded #
 
-if [ -z "$SOLANA_DOWNLOAD_ROOT" ]; then
-    SOLANA_DOWNLOAD_ROOT="https://github.com/solana-labs/solana/releases/download/"
+if [ -z "$SAFECOIN_DOWNLOAD_ROOT" ]; then
+    SAFECOIN_DOWNLOAD_ROOT="https://github.com/solana-labs/safecoin/releases/download/"
 fi
-GH_LATEST_RELEASE="https://api.github.com/repos/solana-labs/solana/releases/latest"
+GH_LATEST_RELEASE="https://api.github.com/repos/solana-labs/safecoin/releases/latest"
 
 set -e
 
 usage() {
     cat 1>&2 <<EOF
-solana-install-init
+safecoin-install-init
 initializes a new installation
 
 USAGE:
-    solana-install-init [FLAGS] [OPTIONS] --data_dir <PATH> --pubkey <PUBKEY>
+    safecoin-install-init [FLAGS] [OPTIONS] --data_dir <PATH> --pubkey <PUBKEY>
 
 FLAGS:
     -h, --help              Prints help information
@@ -36,7 +36,7 @@ FLAGS:
 
 OPTIONS:
     -d, --data_dir <PATH>    Directory to store install data
-    -u, --url <URL>          JSON RPC URL for the solana cluster
+    -u, --url <URL>          JSON RPC URL for the safecoin cluster
     -p, --pubkey <PUBKEY>    Public key of the update manifest
 EOF
 }
@@ -74,13 +74,13 @@ main() {
       ;;
     esac
 
-    temp_dir="$(mktemp -d 2>/dev/null || ensure mktemp -d -t solana-install-init)"
+    temp_dir="$(mktemp -d 2>/dev/null || ensure mktemp -d -t safecoin-install-init)"
     ensure mkdir -p "$temp_dir"
 
-    # Check for SOLANA_RELEASE environment variable override.  Otherwise fetch
+    # Check for SAFECOIN_RELEASE environment variable override.  Otherwise fetch
     # the latest release tag from github
-    if [ -n "$SOLANA_RELEASE" ]; then
-      release="$SOLANA_RELEASE"
+    if [ -n "$SAFECOIN_RELEASE" ]; then
+      release="$SAFECOIN_RELEASE"
     else
       release_file="$temp_dir/release"
       printf 'looking for latest release\n' 1>&2
@@ -94,36 +94,36 @@ main() {
       fi
     fi
 
-    download_url="$SOLANA_DOWNLOAD_ROOT/$release/solana-install-init-$TARGET"
-    solana_install_init="$temp_dir/solana-install-init"
+    download_url="$SAFECOIN_DOWNLOAD_ROOT/$release/safecoin-install-init-$TARGET"
+    safecoin_install_init="$temp_dir/safecoin-install-init"
 
     printf 'downloading %s installer\n' "$release" 1>&2
 
     ensure mkdir -p "$temp_dir"
-    ensure downloader "$download_url" "$solana_install_init"
-    ensure chmod u+x "$solana_install_init"
-    if [ ! -x "$solana_install_init" ]; then
-        printf '%s\n' "Cannot execute $solana_install_init (likely because of mounting /tmp as noexec)." 1>&2
-        printf '%s\n' "Please copy the file to a location where you can execute binaries and run ./solana-install-init." 1>&2
+    ensure downloader "$download_url" "$safecoin_install_init"
+    ensure chmod u+x "$safecoin_install_init"
+    if [ ! -x "$safecoin_install_init" ]; then
+        printf '%s\n' "Cannot execute $safecoin_install_init (likely because of mounting /tmp as noexec)." 1>&2
+        printf '%s\n' "Please copy the file to a location where you can execute binaries and run ./safecoin-install-init." 1>&2
         exit 1
     fi
 
     if [ -z "$1" ]; then
       #shellcheck disable=SC2086
-      ignore "$solana_install_init" $SOLANA_INSTALL_INIT_ARGS
+      ignore "$safecoin_install_init" $SAFECOIN_INSTALL_INIT_ARGS
     else
-      ignore "$solana_install_init" "$@"
+      ignore "$safecoin_install_init" "$@"
     fi
     retval=$?
 
-    ignore rm "$solana_install_init"
+    ignore rm "$safecoin_install_init"
     ignore rm -rf "$temp_dir"
 
     return "$retval"
 }
 
 err() {
-    printf 'solana-install-init: %s\n' "$1" >&2
+    printf 'safecoin-install-init: %s\n' "$1" >&2
     exit 1
 }
 

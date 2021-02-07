@@ -1,9 +1,9 @@
-use solana_runtime::{
+use safecoin_runtime::{
     bank::Bank,
     bank_client::BankClient,
     genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
 };
-use solana_sdk::{
+use safecoin_sdk::{
     account::from_account,
     account_utils::StateMut,
     client::SyncClient,
@@ -14,11 +14,11 @@ use solana_sdk::{
     sysvar::{self, stake_history::StakeHistory},
     transaction::TransactionError,
 };
-use solana_stake_program::{
+use safecoin_stake_program::{
     stake_instruction::{self},
     stake_state::{self, StakeState},
 };
-use solana_vote_program::{
+use safecoin_vote_program::{
     vote_instruction,
     vote_state::{Vote, VoteInit, VoteState, VoteStateVersions},
 };
@@ -102,7 +102,7 @@ fn get_staked(bank: &Bank, stake_pubkey: &Pubkey) -> u64 {
 
 #[test]
 fn test_stake_create_and_split_single_signature() {
-    solana_logger::setup();
+    safecoin_logger::setup();
 
     let GenesisConfigInfo {
         genesis_config,
@@ -110,7 +110,7 @@ fn test_stake_create_and_split_single_signature() {
         ..
     } = create_genesis_config_with_leader(
         100_000_000_000,
-        &solana_sdk::pubkey::new_rand(),
+        &safecoin_sdk::pubkey::new_rand(),
         1_000_000,
     );
 
@@ -119,7 +119,7 @@ fn test_stake_create_and_split_single_signature() {
     let bank_client = BankClient::new_shared(&Arc::new(Bank::new(&genesis_config)));
 
     let stake_address =
-        Pubkey::create_with_seed(&staker_pubkey, "stake", &solana_stake_program::id()).unwrap();
+        Pubkey::create_with_seed(&staker_pubkey, "stake", &safecoin_stake_program::id()).unwrap();
 
     let authorized = stake_state::Authorized::auto(&staker_pubkey);
 
@@ -146,7 +146,7 @@ fn test_stake_create_and_split_single_signature() {
 
     // split the stake
     let split_stake_address =
-        Pubkey::create_with_seed(&staker_pubkey, "split_stake", &solana_stake_program::id())
+        Pubkey::create_with_seed(&staker_pubkey, "split_stake", &safecoin_stake_program::id())
             .unwrap();
     // Test split
     let message = Message::new(
@@ -173,7 +173,7 @@ fn test_stake_create_and_split_to_existing_system_account() {
     // Ensure stake-split does not allow the user to promote an existing system account into
     // a stake account.
 
-    solana_logger::setup();
+    safecoin_logger::setup();
 
     let GenesisConfigInfo {
         genesis_config,
@@ -181,7 +181,7 @@ fn test_stake_create_and_split_to_existing_system_account() {
         ..
     } = create_genesis_config_with_leader(
         100_000_000_000,
-        &solana_sdk::pubkey::new_rand(),
+        &safecoin_sdk::pubkey::new_rand(),
         1_000_000,
     );
 
@@ -190,7 +190,7 @@ fn test_stake_create_and_split_to_existing_system_account() {
     let bank_client = BankClient::new_shared(&Arc::new(Bank::new(&genesis_config)));
 
     let stake_address =
-        Pubkey::create_with_seed(&staker_pubkey, "stake", &solana_stake_program::id()).unwrap();
+        Pubkey::create_with_seed(&staker_pubkey, "stake", &safecoin_stake_program::id()).unwrap();
 
     let authorized = stake_state::Authorized::auto(&staker_pubkey);
 
@@ -215,7 +215,7 @@ fn test_stake_create_and_split_to_existing_system_account() {
         .expect("failed to create and delegate stake account");
 
     let split_stake_address =
-        Pubkey::create_with_seed(&staker_pubkey, "split_stake", &solana_stake_program::id())
+        Pubkey::create_with_seed(&staker_pubkey, "split_stake", &safecoin_stake_program::id())
             .unwrap();
 
     // First, put a system account where we want the new stake account
@@ -268,7 +268,7 @@ fn test_stake_account_lifetime() {
         ..
     } = create_genesis_config_with_leader(
         100_000_000_000,
-        &solana_sdk::pubkey::new_rand(),
+        &safecoin_sdk::pubkey::new_rand(),
         1_000_000,
     );
     let bank = Bank::new(&genesis_config);
@@ -326,7 +326,7 @@ fn test_stake_account_lifetime() {
         &[stake_instruction::withdraw(
             &stake_pubkey,
             &stake_pubkey,
-            &solana_sdk::pubkey::new_rand(),
+            &safecoin_sdk::pubkey::new_rand(),
             1,
             None,
         )],
@@ -421,7 +421,7 @@ fn test_stake_account_lifetime() {
         &[stake_instruction::withdraw(
             &split_stake_pubkey,
             &stake_pubkey,
-            &solana_sdk::pubkey::new_rand(),
+            &safecoin_sdk::pubkey::new_rand(),
             lamports / 2 - split_staked + 1,
             None,
         )],
@@ -443,7 +443,7 @@ fn test_stake_account_lifetime() {
         &[stake_instruction::withdraw(
             &split_stake_pubkey,
             &stake_pubkey,
-            &solana_sdk::pubkey::new_rand(),
+            &safecoin_sdk::pubkey::new_rand(),
             lamports / 2,
             None,
         )],
@@ -459,7 +459,7 @@ fn test_stake_account_lifetime() {
         &[stake_instruction::withdraw(
             &split_stake_pubkey,
             &stake_pubkey,
-            &solana_sdk::pubkey::new_rand(),
+            &safecoin_sdk::pubkey::new_rand(),
             lamports / 2 - split_staked,
             None,
         )],
@@ -484,7 +484,7 @@ fn test_stake_account_lifetime() {
         &[stake_instruction::withdraw(
             &split_stake_pubkey,
             &stake_pubkey,
-            &solana_sdk::pubkey::new_rand(),
+            &safecoin_sdk::pubkey::new_rand(),
             split_staked,
             None,
         )],
@@ -512,7 +512,7 @@ fn test_create_stake_account_from_seed() {
         ..
     } = create_genesis_config_with_leader(
         100_000_000_000,
-        &solana_sdk::pubkey::new_rand(),
+        &safecoin_sdk::pubkey::new_rand(),
         1_000_000,
     );
     let bank = Bank::new(&genesis_config);
@@ -522,7 +522,7 @@ fn test_create_stake_account_from_seed() {
 
     let seed = "test-string";
     let stake_pubkey =
-        Pubkey::create_with_seed(&mint_pubkey, seed, &solana_stake_program::id()).unwrap();
+        Pubkey::create_with_seed(&mint_pubkey, seed, &safecoin_stake_program::id()).unwrap();
 
     // Create Vote Account
     let message = Message::new(

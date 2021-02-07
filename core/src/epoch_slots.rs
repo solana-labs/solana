@@ -4,9 +4,9 @@ use crate::crds_value::MAX_WALLCLOCK;
 use bincode::serialized_size;
 use bv::BitVec;
 use flate2::{Compress, Compression, Decompress, FlushCompress, FlushDecompress};
-use solana_sdk::clock::Slot;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::sanitize::{Sanitize, SanitizeError};
+use safecoin_sdk::clock::Slot;
+use safecoin_sdk::pubkey::Pubkey;
+use safecoin_sdk::sanitize::{Sanitize, SanitizeError};
 
 const MAX_SLOTS_PER_ENTRY: usize = 2048 * 8;
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, AbiExample)]

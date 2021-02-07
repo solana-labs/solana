@@ -1,5 +1,5 @@
 use crate::rpc_request;
-use solana_sdk::{
+use safecoin_sdk::{
     signature::SignerError, transaction::TransactionError, transport::TransportError,
 };
 use std::io;

@@ -1,11 +1,11 @@
 [package]
-name = "solana-storage-bigtable"
+name = "safecoin-storage-bigtable"
 version = "1.6.0"
-description = "Solana Storage BigTable"
-authors = ["Solana Maintainers <maintainers@solana.com>"]
-repository = "https://github.com/solana-labs/solana"
+description = "Safecoin Storage BigTable"
+authors = ["Safecoin Maintainers <maintainers@safecoin.org>"]
+repository = "https://github.com/solana-labs/safecoin"
 license = "Apache-2.0"
-homepage = "https://solana.com/"
+homepage = "https://safecoin.org/"
 edition = "2018"
 
 [dependencies]
@@ -22,9 +22,9 @@ prost-types = "0.7.0"
 serde = "1.0.122"
 serde_derive = "1.0.103"
 smpl_jwt = "0.6.0"
-solana-sdk = { path = "../sdk", version = "1.6.0" }
-solana-storage-proto = { path = "../storage-proto", version = "1.6.0" }
-solana-transaction-status = { path = "../transaction-status", version = "1.6.0" }
+safecoin-sdk = { path = "../sdk", version = "1.6.0" }
+safecoin-storage-proto = { path = "../storage-proto", version = "1.6.0" }
+safecoin-transaction-status = { path = "../transaction-status", version = "1.6.0" }
 thiserror = "1.0"
 futures = "0.3.8"
 tonic = { version = "0.4.0", features = ["tls", "transport"] }
@@ -32,7 +32,7 @@ zstd = "0.5.1"
 
 [lib]
 crate-type = ["lib"]
-name = "solana_storage_bigtable"
+name = "safecoin_storage_bigtable"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

@@ -4,16 +4,16 @@ use log::*;
 /// All tests must start from an entry point and a funding keypair and
 /// discover the rest of the network.
 use rand::{thread_rng, Rng};
-use solana_client::thin_client::create_client;
-use solana_core::{
+use safecoin_client::thin_client::create_client;
+use safecoin_core::{
     cluster_info::VALIDATOR_PORT_RANGE, consensus::VOTE_THRESHOLD_DEPTH, contact_info::ContactInfo,
     gossip_service::discover_cluster,
 };
-use solana_ledger::{
+use safecoin_ledger::{
     blockstore::Blockstore,
     entry::{Entry, EntrySlice},
 };
-use solana_sdk::{
+use safecoin_sdk::{
     client::SyncClient,
     clock::{self, Slot, DEFAULT_MS_PER_SLOT, NUM_CONSECUTIVE_LEADER_SLOTS},
     commitment_config::CommitmentConfig,
@@ -192,7 +192,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
     nodes: usize,
     slot_millis: u64,
 ) {
-    solana_logger::setup();
+    safecoin_logger::setup();
     let cluster_nodes = discover_cluster(&entry_point_info.gossip, nodes).unwrap();
     assert!(cluster_nodes.len() >= nodes);
     let client = create_client(entry_point_info.client_facing_addr(), VALIDATOR_PORT_RANGE);

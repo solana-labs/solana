@@ -10,14 +10,14 @@ use rocksdb::{
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use solana_runtime::hardened_unpack::UnpackError;
-use solana_sdk::{
+use safecoin_runtime::hardened_unpack::UnpackError;
+use safecoin_sdk::{
     clock::{Slot, UnixTimestamp},
     pubkey::Pubkey,
     signature::Signature,
 };
-use solana_storage_proto::convert::generated;
-use solana_transaction_status::TransactionStatusMeta;
+use safecoin_storage_proto::convert::generated;
+use safecoin_transaction_status::TransactionStatusMeta;
 use std::{collections::HashMap, fs, marker::PhantomData, path::Path, sync::Arc};
 use thiserror::Error;
 
@@ -292,7 +292,7 @@ impl Rocks {
                 match DB::open_cf_descriptors(&db_options, path, cfs.into_iter().map(|c| c.1)) {
                     Ok(db) => Rocks(db, ActualAccessType::Primary),
                     Err(err) => {
-                        let secondary_path = path.join("solana-secondary");
+                        let secondary_path = path.join("safecoin-secondary");
 
                         warn!("Error when opening as primary: {}", err);
                         warn!("Trying as secondary at : {:?}", secondary_path);

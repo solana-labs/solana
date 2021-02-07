@@ -1,9 +1,9 @@
-use solana_client::thin_client::ThinClient;
-use solana_core::contact_info::ContactInfo;
-use solana_core::validator::Validator;
-use solana_core::validator::ValidatorConfig;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::Keypair;
+use safecoin_client::thin_client::ThinClient;
+use safecoin_core::contact_info::ContactInfo;
+use safecoin_core::validator::Validator;
+use safecoin_core::validator::ValidatorConfig;
+use safecoin_sdk::pubkey::Pubkey;
+use safecoin_sdk::signature::Keypair;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -44,10 +44,10 @@ pub trait Cluster {
         &mut self,
         pubkey: &Pubkey,
         cluster_validator_info: &mut ClusterValidatorInfo,
-    ) -> (solana_core::cluster_info::Node, Option<ContactInfo>);
+    ) -> (safecoin_core::cluster_info::Node, Option<ContactInfo>);
     fn restart_node_with_context(
         cluster_validator_info: ClusterValidatorInfo,
-        restart_context: (solana_core::cluster_info::Node, Option<ContactInfo>),
+        restart_context: (safecoin_core::cluster_info::Node, Option<ContactInfo>),
     ) -> ClusterValidatorInfo;
     fn add_node(&mut self, pubkey: &Pubkey, cluster_validator_info: ClusterValidatorInfo);
     fn exit_restart_node(&mut self, pubkey: &Pubkey, config: ValidatorConfig);

@@ -168,7 +168,7 @@ fn derive_abi_sample_enum_type(input: ItemEnum) -> TokenStream {
         #injection
         #[automatically_derived]
         #( #attrs )*
-        impl #impl_generics ::solana_frozen_abi::abi_example::AbiExample for #type_name #ty_generics #where_clause {
+        impl #impl_generics ::safecoin_frozen_abi::abi_example::AbiExample for #type_name #ty_generics #where_clause {
             fn example() -> Self {
                 ::log::info!(
                     "AbiExample for enum: {}",
@@ -222,13 +222,13 @@ fn derive_abi_sample_struct_type(input: ItemStruct) -> TokenStream {
         #injection
         #[automatically_derived]
         #( #attrs )*
-        impl #impl_generics ::solana_frozen_abi::abi_example::AbiExample for #type_name #ty_generics #where_clause {
+        impl #impl_generics ::safecoin_frozen_abi::abi_example::AbiExample for #type_name #ty_generics #where_clause {
             fn example() -> Self {
                 ::log::info!(
                     "AbiExample for struct: {}",
                     std::any::type_name::<#type_name #ty_generics>()
                 );
-                use ::solana_frozen_abi::abi_example::AbiExample;
+                use ::safecoin_frozen_abi::abi_example::AbiExample;
 
                 #type_name #turbofish #sample_fields
             }
@@ -273,11 +273,11 @@ fn do_derive_abi_enum_visitor(input: ItemEnum) -> TokenStream {
 
     let type_str = format!("{}", type_name);
     (quote! {
-        impl #impl_generics ::solana_frozen_abi::abi_example::AbiEnumVisitor for #type_name #ty_generics #where_clause {
-            fn visit_for_abi(&self, digester: &mut ::solana_frozen_abi::abi_digester::AbiDigester) -> ::solana_frozen_abi::abi_digester::DigestResult {
+        impl #impl_generics ::safecoin_frozen_abi::abi_example::AbiEnumVisitor for #type_name #ty_generics #where_clause {
+            fn visit_for_abi(&self, digester: &mut ::safecoin_frozen_abi::abi_digester::AbiDigester) -> ::safecoin_frozen_abi::abi_digester::DigestResult {
                 let enum_name = #type_str;
                 use ::serde::ser::Serialize;
-                use ::solana_frozen_abi::abi_example::AbiExample;
+                use ::safecoin_frozen_abi::abi_example::AbiExample;
                 digester.update_with_string(format!("enum {} (variants = {})", enum_name, #variant_count));
                 #serialized_variants
                 Ok(digester.create_child())
@@ -311,12 +311,12 @@ fn quote_for_test(
         #[cfg(test)]
         mod #test_mod_ident {
             use super::*;
-            use ::solana_frozen_abi::abi_example::{AbiExample, AbiEnumVisitor};
+            use ::safecoin_frozen_abi::abi_example::{AbiExample, AbiEnumVisitor};
 
             #[test]
             fn test_abi_digest() {
-                ::solana_logger::setup();
-                let mut digester = ::solana_frozen_abi::abi_digester::AbiDigester::create();
+                ::safecoin_logger::setup();
+                let mut digester = ::safecoin_frozen_abi::abi_digester::AbiDigester::create();
                 let example = <#type_name>::example();
                 let result = <_>::visit_for_abi(&&example, &mut digester);
                 let mut hash = digester.finalize();
@@ -326,16 +326,16 @@ fn quote_for_test(
                 }
                 result.unwrap();
                 let actual_digest = format!("{}", hash);
-                if ::std::env::var("SOLANA_ABI_BULK_UPDATE").is_ok() {
+                if ::std::env::var("SAFECOIN_ABI_BULK_UPDATE").is_ok() {
                     if #expected_digest != actual_digest {
                         #p!("sed -i -e 's/{}/{}/g' $(git grep --files-with-matches frozen_abi)", #expected_digest, hash);
                     }
-                    ::log::warn!("Not testing the abi digest under SOLANA_ABI_BULK_UPDATE!");
+                    ::log::warn!("Not testing the abi digest under SAFECOIN_ABI_BULK_UPDATE!");
                 } else {
-                    if let Ok(dir) = ::std::env::var("SOLANA_ABI_DUMP_DIR") {
-                        assert_eq!(#expected_digest, actual_digest, "Possibly ABI changed? Examine the diff in SOLANA_ABI_DUMP_DIR!: $ diff -u {}/*{}* {}/*{}*", dir, #expected_digest, dir, actual_digest);
+                    if let Ok(dir) = ::std::env::var("SAFECOIN_ABI_DUMP_DIR") {
+                        assert_eq!(#expected_digest, actual_digest, "Possibly ABI changed? Examine the diff in SAFECOIN_ABI_DUMP_DIR!: $ diff -u {}/*{}* {}/*{}*", dir, #expected_digest, dir, actual_digest);
                     } else {
-                        assert_eq!(#expected_digest, actual_digest, "Possibly ABI changed? Confirm the diff by rerunning before and after this test failed with SOLANA_ABI_DUMP_DIR!");
+                        assert_eq!(#expected_digest, actual_digest, "Possibly ABI changed? Confirm the diff by rerunning before and after this test failed with SAFECOIN_ABI_DUMP_DIR!");
                     }
                 }
             }

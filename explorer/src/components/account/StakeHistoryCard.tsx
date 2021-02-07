@@ -1,5 +1,5 @@
 import React from "react";
-import { lamportsToSolString } from "utils";
+import { lamportsToSafeString } from "utils";
 import {
   SysvarAccount,
   StakeHistoryInfo,
@@ -28,9 +28,9 @@ export function StakeHistoryCard({
             <thead>
               <tr>
                 <th className="w-1 text-muted">Epoch</th>
-                <th className="text-muted">Effective (SOL)</th>
-                <th className="text-muted">Activating (SOL)</th>
-                <th className="text-muted">Deactivating (SOL)</th>
+                <th className="text-muted">Effective (SAFE)</th>
+                <th className="text-muted">Activating (SAFE)</th>
+                <th className="text-muted">Deactivating (SAFE)</th>
               </tr>
             </thead>
             <tbody className="list">
@@ -57,13 +57,13 @@ const renderAccountRow = (entry: StakeHistoryEntry, index: number) => {
     <tr key={index}>
       <td className="w-1 text-monospace">{entry.epoch}</td>
       <td className="text-monospace">
-        {lamportsToSolString(entry.stakeHistory.effective)}
+        {lamportsToSafeString(entry.stakeHistory.effective)}
       </td>
       <td className="text-monospace">
-        {lamportsToSolString(entry.stakeHistory.activating)}
+        {lamportsToSafeString(entry.stakeHistory.activating)}
       </td>
       <td className="text-monospace">
-        {lamportsToSolString(entry.stakeHistory.deactivating)}
+        {lamportsToSafeString(entry.stakeHistory.deactivating)}
       </td>
     </tr>
   );

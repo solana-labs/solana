@@ -1,4 +1,4 @@
-use solana_sdk::{
+use safecoin_sdk::{
     hash::Hash, pubkey::Pubkey, signature::Keypair, system_transaction, transaction::Transaction,
 };
 use std::{
@@ -16,7 +16,7 @@ pub fn request_airdrop_transaction(
         Err(Error::new(ErrorKind::Other, "Airdrop failed"))
     } else {
         let key = Keypair::new();
-        let to = solana_sdk::pubkey::new_rand();
+        let to = safecoin_sdk::pubkey::new_rand();
         let blockhash = Hash::default();
         let tx = system_transaction::transfer(&key, &to, lamports, blockhash);
         Ok(tx)

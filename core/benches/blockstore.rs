@@ -1,14 +1,14 @@
 #![feature(test)]
-extern crate solana_ledger;
+extern crate safecoin_ledger;
 extern crate test;
 
 use rand::Rng;
-use solana_ledger::{
+use safecoin_ledger::{
     blockstore::{entries_to_test_shreds, Blockstore},
     entry::{create_ticks, Entry},
     get_tmp_ledger_path,
 };
-use solana_sdk::{clock::Slot, hash::Hash};
+use safecoin_sdk::{clock::Slot, hash::Hash};
 use std::path::Path;
 use test::Bencher;
 

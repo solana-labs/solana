@@ -1,6 +1,6 @@
 use clap::{crate_description, crate_name, App, Arg};
-use solana_streamer::packet::{Packet, Packets, PacketsRecycler, PACKET_DATA_SIZE};
-use solana_streamer::streamer::{receiver, PacketReceiver};
+use safecoin_streamer::packet::{Packet, Packets, PacketsRecycler, PACKET_DATA_SIZE};
+use safecoin_streamer::streamer::{receiver, PacketReceiver};
 use std::cmp::max;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -52,7 +52,7 @@ fn main() -> Result<()> {
 
     let matches = App::new(crate_name!())
         .about(crate_description!())
-        .version(solana_version::version!())
+        .version(safecoin_version::version!())
         .arg(
             Arg::with_name("num-recv-sockets")
                 .long("num-recv-sockets")
@@ -76,7 +76,7 @@ fn main() -> Result<()> {
     let mut read_threads = Vec::new();
     let recycler = PacketsRecycler::default();
     for _ in 0..num_sockets {
-        let read = solana_net_utils::bind_to(ip_addr, port, false).unwrap();
+        let read = safecoin_net_utils::bind_to(ip_addr, port, false).unwrap();
         read.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
 
         addr = read.local_addr().unwrap();

@@ -10,14 +10,14 @@ use crate::perf_libs;
 use crate::recycler::Recycler;
 use bincode::serialized_size;
 use rayon::ThreadPool;
-use solana_metrics::inc_new_counter_debug;
-use solana_rayon_threadlimit::get_thread_count;
-use solana_sdk::message::MessageHeader;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::short_vec::decode_len;
-use solana_sdk::signature::Signature;
+use safecoin_metrics::inc_new_counter_debug;
+use safecoin_rayon_threadlimit::get_thread_count;
+use safecoin_sdk::message::MessageHeader;
+use safecoin_sdk::pubkey::Pubkey;
+use safecoin_sdk::short_vec::decode_len;
+use safecoin_sdk::signature::Signature;
 #[cfg(test)]
-use solana_sdk::transaction::Transaction;
+use safecoin_sdk::transaction::Transaction;
 use std::mem::size_of;
 
 lazy_static! {
@@ -412,10 +412,10 @@ mod tests {
     use crate::sigverify::PacketOffsets;
     use crate::test_tx::{test_multisig_tx, test_tx};
     use bincode::{deserialize, serialize};
-    use solana_sdk::hash::Hash;
-    use solana_sdk::message::{Message, MessageHeader};
-    use solana_sdk::signature::Signature;
-    use solana_sdk::transaction::Transaction;
+    use safecoin_sdk::hash::Hash;
+    use safecoin_sdk::message::{Message, MessageHeader};
+    use safecoin_sdk::signature::Signature;
+    use safecoin_sdk::transaction::Transaction;
 
     const SIG_OFFSET: usize = 1;
 
@@ -722,7 +722,7 @@ mod tests {
 
     #[test]
     fn test_verify_multisig() {
-        solana_logger::setup();
+        safecoin_logger::setup();
 
         let tx = test_multisig_tx();
         let mut packet = sigverify::make_packet_from_transaction(tx);
@@ -750,7 +750,7 @@ mod tests {
     #[test]
     fn test_verify_fuzz() {
         use rand::{thread_rng, Rng};
-        solana_logger::setup();
+        safecoin_logger::setup();
 
         let tx = test_multisig_tx();
         let packet = sigverify::make_packet_from_transaction(tx);
@@ -790,7 +790,7 @@ mod tests {
 
     #[test]
     fn test_get_checked_scalar() {
-        solana_logger::setup();
+        safecoin_logger::setup();
         use curve25519_dalek::scalar::Scalar;
         use rand::{thread_rng, Rng};
         use rayon::prelude::*;
@@ -830,7 +830,7 @@ mod tests {
 
     #[test]
     fn test_ge_small_order() {
-        solana_logger::setup();
+        safecoin_logger::setup();
         use curve25519_dalek::edwards::CompressedEdwardsY;
         use rand::{thread_rng, Rng};
         use rayon::prelude::*;

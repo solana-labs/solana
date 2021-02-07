@@ -2,7 +2,7 @@
 title: Sysvar Cluster Data
 ---
 
-Solana exposes a variety of cluster state data to programs via
+Safecoin exposes a variety of cluster state data to programs via
 [`sysvar`](terminology.md#sysvar) accounts. These accounts are populated at
 known addresses published along with the account layouts in the
 [`solana-program`

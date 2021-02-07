@@ -17,4 +17,4 @@ extern crate log;
 extern crate matches;
 
 #[macro_use]
-extern crate solana_metrics;
+extern crate safecoin_metrics;

@@ -1,13 +1,13 @@
 [package]
-authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+authors = ["Safecoin Maintainers <maintainers@solana.foundation>"]
 edition = "2018"
-name = "solana-validator"
+name = "safecoin-validator"
 description = "Blockchain, Rebuilt for Scale"
 version = "1.6.0"
-repository = "https://github.com/solana-labs/solana"
+repository = "https://github.com/solana-labs/safecoin"
 license = "Apache-2.0"
-homepage = "https://solana.com/"
-default-run = "solana-validator"
+homepage = "https://safecoin.org/"
+default-run = "safecoin-validator"
 
 [dependencies]
 base64 = "0.12.3"
@@ -24,21 +24,21 @@ rand = "0.7.0"
 serde = "1.0.112"
 serde_derive = "1.0.103"
 serde_yaml = "0.8.13"
-solana-clap-utils = { path = "../clap-utils", version = "1.6.0" }
-solana-cli-config = { path = "../cli-config", version = "1.6.0" }
-solana-client = { path = "../client", version = "1.6.0" }
-solana-core = { path = "../core", version = "1.6.0" }
-solana-download-utils = { path = "../download-utils", version = "1.6.0" }
-solana-faucet = { path = "../faucet", version = "1.6.0" }
-solana-ledger = { path = "../ledger", version = "1.6.0" }
-solana-logger = { path = "../logger", version = "1.6.0" }
-solana-perf = { path = "../perf", version = "1.6.0" }
-solana-metrics = { path = "../metrics", version = "1.6.0" }
-solana-net-utils = { path = "../net-utils", version = "1.6.0" }
-solana-runtime = { path = "../runtime", version = "1.6.0" }
-solana-sdk = { path = "../sdk", version = "1.6.0" }
-solana-version = { path = "../version", version = "1.6.0" }
-solana-vote-program = { path = "../programs/vote", version = "1.6.0" }
+safecoin-clap-utils = { path = "../clap-utils", version = "1.6.0" }
+safecoin-cli-config = { path = "../cli-config", version = "1.6.0" }
+safecoin-client = { path = "../client", version = "1.6.0" }
+safecoin-core = { path = "../core", version = "1.6.0" }
+safecoin-download-utils = { path = "../download-utils", version = "1.6.0" }
+safecoin-faucet = { path = "../faucet", version = "1.6.0" }
+safecoin-ledger = { path = "../ledger", version = "1.6.0" }
+safecoin-logger = { path = "../logger", version = "1.6.0" }
+safecoin-perf = { path = "../perf", version = "1.6.0" }
+safecoin-metrics = { path = "../metrics", version = "1.6.0" }
+safecoin-net-utils = { path = "../net-utils", version = "1.6.0" }
+safecoin-runtime = { path = "../runtime", version = "1.6.0" }
+safecoin-sdk = { path = "../sdk", version = "1.6.0" }
+safecoin-version = { path = "../version", version = "1.6.0" }
+safecoin-vote-program = { path = "../programs/vote", version = "1.6.0" }
 symlink = "0.1.0"
 
 [target."cfg(unix)".dependencies]

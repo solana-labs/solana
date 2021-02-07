@@ -15,19 +15,19 @@ use crate::{
 };
 use crossbeam_channel::Receiver;
 use lru::LruCache;
-use solana_ledger::shred::{get_shred_slot_index_type, ShredFetchStats};
-use solana_ledger::{
+use safecoin_ledger::shred::{get_shred_slot_index_type, ShredFetchStats};
+use safecoin_ledger::{
     blockstore::{Blockstore, CompletedSlotsReceiver},
     leader_schedule_cache::LeaderScheduleCache,
 };
-use solana_measure::measure::Measure;
-use solana_metrics::inc_new_counter_error;
-use solana_perf::packet::{Packet, Packets};
-use solana_runtime::{bank::Bank, bank_forks::BankForks};
-use solana_sdk::{
+use safecoin_measure::measure::Measure;
+use safecoin_metrics::inc_new_counter_error;
+use safecoin_perf::packet::{Packet, Packets};
+use safecoin_runtime::{bank::Bank, bank_forks::BankForks};
+use safecoin_sdk::{
     clock::Slot, epoch_schedule::EpochSchedule, feature_set, pubkey::Pubkey, timing::timestamp,
 };
-use solana_streamer::streamer::PacketReceiver;
+use safecoin_streamer::streamer::PacketReceiver;
 use std::{
     cmp,
     collections::hash_set::HashSet,
@@ -452,7 +452,7 @@ pub fn retransmitter(
             let shreds_received = shreds_received.clone();
 
             Builder::new()
-                .name("solana-retransmitter".to_string())
+                .name("safecoin-retransmitter".to_string())
                 .spawn(move || {
                     trace!("retransmitter started");
                     loop {
@@ -589,17 +589,17 @@ impl RetransmitStage {
 mod tests {
     use super::*;
     use crate::contact_info::ContactInfo;
-    use solana_ledger::blockstore_processor::{process_blockstore, ProcessOptions};
-    use solana_ledger::create_new_tmp_ledger;
-    use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
-    use solana_ledger::shred::Shred;
-    use solana_net_utils::find_available_port_in_range;
-    use solana_perf::packet::{Packet, Packets};
+    use safecoin_ledger::blockstore_processor::{process_blockstore, ProcessOptions};
+    use safecoin_ledger::create_new_tmp_ledger;
+    use safecoin_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
+    use safecoin_ledger::shred::Shred;
+    use safecoin_net_utils::find_available_port_in_range;
+    use safecoin_perf::packet::{Packet, Packets};
     use std::net::{IpAddr, Ipv4Addr};
 
     #[test]
     fn test_skip_repair() {
-        solana_logger::setup();
+        safecoin_logger::setup();
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(123);
         let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
         let blockstore = Blockstore::open(&ledger_path).unwrap();
@@ -612,7 +612,7 @@ mod tests {
         let leader_schedule_cache = Arc::new(cached_leader_schedule);
         let bank_forks = Arc::new(RwLock::new(bank_forks));
 
-        let mut me = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0);
+        let mut me = ContactInfo::new_localhost(&safecoin_sdk::pubkey::new_rand(), 0);
         let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
         let port = find_available_port_in_range(ip_addr, (8000, 10000)).unwrap();
         let me_retransmit = UdpSocket::bind(format!("127.0.0.1:{}", port)).unwrap();
@@ -624,7 +624,7 @@ mod tests {
             .local_addr()
             .unwrap();
 
-        let other = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0);
+        let other = ContactInfo::new_localhost(&safecoin_sdk::pubkey::new_rand(), 0);
         let cluster_info = ClusterInfo::new_with_invalid_keypair(other);
         cluster_info.insert_info(me);
 
@@ -649,7 +649,7 @@ mod tests {
         // it should send this over the sockets.
         retransmit_sender.send(packets).unwrap();
         let mut packets = Packets::new(vec![]);
-        solana_streamer::packet::recv_from(&mut packets, &me_retransmit, 1).unwrap();
+        safecoin_streamer::packet::recv_from(&mut packets, &me_retransmit, 1).unwrap();
         assert_eq!(packets.packets.len(), 1);
         assert_eq!(packets.packets[0].meta.repair, false);
 
@@ -662,7 +662,7 @@ mod tests {
         let packets = Packets::new(vec![repair, packet]);
         retransmit_sender.send(packets).unwrap();
         let mut packets = Packets::new(vec![]);
-        solana_streamer::packet::recv_from(&mut packets, &me_retransmit, 1).unwrap();
+        safecoin_streamer::packet::recv_from(&mut packets, &me_retransmit, 1).unwrap();
         assert_eq!(packets.packets.len(), 1);
         assert_eq!(packets.packets[0].meta.repair, false);
     }

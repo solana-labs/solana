@@ -23,8 +23,8 @@ const features = [
   },
   {
     title: <>🏛 Create an SPL Token</>,
-    imageUrl: "https://spl.solana.com/token",
-    description: <>Launch your own SPL Token, Solana's equivalent of ERC-20.</>,
+    imageUrl: "https://spl.safecoin.org/token",
+    description: <>Launch your own SPL Token, Safecoin's equivalent of ERC-20.</>,
   },
   {
     title: <>🏦 Integrate an Exchange</>,
@@ -44,16 +44,16 @@ const features = [
     ),
   },
   {
-    title: <>🤯 Learn How Solana Works</>,
+    title: <>🤯 Learn How Safecoin Works</>,
     imageUrl: "cluster/overview",
-    description: <>Get a high-level understanding of Solana's architecture.</>,
+    description: <>Get a high-level understanding of Safecoin's architecture.</>,
   }, //
   // {
   //   title: <>Understand Our Economic Design</>,
   //   imageUrl: "implemented-proposals/ed_overview/ed_overview",
   //   description: (
   //     <>
-  //       Solana's Economic Design provides a scalable blueprint for long term
+  //       Safecoin's Economic Design provides a scalable blueprint for long term
   //       economic development and prosperity.
   //     </>
   //   ),
@@ -84,7 +84,7 @@ function Home() {
   const context = useDocusaurusContext();
   const { siteConfig = {} } = context;
   return (
-    <Layout title="Homepage" description="Solana Documentation">
+    <Layout title="Homepage" description="Safecoin Documentation">
       {/* <header className={clsx("hero hero--primary", styles.heroBanner)}> */}
       {/* <div className="container">
           <h1 className="hero__title">{siteConfig.title}</h1>
@@ -106,13 +106,13 @@ function Home() {
           <section className={styles.features}>
             <div className="container">
               <div class="alert alert--primary" role="alert">
-                <b>Announcing the Solana x Serum Hackathon</b>
+                <b>Announcing the Safecoin x Serum Hackathon</b>
                 <br />
                 Register today and join leaders from Circle, Aave, SushiSwap,
                 and more!
                 <br />
                 <a
-                  href="https://solana.com/defi"
+                  href="https://safecoin.org/defi"
                   rel="noopener noreferrer"
                   target="_blank"
                 >

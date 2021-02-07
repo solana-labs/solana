@@ -4,7 +4,7 @@ title: Validator
 
 ## History
 
-When we first started Solana, the goal was to de-risk our TPS claims. We knew
+When we first started Safecoin, the goal was to de-risk our TPS claims. We knew
 that between optimistic concurrency control and sufficiently long leader slots,
 that PoS consensus was not the biggest risk to TPS. It was GPU-based signature
 verification, software pipelining and concurrent banking. Thus, the TPU was
@@ -44,11 +44,11 @@ schedule.
 
 - Hoist FetchStage and BroadcastStage out of TPU
 - BankForks renamed to Banktree
-- TPU moves to new socket-free crate called solana-tpu.
+- TPU moves to new socket-free crate called safecoin-tpu.
 - TPU's BankingStage absorbs ReplayStage
 - TVU goes away
 - New RepairStage absorbs Shred Fetch Stage and repair requests
 - JSON RPC Service is optional - used for debugging. It should instead be part
-  of a separate `solana-blockstreamer` executable.
+  of a separate `safecoin-blockstreamer` executable.
 - New MulticastStage absorbs retransmit part of RetransmitStage
 - MulticastStage downstream of Blockstore

@@ -6,19 +6,19 @@ use bincode::deserialize;
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 use reqwest::blocking::Client;
 use serde_json::{Map, Value};
-use solana_account_decoder::validator_info::{
+use safecoin_account_decoder::validator_info::{
     self, ValidatorInfo, MAX_LONG_FIELD_LENGTH, MAX_SHORT_FIELD_LENGTH,
 };
-use solana_clap_utils::{
+use safecoin_clap_utils::{
     input_parsers::pubkey_of,
     input_validators::{is_pubkey, is_url},
     keypair::DefaultSigner,
 };
-use solana_cli_output::{CliValidatorInfo, CliValidatorInfoVec};
-use solana_client::rpc_client::RpcClient;
-use solana_config_program::{config_instruction, get_config_data, ConfigKeys, ConfigState};
-use solana_remote_wallet::remote_wallet::RemoteWalletManager;
-use solana_sdk::{
+use safecoin_cli_output::{CliValidatorInfo, CliValidatorInfoVec};
+use safecoin_client::rpc_client::RpcClient;
+use safecoin_config_program::{config_instruction, get_config_data, ConfigKeys, ConfigState};
+use safecoin_remote_wallet::remote_wallet::RemoteWalletManager;
+use safecoin_sdk::{
     account::Account,
     message::Message,
     pubkey::Pubkey,
@@ -70,7 +70,7 @@ fn verify_keybase(
 ) -> Result<(), Box<dyn error::Error>> {
     if let Some(keybase_username) = keybase_username.as_str() {
         let url = format!(
-            "https://keybase.pub/{}/solana/validator-{:?}",
+            "https://keybase.pub/{}/safecoin/validator-{:?}",
             keybase_username, validator_pubkey
         );
         let client = Client::new();
@@ -113,7 +113,7 @@ fn parse_validator_info(
     pubkey: &Pubkey,
     account: &Account,
 ) -> Result<(Pubkey, Map<String, serde_json::value::Value>), Box<dyn error::Error>> {
-    if account.owner != solana_config_program::id() {
+    if account.owner != safecoin_config_program::id() {
         return Err(format!("{} is not a validator info account", pubkey).into());
     }
     let key_list: ConfigKeys = deserialize(&account.data)?;
@@ -135,11 +135,11 @@ impl ValidatorInfoSubCommands for App<'_, '_> {
     fn validator_info_subcommands(self) -> Self {
         self.subcommand(
             SubCommand::with_name("validator-info")
-                .about("Publish/get Validator info on Solana")
+                .about("Publish/get Validator info on Safecoin")
                 .setting(AppSettings::SubcommandRequiredElseHelp)
                 .subcommand(
                     SubCommand::with_name("publish")
-                        .about("Publish Validator info on Solana")
+                        .about("Publish Validator info on Safecoin")
                         .arg(
                             Arg::with_name("info_pubkey")
                                 .short("p")
@@ -195,7 +195,7 @@ impl ValidatorInfoSubCommands for App<'_, '_> {
                 )
                 .subcommand(
                     SubCommand::with_name("get")
-                        .about("Get and parse Solana Validator info")
+                        .about("Get and parse Safecoin Validator info")
                         .arg(
                             Arg::with_name("info_pubkey")
                                 .index(1)
@@ -262,7 +262,7 @@ pub fn process_set_validator_info(
         info: validator_string,
     };
     // Check for existing validator-info account
-    let all_config = rpc_client.get_program_accounts(&solana_config_program::id())?;
+    let all_config = rpc_client.get_program_accounts(&safecoin_config_program::id())?;
     let existing_account = all_config
         .iter()
         .filter(
@@ -375,7 +375,7 @@ pub fn process_get_validator_info(
             rpc_client.get_account(&validator_info_pubkey)?,
         )]
     } else {
-        let all_config = rpc_client.get_program_accounts(&solana_config_program::id())?;
+        let all_config = rpc_client.get_program_accounts(&safecoin_config_program::id())?;
         all_config
             .into_iter()
             .filter(|(_, validator_info_account)| {
@@ -483,7 +483,7 @@ mod tests {
 
     #[test]
     fn test_parse_validator_info() {
-        let pubkey = solana_sdk::pubkey::new_rand();
+        let pubkey = safecoin_sdk::pubkey::new_rand();
         let keys = vec![(validator_info::id(), false), (pubkey, true)];
         let config = ConfigKeys { keys };
 
@@ -497,7 +497,7 @@ mod tests {
             parse_validator_info(
                 &Pubkey::default(),
                 &Account {
-                    owner: solana_config_program::id(),
+                    owner: safecoin_config_program::id(),
                     data,
                     ..Account::default()
                 }

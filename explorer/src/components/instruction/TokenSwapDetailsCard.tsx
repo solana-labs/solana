@@ -1,5 +1,5 @@
 import React from "react";
-import { TransactionInstruction, SignatureResult } from "@solana/web3.js";
+import { TransactionInstruction, SignatureResult } from "@safecoin/web3.js";
 import { InstructionCard } from "./InstructionCard";
 import { useCluster } from "providers/cluster";
 import { reportError } from "utils/sentry";

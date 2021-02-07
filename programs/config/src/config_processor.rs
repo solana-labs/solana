@@ -3,7 +3,7 @@
 use crate::ConfigKeys;
 use bincode::deserialize;
 use log::*;
-use solana_sdk::{
+use safecoin_sdk::{
     instruction::InstructionError,
     keyed_account::{next_keyed_account, KeyedAccount},
     process_instruction::InvokeContext,
@@ -110,7 +110,7 @@ mod tests {
     use crate::{config_instruction, get_config_data, id, ConfigKeys, ConfigState};
     use bincode::serialized_size;
     use serde_derive::{Deserialize, Serialize};
-    use solana_sdk::{
+    use safecoin_sdk::{
         account::Account,
         keyed_account::create_keyed_is_signer_accounts,
         process_instruction::MockInvokeContext,
@@ -144,7 +144,7 @@ mod tests {
     }
 
     fn create_config_account(keys: Vec<(Pubkey, bool)>) -> (Keypair, RefCell<Account>) {
-        let from_pubkey = solana_sdk::pubkey::new_rand();
+        let from_pubkey = safecoin_sdk::pubkey::new_rand();
         let config_keypair = Keypair::new();
         let config_pubkey = config_keypair.pubkey();
 
@@ -181,7 +181,7 @@ mod tests {
 
     #[test]
     fn test_process_create_ok() {
-        solana_logger::setup();
+        safecoin_logger::setup();
         let keys = vec![];
         let (_, config_account) = create_config_account(keys);
         assert_eq!(
@@ -192,7 +192,7 @@ mod tests {
 
     #[test]
     fn test_process_store_ok() {
-        solana_logger::setup();
+        safecoin_logger::setup();
         let keys = vec![];
         let (config_keypair, config_account) = create_config_account(keys.clone());
         let config_pubkey = config_keypair.pubkey();
@@ -218,7 +218,7 @@ mod tests {
 
     #[test]
     fn test_process_store_fail_instruction_data_too_large() {
-        solana_logger::setup();
+        safecoin_logger::setup();
         let keys = vec![];
         let (config_keypair, config_account) = create_config_account(keys.clone());
         let config_pubkey = config_keypair.pubkey();
@@ -241,7 +241,7 @@ mod tests {
 
     #[test]
     fn test_process_store_fail_account0_not_signer() {
-        solana_logger::setup();
+        safecoin_logger::setup();
         let keys = vec![];
         let (config_keypair, config_account) = create_config_account(keys);
         let config_pubkey = config_keypair.pubkey();
@@ -264,10 +264,10 @@ mod tests {
 
     #[test]
     fn test_process_store_with_additional_signers() {
-        solana_logger::setup();
-        let pubkey = solana_sdk::pubkey::new_rand();
-        let signer0_pubkey = solana_sdk::pubkey::new_rand();
-        let signer1_pubkey = solana_sdk::pubkey::new_rand();
+        safecoin_logger::setup();
+        let pubkey = safecoin_sdk::pubkey::new_rand();
+        let signer0_pubkey = safecoin_sdk::pubkey::new_rand();
+        let signer1_pubkey = safecoin_sdk::pubkey::new_rand();
         let keys = vec![
             (pubkey, false),
             (signer0_pubkey, true),
@@ -305,9 +305,9 @@ mod tests {
 
     #[test]
     fn test_process_store_without_config_signer() {
-        solana_logger::setup();
-        let pubkey = solana_sdk::pubkey::new_rand();
-        let signer0_pubkey = solana_sdk::pubkey::new_rand();
+        safecoin_logger::setup();
+        let pubkey = safecoin_sdk::pubkey::new_rand();
+        let signer0_pubkey = safecoin_sdk::pubkey::new_rand();
         let keys = vec![(pubkey, false), (signer0_pubkey, true)];
         let (config_keypair, _) = create_config_account(keys.clone());
         let config_pubkey = config_keypair.pubkey();
@@ -330,9 +330,9 @@ mod tests {
 
     #[test]
     fn test_process_store_with_bad_additional_signer() {
-        solana_logger::setup();
-        let signer0_pubkey = solana_sdk::pubkey::new_rand();
-        let signer1_pubkey = solana_sdk::pubkey::new_rand();
+        safecoin_logger::setup();
+        let signer0_pubkey = safecoin_sdk::pubkey::new_rand();
+        let signer1_pubkey = safecoin_sdk::pubkey::new_rand();
         let signer0_account = RefCell::new(Account::default());
         let signer1_account = RefCell::new(Account::default());
         let keys = vec![(signer0_pubkey, true)];
@@ -377,11 +377,11 @@ mod tests {
 
     #[test]
     fn test_config_updates() {
-        solana_logger::setup();
-        let pubkey = solana_sdk::pubkey::new_rand();
-        let signer0_pubkey = solana_sdk::pubkey::new_rand();
-        let signer1_pubkey = solana_sdk::pubkey::new_rand();
-        let signer2_pubkey = solana_sdk::pubkey::new_rand();
+        safecoin_logger::setup();
+        let pubkey = safecoin_sdk::pubkey::new_rand();
+        let signer0_pubkey = safecoin_sdk::pubkey::new_rand();
+        let signer1_pubkey = safecoin_sdk::pubkey::new_rand();
+        let signer2_pubkey = safecoin_sdk::pubkey::new_rand();
         let signer0_account = RefCell::new(Account::default());
         let signer1_account = RefCell::new(Account::default());
         let signer2_account = RefCell::new(Account::default());
@@ -482,9 +482,9 @@ mod tests {
 
     #[test]
     fn test_config_updates_requiring_config() {
-        solana_logger::setup();
-        let pubkey = solana_sdk::pubkey::new_rand();
-        let signer0_pubkey = solana_sdk::pubkey::new_rand();
+        safecoin_logger::setup();
+        let pubkey = safecoin_sdk::pubkey::new_rand();
+        let signer0_pubkey = safecoin_sdk::pubkey::new_rand();
         let signer0_account = RefCell::new(Account::default());
         let keys = vec![
             (pubkey, false),
@@ -560,8 +560,8 @@ mod tests {
 
     #[test]
     fn test_config_initialize_no_panic() {
-        let from_pubkey = solana_sdk::pubkey::new_rand();
-        let config_pubkey = solana_sdk::pubkey::new_rand();
+        let from_pubkey = safecoin_sdk::pubkey::new_rand();
+        let config_pubkey = safecoin_sdk::pubkey::new_rand();
         let instructions =
             config_instruction::create_account::<MyConfig>(&from_pubkey, &config_pubkey, 1, vec![]);
         let accounts = vec![];

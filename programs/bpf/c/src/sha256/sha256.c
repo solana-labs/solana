@@ -1,7 +1,7 @@
 /**
  * @brief SHA256 Syscall test
  */
-#include <solana_sdk.h>
+#include <safecoin_sdk.h>
 
 extern uint64_t entrypoint(const uint8_t *input) {
 
@@ -14,12 +14,12 @@ extern uint64_t entrypoint(const uint8_t *input) {
   uint8_t bytes1[] = {'G', 'a', 'g', 'g', 'a', 'b', 'l', 'a',
                       'g', 'h', 'b', 'l', 'a', 'g', 'h', '!'};
   uint8_t bytes2[] = {'f', 'l', 'u', 'r', 'b', 'o', 's'};
-  const SolBytes bytes[] = {{bytes1, SOL_ARRAY_SIZE(bytes1)},
-                            {bytes2, SOL_ARRAY_SIZE(bytes2)}};
+  const SafeBytes bytes[] = {{bytes1, SAFE_ARRAY_SIZE(bytes1)},
+                            {bytes2, SAFE_ARRAY_SIZE(bytes2)}};
 
-  sol_sha256(bytes, SOL_ARRAY_SIZE(bytes), result);
+  safe_sha256(bytes, SAFE_ARRAY_SIZE(bytes), result);
 
-  sol_assert(0 == sol_memcmp(result, expected, SHA256_RESULT_LENGTH));
+  safe_assert(0 == safe_memcmp(result, expected, SHA256_RESULT_LENGTH));
 
   return SUCCESS;
 }

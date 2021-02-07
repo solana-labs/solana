@@ -30,7 +30,7 @@ VoteState is the current state of all the votes the validator has submitted to t
 - `commission` - The commission taken by this VoteState for any rewards claimed by staker's Stake accounts. This is the percentage ceiling of the reward.
 - Account::lamports - The accumulated lamports from the commission. These do not count as stakes.
 - `authorized_voter` - Only this identity is authorized to submit votes. This field can only modified by this identity.
-- `node_pubkey` - The Solana node that votes in this account.
+- `node_pubkey` - The Safecoin node that votes in this account.
 - `authorized_withdrawer` - the identity of the entity in charge of the lamports of this account, separate from the account's address and the authorized vote signer.
 
 ### VoteInstruction::Initialize\(VoteInit\)

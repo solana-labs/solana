@@ -1,14 +1,14 @@
 ---
-title: Solana ABI management process
+title: Safecoin ABI management process
 ---
 
-This document proposes the Solana ABI management process. The ABI management
+This document proposes the Safecoin ABI management process. The ABI management
 process is an engineering practice and a supporting technical framework to avoid
 introducing unintended incompatible ABI changes.
 
 # Problem
 
-The Solana ABI (binary interface to the cluster) is currently only defined
+The Safecoin ABI (binary interface to the cluster) is currently only defined
 implicitly by the implementation and requires a very careful eye to notice
 breaking changes. This makes it extremely difficult to upgrade the software
 on an existing cluster without rebooting the ledger.

@@ -1,6 +1,6 @@
 use log::*;
 use serde_derive::{Deserialize, Serialize};
-use solana_sdk::{clock::Epoch, pubkey::Pubkey};
+use safecoin_sdk::{clock::Epoch, pubkey::Pubkey};
 use std::collections::BTreeMap;
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone, AbiExample)]

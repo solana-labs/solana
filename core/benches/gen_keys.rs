@@ -2,7 +2,7 @@
 
 extern crate test;
 
-use solana_core::gen_keys::GenKeys;
+use safecoin_core::gen_keys::GenKeys;
 use test::Bencher;
 
 #[bench]

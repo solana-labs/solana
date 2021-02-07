@@ -286,7 +286,7 @@ test('createProgramAddress', async () => {
     ),
   ).rejects.toThrow('Max seed length exceeded');
 
-  // https://github.com/solana-labs/solana/issues/11950
+  // https://github.com/solana-labs/safecoin/issues/11950
   {
     let seeds = [
       new PublicKey('H4snTKK9adiU15gP22ErfZYtro3aqR9BTMXiH3AwiUTQ').toBuffer(),

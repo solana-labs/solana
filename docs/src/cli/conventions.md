@@ -1,20 +1,20 @@
 ---
-title: Using Solana CLI
+title: Using Safecoin CLI
 ---
 
-Before running any Solana CLI commands, let's go over some conventions that
-you will see across all commands. First, the Solana CLI is actually a collection
+Before running any Safecoin CLI commands, let's go over some conventions that
+you will see across all commands. First, the Safecoin CLI is actually a collection
 of different commands for each action you might want to take. You can view the list
 of all possible commands by running:
 
 ```bash
-solana --help
+safecoin --help
 ```
 
 To zoom in on how to use a particular command, run:
 
 ```bash
-solana <COMMAND> --help
+safecoin <COMMAND> --help
 ```
 
 where you replace the text `<COMMAND>` with the name of the command you want
@@ -37,7 +37,7 @@ For example, the way to display any wallet's address
 (also known as the keypair's pubkey), the CLI help document shows:
 
 ```bash
-solana-keygen pubkey <KEYPAIR>
+safecoin-keygen pubkey <KEYPAIR>
 ```
 
 Below, we show how to resolve what you should put in `<KEYPAIR>` depending
@@ -54,7 +54,7 @@ when you run the command.
 To display the wallet address of a Paper Wallet:
 
 ```bash
-solana-keygen pubkey ASK
+safecoin-keygen pubkey ASK
 ```
 
 #### File System Wallet
@@ -63,10 +63,10 @@ With a file system wallet, the keypair is stored in a file on your computer.
 Replace `<KEYPAIR>` with the complete file path to the keypair file.
 
 For example, if the file system keypair file location is
-`/home/solana/my_wallet.json`, to display the address, do:
+`/home/safecoin/my_wallet.json`, to display the address, do:
 
 ```bash
-solana-keygen pubkey /home/solana/my_wallet.json
+safecoin-keygen pubkey /home/safecoin/my_wallet.json
 ```
 
 #### Hardware Wallet
@@ -76,5 +76,5 @@ If you chose a hardware wallet, use your
 such as `usb://ledger?key=0`.
 
 ```bash
-solana-keygen pubkey usb://ledger?key=0
+safecoin-keygen pubkey usb://ledger?key=0
 ```

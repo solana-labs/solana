@@ -2,13 +2,13 @@
 
 ## Problem
 
-Solana's initial RPC implementation was created for the purpose of allowing
+Safecoin's initial RPC implementation was created for the purpose of allowing
 users to confirm transactions that had just recently been sent to the cluster.
 It was designed with memory usage in mind such that any validator should be
 able to support the API without concern of DoS attacks.
 
 Later down the line, it became desirable to use that same API to support the
-Solana explorer. The original design only supported minutes of history, so we
+Safecoin explorer. The original design only supported minutes of history, so we
 changed it to instead store transaction statuses in a local RocksDB instance
 and offer days of history. We then extended that to 6 months via BigTable.
 

@@ -2,10 +2,10 @@
 
 use crate::poh_recorder;
 use crate::{cluster_info, duplicate_shred};
-use solana_ledger::block_error;
-use solana_ledger::blockstore;
-use solana_runtime::snapshot_utils;
-use solana_sdk::transaction;
+use safecoin_ledger::block_error;
+use safecoin_ledger::blockstore;
+use safecoin_runtime::snapshot_utils;
+use safecoin_sdk::transaction;
 use std::any::Any;
 
 #[derive(Debug)]
@@ -40,7 +40,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "solana error")
+        write!(f, "safecoin error")
     }
 }
 

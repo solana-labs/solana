@@ -1,7 +1,7 @@
 # |source| this file
 
 set -ex
-solana --version
+safecoin --version
 
 ls -l lib
 test -r lib/index.iife.js

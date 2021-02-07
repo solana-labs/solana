@@ -1,6 +1,6 @@
 import React from "react";
-import { lamportsToSolString } from "utils";
-import { ConfirmedBlock, PublicKey } from "@solana/web3.js";
+import { lamportsToSafeString } from "utils";
+import { ConfirmedBlock, PublicKey } from "@safecoin/web3.js";
 import { Address } from "components/common/Address";
 
 const PAGE_SIZE = 10;
@@ -49,10 +49,10 @@ export function BlockRewardsCard({ block }: { block: ConfirmedBlock }) {
                     <Address pubkey={new PublicKey(reward.pubkey)} link />
                   </td>
                   <td>{reward.rewardType}</td>
-                  <td>{lamportsToSolString(reward.lamports)}</td>
+                  <td>{lamportsToSafeString(reward.lamports)}</td>
                   <td>
                     {reward.postBalance
-                      ? lamportsToSolString(reward.postBalance)
+                      ? lamportsToSafeString(reward.postBalance)
                       : "-"}
                   </td>
                   <td>{percentChange ? percentChange + "%" : "-"}</td>

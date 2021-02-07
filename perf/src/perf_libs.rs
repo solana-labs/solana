@@ -2,7 +2,7 @@ use core::ffi::c_void;
 use dlopen::symbor::{Container, SymBorApi, Symbol};
 use dlopen_derive::SymBorApi;
 use log::*;
-use solana_sdk::packet::Packet;
+use safecoin_sdk::packet::Packet;
 use std::env;
 use std::ffi::OsStr;
 use std::fs;

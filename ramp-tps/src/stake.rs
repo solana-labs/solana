@@ -1,7 +1,7 @@
 use crate::utils;
 use log::*;
-use solana_client::rpc_client::RpcClient;
-use solana_sdk::{
+use safecoin_client::rpc_client::RpcClient;
+use safecoin_sdk::{
     account::from_account,
     clock::Epoch,
     epoch_info::EpochInfo,
@@ -9,7 +9,7 @@ use solana_sdk::{
     stake_history::StakeHistoryEntry,
     sysvar::stake_history::{self, StakeHistory},
 };
-use solana_stake_program::config::Config as StakeConfig;
+use safecoin_stake_program::config::Config as StakeConfig;
 use std::{thread::sleep, time::Duration};
 
 fn calculate_stake_warmup(mut stake_entry: StakeHistoryEntry, stake_config: &StakeConfig) -> u64 {
@@ -63,7 +63,7 @@ pub fn wait_for_warm_up(
     rpc_client: &RpcClient,
     stake_config: &StakeConfig,
     genesis_config: &GenesisConfig,
-    notifier: &solana_notifier::Notifier,
+    notifier: &safecoin_notifier::Notifier,
 ) {
     // Sleep until activation_epoch has finished
     if epoch_info.epoch <= activation_epoch {

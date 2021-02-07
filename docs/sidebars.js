@@ -48,7 +48,7 @@ module.exports = {
 	],
 	"Command Line": [
 	    "cli",
-	    "cli/install-solana-cli-tools",
+	    "cli/install-safecoin-cli-tools",
 	    "cli/conventions",
 	    "cli/choose-a-cluster",
 	    "cli/transfer-tokens",

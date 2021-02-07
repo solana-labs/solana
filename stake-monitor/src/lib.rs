@@ -1,13 +1,13 @@
 use log::*;
 use serde::{Deserialize, Serialize};
-use solana_client::{client_error::Result as ClientResult, rpc_client::RpcClient};
-use solana_metrics::{datapoint_error, datapoint_info};
-use solana_sdk::{
-    clock::Slot, native_token::LAMPORTS_PER_SOL, program_utils::limited_deserialize,
+use safecoin_client::{client_error::Result as ClientResult, rpc_client::RpcClient};
+use safecoin_metrics::{datapoint_error, datapoint_info};
+use safecoin_sdk::{
+    clock::Slot, native_token::LAMPORTS_PER_SAFE, program_utils::limited_deserialize,
     pubkey::Pubkey, signature::Signature, transaction::Transaction,
 };
-use solana_stake_program::{stake_instruction::StakeInstruction, stake_state::Lockup};
-use solana_transaction_status::{
+use safecoin_stake_program::{stake_instruction::StakeInstruction, stake_state::Lockup};
+use safecoin_transaction_status::{
     EncodedConfirmedBlock, UiTransactionEncoding, UiTransactionStatusMeta,
 };
 use std::{collections::HashMap, thread::sleep, time::Duration};
@@ -77,14 +77,14 @@ fn process_transaction(
     // Look for stake operations
     for instruction in message.instructions.iter().rev() {
         let program_pubkey = message.account_keys[instruction.program_id_index as usize];
-        if program_pubkey != solana_stake_program::id() {
+        if program_pubkey != safecoin_stake_program::id() {
             continue;
         }
 
         // Only look for stake instructions in the last instruction of a
         // transaction.  This ensures that the `meta.post_balances` for the
         // transaction reflects the account balances after the stake instruction
-        // executed.  At this time the `solana` cli will only create transactions with the stake
+        // executed.  At this time the `safecoin` cli will only create transactions with the stake
         // instruction as the last instruction.
         if !last_instruction {
             datapoint_error!(
@@ -231,7 +231,7 @@ fn process_transaction(
         if let Some(mut account_info) = accounts.get_mut(&account_pubkey.to_string()) {
             let post_balance = meta.post_balances[index];
             if account_info.compliant_since.is_some()
-                && post_balance <= account_info.lamports.saturating_sub(LAMPORTS_PER_SOL)
+                && post_balance <= account_info.lamports.saturating_sub(LAMPORTS_PER_SAFE)
             {
                 account_info.compliant_since = None;
                 account_info.transactions.push(AccountTransactionInfo {
@@ -358,31 +358,31 @@ pub fn process_slots(rpc_client: &RpcClient, accounts_info: &mut AccountsInfo, b
 mod test {
     use super::*;
     use serial_test::serial;
-    use solana_client::rpc_config::RpcSendTransactionConfig;
-    use solana_core::{rpc::JsonRpcConfig, validator::ValidatorConfig};
-    use solana_local_cluster::local_cluster::{ClusterConfig, LocalCluster};
-    use solana_sdk::{
+    use safecoin_client::rpc_config::RpcSendTransactionConfig;
+    use safecoin_core::{rpc::JsonRpcConfig, validator::ValidatorConfig};
+    use safecoin_local_cluster::local_cluster::{ClusterConfig, LocalCluster};
+    use safecoin_sdk::{
         commitment_config::CommitmentConfig,
         genesis_config::ClusterType,
         message::Message,
-        native_token::sol_to_lamports,
+        native_token::safe_to_lamports,
         signature::{Keypair, Signer},
         system_transaction,
         transaction::Transaction,
     };
-    use solana_stake_program::{stake_instruction, stake_state::Authorized};
+    use safecoin_stake_program::{stake_instruction, stake_state::Authorized};
 
     #[test]
     #[serial]
     fn test_record() {
-        solana_logger::setup();
+        safecoin_logger::setup();
         let mut accounts_info = AccountsInfo::default();
 
-        let one_sol = sol_to_lamports(1.0);
+        let one_safe  = safe_to_lamports(1.0);
         let cluster = LocalCluster::new(&mut ClusterConfig {
             cluster_type: ClusterType::MainnetBeta,
             node_stakes: vec![10; 1],
-            cluster_lamports: sol_to_lamports(1_000_000_000.0),
+            cluster_lamports: safe_to_lamports(1_000_000_000.0),
             validator_configs: vec![ValidatorConfig {
                 rpc_config: JsonRpcConfig {
                     enable_rpc_transaction_history: true,
@@ -406,7 +406,7 @@ mod test {
             &stake1_keypair.pubkey(),
             &Authorized::auto(&payer.pubkey()),
             &Lockup::default(),
-            one_sol,
+            one_safe ,
         );
         let message = Message::new(&instructions, Some(&payer.pubkey()));
         let stake1_signature = rpc_client
@@ -426,7 +426,7 @@ mod test {
             .send_transaction(&system_transaction::transfer(
                 &payer,
                 &stake1_keypair.pubkey(),
-                one_sol,
+                one_safe ,
                 blockhash,
             ))
             .unwrap();
@@ -441,7 +441,7 @@ mod test {
                 custodian: payer.pubkey(),
                 ..Lockup::default()
             },
-            one_sol,
+            one_safe ,
         );
         let message = Message::new(&instructions, Some(&payer.pubkey()));
         let stake2_signature = rpc_client
@@ -459,7 +459,7 @@ mod test {
             &stake3_keypair.pubkey(),
             &Authorized::auto(&stake3_keypair.pubkey()),
             &Lockup::default(),
-            one_sol,
+            one_safe ,
         );
         let message = Message::new(&instructions, Some(&payer.pubkey()));
         let stake3_initialize_signature = rpc_client
@@ -487,7 +487,7 @@ mod test {
                             &stake3_keypair.pubkey(),
                             &stake3_keypair.pubkey(),
                             &payer.pubkey(),
-                            one_sol,
+                            one_safe ,
                             None,
                         )],
                         Some(&payer.pubkey()),
@@ -515,7 +515,7 @@ mod test {
             &stake4_keypair.pubkey(),
             &Authorized::auto(&payer.pubkey()),
             &Lockup::default(),
-            2 * one_sol,
+            2 * one_safe ,
         );
         let message = Message::new(&instructions, Some(&payer.pubkey()));
         let stake4_initialize_signature = rpc_client
@@ -543,7 +543,7 @@ mod test {
                         &stake_instruction::split(
                             &stake4_keypair.pubkey(),
                             &payer.pubkey(),
-                            one_sol,
+                            one_safe ,
                             &stake5_keypair.pubkey(),
                         ),
                         Some(&payer.pubkey()),
@@ -572,7 +572,7 @@ mod test {
             .send_transaction(&system_transaction::transfer(
                 &payer,
                 &system1_keypair.pubkey(),
-                2 * one_sol,
+                2 * one_safe ,
                 blockhash,
             ))
             .unwrap();
@@ -587,7 +587,7 @@ mod test {
             rpc_client
                 .get_slot_with_commitment(CommitmentConfig::processed())
                 .unwrap(),
-            2 * one_sol,
+            2 * one_safe ,
         );
 
         // Withdraw 1 sol from system 1 to make it non-compliant
@@ -596,7 +596,7 @@ mod test {
                 &system_transaction::transfer(
                     &system1_keypair,
                     &payer.pubkey(),
-                    one_sol,
+                    one_safe ,
                     blockhash,
                 ),
                 RpcSendTransactionConfig {
@@ -614,7 +614,7 @@ mod test {
             .send_transaction(&system_transaction::transfer(
                 &payer,
                 &system2_keypair.pubkey(),
-                2 * one_sol,
+                2 * one_safe ,
                 blockhash,
             ))
             .unwrap();
@@ -629,7 +629,7 @@ mod test {
             rpc_client
                 .get_slot_with_commitment(CommitmentConfig::processed())
                 .unwrap(),
-            2 * one_sol,
+            2 * one_safe ,
         );
 
         // Withdraw 1 sol - 1 lamport from system 2, it's still compliant
@@ -638,7 +638,7 @@ mod test {
                 &system_transaction::transfer(
                     &system2_keypair,
                     &payer.pubkey(),
-                    one_sol - 1,
+                    one_safe  - 1,
                     blockhash,
                 ),
                 RpcSendTransactionConfig {
@@ -664,7 +664,7 @@ mod test {
             .get(&stake1_keypair.pubkey().to_string())
             .unwrap();
         assert!(account_info.compliant_since.is_some());
-        assert_eq!(account_info.lamports, one_sol);
+        assert_eq!(account_info.lamports, one_safe );
         assert_eq!(account_info.transactions.len(), 1);
         assert_eq!(
             account_info.transactions[0].op,
@@ -681,7 +681,7 @@ mod test {
             .get(&stake2_keypair.pubkey().to_string())
             .unwrap();
         assert!(account_info.compliant_since.is_none());
-        assert_eq!(account_info.lamports, one_sol);
+        assert_eq!(account_info.lamports, one_safe );
         assert_eq!(account_info.transactions.len(), 1);
         assert_eq!(
             account_info.transactions[0].op,
@@ -698,7 +698,7 @@ mod test {
             .get(&stake3_keypair.pubkey().to_string())
             .unwrap();
         assert!(account_info.compliant_since.is_none());
-        assert_eq!(account_info.lamports, one_sol);
+        assert_eq!(account_info.lamports, one_safe );
         assert_eq!(account_info.transactions.len(), 2);
         assert_eq!(
             account_info.transactions[0].op,
@@ -720,7 +720,7 @@ mod test {
             .get(&stake4_keypair.pubkey().to_string())
             .unwrap();
         assert!(account_info.compliant_since.is_some());
-        assert_eq!(account_info.lamports, one_sol);
+        assert_eq!(account_info.lamports, one_safe );
         assert_eq!(account_info.transactions.len(), 2);
         assert_eq!(
             account_info.transactions[0].op,
@@ -745,7 +745,7 @@ mod test {
             .get(&stake5_keypair.pubkey().to_string())
             .unwrap();
         assert!(account_info.compliant_since.is_some());
-        assert_eq!(account_info.lamports, one_sol);
+        assert_eq!(account_info.lamports, one_safe );
         assert_eq!(account_info.transactions.len(), 1);
         assert_eq!(
             account_info.transactions[0].op,
@@ -762,7 +762,7 @@ mod test {
             .get(&system1_keypair.pubkey().to_string())
             .unwrap();
         assert!(account_info.compliant_since.is_none());
-        assert_eq!(account_info.lamports, 2 * one_sol);
+        assert_eq!(account_info.lamports, 2 * one_safe );
         assert_eq!(account_info.transactions.len(), 2);
         assert_eq!(
             account_info.transactions[0].op,
@@ -779,7 +779,7 @@ mod test {
             .get(&system2_keypair.pubkey().to_string())
             .unwrap();
         assert!(account_info.compliant_since.is_some());
-        assert_eq!(account_info.lamports, 2 * one_sol);
+        assert_eq!(account_info.lamports, 2 * one_safe );
         assert_eq!(account_info.transactions.len(), 1);
         assert_eq!(
             account_info.transactions[0].op,

@@ -1,5 +1,5 @@
 use serde_derive::{Deserialize, Serialize};
-use solana_sdk::pubkey::Pubkey;
+use safecoin_sdk::pubkey::Pubkey;
 use std::{error, fmt};
 
 /// Fixed-point scaler, 10 = one base 10 digit to the right of the decimal, 100 = 2, ...

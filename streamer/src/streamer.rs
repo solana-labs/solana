@@ -3,8 +3,8 @@
 
 use crate::packet::{self, send_to, Packets, PacketsRecycler, PACKETS_PER_BATCH};
 use crate::recvmmsg::NUM_RCVMMSGS;
-use solana_measure::thread_mem_usage;
-use solana_sdk::timing::{duration_as_ms, timestamp};
+use safecoin_measure::thread_mem_usage;
+use safecoin_sdk::timing::{duration_as_ms, timestamp};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, SendError, Sender};
@@ -90,7 +90,7 @@ pub fn receiver(
     }
     let exit = exit.clone();
     Builder::new()
-        .name("solana-receiver".to_string())
+        .name("safecoin-receiver".to_string())
         .spawn(move || {
             thread_mem_usage::datapoint(name);
             let _ = recv_loop(&sock, exit, &packet_sender, &recycler.clone(), name);
@@ -126,7 +126,7 @@ pub fn recv_batch(recvr: &PacketReceiver, max_batch: usize) -> Result<(Vec<Packe
 
 pub fn responder(name: &'static str, sock: Arc<UdpSocket>, r: PacketReceiver) -> JoinHandle<()> {
     Builder::new()
-        .name(format!("solana-responder-{}", name))
+        .name(format!("safecoin-responder-{}", name))
         .spawn(move || {
             let mut errors = 0;
             let mut last_error = None;
@@ -160,7 +160,7 @@ mod test {
     use super::*;
     use crate::packet::{Packet, Packets, PACKET_DATA_SIZE};
     use crate::streamer::{receiver, responder};
-    use solana_perf::recycler::Recycler;
+    use safecoin_perf::recycler::Recycler;
     use std::io;
     use std::io::Write;
     use std::net::UdpSocket;

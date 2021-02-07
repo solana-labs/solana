@@ -1,20 +1,20 @@
 [package]
-authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+authors = ["Safecoin Maintainers <maintainers@solana.foundation>"]
 edition = "2018"
-name = "solana-bench-streamer"
+name = "safecoin-bench-streamer"
 version = "1.6.0"
-repository = "https://github.com/solana-labs/solana"
+repository = "https://github.com/solana-labs/safecoin"
 license = "Apache-2.0"
-homepage = "https://solana.com/"
+homepage = "https://safecoin.org/"
 publish = false
 
 [dependencies]
 clap = "2.33.1"
-solana-clap-utils = { path = "../clap-utils", version = "1.6.0" }
-solana-streamer = { path = "../streamer", version = "1.6.0" }
-solana-logger = { path = "../logger", version = "1.6.0" }
-solana-net-utils = { path = "../net-utils", version = "1.6.0" }
-solana-version = { path = "../version", version = "1.6.0" }
+safecoin-clap-utils = { path = "../clap-utils", version = "1.6.0" }
+safecoin-streamer = { path = "../streamer", version = "1.6.0" }
+safecoin-logger = { path = "../logger", version = "1.6.0" }
+safecoin-net-utils = { path = "../net-utils", version = "1.6.0" }
+safecoin-version = { path = "../version", version = "1.6.0" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

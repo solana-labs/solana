@@ -3,8 +3,8 @@
 extern crate test;
 
 use rand::{thread_rng, Rng};
-use solana_runtime::{accounts_db::AccountInfo, accounts_index::AccountsIndex};
-use solana_sdk::pubkey::{self, Pubkey};
+use safecoin_runtime::{accounts_db::AccountInfo, accounts_index::AccountsIndex};
+use safecoin_sdk::pubkey::{self, Pubkey};
 use std::collections::HashSet;
 use test::Bencher;
 

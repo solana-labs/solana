@@ -3,11 +3,11 @@ use crate::{
     address_generator::AddressGenerator,
     unlocks::{UnlockInfo, Unlocks},
 };
-use solana_sdk::{
+use safecoin_sdk::{
     account::Account, clock::Slot, genesis_config::GenesisConfig, pubkey::Pubkey, system_program,
     timing::years_as_slots,
 };
-use solana_stake_program::{
+use safecoin_stake_program::{
     self,
     stake_state::{create_lockup_stake_account, Authorized, Lockup, StakeState},
 };
@@ -99,7 +99,7 @@ pub fn create_and_add_stakes(
     );
 
     let mut address_generator =
-        AddressGenerator::new(&authorized.staker, &solana_stake_program::id());
+        AddressGenerator::new(&authorized.staker, &safecoin_stake_program::id());
 
     let stake_rent_reserve = StakeState::get_rent_exempt_reserve(&genesis_config.rent);
 
@@ -160,7 +160,7 @@ pub fn create_and_add_stakes(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::rent::Rent;
+    use safecoin_sdk::rent::Rent;
 
     fn create_and_check_stakes(
         genesis_config: &mut GenesisConfig,

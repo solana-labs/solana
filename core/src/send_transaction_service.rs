@@ -2,9 +2,9 @@
 use crate::cluster_info::ClusterInfo;
 use crate::poh_recorder::PohRecorder;
 use log::*;
-use solana_metrics::{datapoint_warn, inc_new_counter_info};
-use solana_runtime::{bank::Bank, bank_forks::BankForks};
-use solana_sdk::{
+use safecoin_metrics::{datapoint_warn, inc_new_counter_info};
+use safecoin_runtime::{bank::Bank, bank_forks::BankForks};
+use safecoin_sdk::{
     clock::{Slot, NUM_CONSECUTIVE_LEADER_SLOTS},
     hash::Hash,
     nonce_account,
@@ -314,13 +314,13 @@ impl SendTransactionService {
 mod test {
     use super::*;
     use crate::contact_info::ContactInfo;
-    use solana_ledger::{
+    use safecoin_ledger::{
         blockstore::Blockstore, get_tmp_ledger_path, leader_schedule_cache::LeaderScheduleCache,
     };
-    use solana_runtime::genesis_utils::{
+    use safecoin_runtime::genesis_utils::{
         create_genesis_config_with_vote_accounts, GenesisConfigInfo, ValidatorVoteKeypairs,
     };
-    use solana_sdk::{
+    use safecoin_sdk::{
         account::Account,
         fee_calculator::FeeCalculator,
         genesis_config::create_genesis_config,
@@ -349,7 +349,7 @@ mod test {
 
     #[test]
     fn process_transactions() {
-        solana_logger::setup();
+        safecoin_logger::setup();
 
         let (genesis_config, mint_keypair) = create_genesis_config(4);
         let bank = Bank::new(&genesis_config);
@@ -503,7 +503,7 @@ mod test {
 
     #[test]
     fn test_retry_durable_nonce_transactions() {
-        solana_logger::setup();
+        safecoin_logger::setup();
 
         let (genesis_config, mint_keypair) = create_genesis_config(4);
         let bank = Bank::new(&genesis_config);
@@ -845,13 +845,13 @@ mod test {
 
             let slot = bank.slot();
             let first_leader =
-                solana_ledger::leader_schedule_utils::slot_leader_at(slot, &bank).unwrap();
+                safecoin_ledger::leader_schedule_utils::slot_leader_at(slot, &bank).unwrap();
             assert_eq!(
                 leader_info.get_leader_tpus(1),
                 vec![recent_peers.get(&first_leader).unwrap()]
             );
 
-            let second_leader = solana_ledger::leader_schedule_utils::slot_leader_at(
+            let second_leader = safecoin_ledger::leader_schedule_utils::slot_leader_at(
                 slot + NUM_CONSECUTIVE_LEADER_SLOTS,
                 &bank,
             )
@@ -863,7 +863,7 @@ mod test {
             expected_leader_sockets.dedup();
             assert_eq!(leader_info.get_leader_tpus(2), expected_leader_sockets);
 
-            let third_leader = solana_ledger::leader_schedule_utils::slot_leader_at(
+            let third_leader = safecoin_ledger::leader_schedule_utils::slot_leader_at(
                 slot + (2 * NUM_CONSECUTIVE_LEADER_SLOTS),
                 &bank,
             )

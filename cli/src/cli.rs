@@ -6,8 +6,8 @@ use clap::{value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
 use log::*;
 use num_traits::FromPrimitive;
 use serde_json::{self, Value};
-use solana_account_decoder::{UiAccount, UiAccountEncoding};
-use solana_clap_utils::{
+use safecoin_account_decoder::{UiAccount, UiAccountEncoding};
+use safecoin_clap_utils::{
     self,
     fee_payer::{fee_payer_arg, FEE_PAYER_ARG},
     input_parsers::*,
@@ -16,11 +16,11 @@ use solana_clap_utils::{
     nonce::*,
     offline::*,
 };
-use solana_cli_output::{
+use safecoin_cli_output::{
     display::{build_balance_message, println_name_value, println_transaction},
     return_signers, CliAccount, CliSignature, CliSignatureVerificationStatus, OutputFormat,
 };
-use solana_client::{
+use safecoin_client::{
     blockhash_query::BlockhashQuery,
     client_error::{ClientError, ClientErrorKind, Result as ClientResult},
     nonce_utils,
@@ -29,11 +29,11 @@ use solana_client::{
     rpc_response::RpcKeyedAccount,
 };
 #[cfg(not(test))]
-use solana_faucet::faucet::request_airdrop_transaction;
+use safecoin_faucet::faucet::request_airdrop_transaction;
 #[cfg(test)]
-use solana_faucet::faucet_mock::request_airdrop_transaction;
-use solana_remote_wallet::remote_wallet::RemoteWalletManager;
-use solana_sdk::{
+use safecoin_faucet::faucet_mock::request_airdrop_transaction;
+use safecoin_remote_wallet::remote_wallet::RemoteWalletManager;
+use safecoin_sdk::{
     clock::{Epoch, Slot},
     commitment_config::CommitmentConfig,
     decode_error::DecodeError,
@@ -46,14 +46,14 @@ use solana_sdk::{
     system_program,
     transaction::{Transaction, TransactionError},
 };
-use solana_stake_program::{
+use safecoin_stake_program::{
     stake_instruction::LockupArgs,
     stake_state::{Lockup, StakeAuthorize},
 };
-use solana_transaction_status::{
+use safecoin_transaction_status::{
     EncodedTransaction, TransactionConfirmationStatus, UiTransactionEncoding,
 };
-use solana_vote_program::vote_state::VoteAuthorize;
+use safecoin_vote_program::vote_state::VoteAuthorize;
 use std::{
     collections::HashMap,
     error,
@@ -372,11 +372,11 @@ pub enum CliError {
     ClientError(#[from] ClientError),
     #[error("command not recognized: {0}")]
     CommandNotRecognized(String),
-    #[error("insufficient funds for fee ({0} SOL)")]
+    #[error("insufficient funds for fee ({0} SAFE)")]
     InsufficientFundsForFee(f64),
-    #[error("insufficient funds for spend ({0} SOL)")]
+    #[error("insufficient funds for spend ({0} SAFE)")]
     InsufficientFundsForSpend(f64),
-    #[error("insufficient funds for spend ({0} SOL) and fee ({1} SOL)")]
+    #[error("insufficient funds for spend ({0} SAFE) and fee ({1} SAFE)")]
     InsufficientFundsForSpendAndFee(f64, f64),
     #[error(transparent)]
     InvalidNonce(nonce_utils::Error),
@@ -426,15 +426,15 @@ pub struct CliConfig<'a> {
 
 impl CliConfig<'_> {
     fn default_keypair_path() -> String {
-        solana_cli_config::Config::default().keypair_path
+        safecoin_cli_config::Config::default().keypair_path
     }
 
     fn default_json_rpc_url() -> String {
-        solana_cli_config::Config::default().json_rpc_url
+        safecoin_cli_config::Config::default().json_rpc_url
     }
 
     fn default_websocket_url() -> String {
-        solana_cli_config::Config::default().websocket_url
+        safecoin_cli_config::Config::default().websocket_url
     }
 
     fn default_commitment() -> CommitmentConfig {
@@ -471,13 +471,13 @@ impl CliConfig<'_> {
             (SettingType::Explicit, websocket_cfg_url.to_string()),
             (
                 SettingType::Computed,
-                solana_cli_config::Config::compute_websocket_url(&normalize_to_url_if_moniker(
+                safecoin_cli_config::Config::compute_websocket_url(&normalize_to_url_if_moniker(
                     json_rpc_cmd_url,
                 )),
             ),
             (
                 SettingType::Computed,
-                solana_cli_config::Config::compute_websocket_url(&normalize_to_url_if_moniker(
+                safecoin_cli_config::Config::compute_websocket_url(&normalize_to_url_if_moniker(
                     json_rpc_cfg_url,
                 )),
             ),
@@ -752,7 +752,7 @@ pub fn parse_command(
             let faucet_host = matches
                 .value_of("faucet_host")
                 .map(|faucet_host| {
-                    solana_net_utils::parse_host(faucet_host).map_err(|err| {
+                    safecoin_net_utils::parse_host(faucet_host).map_err(|err| {
                         CliError::BadParameter(format!("Invalid faucet host: {}", err))
                     })
                 })
@@ -763,7 +763,7 @@ pub fn parse_command(
             } else {
                 vec![default_signer.signer_from_path(matches, wallet_manager)?]
             };
-            let lamports = lamports_of_sol(matches, "amount").unwrap();
+            let lamports = lamports_of_safe (matches, "amount").unwrap();
             Ok(CliCommandInfo {
                 command: CliCommand::Airdrop {
                     faucet_host,
@@ -912,8 +912,8 @@ pub fn parse_create_address_with_seed(
 
     let program_id = match matches.value_of("program_id").unwrap() {
         "NONCE" => system_program::id(),
-        "STAKE" => solana_stake_program::id(),
-        "VOTE" => solana_vote_program::id(),
+        "STAKE" => safecoin_stake_program::id(),
+        "VOTE" => safecoin_vote_program::id(),
         _ => pubkey_of(matches, "program_id").unwrap(),
     };
 
@@ -1198,7 +1198,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         // Cluster Query Commands
         // Get address of this client
         CliCommand::Address => Ok(format!("{}", config.pubkey()?)),
-        // Return software version of solana-cli and cluster entrypoint node
+        // Return software version of safecoin-cli and cluster entrypoint node
         CliCommand::Catchup {
             node_pubkey,
             node_json_rpc_url,
@@ -1684,7 +1684,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
 
         // Wallet Commands
 
-        // Request an airdrop from Solana Faucet;
+        // Request an airdrop from Safecoin Faucet;
         CliCommand::Airdrop {
             faucet_host,
             faucet_port,
@@ -1698,7 +1698,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
                         .host()
                         .unwrap()
                         .to_string();
-                    solana_net_utils::parse_host(&faucet_host).unwrap_or_else(|err| {
+                    safecoin_net_utils::parse_host(&faucet_host).unwrap_or_else(|err| {
                         panic!("Unable to resolve {}: {}", faucet_host, err);
                     })
                 }),
@@ -1889,7 +1889,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .long("faucet-port")
                         .value_name("PORT_NUMBER")
                         .takes_value(true)
-                        .default_value(solana_faucet::faucet::FAUCET_PORT_STR)
+                        .default_value(safecoin_faucet::faucet::FAUCET_PORT_STR)
                         .help("Faucet port to use"),
                 )
                 .arg(
@@ -1899,7 +1899,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .takes_value(true)
                         .validator(is_amount)
                         .required(true)
-                        .help("The airdrop amount to request, in SOL"),
+                        .help("The airdrop amount to request, in SAFE"),
                 )
                 .arg(
                     pubkey!(Arg::with_name("to")
@@ -1921,7 +1921,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                     Arg::with_name("lamports")
                         .long("lamports")
                         .takes_value(false)
-                        .help("Display balance in lamports instead of SOL"),
+                        .help("Display balance in lamports instead of SAFE"),
                 ),
         )
         .subcommand(
@@ -2018,7 +2018,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                     Arg::with_name("allow_excessive_balance")
                         .long("allow-excessive-deploy-account-balance")
                         .takes_value(false)
-                        .help("Use the designated program id, even if the account already holds a large balance of SOL")
+                        .help("Use the designated program id, even if the account already holds a large balance of SAFE")
                 ),
         )
         .subcommand(
@@ -2038,7 +2038,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .takes_value(true)
                         .validator(is_amount_or_all)
                         .required(true)
-                        .help("The amount to send, in SOL; accepts keyword ALL"),
+                        .help("The amount to send, in SAFE; accepts keyword ALL"),
                 )
                 .offline_args()
                 .nonce_args(false)
@@ -2073,7 +2073,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .takes_value(true)
                         .validator(is_amount_or_all)
                         .required(true)
-                        .help("The amount to send, in SOL; accepts keyword ALL"),
+                        .help("The amount to send, in SAFE; accepts keyword ALL"),
                 )
                 .arg(
                     pubkey!(Arg::with_name("from")
@@ -2114,7 +2114,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                     Arg::with_name("lamports")
                         .long("lamports")
                         .takes_value(false)
-                        .help("Display balance in lamports instead of SOL"),
+                        .help("Display balance in lamports instead of SAFE"),
                 ),
         )
         .validator_info_subcommands()
@@ -2125,13 +2125,13 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
 mod tests {
     use super::*;
     use serde_json::{json, Value};
-    use solana_client::{
+    use safecoin_client::{
         blockhash_query,
         mock_sender::SIGNATURE,
         rpc_request::RpcRequest,
         rpc_response::{Response, RpcResponseContext},
     };
-    use solana_sdk::{
+    use safecoin_sdk::{
         pubkey::Pubkey,
         signature::{keypair_from_seed, read_keypair_file, write_keypair_file, Keypair, Presigner},
         transaction::TransactionError,
@@ -2176,7 +2176,7 @@ mod tests {
         assert_eq!(signer_info.signers.len(), 1);
         assert_eq!(signer_info.index_of(None), Some(0));
         assert_eq!(
-            signer_info.index_of(Some(solana_sdk::pubkey::new_rand())),
+            signer_info.index_of(Some(safecoin_sdk::pubkey::new_rand())),
             None
         );
 
@@ -2234,7 +2234,7 @@ mod tests {
     fn test_cli_parse_command() {
         let test_commands = app("test", "desc", "version");
 
-        let pubkey = solana_sdk::pubkey::new_rand();
+        let pubkey = safecoin_sdk::pubkey::new_rand();
         let pubkey_string = format!("{}", pubkey);
 
         let default_keypair = Keypair::new();
@@ -2255,7 +2255,7 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::Airdrop {
                     faucet_host: None,
-                    faucet_port: solana_faucet::faucet::FAUCET_PORT,
+                    faucet_port: safecoin_faucet::faucet::FAUCET_PORT,
                     pubkey: Some(pubkey),
                     lamports: 50_000_000_000,
                 },
@@ -2330,11 +2330,11 @@ mod tests {
         assert!(parse_command(&test_bad_signature, &default_signer, &mut None).is_err());
 
         // Test CreateAddressWithSeed
-        let from_pubkey = Some(solana_sdk::pubkey::new_rand());
+        let from_pubkey = Some(safecoin_sdk::pubkey::new_rand());
         let from_str = from_pubkey.unwrap().to_string();
         for (name, program_id) in &[
-            ("STAKE", solana_stake_program::id()),
-            ("VOTE", solana_vote_program::id()),
+            ("STAKE", safecoin_stake_program::id()),
+            ("VOTE", safecoin_vote_program::id()),
             ("NONCE", system_program::id()),
         ] {
             let test_create_address_with_seed = test_commands.clone().get_matches_from(vec![
@@ -2369,7 +2369,7 @@ mod tests {
                 command: CliCommand::CreateAddressWithSeed {
                     from_pubkey: None,
                     seed: "seed".to_string(),
-                    program_id: solana_stake_program::id(),
+                    program_id: safecoin_stake_program::id(),
                 },
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -2470,7 +2470,7 @@ mod tests {
             pubkey: None,
             use_lamports_unit: false,
         };
-        assert_eq!(process_command(&config).unwrap(), "0.00000005 SOL");
+        assert_eq!(process_command(&config).unwrap(), "0.00000005 SAFE");
 
         let good_signature = Signature::new(&bs58::decode(SIGNATURE).into_vec().unwrap());
         config.command = CliCommand::Confirm(good_signature);
@@ -2494,7 +2494,7 @@ mod tests {
         let result = process_command(&config);
         assert!(result.is_ok());
 
-        let new_authorized_pubkey = solana_sdk::pubkey::new_rand();
+        let new_authorized_pubkey = safecoin_sdk::pubkey::new_rand();
         config.signers = vec![&bob_keypair];
         config.command = CliCommand::VoteAuthorize {
             vote_account_pubkey: bob_pubkey,
@@ -2516,7 +2516,7 @@ mod tests {
 
         let bob_keypair = Keypair::new();
         let bob_pubkey = bob_keypair.pubkey();
-        let custodian = solana_sdk::pubkey::new_rand();
+        let custodian = safecoin_sdk::pubkey::new_rand();
         config.command = CliCommand::CreateStakeAccount {
             stake_account: 1,
             seed: None,
@@ -2539,8 +2539,8 @@ mod tests {
         let result = process_command(&config);
         assert!(result.is_ok());
 
-        let stake_account_pubkey = solana_sdk::pubkey::new_rand();
-        let to_pubkey = solana_sdk::pubkey::new_rand();
+        let stake_account_pubkey = safecoin_sdk::pubkey::new_rand();
+        let to_pubkey = safecoin_sdk::pubkey::new_rand();
         config.command = CliCommand::WithdrawStake {
             stake_account_pubkey,
             destination_account_pubkey: to_pubkey,
@@ -2557,7 +2557,7 @@ mod tests {
         let result = process_command(&config);
         assert!(result.is_ok());
 
-        let stake_account_pubkey = solana_sdk::pubkey::new_rand();
+        let stake_account_pubkey = safecoin_sdk::pubkey::new_rand();
         config.command = CliCommand::DeactivateStake {
             stake_account_pubkey,
             stake_authority: 0,
@@ -2570,7 +2570,7 @@ mod tests {
         let result = process_command(&config);
         assert!(result.is_ok());
 
-        let stake_account_pubkey = solana_sdk::pubkey::new_rand();
+        let stake_account_pubkey = safecoin_sdk::pubkey::new_rand();
         let split_stake_account = Keypair::new();
         config.command = CliCommand::SplitStake {
             stake_account_pubkey,
@@ -2588,8 +2588,8 @@ mod tests {
         let result = process_command(&config);
         assert!(result.is_ok());
 
-        let stake_account_pubkey = solana_sdk::pubkey::new_rand();
-        let source_stake_account_pubkey = solana_sdk::pubkey::new_rand();
+        let stake_account_pubkey = safecoin_sdk::pubkey::new_rand();
+        let source_stake_account_pubkey = safecoin_sdk::pubkey::new_rand();
         let merge_stake_account = Keypair::new();
         config.command = CliCommand::MergeStake {
             stake_account_pubkey,
@@ -2612,20 +2612,20 @@ mod tests {
         assert_eq!(process_command(&config).unwrap(), "1234");
 
         // CreateAddressWithSeed
-        let from_pubkey = solana_sdk::pubkey::new_rand();
+        let from_pubkey = safecoin_sdk::pubkey::new_rand();
         config.signers = vec![];
         config.command = CliCommand::CreateAddressWithSeed {
             from_pubkey: Some(from_pubkey),
             seed: "seed".to_string(),
-            program_id: solana_stake_program::id(),
+            program_id: safecoin_stake_program::id(),
         };
         let address = process_command(&config);
         let expected_address =
-            Pubkey::create_with_seed(&from_pubkey, "seed", &solana_stake_program::id()).unwrap();
+            Pubkey::create_with_seed(&from_pubkey, "seed", &safecoin_stake_program::id()).unwrap();
         assert_eq!(address.unwrap(), expected_address.to_string());
 
         // Need airdrop cases
-        let to = solana_sdk::pubkey::new_rand();
+        let to = safecoin_sdk::pubkey::new_rand();
         config.signers = vec![&keypair];
         config.command = CliCommand::Airdrop {
             faucet_host: None,
@@ -2703,7 +2703,7 @@ mod tests {
 
     #[test]
     fn test_cli_deploy() {
-        solana_logger::setup();
+        safecoin_logger::setup();
         let mut pathbuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         pathbuf.push("tests");
         pathbuf.push("fixtures");
@@ -2765,7 +2765,7 @@ mod tests {
             arg_name: "".to_string(),
         };
 
-        //Test Transfer Subcommand, SOL
+        //Test Transfer Subcommand, SAFE
         let from_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
         let from_pubkey = from_keypair.pubkey();
         let from_string = from_pubkey.to_string();

@@ -1,5 +1,5 @@
 use log::*;
-use solana_client::rpc_response::{RpcContactInfo, RpcLeaderSchedule};
+use safecoin_client::rpc_response::{RpcContactInfo, RpcLeaderSchedule};
 use std::net::{SocketAddr, UdpSocket};
 
 pub fn get_leader_tpu(

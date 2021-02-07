@@ -1,15 +1,15 @@
 extern crate log;
 use clap::{crate_description, crate_name, value_t, App, Arg};
-use solana_measure::measure::Measure;
-use solana_runtime::accounts_db::AccountsDB;
-use solana_sdk::{hash::Hash, pubkey::Pubkey};
+use safecoin_measure::measure::Measure;
+use safecoin_runtime::accounts_db::AccountsDB;
+use safecoin_sdk::{hash::Hash, pubkey::Pubkey};
 
 fn main() {
-    solana_logger::setup();
+    safecoin_logger::setup();
 
     let matches = App::new(crate_name!())
         .about(crate_description!())
-        .version(solana_version::version!())
+        .version(safecoin_version::version!())
         .arg(
             Arg::with_name("num_accounts")
                 .long("num_accounts")

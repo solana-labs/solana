@@ -1,6 +1,6 @@
-//! The `faucet` module provides an object for launching a Solana Faucet,
+//! The `faucet` module provides an object for launching a Safecoin Faucet,
 //! which is the custodian of any remaining lamports in a mint.
-//! The Solana Faucet builds and send airdrop transactions,
+//! The Safecoin Faucet builds and send airdrop transactions,
 //! checking requests against a request cap for a given time time_slice
 //! and (to come) an IP rate limit.
 
@@ -8,8 +8,8 @@ use bincode::{deserialize, serialize, serialized_size};
 use byteorder::{ByteOrder, LittleEndian};
 use log::*;
 use serde_derive::{Deserialize, Serialize};
-use solana_metrics::datapoint_info;
-use solana_sdk::{
+use safecoin_metrics::datapoint_info;
+use safecoin_sdk::{
     hash::Hash,
     message::Message,
     packet::PACKET_DATA_SIZE,
@@ -43,7 +43,7 @@ macro_rules! socketaddr {
 }
 
 pub const TIME_SLICE: u64 = 60;
-pub const REQUEST_CAP: u64 = solana_sdk::native_token::LAMPORTS_PER_SOL * 10_000_000;
+pub const REQUEST_CAP: u64 = safecoin_sdk::native_token::LAMPORTS_PER_SAFE * 10_000_000;
 pub const FAUCET_PORT: u16 = 9900;
 pub const FAUCET_PORT_STR: &str = "9900";
 
@@ -198,7 +198,7 @@ impl Faucet {
 
 impl Drop for Faucet {
     fn drop(&mut self) {
-        solana_metrics::flush();
+        safecoin_metrics::flush();
     }
 }
 
@@ -366,7 +366,7 @@ async fn process(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::system_instruction::SystemInstruction;
+    use safecoin_sdk::system_instruction::SystemInstruction;
     use std::time::Duration;
 
     #[test]
@@ -427,7 +427,7 @@ mod tests {
 
     #[test]
     fn test_faucet_build_airdrop_transaction() {
-        let to = solana_sdk::pubkey::new_rand();
+        let to = safecoin_sdk::pubkey::new_rand();
         let blockhash = Hash::default();
         let request = FaucetRequest::GetAirdrop {
             lamports: 2,
@@ -468,7 +468,7 @@ mod tests {
 
     #[test]
     fn test_process_faucet_request() {
-        let to = solana_sdk::pubkey::new_rand();
+        let to = safecoin_sdk::pubkey::new_rand();
         let blockhash = Hash::new(&to.as_ref());
         let lamports = 50;
         let req = FaucetRequest::GetAirdrop {

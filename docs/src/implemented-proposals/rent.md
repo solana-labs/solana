@@ -2,7 +2,7 @@
 title: Rent
 ---
 
-Accounts on Solana may have owner-controlled state \(`Account::data`\) that's separate from the account's balance \(`Account::lamports`\). Since validators on the network need to maintain a working copy of this state in memory, the network charges a time-and-space based fee for this resource consumption, also known as Rent.
+Accounts on Safecoin may have owner-controlled state \(`Account::data`\) that's separate from the account's balance \(`Account::lamports`\). Since validators on the network need to maintain a working copy of this state in memory, the network charges a time-and-space based fee for this resource consumption, also known as Rent.
 
 ## Two-tiered rent regime
 

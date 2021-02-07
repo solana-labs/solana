@@ -17,13 +17,13 @@ use crossbeam_channel::{
     Receiver as CrossbeamReceiver, RecvTimeoutError as CrossbeamRecvTimeoutError,
     Sender as CrossbeamSender,
 };
-use solana_ledger::{blockstore::Blockstore, shred::Shred};
-use solana_measure::measure::Measure;
-use solana_metrics::{inc_new_counter_error, inc_new_counter_info};
-use solana_runtime::bank::Bank;
-use solana_sdk::timing::timestamp;
-use solana_sdk::{clock::Slot, pubkey::Pubkey};
-use solana_streamer::sendmmsg::send_mmsg;
+use safecoin_ledger::{blockstore::Blockstore, shred::Shred};
+use safecoin_measure::measure::Measure;
+use safecoin_metrics::{inc_new_counter_error, inc_new_counter_info};
+use safecoin_runtime::bank::Bank;
+use safecoin_sdk::timing::timestamp;
+use safecoin_sdk::{clock::Slot, pubkey::Pubkey};
+use safecoin_streamer::sendmmsg::send_mmsg;
 use std::sync::atomic::AtomicU64;
 use std::{
     collections::HashMap,
@@ -222,7 +222,7 @@ impl BroadcastStage {
 
         let socket_sender_ = socket_sender.clone();
         let thread_hdl = Builder::new()
-            .name("solana-broadcaster".to_string())
+            .name("safecoin-broadcaster".to_string())
             .spawn(move || {
                 let _finalizer = Finalizer::new(exit);
                 Self::run(
@@ -241,10 +241,10 @@ impl BroadcastStage {
             let mut bs_transmit = broadcast_stage_run.clone();
             let cluster_info = cluster_info.clone();
             let t = Builder::new()
-                .name("solana-broadcaster-transmit".to_string())
+                .name("safecoin-broadcaster-transmit".to_string())
                 .spawn(move || loop {
                     let res = bs_transmit.transmit(&socket_receiver, &cluster_info, &sock);
-                    let res = Self::handle_error(res, "solana-broadcaster-transmit");
+                    let res = Self::handle_error(res, "safecoin-broadcaster-transmit");
                     if let Some(res) = res {
                         return res;
                     }
@@ -258,10 +258,10 @@ impl BroadcastStage {
             let mut bs_record = broadcast_stage_run.clone();
             let btree = blockstore.clone();
             let t = Builder::new()
-                .name("solana-broadcaster-record".to_string())
+                .name("safecoin-broadcaster-record".to_string())
                 .spawn(move || loop {
                     let res = bs_record.record(&blockstore_receiver, &btree);
-                    let res = Self::handle_error(res, "solana-broadcaster-record");
+                    let res = Self::handle_error(res, "safecoin-broadcaster-record");
                     if let Some(res) = res {
                         return res;
                     }
@@ -272,7 +272,7 @@ impl BroadcastStage {
 
         let blockstore = blockstore.clone();
         let retransmit_thread = Builder::new()
-            .name("solana-broadcaster-retransmit".to_string())
+            .name("safecoin-broadcaster-retransmit".to_string())
             .spawn(move || loop {
                 if let Some(res) = Self::handle_error(
                     Self::check_retransmit_signals(
@@ -280,7 +280,7 @@ impl BroadcastStage {
                         &retransmit_slots_receiver,
                         &socket_sender,
                     ),
-                    "solana-broadcaster-retransmit-check_retransmit_signals",
+                    "safecoin-broadcaster-retransmit-check_retransmit_signals",
                 ) {
                     return res;
                 }
@@ -442,15 +442,15 @@ pub mod test {
     use super::*;
     use crate::cluster_info::{ClusterInfo, Node};
     use crossbeam_channel::unbounded;
-    use solana_ledger::{
+    use safecoin_ledger::{
         blockstore::{make_slot_entries, Blockstore},
         entry::create_ticks,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         get_tmp_ledger_path,
         shred::{max_ticks_per_n_shreds, ProcessShredsStats, Shredder, RECOMMENDED_FEC_RATE},
     };
-    use solana_runtime::bank::Bank;
-    use solana_sdk::{
+    use safecoin_runtime::bank::Bank;
+    use safecoin_sdk::{
         hash::Hash,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
@@ -634,7 +634,7 @@ pub mod test {
 
     #[test]
     fn test_broadcast_ledger() {
-        solana_logger::setup();
+        safecoin_logger::setup();
         let ledger_path = get_tmp_ledger_path!();
 
         {

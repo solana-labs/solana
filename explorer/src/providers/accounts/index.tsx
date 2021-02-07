@@ -1,5 +1,5 @@
 import React from "react";
-import { PublicKey, Connection, StakeActivationData } from "@solana/web3.js";
+import { PublicKey, Connection, StakeActivationData } from "@safecoin/web3.js";
 import { useCluster, Cluster } from "../cluster";
 import { HistoryProvider } from "./history";
 import { TokensProvider } from "./tokens";

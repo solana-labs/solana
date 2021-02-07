@@ -3,7 +3,7 @@ import {
   TransactionSignature,
   Connection,
   SignatureResult,
-} from "@solana/web3.js";
+} from "@safecoin/web3.js";
 import { useCluster, Cluster } from "../cluster";
 import { DetailsProvider } from "./details";
 import * as Cache from "providers/cache";

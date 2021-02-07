@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Builds known downstream projects against local solana source
+# Builds known downstream projects against local safecoin source
 #
 
 set -e
@@ -8,32 +8,32 @@ cd "$(dirname "$0")"/..
 source ci/_
 source scripts/read-cargo-variable.sh
 
-solana_ver=$(readCargoVariable version sdk/Cargo.toml)
-solana_dir=$PWD
-cargo="$solana_dir"/cargo
-cargo_build_bpf="$solana_dir"/cargo-build-bpf
-cargo_test_bpf="$solana_dir"/cargo-test-bpf
+safecoin_ver=$(readCargoVariable version sdk/Cargo.toml)
+safecoin_dir=$PWD
+cargo="$safecoin_dir"/cargo
+cargo_build_bpf="$safecoin_dir"/cargo-build-bpf
+cargo_test_bpf="$safecoin_dir"/cargo-test-bpf
 
 mkdir -p target/downstream-projects
 cd target/downstream-projects
 
-update_solana_dependencies() {
+update_safecoin_dependencies() {
   declare tomls=()
   while IFS='' read -r line; do tomls+=("$line"); done < <(find "$1" -name Cargo.toml)
 
-  sed -i -e "s#\(solana-program = \"\)[^\"]*\(\"\)#\1$solana_ver\2#g" "${tomls[@]}" || return $?
-  sed -i -e "s#\(solana-sdk = \"\).*\(\"\)#\1$solana_ver\2#g" "${tomls[@]}" || return $?
-  sed -i -e "s#\(solana-sdk = { version = \"\)[^\"]*\(\"\)#\1$solana_ver\2#g" "${tomls[@]}" || return $?
-  sed -i -e "s#\(solana-client = \"\)[^\"]*\(\"\)#\1$solana_ver\2#g" "${tomls[@]}" || return $?
-  sed -i -e "s#\(solana-client = { version = \"\)[^\"]*\(\"\)#\1$solana_ver\2#g" "${tomls[@]}" || return $?
+  sed -i -e "s#\(solana-program = \"\)[^\"]*\(\"\)#\1$safecoin_ver\2#g" "${tomls[@]}" || return $?
+  sed -i -e "s#\(safecoin-sdk = \"\).*\(\"\)#\1$safecoin_ver\2#g" "${tomls[@]}" || return $?
+  sed -i -e "s#\(safecoin-sdk = { version = \"\)[^\"]*\(\"\)#\1$safecoin_ver\2#g" "${tomls[@]}" || return $?
+  sed -i -e "s#\(safecoin-client = \"\)[^\"]*\(\"\)#\1$safecoin_ver\2#g" "${tomls[@]}" || return $?
+  sed -i -e "s#\(safecoin-client = { version = \"\)[^\"]*\(\"\)#\1$safecoin_ver\2#g" "${tomls[@]}" || return $?
 }
 
 patch_crates_io() {
   cat >> "$1" <<EOF
 [patch.crates-io]
-solana-client = { path = "$solana_dir/client" }
-solana-program = { path = "$solana_dir/sdk/program" }
-solana-sdk = { path = "$solana_dir/sdk" }
+safecoin-client = { path = "$safecoin_dir/client" }
+solana-program = { path = "$safecoin_dir/sdk/program" }
+safecoin-sdk = { path = "$safecoin_dir/sdk" }
 EOF
 }
 
@@ -44,7 +44,7 @@ example_helloworld() {
     git clone https://github.com/solana-labs/example-helloworld.git
     cd example-helloworld
 
-    update_solana_dependencies src/program-rust
+    update_safecoin_dependencies src/program-rust
     patch_crates_io src/program-rust/Cargo.toml
     echo "[workspace]" >> src/program-rust/Cargo.toml
 
@@ -62,11 +62,11 @@ spl() {
     git clone https://github.com/solana-labs/solana-program-library.git spl
     cd spl
 
-    ./patch.crates-io.sh "$solana_dir"
+    ./patch.crates-io.sh "$safecoin_dir"
 
     $cargo build
 
-    # Generic `cargo test`/`cargo test-bpf` disabled due to BPF VM interface changes between Solana 1.4
+    # Generic `cargo test`/`cargo test-bpf` disabled due to BPF VM interface changes between Safecoin 1.4
     # and 1.5...
     #$cargo test
     #$cargo_test_bpf
@@ -84,7 +84,7 @@ serum_dex() {
     git clone https://github.com/project-serum/serum-dex.git
     cd serum-dex
 
-    update_solana_dependencies .
+    update_safecoin_dependencies .
     patch_crates_io Cargo.toml
     patch_crates_io dex/Cargo.toml
     cat >> dex/Cargo.toml <<EOF

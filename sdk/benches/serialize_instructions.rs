@@ -2,10 +2,10 @@
 
 extern crate test;
 use bincode::{deserialize, serialize};
-use solana_sdk::instruction::{AccountMeta, Instruction};
-use solana_sdk::message::Message;
-use solana_sdk::pubkey;
-use solana_sdk::sysvar::instructions;
+use safecoin_sdk::instruction::{AccountMeta, Instruction};
+use safecoin_sdk::message::Message;
+use safecoin_sdk::pubkey;
+use safecoin_sdk::sysvar::instructions;
 use test::Bencher;
 
 fn make_instructions() -> Vec<Instruction> {

@@ -1,7 +1,7 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
 use crate::{
-    rpc_pubsub::{RpcSolPubSub, RpcSolPubSubImpl},
+    rpc_pubsub::{RpcSafePubSub, RpcSafePubSubImpl},
     rpc_subscriptions::RpcSubscriptions,
 };
 use jsonrpc_pubsub::{PubSubHandler, Session};
@@ -53,7 +53,7 @@ impl PubSubService {
         exit: &Arc<AtomicBool>,
     ) -> Self {
         info!("rpc_pubsub bound to {:?}", pubsub_addr);
-        let rpc = RpcSolPubSubImpl::new(subscriptions.clone());
+        let rpc = RpcSafePubSubImpl::new(subscriptions.clone());
         let exit_ = exit.clone();
 
         // TODO: Once https://github.com/paritytech/jsonrpc/pull/594 lands, use
@@ -70,7 +70,7 @@ impl PubSubService {
         info!("rpc_pubsub max_payload: {}", max_payload);
 
         let thread_hdl = Builder::new()
-            .name("solana-pubsub".to_string())
+            .name("safecoin-pubsub".to_string())
             .spawn(move || {
                 let mut io = PubSubHandler::default();
                 io.extend_with(rpc.to_delegate());
@@ -118,7 +118,7 @@ impl PubSubService {
 mod tests {
     use super::*;
     use crate::optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank;
-    use solana_runtime::{
+    use safecoin_runtime::{
         bank::Bank,
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
@@ -147,6 +147,6 @@ mod tests {
         let pubsub_service =
             PubSubService::new(PubSubConfig::default(), &subscriptions, pubsub_addr, &exit);
         let thread = pubsub_service.thread_hdl.thread();
-        assert_eq!(thread.name().unwrap(), "solana-pubsub");
+        assert_eq!(thread.name().unwrap(), "safecoin-pubsub");
     }
 }

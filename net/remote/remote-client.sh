@@ -43,11 +43,11 @@ skip)
 esac
 
 case $clientToRun in
-solana-bench-tps)
+safecoin-bench-tps)
   net/scripts/rsync-retry.sh -vPrc \
-    "$entrypointIp":~/solana/config/bench-tps"$clientIndex".yml ./client-accounts.yml
+    "$entrypointIp":~/safecoin/config/bench-tps"$clientIndex".yml ./client-accounts.yml
   clientCommand="\
-    solana-bench-tps \
+    safecoin-bench-tps \
       --entrypoint $entrypointIp:8001 \
       --faucet $entrypointIp:9900 \
       --duration 7500 \
@@ -57,12 +57,12 @@ solana-bench-tps)
       --read-client-keys ./client-accounts.yml \
   "
   ;;
-solana-bench-exchange)
-  solana-keygen new --no-passphrase -fso bench.keypair
+safecoin-bench-exchange)
+  safecoin-keygen new --no-passphrase -fso bench.keypair
   net/scripts/rsync-retry.sh -vPrc \
-    "$entrypointIp":~/solana/config/bench-exchange"$clientIndex".yml ./client-accounts.yml
+    "$entrypointIp":~/safecoin/config/bench-exchange"$clientIndex".yml ./client-accounts.yml
   clientCommand="\
-    solana-bench-exchange \
+    safecoin-bench-exchange \
       --entrypoint $entrypointIp:8001 \
       --faucet $entrypointIp:9900 \
       --threads $threadCount \
@@ -77,7 +77,7 @@ solana-bench-exchange)
 idle)
   # Add the faucet keypair to idle clients for convenience
   net/scripts/rsync-retry.sh -vPrc \
-    "$entrypointIp":~/solana/config/faucet.json ~/solana/
+    "$entrypointIp":~/safecoin/config/faucet.json ~/safecoin/
   exit 0
   ;;
 *)
@@ -86,9 +86,9 @@ idle)
 esac
 
 
-cat > ~/solana/on-reboot <<EOF
+cat > ~/safecoin/on-reboot <<EOF
 #!/usr/bin/env bash
-cd ~/solana
+cd ~/safecoin
 
 PATH="$HOME"/.cargo/bin:"$PATH"
 export USE_INSTALL=1
@@ -96,7 +96,7 @@ export USE_INSTALL=1
 echo "$(date) | $0 $*" >> client.log
 
 (
-  sudo SOLANA_METRICS_CONFIG="$SOLANA_METRICS_CONFIG" scripts/oom-monitor.sh
+  sudo SAFECOIN_METRICS_CONFIG="$SAFECOIN_METRICS_CONFIG" scripts/oom-monitor.sh
 ) > oom-monitor.log 2>&1 &
 echo \$! > oom-monitor.pid
 scripts/fd-monitor.sh > fd-monitor.log 2>&1 &
@@ -115,10 +115,10 @@ tmux new -s "$clientToRun" -d "
   done
 "
 EOF
-chmod +x ~/solana/on-reboot
-echo "@reboot ~/solana/on-reboot" | crontab -
+chmod +x ~/safecoin/on-reboot
+echo "@reboot ~/safecoin/on-reboot" | crontab -
 
-~/solana/on-reboot
+~/safecoin/on-reboot
 
 sleep 1
 tmux capture-pane -t "$clientToRun" -p -S -100

@@ -26,7 +26,7 @@ if [[ -n $CI ]]; then
     export CI_COMMIT=$BUILDKITE_COMMIT
     export CI_JOB_ID=$BUILDKITE_JOB_ID
     # The standard BUILDKITE_PULL_REQUEST environment variable is always "false" due
-    # to how solana-ci-gate is used to trigger PR builds rather than using the
+    # to how safecoin-ci-gate is used to trigger PR builds rather than using the
     # standard Buildkite PR trigger.
     if [[ $CI_BRANCH =~ pull/* ]]; then
       export CI_BASE_BRANCH=$BUILDKITE_PULL_REQUEST_BASE_BRANCH
@@ -37,14 +37,14 @@ if [[ -n $CI ]]; then
     fi
     export CI_OS_NAME=linux
     if [[ -n $BUILDKITE_TRIGGERED_FROM_BUILD_PIPELINE_SLUG ]]; then
-      # The solana-secondary pipeline should use the slug of the pipeline that
+      # The safecoin-secondary pipeline should use the slug of the pipeline that
       # triggered it
       export CI_REPO_SLUG=$BUILDKITE_ORGANIZATION_SLUG/$BUILDKITE_TRIGGERED_FROM_BUILD_PIPELINE_SLUG
     else
       export CI_REPO_SLUG=$BUILDKITE_ORGANIZATION_SLUG/$BUILDKITE_PIPELINE_SLUG
     fi
     # TRIGGERED_BUILDKITE_TAG is a workaround to propagate BUILDKITE_TAG into
-    # the solana-secondary pipeline
+    # the safecoin-secondary pipeline
     if [[ -n $TRIGGERED_BUILDKITE_TAG ]]; then
       export CI_TAG=$TRIGGERED_BUILDKITE_TAG
     else

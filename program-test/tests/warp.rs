@@ -11,15 +11,15 @@ use {
         sysvar::{clock, Sysvar},
     },
     solana_program_test::{processor, ProgramTest, ProgramTestError},
-    solana_sdk::{
+    safecoin_sdk::{
         signature::{Keypair, Signer},
         transaction::{Transaction, TransactionError},
     },
-    solana_stake_program::{
+    safecoin_stake_program::{
         stake_instruction,
         stake_state::{Authorized, Lockup},
     },
-    solana_vote_program::{
+    safecoin_vote_program::{
         vote_instruction,
         vote_state::{VoteInit, VoteState},
     },

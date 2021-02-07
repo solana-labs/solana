@@ -22,7 +22,7 @@ jobs:
       git:
         depth: false
       script:
-        - .travis/export-github-repo.sh web3.js/ solana-web3.js
+        - .travis/export-github-repo.sh web3.js/ safecoin-web3.js
         - .travis/export-github-repo.sh explorer/ explorer
 
     - &release-artifacts
@@ -43,7 +43,7 @@ jobs:
         - provider: s3
           access_key_id: $AWS_ACCESS_KEY_ID
           secret_access_key: $AWS_SECRET_ACCESS_KEY
-          bucket: release.solana.com
+          bucket: release.safecoin.org
           region: us-west-1
           skip_cleanup: true
           acl: public_read

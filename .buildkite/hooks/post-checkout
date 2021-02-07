@@ -9,7 +9,7 @@ source ci/env.sh
 #
 (
   containers=$(docker ps -q)
-  if [[ $(hostname) != metrics-solana-com && -n $containers ]]; then
+  if [[ $(hostname) != metrics-safecoin.org && -n $containers ]]; then
     echo "+++ Killing stale docker containers"
     docker ps
 
@@ -25,7 +25,7 @@ source ci/env.sh
 # processes will all have the `init` process as their PPID:
 (
   victims=
-  for name in bash cargo docker solana; do
+  for name in bash cargo docker safecoin; do
     victims="$victims $(pgrep -u "$(id -u)" -P 1 -d \  $name)"
   done
   for victim in $victims; do

@@ -10,8 +10,8 @@ use jsonrpc_pubsub::{
     SubscriptionId,
 };
 use serde::Serialize;
-use solana_account_decoder::{parse_token::spl_token_id_v2_0, UiAccount, UiAccountEncoding};
-use solana_client::{
+use safecoin_account_decoder::{parse_token::spl_token_id_v2_0, UiAccount, UiAccountEncoding};
+use safecoin_client::{
     rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcSignatureSubscribeConfig},
     rpc_filter::RpcFilterType,
     rpc_response::{
@@ -19,15 +19,15 @@ use solana_client::{
         RpcLogsResponse, RpcResponseContext, RpcSignatureResult, SlotInfo,
     },
 };
-use solana_measure::measure::Measure;
-use solana_runtime::{
+use safecoin_measure::measure::Measure;
+use safecoin_runtime::{
     bank::{
         Bank, TransactionLogCollectorConfig, TransactionLogCollectorFilter, TransactionLogInfo,
     },
     bank_forks::BankForks,
     commitment::{BlockCommitmentCache, CommitmentSlots},
 };
-use solana_sdk::{
+use safecoin_sdk::{
     account::Account,
     clock::{Slot, UnixTimestamp},
     commitment_config::CommitmentConfig,
@@ -35,7 +35,7 @@ use solana_sdk::{
     signature::Signature,
     transaction,
 };
-use solana_vote_program::vote_state::Vote;
+use safecoin_vote_program::vote_state::Vote;
 use std::{
     collections::{HashMap, HashSet},
     iter,
@@ -489,7 +489,7 @@ impl RpcSubscriptions {
 
         let notifier = RpcNotifier {};
         let t_cleanup = Builder::new()
-            .name("solana-rpc-notifications".to_string())
+            .name("safecoin-rpc-notifications".to_string())
             .spawn(move || {
                 Self::process_notifications(
                     exit_clone,
@@ -1278,11 +1278,11 @@ pub(crate) mod tests {
     use jsonrpc_core::futures::StreamExt;
     use jsonrpc_pubsub::typed::Subscriber;
     use serial_test::serial;
-    use solana_runtime::{
+    use safecoin_runtime::{
         commitment::BlockCommitment,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
     };
-    use solana_sdk::{
+    use safecoin_sdk::{
         message::Message,
         signature::{Keypair, Signer},
         system_instruction, system_program, system_transaction,
@@ -1485,7 +1485,7 @@ pub(crate) mod tests {
             blockhash,
             1,
             16,
-            &solana_stake_program::id(),
+            &safecoin_stake_program::id(),
         );
         bank_forks
             .write()
@@ -1508,7 +1508,7 @@ pub(crate) mod tests {
             optimistically_confirmed_bank,
         );
         subscriptions.add_program_subscription(
-            solana_stake_program::id(),
+            safecoin_stake_program::id(),
             Some(RpcProgramAccountsConfig {
                 account_config: RpcAccountInfoConfig {
                     commitment: Some(CommitmentConfig::processed()),
@@ -1525,7 +1525,7 @@ pub(crate) mod tests {
             .program_subscriptions
             .read()
             .unwrap()
-            .contains_key(&solana_stake_program::id()));
+            .contains_key(&safecoin_stake_program::id()));
 
         subscriptions.notify_subscribers(CommitmentSlots::default());
         let (response, _) = robust_poll_or_panic(transport_receiver);
@@ -1557,7 +1557,7 @@ pub(crate) mod tests {
             .program_subscriptions
             .read()
             .unwrap()
-            .contains_key(&solana_stake_program::id()));
+            .contains_key(&safecoin_stake_program::id()));
     }
 
     #[test]
@@ -1588,7 +1588,7 @@ pub(crate) mod tests {
 
         let next_bank = Bank::new_from_parent(
             &bank_forks.get(0).unwrap().clone(),
-            &solana_sdk::pubkey::new_rand(),
+            &safecoin_sdk::pubkey::new_rand(),
             1,
         );
         bank_forks.insert(next_bank);
@@ -1985,7 +1985,7 @@ pub(crate) mod tests {
             blockhash,
             1,
             16,
-            &solana_stake_program::id(),
+            &safecoin_stake_program::id(),
         );
 
         // Add the transaction to the 1st bank and then freeze the bank

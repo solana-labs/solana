@@ -1,11 +1,11 @@
 [package]
-name = "solana-bpf-rust-dep-crate"
+name = "safecoin-bpf-rust-dep-crate"
 version = "1.6.0"
-description = "Solana BPF test program written in Rust"
-authors = ["Solana Maintainers <maintainers@solana.foundation>"]
-repository = "https://github.com/solana-labs/solana"
+description = "Safecoin BPF test program written in Rust"
+authors = ["Safecoin Maintainers <maintainers@solana.foundation>"]
+repository = "https://github.com/solana-labs/safecoin"
 license = "Apache-2.0"
-homepage = "https://solana.com/"
+homepage = "https://safecoin.org/"
 edition = "2018"
 
 [dependencies]

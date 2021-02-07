@@ -1,6 +1,6 @@
 // @flow
 import bs58 from 'bs58';
-import {Token, u64} from '@solana/spl-token';
+import {Token, u64} from '@safecoin/spl-token';
 
 import {
   Account,
@@ -9,7 +9,7 @@ import {
   SystemProgram,
   Transaction,
   sendAndConfirmTransaction,
-  LAMPORTS_PER_SOL,
+  LAMPORTS_PER_SAFE,
   Lockup,
   PublicKey,
   StakeProgram,
@@ -99,7 +99,7 @@ test('get program accounts', async () => {
     url,
     {
       method: 'requestAirdrop',
-      params: [account0.publicKey.toBase58(), LAMPORTS_PER_SOL],
+      params: [account0.publicKey.toBase58(), LAMPORTS_PER_SAFE],
     },
     {
       error: null,
@@ -112,7 +112,7 @@ test('get program accounts', async () => {
   );
   let signature = await connection.requestAirdrop(
     account0.publicKey,
-    LAMPORTS_PER_SOL,
+    LAMPORTS_PER_SAFE,
   );
   await connection.confirmTransaction(signature);
 
@@ -120,7 +120,7 @@ test('get program accounts', async () => {
     url,
     {
       method: 'requestAirdrop',
-      params: [account1.publicKey.toBase58(), 0.5 * LAMPORTS_PER_SOL],
+      params: [account1.publicKey.toBase58(), 0.5 * LAMPORTS_PER_SAFE],
     },
     {
       error: null,
@@ -133,7 +133,7 @@ test('get program accounts', async () => {
   );
   signature = await connection.requestAirdrop(
     account1.publicKey,
-    0.5 * LAMPORTS_PER_SOL,
+    0.5 * LAMPORTS_PER_SAFE,
   );
   await connection.confirmTransaction(signature);
 
@@ -241,7 +241,7 @@ test('get program accounts', async () => {
           account: {
             data: ['', 'base64'],
             executable: false,
-            lamports: LAMPORTS_PER_SOL - feeCalculator.lamportsPerSignature,
+            lamports: LAMPORTS_PER_SAFE - feeCalculator.lamportsPerSignature,
             owner: programId.publicKey.toBase58(),
             rentEpoch: 20,
           },
@@ -252,7 +252,7 @@ test('get program accounts', async () => {
             data: ['', 'base64'],
             executable: false,
             lamports:
-              0.5 * LAMPORTS_PER_SOL - feeCalculator.lamportsPerSignature,
+              0.5 * LAMPORTS_PER_SAFE - feeCalculator.lamportsPerSignature,
             owner: programId.publicKey.toBase58(),
             rentEpoch: 20,
           },
@@ -269,11 +269,11 @@ test('get program accounts', async () => {
   programAccounts.forEach(function (element) {
     if (element.pubkey.equals(account0.publicKey)) {
       expect(element.account.lamports).toBe(
-        LAMPORTS_PER_SOL - feeCalculator.lamportsPerSignature,
+        LAMPORTS_PER_SAFE - feeCalculator.lamportsPerSignature,
       );
     } else if (element.pubkey.equals(account1.publicKey)) {
       expect(element.account.lamports).toBe(
-        0.5 * LAMPORTS_PER_SOL - feeCalculator.lamportsPerSignature,
+        0.5 * LAMPORTS_PER_SAFE - feeCalculator.lamportsPerSignature,
       );
     } else {
       expect(element.pubkey.equals(account1.publicKey)).toBe(true);
@@ -289,11 +289,11 @@ test('get program accounts', async () => {
     programAccounts.forEach(function (element) {
       if (element.pubkey.equals(account0.publicKey)) {
         expect(element.account.lamports).toBe(
-          LAMPORTS_PER_SOL - feeCalculator.lamportsPerSignature,
+          LAMPORTS_PER_SAFE - feeCalculator.lamportsPerSignature,
         );
       } else if (element.pubkey.equals(account1.publicKey)) {
         expect(element.account.lamports).toBe(
-          0.5 * LAMPORTS_PER_SOL - feeCalculator.lamportsPerSignature,
+          0.5 * LAMPORTS_PER_SAFE - feeCalculator.lamportsPerSignature,
         );
       } else {
         expect(element.pubkey.equals(account1.publicKey)).toBe(true);
@@ -1329,7 +1329,7 @@ test('get block time', async () => {
 
   const blockTime = await connection.getBlockTime(1);
   if (blockTime === null) {
-    // TODO: enable after https://github.com/solana-labs/solana/issues/11849 fixed
+    // TODO: enable after https://github.com/solana-labs/safecoin/issues/11849 fixed
     // expect(blockTime).not.toBeNull();
   } else {
     expect(blockTime).toBeGreaterThan(0);
@@ -1743,7 +1743,7 @@ test('stake activation should return activating for new accounts', async () => {
   const authorized = new Account();
   let signature = await connection.requestAirdrop(
     authorized.publicKey,
-    2 * LAMPORTS_PER_SOL,
+    2 * LAMPORTS_PER_SAFE,
   );
   await connection.confirmTransaction(signature);
 
@@ -1844,12 +1844,12 @@ test('getVersion', async () => {
     },
     {
       error: null,
-      result: {'solana-core': '0.20.4'},
+      result: {'safecoin-core': '0.20.4'},
     },
   ]);
 
   const version = await connection.getVersion();
-  expect(version['solana-core']).toBeTruthy();
+  expect(version['safecoin-core']).toBeTruthy();
 });
 
 test('request airdrop', async () => {
@@ -2457,11 +2457,11 @@ test('multi-instruction transaction', async () => {
 
   let signature = await connection.requestAirdrop(
     accountFrom.publicKey,
-    LAMPORTS_PER_SOL,
+    LAMPORTS_PER_SAFE,
   );
   await connection.confirmTransaction(signature, 'singleGossip');
   expect(await connection.getBalance(accountFrom.publicKey)).toBe(
-    LAMPORTS_PER_SOL,
+    LAMPORTS_PER_SAFE,
   );
 
   const minimumAmount = await connection.getMinimumBalanceForRentExemption(
@@ -2511,11 +2511,11 @@ test('multi-instruction transaction', async () => {
     expect(response).not.toBeNull();
   }
 
-  // accountFrom may have less than LAMPORTS_PER_SOL due to transaction fees
+  // accountFrom may have less than LAMPORTS_PER_SAFE due to transaction fees
   expect(await connection.getBalance(accountFrom.publicKey)).toBeGreaterThan(0);
   expect(
     await connection.getBalance(accountFrom.publicKey),
-  ).toBeLessThanOrEqual(LAMPORTS_PER_SOL);
+  ).toBeLessThanOrEqual(LAMPORTS_PER_SAFE);
 
   expect(await connection.getBalance(accountTo.publicKey)).toBe(
     minimumAmount + 21,
@@ -2547,7 +2547,7 @@ test('account change notification', async () => {
 
   let signature = await connection.requestAirdrop(
     owner.publicKey,
-    LAMPORTS_PER_SOL,
+    LAMPORTS_PER_SAFE,
   );
   await connection.confirmTransaction(signature);
   try {
@@ -2619,7 +2619,7 @@ test('program account change notification', async () => {
 
   let signature = await connection.requestAirdrop(
     owner.publicKey,
-    LAMPORTS_PER_SOL,
+    LAMPORTS_PER_SAFE,
   );
   await connection.confirmTransaction(signature);
   try {
@@ -2719,7 +2719,7 @@ test('https request', async () => {
     return;
   }
 
-  const connection = new Connection('https://devnet.solana.com');
+  const connection = new Connection('https://devnet.safecoin.org');
   const version = await connection.getVersion();
-  expect(version['solana-core']).toBeTruthy();
+  expect(version['safecoin-core']).toBeTruthy();
 });

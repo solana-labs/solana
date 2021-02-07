@@ -1,9 +1,9 @@
-use solana_ledger::entry::Entry;
-use solana_ledger::shred::{
+use safecoin_ledger::entry::Entry;
+use safecoin_ledger::shred::{
     max_entries_per_n_shred, verify_test_data_shred, Shred, Shredder,
     MAX_DATA_SHREDS_PER_FEC_BLOCK, SIZE_OF_DATA_SHRED_PAYLOAD,
 };
-use solana_sdk::{
+use safecoin_sdk::{
     clock::Slot,
     hash::Hash,
     signature::{Keypair, Signer},

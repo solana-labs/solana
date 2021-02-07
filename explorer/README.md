@@ -1,8 +1,8 @@
 <p align="center">
-    <img alt="Solana" src="https://i.imgur.com/OMnvVEz.png" width="250" />
+    <img alt="Safecoin" src="https://i.imgur.com/OMnvVEz.png" width="250" />
 </p>
 
-# Solana Explorer
+# Safecoin Explorer
 
 ## Development
 

@@ -6,8 +6,8 @@ use crate::faucet;
 use log::*;
 use num_derive::{FromPrimitive, ToPrimitive};
 use serde_derive::Serialize;
-use solana_metrics::inc_new_counter_info;
-use solana_sdk::{
+use safecoin_metrics::inc_new_counter_info;
+use safecoin_sdk::{
     decode_error::DecodeError, instruction::InstructionError, keyed_account::KeyedAccount,
     process_instruction::InvokeContext, program_utils::limited_deserialize, pubkey::Pubkey,
 };
@@ -466,7 +466,7 @@ pub fn process_instruction(
     data: &[u8],
     _invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
-    solana_logger::setup();
+    safecoin_logger::setup();
 
     match limited_deserialize::<ExchangeInstruction>(data)? {
         ExchangeInstruction::AccountRequest => {
@@ -489,13 +489,13 @@ pub fn process_instruction(
 mod test {
     use super::*;
     use crate::{exchange_instruction, id};
-    use solana_runtime::bank::Bank;
-    use solana_runtime::bank_client::BankClient;
-    use solana_sdk::client::SyncClient;
-    use solana_sdk::genesis_config::create_genesis_config;
-    use solana_sdk::message::Message;
-    use solana_sdk::signature::{Keypair, Signer};
-    use solana_sdk::system_instruction;
+    use safecoin_runtime::bank::Bank;
+    use safecoin_runtime::bank_client::BankClient;
+    use safecoin_sdk::client::SyncClient;
+    use safecoin_sdk::genesis_config::create_genesis_config;
+    use safecoin_sdk::message::Message;
+    use safecoin_sdk::signature::{Keypair, Signer};
+    use safecoin_sdk::system_instruction;
     use std::mem;
 
     #[allow(clippy::too_many_arguments)]
@@ -556,7 +556,7 @@ mod test {
     #[test]
     #[rustfmt::skip]
     fn test_calculate_swap() {
-        solana_logger::setup();
+        safecoin_logger::setup();
 
         try_calc(1,     50,     2,   50,    1,  0, 0, 50,   50, Tokens::new(   0, 0, 0, 0)).unwrap_err();
         try_calc(1,     50,     1,    0,    1,  0, 0, 50,   50, Tokens::new(   0, 0, 0, 0)).unwrap_err();
@@ -666,7 +666,7 @@ mod test {
 
     #[test]
     fn test_exchange_new_account() {
-        solana_logger::setup();
+        safecoin_logger::setup();
         let (bank, mint_keypair) = create_bank(10_000);
         let (client, owner) = create_client(bank, mint_keypair);
 
@@ -685,7 +685,7 @@ mod test {
 
     #[test]
     fn test_exchange_new_account_not_unallocated() {
-        solana_logger::setup();
+        safecoin_logger::setup();
         let (bank, mint_keypair) = create_bank(10_000);
         let (client, owner) = create_client(bank, mint_keypair);
 
@@ -698,7 +698,7 @@ mod test {
 
     #[test]
     fn test_exchange_new_transfer_request() {
-        solana_logger::setup();
+        safecoin_logger::setup();
         let (bank, mint_keypair) = create_bank(10_000);
         let (client, owner) = create_client(bank, mint_keypair);
 
@@ -729,7 +729,7 @@ mod test {
 
     #[test]
     fn test_exchange_new_trade_request() {
-        solana_logger::setup();
+        safecoin_logger::setup();
         let (bank, mint_keypair) = create_bank(10_000);
         let (client, owner) = create_client(bank, mint_keypair);
 
@@ -770,7 +770,7 @@ mod test {
 
     #[test]
     fn test_exchange_new_swap_request() {
-        solana_logger::setup();
+        safecoin_logger::setup();
         let (bank, mint_keypair) = create_bank(10_000);
         let (client, owner) = create_client(bank, mint_keypair);
 
@@ -837,7 +837,7 @@ mod test {
 
     #[test]
     fn test_exchange_trade_to_token_account() {
-        solana_logger::setup();
+        safecoin_logger::setup();
         let (bank, mint_keypair) = create_bank(10_000);
         let (client, owner) = create_client(bank, mint_keypair);
 

@@ -60,12 +60,12 @@ if [[ $CI_OS_NAME = windows ]]; then
   # Limit windows to end-user command-line tools.  Full validator support is not
   # yet available on windows
   BINS=(
-    solana
-    solana-install
-    solana-install-init
-    solana-keygen
-    solana-stake-accounts
-    solana-tokens
+    safecoin
+    safecoin-install
+    safecoin-install-init
+    safecoin-keygen
+    safecoin-stake-accounts
+    safecoin-tokens
   )
 else
   ./fetch-perf-libs.sh
@@ -79,31 +79,31 @@ else
   BINS=(
     cargo-build-bpf
     cargo-test-bpf
-    solana
-    solana-bench-exchange
-    solana-bench-tps
-    solana-dos
-    solana-faucet
-    solana-gossip
-    solana-install
-    solana-install-init
-    solana-keygen
-    solana-ledger-tool
-    solana-log-analyzer
-    solana-net-shaper
-    solana-stake-accounts
-    solana-stake-monitor
-    solana-stake-o-matic
-    solana-sys-tuner
-    solana-test-validator
-    solana-tokens
-    solana-validator
-    solana-watchtower
+    safecoin
+    safecoin-bench-exchange
+    safecoin-bench-tps
+    safecoin-dos
+    safecoin-faucet
+    safecoin-gossip
+    safecoin-install
+    safecoin-install-init
+    safecoin-keygen
+    safecoin-ledger-tool
+    safecoin-log-analyzer
+    safecoin-net-shaper
+    safecoin-stake-accounts
+    safecoin-stake-monitor
+    safecoin-stake-o-matic
+    safecoin-sys-tuner
+    safecoin-test-validator
+    safecoin-tokens
+    safecoin-validator
+    safecoin-watchtower
   )
 
-  #XXX: Ensure `solana-genesis` is built LAST!
-  # See https://github.com/solana-labs/solana/issues/5826
-  BINS+=(solana-genesis)
+  #XXX: Ensure `safecoin-genesis` is built LAST!
+  # See https://github.com/solana-labs/safecoin/issues/5826
+  BINS+=(safecoin-genesis)
 fi
 
 binArgs=()
@@ -136,7 +136,7 @@ cp -a sdk/bpf/* "$installDir"/bin/sdk/bpf
   set -x
   # deps dir can be empty
   shopt -s nullglob
-  for dep in target/"$buildVariant"/deps/libsolana*program.*; do
+  for dep in target/"$buildVariant"/deps/libsafecoin*program.*; do
     cp -fv "$dep" "$installDir/bin/deps"
   done
 )

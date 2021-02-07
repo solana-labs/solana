@@ -4,7 +4,7 @@ title: Calling Between Programs
 
 ## Cross-Program Invocations
 
-The Solana runtime allows programs to call each other via a mechanism called
+The Safecoin runtime allows programs to call each other via a mechanism called
 cross-program invocation.  Calling between programs is achieved by one program
 invoking an instruction of the other.  The invoking program is halted until the
 invoked program finishes processing the instruction.
@@ -52,7 +52,7 @@ mod acme {
     }
 ```
 
-`invoke()` is built into Solana's runtime and is responsible for routing the
+`invoke()` is built into Safecoin's runtime and is responsible for routing the
 given instruction to the `token` program via the instruction's `program_id`
 field.
 
@@ -132,9 +132,9 @@ account and later transfer that authority to another. This is possible because
 the program can act as the signer in the transaction that gives authority.
 
 For example, if two users want to make a wager on the outcome of a game in
-Solana, they must each transfer their wager's assets to some intermediary that
+Safecoin, they must each transfer their wager's assets to some intermediary that
 will honor their agreement. Currently, there is no way to implement this
-intermediary as a program in Solana because the intermediary program cannot
+intermediary as a program in Safecoin because the intermediary program cannot
 transfer the assets to the winner.
 
 This capability is necessary for many DeFi applications since they require

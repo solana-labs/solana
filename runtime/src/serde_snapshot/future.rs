@@ -1,7 +1,7 @@
 use super::common::UnusedAccounts;
 #[cfg(all(test, RUSTC_WITH_SPECIALIZATION))]
-use solana_frozen_abi::abi_example::IgnoreAsHelper;
-use {super::*, solana_measure::measure::Measure, std::cell::RefCell};
+use safecoin_frozen_abi::abi_example::IgnoreAsHelper;
+use {super::*, safecoin_measure::measure::Measure, std::cell::RefCell};
 
 type AccountsDbFields = super::AccountsDbFields<SerializableAccountStorageEntry>;
 
@@ -27,7 +27,7 @@ impl SerializableStorage for SerializableAccountStorageEntry {
 }
 
 #[cfg(all(test, RUSTC_WITH_SPECIALIZATION))]
-impl solana_frozen_abi::abi_example::IgnoreAsHelper for SerializableAccountStorageEntry {}
+impl safecoin_frozen_abi::abi_example::IgnoreAsHelper for SerializableAccountStorageEntry {}
 
 impl From<&AccountStorageEntry> for SerializableAccountStorageEntry {
     fn from(rhs: &AccountStorageEntry) -> Self {

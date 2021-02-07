@@ -488,7 +488,7 @@ fn configure(matches: &ArgMatches) {
 }
 
 fn main() {
-    solana_logger::setup();
+    safecoin_logger::setup();
 
     let matches = App::new(crate_name!())
         .about(crate_description!())

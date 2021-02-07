@@ -4,7 +4,7 @@ import {
   ConfirmedSignatureInfo,
   ParsedInstruction,
   PartiallyDecodedInstruction,
-} from "@solana/web3.js";
+} from "@safecoin/web3.js";
 import { CacheEntry, FetchStatus } from "providers/cache";
 import {
   useAccountHistories,

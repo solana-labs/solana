@@ -3,7 +3,7 @@ import {
   TransactionInstruction,
   SignatureResult,
   ParsedInstruction,
-} from "@solana/web3.js";
+} from "@safecoin/web3.js";
 import { RawDetails } from "./RawDetails";
 import { RawParsedDetails } from "./RawParsedDetails";
 import { SignatureContext } from "../../pages/TransactionDetailsPage";

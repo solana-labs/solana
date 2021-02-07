@@ -3,12 +3,12 @@
 extern crate test;
 
 use rand::{thread_rng, Rng};
-use solana_core::contact_info::ContactInfo;
-use solana_core::crds::VersionedCrdsValue;
-use solana_core::crds_shards::CrdsShards;
-use solana_core::crds_value::{CrdsData, CrdsValue};
-use solana_sdk::pubkey;
-use solana_sdk::timing::timestamp;
+use safecoin_core::contact_info::ContactInfo;
+use safecoin_core::crds::VersionedCrdsValue;
+use safecoin_core::crds_shards::CrdsShards;
+use safecoin_core::crds_value::{CrdsData, CrdsValue};
+use safecoin_sdk::pubkey;
+use safecoin_sdk::timing::timestamp;
 use test::Bencher;
 
 const CRDS_SHARDS_BITS: u32 = 8;

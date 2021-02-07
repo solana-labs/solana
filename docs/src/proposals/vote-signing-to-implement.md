@@ -6,7 +6,7 @@ title: Secure Vote Signing
 
 This design describes additional vote signing behavior that will make the process more secure.
 
-Currently, Solana implements a vote-signing service that evaluates each vote to ensure it does not violate a slashing condition. The service could potentially have different variations, depending on the hardware platform capabilities. In particular, it could be used in conjunction with a secure enclave \(such as SGX\). The enclave could generate an asymmetric key, exposing an API for user \(untrusted\) code to sign the vote transactions, while keeping the vote-signing private key in its protected memory.
+Currently, Safecoin implements a vote-signing service that evaluates each vote to ensure it does not violate a slashing condition. The service could potentially have different variations, depending on the hardware platform capabilities. In particular, it could be used in conjunction with a secure enclave \(such as SGX\). The enclave could generate an asymmetric key, exposing an API for user \(untrusted\) code to sign the vote transactions, while keeping the vote-signing private key in its protected memory.
 
 The following sections outline how this architecture would work:
 

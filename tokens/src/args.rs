@@ -1,4 +1,4 @@
-use solana_sdk::{pubkey::Pubkey, signature::Signer};
+use safecoin_sdk::{pubkey::Pubkey, signature::Signer};
 
 pub struct DistributeTokensArgs {
     pub input_csv: String,
@@ -13,7 +13,7 @@ pub struct DistributeTokensArgs {
 }
 
 pub struct StakeArgs {
-    pub unlocked_sol: u64,
+    pub unlocked_safe : u64,
     pub stake_account_address: Pubkey,
     pub stake_authority: Box<dyn Signer>,
     pub withdraw_authority: Box<dyn Signer>,

@@ -2,13 +2,13 @@
 
 use crate::packet_hasher::PacketHasher;
 use lru::LruCache;
-use solana_ledger::shred::{get_shred_slot_index_type, ShredFetchStats};
-use solana_perf::cuda_runtime::PinnedVec;
-use solana_perf::packet::{Packet, PacketsRecycler};
-use solana_perf::recycler::Recycler;
-use solana_runtime::bank_forks::BankForks;
-use solana_sdk::clock::{Slot, DEFAULT_MS_PER_SLOT};
-use solana_streamer::streamer::{self, PacketReceiver, PacketSender};
+use safecoin_ledger::shred::{get_shred_slot_index_type, ShredFetchStats};
+use safecoin_perf::cuda_runtime::PinnedVec;
+use safecoin_perf::packet::{Packet, PacketsRecycler};
+use safecoin_perf::recycler::Recycler;
+use safecoin_runtime::bank_forks::BankForks;
+use safecoin_sdk::clock::{Slot, DEFAULT_MS_PER_SLOT};
+use safecoin_streamer::streamer::{self, PacketReceiver, PacketSender};
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::channel;
@@ -154,7 +154,7 @@ impl ShredFetchStage {
             .collect();
 
         let modifier_hdl = Builder::new()
-            .name("solana-tvu-fetch-stage-packet-modifier".to_string())
+            .name("safecoin-tvu-fetch-stage-packet-modifier".to_string())
             .spawn(move || Self::modify_packets(packet_receiver, sender, bank_forks, name, modify))
             .unwrap();
         (streamers, modifier_hdl)
@@ -222,12 +222,12 @@ impl ShredFetchStage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_ledger::blockstore::MAX_DATA_SHREDS_PER_SLOT;
-    use solana_ledger::shred::Shred;
+    use safecoin_ledger::blockstore::MAX_DATA_SHREDS_PER_SLOT;
+    use safecoin_ledger::shred::Shred;
 
     #[test]
     fn test_data_code_same_index() {
-        solana_logger::setup();
+        safecoin_logger::setup();
         let mut shreds_received = LruCache::new(DEFAULT_LRU_SIZE);
         let mut packet = Packet::default();
         let mut stats = ShredFetchStats::default();
@@ -254,7 +254,7 @@ mod tests {
         assert!(!packet.meta.discard);
 
         let coding =
-            solana_ledger::shred::Shredder::generate_coding_shreds(slot, 1.0f32, &[shred], 10, 1);
+            safecoin_ledger::shred::Shredder::generate_coding_shreds(slot, 1.0f32, &[shred], 10, 1);
         coding[0].copy_to_packet(&mut packet);
         ShredFetchStage::process_packet(
             &mut packet,
@@ -271,7 +271,7 @@ mod tests {
 
     #[test]
     fn test_shred_filter() {
-        solana_logger::setup();
+        safecoin_logger::setup();
         let mut shreds_received = LruCache::new(DEFAULT_LRU_SIZE);
         let mut packet = Packet::default();
         let mut stats = ShredFetchStats::default();

@@ -1,6 +1,6 @@
 use crate::erasure::ErasureConfig;
 use serde::{Deserialize, Serialize};
-use solana_sdk::clock::Slot;
+use safecoin_sdk::clock::Slot;
 use std::{collections::BTreeSet, ops::RangeBounds};
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]

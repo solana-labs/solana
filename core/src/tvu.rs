@@ -23,12 +23,12 @@ use crate::{
     snapshot_packager_service::PendingSnapshotPackage,
 };
 use crossbeam_channel::unbounded;
-use solana_ledger::{
+use safecoin_ledger::{
     blockstore::{Blockstore, CompletedSlotsReceiver},
     blockstore_processor::TransactionStatusSender,
     leader_schedule_cache::LeaderScheduleCache,
 };
-use solana_runtime::{
+use safecoin_runtime::{
     accounts_background_service::{
         ABSRequestHandler, ABSRequestSender, AccountsBackgroundService, SendDroppedBankCallback,
         SnapshotRequestHandler,
@@ -37,7 +37,7 @@ use solana_runtime::{
     commitment::BlockCommitmentCache,
     vote_sender_types::ReplayVoteSender,
 };
-use solana_sdk::{
+use safecoin_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signer},
 };
@@ -312,19 +312,19 @@ pub mod tests {
         optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
     };
     use serial_test::serial;
-    use solana_ledger::{
+    use safecoin_ledger::{
         blockstore::BlockstoreSignals,
         create_new_tmp_ledger,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
     };
-    use solana_runtime::bank::Bank;
+    use safecoin_runtime::bank::Bank;
     use std::sync::atomic::Ordering;
 
     #[ignore]
     #[test]
     #[serial]
     fn test_tvu_exit() {
-        solana_logger::setup();
+        safecoin_logger::setup();
         let leader = Node::new_localhost();
         let target1_keypair = Keypair::new();
         let target1 = Node::new_localhost_with_pubkey(&target1_keypair.pubkey());

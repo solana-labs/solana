@@ -1,8 +1,8 @@
 #![cfg(target_os = "linux")]
 
-use solana_streamer::packet::Packet;
-use solana_streamer::packet::PACKET_DATA_SIZE;
-use solana_streamer::recvmmsg::*;
+use safecoin_streamer::packet::Packet;
+use safecoin_streamer::packet::PACKET_DATA_SIZE;
+use safecoin_streamer::recvmmsg::*;
 use std::net::UdpSocket;
 use std::time::Instant;
 

@@ -1,6 +1,6 @@
 use crate::update_manifest::UpdateManifest;
 use serde_derive::{Deserialize, Serialize};
-use solana_sdk::pubkey::Pubkey;
+use safecoin_sdk::pubkey::Pubkey;
 use std::fs::{create_dir_all, File};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};

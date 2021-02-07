@@ -5,11 +5,11 @@
 //!
 
 use crate::sigverify_stage::SigVerifier;
-use solana_perf::cuda_runtime::PinnedVec;
-use solana_perf::packet::Packets;
-use solana_perf::recycler::Recycler;
-use solana_perf::sigverify;
-pub use solana_perf::sigverify::{
+use safecoin_perf::cuda_runtime::PinnedVec;
+use safecoin_perf::packet::Packets;
+use safecoin_perf::recycler::Recycler;
+use safecoin_perf::sigverify;
+pub use safecoin_perf::sigverify::{
     batch_size, ed25519_verify_cpu, ed25519_verify_disabled, init, TxOffset,
 };
 
@@ -49,7 +49,7 @@ pub fn mark_disabled(batches: &mut Vec<Packets>, r: &[Vec<u8>]) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_perf::packet::Packet;
+    use safecoin_perf::packet::Packet;
 
     #[test]
     fn test_mark_disabled() {

@@ -16,7 +16,7 @@ The affected RPC endpoints are:
 * [getSignatureStatuses](developing/clients/jsonrpc-api.md#getsignaturestatuses)
 
 Note that [getBlockTime](developing/clients/jsonrpc-api.md#getblocktime)
-is not supported, as once https://github.com/solana-labs/solana/issues/10089 is
+is not supported, as once https://github.com/solana-labs/safecoin/issues/10089 is
 fixed then `getBlockTime` can be removed.
 
 Some system design constraints:
@@ -65,7 +65,7 @@ results of BigTable queries more complicated but is not a significant issue.
 
 ## Data Population
 The ongoing population of instance data will occur on an epoch cadence through the
-use of a new `solana-ledger-tool` command that will convert rocksdb data for a
+use of a new `safecoin-ledger-tool` command that will convert rocksdb data for a
 given slot range into the instance schema.
 
 The same process will be run once, manually, to backfill the existing ledger

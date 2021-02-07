@@ -5,20 +5,20 @@ use {
         rpc::JsonRpcConfig,
         validator::{Validator, ValidatorConfig},
     },
-    solana_client::rpc_client::RpcClient,
-    solana_ledger::{blockstore::create_new_ledger, create_new_tmp_ledger},
-    solana_runtime::{
+    safecoin_client::rpc_client::RpcClient,
+    safecoin_ledger::{blockstore::create_new_ledger, create_new_tmp_ledger},
+    safecoin_runtime::{
         bank_forks::{ArchiveFormat, SnapshotConfig, SnapshotVersion},
         genesis_utils::create_genesis_config_with_leader_ex,
         hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
     },
-    solana_sdk::{
+    safecoin_sdk::{
         account::Account,
         clock::{Slot, DEFAULT_MS_PER_SLOT},
         commitment_config::CommitmentConfig,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         hash::Hash,
-        native_token::sol_to_lamports,
+        native_token::safe_to_lamports,
         pubkey::Pubkey,
         rent::Rent,
         signature::{read_keypair_file, write_keypair_file, Keypair, Signer},
@@ -171,7 +171,7 @@ impl TestValidatorGenesis {
 
         self.programs.push(ProgramInfo {
             program_id,
-            loader: solana_sdk::bpf_loader::id(),
+            loader: safecoin_sdk::bpf_loader::id(),
             program_path,
         });
         self
@@ -265,9 +265,9 @@ impl TestValidator {
         let validator_identity = Keypair::new();
         let validator_vote_account = Keypair::new();
         let validator_stake_account = Keypair::new();
-        let validator_identity_lamports = sol_to_lamports(500.);
-        let validator_stake_lamports = sol_to_lamports(1_000_000.);
-        let mint_lamports = sol_to_lamports(500_000_000.);
+        let validator_identity_lamports = safe_to_lamports(500.);
+        let validator_stake_lamports = safe_to_lamports(1_000_000.);
+        let mint_lamports = safe_to_lamports(500_000_000.);
 
         let mut accounts = config.accounts.clone();
         for (address, account) in solana_program_test::programs::spl_programs(&config.rent) {
@@ -297,10 +297,10 @@ impl TestValidator {
             validator_identity_lamports,
             config.fee_rate_governor.clone(),
             config.rent,
-            solana_sdk::genesis_config::ClusterType::Development,
+            safecoin_sdk::genesis_config::ClusterType::Development,
             accounts.into_iter().collect(),
         );
-        genesis_config.epoch_schedule = solana_sdk::epoch_schedule::EpochSchedule::without_warmup();
+        genesis_config.epoch_schedule = safecoin_sdk::epoch_schedule::EpochSchedule::without_warmup();
 
         let ledger_path = match &config.ledger_path {
             None => create_new_tmp_ledger!(&genesis_config).0,
@@ -313,7 +313,7 @@ impl TestValidator {
                     ledger_path,
                     &genesis_config,
                     MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
-                    solana_ledger::blockstore_db::AccessType::PrimaryOnly,
+                    safecoin_ledger::blockstore_db::AccessType::PrimaryOnly,
                 )
                 .map_err(|err| {
                     format!(
@@ -408,7 +408,7 @@ impl TestValidator {
             true, // should_check_duplicate_instance
         ));
 
-        // Needed to avoid panics in `solana-responder-gossip` in tests that create a number of
+        // Needed to avoid panics in `safecoin-responder-gossip` in tests that create a number of
         // test validators concurrently...
         discover_cluster(&gossip, 1).expect("TestValidator startup failed");
 

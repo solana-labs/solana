@@ -2,7 +2,7 @@
 
 extern crate test;
 use bincode::deserialize;
-use solana_sdk::short_vec::ShortVec;
+use safecoin_sdk::short_vec::ShortVec;
 use test::Bencher;
 
 // Return a ShortVec with 127 bytes

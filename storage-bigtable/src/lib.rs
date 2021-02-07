@@ -1,15 +1,15 @@
 use log::*;
 use serde::{Deserialize, Serialize};
-use solana_sdk::{
+use safecoin_sdk::{
     clock::{Slot, UnixTimestamp},
     pubkey::Pubkey,
     signature::Signature,
     sysvar::is_sysvar_id,
     transaction::{Transaction, TransactionError},
 };
-use solana_storage_proto::convert::generated;
-use solana_storage_proto::convert::tx_by_addr;
-use solana_transaction_status::{
+use safecoin_storage_proto::convert::generated;
+use safecoin_storage_proto::convert::tx_by_addr;
+use safecoin_transaction_status::{
     ConfirmedBlock, ConfirmedTransaction, ConfirmedTransactionStatusWithSignature, Reward,
     TransactionByAddrInfo, TransactionConfirmationStatus, TransactionStatus, TransactionStatusMeta,
     TransactionWithStatusMeta,
@@ -299,7 +299,7 @@ pub struct LedgerStorage {
 impl LedgerStorage {
     pub async fn new(read_only: bool, timeout: Option<std::time::Duration>) -> Result<Self> {
         let connection =
-            bigtable::BigTableConnection::new("solana-ledger", read_only, timeout).await?;
+            bigtable::BigTableConnection::new("safecoin-ledger", read_only, timeout).await?;
         Ok(Self { connection })
     }
 

@@ -3,14 +3,14 @@
 use crate::cluster_info::{ClusterInfo, VALIDATOR_PORT_RANGE};
 use crate::contact_info::ContactInfo;
 use rand::{thread_rng, Rng};
-use solana_client::thin_client::{create_client, ThinClient};
-use solana_perf::recycler::Recycler;
-use solana_runtime::bank_forks::BankForks;
-use solana_sdk::{
+use safecoin_client::thin_client::{create_client, ThinClient};
+use safecoin_perf::recycler::Recycler;
+use safecoin_runtime::bank_forks::BankForks;
+use safecoin_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signer},
 };
-use solana_streamer::streamer;
+use safecoin_streamer::streamer;
 use std::{
     collections::HashSet,
     net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, UdpSocket},
@@ -126,7 +126,7 @@ pub fn discover(
         info!("Gossip Address: {:?}", my_gossip_addr);
     }
 
-    let _ip_echo_server = ip_echo.map(solana_net_utils::ip_echo_server);
+    let _ip_echo_server = ip_echo.map(safecoin_net_utils::ip_echo_server);
 
     let (met_criteria, secs, all_peers, tvu_peers) = spy(
         spy_ref.clone(),
@@ -189,7 +189,7 @@ pub fn get_multi_client(nodes: &[ContactInfo]) -> (ThinClient, usize) {
         .collect();
     let rpc_addrs: Vec<_> = addrs.iter().map(|addr| addr.0).collect();
     let tpu_addrs: Vec<_> = addrs.iter().map(|addr| addr.1).collect();
-    let (_, transactions_socket) = solana_net_utils::bind_in_range(
+    let (_, transactions_socket) = safecoin_net_utils::bind_in_range(
         IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
         VALIDATOR_PORT_RANGE,
     )
@@ -329,8 +329,8 @@ mod tests {
     #[test]
     fn test_gossip_services_spy() {
         let keypair = Keypair::new();
-        let peer0 = solana_sdk::pubkey::new_rand();
-        let peer1 = solana_sdk::pubkey::new_rand();
+        let peer0 = safecoin_sdk::pubkey::new_rand();
+        let peer1 = safecoin_sdk::pubkey::new_rand();
         let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
         let peer0_info = ContactInfo::new_localhost(&peer0, 0);
         let peer1_info = ContactInfo::new_localhost(&peer1, 0);
@@ -358,7 +358,7 @@ mod tests {
             spy_ref.clone(),
             None,
             Some(0),
-            Some(solana_sdk::pubkey::new_rand()),
+            Some(safecoin_sdk::pubkey::new_rand()),
             None,
         );
         assert_eq!(met_criteria, false);
@@ -372,7 +372,7 @@ mod tests {
             spy_ref.clone(),
             Some(1),
             Some(0),
-            Some(solana_sdk::pubkey::new_rand()),
+            Some(safecoin_sdk::pubkey::new_rand()),
             None,
         );
         assert_eq!(met_criteria, false);

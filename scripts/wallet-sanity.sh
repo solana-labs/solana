@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# solana-cli integration sanity test
+# safecoin-cli integration sanity test
 #
 set -e
 
@@ -15,13 +15,13 @@ else
   args=("$@")
 fi
 
-args+=(--keypair "$SOLANA_CONFIG_DIR"/faucet.json)
+args+=(--keypair "$SAFECOIN_CONFIG_DIR"/faucet.json)
 
 node_readiness=false
 timeout=60
 while [[ $timeout -gt 0 ]]; do
   set +e
-  output=$($solana_cli "${args[@]}" transaction-count --commitment max)
+  output=$($safecoin_cli "${args[@]}" transaction-count --commitment max)
   rc=$?
   set -e
   if [[ $rc -eq 0 && -n $output ]]; then
@@ -38,10 +38,10 @@ fi
 
 (
   set -x
-  $solana_cli "${args[@]}" address
-  $solana_cli "${args[@]}" balance
-  $solana_cli "${args[@]}" ping --count 5 --interval 0
-  $solana_cli "${args[@]}" balance
+  $safecoin_cli "${args[@]}" address
+  $safecoin_cli "${args[@]}" balance
+  $safecoin_cli "${args[@]}" ping --count 5 --interval 0
+  $safecoin_cli "${args[@]}" balance
 )
 
 echo PASS

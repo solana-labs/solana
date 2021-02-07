@@ -1,6 +1,6 @@
 import React from "react";
 
-import { Supply, Connection } from "@solana/web3.js";
+import { Supply, Connection } from "@safecoin/web3.js";
 import { useCluster, ClusterStatus, Cluster } from "./cluster";
 import { reportError } from "utils/sentry";
 

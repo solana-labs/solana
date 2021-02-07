@@ -3,24 +3,24 @@ use crossbeam_channel::unbounded;
 use log::*;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
-use solana_core::{
+use safecoin_core::{
     banking_stage::{create_test_recorder, BankingStage},
     cluster_info::ClusterInfo,
     cluster_info::Node,
     poh_recorder::PohRecorder,
     poh_recorder::WorkingBankEntry,
 };
-use solana_ledger::{
+use safecoin_ledger::{
     blockstore::Blockstore,
     genesis_utils::{create_genesis_config, GenesisConfigInfo},
     get_tmp_ledger_path,
 };
-use solana_measure::measure::Measure;
-use solana_perf::packet::to_packets_chunked;
-use solana_runtime::{
+use safecoin_measure::measure::Measure;
+use safecoin_perf::packet::to_packets_chunked;
+use safecoin_runtime::{
     accounts_background_service::ABSRequestSender, bank::Bank, bank_forks::BankForks,
 };
-use solana_sdk::{
+use safecoin_sdk::{
     hash::Hash,
     signature::Keypair,
     signature::Signature,
@@ -70,7 +70,7 @@ fn make_accounts_txs(
     hash: Hash,
     same_payer: bool,
 ) -> Vec<Transaction> {
-    let to_pubkey = solana_sdk::pubkey::new_rand();
+    let to_pubkey = safecoin_sdk::pubkey::new_rand();
     let payer_key = Keypair::new();
     let dummy = system_transaction::transfer(&payer_key, &to_pubkey, 1, hash);
     (0..total_num_transactions)
@@ -79,9 +79,9 @@ fn make_accounts_txs(
             let mut new = dummy.clone();
             let sig: Vec<u8> = (0..64).map(|_| thread_rng().gen()).collect();
             if !same_payer {
-                new.message.account_keys[0] = solana_sdk::pubkey::new_rand();
+                new.message.account_keys[0] = safecoin_sdk::pubkey::new_rand();
             }
-            new.message.account_keys[1] = solana_sdk::pubkey::new_rand();
+            new.message.account_keys[1] = safecoin_sdk::pubkey::new_rand();
             new.signatures = vec![Signature::new(&sig[0..64])];
             new
         })
@@ -106,11 +106,11 @@ fn bytes_as_usize(bytes: &[u8]) -> usize {
 
 #[allow(clippy::cognitive_complexity)]
 fn main() {
-    solana_logger::setup();
+    safecoin_logger::setup();
 
     let matches = App::new(crate_name!())
         .about(crate_description!())
-        .version(solana_version::version!())
+        .version(safecoin_version::version!())
         .arg(
             Arg::with_name("num_chunks")
                 .long("num-chunks")
@@ -242,7 +242,7 @@ fn main() {
         let base_tx_count = bank.transaction_count();
         let mut txs_processed = 0;
         let mut root = 1;
-        let collector = solana_sdk::pubkey::new_rand();
+        let collector = safecoin_sdk::pubkey::new_rand();
         let config = Config {
             packets_per_batch: packets_per_chunk,
             chunk_len,

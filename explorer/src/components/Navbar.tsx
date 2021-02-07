@@ -1,5 +1,5 @@
 import React from "react";
-import Logo from "img/logos-solana/dark-explorer-logo.svg";
+import Logo from "img/logos-safecoin/dark-explorer-logo.svg";
 import { clusterPath } from "utils/url";
 import { Link, NavLink } from "react-router-dom";
 import { ClusterStatusButton } from "components/ClusterStatusButton";
@@ -12,7 +12,7 @@ export function Navbar() {
     <nav className="navbar navbar-expand-md navbar-light">
       <div className="container">
         <Link to={clusterPath("/")}>
-          <img src={Logo} width="250" alt="Solana Explorer" />
+          <img src={Logo} width="250" alt="Safecoin Explorer" />
         </Link>
 
         <button

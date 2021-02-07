@@ -7,12 +7,12 @@
 
 use crate::sigverify;
 use crossbeam_channel::{SendError, Sender as CrossbeamSender};
-use solana_measure::measure::Measure;
-use solana_metrics::datapoint_debug;
-use solana_perf::packet::Packets;
-use solana_perf::perf_libs;
-use solana_sdk::timing;
-use solana_streamer::streamer::{self, PacketReceiver, StreamerError};
+use safecoin_measure::measure::Measure;
+use safecoin_metrics::datapoint_debug;
+use safecoin_perf::packet::Packets;
+use safecoin_perf::perf_libs;
+use safecoin_sdk::timing;
+use safecoin_streamer::streamer::{self, PacketReceiver, StreamerError};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, Builder, JoinHandle};
@@ -123,7 +123,7 @@ impl SigVerifyStage {
     ) -> JoinHandle<()> {
         let verifier = verifier.clone();
         Builder::new()
-            .name(format!("solana-verifier-{}", id))
+            .name(format!("safecoin-verifier-{}", id))
             .spawn(move || loop {
                 if let Err(e) = Self::verifier(&packet_receiver, &verified_sender, id, &verifier) {
                     match e {

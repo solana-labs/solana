@@ -3,17 +3,17 @@ use crate::args::{
     SetLockupArgs,
 };
 use clap::{value_t, value_t_or_exit, App, Arg, ArgMatches, SubCommand};
-use solana_clap_utils::{
+use safecoin_clap_utils::{
     input_parsers::unix_timestamp_from_rfc3339_datetime,
     input_validators::{is_amount, is_rfc3339_datetime, is_valid_pubkey, is_valid_signer},
 };
-use solana_cli_config::CONFIG_FILE;
-use solana_sdk::native_token::sol_to_lamports;
+use safecoin_cli_config::CONFIG_FILE;
+use safecoin_sdk::native_token::safe_to_lamports;
 use std::ffi::OsString;
 use std::process::exit;
 
 fn fee_payer_arg<'a, 'b>() -> Arg<'a, 'b> {
-    solana_clap_utils::fee_payer::fee_payer_arg().required(true)
+    safecoin_clap_utils::fee_payer::fee_payer_arg().required(true)
 }
 
 fn funding_keypair_arg<'a, 'b>() -> Arg<'a, 'b> {
@@ -132,7 +132,7 @@ where
     T: Into<OsString> + Clone,
 {
     let default_config_file = CONFIG_FILE.as_ref().unwrap();
-    App::new("solana-stake-accounts")
+    App::new("safecoin-stake-accounts")
         .about("about")
         .version("version")
         .arg(
@@ -149,7 +149,7 @@ where
                 .global(true)
                 .takes_value(true)
                 .value_name("URL")
-                .help("RPC entrypoint address. i.e. http://devnet.solana.com"),
+                .help("RPC entrypoint address. i.e. http://devnet.safecoin.org"),
         )
         .subcommand(
             SubCommand::with_name("new")
@@ -172,7 +172,7 @@ where
                         .takes_value(true)
                         .value_name("AMOUNT")
                         .validator(is_amount)
-                        .help("Amount to move into the new stake accounts, in SOL"),
+                        .help("Amount to move into the new stake accounts, in SAFE"),
                 )
                 .arg(
                     Arg::with_name("stake_authority")
@@ -280,7 +280,7 @@ fn parse_new_args(matches: &ArgMatches<'_>) -> NewArgs<String, String> {
     NewArgs {
         fee_payer: value_t_or_exit!(matches, "fee_payer", String),
         funding_keypair: value_t_or_exit!(matches, "funding_keypair", String),
-        lamports: sol_to_lamports(value_t_or_exit!(matches, "amount", f64)),
+        lamports: safe_to_lamports(value_t_or_exit!(matches, "amount", f64)),
         base_keypair: value_t_or_exit!(matches, "base_keypair", String),
         stake_authority: value_t_or_exit!(matches, "stake_authority", String),
         withdraw_authority: value_t_or_exit!(matches, "withdraw_authority", String),

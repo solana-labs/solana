@@ -18,7 +18,7 @@ else
   echo "maxmemory not present: appending setting"
   cat << EOF >> $REDIS_CONF
 
-# limit set by solana/net/scripts/install-redis.sh
+# limit set by safecoin/net/scripts/install-redis.sh
 maxmemory 8gb
 EOF
 
@@ -30,7 +30,7 @@ if grep -q "^maxmemory-policy " $REDIS_CONF; then
 else
   echo "maxmemory-policy not present: appending setting"
   cat << EOF >> $REDIS_CONF
-# limit set by solana/net/scripts/install-redis.sh
+# limit set by safecoin/net/scripts/install-redis.sh
 maxmemory-policy allkeys-lru
 
 EOF

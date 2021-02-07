@@ -9,11 +9,11 @@ use crate::{
     snapshot_packager_service::PendingSnapshotPackage,
 };
 use rayon::ThreadPool;
-use solana_runtime::{
+use safecoin_runtime::{
     accounts_db,
     snapshot_package::{AccountsPackage, AccountsPackagePre, AccountsPackageReceiver},
 };
-use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey};
+use safecoin_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey};
 use std::collections::{HashMap, HashSet};
 use std::{
     sync::{
@@ -43,7 +43,7 @@ impl AccountsHashVerifier {
         let exit = exit.clone();
         let cluster_info = cluster_info.clone();
         let t_accounts_hash_verifier = Builder::new()
-            .name("solana-accounts-hash".to_string())
+            .name("safecoin-accounts-hash".to_string())
             .spawn(move || {
                 let mut hashes = vec![];
                 let mut thread_pool_storage = None;
@@ -98,7 +98,7 @@ impl AccountsHashVerifier {
         snapshot_interval_slots: u64,
         thread_pool: Option<&ThreadPool>,
     ) {
-        let accounts_package = solana_runtime::snapshot_utils::process_accounts_package_pre(
+        let accounts_package = safecoin_runtime::snapshot_utils::process_accounts_package_pre(
             accounts_package,
             thread_pool,
         );
@@ -132,7 +132,7 @@ impl AccountsHashVerifier {
         {
             // For testing, publish an invalid hash to gossip.
             use rand::{thread_rng, Rng};
-            use solana_sdk::hash::extend_and_hash;
+            use safecoin_sdk::hash::extend_and_hash;
             warn!("inserting fault at slot: {}", accounts_package.slot);
             let rand = thread_rng().gen_range(0, 10);
             let hash = extend_and_hash(&hash, &[rand]);
@@ -220,9 +220,9 @@ mod tests {
     use super::*;
     use crate::cluster_info::make_accounts_hashes_message;
     use crate::contact_info::ContactInfo;
-    use solana_runtime::bank_forks::ArchiveFormat;
-    use solana_runtime::snapshot_utils::SnapshotVersion;
-    use solana_sdk::{
+    use safecoin_runtime::bank_forks::ArchiveFormat;
+    use safecoin_runtime::snapshot_utils::SnapshotVersion;
+    use safecoin_sdk::{
         hash::hash,
         signature::{Keypair, Signer},
     };
@@ -262,7 +262,7 @@ mod tests {
 
     #[test]
     fn test_max_hashes() {
-        solana_logger::setup();
+        safecoin_logger::setup();
         use std::path::PathBuf;
         use tempfile::TempDir;
         let keypair = Keypair::new();

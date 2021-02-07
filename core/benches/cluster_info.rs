@@ -3,13 +3,13 @@
 extern crate test;
 
 use rand::{thread_rng, Rng};
-use solana_core::broadcast_stage::broadcast_metrics::TransmitShredsStats;
-use solana_core::broadcast_stage::{broadcast_shreds, get_broadcast_peers};
-use solana_core::cluster_info::{ClusterInfo, Node};
-use solana_core::contact_info::ContactInfo;
-use solana_ledger::shred::Shred;
-use solana_sdk::pubkey;
-use solana_sdk::timing::timestamp;
+use safecoin_core::broadcast_stage::broadcast_metrics::TransmitShredsStats;
+use safecoin_core::broadcast_stage::{broadcast_shreds, get_broadcast_peers};
+use safecoin_core::cluster_info::{ClusterInfo, Node};
+use safecoin_core::contact_info::ContactInfo;
+use safecoin_ledger::shred::Shred;
+use safecoin_sdk::pubkey;
+use safecoin_sdk::timing::timestamp;
 use std::{
     collections::HashMap,
     net::UdpSocket,
@@ -19,7 +19,7 @@ use test::Bencher;
 
 #[bench]
 fn broadcast_shreds_bench(bencher: &mut Bencher) {
-    solana_logger::setup();
+    safecoin_logger::setup();
     let leader_pubkey = pubkey::new_rand();
     let leader_info = Node::new_localhost_with_pubkey(&leader_pubkey);
     let cluster_info = ClusterInfo::new_with_invalid_keypair(leader_info.info);

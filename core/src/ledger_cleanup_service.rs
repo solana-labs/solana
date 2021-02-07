@@ -1,9 +1,9 @@
 //! The `ledger_cleanup_service` drops older ledger data to limit disk space usage
 
-use solana_ledger::blockstore::{Blockstore, PurgeType};
-use solana_ledger::blockstore_db::Result as BlockstoreResult;
-use solana_measure::measure::Measure;
-use solana_sdk::clock::{Slot, DEFAULT_TICKS_PER_SLOT, TICKS_PER_DAY};
+use safecoin_ledger::blockstore::{Blockstore, PurgeType};
+use safecoin_ledger::blockstore_db::Result as BlockstoreResult;
+use safecoin_measure::measure::Measure;
+use safecoin_sdk::clock::{Slot, DEFAULT_TICKS_PER_SLOT, TICKS_PER_DAY};
 use std::string::ToString;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
@@ -53,7 +53,7 @@ impl LedgerCleanupService {
         let mut last_compaction_slot = 0;
 
         let t_cleanup = Builder::new()
-            .name("solana-ledger-cleanup".to_string())
+            .name("safecoin-ledger-cleanup".to_string())
             .spawn(move || loop {
                 if exit.load(Ordering::Relaxed) {
                     break;
@@ -168,7 +168,7 @@ impl LedgerCleanupService {
             let blockstore = blockstore.clone();
             let purge_complete1 = purge_complete.clone();
             let _t_purge = Builder::new()
-                .name("solana-ledger-purge".to_string())
+                .name("safecoin-ledger-purge".to_string())
                 .spawn(move || {
                     let mut slot_update_time = Measure::start("slot_update");
                     *blockstore.lowest_cleanup_slot.write().unwrap() = lowest_cleanup_slot;
@@ -246,13 +246,13 @@ impl LedgerCleanupService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_ledger::blockstore::make_many_slot_entries;
-    use solana_ledger::get_tmp_ledger_path;
+    use safecoin_ledger::blockstore::make_many_slot_entries;
+    use safecoin_ledger::get_tmp_ledger_path;
     use std::sync::mpsc::channel;
 
     #[test]
     fn test_cleanup() {
-        solana_logger::setup();
+        safecoin_logger::setup();
         let blockstore_path = get_tmp_ledger_path!();
         let blockstore = Blockstore::open(&blockstore_path).unwrap();
         let (shreds, _) = make_many_slot_entries(0, 50, 5);
@@ -287,7 +287,7 @@ mod tests {
 
     #[test]
     fn test_cleanup_speed() {
-        solana_logger::setup();
+        safecoin_logger::setup();
         let blockstore_path = get_tmp_ledger_path!();
         let mut blockstore = Blockstore::open(&blockstore_path).unwrap();
         blockstore.set_no_compaction(true);

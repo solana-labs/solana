@@ -10,24 +10,24 @@ use {
     inflector::cases::titlecase::to_title_case,
     serde::{Deserialize, Serialize},
     serde_json::{Map, Value},
-    solana_account_decoder::parse_token::UiTokenAccount,
-    solana_clap_utils::keypair::SignOnly,
-    solana_client::rpc_response::{
+    safecoin_account_decoder::parse_token::UiTokenAccount,
+    safecoin_clap_utils::keypair::SignOnly,
+    safecoin_client::rpc_response::{
         RpcAccountBalance, RpcInflationGovernor, RpcInflationRate, RpcKeyedAccount, RpcSupply,
         RpcVoteAccountInfo,
     },
-    solana_sdk::{
+    safecoin_sdk::{
         clock::{self, Epoch, Slot, UnixTimestamp},
         epoch_info::EpochInfo,
         hash::Hash,
-        native_token::lamports_to_sol,
+        native_token::lamports_to_safe ,
         pubkey::Pubkey,
         signature::Signature,
         stake_history::StakeHistoryEntry,
         transaction::Transaction,
     },
-    solana_stake_program::stake_state::{Authorized, Lockup},
-    solana_vote_program::{
+    safecoin_stake_program::stake_state::{Authorized, Lockup},
+    safecoin_vote_program::{
         authorized_voters::AuthorizedVoters,
         vote_state::{BlockTimestamp, Lockout},
     },
@@ -661,8 +661,8 @@ fn show_epoch_rewards(
                 "  {:<6}  {:<11}  ◎{:<16.9}  ◎{:<14.9}  {:>13.2}%  {}",
                 reward.epoch,
                 reward.effective_slot,
-                lamports_to_sol(reward.amount),
-                lamports_to_sol(reward.post_balance),
+                lamports_to_safe (reward.amount),
+                lamports_to_safe (reward.post_balance),
                 reward.percent_change,
                 reward
                     .apr
@@ -923,7 +923,7 @@ impl fmt::Display for CliStakeHistory {
                 if self.use_lamports_unit {
                     "lamports"
                 } else {
-                    "SOL"
+                    "SAFE"
                 }
             )?;
         }
@@ -1338,7 +1338,7 @@ impl fmt::Display for CliAccountBalances {
                 f,
                 "{:<44}  {}",
                 account.address,
-                &format!("{} SOL", lamports_to_sol(account.lamports))
+                &format!("{} SAFE", lamports_to_safe (account.lamports))
             )?;
         }
         Ok(())
@@ -1373,16 +1373,16 @@ impl VerboseDisplay for CliSupply {}
 
 impl fmt::Display for CliSupply {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln_name_value(f, "Total:", &format!("{} SOL", lamports_to_sol(self.total)))?;
+        writeln_name_value(f, "Total:", &format!("{} SAFE", lamports_to_safe (self.total)))?;
         writeln_name_value(
             f,
             "Circulating:",
-            &format!("{} SOL", lamports_to_sol(self.circulating)),
+            &format!("{} SAFE", lamports_to_safe (self.circulating)),
         )?;
         writeln_name_value(
             f,
             "Non-Circulating:",
-            &format!("{} SOL", lamports_to_sol(self.non_circulating)),
+            &format!("{} SAFE", lamports_to_safe (self.non_circulating)),
         )?;
         if self.print_accounts {
             writeln!(f)?;
@@ -1692,7 +1692,7 @@ impl fmt::Display for CliSignatureVerificationStatus {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::{
+    use safecoin_sdk::{
         message::Message,
         pubkey::Pubkey,
         signature::{keypair_from_seed, NullSigner, Signature, Signer, SignerError},

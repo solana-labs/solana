@@ -1,6 +1,6 @@
 #![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(specialization))]
 #[macro_use]
-extern crate solana_bpf_loader_program;
+extern crate safecoin_bpf_loader_program;
 
 pub mod bank_forks_utils;
 pub mod bigtable_upload;
@@ -26,7 +26,7 @@ pub mod sigverify_shreds;
 pub mod staking_utils;
 
 #[macro_use]
-extern crate solana_metrics;
+extern crate safecoin_metrics;
 
 #[macro_use]
 extern crate log;
@@ -35,4 +35,4 @@ extern crate log;
 extern crate lazy_static;
 
 #[macro_use]
-extern crate solana_frozen_abi_macro;
+extern crate safecoin_frozen_abi_macro;

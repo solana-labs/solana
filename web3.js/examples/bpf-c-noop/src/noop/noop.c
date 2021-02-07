@@ -3,17 +3,17 @@
  * passed to it
  */
 
-#include <solana_sdk.h>
+#include <safecoin_sdk.h>
 
 extern uint64_t entrypoint(const uint8_t *input) {
-  SolAccountInfo ka[1];
-  SolParameters params = (SolParameters) { .ka = ka };
+  SafeAccountInfo ka[1];
+  SafeParameters params = (SafeParameters) { .ka = ka };
 
-  sol_log("Hello World");
+  safe_log("Hello World");
 
-  if (!sol_deserialize(input, &params, SOL_ARRAY_SIZE(ka))) {
+  if (!safe_deserialize(input, &params, SAFE_ARRAY_SIZE(ka))) {
     return ERROR_INVALID_ARGUMENT;
   }
-  sol_log_params(&params);
+  safe_log_params(&params);
   return SUCCESS;
 }

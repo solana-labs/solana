@@ -1,17 +1,17 @@
-use solana_cli::{
+use safecoin_cli::{
     cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
     spend_utils::SpendAmount,
     test_utils::{check_ready, check_recent_balance},
 };
-use solana_cli_output::{parse_sign_only_reply_string, OutputFormat};
-use solana_client::{
+use safecoin_cli_output::{parse_sign_only_reply_string, OutputFormat};
+use safecoin_client::{
     blockhash_query::{self, BlockhashQuery},
     nonce_utils,
     rpc_client::RpcClient,
 };
-use solana_core::test_validator::TestValidator;
-use solana_faucet::faucet::run_local_faucet;
-use solana_sdk::{
+use safecoin_core::test_validator::TestValidator;
+use safecoin_faucet::faucet::run_local_faucet;
+use safecoin_sdk::{
     commitment_config::CommitmentConfig,
     nonce::State as NonceState,
     pubkey::Pubkey,
@@ -20,7 +20,7 @@ use solana_sdk::{
 
 #[test]
 fn test_transfer() {
-    solana_logger::setup();
+    safecoin_logger::setup();
     let mint_keypair = Keypair::new();
     let test_validator = TestValidator::with_custom_fees(mint_keypair.pubkey(), 1);
     let faucet_addr = run_local_faucet(mint_keypair, None);
@@ -235,7 +235,7 @@ fn test_transfer() {
 
 #[test]
 fn test_transfer_multisession_signing() {
-    solana_logger::setup();
+    safecoin_logger::setup();
     let mint_keypair = Keypair::new();
     let test_validator = TestValidator::with_custom_fees(mint_keypair.pubkey(), 1);
     let faucet_addr = run_local_faucet(mint_keypair, None);
@@ -349,7 +349,7 @@ fn test_transfer_multisession_signing() {
 
 #[test]
 fn test_transfer_all() {
-    solana_logger::setup();
+    safecoin_logger::setup();
     let mint_keypair = Keypair::new();
     let test_validator = TestValidator::with_custom_fees(mint_keypair.pubkey(), 1);
     let faucet_addr = run_local_faucet(mint_keypair, None);

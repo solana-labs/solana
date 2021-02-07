@@ -1,12 +1,12 @@
 [package]
-name = "solana-bpf-programs"
+name = "safecoin-bpf-programs"
 description = "Blockchain, Rebuilt for Scale"
 version = "1.6.0"
-documentation = "https://docs.rs/solana"
-homepage = "https://solana.com/"
+documentation = "https://docs.rs/safecoin"
+homepage = "https://safecoin.org/"
 readme = "README.md"
-repository = "https://github.com/solana-labs/solana"
-authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+repository = "https://github.com/solana-labs/safecoin"
+authors = ["Safecoin Maintainers <maintainers@solana.foundation>"]
 license = "Apache-2.0"
 edition = "2018"
 publish = false
@@ -25,14 +25,14 @@ elf = "0.0.10"
 itertools = "0.10.0"
 miow = "0.2.2"
 net2 = "0.2.37"
-solana-bpf-loader-program = { path = "../bpf_loader", version = "1.6.0" }
-solana-cli-output = { path = "../../cli-output", version = "1.6.0" }
-solana-logger = { path = "../../logger", version = "1.6.0" }
-solana-measure = { path = "../../measure", version = "1.6.0" }
+safecoin-bpf-loader-program = { path = "../bpf_loader", version = "1.6.0" }
+safecoin-cli-output = { path = "../../cli-output", version = "1.6.0" }
+safecoin-logger = { path = "../../logger", version = "1.6.0" }
+safecoin-measure = { path = "../../measure", version = "1.6.0" }
 solana_rbpf = "=0.2.4"
-solana-runtime = { path = "../../runtime", version = "1.6.0" }
-solana-sdk = { path = "../../sdk", version = "1.6.0" }
-solana-transaction-status = { path = "../../transaction-status", version = "1.6.0" }
+safecoin-runtime = { path = "../../runtime", version = "1.6.0" }
+safecoin-sdk = { path = "../../sdk", version = "1.6.0" }
+safecoin-transaction-status = { path = "../../transaction-status", version = "1.6.0" }
 
 
 [[bench]]

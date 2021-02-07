@@ -1,20 +1,20 @@
 {
-  "name": "@solana/web3.js",
+  "name": "@safecoin/web3.js",
   "version": "0.0.0-development",
-  "description": "Solana Javascript API",
+  "description": "Safecoin Javascript API",
   "keywords": [
     "api",
     "blockchain"
   ],
   "license": "MIT",
-  "author": "Solana Maintainers <maintainers@solana.com>",
-  "homepage": "https://solana.com/",
+  "author": "Safecoin Maintainers <maintainers@safecoin.org>",
+  "homepage": "https://safecoin.org/",
   "repository": {
     "type": "git",
-    "url": "https://github.com/solana-labs/solana-web3.js.git"
+    "url": "https://github.com/solana-labs/safecoin-web3.js.git"
   },
   "bugs": {
-    "url": "http://github.com/solana-labs/solana-web3.js.git/issues"
+    "url": "http://github.com/solana-labs/safecoin-web3.js.git/issues"
   },
   "publishConfig": {
     "access": "public"
@@ -23,8 +23,8 @@
   "module": "lib/index.esm.js",
   "types": "lib/index.d.ts",
   "bin": {
-    "solana-bpf-sdk-install": "bin/bpf-sdk-install.sh",
-    "solana-localnet": "bin/localnet.sh"
+    "safecoin-bpf-sdk-install": "bin/bpf-sdk-install.sh",
+    "safecoin-localnet": "bin/localnet.sh"
   },
   "testnetDefaultChannel": "edge",
   "files": [
@@ -63,11 +63,11 @@
     "prepare": "run-s clean bpf-sdk:install bpf-sdk:remove-symlinks build",
     "pretty": "prettier --check '{,{examples,src,test}/**/}*.{j,t}s'",
     "pretty:fix": "prettier --write '{,{examples,src,test}/**/}*.{j,t}s'",
-    "re": "semantic-release --repository-url git@github.com:solana-labs/solana-web3.js.git",
+    "re": "semantic-release --repository-url git@github.com:solana-labs/safecoin-web3.js.git",
     "test": "npm run build:fixtures && cross-env NODE_ENV=test jest --useStderr",
     "test:cover": "npm run build:fixtures && cross-env NODE_ENV=test jest --coverage --useStderr",
     "test:live": "npm run build:fixtures && cross-env NODE_ENV=test TEST_LIVE=1 jest --useStderr",
-    "test:live-with-test-validator": "start-server-and-test 'solana-test-validator --reset --quiet' http://localhost:8899/health test:live",
+    "test:live-with-test-validator": "start-server-and-test 'safecoin-test-validator --reset --quiet' http://localhost:8899/health test:live",
     "test:watch": "npm run build:fixtures && cross-env NODE_ENV=test jest --watch --useStderr"
   },
   "jest": {
@@ -101,7 +101,7 @@
     "@babel/preset-flow": "^7.0.0",
     "@commitlint/config-conventional": "^11.0.0",
     "@commitlint/travis-cli": "^11.0.0",
-    "@solana/spl-token": "^0.0.13",
+    "@safecoin/spl-token": "^0.0.13",
     "@typescript-eslint/eslint-plugin": "^4.0.0",
     "@typescript-eslint/parser": "^3.10.1",
     "acorn": "^8.0.1",

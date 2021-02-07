@@ -121,7 +121,7 @@ impl Pubkey {
     /// Create a program address
     ///
     /// Program addresses are account keys that only the program has the
-    /// authority to sign.  The address is of the same form as a Solana
+    /// authority to sign.  The address is of the same form as a Safecoin
     /// `Pubkey`, except they are ensured to not be on the ed25519 curve and
     /// thus have no associated private key.  When performing cross-program
     /// invocations the program can "sign" for the key by calling
@@ -178,7 +178,7 @@ impl Pubkey {
         #[cfg(target_arch = "bpf")]
         {
             extern "C" {
-                fn sol_create_program_address(
+                fn safe_create_program_address(
                     seeds_addr: *const u8,
                     seeds_len: u64,
                     program_id_addr: *const u8,
@@ -187,7 +187,7 @@ impl Pubkey {
             };
             let mut bytes = [0; 32];
             let result = unsafe {
-                sol_create_program_address(
+                safe_create_program_address(
                     seeds as *const _ as *const u8,
                     seeds.len() as u64,
                     program_id as *const _ as *const u8,
@@ -259,7 +259,7 @@ impl Pubkey {
         #[cfg(target_arch = "bpf")]
         {
             extern "C" {
-                fn sol_try_find_program_address(
+                fn safe_try_find_program_address(
                     seeds_addr: *const u8,
                     seeds_len: u64,
                     program_id_addr: *const u8,
@@ -270,7 +270,7 @@ impl Pubkey {
             let mut bytes = [0; 32];
             let mut bump_seed = std::u8::MAX;
             let result = unsafe {
-                sol_try_find_program_address(
+                safe_try_find_program_address(
                     seeds as *const _ as *const u8,
                     seeds.len() as u64,
                     program_id as *const _ as *const u8,
@@ -294,13 +294,13 @@ impl Pubkey {
         #[cfg(target_arch = "bpf")]
         {
             extern "C" {
-                fn sol_log_pubkey(pubkey_addr: *const u8);
+                fn safe_log_pubkey(pubkey_addr: *const u8);
             };
-            unsafe { sol_log_pubkey(self.as_ref() as *const _ as *const u8) };
+            unsafe { safe_log_pubkey(self.as_ref() as *const _ as *const u8) };
         }
 
         #[cfg(not(target_arch = "bpf"))]
-        crate::program_stubs::sol_log(&self.to_string());
+        crate::program_stubs::safe_log(&self.to_string());
     }
 }
 

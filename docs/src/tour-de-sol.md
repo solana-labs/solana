@@ -4,8 +4,8 @@ title: Introduction
 
 ## Welcome!
 
-This guide contains information about how to participate in Solana's Tour de SOL. Questions? Comments? Email ryan@solana.com
+This guide contains information about how to participate in Safecoin's Tour de SAFE. Questions? Comments? Email ryan@safecoin.org
 
-### [Learn more about Tour de SOL](https://solana.com/tds/)
+### [Learn more about Tour de SAFE](https://safecoin.org/tds/)
 
-If you haven't registered yet, complete the form at [https://solana.com/tds/](https://solana.com/tds/) first.
+If you haven't registered yet, complete the form at [https://safecoin.org/tds/](https://safecoin.org/tds/) first.

@@ -4,19 +4,19 @@ use crate::{
 };
 use itertools::izip;
 use log::*;
-use solana_client::thin_client::{create_client, ThinClient};
-use solana_core::{
+use safecoin_client::thin_client::{create_client, ThinClient};
+use safecoin_core::{
     cluster_info::{Node, VALIDATOR_PORT_RANGE},
     contact_info::ContactInfo,
     gossip_service::discover_cluster,
     validator::{Validator, ValidatorConfig},
 };
-use solana_ledger::create_new_tmp_ledger;
-use solana_runtime::genesis_utils::{
+use safecoin_ledger::create_new_tmp_ledger;
+use safecoin_runtime::genesis_utils::{
     create_genesis_config_with_vote_accounts_and_cluster_type, GenesisConfigInfo,
     ValidatorVoteKeypairs,
 };
-use solana_sdk::{
+use safecoin_sdk::{
     account::Account,
     client::SyncClient,
     clock::{DEFAULT_DEV_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
@@ -30,11 +30,11 @@ use solana_sdk::{
     system_transaction,
     transaction::Transaction,
 };
-use solana_stake_program::{
+use safecoin_stake_program::{
     config as stake_config, stake_instruction,
     stake_state::{Authorized, Lockup, StakeState},
 };
-use solana_vote_program::{
+use safecoin_vote_program::{
     vote_instruction,
     vote_state::{VoteInit, VoteState},
 };
@@ -620,7 +620,7 @@ impl Cluster for LocalCluster {
         &mut self,
         pubkey: &Pubkey,
         cluster_validator_info: &mut ClusterValidatorInfo,
-    ) -> (solana_core::cluster_info::Node, Option<ContactInfo>) {
+    ) -> (safecoin_core::cluster_info::Node, Option<ContactInfo>) {
         // Update the stored ContactInfo for this node
         let node = Node::new_localhost_with_pubkey(&pubkey);
         cluster_validator_info.info.contact_info = node.info.clone();
@@ -693,11 +693,11 @@ impl Drop for LocalCluster {
 #[cfg(test)]
 mod test {
     use super::*;
-    use solana_sdk::epoch_schedule::MINIMUM_SLOTS_PER_EPOCH;
+    use safecoin_sdk::epoch_schedule::MINIMUM_SLOTS_PER_EPOCH;
 
     #[test]
     fn test_local_cluster_start_and_exit() {
-        solana_logger::setup();
+        safecoin_logger::setup();
         let num_nodes = 1;
         let cluster = LocalCluster::new_with_equal_stakes(num_nodes, 100, 3);
         assert_eq!(cluster.validators.len(), num_nodes);
@@ -705,7 +705,7 @@ mod test {
 
     #[test]
     fn test_local_cluster_start_and_exit_with_config() {
-        solana_logger::setup();
+        safecoin_logger::setup();
         let mut validator_config = ValidatorConfig::default();
         validator_config.rpc_config.enable_validator_exit = true;
         const NUM_NODES: usize = 1;

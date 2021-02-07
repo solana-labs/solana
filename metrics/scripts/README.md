@@ -9,7 +9,7 @@ Start the local metric services:
 
 Metrics are enabled on a per-shell basis which means you must `source` the
 following scripts in each shell in which you start an application you wish to
-collect metrics from.  For example, if running a Solana validator you must run
+collect metrics from.  For example, if running a Safecoin validator you must run
 `source ./enable.sh` before starting the node:
 
 `$ source ./enable.sh`

@@ -12,7 +12,7 @@ source ../ci/env.sh
 source ../ci/rust-version.sh
 ../ci/docker-run.sh "$rust_stable_docker_image" docs/build-cli-usage.sh
 ../ci/docker-run.sh "$rust_stable_docker_image" docs/convert-ascii-to-svg.sh
-./set-solana-release-tag.sh
+./set-safecoin-release-tag.sh
 
 # Build from /src into /build
 npm run build

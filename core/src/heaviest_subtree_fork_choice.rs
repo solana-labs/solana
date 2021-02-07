@@ -4,8 +4,8 @@ use crate::{
     progress_map::ProgressMap,
     tree_diff::TreeDiff,
 };
-use solana_runtime::{bank::Bank, bank_forks::BankForks, epoch_stakes::EpochStakes};
-use solana_sdk::{
+use safecoin_runtime::{bank::Bank, bank_forks::BankForks, epoch_stakes::EpochStakes};
+use safecoin_sdk::{
     clock::{Epoch, Slot},
     epoch_schedule::EpochSchedule,
     pubkey::Pubkey,
@@ -640,8 +640,8 @@ impl<'a> Iterator for AncestorIterator<'a> {
 mod test {
     use super::*;
     use crate::consensus::test::VoteSimulator;
-    use solana_runtime::{bank::Bank, bank_utils};
-    use solana_sdk::{hash::Hash, slot_history::SlotHistory};
+    use safecoin_runtime::{bank::Bank, bank_utils};
+    use safecoin_sdk::{hash::Hash, slot_history::SlotHistory};
     use std::{collections::HashSet, ops::Range};
     use trees::tr;
 

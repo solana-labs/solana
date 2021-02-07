@@ -2,7 +2,7 @@
 title: Accepted Design Proposals
 ---
 
-The following architectural proposals have been accepted by the Solana team,
+The following architectural proposals have been accepted by the Safecoin team,
 but are not yet fully implemented.
 The proposals may be implemented as described, implemented differently as
 issues in the designs become evident, or not implemented at all.

@@ -2,7 +2,7 @@ use {
     clap::{
         crate_description, crate_name, crate_version, value_t, value_t_or_exit, values_t, App, Arg,
     },
-    solana_sdk::signature::{write_keypair_file, Keypair},
+    safecoin_sdk::signature::{write_keypair_file, Keypair},
     std::{
         env,
         ffi::OsStr,
@@ -103,7 +103,7 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
         }
     };
 
-    let legacy_program_feature_present = package.name == "solana-sdk";
+    let legacy_program_feature_present = package.name == "safecoin-sdk";
     let root_package_dir = &package.manifest_path.parent().unwrap_or_else(|| {
         eprintln!(
             "Unable to get directory of {}",
@@ -213,7 +213,7 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
 
         println!();
         println!("To deploy this program:");
-        println!("  $ solana program deploy {}", program_so.display());
+        println!("  $ safecoin program deploy {}", program_so.display());
     } else if config.dump {
         println!("Note: --dump is only available for crates with a cdylib target");
     }
@@ -276,7 +276,7 @@ fn main() {
                 .value_name("PATH")
                 .takes_value(true)
                 .default_value(&default_bpf_sdk)
-                .help("Path to the Solana BPF SDK"),
+                .help("Path to the Safecoin BPF SDK"),
         )
         .arg(
             Arg::with_name("dump")

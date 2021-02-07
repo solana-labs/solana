@@ -2,11 +2,11 @@
 title: "FAQ"
 ---
 
-When writing or interacting with Solana programs, there are common questions or
+When writing or interacting with Safecoin programs, there are common questions or
 challenges that often come up. Below are resources to help answer these
 questions.
 
-If not addressed here, the Solana [#developers](https://discord.gg/RxeGBH)
+If not addressed here, the Safecoin [#developers](https://discord.gg/RxeGBH)
 Discord channel is a great resource.
 
 ## `CallDepth` error
@@ -55,7 +55,7 @@ padding between fields. If the program implements the Rust `Pack` trait then try
 packing and unpacking the instruction type `T` to determine the exact encoding
 the program expects:
 
-https://github.com/solana-labs/solana/blob/v1.4/sdk/program/src/program_pack.rs
+https://github.com/solana-labs/safecoin/blob/v1.4/sdk/program/src/program_pack.rs
 
 ## MissingRequiredSignature
 

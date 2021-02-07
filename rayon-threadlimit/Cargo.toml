@@ -1,11 +1,11 @@
 [package]
-name = "solana-rayon-threadlimit"
+name = "safecoin-rayon-threadlimit"
 version = "1.6.0"
-description = "solana-rayon-threadlimit"
-homepage = "https://solana.com/"
+description = "safecoin-rayon-threadlimit"
+homepage = "https://safecoin.org/"
 readme = "../README.md"
-repository = "https://github.com/solana-labs/solana"
-authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+repository = "https://github.com/solana-labs/safecoin"
+authors = ["Safecoin Maintainers <maintainers@solana.foundation>"]
 license = "Apache-2.0"
 edition = "2018"
 

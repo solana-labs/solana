@@ -7,7 +7,7 @@ import {
   Connection,
   TokenAccountBalancePair,
   ParsedAccountData,
-} from "@solana/web3.js";
+} from "@safecoin/web3.js";
 import { TokenAccountInfo, TokenAccount } from "validators/accounts/token";
 import { ParsedInfo } from "validators";
 import { coerce } from "superstruct";

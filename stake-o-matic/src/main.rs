@@ -1,17 +1,17 @@
 use clap::{crate_description, crate_name, crate_version, value_t, value_t_or_exit, App, Arg};
 use log::*;
-use solana_clap_utils::{
+use safecoin_clap_utils::{
     input_parsers::{keypair_of, pubkey_of},
     input_validators::{is_amount, is_keypair, is_pubkey_or_keypair, is_url, is_valid_percentage},
 };
-use solana_cli_output::display::format_labeled_address;
-use solana_client::{
+use safecoin_cli_output::display::format_labeled_address;
+use safecoin_client::{
     client_error, rpc_client::RpcClient, rpc_config::RpcSimulateTransactionConfig,
     rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS, rpc_response::RpcVoteAccountInfo,
 };
-use solana_metrics::datapoint_info;
-use solana_notifier::Notifier;
-use solana_sdk::{
+use safecoin_metrics::datapoint_info;
+use safecoin_notifier::Notifier;
+use safecoin_sdk::{
     account_utils::StateMut,
     clock::{Epoch, Slot},
     commitment_config::CommitmentConfig,
@@ -21,7 +21,7 @@ use solana_sdk::{
     signature::{Keypair, Signature, Signer},
     transaction::Transaction,
 };
-use solana_stake_program::{stake_instruction, stake_state::StakeState};
+use safecoin_stake_program::{stake_instruction, stake_state::StakeState};
 
 use std::{
     collections::{HashMap, HashSet},
@@ -84,7 +84,7 @@ fn get_config() -> Config {
                 .takes_value(true)
                 .global(true)
                 .help("Configuration file to use");
-            if let Some(ref config_file) = *solana_cli_config::CONFIG_FILE {
+            if let Some(ref config_file) = *safecoin_cli_config::CONFIG_FILE {
                 arg.default_value(&config_file)
             } else {
                 arg
@@ -159,7 +159,7 @@ fn get_config() -> Config {
         .arg(
             Arg::with_name("baseline_stake_amount")
                 .long("baseline-stake-amount")
-                .value_name("SOL")
+                .value_name("SAFE")
                 .takes_value(true)
                 .default_value("5000")
                 .validator(is_amount)
@@ -167,7 +167,7 @@ fn get_config() -> Config {
         .arg(
             Arg::with_name("bonus_stake_amount")
                 .long("bonus-stake-amount")
-                .value_name("SOL")
+                .value_name("SAFE")
                 .takes_value(true)
                 .default_value("50000")
                 .validator(is_amount)
@@ -184,9 +184,9 @@ fn get_config() -> Config {
         .get_matches();
 
     let config = if let Some(config_file) = matches.value_of("config_file") {
-        solana_cli_config::Config::load(config_file).unwrap_or_default()
+        safecoin_cli_config::Config::load(config_file).unwrap_or_default()
     } else {
-        solana_cli_config::Config::default()
+        safecoin_cli_config::Config::default()
     };
 
     let source_stake_address = pubkey_of(&matches, "source_stake_address").unwrap();
@@ -199,18 +199,18 @@ fn get_config() -> Config {
     let max_poor_block_producer_percentage =
         value_t_or_exit!(matches, "max_poor_block_producer_percentage", usize);
     let baseline_stake_amount =
-        sol_to_lamports(value_t_or_exit!(matches, "baseline_stake_amount", f64));
-    let bonus_stake_amount = sol_to_lamports(value_t_or_exit!(matches, "bonus_stake_amount", f64));
+        safe_to_lamports(value_t_or_exit!(matches, "baseline_stake_amount", f64));
+    let bonus_stake_amount = safe_to_lamports(value_t_or_exit!(matches, "bonus_stake_amount", f64));
 
     let (json_rpc_url, validator_list) = match cluster.as_str() {
         "mainnet-beta" => (
             value_t!(matches, "json_rpc_url", String)
-                .unwrap_or_else(|_| "http://api.mainnet-beta.solana.com".into()),
+                .unwrap_or_else(|_| "http://api.mainnet-beta.safecoin.org".into()),
             validator_list::mainnet_beta_validators(),
         ),
         "testnet" => (
             value_t!(matches, "json_rpc_url", String)
-                .unwrap_or_else(|_| "http://testnet.solana.com".into()),
+                .unwrap_or_else(|_| "http://testnet.safecoin.org".into()),
             validator_list::testnet_validators(),
         ),
         "unknown" => {
@@ -276,7 +276,7 @@ fn get_stake_account(
         )
     })?;
 
-    if account.owner != solana_stake_program::id() {
+    if account.owner != safecoin_stake_program::id() {
         return Err(format!(
             "not a stake account (owned by {}): {}",
             account.owner, address
@@ -427,8 +427,8 @@ fn validate_source_stake_account(
         get_stake_account(&rpc_client, &config.source_stake_address)?;
 
     info!(
-        "stake account balance: {} SOL",
-        lamports_to_sol(source_stake_balance)
+        "stake account balance: {} SAFE",
+        lamports_to_safe (source_stake_balance)
     );
     match &source_stake_state {
         StakeState::Initialized(_) | StakeState::Stake(_, _) => source_stake_state
@@ -501,8 +501,8 @@ fn transact(
 ) -> Result<Vec<ConfirmedTransaction>, Box<dyn error::Error>> {
     let authorized_staker_balance = rpc_client.get_balance(&authorized_staker.pubkey())?;
     info!(
-        "Authorized staker balance: {} SOL",
-        lamports_to_sol(authorized_staker_balance)
+        "Authorized staker balance: {} SAFE",
+        lamports_to_safe (authorized_staker_balance)
     );
 
     let (blockhash, fee_calculator, last_valid_slot) = rpc_client
@@ -513,7 +513,7 @@ fn transact(
     let required_fee = transactions.iter().fold(0, |fee, (transaction, _)| {
         fee + fee_calculator.calculate_fee(&transaction.message)
     });
-    info!("Required fee: {} SOL", lamports_to_sol(required_fee));
+    info!("Required fee: {} SAFE", lamports_to_safe (required_fee));
     if required_fee > authorized_staker_balance {
         return Err("Authorized staker has insufficient funds".into());
     }
@@ -635,7 +635,7 @@ fn process_confirmations(
 
 #[allow(clippy::cognitive_complexity)] // Yeah I know...
 fn main() -> Result<(), Box<dyn error::Error>> {
-    solana_logger::setup_with_default("solana=info");
+    safecoin_logger::setup_with_default("safecoin=info");
     let config = get_config();
 
     let notifier = Notifier::default();
@@ -703,13 +703,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         let baseline_stake_address = Pubkey::create_with_seed(
             &config.authorized_staker.pubkey(),
             baseline_seed,
-            &solana_stake_program::id(),
+            &safecoin_stake_program::id(),
         )
         .unwrap();
         let bonus_stake_address = Pubkey::create_with_seed(
             &config.authorized_staker.pubkey(),
             bonus_seed,
-            &solana_stake_program::id(),
+            &safecoin_stake_program::id(),
         )
         .unwrap();
 
@@ -809,7 +809,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     formatted_node_pubkey,
                     commission,
                     config.max_commission,
-                    lamports_to_sol(config.baseline_stake_amount),
+                    lamports_to_safe (config.baseline_stake_amount),
                 ),
             ));
 
@@ -827,7 +827,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     formatted_node_pubkey,
                     commission,
                     config.max_commission,
-                    lamports_to_sol(config.bonus_stake_amount),
+                    lamports_to_safe (config.bonus_stake_amount),
                 ),
             ));
 
@@ -856,7 +856,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     format!(
                         "🥩 `{}` is current. Added ◎{} baseline stake",
                         formatted_node_pubkey,
-                        lamports_to_sol(config.baseline_stake_amount),
+                        lamports_to_safe (config.baseline_stake_amount),
                     ),
                 ));
             }
@@ -879,7 +879,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                             "🏅 `{}` was a quality block producer during epoch {}. Added ◎{} bonus stake",
                             formatted_node_pubkey,
                             last_epoch,
-                            lamports_to_sol(config.bonus_stake_amount),
+                            lamports_to_safe (config.bonus_stake_amount),
                         ),
                     ));
                     }
@@ -898,7 +898,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         "💔 `{}` was a poor block producer during epoch {}. Removed ◎{} bonus stake",
                         formatted_node_pubkey,
                         last_epoch,
-                        lamports_to_sol(config.bonus_stake_amount),
+                        lamports_to_safe (config.bonus_stake_amount),
                     ),
                 ));
                 }
@@ -922,7 +922,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     format!(
                         "🏖️ `{}` is delinquent. Removed ◎{} baseline stake",
                         formatted_node_pubkey,
-                        lamports_to_sol(config.baseline_stake_amount),
+                        lamports_to_safe (config.baseline_stake_amount),
                     ),
                 ));
 
@@ -938,7 +938,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     format!(
                         "🏖️ `{}` is delinquent. Removed ◎{} bonus stake",
                         formatted_node_pubkey,
-                        lamports_to_sol(config.bonus_stake_amount),
+                        lamports_to_safe (config.bonus_stake_amount),
                     ),
                 ));
 
@@ -966,15 +966,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         info!("All stake accounts exist");
     } else {
         info!(
-            "{} SOL is required to create {} stake accounts",
-            lamports_to_sol(source_stake_lamports_required),
+            "{} SAFE is required to create {} stake accounts",
+            lamports_to_safe (source_stake_lamports_required),
             create_stake_transactions.len()
         );
         if source_stake_balance < source_stake_lamports_required {
             error!(
-                "Source stake account has insufficient balance: {} SOL, but {} SOL is required",
-                lamports_to_sol(source_stake_balance),
-                lamports_to_sol(source_stake_lamports_required)
+                "Source stake account has insufficient balance: {} SAFE, but {} SAFE is required",
+                lamports_to_safe (source_stake_balance),
+                lamports_to_safe (source_stake_lamports_required)
             );
             process::exit(1);
         }

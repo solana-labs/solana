@@ -1,5 +1,5 @@
 import React from "react";
-import { ConfirmedBlock } from "@solana/web3.js";
+import { ConfirmedBlock } from "@safecoin/web3.js";
 import { ErrorCard } from "components/common/ErrorCard";
 import { Signature } from "components/common/Signature";
 import bs58 from "bs58";

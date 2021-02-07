@@ -6,7 +6,7 @@ title: Economic Design MVP
 
 The preceding sections, outlined in the
 [Economic Design Overview](ed_overview.md),
-describe a long-term vision of a sustainable Solana economy.
+describe a long-term vision of a sustainable Safecoin economy.
 Of course, we don't expect the final implementation to perfectly match what has
 been described above. We intend to fully engage with network stakeholders
 throughout the implementation phases \(i.e. pre-testnet, testnet, mainnet\)
@@ -18,7 +18,7 @@ functionality from which a more complete and functional system can be developed.
 
 ## MVP Economic Features
 
-- Faucet to deliver testnet SOLs to validators for staking and application development.
+- Faucet to deliver testnet SAFEs to validators for staking and application development.
 - Mechanism by which validators are rewarded via network inflation.
 - Ability to delegate tokens to validator nodes
 - Validator set commission fees on interest from delegated tokens.

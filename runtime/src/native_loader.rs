@@ -5,7 +5,7 @@ use libloading::os::unix::*;
 use libloading::os::windows::*;
 use log::*;
 use num_derive::{FromPrimitive, ToPrimitive};
-use solana_sdk::{
+use safecoin_sdk::{
     decode_error::DecodeError,
     entrypoint_native::ProgramEntrypoint,
     instruction::InstructionError,

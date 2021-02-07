@@ -1,4 +1,4 @@
-//! The `rpc_service` module implements the Solana JSON RPC service.
+//! The `rpc_service` module implements the Safecoin JSON RPC service.
 
 use crate::{
     bigtable_upload_service::BigTableUploadService,
@@ -16,14 +16,14 @@ use jsonrpc_http_server::{
     RequestMiddlewareAction, ServerBuilder,
 };
 use regex::Regex;
-use solana_ledger::blockstore::Blockstore;
-use solana_metrics::inc_new_counter_info;
-use solana_runtime::{
+use safecoin_ledger::blockstore::Blockstore;
+use safecoin_metrics::inc_new_counter_info;
+use safecoin_runtime::{
     bank_forks::{BankForks, SnapshotConfig},
     commitment::BlockCommitmentCache,
     snapshot_utils,
 };
-use solana_sdk::{hash::Hash, native_token::lamports_to_sol, pubkey::Pubkey};
+use safecoin_sdk::{hash::Hash, native_token::lamports_to_safe , pubkey::Pubkey};
 use std::{
     collections::HashSet,
     net::SocketAddr,
@@ -218,14 +218,14 @@ fn process_rest(bank_forks: &Arc<RwLock<BankForks>>, path: &str) -> Option<Strin
                 crate::non_circulating_supply::calculate_non_circulating_supply(&bank).lamports;
             Some(format!(
                 "{}",
-                lamports_to_sol(total_supply - non_circulating_supply)
+                lamports_to_safe (total_supply - non_circulating_supply)
             ))
         }
         "/v0/total-supply" => {
             let r_bank_forks = bank_forks.read().unwrap();
             let bank = r_bank_forks.root_bank();
             let total_supply = bank.capitalization();
-            Some(format!("{}", lamports_to_sol(total_supply)))
+            Some(format!("{}", lamports_to_safe (total_supply)))
         }
         _ => None,
     }
@@ -276,7 +276,7 @@ impl JsonRpcService {
         let (bigtable_ledger_storage, _bigtable_ledger_upload_service) =
             if config.enable_bigtable_ledger_storage || config.enable_bigtable_ledger_upload {
                 runtime
-                    .block_on(solana_storage_bigtable::LedgerStorage::new(
+                    .block_on(safecoin_storage_bigtable::LedgerStorage::new(
                         !config.enable_bigtable_ledger_upload,
                         config.rpc_bigtable_timeout,
                     ))
@@ -359,10 +359,10 @@ impl JsonRpcService {
 
         let (close_handle_sender, close_handle_receiver) = channel();
         let thread_hdl = Builder::new()
-            .name("solana-jsonrpc".to_string())
+            .name("safecoin-jsonrpc".to_string())
             .spawn(move || {
                 let mut io = MetaIoHandler::default();
-                let rpc = RpcSolImpl;
+                let rpc = RpcSafeImpl;
                 io.extend_with(rpc.to_delegate());
 
                 let request_middleware = RpcRequestMiddleware::new(
@@ -435,12 +435,12 @@ mod tests {
         crds_value::{CrdsData, CrdsValue, SnapshotHash},
         rpc::create_validator_exit,
     };
-    use solana_ledger::{
+    use safecoin_ledger::{
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         get_tmp_ledger_path,
     };
-    use solana_runtime::{bank::Bank, bank_forks::ArchiveFormat, snapshot_utils::SnapshotVersion};
-    use solana_sdk::{genesis_config::ClusterType, signature::Signer};
+    use safecoin_runtime::{bank::Bank, bank_forks::ArchiveFormat, snapshot_utils::SnapshotVersion};
+    use safecoin_sdk::{genesis_config::ClusterType, signature::Signer};
     use std::net::{IpAddr, Ipv4Addr};
 
     #[test]
@@ -457,7 +457,7 @@ mod tests {
         let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
         let rpc_addr = SocketAddr::new(
             ip_addr,
-            solana_net_utils::find_available_port_in_range(ip_addr, (10000, 65535)).unwrap(),
+            safecoin_net_utils::find_available_port_in_range(ip_addr, (10000, 65535)).unwrap(),
         );
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let ledger_path = get_tmp_ledger_path!();
@@ -484,7 +484,7 @@ mod tests {
             1,
         );
         let thread = rpc_service.thread_hdl.thread();
-        assert_eq!(thread.name().unwrap(), "solana-jsonrpc");
+        assert_eq!(thread.name().unwrap(), "safecoin-jsonrpc");
 
         assert_eq!(
             10_000,
@@ -584,9 +584,9 @@ mod tests {
         let health_check_slot_distance = 123;
         let override_health_check = Arc::new(AtomicBool::new(false));
         let trusted_validators = vec![
-            solana_sdk::pubkey::new_rand(),
-            solana_sdk::pubkey::new_rand(),
-            solana_sdk::pubkey::new_rand(),
+            safecoin_sdk::pubkey::new_rand(),
+            safecoin_sdk::pubkey::new_rand(),
+            safecoin_sdk::pubkey::new_rand(),
         ];
 
         let health = Arc::new(RpcHealth::new(

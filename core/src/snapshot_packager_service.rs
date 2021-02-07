@@ -1,6 +1,6 @@
 use crate::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES};
-use solana_runtime::{snapshot_package::AccountsPackage, snapshot_utils};
-use solana_sdk::{clock::Slot, hash::Hash};
+use safecoin_runtime::{snapshot_package::AccountsPackage, snapshot_utils};
+use safecoin_sdk::{clock::Slot, hash::Hash};
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -73,14 +73,14 @@ impl SnapshotPackagerService {
 mod tests {
     use super::*;
     use bincode::serialize_into;
-    use solana_runtime::{
+    use safecoin_runtime::{
         accounts_db::AccountStorageEntry,
         bank::BankSlotDelta,
         bank_forks::ArchiveFormat,
         snapshot_package::AccountsPackage,
         snapshot_utils::{self, SnapshotVersion, SNAPSHOT_STATUS_CACHE_FILE_NAME},
     };
-    use solana_sdk::hash::Hash;
+    use safecoin_sdk::hash::Hash;
     use std::{
         fs::{self, remove_dir_all, OpenOptions},
         io::Write,

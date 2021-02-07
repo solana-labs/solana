@@ -1,17 +1,17 @@
 use crate::utils;
 use log::*;
-use solana_client::{client_error::Result as ClientResult, rpc_client::RpcClient};
-use solana_notifier::Notifier;
-use solana_sdk::{
+use safecoin_client::{client_error::Result as ClientResult, rpc_client::RpcClient};
+use safecoin_notifier::Notifier;
+use safecoin_sdk::{
     clock::Slot,
     epoch_schedule::EpochSchedule,
     message::Message,
-    native_token::sol_to_lamports,
+    native_token::safe_to_lamports,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
     transaction::Transaction,
 };
-use solana_stake_program::{
+use safecoin_stake_program::{
     stake_instruction,
     stake_state::{Authorized as StakeAuthorized, Lockup},
 };
@@ -120,7 +120,7 @@ fn delegate_stake(
     rpc_client: &RpcClient,
     faucet_keypair: &Keypair,
     vote_account_pubkey: &Pubkey,
-    sol_gift: u64,
+    safe_gift: u64,
 ) {
     let stake_account_keypair = Keypair::new();
     info!(
@@ -145,7 +145,7 @@ fn delegate_stake(
             &vote_account_pubkey,
             &StakeAuthorized::auto(&faucet_keypair.pubkey()),
             &Lockup::default(),
-            sol_to_lamports(sol_gift as f64),
+            safe_to_lamports(safe_gift as f64),
         );
         let message = Message::new(&instructions, Some(&faucet_keypair.pubkey()));
         let transaction = Transaction::new(
@@ -157,7 +157,7 @@ fn delegate_stake(
         // Check if stake was delegated but just failed to confirm on an earlier attempt
         if retry_count > 0 {
             if let Ok(stake_account) = rpc_client.get_account(&stake_account_keypair.pubkey()) {
-                if stake_account.owner == solana_stake_program::id() {
+                if stake_account.owner == safecoin_stake_program::id() {
                     break;
                 }
             }
@@ -233,15 +233,15 @@ pub fn award_stake(
     rpc_client: &RpcClient,
     faucet_keypair: &Keypair,
     voters: Vec<(String, &Pubkey)>,
-    sol_gift: u64,
+    safe_gift: u64,
     notifier: &mut Notifier,
 ) {
     let mut buffer = vec![];
 
     for (node_pubkey, vote_account_pubkey) in voters {
-        info!("Delegate {} SOL to {}", sol_gift, node_pubkey);
-        delegate_stake(rpc_client, faucet_keypair, vote_account_pubkey, sol_gift);
-        buffer.push(format!("Delegated {} SOL to {}", sol_gift, node_pubkey));
+        info!("Delegate {} SAFE to {}", safe_gift, node_pubkey);
+        delegate_stake(rpc_client, faucet_keypair, vote_account_pubkey, safe_gift);
+        buffer.push(format!("Delegated {} SAFE to {}", safe_gift, node_pubkey));
     }
     notifier.send(&buffer.join("\n"));
 }

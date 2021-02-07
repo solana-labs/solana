@@ -3,15 +3,15 @@
 */
 
 //eslint-disable-next-line import/no-commonjs
-const solanaWeb3 = require('..');
-//const solanaWeb3 = require('@solana/web3.js');
+const safecoinWeb3 = require('..');
+//const safecoinWeb3 = require('@safecoin/web3.js');
 
-const account = new solanaWeb3.Account();
+const account = new safecoinWeb3.Account();
 
 let url;
-url = 'http://devnet.solana.com';
+url = 'http://devnet.safecoin.org';
 //url = 'http://localhost:8899';
-const connection = new solanaWeb3.Connection(url);
+const connection = new safecoinWeb3.Connection(url);
 
 connection.getBalance(account.publicKey).then(balance => {
   console.log(`${account.publicKey} has a balance of ${balance}`);

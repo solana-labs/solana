@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
-use solana_sdk::deserialize_utils::default_on_eof;
-use solana_transaction_status::{Reward, RewardType};
+use safecoin_sdk::deserialize_utils::default_on_eof;
+use safecoin_transaction_status::{Reward, RewardType};
 
 pub mod convert;
 

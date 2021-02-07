@@ -1,8 +1,8 @@
 /farf/
-/solana-release/
-/solana-release.tar.bz2
-/solana-metrics/
-/solana-metrics.tar.bz2
+/safecoin-release/
+/safecoin-release.tar.bz2
+/safecoin-metrics/
+/safecoin-metrics.tar.bz2
 /target/
 
 **/*.rs.bk
@@ -19,7 +19,7 @@ log-*/
 
 # intellij files
 /.idea/
-/solana.iml
+/safecoin.iml
 /.vscode/
 
 # fetch-spl.sh artifacts

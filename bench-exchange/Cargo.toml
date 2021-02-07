@@ -1,11 +1,11 @@
 [package]
-authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+authors = ["Safecoin Maintainers <maintainers@solana.foundation>"]
 edition = "2018"
-name = "solana-bench-exchange"
+name = "safecoin-bench-exchange"
 version = "1.6.0"
-repository = "https://github.com/solana-labs/solana"
+repository = "https://github.com/solana-labs/safecoin"
 license = "Apache-2.0"
-homepage = "https://solana.com/"
+homepage = "https://safecoin.org/"
 publish = false
 
 [dependencies]
@@ -18,21 +18,21 @@ rand = "0.7.0"
 rayon = "1.5.0"
 serde_json = "1.0.56"
 serde_yaml = "0.8.13"
-solana-clap-utils = { path = "../clap-utils", version = "1.6.0" }
-solana-core = { path = "../core", version = "1.6.0" }
-solana-genesis = { path = "../genesis", version = "1.6.0" }
-solana-client = { path = "../client", version = "1.6.0" }
-solana-faucet = { path = "../faucet", version = "1.6.0" }
-solana-exchange-program = { path = "../programs/exchange", version = "1.6.0" }
-solana-logger = { path = "../logger", version = "1.6.0" }
-solana-metrics = { path = "../metrics", version = "1.6.0" }
-solana-net-utils = { path = "../net-utils", version = "1.6.0" }
-solana-runtime = { path = "../runtime", version = "1.6.0" }
-solana-sdk = { path = "../sdk", version = "1.6.0" }
-solana-version = { path = "../version", version = "1.6.0" }
+safecoin-clap-utils = { path = "../clap-utils", version = "1.6.0" }
+safecoin-core = { path = "../core", version = "1.6.0" }
+safecoin-genesis = { path = "../genesis", version = "1.6.0" }
+safecoin-client = { path = "../client", version = "1.6.0" }
+safecoin-faucet = { path = "../faucet", version = "1.6.0" }
+safecoin-exchange-program = { path = "../programs/exchange", version = "1.6.0" }
+safecoin-logger = { path = "../logger", version = "1.6.0" }
+safecoin-metrics = { path = "../metrics", version = "1.6.0" }
+safecoin-net-utils = { path = "../net-utils", version = "1.6.0" }
+safecoin-runtime = { path = "../runtime", version = "1.6.0" }
+safecoin-sdk = { path = "../sdk", version = "1.6.0" }
+safecoin-version = { path = "../version", version = "1.6.0" }
 
 [dev-dependencies]
-solana-local-cluster = { path = "../local-cluster", version = "1.6.0" }
+safecoin-local-cluster = { path = "../local-cluster", version = "1.6.0" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

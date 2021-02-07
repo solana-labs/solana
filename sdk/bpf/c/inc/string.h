@@ -1,7 +1,7 @@
 #pragma once
-#include <solana_sdk.h>
+#include <safecoin_sdk.h>
 
-#define memcpy sol_memcpy
-#define memset sol_memset
-#define strlen sol_strlen
+#define memcpy safe_memcpy
+#define memset safe_memset
+#define strlen safe_strlen
 

@@ -43,7 +43,7 @@ function analyze_packet_loss {
     done > ip_address_map.txt
 
     for ip in "${validatorIpList[@]}"; do
-      "${REPO_ROOT}"/net/scp.sh ip_address_map.txt solana@"$ip":~/solana/
+      "${REPO_ROOT}"/net/scp.sh ip_address_map.txt safecoin@"$ip":~/safecoin/
     done
 
     execution_step "Remotely post-process iftop logs"
@@ -51,12 +51,12 @@ function analyze_packet_loss {
     for ip in "${validatorIpList[@]}"; do
       iftop_log=iftop-logs/$ip-iftop.log
       # shellcheck disable=SC2016
-      "${REPO_ROOT}"/net/ssh.sh solana@"$ip" 'PATH=$PATH:~/.cargo/bin/ ~/solana/scripts/iftop-postprocess.sh ~/solana/iftop.log temp.log ~solana/solana/ip_address_map.txt' > "$iftop_log"
+      "${REPO_ROOT}"/net/ssh.sh safecoin@"$ip" 'PATH=$PATH:~/.cargo/bin/ ~/safecoin/scripts/iftop-postprocess.sh ~/safecoin/iftop.log temp.log ~safecoin/safecoin/ip_address_map.txt' > "$iftop_log"
       upload-ci-artifact "$iftop_log"
     done
 
     execution_step "Analyzing Packet Loss"
-    "${REPO_ROOT}"/solana-release/bin/solana-log-analyzer analyze -f ./iftop-logs/ | sort -k 2 -g
+    "${REPO_ROOT}"/safecoin-release/bin/safecoin-log-analyzer analyze -f ./iftop-logs/ | sort -k 2 -g
   )
 }
 
@@ -71,13 +71,13 @@ function wait_for_bootstrap_validator_stake_drop {
 
   # shellcheck disable=SC2154
   # shellcheck disable=SC2029
-  ssh "${sshOptions[@]}" "${validatorIpList[0]}" "RUST_LOG=info \$HOME/.cargo/bin/solana wait-for-max-stake $max_stake --url http://127.0.0.1:8899"
+  ssh "${sshOptions[@]}" "${validatorIpList[0]}" "RUST_LOG=info \$HOME/.cargo/bin/safecoin wait-for-max-stake $max_stake --url http://127.0.0.1:8899"
 }
 
 function get_slot {
   source "${REPO_ROOT}"/net/common.sh
   loadConfigFile
-  ssh "${sshOptions[@]}" "${validatorIpList[0]}" '$HOME/.cargo/bin/solana --url http://127.0.0.1:8899 slot'
+  ssh "${sshOptions[@]}" "${validatorIpList[0]}" '$HOME/.cargo/bin/safecoin --url http://127.0.0.1:8899 slot'
 }
 
 function get_bootstrap_validator_ip_address {
@@ -166,7 +166,7 @@ function upload_results_to_slack() {
 
   COMMIT=$(git rev-parse HEAD)
   COMMIT_BUTTON_TEXT="$(echo "$COMMIT" | head -c 8)"
-  COMMIT_URL="https://github.com/solana-labs/solana/commit/${COMMIT}"
+  COMMIT_URL="https://github.com/solana-labs/safecoin.orgmit/${COMMIT}"
 
   if [[ -n $BUILDKITE_BUILD_URL ]] ; then
     BUILD_BUTTON_TEXT="Build Kite Job"
@@ -175,7 +175,7 @@ function upload_results_to_slack() {
     BUILDKITE_BUILD_URL="https://buildkite.com/solana-labs/"
   fi
 
-  GRAFANA_URL="https://metrics.solana.com:3000/d/monitor-${CHANNEL:-edge}/cluster-telemetry-${CHANNEL:-edge}?var-testnet=${TESTNET_TAG:-testnet-automation}&from=${TESTNET_START_UNIX_MSECS:-0}&to=${TESTNET_FINISH_UNIX_MSECS:-0}"
+  GRAFANA_URL="https://metrics.safecoin.org:3000/d/monitor-${CHANNEL:-edge}/cluster-telemetry-${CHANNEL:-edge}?var-testnet=${TESTNET_TAG:-testnet-automation}&from=${TESTNET_START_UNIX_MSECS:-0}&to=${TESTNET_FINISH_UNIX_MSECS:-0}"
 
   [[ -n $RESULT_DETAILS ]] || RESULT_DETAILS="Undefined"
   [[ -n $TEST_CONFIGURATION ]] || TEST_CONFIGURATION="Undefined"

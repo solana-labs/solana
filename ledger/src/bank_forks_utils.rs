@@ -8,11 +8,11 @@ use crate::{
     leader_schedule_cache::LeaderScheduleCache,
 };
 use log::*;
-use solana_runtime::{
+use safecoin_runtime::{
     bank_forks::{BankForks, SnapshotConfig},
     snapshot_utils,
 };
-use solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash};
+use safecoin_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash};
 use std::{fs, path::PathBuf, process, result};
 
 pub type LoadResult = result::Result<

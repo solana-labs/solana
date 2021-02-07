@@ -1,12 +1,12 @@
 [package]
-authors = ["Solana Maintainers <maintainers@solana.com>"]
+authors = ["Safecoin Maintainers <maintainers@safecoin.org>"]
 description = "Blockchain, Rebuilt for Scale"
 edition = "2018"
-homepage = "https://solana.com/"
+homepage = "https://safecoin.org/"
 license = "Apache-2.0"
 name = "proto"
 publish = false
-repository = "https://github.com/solana-labs/solana"
+repository = "https://github.com/solana-labs/safecoin"
 version = "1.6.0"
 
 [workspace]

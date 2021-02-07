@@ -1,9 +1,9 @@
-use solana_ledger::entry;
-use solana_ledger::{
+use safecoin_ledger::entry;
+use safecoin_ledger::{
     blockstore::{self, Blockstore},
     get_tmp_ledger_path,
 };
-use solana_sdk::hash::Hash;
+use safecoin_sdk::hash::Hash;
 use std::sync::Arc;
 use std::thread::Builder;
 

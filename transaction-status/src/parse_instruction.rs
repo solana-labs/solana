@@ -4,8 +4,8 @@ use crate::{
 };
 use inflector::Inflector;
 use serde_json::Value;
-use solana_account_decoder::parse_token::spl_token_id_v2_0;
-use solana_sdk::{instruction::CompiledInstruction, pubkey::Pubkey, system_program};
+use safecoin_account_decoder::parse_token::spl_token_id_v2_0;
+use safecoin_sdk::{instruction::CompiledInstruction, pubkey::Pubkey, system_program};
 use std::{
     collections::HashMap,
     str::{from_utf8, FromStr},
@@ -13,15 +13,15 @@ use std::{
 use thiserror::Error;
 
 lazy_static! {
-    static ref BPF_LOADER_PROGRAM_ID: Pubkey = solana_sdk::bpf_loader::id();
+    static ref BPF_LOADER_PROGRAM_ID: Pubkey = safecoin_sdk::bpf_loader::id();
     static ref MEMO_V1_PROGRAM_ID: Pubkey =
         Pubkey::from_str(&spl_memo_v1_0::id().to_string()).unwrap();
     static ref MEMO_V3_PROGRAM_ID: Pubkey =
         Pubkey::from_str(&spl_memo_v3_0::id().to_string()).unwrap();
-    static ref STAKE_PROGRAM_ID: Pubkey = solana_stake_program::id();
+    static ref STAKE_PROGRAM_ID: Pubkey = safecoin_stake_program::id();
     static ref SYSTEM_PROGRAM_ID: Pubkey = system_program::id();
     static ref TOKEN_PROGRAM_ID: Pubkey = spl_token_id_v2_0();
-    static ref VOTE_PROGRAM_ID: Pubkey = solana_vote_program::id();
+    static ref VOTE_PROGRAM_ID: Pubkey = safecoin_vote_program::id();
     static ref PARSABLE_PROGRAM_IDS: HashMap<Pubkey, ParsableProgram> = {
         let mut m = HashMap::new();
         m.insert(*MEMO_V1_PROGRAM_ID, ParsableProgram::SplMemo);

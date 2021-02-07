@@ -39,7 +39,7 @@ mod tests {
     #[test]
     fn test_read_write_pubkey() -> Result<(), Box<dyn std::error::Error>> {
         let filename = "test_pubkey.json";
-        let pubkey = solana_sdk::pubkey::new_rand();
+        let pubkey = safecoin_sdk::pubkey::new_rand();
         write_pubkey_file(filename, pubkey)?;
         let read = read_pubkey_file(filename)?;
         assert_eq!(read, pubkey);

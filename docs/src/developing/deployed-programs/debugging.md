@@ -2,9 +2,9 @@
 title: "Debugging"
 ---
 
-Solana programs run on-chain, so debugging them in the wild can be challenging.
+Safecoin programs run on-chain, so debugging them in the wild can be challenging.
 To make debugging programs easier, developers can write unit tests that directly
-test their program's execution via the Solana runtime, or run a local cluster
+test their program's execution via the Safecoin runtime, or run a local cluster
 that will allow RPC clients to interact with their program.
 
 ## Running unit tests
@@ -29,7 +29,7 @@ the rest of the cluster logs.  To focus in on program specific information the
 following log mask is recommended:
 
 `export
-RUST_LOG=solana_runtime::system_instruction_processor=trace,solana_runtime::message_processor=info,solana_bpf_loader=debug,solana_rbpf=debug`
+RUST_LOG=safecoin_runtime::system_instruction_processor=trace,safecoin_runtime::message_processor=info,safecoin_bpf_loader=debug,solana_rbpf=debug`
 
 Log messages coming directly from the program (not the runtime) will be
 displayed in the form:
@@ -49,17 +49,17 @@ get more information:
 - The BPF loader may fail to setup the program's execution environment
   - `InstructionError::Custom(0x0b9f_0001)` will be returned as part of the
     transaction error.  "0x0b9f_0001" is the hexadecimal representation of
-    [`VirtualMachineCreationFailed`](https://github.com/solana-labs/solana/blob/bc7133d7526a041d1aaee807b80922baa89b6f90/programs/bpf_loader/src/lib.rs#L44).
+    [`VirtualMachineCreationFailed`](https://github.com/solana-labs/safecoin/blob/bc7133d7526a041d1aaee807b80922baa89b6f90/programs/bpf_loader/src/lib.rs#L44).
 - The BPF loader may have detected a fatal error during program executions
   (things like panics, memory violations, system call errors, etc...)
   - `InstructionError::Custom(0x0b9f_0002)` will be returned as part of the
       transaction error.  "0x0b9f_0002" is the hexadecimal representation of
-      [`VirtualMachineFailedToRunProgram`](https://github.com/solana-labs/solana/blob/bc7133d7526a041d1aaee807b80922baa89b6f90/programs/bpf_loader/src/lib.rs#L46).
+      [`VirtualMachineFailedToRunProgram`](https://github.com/solana-labs/safecoin/blob/bc7133d7526a041d1aaee807b80922baa89b6f90/programs/bpf_loader/src/lib.rs#L46).
 - The program itself may return an error
   - `InstructionError::Custom(<user defined value>)` will be returned.  The
     "user defined value" must not conflict with any of the [builtin runtime
     program
-    errors](https://github.com/solana-labs/solana/blob/bc7133d7526a041d1aaee807b80922baa89b6f90/sdk/program/src/program_error.rs#L87).
+    errors](https://github.com/solana-labs/safecoin/blob/bc7133d7526a041d1aaee807b80922baa89b6f90/sdk/program/src/program_error.rs#L87).
     Programs typically use enumeration types to define error codes starting at
     zero so they won't conflict.
 

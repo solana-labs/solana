@@ -1,8 +1,8 @@
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender};
-use solana_ledger::blockstore::{Blockstore, CompletedDataSetInfo};
-use solana_ledger::entry::Entry;
-use solana_sdk::signature::Signature;
+use safecoin_ledger::blockstore::{Blockstore, CompletedDataSetInfo};
+use safecoin_ledger::entry::Entry;
+use safecoin_sdk::signature::Signature;
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -93,9 +93,9 @@ impl CompletedDataSetsService {
 #[cfg(test)]
 pub mod test {
     use super::*;
-    use solana_sdk::hash::Hash;
-    use solana_sdk::signature::{Keypair, Signer};
-    use solana_sdk::transaction::Transaction;
+    use safecoin_sdk::hash::Hash;
+    use safecoin_sdk::signature::{Keypair, Signer};
+    use safecoin_sdk::transaction::Transaction;
 
     #[test]
     fn test_zero_signatures() {

@@ -1,4 +1,4 @@
-use solana_sdk::hash::{hashv, Hash};
+use safecoin_sdk::hash::{hashv, Hash};
 
 // We need to discern between leaf and intermediate nodes to prevent trivial second
 // pre-image attacks.

@@ -8,8 +8,8 @@ use crate::{
 use log::*;
 use num_derive::{FromPrimitive, ToPrimitive};
 use serde_derive::{Deserialize, Serialize};
-use solana_metrics::inc_new_counter_info;
-use solana_sdk::{
+use safecoin_metrics::inc_new_counter_info;
+use safecoin_sdk::{
     decode_error::DecodeError,
     hash::Hash,
     instruction::{AccountMeta, Instruction, InstructionError},
@@ -333,7 +333,7 @@ pub fn process_instruction(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::{
+    use safecoin_sdk::{
         account::{self, Account},
         process_instruction::MockInvokeContext,
         rent::Rent,
@@ -459,7 +459,7 @@ mod tests {
 
     #[test]
     fn test_minimum_balance() {
-        let rent = solana_sdk::rent::Rent::default();
+        let rent = safecoin_sdk::rent::Rent::default();
         let minimum_balance = rent.minimum_balance(VoteState::size_of());
         // golden, may need updating when vote_state grows
         assert!(minimum_balance as f64 / 10f64.powf(9.0) < 0.04)

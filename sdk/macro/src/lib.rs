@@ -67,13 +67,13 @@ struct Id(proc_macro2::TokenStream);
 
 impl Parse for Id {
     fn parse(input: ParseStream) -> Result<Self> {
-        parse_id(input, quote! { ::solana_sdk::pubkey::Pubkey }).map(Self)
+        parse_id(input, quote! { ::safecoin_sdk::pubkey::Pubkey }).map(Self)
     }
 }
 
 impl ToTokens for Id {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        id_to_tokens(&self.0, quote! { ::solana_sdk::pubkey::Pubkey }, tokens)
+        id_to_tokens(&self.0, quote! { ::safecoin_sdk::pubkey::Pubkey }, tokens)
     }
 }
 
@@ -198,7 +198,7 @@ struct Pubkeys {
 impl Parse for Pubkeys {
     fn parse(input: ParseStream) -> Result<Self> {
         let pubkey_type = quote! {
-            ::solana_sdk::pubkey::Pubkey
+            ::safecoin_sdk::pubkey::Pubkey
         };
 
         let method = input.parse()?;
@@ -238,7 +238,7 @@ impl ToTokens for Pubkeys {
         } = self;
 
         let pubkey_type = quote! {
-            ::solana_sdk::pubkey::Pubkey
+            ::safecoin_sdk::pubkey::Pubkey
         };
         if *num == 1 {
             tokens.extend(quote! {

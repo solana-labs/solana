@@ -23,10 +23,10 @@ because F1 was re-enabled.
 In practice this problem is much less obvious as both A and B likely to not have
 a direct dependency on C, indirectly causing rebuilds of numerous other crates as well.
 
-The `solana-crate-features` offers a workaround to this "feature thrashing"
+The `safecoin-crate-features` offers a workaround to this "feature thrashing"
 problem by explicitly declaring all "C-like crates" with the union of all features
 that any other crate in the tree (either explicitly or implicitly) enable.  All
-crates in the Solana source tree should depend on `solana-crate-features`.
+crates in the Safecoin source tree should depend on `safecoin-crate-features`.
 
 ### Adding new dependent crates
 When unnecessary `cargo` rebuilds are observed, the first step is to figure what
@@ -47,7 +47,7 @@ $ cp ./target/debug/cargo ~/.cargo/bin/cargo
 Rebuild with the custom `cargo` and search for indications of crates getting
 built with different features (repeated runs of `./scripts/cargo-install-all.sh`
 work great for this).  When the problematic crate is identified, add it as a
-dependency of `solana-crate-features` with the union of all observed enabled
+dependency of `safecoin-crate-features` with the union of all observed enabled
 features for that crate.
 
 ### Appendix

@@ -17,8 +17,8 @@ use flate2::read::GzDecoder;
 use log::*;
 use rayon::ThreadPool;
 use regex::Regex;
-use solana_measure::measure::Measure;
-use solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash, pubkey::Pubkey};
+use safecoin_measure::measure::Measure;
+use safecoin_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash, pubkey::Pubkey};
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::{

@@ -5,8 +5,8 @@ use crate::{
     bank::Bank,
 };
 use log::*;
-use solana_metrics::inc_new_counter_info;
-use solana_sdk::{clock::Slot, timing};
+use safecoin_metrics::inc_new_counter_info;
+use safecoin_sdk::{clock::Slot, timing};
 use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
     ops::Index,
@@ -322,15 +322,15 @@ mod tests {
             create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
         },
     };
-    use solana_sdk::hash::Hash;
-    use solana_sdk::{
+    use safecoin_sdk::hash::Hash;
+    use safecoin_sdk::{
         clock::UnixTimestamp,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
         stake_weighted_timestamp::DEPRECATED_TIMESTAMP_SLOT_RANGE,
         sysvar::epoch_schedule::EpochSchedule,
     };
-    use solana_vote_program::vote_state::BlockTimestamp;
+    use safecoin_vote_program::vote_state::BlockTimestamp;
 
     #[test]
     fn test_bank_forks_new() {
@@ -417,7 +417,7 @@ mod tests {
 
     #[test]
     fn test_bank_forks_different_set_root() {
-        solana_logger::setup();
+        safecoin_logger::setup();
         let leader_keypair = Keypair::new();
         let GenesisConfigInfo {
             mut genesis_config,

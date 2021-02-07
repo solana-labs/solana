@@ -1,10 +1,10 @@
 #![feature(test)]
 extern crate test;
 
-use solana_ledger::entry::{next_entry_mut, Entry, EntrySlice};
-use solana_sdk::hash::{hash, Hash};
-use solana_sdk::signature::{Keypair, Signer};
-use solana_sdk::system_transaction;
+use safecoin_ledger::entry::{next_entry_mut, Entry, EntrySlice};
+use safecoin_sdk::hash::{hash, Hash};
+use safecoin_sdk::signature::{Keypair, Signer};
+use safecoin_sdk::system_transaction;
 use test::Bencher;
 
 const NUM_HASHES: u64 = 400;
@@ -12,7 +12,7 @@ const NUM_ENTRIES: usize = 800;
 
 #[bench]
 fn bench_poh_verify_ticks(bencher: &mut Bencher) {
-    solana_logger::setup();
+    safecoin_logger::setup();
     let zero = Hash::default();
     let start_hash = hash(&zero.as_ref());
     let mut cur_hash = start_hash;

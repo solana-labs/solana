@@ -1,11 +1,11 @@
 [package]
-name = "solana-config-program"
+name = "safecoin-config-program"
 version = "1.6.0"
-description = "Solana Config program"
-authors = ["Solana Maintainers <maintainers@solana.foundation>"]
-repository = "https://github.com/solana-labs/solana"
+description = "Safecoin Config program"
+authors = ["Safecoin Maintainers <maintainers@solana.foundation>"]
+repository = "https://github.com/solana-labs/safecoin"
 license = "Apache-2.0"
-homepage = "https://solana.com/"
+homepage = "https://safecoin.org/"
 edition = "2018"
 
 [dependencies]
@@ -14,14 +14,14 @@ chrono = { version = "0.4.11", features = ["serde"] }
 log = "0.4.11"
 serde = "1.0.122"
 serde_derive = "1.0.103"
-solana-sdk = { path = "../../sdk", version = "1.6.0" }
+safecoin-sdk = { path = "../../sdk", version = "1.6.0" }
 
 [dev-dependencies]
-solana-logger = { path = "../../logger", version = "1.6.0" }
+safecoin-logger = { path = "../../logger", version = "1.6.0" }
 
 [lib]
 crate-type = ["lib"]
-name = "solana_config_program"
+name = "safecoin_config_program"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

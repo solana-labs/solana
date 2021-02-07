@@ -2,7 +2,7 @@
 
 use crate::ownable_instruction::OwnableError;
 use bincode::serialize_into;
-use solana_sdk::{
+use safecoin_sdk::{
     instruction::InstructionError,
     keyed_account::{next_keyed_account, KeyedAccount},
     process_instruction::InvokeContext,
@@ -59,8 +59,8 @@ pub fn process_instruction(
 mod tests {
     use super::*;
     use crate::ownable_instruction;
-    use solana_runtime::{bank::Bank, bank_client::BankClient};
-    use solana_sdk::{
+    use safecoin_runtime::{bank::Bank, bank_client::BankClient};
+    use safecoin_sdk::{
         account::Account,
         client::SyncClient,
         genesis_config::create_genesis_config,
@@ -153,9 +153,9 @@ mod tests {
 
     #[test]
     fn test_ownable_missing_owner_signature() {
-        let mut account_owner_pubkey = solana_sdk::pubkey::new_rand();
+        let mut account_owner_pubkey = safecoin_sdk::pubkey::new_rand();
         let owner_pubkey = account_owner_pubkey;
-        let new_owner_pubkey = solana_sdk::pubkey::new_rand();
+        let new_owner_pubkey = safecoin_sdk::pubkey::new_rand();
         let account = Account::new_ref(1, 0, &system_program::id());
         let owner_keyed_account = KeyedAccount::new(&owner_pubkey, false, &account); // <-- Attack! Setting owner without the original owner's signature.
         let err = set_owner(
@@ -169,10 +169,10 @@ mod tests {
 
     #[test]
     fn test_ownable_incorrect_owner() {
-        let mut account_owner_pubkey = solana_sdk::pubkey::new_rand();
-        let new_owner_pubkey = solana_sdk::pubkey::new_rand();
+        let mut account_owner_pubkey = safecoin_sdk::pubkey::new_rand();
+        let new_owner_pubkey = safecoin_sdk::pubkey::new_rand();
         let account = Account::new_ref(1, 0, &system_program::id());
-        let mallory_pubkey = solana_sdk::pubkey::new_rand(); // <-- Attack! Signing with wrong pubkey
+        let mallory_pubkey = safecoin_sdk::pubkey::new_rand(); // <-- Attack! Signing with wrong pubkey
         let owner_keyed_account = KeyedAccount::new(&mallory_pubkey, true, &account);
         let err = set_owner(
             &mut account_owner_pubkey,

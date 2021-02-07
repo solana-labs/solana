@@ -41,8 +41,8 @@
 //!
 //!
 
-use reed_solomon_erasure::galois_8::Field;
-use reed_solomon_erasure::ReedSolomon;
+use reed_safe omon_erasure::galois_8::Field;
+use reed_safe omon_erasure::ReedSafeomon;
 use serde::{Deserialize, Serialize};
 
 //TODO(sakridge) pick these values
@@ -83,22 +83,22 @@ impl ErasureConfig {
     }
 }
 
-type Result<T> = std::result::Result<T, reed_solomon_erasure::Error>;
+type Result<T> = std::result::Result<T, reed_safe omon_erasure::Error>;
 
 /// Represents an erasure "session" with a particular configuration and number of data and coding
 /// shreds
 #[derive(Debug, Clone)]
-pub struct Session(ReedSolomon<Field>);
+pub struct Session(ReedSafeomon<Field>);
 
 impl Session {
     pub fn new(data_count: usize, coding_count: usize) -> Result<Session> {
-        let rs = ReedSolomon::new(data_count, coding_count)?;
+        let rs = ReedSafeomon::new(data_count, coding_count)?;
 
         Ok(Session(rs))
     }
 
     pub fn new_from_config(config: &ErasureConfig) -> Result<Session> {
-        let rs = ReedSolomon::new(config.num_data, config.num_coding)?;
+        let rs = ReedSafeomon::new(config.num_data, config.num_coding)?;
 
         Ok(Session(rs))
     }
@@ -132,7 +132,7 @@ impl Default for Session {
 pub mod test {
     use super::*;
     use log::*;
-    use solana_sdk::clock::Slot;
+    use safecoin_sdk::clock::Slot;
 
     /// Specifies the contents of a 16-data-shred and 4-coding-shred erasure set
     /// Exists to be passed to `generate_blockstore_with_coding`

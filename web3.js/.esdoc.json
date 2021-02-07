@@ -14,9 +14,9 @@
         "unexportedIdentifier": {"enable": false},
         "typeInference": {"enable": true},
         "brand": {
-          "title": "Solana Javascript API",
-          "repository": "https://github.com/solana-labs/solana-web3.js",
-          "site": "https://solana.com"
+          "title": "Safecoin Javascript API",
+          "repository": "https://github.com/solana-labs/safecoin-web3.js",
+          "site": "https://safecoin.org"
         }
       }
     },
@@ -25,7 +25,7 @@
       "option": {
         "stripPackageName": true,
         "replaces": [
-          {"from": ".*", "to": "@solana/web3"}
+          {"from": ".*", "to": "@safecoin/web3"}
         ]
       }
     },

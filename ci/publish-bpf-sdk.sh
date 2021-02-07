@@ -21,7 +21,7 @@ echo --- AWS S3 Store
 if [[ -z $CHANNEL_OR_TAG ]]; then
   echo Skipped
 else
-  upload-s3-artifact "/solana/bpf-sdk.tar.bz2" "s3://solana-sdk/$CHANNEL_OR_TAG/bpf-sdk.tar.bz2"
+  upload-s3-artifact "/safecoin/bpf-sdk.tar.bz2" "s3://safecoin-sdk/$CHANNEL_OR_TAG/bpf-sdk.tar.bz2"
 fi
 
 exit 0

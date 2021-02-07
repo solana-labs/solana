@@ -4,12 +4,12 @@ use crate::{
 };
 use bincode::deserialize;
 use serde_json::Value;
-use solana_config_program::{get_config_data, ConfigKeys};
-use solana_sdk::pubkey::Pubkey;
-use solana_stake_program::config::Config as StakeConfig;
+use safecoin_config_program::{get_config_data, ConfigKeys};
+use safecoin_sdk::pubkey::Pubkey;
+use safecoin_stake_program::config::Config as StakeConfig;
 
 pub fn parse_config(data: &[u8], pubkey: &Pubkey) -> Result<ConfigAccountType, ParseAccountError> {
-    let parsed_account = if pubkey == &solana_stake_program::config::id() {
+    let parsed_account = if pubkey == &safecoin_stake_program::config::id() {
         get_config_data(data)
             .ok()
             .and_then(|data| deserialize::<StakeConfig>(data).ok())
@@ -90,7 +90,7 @@ mod test {
     use super::*;
     use crate::validator_info::ValidatorInfo;
     use serde_json::json;
-    use solana_config_program::create_config_account;
+    use safecoin_config_program::create_config_account;
 
     #[test]
     fn test_parse_config() {
@@ -102,7 +102,7 @@ mod test {
         assert_eq!(
             parse_config(
                 &stake_config_account.data,
-                &solana_stake_program::config::id()
+                &safecoin_stake_program::config::id()
             )
             .unwrap(),
             ConfigAccountType::StakeConfig(UiStakeConfig {
@@ -113,11 +113,11 @@ mod test {
 
         let validator_info = ValidatorInfo {
             info: serde_json::to_string(&json!({
-                "name": "Solana",
+                "name": "Safecoin",
             }))
             .unwrap(),
         };
-        let info_pubkey = solana_sdk::pubkey::new_rand();
+        let info_pubkey = safecoin_sdk::pubkey::new_rand();
         let validator_info_config_account = create_config_account(
             vec![(validator_info::id(), false), (info_pubkey, true)],
             &validator_info,
@@ -136,7 +136,7 @@ mod test {
                         signer: true,
                     }
                 ],
-                config_data: serde_json::from_str(r#"{"name":"Solana"}"#).unwrap(),
+                config_data: serde_json::from_str(r#"{"name":"Safecoin"}"#).unwrap(),
             }),
         );
 

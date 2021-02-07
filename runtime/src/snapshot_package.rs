@@ -1,8 +1,8 @@
 use crate::bank_forks::ArchiveFormat;
 use crate::snapshot_utils::SnapshotVersion;
 use crate::{accounts_db::SnapshotStorages, bank::BankSlotDelta};
-use solana_sdk::clock::Slot;
-use solana_sdk::hash::Hash;
+use safecoin_sdk::clock::Slot;
+use safecoin_sdk::hash::Hash;
 use std::{
     path::PathBuf,
     sync::mpsc::{Receiver, SendError, Sender},

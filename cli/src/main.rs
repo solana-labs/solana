@@ -3,19 +3,19 @@ use clap::{
     SubCommand,
 };
 use console::style;
-use solana_clap_utils::{
+use safecoin_clap_utils::{
     input_validators::{is_url, is_url_or_moniker, normalize_to_url_if_moniker},
     keypair::{CliSigners, DefaultSigner, SKIP_SEED_PHRASE_VALIDATION_ARG},
     DisplayError,
 };
-use solana_cli::cli::{
+use safecoin_cli::cli::{
     app, parse_command, process_command, CliCommandInfo, CliConfig, SettingType,
     DEFAULT_RPC_TIMEOUT_SECONDS,
 };
-use solana_cli_config::{Config, CONFIG_FILE};
-use solana_cli_output::{display::println_name_value, OutputFormat};
-use solana_client::rpc_config::RpcSendTransactionConfig;
-use solana_remote_wallet::remote_wallet::RemoteWalletManager;
+use safecoin_cli_config::{Config, CONFIG_FILE};
+use safecoin_cli_output::{display::println_name_value, OutputFormat};
+use safecoin_client::rpc_config::RpcSendTransactionConfig;
+use safecoin_remote_wallet::remote_wallet::RemoteWalletManager;
 use std::{collections::HashMap, error, path::PathBuf, sync::Arc, time::Duration};
 
 pub fn println_name_value_or(name: &str, value: &str, setting_type: SettingType) {
@@ -245,11 +245,11 @@ pub fn parse_args<'a>(
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
-    solana_logger::setup_with_default("off");
+    safecoin_logger::setup_with_default("off");
     let matches = app(
         crate_name!(),
         crate_description!(),
-        solana_version::version!(),
+        safecoin_version::version!(),
     )
     .arg({
         let arg = Arg::with_name("config_file")
@@ -274,7 +274,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             .global(true)
             .validator(is_url_or_moniker)
             .help(
-                "URL for Solana's JSON RPC or moniker (or their first letter): \
+                "URL for Safecoin's JSON RPC or moniker (or their first letter): \
                    [mainnet-beta, testnet, devnet, localhost]",
             ),
     )
@@ -285,7 +285,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             .takes_value(true)
             .global(true)
             .validator(is_url)
-            .help("WebSocket URL for the solana cluster"),
+            .help("WebSocket URL for the safecoin cluster"),
     )
     .arg(
         Arg::with_name("keypair")
@@ -355,7 +355,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     )
     .subcommand(
         SubCommand::with_name("config")
-            .about("Solana command-line tool configuration settings")
+            .about("Safecoin command-line tool configuration settings")
             .aliases(&["get", "set"])
             .setting(AppSettings::SubcommandRequiredElseHelp)
             .subcommand(

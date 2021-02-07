@@ -3,22 +3,22 @@
 
 extern crate test;
 #[macro_use]
-extern crate solana_bpf_loader_program;
+extern crate safecoin_bpf_loader_program;
 
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
-use solana_bpf_loader_program::{
+use safecoin_bpf_loader_program::{
     create_vm, serialization::serialize_parameters, syscalls::register_syscalls, BPFError,
     ThisInstructionMeter,
 };
-use solana_measure::measure::Measure;
+use safecoin_measure::measure::Measure;
 use solana_rbpf::vm::{Config, Executable, InstructionMeter};
-use solana_runtime::{
+use safecoin_runtime::{
     bank::Bank,
     bank_client::BankClient,
     genesis_utils::{create_genesis_config, GenesisConfigInfo},
     loader_utils::load_program,
 };
-use solana_sdk::{
+use safecoin_sdk::{
     account::Account,
     bpf_loader,
     client::SyncClient,
@@ -164,7 +164,7 @@ fn bench_program_execute_noop(bencher: &mut Bencher) {
         ..
     } = create_genesis_config(50);
     let mut bank = Bank::new(&genesis_config);
-    let (name, id, entrypoint) = solana_bpf_loader_program!();
+    let (name, id, entrypoint) = safecoin_bpf_loader_program!();
     bank.add_builtin(&name, id, entrypoint);
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);
@@ -200,20 +200,20 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
     let accounts = [RefCell::new(Account::new(
         1,
         10000001,
-        &solana_sdk::pubkey::new_rand(),
+        &safecoin_sdk::pubkey::new_rand(),
     ))];
-    let keys = [solana_sdk::pubkey::new_rand()];
+    let keys = [safecoin_sdk::pubkey::new_rand()];
     let keyed_accounts: Vec<_> = keys
         .iter()
         .zip(&accounts)
-        .map(|(key, account)| solana_sdk::keyed_account::KeyedAccount::new(&key, false, &account))
+        .map(|(key, account)| safecoin_sdk::keyed_account::KeyedAccount::new(&key, false, &account))
         .collect();
     let instruction_data = vec![0u8];
 
     // Serialize account data
     let mut serialized = serialize_parameters(
         &bpf_loader::id(),
-        &solana_sdk::pubkey::new_rand(),
+        &safecoin_sdk::pubkey::new_rand(),
         &keyed_accounts,
         &instruction_data,
     )

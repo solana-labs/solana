@@ -23,5 +23,5 @@ waitForNodeToInit() {
   echo "$hostname booted up"
 }
 
-cd ~/solana
+cd ~/safecoin
 waitForNodeToInit

@@ -3,7 +3,7 @@ title: "Transactions"
 ---
 
 Program execution begins with a [transaction](terminology.md#transaction) being
-submitted to the cluster. The Solana runtime will execute a program to process
+submitted to the cluster. The Safecoin runtime will execute a program to process
 each of the [instructions](terminology.md#instruction) contained in the
 transaction, in order, and atomically.
 
@@ -15,7 +15,7 @@ This section covers the binary format of a transaction.
 
 A transaction contains a [compact-array](#compact-array-format) of signatures,
 followed by a [message](#message-format). Each item in the signatures array is
-a [digital signature](#signature-format) of the given message. The Solana
+a [digital signature](#signature-format) of the given message. The Safecoin
 runtime verifies that the number of signatures matches the number in the first
 8 bits of the [message header](#message-header-format). It also verifies that
 each signature was signed by the private key corresponding to the public key at
@@ -95,7 +95,7 @@ entire transaction to fail immediately.
 Program's typically provide helper functions to construct instruction they
 support. For example, the system program provides the following Rust helper to
 construct a
-[`SystemInstruction::CreateAccount`](https://github.com/solana-labs/solana/blob/6606590b8132e56dab9e60b3f7d20ba7412a736c/sdk/program/src/system_instruction.rs#L63)
+[`SystemInstruction::CreateAccount`](https://github.com/solana-labs/safecoin/blob/6606590b8132e56dab9e60b3f7d20ba7412a736c/sdk/program/src/system_instruction.rs#L63)
 instruction:
 
 ```rust
@@ -124,7 +124,7 @@ pub fn create_account(
 
 Which can be found here:
 
-https://github.com/solana-labs/solana/blob/6606590b8132e56dab9e60b3f7d20ba7412a736c/sdk/program/src/system_instruction.rs#L220
+https://github.com/solana-labs/safecoin/blob/6606590b8132e56dab9e60b3f7d20ba7412a736c/sdk/program/src/system_instruction.rs#L220
 
 ### Program Id
 
@@ -141,7 +141,7 @@ runtime will reject transactions that specify programs that are not executable.
 
 
 Unlike deployed programs, [builtins](developing/builtins/programs.md) are handled
-differently in that they are built directly into the Solana runtime.
+differently in that they are built directly into the Safecoin runtime.
 
 ### Accounts
 
@@ -163,11 +163,11 @@ overhead of decoding since that step is performed by the program on-chain. It's
 been observed that some common encodings (Rust's bincode for example) are very
 inefficient.
 
-The [Solana Program Library's Token
+The [Safecoin Program Library's Token
 program](https://github.com/solana-labs/solana-program-library/tree/master/token)
 gives one example of how instruction data can be encoded efficiently, but note
 that this method only supports fixed sized types. Token utilizes the
-[Pack](https://github.com/solana-labs/solana/blob/master/sdk/program/src/program_pack.rs)
+[Pack](https://github.com/solana-labs/safecoin/blob/master/sdk/program/src/program_pack.rs)
 trait to encode/decode instruction data for both token instructions as well as
 token account states.
 

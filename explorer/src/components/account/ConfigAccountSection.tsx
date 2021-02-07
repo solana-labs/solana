@@ -11,7 +11,7 @@ import {
   AccountBalanceRow,
   AccountHeader,
 } from "components/common/Account";
-import { PublicKey } from "@solana/web3.js";
+import { PublicKey } from "@safecoin/web3.js";
 import { Address } from "components/common/Address";
 
 const MAX_SLASH_PENALTY = Math.pow(2, 8);

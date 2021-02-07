@@ -30,8 +30,8 @@ use crate::{
 use rand::distributions::{Distribution, WeightedIndex};
 use rand::{CryptoRng, Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
-use solana_ledger::shred::Shred;
-use solana_sdk::sanitize::{Sanitize, SanitizeError};
+use safecoin_ledger::shred::Shred;
+use safecoin_sdk::sanitize::{Sanitize, SanitizeError};
 
 use bincode::{serialize, serialized_size};
 use itertools::Itertools;
@@ -39,20 +39,20 @@ use rand::thread_rng;
 use rayon::prelude::*;
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use serde::ser::Serialize;
-use solana_measure::measure::Measure;
-use solana_measure::thread_mem_usage;
-use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};
-use solana_net_utils::{
+use safecoin_measure::measure::Measure;
+use safecoin_measure::thread_mem_usage;
+use safecoin_metrics::{inc_new_counter_debug, inc_new_counter_error};
+use safecoin_net_utils::{
     bind_common, bind_common_in_range, bind_in_range, find_available_port_in_range,
     multi_bind_in_range, PortRange,
 };
-use solana_perf::packet::{
+use safecoin_perf::packet::{
     limited_deserialize, to_packets_with_destination, Packet, Packets, PacketsRecycler,
     PACKET_DATA_SIZE,
 };
-use solana_rayon_threadlimit::get_thread_count;
-use solana_runtime::bank_forks::BankForks;
-use solana_sdk::{
+use safecoin_rayon_threadlimit::get_thread_count;
+use safecoin_runtime::bank_forks::BankForks;
+use safecoin_sdk::{
     clock::{Slot, DEFAULT_MS_PER_SLOT, DEFAULT_SLOTS_PER_EPOCH},
     feature_set::{self, FeatureSet},
     hash::Hash,
@@ -61,9 +61,9 @@ use solana_sdk::{
     timing::timestamp,
     transaction::Transaction,
 };
-use solana_streamer::sendmmsg::multicast;
-use solana_streamer::streamer::{PacketReceiver, PacketSender};
-use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
+use safecoin_streamer::sendmmsg::multicast;
+use safecoin_streamer::streamer::{PacketReceiver, PacketSender};
+use safecoin_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::{
     borrow::Cow,
     collections::{hash_map::Entry, HashMap, HashSet, VecDeque},
@@ -1242,7 +1242,7 @@ impl ClusterInfo {
         (vec, max)
     }
 
-    pub fn get_node_version(&self, pubkey: &Pubkey) -> Option<solana_version::Version> {
+    pub fn get_node_version(&self, pubkey: &Pubkey) -> Option<safecoin_version::Version> {
         let version = self
             .gossip
             .read()
@@ -1820,7 +1820,7 @@ impl ClusterInfo {
             .build()
             .unwrap();
         Builder::new()
-            .name("solana-gossip".to_string())
+            .name("safecoin-gossip".to_string())
             .spawn(move || {
                 let mut last_push = timestamp();
                 let mut last_contact_info_trace = timestamp();
@@ -1838,7 +1838,7 @@ impl ClusterInfo {
                 let mut generate_pull_requests = true;
                 loop {
                     let start = timestamp();
-                    thread_mem_usage::datapoint("solana-gossip");
+                    thread_mem_usage::datapoint("safecoin-gossip");
                     if self.contact_debug_interval != 0
                         && start - last_contact_info_trace > self.contact_debug_interval
                     {
@@ -2911,7 +2911,7 @@ impl ClusterInfo {
         let exit = exit.clone();
         let recycler = PacketsRecycler::default();
         Builder::new()
-            .name("solana-listen".to_string())
+            .name("safecoin-listen".to_string())
             .spawn(move || {
                 let thread_pool = ThreadPoolBuilder::new()
                     .num_threads(std::cmp::min(get_thread_count(), 8))
@@ -2951,7 +2951,7 @@ impl ClusterInfo {
                             _ => error!("gossip run_listen failed: {}", err),
                         }
                     }
-                    thread_mem_usage::datapoint("solana-listen");
+                    thread_mem_usage::datapoint("safecoin-listen");
                 }
             })
             .unwrap()
@@ -3051,7 +3051,7 @@ pub struct Node {
 
 impl Node {
     pub fn new_localhost() -> Self {
-        let pubkey = solana_sdk::pubkey::new_rand();
+        let pubkey = safecoin_sdk::pubkey::new_rand();
         Self::new_localhost_with_pubkey(&pubkey)
     }
     pub fn new_localhost_with_pubkey(pubkey: &Pubkey) -> Self {
@@ -3207,9 +3207,9 @@ mod tests {
     };
     use itertools::izip;
     use rand::seq::SliceRandom;
-    use solana_ledger::shred::Shredder;
-    use solana_sdk::signature::{Keypair, Signer};
-    use solana_vote_program::{vote_instruction, vote_state::Vote};
+    use safecoin_ledger::shred::Shredder;
+    use safecoin_sdk::signature::{Keypair, Signer};
+    use safecoin_vote_program::{vote_instruction, vote_state::Vote};
     use std::iter::repeat_with;
     use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddrV4};
     use std::sync::Arc;
@@ -3217,10 +3217,10 @@ mod tests {
     #[test]
     fn test_gossip_node() {
         //check that a gossip nodes always show up as spies
-        let (node, _, _) = ClusterInfo::spy_node(&solana_sdk::pubkey::new_rand(), 0);
+        let (node, _, _) = ClusterInfo::spy_node(&safecoin_sdk::pubkey::new_rand(), 0);
         assert!(ClusterInfo::is_spy_node(&node));
         let (node, _, _) = ClusterInfo::gossip_node(
-            &solana_sdk::pubkey::new_rand(),
+            &safecoin_sdk::pubkey::new_rand(),
             &"1.1.1.1:1111".parse().unwrap(),
             0,
         );
@@ -3229,11 +3229,11 @@ mod tests {
 
     #[test]
     fn test_handle_pull() {
-        solana_logger::setup();
+        safecoin_logger::setup();
         let node = Node::new_localhost();
         let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(node.info));
 
-        let entrypoint_pubkey = solana_sdk::pubkey::new_rand();
+        let entrypoint_pubkey = safecoin_sdk::pubkey::new_rand();
         let data = test_crds_values(entrypoint_pubkey);
         let timeouts = HashMap::new();
         assert_eq!(
@@ -3246,7 +3246,7 @@ mod tests {
             )
         );
 
-        let entrypoint_pubkey2 = solana_sdk::pubkey::new_rand();
+        let entrypoint_pubkey2 = safecoin_sdk::pubkey::new_rand();
         assert_eq!(
             (1, 0, 0),
             ClusterInfo::handle_pull_response(&cluster_info, &entrypoint_pubkey2, data, &timeouts)
@@ -3388,7 +3388,7 @@ mod tests {
 
     #[test]
     fn test_filter_shred_version() {
-        let from = solana_sdk::pubkey::new_rand();
+        let from = safecoin_sdk::pubkey::new_rand();
         let my_shred_version = 1;
         let other_shred_version = 1;
 
@@ -3423,7 +3423,7 @@ mod tests {
         assert_eq!(values.len(), 1);
 
         let snapshot_hash_data = CrdsValue::new_unsigned(CrdsData::SnapshotHashes(SnapshotHash {
-            from: solana_sdk::pubkey::new_rand(),
+            from: safecoin_sdk::pubkey::new_rand(),
             hashes: vec![],
             wallclock: 0,
         }));
@@ -3557,7 +3557,7 @@ mod tests {
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         //check that gossip doesn't try to push to invalid addresses
         let node = Node::new_localhost();
-        let (spy, _, _) = ClusterInfo::spy_node(&solana_sdk::pubkey::new_rand(), 0);
+        let (spy, _, _) = ClusterInfo::spy_node(&safecoin_sdk::pubkey::new_rand(), 0);
         let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(node.info));
         cluster_info.insert_info(spy);
         cluster_info
@@ -3577,16 +3577,16 @@ mod tests {
 
     #[test]
     fn test_cluster_info_new() {
-        let d = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
+        let d = ContactInfo::new_localhost(&safecoin_sdk::pubkey::new_rand(), timestamp());
         let cluster_info = ClusterInfo::new_with_invalid_keypair(d.clone());
         assert_eq!(d.id, cluster_info.id());
     }
 
     #[test]
     fn insert_info_test() {
-        let d = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
+        let d = ContactInfo::new_localhost(&safecoin_sdk::pubkey::new_rand(), timestamp());
         let cluster_info = ClusterInfo::new_with_invalid_keypair(d);
-        let d = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
+        let d = ContactInfo::new_localhost(&safecoin_sdk::pubkey::new_rand(), timestamp());
         let label = CrdsValueLabel::ContactInfo(d.id);
         cluster_info.insert_info(d);
         assert!(cluster_info
@@ -3600,7 +3600,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_update_contact_info() {
-        let d = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
+        let d = ContactInfo::new_localhost(&safecoin_sdk::pubkey::new_rand(), timestamp());
         let cluster_info = ClusterInfo::new_with_invalid_keypair(d);
         let entry_label = CrdsValueLabel::ContactInfo(cluster_info.id());
         assert!(cluster_info
@@ -3629,7 +3629,7 @@ mod tests {
 
         // Inserting Contactinfo with different pubkey should panic,
         // and update should fail
-        cluster_info.update_contact_info(|ci| ci.id = solana_sdk::pubkey::new_rand())
+        cluster_info.update_contact_info(|ci| ci.id = safecoin_sdk::pubkey::new_rand())
     }
 
     fn assert_in_range(x: u16, range: (u16, u16)) {
@@ -3664,7 +3664,7 @@ mod tests {
     fn new_with_external_ip_test_random() {
         let ip = Ipv4Addr::from(0);
         let node = Node::new_with_external_ip(
-            &solana_sdk::pubkey::new_rand(),
+            &safecoin_sdk::pubkey::new_rand(),
             &socketaddr!(ip, 0),
             VALIDATOR_PORT_RANGE,
             IpAddr::V4(ip),
@@ -3682,7 +3682,7 @@ mod tests {
         let ip = IpAddr::V4(Ipv4Addr::from(0));
         let port = bind_in_range(ip, port_range).expect("Failed to bind").0;
         let node = Node::new_with_external_ip(
-            &solana_sdk::pubkey::new_rand(),
+            &safecoin_sdk::pubkey::new_rand(),
             &socketaddr!(0, port),
             port_range,
             ip,
@@ -3754,7 +3754,7 @@ mod tests {
         // add a vote
         let vote = Vote::new(
             vec![1, 3, 7], // slots
-            solana_sdk::hash::new_rand(&mut rng),
+            safecoin_sdk::hash::new_rand(&mut rng),
         );
         let ix = vote_instruction::vote(
             &Pubkey::new_unique(), // vote_pubkey
@@ -3789,7 +3789,7 @@ mod tests {
     }
 
     fn new_vote_transaction<R: Rng>(rng: &mut R, slots: Vec<Slot>) -> Transaction {
-        let vote = Vote::new(slots, solana_sdk::hash::new_rand(rng));
+        let vote = Vote::new(slots, safecoin_sdk::hash::new_rand(rng));
         let ix = vote_instruction::vote(
             &Pubkey::new_unique(), // vote_pubkey
             &Pubkey::new_unique(), // authorized_voter_pubkey
@@ -3895,7 +3895,7 @@ mod tests {
             ContactInfo::new_localhost(&node_keypair.pubkey(), timestamp()),
             node_keypair,
         );
-        let entrypoint_pubkey = solana_sdk::pubkey::new_rand();
+        let entrypoint_pubkey = safecoin_sdk::pubkey::new_rand();
         let entrypoint = ContactInfo::new_localhost(&entrypoint_pubkey, timestamp());
         cluster_info.set_entrypoint(entrypoint.clone());
         let pulls = cluster_info.new_pull_requests(&thread_pool, None, &HashMap::new());
@@ -3955,7 +3955,7 @@ mod tests {
         let splits: Vec<_> =
             ClusterInfo::split_gossip_messages(PUSH_MESSAGE_MAX_PAYLOAD_SIZE, values.clone())
                 .collect();
-        let self_pubkey = solana_sdk::pubkey::new_rand();
+        let self_pubkey = safecoin_sdk::pubkey::new_rand();
         assert!(splits.len() * 3 < NUM_CRDS_VALUES);
         // Assert that all messages are included in the splits.
         assert_eq!(NUM_CRDS_VALUES, splits.iter().map(Vec::len).sum::<usize>());
@@ -4091,14 +4091,14 @@ mod tests {
             ContactInfo::new_localhost(&node_keypair.pubkey(), timestamp()),
             node_keypair,
         );
-        let entrypoint_pubkey = solana_sdk::pubkey::new_rand();
+        let entrypoint_pubkey = safecoin_sdk::pubkey::new_rand();
         let mut entrypoint = ContactInfo::new_localhost(&entrypoint_pubkey, timestamp());
         entrypoint.gossip = socketaddr!("127.0.0.2:1234");
         cluster_info.set_entrypoint(entrypoint.clone());
 
         let mut stakes = HashMap::new();
 
-        let other_node_pubkey = solana_sdk::pubkey::new_rand();
+        let other_node_pubkey = safecoin_sdk::pubkey::new_rand();
         let other_node = ContactInfo::new_localhost(&other_node_pubkey, timestamp());
         assert_ne!(other_node.gossip, entrypoint.gossip);
         cluster_info.insert_info(other_node.clone());
@@ -4135,7 +4135,7 @@ mod tests {
         for i in 0..10 {
             // make these invalid for the upcoming repair request
             let peer_lowest = if i >= 5 { 10 } else { 0 };
-            let other_node_pubkey = solana_sdk::pubkey::new_rand();
+            let other_node_pubkey = safecoin_sdk::pubkey::new_rand();
             let other_node = ContactInfo::new_localhost(&other_node_pubkey, timestamp());
             cluster_info.insert_info(other_node.clone());
             let value = CrdsValue::new_unsigned(CrdsData::LowestSlot(
@@ -4258,7 +4258,7 @@ mod tests {
         // Simulate getting entrypoint ContactInfo from gossip with an entrypoint1 shred version of
         // 0
         let mut gossiped_entrypoint1_info =
-            ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
+            ContactInfo::new_localhost(&safecoin_sdk::pubkey::new_rand(), timestamp());
         gossiped_entrypoint1_info.gossip = entrypoint1_gossip_addr;
         gossiped_entrypoint1_info.shred_version = 0;
         cluster_info.insert_info(gossiped_entrypoint1_info.clone());
@@ -4286,7 +4286,7 @@ mod tests {
         // Simulate getting entrypoint ContactInfo from gossip with an entrypoint2 shred version of
         // !0
         let mut gossiped_entrypoint2_info =
-            ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
+            ContactInfo::new_localhost(&safecoin_sdk::pubkey::new_rand(), timestamp());
         gossiped_entrypoint2_info.gossip = entrypoint2_gossip_addr;
         gossiped_entrypoint2_info.shred_version = 1;
         cluster_info.insert_info(gossiped_entrypoint2_info.clone());
@@ -4337,7 +4337,7 @@ mod tests {
 
         // Simulate getting entrypoint ContactInfo from gossip
         let mut gossiped_entrypoint_info =
-            ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
+            ContactInfo::new_localhost(&safecoin_sdk::pubkey::new_rand(), timestamp());
         gossiped_entrypoint_info.gossip = entrypoint_gossip_addr;
         gossiped_entrypoint_info.shred_version = 1;
         cluster_info.insert_info(gossiped_entrypoint_info.clone());

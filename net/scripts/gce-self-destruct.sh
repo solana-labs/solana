@@ -102,7 +102,7 @@ EOF
 
   at -t "$at_time" <<EOF
 bash -i <<'EOF2'
-source /solana-scratch/gce-self-destruct.sh
+source /safecoin-scratch/gce-self-destruct.sh
 gce_self_destruct_check
 EOF2
 EOF
@@ -122,7 +122,7 @@ gce_self_destruct_check() {
     else
       at -t "$(unix_to_at_time "$destruct")" <<EOF
 bash -i <<'OEF2'
-source /solana-scratch/gce-self-destruct.sh
+source /safecoin-scratch/gce-self-destruct.sh
 gce_self_destruct_check
 EOF2
 EOF

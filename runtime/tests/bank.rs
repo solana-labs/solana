@@ -1,14 +1,14 @@
-use solana_runtime::bank::Bank;
-use solana_sdk::{genesis_config::create_genesis_config, hash::hash};
+use safecoin_runtime::bank::Bank;
+use safecoin_sdk::{genesis_config::create_genesis_config, hash::hash};
 use std::{sync::Arc, thread::Builder};
 
 #[test]
 fn test_race_register_tick_freeze() {
-    solana_logger::setup();
+    safecoin_logger::setup();
 
     let (mut genesis_config, _) = create_genesis_config(50);
     genesis_config.ticks_per_slot = 1;
-    let p = solana_sdk::pubkey::new_rand();
+    let p = safecoin_sdk::pubkey::new_rand();
     let hash = hash(p.as_ref());
 
     for _ in 0..1000 {

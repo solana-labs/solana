@@ -6,7 +6,7 @@ A validator receives entries from the current leader and submits votes confirmin
 
 The validator votes on its chosen fork by submitting a transaction that uses an asymmetric key to sign the result of its validation work. Other entities can verify this signature using the validator's public key. If the validator's key is used to sign incorrect data \(e.g. votes on multiple forks of the ledger\), the node's stake or its resources could be compromised.
 
-Solana addresses this risk by splitting off a separate _vote signer_ service that evaluates each vote to ensure it does not violate a slashing condition.
+Safecoin addresses this risk by splitting off a separate _vote signer_ service that evaluates each vote to ensure it does not violate a slashing condition.
 
 ## Validators, Vote Signers, and Stakeholders
 

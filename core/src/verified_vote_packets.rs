@@ -2,7 +2,7 @@ use crate::{
     cluster_info_vote_listener::VerifiedLabelVotePacketsReceiver, crds_value::CrdsValueLabel,
     result::Result,
 };
-use solana_perf::packet::Packets;
+use safecoin_perf::packet::Packets;
 use std::{collections::HashMap, time::Duration};
 
 #[derive(Default)]
@@ -57,11 +57,11 @@ mod tests {
     use super::*;
     use crate::result::Error;
     use crossbeam_channel::{unbounded, RecvTimeoutError};
-    use solana_perf::packet::{Meta, Packet};
+    use safecoin_perf::packet::{Meta, Packet};
 
     #[test]
     fn test_get_latest_votes() {
-        let pubkey = solana_sdk::pubkey::new_rand();
+        let pubkey = safecoin_sdk::pubkey::new_rand();
         let label1 = CrdsValueLabel::Vote(0, pubkey);
         let label2 = CrdsValueLabel::Vote(1, pubkey);
         let mut verified_vote_packets = VerifiedVotePackets(HashMap::new());
@@ -105,7 +105,7 @@ mod tests {
     #[test]
     fn test_get_and_process_vote_packets() {
         let (s, r) = unbounded();
-        let pubkey = solana_sdk::pubkey::new_rand();
+        let pubkey = safecoin_sdk::pubkey::new_rand();
         let label1 = CrdsValueLabel::Vote(0, pubkey);
         let label2 = CrdsValueLabel::Vote(1, pubkey);
         let mut update_version = 0;

@@ -2,7 +2,7 @@
 title: Tower BFT
 ---
 
-This design describes Solana's _Tower BFT_ algorithm. It addresses the following problems:
+This design describes Safecoin's _Tower BFT_ algorithm. It addresses the following problems:
 
 - Some forks may not end up accepted by the supermajority of the cluster, and voters need to recover from voting on such forks.
 - Many forks may be votable by different voters, and each voter may see a different set of votable forks. The selected forks should eventually converge for the cluster.
@@ -14,7 +14,7 @@ For brevity this design assumes that a single voter with a stake is deployed as 
 
 ## Time
 
-The Solana cluster generates a source of time via a Verifiable Delay Function we are calling [Proof of History](../cluster/synchronization.md).
+The Safecoin cluster generates a source of time via a Verifiable Delay Function we are calling [Proof of History](../cluster/synchronization.md).
 
 Proof of History is used to create a deterministic round robin schedule for all the active leaders. At any given time only 1 leader, which can be computed from the ledger itself, can propose a fork. For more details, see [fork generation](../cluster/fork-generation.md) and [leader rotation](../cluster/leader-rotation.md).
 

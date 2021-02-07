@@ -1,11 +1,11 @@
 use crate::cli::CliError;
-use solana_client::{
+use safecoin_client::{
     client_error::{ClientError, Result as ClientResult},
     rpc_client::RpcClient,
 };
-use solana_sdk::{
+use safecoin_sdk::{
     commitment_config::CommitmentConfig, fee_calculator::FeeCalculator, message::Message,
-    native_token::lamports_to_sol, pubkey::Pubkey,
+    native_token::lamports_to_safe , pubkey::Pubkey,
 };
 
 pub fn check_account_for_fee(
@@ -84,11 +84,11 @@ pub fn check_account_for_spend_multiple_fees_with_commitment(
     {
         if balance > 0 {
             return Err(CliError::InsufficientFundsForSpendAndFee(
-                lamports_to_sol(balance),
-                lamports_to_sol(fee),
+                lamports_to_safe (balance),
+                lamports_to_safe (fee),
             ));
         } else {
-            return Err(CliError::InsufficientFundsForFee(lamports_to_sol(fee)));
+            return Err(CliError::InsufficientFundsForFee(lamports_to_safe (fee)));
         }
     }
     Ok(())
@@ -147,11 +147,11 @@ pub fn check_unique_pubkeys(
 mod tests {
     use super::*;
     use serde_json::json;
-    use solana_client::{
+    use safecoin_client::{
         rpc_request::RpcRequest,
         rpc_response::{Response, RpcResponseContext},
     };
-    use solana_sdk::system_instruction;
+    use safecoin_sdk::system_instruction;
     use std::collections::HashMap;
 
     #[test]
@@ -161,7 +161,7 @@ mod tests {
             context: RpcResponseContext { slot: 1 },
             value: json!(account_balance),
         });
-        let pubkey = solana_sdk::pubkey::new_rand();
+        let pubkey = safecoin_sdk::pubkey::new_rand();
         let fee_calculator = FeeCalculator::new(1);
 
         let pubkey0 = Pubkey::new(&[0; 32]);
@@ -221,7 +221,7 @@ mod tests {
             context: RpcResponseContext { slot: 1 },
             value: json!(account_balance),
         });
-        let pubkey = solana_sdk::pubkey::new_rand();
+        let pubkey = safecoin_sdk::pubkey::new_rand();
 
         let mut mocks = HashMap::new();
         mocks.insert(RpcRequest::GetBalance, account_balance_response);
@@ -267,9 +267,9 @@ mod tests {
 
     #[test]
     fn test_check_unique_pubkeys() {
-        let pubkey0 = solana_sdk::pubkey::new_rand();
+        let pubkey0 = safecoin_sdk::pubkey::new_rand();
         let pubkey_clone = pubkey0;
-        let pubkey1 = solana_sdk::pubkey::new_rand();
+        let pubkey1 = safecoin_sdk::pubkey::new_rand();
 
         check_unique_pubkeys((&pubkey0, "foo".to_string()), (&pubkey1, "bar".to_string()))
             .expect("unexpected result");

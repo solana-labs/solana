@@ -2,16 +2,16 @@
 title: Stake Account Structure
 ---
 
-A stake account on Solana can be used to delegate tokens to validators on
+A stake account on Safecoin can be used to delegate tokens to validators on
 the network to potentially earn rewards for the owner of the stake account.
 Stake accounts are created and managed differently than a traditional wallet
 address, known as a *system account*.  A system account is only able to send and
-receive SOL from other accounts on the network, whereas a stake account supports
+receive SAFE from other accounts on the network, whereas a stake account supports
 more complex operations needed to manage a delegation of tokens.
 
-Stake accounts on Solana also work differently than those of other Proof-of-Stake
+Stake accounts on Safecoin also work differently than those of other Proof-of-Stake
 blockchain networks that you may be familiar with.  This document describes the
-high-level structure and functions of a Solana stake account.
+high-level structure and functions of a Safecoin stake account.
 
 #### Account Address
 Each stake account has a unique address which can be used to look up the account
@@ -107,13 +107,13 @@ modified later, by the *lockup authority* or *custodian*, the address of which
 is also set when the account is created.
 
 #### Destroying a Stake Account
-Like other types of accounts on the Solana network, a stake account that has a
-balance of 0 SOL is no longer tracked.  If a stake account is not delegated
+Like other types of accounts on the Safecoin network, a stake account that has a
+balance of 0 SAFE is no longer tracked.  If a stake account is not delegated
 and all of the tokens it contains are withdrawn to a wallet address, the account
 at that address is effectively destroyed, and will need to be manually
 re-created for the address to be used again.
 
 #### Viewing Stake Accounts
-Stake account details can be viewed on the Solana Explorer by copying and pasting
+Stake account details can be viewed on the Safecoin Explorer by copying and pasting
 an account address into the search bar.
- - http://explorer.solana.com/accounts
+ - http://explorer.safecoin.org/accounts

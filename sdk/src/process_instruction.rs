@@ -1,4 +1,4 @@
-use solana_sdk::{
+use safecoin_sdk::{
     account::Account,
     feature_set::{
         bpf_compute_budget_balancing, max_cpi_instruction_size_ipv6_mtu, max_invoke_depth_4,

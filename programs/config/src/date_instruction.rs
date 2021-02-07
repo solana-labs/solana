@@ -8,7 +8,7 @@ use chrono::{
     serde::ts_seconds,
 };
 use serde_derive::{Deserialize, Serialize};
-use solana_sdk::{instruction::Instruction, pubkey::Pubkey};
+use safecoin_sdk::{instruction::Instruction, pubkey::Pubkey};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct DateConfig {

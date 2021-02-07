@@ -2,12 +2,12 @@
 title: Mobile App Wallets
 ---
 
-Solana is supported by multiple third-party apps which should provide a familiar
+Safecoin is supported by multiple third-party apps which should provide a familiar
 experience for most people who are new or experienced with using crypto wallets.
 
 ## Trust Wallet
 [Trust Wallet](https://trustwallet.com/) is an app available for iOS and Android
-and can be used to send and receive SOL tokens.
+and can be used to send and receive SAFE tokens.
 
 *Note: Trust Wallet does not support stake accounts or staking operations*
 
@@ -33,6 +33,6 @@ viewed at any later time in the app by following these steps:
 
 ## Coin98
 [Coin98](https://coin98.app/) is an app available for iOS and Android and can
-be used to send and receive SOL tokens.
+be used to send and receive SAFE tokens.
 
 *Note: Coin98 does not support stake accounts or staking operations*

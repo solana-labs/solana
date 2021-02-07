@@ -3,12 +3,12 @@ use crate::{
     commands::{Allocation, Error, FundingSource},
 };
 use console::style;
-use solana_account_decoder::parse_token::{
+use safecoin_account_decoder::parse_token::{
     pubkey_from_spl_token_v2_0, spl_token_v2_0_pubkey, token_amount_to_ui_amount,
 };
-use solana_client::rpc_client::RpcClient;
-use solana_sdk::{instruction::Instruction, native_token::lamports_to_sol};
-use solana_transaction_status::parse_token::spl_token_v2_0_instruction;
+use safecoin_client::rpc_client::RpcClient;
+use safecoin_sdk::{instruction::Instruction, native_token::lamports_to_safe };
+use safecoin_transaction_status::parse_token::spl_token_v2_0_instruction;
 use spl_associated_token_account_v1_0::{
     create_associated_token_account, get_associated_token_address,
 };
@@ -109,7 +109,7 @@ pub fn check_spl_token_balances(
     if fee_payer_balance < fees + account_creation_amount {
         return Err(Error::InsufficientFunds(
             vec![FundingSource::FeePayer].into(),
-            lamports_to_sol(fees + account_creation_amount),
+            lamports_to_safe (fees + account_creation_amount),
         ));
     }
     let source_token_account = client
@@ -177,8 +177,8 @@ pub fn print_token_balances(
 #[cfg(test)]
 mod tests {
     // The following unit tests were written for v1.4 using the ProgramTest framework, passing its
-    // BanksClient into the `solana-tokens` methods. With the revert to RpcClient in this module
-    // (https://github.com/solana-labs/solana/pull/13623), that approach was no longer viable.
+    // BanksClient into the `safecoin-tokens` methods. With the revert to RpcClient in this module
+    // (https://github.com/solana-labs/safecoin/pull/13623), that approach was no longer viable.
     // These tests were removed rather than rewritten to avoid accruing technical debt. Once a new
     // rpc/client framework is implemented, they should be restored.
     //
@@ -186,5 +186,5 @@ mod tests {
     // async fn test_process_spl_token_transfer_amount_allocations()
     // async fn test_check_spl_token_balances()
     //
-    // https://github.com/solana-labs/solana/blob/5511d52c6284013a24ced10966d11d8f4585799e/tokens/src/spl_token.rs#L490-L685
+    // https://github.com/solana-labs/safecoin/blob/5511d52c6284013a24ced10966d11d8f4585799e/tokens/src/spl_token.rs#L490-L685
 }

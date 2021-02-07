@@ -1,5 +1,5 @@
 import React from "react";
-import { clusterApiUrl, Connection } from "@solana/web3.js";
+import { clusterApiUrl, Connection } from "@safecoin/web3.js";
 import { useQuery } from "../utils/url";
 import { useHistory, useLocation } from "react-router-dom";
 import { reportError } from "utils/sentry";

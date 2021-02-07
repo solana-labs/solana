@@ -1,4 +1,4 @@
-use solana_sdk::{
+use safecoin_sdk::{
     instruction::InstructionError, keyed_account::KeyedAccount, process_instruction::InvokeContext,
     pubkey::Pubkey,
 };
@@ -16,7 +16,7 @@ pub fn process_instruction(
 #[cfg(test)]
 pub mod test {
     use rand::{thread_rng, Rng};
-    use solana_sdk::{
+    use safecoin_sdk::{
         hash::Hash,
         secp256k1_instruction::{
             new_secp256k1_instruction, SecpSignatureOffsets, SIGNATURE_OFFSETS_SERIALIZED_SIZE,
@@ -27,7 +27,7 @@ pub mod test {
 
     #[test]
     fn test_secp256k1() {
-        solana_logger::setup();
+        safecoin_logger::setup();
         let offsets = SecpSignatureOffsets::default();
         assert_eq!(
             bincode::serialized_size(&offsets).unwrap() as usize,

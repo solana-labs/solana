@@ -1,38 +1,38 @@
 //! A command-line executable for generating the chain's genesis config.
 
 #[macro_use]
-extern crate solana_budget_program;
+extern crate safecoin_budget_program;
 #[macro_use]
-extern crate solana_exchange_program;
+extern crate safecoin_exchange_program;
 #[macro_use]
-extern crate solana_vest_program;
+extern crate safecoin_vest_program;
 
 use clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg, ArgMatches};
-use solana_clap_utils::{
+use safecoin_clap_utils::{
     input_parsers::{cluster_type_of, pubkey_of, pubkeys_of, unix_timestamp_from_rfc3339_datetime},
     input_validators::{is_pubkey_or_keypair, is_rfc3339_datetime, is_valid_percentage},
 };
-use solana_genesis::{genesis_accounts::add_genesis_accounts, Base64Account};
-use solana_ledger::{
+use safecoin_genesis::{genesis_accounts::add_genesis_accounts, Base64Account};
+use safecoin_ledger::{
     blockstore::create_new_ledger, blockstore_db::AccessType, poh::compute_hashes_per_tick,
 };
-use solana_runtime::hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE;
-use solana_sdk::{
+use safecoin_runtime::hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE;
+use safecoin_sdk::{
     account::Account,
     clock,
     epoch_schedule::EpochSchedule,
     fee_calculator::FeeRateGovernor,
     genesis_config::{ClusterType, GenesisConfig},
     inflation::Inflation,
-    native_token::sol_to_lamports,
+    native_token::safe_to_lamports,
     poh_config::PohConfig,
     pubkey::Pubkey,
     rent::Rent,
     signature::{Keypair, Signer},
     system_program, timing,
 };
-use solana_stake_program::stake_state::{self, StakeState};
-use solana_vote_program::vote_state::{self, VoteState};
+use safecoin_stake_program::stake_state::{self, StakeState};
+use safecoin_vote_program::vote_state::{self, VoteState};
 use std::{
     collections::HashMap,
     error,
@@ -100,7 +100,7 @@ pub fn load_genesis_accounts(file: &str, genesis_config: &mut GenesisConfig) -> 
 
 #[allow(clippy::cognitive_complexity)]
 fn main() -> Result<(), Box<dyn error::Error>> {
-    let default_faucet_pubkey = solana_cli_config::Config::default().keypair_path;
+    let default_faucet_pubkey = safecoin_cli_config::Config::default().keypair_path;
     let fee_rate_governor = FeeRateGovernor::default();
     let (
         default_target_lamports_per_signature,
@@ -128,11 +128,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     };
 
     // vote account
-    let default_bootstrap_validator_lamports = &sol_to_lamports(500.0)
+    let default_bootstrap_validator_lamports = &safe_to_lamports(500.0)
         .max(VoteState::get_rent_exempt_reserve(&rent))
         .to_string();
     // stake account
-    let default_bootstrap_validator_stake_lamports = &sol_to_lamports(0.5)
+    let default_bootstrap_validator_stake_lamports = &safe_to_lamports(0.5)
         .max(StakeState::get_rent_exempt_reserve(&rent))
         .to_string();
 
@@ -144,7 +144,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let matches = App::new(crate_name!())
         .about(crate_description!())
-        .version(solana_version::version!())
+        .version(safecoin_version::version!())
         .arg(
             Arg::with_name("creation_time")
                 .long("creation-time")
@@ -491,9 +491,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let native_instruction_processors = if cluster_type == ClusterType::Development {
         vec![
-            solana_vest_program!(),
-            solana_budget_program!(),
-            solana_exchange_program!(),
+            safecoin_vest_program!(),
+            safecoin_budget_program!(),
+            safecoin_exchange_program!(),
         ]
     } else {
         vec![]
@@ -571,9 +571,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         );
     }
 
-    solana_stake_program::add_genesis_accounts(&mut genesis_config);
+    safecoin_stake_program::add_genesis_accounts(&mut genesis_config);
     if genesis_config.cluster_type == ClusterType::Development {
-        solana_runtime::genesis_utils::activate_all_features(&mut genesis_config);
+        safecoin_runtime::genesis_utils::activate_all_features(&mut genesis_config);
     }
 
     if let Some(files) = matches.values_of("primordial_accounts_file") {
@@ -631,7 +631,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         }
     }
 
-    solana_logger::setup();
+    safecoin_logger::setup();
     create_new_ledger(
         &ledger_path,
         &genesis_config,
@@ -646,7 +646,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::genesis_config::GenesisConfig;
+    use safecoin_sdk::genesis_config::GenesisConfig;
     use std::collections::HashMap;
     use std::fs::remove_file;
     use std::io::Write;
@@ -661,27 +661,27 @@ mod tests {
 
         let mut genesis_accounts = HashMap::new();
         genesis_accounts.insert(
-            solana_sdk::pubkey::new_rand().to_string(),
+            safecoin_sdk::pubkey::new_rand().to_string(),
             Base64Account {
-                owner: solana_sdk::pubkey::new_rand().to_string(),
+                owner: safecoin_sdk::pubkey::new_rand().to_string(),
                 balance: 2,
                 executable: false,
                 data: String::from("aGVsbG8="),
             },
         );
         genesis_accounts.insert(
-            solana_sdk::pubkey::new_rand().to_string(),
+            safecoin_sdk::pubkey::new_rand().to_string(),
             Base64Account {
-                owner: solana_sdk::pubkey::new_rand().to_string(),
+                owner: safecoin_sdk::pubkey::new_rand().to_string(),
                 balance: 1,
                 executable: true,
                 data: String::from("aGVsbG8gd29ybGQ="),
             },
         );
         genesis_accounts.insert(
-            solana_sdk::pubkey::new_rand().to_string(),
+            safecoin_sdk::pubkey::new_rand().to_string(),
             Base64Account {
-                owner: solana_sdk::pubkey::new_rand().to_string(),
+                owner: safecoin_sdk::pubkey::new_rand().to_string(),
                 balance: 3,
                 executable: true,
                 data: String::from("bWUgaGVsbG8gdG8gd29ybGQ="),
@@ -734,27 +734,27 @@ mod tests {
         // Test more accounts can be appended
         let mut genesis_accounts1 = HashMap::new();
         genesis_accounts1.insert(
-            solana_sdk::pubkey::new_rand().to_string(),
+            safecoin_sdk::pubkey::new_rand().to_string(),
             Base64Account {
-                owner: solana_sdk::pubkey::new_rand().to_string(),
+                owner: safecoin_sdk::pubkey::new_rand().to_string(),
                 balance: 6,
                 executable: true,
                 data: String::from("eW91IGFyZQ=="),
             },
         );
         genesis_accounts1.insert(
-            solana_sdk::pubkey::new_rand().to_string(),
+            safecoin_sdk::pubkey::new_rand().to_string(),
             Base64Account {
-                owner: solana_sdk::pubkey::new_rand().to_string(),
+                owner: safecoin_sdk::pubkey::new_rand().to_string(),
                 balance: 5,
                 executable: false,
                 data: String::from("bWV0YSBzdHJpbmc="),
             },
         );
         genesis_accounts1.insert(
-            solana_sdk::pubkey::new_rand().to_string(),
+            safecoin_sdk::pubkey::new_rand().to_string(),
             Base64Account {
-                owner: solana_sdk::pubkey::new_rand().to_string(),
+                owner: safecoin_sdk::pubkey::new_rand().to_string(),
                 balance: 10,
                 executable: false,
                 data: String::from("YmFzZTY0IHN0cmluZw=="),
@@ -819,7 +819,7 @@ mod tests {
         genesis_accounts2.insert(
             serde_json::to_string(&account_keypairs[0].to_bytes().to_vec()).unwrap(),
             Base64Account {
-                owner: solana_sdk::pubkey::new_rand().to_string(),
+                owner: safecoin_sdk::pubkey::new_rand().to_string(),
                 balance: 20,
                 executable: true,
                 data: String::from("Y2F0IGRvZw=="),
@@ -828,7 +828,7 @@ mod tests {
         genesis_accounts2.insert(
             serde_json::to_string(&account_keypairs[1].to_bytes().to_vec()).unwrap(),
             Base64Account {
-                owner: solana_sdk::pubkey::new_rand().to_string(),
+                owner: safecoin_sdk::pubkey::new_rand().to_string(),
                 balance: 15,
                 executable: false,
                 data: String::from("bW9ua2V5IGVsZXBoYW50"),
@@ -837,7 +837,7 @@ mod tests {
         genesis_accounts2.insert(
             serde_json::to_string(&account_keypairs[2].to_bytes().to_vec()).unwrap(),
             Base64Account {
-                owner: solana_sdk::pubkey::new_rand().to_string(),
+                owner: safecoin_sdk::pubkey::new_rand().to_string(),
                 balance: 30,
                 executable: true,
                 data: String::from("Y29tYSBtb2Nh"),

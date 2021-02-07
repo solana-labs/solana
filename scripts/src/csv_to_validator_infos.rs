@@ -1,7 +1,7 @@
 // Utility to print ValidatorInfo structs for `genesis_accounts.rs`
 //
 // Usage:
-//   cargo run --bin solana-csv-to-validator-infos < validators.csv
+//   cargo run --bin safecoin-csv-to-validator-infos < validators.csv
 
 use serde::Deserialize;
 use std::error::Error;
@@ -23,7 +23,7 @@ fn parse_csv() -> Result<(), Box<dyn Error>> {
     for result in rdr.deserialize() {
         let record: ValidatorRecord = result?;
         println!(
-            r#"ValidatorInfo {{name: "{adjective} {noun}", node: "{identity_pubkey}", node_sol: {tokens:.1}, vote: "{vote_pubkey}", commission: 0}},"#,
+            r#"ValidatorInfo {{name: "{adjective} {noun}", node: "{identity_pubkey}", node_safe : {tokens:.1}, vote: "{vote_pubkey}", commission: 0}},"#,
             tokens = &record.tokens,
             adjective = &record.adjective,
             noun = &record.noun,

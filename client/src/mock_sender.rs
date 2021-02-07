@@ -5,15 +5,15 @@ use crate::{
     rpc_sender::RpcSender,
 };
 use serde_json::{json, Number, Value};
-use solana_sdk::{
+use safecoin_sdk::{
     epoch_info::EpochInfo,
     fee_calculator::{FeeCalculator, FeeRateGovernor},
     instruction::InstructionError,
     signature::Signature,
     transaction::{self, Transaction, TransactionError},
 };
-use solana_transaction_status::{TransactionConfirmationStatus, TransactionStatus};
-use solana_version::Version;
+use safecoin_transaction_status::{TransactionConfirmationStatus, TransactionStatus};
+use safecoin_version::Version;
 use std::{collections::HashMap, sync::RwLock};
 
 pub const PUBKEY: &str = "7RoSF9fUmdphVCpabEoefH81WwrW7orsWonXWqTXkKV8";
@@ -137,7 +137,7 @@ impl RpcSender for MockSender {
             RpcRequest::GetVersion => {
                 let version = Version::default();
                 json!(RpcVersionInfo {
-                    solana_core: version.to_string(),
+                    safecoin_core: version.to_string(),
                     feature_set: Some(version.feature_set),
                 })
             }

@@ -3,13 +3,13 @@
 extern crate test;
 
 use log::*;
-use solana_runtime::message_processor::PreAccount;
-use solana_sdk::{account::Account, pubkey, rent::Rent};
+use safecoin_runtime::message_processor::PreAccount;
+use safecoin_sdk::{account::Account, pubkey, rent::Rent};
 use test::Bencher;
 
 #[bench]
 fn bench_verify_account_changes_data(bencher: &mut Bencher) {
-    solana_logger::setup();
+    safecoin_logger::setup();
 
     let owner = pubkey::new_rand();
     let non_owner = pubkey::new_rand();

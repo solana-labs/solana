@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package solana.storage.TransactionByAddr;
+package safecoin.storage.TransactionByAddr;
 
 message TransactionByAddr {
     repeated TransactionByAddrInfo tx_by_addrs = 1;

@@ -1,16 +1,16 @@
 [package]
-name = "solana-bpf-rust-param-passing"
+name = "safecoin-bpf-rust-param-passing"
 version = "1.6.0"
-description = "Solana BPF test program written in Rust"
-authors = ["Solana Maintainers <maintainers@solana.foundation>"]
-repository = "https://github.com/solana-labs/solana"
+description = "Safecoin BPF test program written in Rust"
+authors = ["Safecoin Maintainers <maintainers@solana.foundation>"]
+repository = "https://github.com/solana-labs/safecoin"
 license = "Apache-2.0"
-homepage = "https://solana.com/"
+homepage = "https://safecoin.org/"
 edition = "2018"
 
 [dependencies]
 solana-program = { path = "../../../../sdk/program", version = "1.6.0" }
-solana-bpf-rust-param-passing-dep = { path = "../param_passing_dep", version = "1.6.0" }
+safecoin-bpf-rust-param-passing-dep = { path = "../param_passing_dep", version = "1.6.0" }
 
 [lib]
 crate-type = ["cdylib"]

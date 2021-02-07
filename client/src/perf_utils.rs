@@ -1,5 +1,5 @@
 use log::*;
-use solana_sdk::{client::Client, commitment_config::CommitmentConfig, timing::duration_as_s};
+use safecoin_sdk::{client::Client, commitment_config::CommitmentConfig, timing::duration_as_s};
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},

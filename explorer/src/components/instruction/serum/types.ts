@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-redeclare */
 
 import { decodeInstruction, MARKETS } from "@project-serum/serum";
-import { PublicKey, TransactionInstruction } from "@solana/web3.js";
+import { PublicKey, TransactionInstruction } from "@safecoin/web3.js";
 import BN from "bn.js";
 import { coerce, enums, number, optional, pick, StructType } from "superstruct";
 import { BigNumValue } from "validators/bignum";

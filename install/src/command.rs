@@ -7,9 +7,9 @@ use chrono::{Local, TimeZone};
 use console::{style, Emoji};
 use indicatif::{ProgressBar, ProgressStyle};
 use serde_derive::Deserialize;
-use solana_client::rpc_client::RpcClient;
-use solana_config_program::{config_instruction, get_config_data, ConfigState};
-use solana_sdk::{
+use safecoin_client::rpc_client::RpcClient;
+use safecoin_config_program::{config_instruction, get_config_data, ConfigState};
+use safecoin_sdk::{
     hash::{Hash, Hasher},
     message::Message,
     pubkey::Pubkey,
@@ -191,7 +191,7 @@ fn load_release_version(version_yml: &Path) -> Result<ReleaseVersion, String> {
 /// Reads the supported TARGET triple for the given release
 fn load_release_target(release_dir: &Path) -> Result<String, String> {
     let mut version_yml = PathBuf::from(release_dir);
-    version_yml.push("solana-release");
+    version_yml.push("safecoin-release");
     version_yml.push("version.yml");
 
     let version = load_release_version(&version_yml)?;
@@ -298,7 +298,7 @@ fn check_env_path_for_bin_dir(config: &Config) {
 
     if !found {
         println!(
-            "\nPlease update your PATH environment variable to include the solana programs:\n    PATH=\"{}:$PATH\"\n",
+            "\nPlease update your PATH environment variable to include the safecoin programs:\n    PATH=\"{}:$PATH\"\n",
             config.active_release_bin_dir().to_str().unwrap()
         );
     }
@@ -528,7 +528,7 @@ pub fn init(
     explicit_release: Option<ExplicitRelease>,
 ) -> Result<(), String> {
     let config = {
-        // Write new config file only if different, so that running |solana-install init|
+        // Write new config file only if different, so that running |safecoin-install init|
         // repeatedly doesn't unnecessarily re-download
         let mut current_config = Config::load(config_file).unwrap_or_default();
         current_config.current_update_manifest = None;
@@ -560,7 +560,7 @@ pub fn init(
 
 fn github_release_download_url(release_semver: &str) -> String {
     format!(
-        "https://github.com/solana-labs/solana/releases/download/v{}/solana-release-{}.tar.bz2",
+        "https://github.com/solana-labs/safecoin/releases/download/v{}/safecoin-release-{}.tar.bz2",
         release_semver,
         crate::build_env::TARGET
     )
@@ -568,7 +568,7 @@ fn github_release_download_url(release_semver: &str) -> String {
 
 fn release_channel_download_url(release_channel: &str) -> String {
     format!(
-        "http://release.solana.com/{}/solana-release-{}.tar.bz2",
+        "http://release.safecoin.org/{}/safecoin-release-{}.tar.bz2",
         release_channel,
         crate::build_env::TARGET
     )
@@ -576,7 +576,7 @@ fn release_channel_download_url(release_channel: &str) -> String {
 
 fn release_channel_version_url(release_channel: &str) -> String {
     format!(
-        "http://release.solana.com/{}/solana-release-{}.yml",
+        "http://release.safecoin.org/{}/safecoin-release-{}.yml",
         release_channel,
         crate::build_env::TARGET
     )
@@ -591,7 +591,7 @@ pub fn info(
 
     if eval {
         println!(
-            "SOLANA_INSTALL_ACTIVE_RELEASE={}",
+            "SAFECOIN_INSTALL_ACTIVE_RELEASE={}",
             &config.active_release_dir().to_str().unwrap_or("")
         );
         config
@@ -601,7 +601,7 @@ pub fn info(
                 ExplicitRelease::Channel(channel) => channel,
             })
             .and_then(|channel| {
-                println!("SOLANA_INSTALL_ACTIVE_CHANNEL={}", channel,);
+                println!("SAFECOIN_INSTALL_ACTIVE_CHANNEL={}", channel,);
                 Option::<String>::None
             });
         return Ok(None);
@@ -876,7 +876,7 @@ pub fn update(config_file: &str) -> Result<bool, String> {
                 let release_id = format!("{}-{}", release_channel, update_release_version.commit);
                 let release_dir = config.release_dir(&release_id);
                 let current_release_version_yml =
-                    release_dir.join("solana-release").join("version.yml");
+                    release_dir.join("safecoin-release").join("version.yml");
 
                 let download_url = Some(release_channel_download_url(release_channel));
 
@@ -985,7 +985,7 @@ pub fn update(config_file: &str) -> Result<bool, String> {
 
     let _ = fs::remove_dir_all(config.active_release_dir());
     symlink_dir(
-        release_dir.join("solana-release"),
+        release_dir.join("safecoin-release"),
         config.active_release_dir(),
     )
     .map_err(|err| {

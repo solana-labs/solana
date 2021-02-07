@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use solana_sdk::{
+use safecoin_sdk::{
     fee_calculator::FeeCalculator, hash::Hash, sysvar::recent_blockhashes, timing::timestamp,
 };
 use std::collections::HashMap;
@@ -135,7 +135,7 @@ impl BlockhashQueue {
 mod tests {
     use super::*;
     use bincode::serialize;
-    use solana_sdk::{
+    use safecoin_sdk::{
         clock::MAX_RECENT_BLOCKHASHES, hash::hash, sysvar::recent_blockhashes::IterItem,
     };
 

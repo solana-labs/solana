@@ -6,9 +6,9 @@ pub mod vote_state;
 pub mod vote_transaction;
 
 #[macro_use]
-extern crate solana_metrics;
+extern crate safecoin_metrics;
 
 #[macro_use]
-extern crate solana_frozen_abi_macro;
+extern crate safecoin_frozen_abi_macro;
 
-solana_sdk::declare_id!("Vote111111111111111111111111111111111111111");
+safecoin_sdk::declare_id!("Vote111111111111111111111111111111111111111");

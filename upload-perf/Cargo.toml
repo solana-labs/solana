@@ -1,20 +1,20 @@
 [package]
-name = "solana-upload-perf"
+name = "safecoin-upload-perf"
 version = "1.6.0"
 description = "Metrics Upload Utility"
-authors = ["Solana Maintainers <maintainers@solana.foundation>"]
-repository = "https://github.com/solana-labs/solana"
+authors = ["Safecoin Maintainers <maintainers@solana.foundation>"]
+repository = "https://github.com/solana-labs/safecoin"
 license = "Apache-2.0"
 edition = "2018"
-homepage = "https://solana.com/"
+homepage = "https://safecoin.org/"
 publish = false
 
 [dependencies]
 serde_json = "1.0.56"
-solana-metrics = { path = "../metrics", version = "1.6.0" }
+safecoin-metrics = { path = "../metrics", version = "1.6.0" }
 
 [[bin]]
-name = "solana-upload-perf"
+name = "safecoin-upload-perf"
 path = "src/upload-perf.rs"
 
 

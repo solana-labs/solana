@@ -3,7 +3,7 @@
 extern crate test;
 
 use rand::{seq::SliceRandom, thread_rng};
-use solana_runtime::transaction_utils::OrderedIterator;
+use safecoin_runtime::transaction_utils::OrderedIterator;
 use test::Bencher;
 
 #[bench]

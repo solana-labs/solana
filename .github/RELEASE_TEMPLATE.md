@@ -23,6 +23,6 @@ fun blurb about the name, what's in the release
 
 ## Thanks to our Contributors
 
-This release contains contributions from many people at Solana, as well as:
+This release contains contributions from many people at Safecoin, as well as:
 
   pull from commit log

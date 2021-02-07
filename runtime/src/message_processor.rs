@@ -4,7 +4,7 @@ use crate::{
 };
 use log::*;
 use serde::{Deserialize, Serialize};
-use solana_sdk::{
+use safecoin_sdk::{
     account::Account,
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
@@ -423,7 +423,7 @@ impl Clone for MessageProcessor {
 }
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
-impl ::solana_frozen_abi::abi_example::AbiExample for MessageProcessor {
+impl ::safecoin_frozen_abi::abi_example::AbiExample for MessageProcessor {
     fn example() -> Self {
         // MessageProcessor's fields are #[serde(skip)]-ed and not Serialize
         // so, just rely on Default anyway.
@@ -623,7 +623,7 @@ impl MessageProcessor {
             let signers = signers_seeds
                 .iter()
                 .map(|seeds| Pubkey::create_program_address(&seeds, caller_program_id))
-                .collect::<Result<Vec<_>, solana_sdk::pubkey::PubkeyError>>()?;
+                .collect::<Result<Vec<_>, safecoin_sdk::pubkey::PubkeyError>>()?;
             let mut caller_privileges = keyed_accounts
                 .iter()
                 .map(|keyed_account| keyed_account.is_writable())
@@ -949,9 +949,9 @@ impl MessageProcessor {
         // before the account pre-values are taken care of
         if feature_set.is_active(&instructions_sysvar_enabled::id()) {
             for (i, key) in message.account_keys.iter().enumerate() {
-                if solana_sdk::sysvar::instructions::check_id(key) {
+                if safecoin_sdk::sysvar::instructions::check_id(key) {
                     let mut mut_account_ref = accounts[i].borrow_mut();
-                    solana_sdk::sysvar::instructions::store_current_index(
+                    safecoin_sdk::sysvar::instructions::store_current_index(
                         &mut mut_account_ref.data,
                         instruction_index as u16,
                     );
@@ -1037,7 +1037,7 @@ impl MessageProcessor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::{
+    use safecoin_sdk::{
         instruction::{AccountMeta, Instruction, InstructionError},
         message::Message,
         native_loader::create_loadable_account,
@@ -1051,8 +1051,8 @@ mod tests {
         let mut pre_accounts = vec![];
         let mut accounts = vec![];
         for i in 0..MAX_DEPTH {
-            program_ids.push(solana_sdk::pubkey::new_rand());
-            keys.push(solana_sdk::pubkey::new_rand());
+            program_ids.push(safecoin_sdk::pubkey::new_rand());
+            keys.push(safecoin_sdk::pubkey::new_rand());
             accounts.push(Rc::new(RefCell::new(Account::new(
                 i as u64,
                 1,
@@ -1060,7 +1060,7 @@ mod tests {
             ))));
             pre_accounts.push(PreAccount::new(&keys[i], &accounts[i].borrow(), false))
         }
-        let account = Account::new(1, 1, &solana_sdk::pubkey::Pubkey::default());
+        let account = Account::new(1, 1, &safecoin_sdk::pubkey::Pubkey::default());
         for program_id in program_ids.iter() {
             pre_accounts.push(PreAccount::new(program_id, &account.clone(), false));
         }
@@ -1107,7 +1107,7 @@ mod tests {
             these_accounts.push(Rc::new(RefCell::new(Account::new(
                 1,
                 1,
-                &solana_sdk::pubkey::Pubkey::default(),
+                &safecoin_sdk::pubkey::Pubkey::default(),
             ))));
             invoke_context
                 .verify_and_update(&message, &message.instructions[0], &these_accounts, None)
@@ -1170,7 +1170,7 @@ mod tests {
     #[test]
     fn test_verify_account_references() {
         let accounts = vec![(
-            solana_sdk::pubkey::new_rand(),
+            safecoin_sdk::pubkey::new_rand(),
             RefCell::new(Account::default()),
         )];
 
@@ -1197,7 +1197,7 @@ mod tests {
                 rent: Rent::default(),
                 is_writable: true,
                 pre: PreAccount::new(
-                    &solana_sdk::pubkey::new_rand(),
+                    &safecoin_sdk::pubkey::new_rand(),
                     &Account {
                         owner: *owner,
                         lamports: std::u64::MAX,
@@ -1254,8 +1254,8 @@ mod tests {
     #[test]
     fn test_verify_account_changes_owner() {
         let system_program_id = system_program::id();
-        let alice_program_id = solana_sdk::pubkey::new_rand();
-        let mallory_program_id = solana_sdk::pubkey::new_rand();
+        let alice_program_id = safecoin_sdk::pubkey::new_rand();
+        let mallory_program_id = safecoin_sdk::pubkey::new_rand();
 
         assert_eq!(
             Change::new(&system_program_id, &system_program_id)
@@ -1315,8 +1315,8 @@ mod tests {
 
     #[test]
     fn test_verify_account_changes_executable() {
-        let owner = solana_sdk::pubkey::new_rand();
-        let mallory_program_id = solana_sdk::pubkey::new_rand();
+        let owner = safecoin_sdk::pubkey::new_rand();
+        let mallory_program_id = safecoin_sdk::pubkey::new_rand();
         let system_program_id = system_program::id();
 
         assert_eq!(
@@ -1422,7 +1422,7 @@ mod tests {
 
     #[test]
     fn test_verify_account_changes_data_len() {
-        let alice_program_id = solana_sdk::pubkey::new_rand();
+        let alice_program_id = safecoin_sdk::pubkey::new_rand();
 
         assert_eq!(
             Change::new(&system_program::id(), &system_program::id())
@@ -1442,8 +1442,8 @@ mod tests {
 
     #[test]
     fn test_verify_account_changes_data() {
-        let alice_program_id = solana_sdk::pubkey::new_rand();
-        let mallory_program_id = solana_sdk::pubkey::new_rand();
+        let alice_program_id = safecoin_sdk::pubkey::new_rand();
+        let mallory_program_id = safecoin_sdk::pubkey::new_rand();
 
         assert_eq!(
             Change::new(&alice_program_id, &alice_program_id)
@@ -1471,7 +1471,7 @@ mod tests {
 
     #[test]
     fn test_verify_account_changes_rent_epoch() {
-        let alice_program_id = solana_sdk::pubkey::new_rand();
+        let alice_program_id = safecoin_sdk::pubkey::new_rand();
 
         assert_eq!(
             Change::new(&alice_program_id, &system_program::id()).verify(),
@@ -1489,8 +1489,8 @@ mod tests {
 
     #[test]
     fn test_verify_account_changes_deduct_lamports_and_reassign_account() {
-        let alice_program_id = solana_sdk::pubkey::new_rand();
-        let bob_program_id = solana_sdk::pubkey::new_rand();
+        let alice_program_id = safecoin_sdk::pubkey::new_rand();
+        let bob_program_id = safecoin_sdk::pubkey::new_rand();
 
         // positive test of this capability
         assert_eq!(
@@ -1506,7 +1506,7 @@ mod tests {
 
     #[test]
     fn test_verify_account_changes_lamports() {
-        let alice_program_id = solana_sdk::pubkey::new_rand();
+        let alice_program_id = safecoin_sdk::pubkey::new_rand();
 
         assert_eq!(
             Change::new(&alice_program_id, &system_program::id())
@@ -1544,7 +1544,7 @@ mod tests {
 
     #[test]
     fn test_verify_account_changes_data_size_changed() {
-        let alice_program_id = solana_sdk::pubkey::new_rand();
+        let alice_program_id = safecoin_sdk::pubkey::new_rand();
 
         assert_eq!(
             Change::new(&alice_program_id, &system_program::id())
@@ -1620,8 +1620,8 @@ mod tests {
 
         let executors = Rc::new(RefCell::new(Executors::default()));
 
-        let from_pubkey = solana_sdk::pubkey::new_rand();
-        let to_pubkey = solana_sdk::pubkey::new_rand();
+        let from_pubkey = safecoin_sdk::pubkey::new_rand();
+        let to_pubkey = safecoin_sdk::pubkey::new_rand();
         let account_metas = vec![
             AccountMeta::new(from_pubkey, true),
             AccountMeta::new_readonly(to_pubkey, false),
@@ -1784,8 +1784,8 @@ mod tests {
 
         let executors = Rc::new(RefCell::new(Executors::default()));
 
-        let from_pubkey = solana_sdk::pubkey::new_rand();
-        let to_pubkey = solana_sdk::pubkey::new_rand();
+        let from_pubkey = safecoin_sdk::pubkey::new_rand();
+        let to_pubkey = safecoin_sdk::pubkey::new_rand();
         let dup_pubkey = from_pubkey;
         let account_metas = vec![
             AccountMeta::new(from_pubkey, true),
@@ -1914,20 +1914,20 @@ mod tests {
             Ok(())
         }
 
-        let caller_program_id = solana_sdk::pubkey::new_rand();
-        let callee_program_id = solana_sdk::pubkey::new_rand();
+        let caller_program_id = safecoin_sdk::pubkey::new_rand();
+        let callee_program_id = safecoin_sdk::pubkey::new_rand();
 
         let mut program_account = Account::new(1, 0, &native_loader::id());
         program_account.executable = true;
         let executable_preaccount = PreAccount::new(&callee_program_id, &program_account, true);
         let executable_accounts = vec![(callee_program_id, RefCell::new(program_account.clone()))];
 
-        let owned_key = solana_sdk::pubkey::new_rand();
+        let owned_key = safecoin_sdk::pubkey::new_rand();
         let owned_account = Account::new(42, 1, &callee_program_id);
         let owned_preaccount = PreAccount::new(&owned_key, &owned_account, true);
 
-        let not_owned_key = solana_sdk::pubkey::new_rand();
-        let not_owned_account = Account::new(84, 1, &solana_sdk::pubkey::new_rand());
+        let not_owned_key = safecoin_sdk::pubkey::new_rand();
+        let not_owned_account = Account::new(84, 1, &safecoin_sdk::pubkey::new_rand());
         let not_owned_preaccount = PreAccount::new(&not_owned_key, &not_owned_account, true);
 
         #[allow(unused_mut)]
@@ -2041,7 +2041,7 @@ mod tests {
         ) -> Result<(), InstructionError> {
             Ok(())
         }
-        let program_id = solana_sdk::pubkey::new_rand();
+        let program_id = safecoin_sdk::pubkey::new_rand();
         message_processor.add_program(program_id, mock_process_instruction);
         message_processor.add_loader(program_id, mock_ix_processor);
 

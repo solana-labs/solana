@@ -30,7 +30,7 @@ fn process_instruction(
     // the no-op program, no account keys or input data are expected but real
     // programs will have specific requirements so they can do their work.
     msg!("Account keys and instruction input data:");
-    sol_log_params(accounts, instruction_data);
+    safe_log_params(accounts, instruction_data);
 
     {
         // Test - use std methods, unwrap

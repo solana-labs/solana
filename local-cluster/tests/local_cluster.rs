@@ -3,14 +3,14 @@ use crossbeam_channel::{unbounded, Receiver};
 use gag::BufferRedirect;
 use log::*;
 use serial_test::serial;
-use solana_client::{
+use safecoin_client::{
     pubsub_client::PubsubClient,
     rpc_client::RpcClient,
     rpc_config::{RpcProgramAccountsConfig, RpcSignatureSubscribeConfig},
     rpc_response::RpcSignatureResult,
     thin_client::{create_client, ThinClient},
 };
-use solana_core::{
+use safecoin_core::{
     broadcast_stage::BroadcastStageType,
     cluster_info::VALIDATOR_PORT_RANGE,
     consensus::{Tower, SWITCH_FORK_THRESHOLD, VOTE_THRESHOLD_DEPTH},
@@ -18,24 +18,24 @@ use solana_core::{
     optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
     validator::ValidatorConfig,
 };
-use solana_download_utils::download_snapshot;
-use solana_ledger::{
+use safecoin_download_utils::download_snapshot;
+use safecoin_ledger::{
     ancestor_iterator::AncestorIterator,
     blockstore::{Blockstore, PurgeType},
     blockstore_db::AccessType,
     leader_schedule::FixedSchedule,
     leader_schedule::LeaderSchedule,
 };
-use solana_local_cluster::{
+use safecoin_local_cluster::{
     cluster::Cluster,
     cluster_tests,
     local_cluster::{ClusterConfig, LocalCluster},
 };
-use solana_runtime::{
+use safecoin_runtime::{
     bank_forks::{ArchiveFormat, SnapshotConfig},
     snapshot_utils,
 };
-use solana_sdk::{
+use safecoin_sdk::{
     account::Account,
     client::{AsyncClient, SyncClient},
     clock::{self, Slot},
@@ -48,7 +48,7 @@ use solana_sdk::{
     signature::{Keypair, Signer},
     system_program, system_transaction,
 };
-use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
+use safecoin_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::{
     collections::{HashMap, HashSet},
     fs,
@@ -65,7 +65,7 @@ use tempfile::TempDir;
 #[test]
 #[serial]
 fn test_ledger_cleanup_service() {
-    solana_logger::setup();
+    safecoin_logger::setup();
     error!("test_ledger_cleanup_service");
     let num_nodes = 3;
     let validator_config = ValidatorConfig {
@@ -106,7 +106,7 @@ fn test_ledger_cleanup_service() {
 #[test]
 #[serial]
 fn test_spend_and_verify_all_nodes_1() {
-    solana_logger::setup();
+    safecoin_logger::setup();
     error!("test_spend_and_verify_all_nodes_1");
     let num_nodes = 1;
     let local = LocalCluster::new_with_equal_stakes(num_nodes, 10_000, 100);
@@ -121,7 +121,7 @@ fn test_spend_and_verify_all_nodes_1() {
 #[test]
 #[serial]
 fn test_spend_and_verify_all_nodes_2() {
-    solana_logger::setup();
+    safecoin_logger::setup();
     error!("test_spend_and_verify_all_nodes_2");
     let num_nodes = 2;
     let local = LocalCluster::new_with_equal_stakes(num_nodes, 10_000, 100);
@@ -136,7 +136,7 @@ fn test_spend_and_verify_all_nodes_2() {
 #[test]
 #[serial]
 fn test_spend_and_verify_all_nodes_3() {
-    solana_logger::setup();
+    safecoin_logger::setup();
     error!("test_spend_and_verify_all_nodes_3");
     let num_nodes = 3;
     let local = LocalCluster::new_with_equal_stakes(num_nodes, 10_000, 100);
@@ -151,7 +151,7 @@ fn test_spend_and_verify_all_nodes_3() {
 #[test]
 #[serial]
 fn test_local_cluster_signature_subscribe() {
-    solana_logger::setup();
+    safecoin_logger::setup();
     let num_nodes = 2;
     let cluster = LocalCluster::new_with_equal_stakes(num_nodes, 10_000, 100);
     let nodes = cluster.get_node_pubkeys();
@@ -173,7 +173,7 @@ fn test_local_cluster_signature_subscribe() {
 
     let mut transaction = system_transaction::transfer(
         &cluster.funding_keypair,
-        &solana_sdk::pubkey::new_rand(),
+        &safecoin_sdk::pubkey::new_rand(),
         10,
         blockhash,
     );
@@ -225,7 +225,7 @@ fn test_local_cluster_signature_subscribe() {
 #[allow(unused_attributes)]
 #[ignore]
 fn test_spend_and_verify_all_nodes_env_num_nodes() {
-    solana_logger::setup();
+    safecoin_logger::setup();
     let num_nodes: usize = std::env::var("NUM_NODES")
         .expect("please set environment variable NUM_NODES")
         .parse()
@@ -243,7 +243,7 @@ fn test_spend_and_verify_all_nodes_env_num_nodes() {
 #[test]
 #[should_panic]
 fn test_validator_exit_default_config_should_panic() {
-    solana_logger::setup();
+    safecoin_logger::setup();
     error!("test_validator_exit_default_config_should_panic");
     let num_nodes = 2;
     let local = LocalCluster::new_with_equal_stakes(num_nodes, 10_000, 100);
@@ -253,7 +253,7 @@ fn test_validator_exit_default_config_should_panic() {
 #[test]
 #[serial]
 fn test_validator_exit_2() {
-    solana_logger::setup();
+    safecoin_logger::setup();
     error!("test_validator_exit_2");
     let num_nodes = 2;
     let mut validator_config = ValidatorConfig::default();
@@ -274,7 +274,7 @@ fn test_validator_exit_2() {
 #[test]
 #[serial]
 fn test_leader_failure_4() {
-    solana_logger::setup();
+    safecoin_logger::setup();
     error!("test_leader_failure_4");
     let num_nodes = 4;
     let mut validator_config = ValidatorConfig::default();
@@ -314,7 +314,7 @@ fn run_cluster_partition<E, F>(
     E: FnOnce(&mut LocalCluster),
     F: FnOnce(&mut LocalCluster),
 {
-    solana_logger::setup();
+    safecoin_logger::setup();
     info!("PARTITION_TEST!");
     let num_nodes = partitions.len();
     let node_stakes: Vec<_> = partitions
@@ -643,7 +643,7 @@ fn test_kill_partition_switch_threshold_progress() {
 #[test]
 #[serial]
 fn test_two_unbalanced_stakes() {
-    solana_logger::setup();
+    safecoin_logger::setup();
     error!("test_two_unbalanced_stakes");
     let mut validator_config = ValidatorConfig::default();
     let num_ticks_per_second = 100;
@@ -704,7 +704,7 @@ fn test_forwarding() {
 #[test]
 #[serial]
 fn test_restart_node() {
-    solana_logger::setup();
+    safecoin_logger::setup();
     error!("test_restart_node");
     let slots_per_epoch = MINIMUM_SLOTS_PER_EPOCH * 2;
     let ticks_per_slot = 16;
@@ -758,7 +758,7 @@ fn test_listener_startup() {
 #[test]
 #[serial]
 fn test_mainnet_beta_cluster_type() {
-    solana_logger::setup();
+    safecoin_logger::setup();
 
     let mut config = ClusterConfig {
         cluster_type: ClusterType::MainnetBeta,
@@ -773,17 +773,17 @@ fn test_mainnet_beta_cluster_type() {
 
     let client = create_client(
         cluster.entry_point_info.client_facing_addr(),
-        solana_core::cluster_info::VALIDATOR_PORT_RANGE,
+        safecoin_core::cluster_info::VALIDATOR_PORT_RANGE,
     );
 
     // Programs that are available at epoch 0
     for program_id in [
-        &solana_config_program::id(),
-        &solana_sdk::system_program::id(),
-        &solana_stake_program::id(),
-        &solana_vote_program::id(),
-        &solana_sdk::bpf_loader_deprecated::id(),
-        &solana_sdk::bpf_loader::id(),
+        &safecoin_config_program::id(),
+        &safecoin_sdk::system_program::id(),
+        &safecoin_stake_program::id(),
+        &safecoin_vote_program::id(),
+        &safecoin_sdk::bpf_loader_deprecated::id(),
+        &safecoin_sdk::bpf_loader::id(),
     ]
     .iter()
     {
@@ -800,8 +800,8 @@ fn test_mainnet_beta_cluster_type() {
 
     // Programs that are not available at epoch 0
     for program_id in [
-        &solana_sdk::bpf_loader_upgradeable::id(),
-        &solana_vest_program::id(),
+        &safecoin_sdk::bpf_loader_upgradeable::id(),
+        &safecoin_vest_program::id(),
     ]
     .iter()
     {
@@ -831,11 +831,11 @@ fn generate_frozen_account_panic(mut cluster: LocalCluster, frozen_account: Arc<
     );
 
     // Reset the frozen account panic signal
-    solana_runtime::accounts_db::FROZEN_ACCOUNT_PANIC.store(false, Ordering::Relaxed);
+    safecoin_runtime::accounts_db::FROZEN_ACCOUNT_PANIC.store(false, Ordering::Relaxed);
 
     // Wait for the frozen account panic signal
     let mut i = 0;
-    while !solana_runtime::accounts_db::FROZEN_ACCOUNT_PANIC.load(Ordering::Relaxed) {
+    while !safecoin_runtime::accounts_db::FROZEN_ACCOUNT_PANIC.load(Ordering::Relaxed) {
         // Transfer from frozen account
         let (blockhash, _fee_calculator, _last_valid_slot) = client
             .get_recent_blockhash_with_commitment(CommitmentConfig::processed())
@@ -844,7 +844,7 @@ fn generate_frozen_account_panic(mut cluster: LocalCluster, frozen_account: Arc<
             .async_transfer(
                 1,
                 &frozen_account,
-                &solana_sdk::pubkey::new_rand(),
+                &safecoin_sdk::pubkey::new_rand(),
                 blockhash,
             )
             .unwrap();
@@ -865,9 +865,9 @@ fn generate_frozen_account_panic(mut cluster: LocalCluster, frozen_account: Arc<
 #[test]
 #[serial]
 fn test_frozen_account_from_genesis() {
-    solana_logger::setup();
+    safecoin_logger::setup();
     let validator_identity =
-        Arc::new(solana_sdk::signature::keypair_from_seed(&[0u8; 32]).unwrap());
+        Arc::new(safecoin_sdk::signature::keypair_from_seed(&[0u8; 32]).unwrap());
 
     let mut config = ClusterConfig {
         validator_keys: Some(vec![(validator_identity.clone(), true)]),
@@ -889,9 +889,9 @@ fn test_frozen_account_from_genesis() {
 #[test]
 #[serial]
 fn test_frozen_account_from_snapshot() {
-    solana_logger::setup();
+    safecoin_logger::setup();
     let validator_identity =
-        Arc::new(solana_sdk::signature::keypair_from_seed(&[0u8; 32]).unwrap());
+        Arc::new(safecoin_sdk::signature::keypair_from_seed(&[0u8; 32]).unwrap());
 
     let mut snapshot_test_config = setup_snapshot_validator_config(5, 1);
     // Freeze the validator identity account
@@ -929,7 +929,7 @@ fn test_frozen_account_from_snapshot() {
 #[test]
 #[serial]
 fn test_consistency_halt() {
-    solana_logger::setup();
+    safecoin_logger::setup();
     let snapshot_interval_slots = 20;
     let num_account_paths = 1;
 
@@ -1018,7 +1018,7 @@ fn test_consistency_halt() {
 #[test]
 #[serial]
 fn test_snapshot_download() {
-    solana_logger::setup();
+    safecoin_logger::setup();
     // First set up the cluster with 1 node
     let snapshot_interval_slots = 50;
     let num_account_paths = 3;
@@ -1081,7 +1081,7 @@ fn test_snapshot_download() {
 #[test]
 #[serial]
 fn test_snapshot_restart_tower() {
-    solana_logger::setup();
+    safecoin_logger::setup();
     // First set up the cluster with 2 nodes
     let snapshot_interval_slots = 10;
     let num_account_paths = 2;
@@ -1153,7 +1153,7 @@ fn test_snapshot_restart_tower() {
 #[test]
 #[serial]
 fn test_snapshots_blockstore_floor() {
-    solana_logger::setup();
+    safecoin_logger::setup();
     // First set up the cluster with 1 snapshotting leader
     let snapshot_interval_slots = 10;
     let num_account_paths = 4;
@@ -1253,7 +1253,7 @@ fn test_snapshots_blockstore_floor() {
 #[test]
 #[serial]
 fn test_snapshots_restart_validity() {
-    solana_logger::setup();
+    safecoin_logger::setup();
     let snapshot_interval_slots = 10;
     let num_account_paths = 1;
     let mut snapshot_test_config =
@@ -1343,7 +1343,7 @@ fn test_fake_shreds_broadcast_leader() {
 }
 
 fn test_faulty_node(faulty_node_type: BroadcastStageType) {
-    solana_logger::setup();
+    safecoin_logger::setup();
     let num_nodes = 2;
     let error_validator_config = ValidatorConfig {
         broadcast_stage_type: faulty_node_type,
@@ -1373,7 +1373,7 @@ fn test_faulty_node(faulty_node_type: BroadcastStageType) {
 
 #[test]
 fn test_wait_for_max_stake() {
-    solana_logger::setup();
+    safecoin_logger::setup();
     let mut validator_config = ValidatorConfig::default();
     validator_config.rpc_config.enable_validator_exit = true;
     let mut config = ClusterConfig {
@@ -1395,7 +1395,7 @@ fn test_wait_for_max_stake() {
 // Test that when a leader is leader for banks B_i..B_{i+n}, and B_i is not
 // votable, then B_{i+1} still chains to B_i
 fn test_no_voting() {
-    solana_logger::setup();
+    safecoin_logger::setup();
     let mut validator_config = ValidatorConfig::default();
     validator_config.rpc_config.enable_validator_exit = true;
     validator_config.voting_disabled = true;
@@ -1434,7 +1434,7 @@ fn test_no_voting() {
 #[test]
 #[serial]
 fn test_optimistic_confirmation_violation_detection() {
-    solana_logger::setup();
+    safecoin_logger::setup();
     let buf = std::env::var("OPTIMISTIC_CONF_TEST_DUMP_LOG")
         .err()
         .map(|_| BufferRedirect::stderr().unwrap());
@@ -1540,7 +1540,7 @@ fn test_optimistic_confirmation_violation_detection() {
 #[test]
 #[serial]
 fn test_validator_saves_tower() {
-    solana_logger::setup();
+    safecoin_logger::setup();
 
     let validator_config = ValidatorConfig {
         require_tower: true,
@@ -1753,7 +1753,7 @@ fn remove_tower(ledger_path: &Path, node_pubkey: &Pubkey) {
 //    `A` should not be able to generate a switching proof.
 //
 fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: bool) {
-    solana_logger::setup();
+    safecoin_logger::setup();
 
     // First set up the cluster with 4 nodes
     let slots_per_epoch = 2048;
@@ -1935,7 +1935,7 @@ enum ClusterMode {
 }
 
 fn do_test_future_tower(cluster_mode: ClusterMode) {
-    solana_logger::setup();
+    safecoin_logger::setup();
 
     // First set up the cluster with 4 nodes
     let slots_per_epoch = 2048;
@@ -2043,7 +2043,7 @@ fn test_future_tower_master_slave() {
 
 #[test]
 fn test_hard_fork_invalidates_tower() {
-    solana_logger::setup();
+    safecoin_logger::setup();
 
     // First set up the cluster with 2 nodes
     let slots_per_epoch = 2048;
@@ -2096,10 +2096,10 @@ fn test_hard_fork_invalidates_tower() {
     // setup hard fork at slot < a previously rooted slot!
     let hard_fork_slot = min_root - 5;
     let hard_fork_slots = Some(vec![hard_fork_slot]);
-    let mut hard_forks = solana_sdk::hard_forks::HardForks::default();
+    let mut hard_forks = safecoin_sdk::hard_forks::HardForks::default();
     hard_forks.register(hard_fork_slot);
 
-    let expected_shred_version = solana_sdk::shred_version::compute_shred_version(
+    let expected_shred_version = safecoin_sdk::shred_version::compute_shred_version(
         &cluster.lock().unwrap().genesis_config.hash(),
         Some(&hard_forks),
     );
@@ -2332,7 +2332,7 @@ fn setup_transfer_scan_threads(
 }
 
 fn run_test_load_program_accounts(scan_commitment: CommitmentConfig) {
-    solana_logger::setup();
+    safecoin_logger::setup();
     // First set up the cluster with 2 nodes
     let slots_per_epoch = 2048;
     let node_stakes = vec![51, 50];

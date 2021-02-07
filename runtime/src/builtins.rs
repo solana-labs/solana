@@ -2,7 +2,7 @@ use crate::{
     bank::{Builtin, Builtins},
     system_instruction_processor,
 };
-use solana_sdk::{
+use safecoin_sdk::{
     feature_set,
     instruction::InstructionError,
     keyed_account::KeyedAccount,
@@ -57,18 +57,18 @@ fn genesis_builtins() -> Vec<Builtin> {
         ),
         Builtin::new(
             "vote_program",
-            solana_vote_program::id(),
-            with_program_logging!(solana_vote_program::vote_instruction::process_instruction),
+            safecoin_vote_program::id(),
+            with_program_logging!(safecoin_vote_program::vote_instruction::process_instruction),
         ),
         Builtin::new(
             "stake_program",
-            solana_stake_program::id(),
-            with_program_logging!(solana_stake_program::stake_instruction::process_instruction),
+            safecoin_stake_program::id(),
+            with_program_logging!(safecoin_stake_program::stake_instruction::process_instruction),
         ),
         Builtin::new(
             "config_program",
-            solana_config_program::id(),
-            with_program_logging!(solana_config_program::config_processor::process_instruction),
+            safecoin_config_program::id(),
+            with_program_logging!(safecoin_config_program::config_processor::process_instruction),
         ),
     ]
 }
@@ -86,13 +86,13 @@ pub enum ActivationType {
 /// This is to enable the runtime to determine categorically whether the builtin update has
 /// occurred, and preserve idempotency in Bank::add_native_program across genesis, snapshot, and
 /// normal child Bank creation.
-/// https://github.com/solana-labs/solana/blob/84b139cc94b5be7c9e0c18c2ad91743231b85a0d/runtime/src/bank.rs#L1723
+/// https://github.com/solana-labs/safecoin/blob/84b139cc94b5be7c9e0c18c2ad91743231b85a0d/runtime/src/bank.rs#L1723
 fn feature_builtins() -> Vec<(Builtin, Pubkey, ActivationType)> {
     vec![(
         Builtin::new(
             "secp256k1_program",
-            solana_sdk::secp256k1_program::id(),
-            solana_secp256k1_program::process_instruction,
+            safecoin_sdk::secp256k1_program::id(),
+            safecoin_secp256k1_program::process_instruction,
         ),
         feature_set::secp256k1_program_enabled::id(),
         ActivationType::NewProgram,

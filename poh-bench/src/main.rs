@@ -1,15 +1,15 @@
 use clap::{crate_description, crate_name, value_t, App, Arg};
-use solana_ledger::entry::{self, create_ticks, init_poh, EntrySlice, VerifyRecyclers};
-use solana_measure::measure::Measure;
-use solana_perf::perf_libs;
-use solana_sdk::hash::hash;
+use safecoin_ledger::entry::{self, create_ticks, init_poh, EntrySlice, VerifyRecyclers};
+use safecoin_measure::measure::Measure;
+use safecoin_perf::perf_libs;
+use safecoin_sdk::hash::hash;
 
 fn main() {
-    solana_logger::setup();
+    safecoin_logger::setup();
 
     let matches = App::new(crate_name!())
         .about(crate_description!())
-        .version(solana_version::version!())
+        .version(safecoin_version::version!())
         .arg(
             Arg::with_name("max_num_entries")
                 .long("max-num-entries")

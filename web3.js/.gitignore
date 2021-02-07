@@ -28,5 +28,5 @@ doc
 # fixtures
 /test/fixtures
 
-# `solana-test-validator` ledger location
+# `safecoin-test-validator` ledger location
 test-ledger/

@@ -7,16 +7,16 @@ use crate::{
     spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
 };
 use clap::{App, Arg, ArgMatches, SubCommand};
-use solana_clap_utils::{
+use safecoin_clap_utils::{
     input_parsers::*,
     input_validators::*,
     keypair::{DefaultSigner, SignerIndex},
     nonce::*,
 };
-use solana_cli_output::CliNonceAccount;
-use solana_client::{nonce_utils::*, rpc_client::RpcClient};
-use solana_remote_wallet::remote_wallet::RemoteWalletManager;
-use solana_sdk::{
+use safecoin_cli_output::CliNonceAccount;
+use safecoin_client::{nonce_utils::*, rpc_client::RpcClient};
+use safecoin_remote_wallet::remote_wallet::RemoteWalletManager;
+use safecoin_sdk::{
     account::Account,
     hash::Hash,
     message::Message,
@@ -75,7 +75,7 @@ impl NonceSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .required(true)
                         .validator(is_amount_or_all)
-                        .help("The amount to load the nonce account with, in SOL; accepts keyword ALL"),
+                        .help("The amount to load the nonce account with, in SAFE; accepts keyword ALL"),
                 )
                 .arg(
                     pubkey!(Arg::with_name(NONCE_AUTHORITY_ARG.name)
@@ -130,12 +130,12 @@ impl NonceSubCommands for App<'_, '_> {
                     Arg::with_name("lamports")
                         .long("lamports")
                         .takes_value(false)
-                        .help("Display balance in lamports instead of SOL"),
+                        .help("Display balance in lamports instead of SAFE"),
                 ),
         )
         .subcommand(
             SubCommand::with_name("withdraw-from-nonce-account")
-                .about("Withdraw SOL from the nonce account")
+                .about("Withdraw SAFE from the nonce account")
                 .arg(
                     pubkey!(Arg::with_name("nonce_account_pubkey")
                         .index(1)
@@ -148,7 +148,7 @@ impl NonceSubCommands for App<'_, '_> {
                         .index(2)
                         .value_name("RECIPIENT_ADDRESS")
                         .required(true),
-                        "The account to which the SOL should be transferred. "),
+                        "The account to which the SAFE should be transferred. "),
                 )
                 .arg(
                     Arg::with_name("amount")
@@ -157,7 +157,7 @@ impl NonceSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .required(true)
                         .validator(is_amount)
-                        .help("The amount to withdraw from the nonce account, in SOL"),
+                        .help("The amount to withdraw from the nonce account, in SAFE"),
                 )
                 .arg(nonce_authority_arg()),
         )
@@ -283,7 +283,7 @@ pub fn parse_withdraw_from_nonce_account(
     let nonce_account = pubkey_of_signer(matches, "nonce_account_pubkey", wallet_manager)?.unwrap();
     let destination_account_pubkey =
         pubkey_of_signer(matches, "destination_account_pubkey", wallet_manager)?.unwrap();
-    let lamports = lamports_of_sol(matches, "amount").unwrap();
+    let lamports = lamports_of_safe (matches, "amount").unwrap();
     let (nonce_authority, nonce_authority_pubkey) =
         signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
 
@@ -547,7 +547,7 @@ pub fn process_withdraw_from_nonce_account(
 mod tests {
     use super::*;
     use crate::cli::{app, parse_command};
-    use solana_sdk::{
+    use safecoin_sdk::{
         account::Account,
         account_utils::StateMut,
         fee_calculator::FeeCalculator,
@@ -807,7 +807,7 @@ mod tests {
     #[test]
     fn test_check_nonce_account() {
         let blockhash = Hash::default();
-        let nonce_pubkey = solana_sdk::pubkey::new_rand();
+        let nonce_pubkey = safecoin_sdk::pubkey::new_rand();
         let data = Versions::new_current(State::Initialized(nonce::state::Data {
             authority: nonce_pubkey,
             blockhash,
@@ -843,7 +843,7 @@ mod tests {
         }
 
         let data = Versions::new_current(State::Initialized(nonce::state::Data {
-            authority: solana_sdk::pubkey::new_rand(),
+            authority: safecoin_sdk::pubkey::new_rand(),
             blockhash,
             fee_calculator: FeeCalculator::default(),
         }));

@@ -1,21 +1,21 @@
 [package]
-name = "solana-noop-program"
+name = "safecoin-noop-program"
 version = "1.6.0"
-description = "Solana Noop program"
-authors = ["Solana Maintainers <maintainers@solana.foundation>"]
-repository = "https://github.com/solana-labs/solana"
+description = "Safecoin Noop program"
+authors = ["Safecoin Maintainers <maintainers@solana.foundation>"]
+repository = "https://github.com/solana-labs/safecoin"
 license = "Apache-2.0"
-homepage = "https://solana.com/"
+homepage = "https://safecoin.org/"
 edition = "2018"
 
 [dependencies]
 log = "0.4.11"
-solana-logger = { path = "../../logger", version = "1.6.0" }
-solana-sdk = { path = "../../sdk", version = "1.6.0" }
+safecoin-logger = { path = "../../logger", version = "1.6.0" }
+safecoin-sdk = { path = "../../sdk", version = "1.6.0" }
 
 [lib]
 crate-type = ["lib", "cdylib"]
-name = "solana_noop_program"
+name = "safecoin_noop_program"
 
 
 [package.metadata.docs.rs]

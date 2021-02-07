@@ -14,7 +14,7 @@ import {
   Transaction,
   PartiallyDecodedInstruction,
   ParsedInstruction,
-} from "@solana/web3.js";
+} from "@safecoin/web3.js";
 import { TokenRegistry } from "tokenRegistry";
 import { Cluster } from "providers/cluster";
 import { SerumMarketRegistry } from "serumMarketRegistry";
@@ -22,7 +22,7 @@ import { SerumMarketRegistry } from "serumMarketRegistry";
 export type ProgramName = typeof PROGRAM_IDS[keyof typeof PROGRAM_IDS];
 
 export const PROGRAM_IDS = {
-  BrEAK7zGZ6dM71zUDACDqJnekihmwF15noTddWTsknjC: "Break Solana Program",
+  BrEAK7zGZ6dM71zUDACDqJnekihmwF15noTddWTsknjC: "Break Safecoin Program",
   Budget1111111111111111111111111111111111111: "Budget Program",
   Config1111111111111111111111111111111111111: "Config Program",
   Exchange11111111111111111111111111111111111: "Exchange Program",

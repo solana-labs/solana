@@ -1,13 +1,13 @@
-use solana_sdk::{account::Account, pubkey::Pubkey, rent::Rent};
+use safecoin_sdk::{account::Account, pubkey::Pubkey, rent::Rent};
 
 mod spl_token {
-    solana_sdk::declare_id!("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+    safecoin_sdk::declare_id!("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 }
 mod spl_memo {
-    solana_sdk::declare_id!("Memo1UhkJRfHyvLMcVucJwxXeuD728EqVDDwQDxFMNo");
+    safecoin_sdk::declare_id!("Memo1UhkJRfHyvLMcVucJwxXeuD728EqVDDwQDxFMNo");
 }
 mod spl_associated_token_account {
-    solana_sdk::declare_id!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+    safecoin_sdk::declare_id!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 }
 
 static SPL_PROGRAMS: &[(Pubkey, &[u8])] = &[
