@@ -1828,21 +1828,11 @@ impl AccountsDB {
         }
         rewrite_elapsed.stop();
 
-        let mut recycle_stores_write_elapsed = Measure::start("recycle_stores_write_time");
-        let mut recycle_stores = self.recycle_stores.write().unwrap();
-        recycle_stores_write_elapsed.stop();
-
         let mut drop_storage_entries_elapsed = Measure::start("drop_storage_entries_elapsed");
-        if recycle_stores.len() < MAX_RECYCLE_STORES {
-            recycle_stores.extend(dead_storages);
-            drop(recycle_stores);
-        } else {
-            self.stats
-                .dropped_stores
-                .fetch_add(recycle_stores.len() as u64, Ordering::Relaxed);
-            drop(recycle_stores);
-            drop(dead_storages);
-        }
+        self.stats
+            .dropped_stores
+            .fetch_add(dead_storages.len() as u64, Ordering::Relaxed);
+        drop(dead_storages);
         drop_storage_entries_elapsed.stop();
 
         self.shrink_stats
@@ -1878,9 +1868,6 @@ impl AccountsDB {
         self.shrink_stats
             .drop_storage_entries_elapsed
             .fetch_add(drop_storage_entries_elapsed.as_us(), Ordering::Relaxed);
-        self.shrink_stats
-            .recycle_stores_write_elapsed
-            .fetch_add(recycle_stores_write_elapsed.as_us(), Ordering::Relaxed);
         self.shrink_stats.accounts_removed.fetch_add(
             total_starting_accounts - total_accounts_after_shrink,
             Ordering::Relaxed,
@@ -2475,7 +2462,7 @@ impl AccountsDB {
         for slot_entries in slot_stores {
             let entry = slot_entries.read().unwrap();
             for (_store_id, stores) in entry.iter() {
-                if recycle_stores.len() > MAX_RECYCLE_STORES {
+                if self.caching_enabled || recycle_stores.len() > MAX_RECYCLE_STORES {
                     let dropped_count = total_removed_storage_entries - recycled_count;
                     self.stats
                         .dropped_stores
