@@ -28,7 +28,7 @@ import { SlotHashesCard } from "components/account/SlotHashesCard";
 import { StakeHistoryCard } from "components/account/StakeHistoryCard";
 import { BlockhashesCard } from "components/account/BlockhashesCard";
 import { ConfigAccountSection } from "components/account/ConfigAccountSection";
-import { isScamAccount } from "scamRegistry";
+import { useFlaggedAccounts } from "providers/accounts/flagged-accounts";
 
 const TABS_LOOKUP: { [id: string]: Tab } = {
   "spl-token:mint": {
@@ -130,7 +130,7 @@ function DetailsSections({ pubkey, tab }: { pubkey: PublicKey; tab?: string }) {
   const info = useAccountInfo(address);
   const { status } = useCluster();
   const location = useLocation();
-  const isScam = isScamAccount(address);
+  const { flaggedAccounts } = useFlaggedAccounts();
 
   // Fetch account on load
   React.useEffect(() => {
@@ -159,7 +159,7 @@ function DetailsSections({ pubkey, tab }: { pubkey: PublicKey; tab?: string }) {
 
   return (
     <>
-      {isScam && (
+      {flaggedAccounts.has(address) && (
         <div className="alert alert-danger alert-scam" role="alert">
           Warning! This account has been flagged as a scam account. Please be
           cautious sending SOL to this account.

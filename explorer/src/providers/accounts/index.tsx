@@ -18,6 +18,7 @@ import { VoteAccount } from "validators/accounts/vote";
 import { NonceAccount } from "validators/accounts/nonce";
 import { SysvarAccount } from "validators/accounts/sysvar";
 import { ConfigAccount } from "validators/accounts/config";
+import { FlaggedAccountsProvider } from "./flagged-accounts";
 export { useAccountHistory } from "./history";
 
 export type StakeProgramData = {
@@ -92,7 +93,9 @@ export function AccountsProvider({ children }: AccountsProviderProps) {
     <StateContext.Provider value={state}>
       <DispatchContext.Provider value={dispatch}>
         <TokensProvider>
-          <HistoryProvider>{children}</HistoryProvider>
+          <HistoryProvider>
+            <FlaggedAccountsProvider>{children}</FlaggedAccountsProvider>
+          </HistoryProvider>
         </TokensProvider>
       </DispatchContext.Provider>
     </StateContext.Provider>
