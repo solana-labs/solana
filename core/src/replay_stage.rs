@@ -43,7 +43,6 @@ use solana_sdk::{
 use solana_vote_program::{vote_instruction, vote_state::Vote};
 use std::{
     collections::{HashMap, HashSet},
-    ops::Deref,
     result,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -1638,8 +1637,8 @@ impl ReplayStage {
 
     fn update_fork_propagated_threshold_from_votes(
         progress: &mut ProgressMap,
-        mut newly_voted_pubkeys: Vec<impl Deref<Target = Pubkey>>,
-        mut cluster_slot_pubkeys: Vec<impl Deref<Target = Pubkey>>,
+        mut newly_voted_pubkeys: Vec<Pubkey>,
+        mut cluster_slot_pubkeys: Vec<Pubkey>,
         fork_tip: Slot,
         bank_forks: &RwLock<BankForks>,
     ) {
@@ -1696,8 +1695,8 @@ impl ReplayStage {
     }
 
     fn update_slot_propagated_threshold_from_votes(
-        newly_voted_pubkeys: &mut Vec<impl Deref<Target = Pubkey>>,
-        cluster_slot_pubkeys: &mut Vec<impl Deref<Target = Pubkey>>,
+        newly_voted_pubkeys: &mut Vec<Pubkey>,
+        cluster_slot_pubkeys: &mut Vec<Pubkey>,
         leader_bank: &Bank,
         leader_propagated_stats: &mut PropagatedStats,
         did_child_reach_threshold: bool,
@@ -1735,7 +1734,7 @@ impl ReplayStage {
                 .propagated_validators
                 .contains(vote_pubkey);
             leader_propagated_stats.add_vote_pubkey(
-                **vote_pubkey,
+                *vote_pubkey,
                 leader_bank.epoch_vote_account_stake(&vote_pubkey),
             );
             !exists
@@ -1744,7 +1743,7 @@ impl ReplayStage {
         cluster_slot_pubkeys.retain(|node_pubkey| {
             let exists = leader_propagated_stats
                 .propagated_node_ids
-                .contains(&**node_pubkey);
+                .contains(node_pubkey);
             leader_propagated_stats.add_node_pubkey(&*node_pubkey, leader_bank);
             !exists
         });
@@ -1864,11 +1863,11 @@ impl ReplayStage {
                     &leader,
                     subscriptions,
                 );
-                let empty: Vec<&Pubkey> = vec![];
+                let empty: Vec<Pubkey> = vec![];
                 Self::update_fork_propagated_threshold_from_votes(
                     progress,
                     empty,
-                    vec![&leader],
+                    vec![leader],
                     parent_bank.slot(),
                     bank_forks,
                 );
@@ -3099,17 +3098,9 @@ pub(crate) mod tests {
         for i in 0..std::cmp::max(new_vote_pubkeys.len(), new_node_pubkeys.len()) {
             propagated_stats.is_propagated = false;
             let len = std::cmp::min(i, new_vote_pubkeys.len());
-            let mut voted_pubkeys = new_vote_pubkeys[..len]
-                .iter()
-                .cloned()
-                .map(Arc::new)
-                .collect();
+            let mut voted_pubkeys = new_vote_pubkeys[..len].iter().copied().collect();
             let len = std::cmp::min(i, new_node_pubkeys.len());
-            let mut node_pubkeys = new_node_pubkeys[..len]
-                .iter()
-                .cloned()
-                .map(Arc::new)
-                .collect();
+            let mut node_pubkeys = new_node_pubkeys[..len].iter().copied().collect();
             let did_newly_reach_threshold =
                 ReplayStage::update_slot_propagated_threshold_from_votes(
                     &mut voted_pubkeys,
@@ -3126,14 +3117,14 @@ pub(crate) mod tests {
                 if i == 0 || i >= new_vote_pubkeys.len() {
                     vec![]
                 } else {
-                    vec![Arc::new(new_vote_pubkeys[i - 1])]
+                    vec![new_vote_pubkeys[i - 1]]
                 }
             };
             let remaining_node_pubkeys = {
                 if i == 0 || i >= new_node_pubkeys.len() {
                     vec![]
                 } else {
-                    vec![Arc::new(new_node_pubkeys[i - 1])]
+                    vec![new_node_pubkeys[i - 1]]
                 }
             };
             assert_eq!(voted_pubkeys, remaining_vote_pubkeys);
@@ -3154,7 +3145,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_update_slot_propagated_threshold_from_votes2() {
-        let mut empty: Vec<&Pubkey> = vec![];
+        let mut empty: Vec<Pubkey> = vec![];
         let genesis_config = create_genesis_config(100_000_000).genesis_config;
         let root_bank = Bank::new(&genesis_config);
         let stake = 10_000;
@@ -3167,7 +3158,7 @@ pub(crate) mod tests {
         };
         propagated_stats.total_epoch_stake = stake * 10;
         let child_reached_threshold = true;
-        let mut newly_voted_pubkeys: Vec<Arc<Pubkey>> = vec![];
+        let mut newly_voted_pubkeys: Vec<Pubkey> = vec![];
 
         assert!(ReplayStage::update_slot_propagated_threshold_from_votes(
             &mut newly_voted_pubkeys,
@@ -3208,7 +3199,7 @@ pub(crate) mod tests {
         // Create genesis stakers
         let vote_keypairs = ValidatorVoteKeypairs::new_rand();
         let node_pubkey = vote_keypairs.node_keypair.pubkey();
-        let vote_pubkey = Arc::new(vote_keypairs.vote_keypair.pubkey());
+        let vote_pubkey = vote_keypairs.vote_keypair.pubkey();
         let keypairs: HashMap<_, _> = vec![(node_pubkey, vote_keypairs)].into_iter().collect();
         let stake = 10_000;
         let (mut bank_forks, mut progress_map, _) = initialize_state(&keypairs, stake);
@@ -3254,7 +3245,7 @@ pub(crate) mod tests {
         assert!(!progress_map.is_propagated(10));
 
         let vote_tracker = VoteTracker::new(&bank_forks.root_bank());
-        vote_tracker.insert_vote(10, vote_pubkey.clone());
+        vote_tracker.insert_vote(10, vote_pubkey);
         ReplayStage::update_propagation_status(
             &mut progress_map,
             10,
@@ -3282,7 +3273,7 @@ pub(crate) mod tests {
         // The voter should be recorded
         assert!(propagated_stats
             .propagated_validators
-            .contains(&*vote_pubkey));
+            .contains(&vote_pubkey));
 
         assert_eq!(propagated_stats.propagated_validators_stake, stake);
     }
@@ -3341,7 +3332,7 @@ pub(crate) mod tests {
         let vote_tracker = VoteTracker::new(&bank_forks.root_bank());
         for vote_pubkey in &vote_pubkeys {
             // Insert a vote for the last bank for each voter
-            vote_tracker.insert_vote(10, Arc::new(*vote_pubkey));
+            vote_tracker.insert_vote(10, *vote_pubkey);
         }
 
         // The last bank should reach propagation threshold, and propagate it all
@@ -3427,7 +3418,7 @@ pub(crate) mod tests {
 
         let vote_tracker = VoteTracker::new(&bank_forks.root_bank());
         // Insert a new vote
-        vote_tracker.insert_vote(10, Arc::new(vote_pubkeys[2]));
+        vote_tracker.insert_vote(10, vote_pubkeys[2]);
 
         // The last bank should reach propagation threshold, and propagate it all
         // the way back through earlier leader banks
@@ -3790,7 +3781,7 @@ pub(crate) mod tests {
 
         // Add votes
         for vote_key in validator_voting_keys.values() {
-            vote_tracker.insert_vote(root_bank.slot(), Arc::new(*vote_key));
+            vote_tracker.insert_vote(root_bank.slot(), *vote_key);
         }
 
         assert!(!progress.is_propagated(root_bank.slot()));
