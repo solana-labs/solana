@@ -226,6 +226,7 @@ impl Rocks {
         if let Some(recovery_mode) = recovery_mode {
             db_options.set_wal_recovery_mode(recovery_mode.into());
         }
+        db_options.set_max_open_files(512);
 
         // Column family names
         let meta_cf_descriptor =
