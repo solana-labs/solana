@@ -70,7 +70,7 @@ impl fmt::Display for CliFeatures {
                 f,
                 "{}",
                 style(format!(
-                    "{:<44} {:<28} {}",
+                    "{:<44} | {:<27} | {}",
                     "Feature", "Status", "Description"
                 ))
                 .bold()
@@ -79,7 +79,7 @@ impl fmt::Display for CliFeatures {
         for feature in &self.features {
             writeln!(
                 f,
-                "{:<44} {:<28} {}",
+                "{:<44} | {:<27} | {}",
                 feature.id,
                 match feature.status {
                     CliFeatureStatus::Inactive => style("inactive".to_string()).red(),
