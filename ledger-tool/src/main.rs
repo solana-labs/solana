@@ -1268,7 +1268,7 @@ fn main() {
                     .long("dead-slots-only")
                     .required(false)
                     .takes_value(false)
-                    .help("Limit puring to dead slots only")
+                    .help("Limit purging to dead slots only")
             )
         )
         .subcommand(
