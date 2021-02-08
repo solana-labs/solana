@@ -1,6 +1,6 @@
 use crate::{
     cluster_info::ClusterInfo, contact_info::ContactInfo, epoch_slots::EpochSlots,
-    pubkey_references::LockedPubkeyReferences, serve_repair::RepairType,
+    serve_repair::RepairType,
 };
 use solana_runtime::{bank_forks::BankForks, epoch_stakes::NodeIdToVoteAccounts};
 use solana_sdk::{clock::Slot, pubkey::Pubkey};
@@ -9,13 +9,12 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-pub type SlotPubkeys = HashMap<Arc<Pubkey>, u64>;
+pub type SlotPubkeys = HashMap<Pubkey, u64>;
 pub type ClusterSlotsMap = RwLock<HashMap<Slot, Arc<RwLock<SlotPubkeys>>>>;
 
 #[derive(Default)]
 pub struct ClusterSlots {
     cluster_slots: ClusterSlotsMap,
-    keys: LockedPubkeyReferences,
     since: RwLock<Option<u64>>,
     validator_stakes: RwLock<Arc<NodeIdToVoteAccounts>>,
     epoch: RwLock<Option<u64>>,
@@ -40,12 +39,10 @@ impl ClusterSlots {
                 if *slot <= root {
                     continue;
                 }
-                let unduplicated_pubkey = self.keys.get_or_insert(&epoch_slots.from);
-                self.insert_node_id(*slot, unduplicated_pubkey);
+                self.insert_node_id(*slot, epoch_slots.from);
             }
         }
         self.cluster_slots.write().unwrap().retain(|x, _| *x > root);
-        self.keys.purge();
         *self.since.write().unwrap() = since;
     }
 
@@ -60,7 +57,7 @@ impl ClusterSlots {
             .collect()
     }
 
-    pub fn insert_node_id(&self, slot: Slot, node_id: Arc<Pubkey>) {
+    pub fn insert_node_id(&self, slot: Slot, node_id: Pubkey) {
         let balance = self
             .validator_stakes
             .read()
@@ -241,8 +238,8 @@ mod tests {
         let mut map = HashMap::new();
         let k1 = solana_sdk::pubkey::new_rand();
         let k2 = solana_sdk::pubkey::new_rand();
-        map.insert(Arc::new(k1), std::u64::MAX / 2);
-        map.insert(Arc::new(k2), 0);
+        map.insert(k1, std::u64::MAX / 2);
+        map.insert(k2, 0);
         cs.cluster_slots
             .write()
             .unwrap()
@@ -263,14 +260,14 @@ mod tests {
         let mut map = HashMap::new();
         let k1 = solana_sdk::pubkey::new_rand();
         let k2 = solana_sdk::pubkey::new_rand();
-        map.insert(Arc::new(k2), 0);
+        map.insert(k2, 0);
         cs.cluster_slots
             .write()
             .unwrap()
             .insert(0, Arc::new(RwLock::new(map)));
         //make sure default weights are used as well
         let validator_stakes: HashMap<_, _> = vec![(
-            *Arc::new(k1),
+            k1,
             NodeVoteAccounts {
                 total_stake: std::u64::MAX / 2,
                 vote_accounts: vec![Pubkey::default()],
@@ -317,7 +314,7 @@ mod tests {
         // Mark the first validator as completed slot 9, should pick that validator,
         // even though it only has default stake, while the other validator has
         // max stake
-        cs.insert_node_id(slot, Arc::new(contact_infos[0].id));
+        cs.insert_node_id(slot, contact_infos[0].id);
         assert_eq!(
             cs.compute_weights_exclude_noncomplete(slot, &contact_infos),
             vec![(1, 0)]
