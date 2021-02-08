@@ -1048,7 +1048,7 @@ mod test {
         // a valid target for repair
         let dead_slot = 9;
         let cluster_slots = ClusterSlots::default();
-        cluster_slots.insert_node_id(dead_slot, Arc::new(valid_repair_peer.id));
+        cluster_slots.insert_node_id(dead_slot, valid_repair_peer.id);
         cluster_info.insert_info(valid_repair_peer);
 
         // Not enough time has passed, should not update the
@@ -1178,7 +1178,7 @@ mod test {
         let cluster_slots = ClusterSlots::default();
         let duplicate_slot_repair_statuses = HashMap::new();
         let keypairs = ValidatorVoteKeypairs::new_rand();
-        let only_node_id = Arc::new(keypairs.node_keypair.pubkey());
+        let only_node_id = keypairs.node_keypair.pubkey();
         let GenesisConfigInfo { genesis_config, .. } =
             genesis_utils::create_genesis_config_with_vote_accounts(
                 1_000_000_000,
