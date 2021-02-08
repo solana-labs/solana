@@ -20,9 +20,11 @@ import {
   DeactivateInfo,
   DelegateInfo,
   InitializeInfo,
+  MergeInfo,
   SplitInfo,
   WithdrawInfo,
 } from "./types";
+import { MergeDetailsCard } from "./MergeDetailsCard";
 
 type DetailsProps = {
   tx: ParsedTransaction;
@@ -61,6 +63,10 @@ export function StakeDetailsCard(props: DetailsProps) {
       case "deactivate": {
         const info = coerce(parsed.info, DeactivateInfo);
         return <DeactivateDetailsCard info={info} {...props} />;
+      }
+      case "merge": {
+        const info = coerce(parsed.info, MergeInfo);
+        return <MergeDetailsCard info={info} {...props} />;
       }
       default:
         return <UnknownDetailsCard {...props} />;
