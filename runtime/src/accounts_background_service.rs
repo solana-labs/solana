@@ -122,9 +122,9 @@ impl SnapshotRequestHandler {
 
                 let mut hash_time = Measure::start("hash_time");
                 let mut hash_for_testing = None;
-                const DO_NOT_USE_INDEX: bool = false;
+                const USE_INDEX: bool = true;
                 snapshot_root_bank.update_accounts_hash_with_index_option(
-                    DO_NOT_USE_INDEX,
+                    !USE_INDEX,
                     test_hash_calculation,
                 );
                 if test_hash_calculation {
