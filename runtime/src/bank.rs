@@ -4775,11 +4775,29 @@ impl Bank {
     }
 
     fn apply_spl_token_v2_self_transfer_fix(&mut self) {
-        if let Some(mut account) = self.get_account(&inline_spl_token_v2_0::id()) {
-            self.capitalization.fetch_sub(account.lamports, Relaxed);
-            account.lamports = 0;
-            self.store_account(&inline_spl_token_v2_0::id(), &account);
-            self.remove_executor(&inline_spl_token_v2_0::id());
+        if let Some(old_account) = self.get_account(&inline_spl_token_v2_0::id()) {
+            if let Some(new_account) =
+                self.get_account(&inline_spl_token_v2_0::new_token_program::id())
+            {
+                datapoint_info!(
+                    "bank-apply_spl_token_v2_self_transfer_fix",
+                    ("slot", self.slot, i64),
+                );
+
+                // Burn lamports in the old token account
+                self.capitalization.fetch_sub(old_account.lamports, Relaxed);
+
+                // Transfer new token account to old token account
+                self.store_account(&inline_spl_token_v2_0::id(), &new_account);
+
+                // Clear new token account
+                self.store_account(
+                    &inline_spl_token_v2_0::new_token_program::id(),
+                    &Account::default(),
+                );
+
+                self.remove_executor(&inline_spl_token_v2_0::id());
+            }
         }
     }
 
@@ -11070,7 +11088,7 @@ pub(crate) mod tests {
         let (genesis_config, _mint_keypair) = create_genesis_config(0);
         let mut bank = Bank::new(&genesis_config);
 
-        // Setup a simulated account
+        // Setup original token account
         bank.store_account_and_update_capitalization(
             &inline_spl_token_v2_0::id(),
             &Account {
@@ -11079,12 +11097,40 @@ pub(crate) mod tests {
             },
         );
         assert_eq!(bank.get_balance(&inline_spl_token_v2_0::id()), 100);
+
+        // Setup new token account
+        let new_token_account = Account {
+            lamports: 123,
+            data: vec![1, 2, 3],
+            executable: true,
+            ..Account::default()
+        };
+        bank.store_account_and_update_capitalization(
+            &inline_spl_token_v2_0::new_token_program::id(),
+            &new_token_account,
+        );
+        assert_eq!(
+            bank.get_balance(&inline_spl_token_v2_0::new_token_program::id()),
+            123
+        );
+
         let original_capitalization = bank.capitalization();
 
         bank.apply_spl_token_v2_self_transfer_fix();
 
-        // Account is now empty, and the account lamports were burnt
-        assert_eq!(bank.get_balance(&inline_spl_token_v2_0::id()), 0);
+        // New token account is now empty
+        assert_eq!(
+            bank.get_balance(&inline_spl_token_v2_0::new_token_program::id()),
+            0
+        );
+
+        // Old token account holds the new token account
+        assert_eq!(
+            bank.get_account(&inline_spl_token_v2_0::id()),
+            Some(new_token_account)
+        );
+
+        // Lamports in the old token account were burnt
         assert_eq!(bank.capitalization(), original_capitalization - 100);
     }
 
