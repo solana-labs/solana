@@ -63,7 +63,7 @@ if [[ $CI_OS_NAME = windows ]]; then
     solana
     solana-install
     solana-install-init
-    solana-keygen
+    safecoin-keygen
     solana-stake-accounts
     solana-tokens
   )
@@ -87,7 +87,7 @@ else
     solana-gossip
     solana-install
     solana-install-init
-    solana-keygen
+    safecoin-keygen
     solana-ledger-tool
     solana-log-analyzer
     solana-net-shaper

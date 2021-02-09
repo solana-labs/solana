@@ -151,17 +151,17 @@ EOF
             cp net/keypairs/"$name".json config/"$name".json
           fi
         else
-          solana-keygen new --no-passphrase -so config/"$name".json
+          safecoin-keygen new --no-passphrase -so config/"$name".json
           if [[ "$name" =~ ^validator-identity- ]]; then
             name="${name//-identity-/-vote-}"
-            solana-keygen new --no-passphrase -so config/"$name".json
+            safecoin-keygen new --no-passphrase -so config/"$name".json
             name="${name//-vote-/-stake-}"
-            solana-keygen new --no-passphrase -so config/"$name".json
+            safecoin-keygen new --no-passphrase -so config/"$name".json
           fi
         fi
         if [[ -n $internalNodesLamports ]]; then
           declare pubkey
-          pubkey="$(solana-keygen pubkey config/"$name".json)"
+          pubkey="$(safecoin-keygen pubkey config/"$name".json)"
           cat >> config/validator-balances.yml <<EOF
 $pubkey:
   balance: $internalNodesLamports
@@ -233,9 +233,9 @@ EOF
           extraPrimordialStakes=$numNodes
         fi
         for i in $(seq "$extraPrimordialStakes"); do
-          args+=(--bootstrap-validator "$(solana-keygen pubkey "config/validator-identity-$i.json")"
-                                       "$(solana-keygen pubkey "config/validator-vote-$i.json")"
-                                       "$(solana-keygen pubkey "config/validator-stake-$i.json")"
+          args+=(--bootstrap-validator "$(safecoin-keygen pubkey "config/validator-identity-$i.json")"
+                                       "$(safecoin-keygen pubkey "config/validator-vote-$i.json")"
+                                       "$(safecoin-keygen pubkey "config/validator-stake-$i.json")"
           )
         done
       fi
@@ -350,11 +350,11 @@ EOF
     fi
 
     if [[ ! -f "$SAFECOIN_CONFIG_DIR"/validator-identity.json ]]; then
-      solana-keygen new --no-passphrase -so "$SAFECOIN_CONFIG_DIR"/validator-identity.json
+      safecoin-keygen new --no-passphrase -so "$SAFECOIN_CONFIG_DIR"/validator-identity.json
     fi
     args+=(--identity "$SAFECOIN_CONFIG_DIR"/validator-identity.json)
     if [[ ! -f "$SAFECOIN_CONFIG_DIR"/vote-account.json ]]; then
-      solana-keygen new --no-passphrase -so "$SAFECOIN_CONFIG_DIR"/vote-account.json
+      safecoin-keygen new --no-passphrase -so "$SAFECOIN_CONFIG_DIR"/vote-account.json
     fi
     args+=(--vote-account "$SAFECOIN_CONFIG_DIR"/vote-account.json)
 

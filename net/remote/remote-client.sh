@@ -58,7 +58,7 @@ solana-bench-tps)
   "
   ;;
 solana-bench-exchange)
-  solana-keygen new --no-passphrase -fso bench.keypair
+  safecoin-keygen new --no-passphrase -fso bench.keypair
   net/scripts/rsync-retry.sh -vPrc \
     "$entrypointIp":~/solana/config/bench-exchange"$clientIndex".yml ./client-accounts.yml
   clientCommand="\

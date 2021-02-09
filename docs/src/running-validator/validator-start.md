@@ -117,13 +117,13 @@ EOF"
 Create an identity keypair for your validator by running:
 
 ```bash
-solana-keygen new -o ~/validator-keypair.json
+safecoin-keygen new -o ~/validator-keypair.json
 ```
 
 The identity public key can now be viewed by running:
 
 ```bash
-solana-keygen pubkey ~/validator-keypair.json
+safecoin-keygen pubkey ~/validator-keypair.json
 ```
 
 > Note: The "validator-keypair.json” file is also your \(ed25519\) private key.
@@ -134,13 +134,13 @@ You can create a paper wallet for your identity file instead of writing the
 keypair file to disk with:
 
 ```bash
-solana-keygen new --no-outfile
+safecoin-keygen new --no-outfile
 ```
 
 The corresponding identity public key can now be viewed by running:
 
 ```bash
-solana-keygen pubkey ASK
+safecoin-keygen pubkey ASK
 ```
 
 and then entering your seed phrase.
@@ -151,10 +151,10 @@ See [Paper Wallet Usage](../wallet-guide/paper-wallet.md) for more info.
 
 ### Vanity Keypair
 
-You can generate a custom vanity keypair using solana-keygen. For instance:
+You can generate a custom vanity keypair using safecoin-keygen. For instance:
 
 ```bash
-solana-keygen grind --starts-with e1v1s:1
+safecoin-keygen grind --starts-with e1v1s:1
 ```
 
 Depending on the string requested, it may take days to find a match...
@@ -220,7 +220,7 @@ vote account on the network. If you have completed this step, you should see the
 “vote-account-keypair.json” in your Safecoin runtime directory:
 
 ```bash
-solana-keygen new -o ~/vote-account-keypair.json
+safecoin-keygen new -o ~/vote-account-keypair.json
 ```
 
 The following command can be used to create your vote account on the blockchain

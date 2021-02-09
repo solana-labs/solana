@@ -12,13 +12,13 @@ validator's identity public key under your keybase.io account.
 1. If you haven't already, generate your validator's identity keypair by running:
 
    ```bash
-     solana-keygen new -o ~/validator-keypair.json
+     safecoin-keygen new -o ~/validator-keypair.json
    ```
 
 2. The identity public key can now be viewed by running:
 
    ```bash
-     solana-keygen pubkey ~/validator-keypair.json
+     safecoin-keygen pubkey ~/validator-keypair.json
    ```
 
 > Note: The "validator-keypair.json” file is also your \(ed25519\) private key.

@@ -29,7 +29,7 @@ this step, you should see the “validator-stake-keypair.json” in your Safecoi
 runtime directory.
 
 ```bash
-solana-keygen new -o ~/validator-stake-keypair.json
+safecoin-keygen new -o ~/validator-stake-keypair.json
 ```
 
 ## Delegate Stake

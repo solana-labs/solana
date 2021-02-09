@@ -1,5 +1,5 @@
 [package]
-name = "solana-keygen"
+name = "safecoin-keygen"
 version = "1.6.0"
 description = "Safecoin key generation utility"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
@@ -21,7 +21,7 @@ solana-version = { path = "../version", version = "1.6.0" }
 tiny-bip39 = "0.7.0"
 
 [[bin]]
-name = "solana-keygen"
+name = "safecoin-keygen"
 path = "src/keygen.rs"
 
 [package.metadata.docs.rs]

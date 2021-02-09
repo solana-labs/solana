@@ -39,7 +39,7 @@ test-stable)
   _ "$cargo" stable test --jobs "$NPROC" --all --exclude solana-local-cluster ${V:+--verbose} -- --nocapture
   ;;
 test-stable-perf)
-  # solana-keygen required when building C programs
+  # safecoin-keygen required when building C programs
   _ "$cargo" build --manifest-path=keygen/Cargo.toml
   export PATH="$PWD/target/debug":$PATH
 

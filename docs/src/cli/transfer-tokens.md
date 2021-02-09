@@ -48,7 +48,7 @@ We will need a new address to receive our tokens. Create a second
 keypair and record its pubkey:
 
 ```bash
-solana-keygen new --no-passphrase --no-outfile
+safecoin-keygen new --no-passphrase --no-outfile
 ```
 
 The output will contain the address after the text `pubkey:`. Copy the
@@ -90,7 +90,7 @@ recipient's public key.
 #### Full example of test transfer
 
 ```bash
-$ solana-keygen new --outfile my_solana_wallet.json   # Creating my first wallet, a file system wallet
+$ safecoin-keygen new --outfile my_solana_wallet.json   # Creating my first wallet, a file system wallet
 Generating a new keypair
 For added security, enter a passphrase (empty for no passphrase):
 Wrote new keypair to my_solana_wallet.json
@@ -108,7 +108,7 @@ Requesting airdrop of 10 SAFE from 35.233.193.70:9900
 $ solana balance DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com # Check the address's balance
 10 SAFE
 
-$ solana-keygen new --no-outfile  # Creating a second wallet, a paper wallet
+$ safecoin-keygen new --no-outfile  # Creating a second wallet, a paper wallet
 Generating a new keypair
 For added security, enter a passphrase (empty for no passphrase):
 ====================================================================

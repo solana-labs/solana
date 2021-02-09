@@ -37,7 +37,7 @@ For example, the way to display any wallet's address
 (also known as the keypair's pubkey), the CLI help document shows:
 
 ```bash
-solana-keygen pubkey <KEYPAIR>
+safecoin-keygen pubkey <KEYPAIR>
 ```
 
 Below, we show how to resolve what you should put in `<KEYPAIR>` depending
@@ -54,7 +54,7 @@ when you run the command.
 To display the wallet address of a Paper Wallet:
 
 ```bash
-solana-keygen pubkey ASK
+safecoin-keygen pubkey ASK
 ```
 
 #### File System Wallet
@@ -66,7 +66,7 @@ For example, if the file system keypair file location is
 `/home/solana/my_wallet.json`, to display the address, do:
 
 ```bash
-solana-keygen pubkey /home/solana/my_wallet.json
+safecoin-keygen pubkey /home/solana/my_wallet.json
 ```
 
 #### Hardware Wallet
@@ -76,5 +76,5 @@ If you chose a hardware wallet, use your
 such as `usb://ledger?key=0`.
 
 ```bash
-solana-keygen pubkey usb://ledger?key=0
+safecoin-keygen pubkey usb://ledger?key=0
 ```

@@ -4545,7 +4545,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-keygen"
+name = "safecoin-keygen"
 version = "1.6.0"
 dependencies = [
  "bs58",

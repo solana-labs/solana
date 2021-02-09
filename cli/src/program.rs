@@ -1553,7 +1553,7 @@ fn report_ephemeral_mnemonic(words: usize, mnemonic: bip39::Mnemonic) {
         divider
     );
     eprintln!(
-        "`solana-keygen recover` and the following {}-word seed phrase,",
+        "`safecoin-keygen recover` and the following {}-word seed phrase,",
         words
     );
     eprintln!(

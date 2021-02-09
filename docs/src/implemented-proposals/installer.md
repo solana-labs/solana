@@ -50,7 +50,7 @@ $ cargo run -- --help
 Given a solana release tarball \(as created by `ci/publish-tarball.sh`\) that has already been uploaded to a publicly accessible URL, the following commands will deploy the update:
 
 ```bash
-$ solana-keygen new -o update-manifest.json  # <-- only generated once, the public key is shared with users
+$ safecoin-keygen new -o update-manifest.json  # <-- only generated once, the public key is shared with users
 $ solana-install deploy http://example.com/path/to/solana-release.tar.bz2 update-manifest.json
 ```
 
@@ -59,7 +59,7 @@ $ solana-install deploy http://example.com/path/to/solana-release.tar.bz2 update
 ```bash
 $ solana-install init --pubkey 92DMonmBYXwEMHJ99c9ceRSpAmk9v6i3RdvDdXaVcrfj  # <-- pubkey is obtained from whoever is deploying the updates
 $ export PATH=~/.local/share/solana-install/bin:$PATH
-$ solana-keygen ...  # <-- runs the latest solana-keygen
+$ safecoin-keygen ...  # <-- runs the latest safecoin-keygen
 $ solana-install run solana-validator ...  # <-- runs a validator, restarting it as necesary when an update is applied
 ```
 

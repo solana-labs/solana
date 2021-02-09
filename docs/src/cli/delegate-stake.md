@@ -19,7 +19,7 @@ No need for a password or encryption here; this keypair will be discarded right
 after creating the stake account.
 
 ```bash
-solana-keygen new --no-passphrase -o stake-account.json
+safecoin-keygen new --no-passphrase -o stake-account.json
 ```
 
 The output will contain the public key after the text `pubkey:`.

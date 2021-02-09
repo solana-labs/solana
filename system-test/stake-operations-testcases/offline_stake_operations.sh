@@ -36,7 +36,7 @@ solana config set --url $url
 
 # Create a dummy keypair file with no balance for operations that require a "client keypair file" to exist even if they don't touch it
 dummy_keypair=dummy.json
-solana-keygen new -o "$dummy_keypair" --no-passphrase --force --silent
+safecoin-keygen new -o "$dummy_keypair" --no-passphrase --force --silent
 solana config set --keypair $dummy_keypair
 
 ### Offline stake account creation
@@ -45,11 +45,11 @@ solana config set --keypair $dummy_keypair
 online_nonce_account_keypair=nonce_keypair.json
 online_system_account_keypair=online_system_account_keypair.json
 
-solana-keygen new -o "$online_system_account_keypair" --no-passphrase --force --silent
-solana-keygen new -o "$online_nonce_account_keypair" --no-passphrase --force --silent
+safecoin-keygen new -o "$online_system_account_keypair" --no-passphrase --force --silent
+safecoin-keygen new -o "$online_nonce_account_keypair" --no-passphrase --force --silent
 
-online_system_account_pubkey="$(solana-keygen pubkey $online_system_account_keypair)"
-nonce_account_pubkey="$(solana-keygen pubkey $online_nonce_account_keypair)"
+online_system_account_pubkey="$(safecoin-keygen pubkey $online_system_account_keypair)"
+nonce_account_pubkey="$(safecoin-keygen pubkey $online_nonce_account_keypair)"
 
 # System account funding the stake account is offline, and the auth staker and withdrawer keypairs are offline
 offline_system_account_keypair=offline_system_account_keypair.json
@@ -57,15 +57,15 @@ offline_staker_keypair=offline_staker_keypair.json
 offline_withdrawer_keypair=offline_withdrawer_keypair.json
 offline_custodian_keypair=offline_custodian_keypair.json
 
-solana-keygen new -o "$offline_system_account_keypair" --no-passphrase --force --silent
-solana-keygen new -o "$offline_staker_keypair" --no-passphrase --force --silent
-solana-keygen new -o "$offline_withdrawer_keypair" --no-passphrase --force --silent
-solana-keygen new -o "$offline_custodian_keypair" --no-passphrase --force --silent
+safecoin-keygen new -o "$offline_system_account_keypair" --no-passphrase --force --silent
+safecoin-keygen new -o "$offline_staker_keypair" --no-passphrase --force --silent
+safecoin-keygen new -o "$offline_withdrawer_keypair" --no-passphrase --force --silent
+safecoin-keygen new -o "$offline_custodian_keypair" --no-passphrase --force --silent
 
-offline_system_account_pubkey="$(solana-keygen pubkey $offline_system_account_keypair)"
-offline_withdrawer_pubkey="$(solana-keygen pubkey $offline_withdrawer_keypair)"
-offline_staker_pubkey="$(solana-keygen pubkey $offline_staker_keypair)"
-offline_custodian_pubkey="$(solana-keygen pubkey $offline_custodian_keypair)"
+offline_system_account_pubkey="$(safecoin-keygen pubkey $offline_system_account_keypair)"
+offline_withdrawer_pubkey="$(safecoin-keygen pubkey $offline_withdrawer_keypair)"
+offline_staker_pubkey="$(safecoin-keygen pubkey $offline_staker_keypair)"
+offline_custodian_pubkey="$(safecoin-keygen pubkey $offline_custodian_keypair)"
 
 # Airdrop some funds to the offline account.
 solana airdrop 100 $offline_system_account_pubkey
@@ -88,8 +88,8 @@ execution_step CREATE OFFLINE STAKE ACCOUNT
 # Create a stake account funded by the offline system account
 
 stake_account_keypair=stake_account_keypair.json
-solana-keygen new -o "$stake_account_keypair" --no-passphrase --force --silent
-stake_account_address="$(solana-keygen pubkey $stake_account_keypair)"
+safecoin-keygen new -o "$stake_account_keypair" --no-passphrase --force --silent
+stake_account_address="$(safecoin-keygen pubkey $stake_account_keypair)"
 
 sign_only="$(solana create-stake-account $stake_account_keypair 50 \
   --sign-only --blockhash $nonce --nonce $nonce_account_pubkey --nonce-authority $offline_system_account_keypair \
@@ -127,8 +127,8 @@ execution_step SPLIT STAKE OFFLINE
 # Split the original stake account before delegating
 
 split_stake_account_keypair=split_stake_account_keypair.json
-solana-keygen new -o $split_stake_account_keypair --no-passphrase --force --silent
-split_stake_account_address=$(solana-keygen pubkey $split_stake_account_keypair)
+safecoin-keygen new -o $split_stake_account_keypair --no-passphrase --force --silent
+split_stake_account_address=$(safecoin-keygen pubkey $split_stake_account_keypair)
 
 nonce="$(solana nonce $nonce_account_pubkey)"
 

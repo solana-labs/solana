@@ -23,7 +23,7 @@ your Nano, [click here](../ledger-live.md#interact-with-the-solana-network).
 On your computer, run:
 
 ```bash
-solana-keygen pubkey usb://ledger
+safecoin-keygen pubkey usb://ledger
 ```
 
 This confirms your Ledger device is connected properly and in the correct state
@@ -38,7 +38,7 @@ using the wallet ID to use a specific Ledger, see
 ### View your Wallet Addresses
 
 Your Nano supports an arbitrary number of valid wallet addresses and signers.
-To view any address, use the `solana-keygen pubkey` command, as shown below,
+To view any address, use the `safecoin-keygen pubkey` command, as shown below,
 followed by a valid [keypair URL](../hardware-wallets.md#specify-a-keypair-url).
 
 Multiple wallet addresses can be useful if you want to transfer tokens between
@@ -49,10 +49,10 @@ All of the following commands will display different addresses, associated with
 the keypair path given. Try them out!
 
 ```bash
-solana-keygen pubkey usb://ledger
-solana-keygen pubkey usb://ledger?key=0
-solana-keygen pubkey usb://ledger?key=1
-solana-keygen pubkey usb://ledger?key=2
+safecoin-keygen pubkey usb://ledger
+safecoin-keygen pubkey usb://ledger?key=0
+safecoin-keygen pubkey usb://ledger?key=1
+safecoin-keygen pubkey usb://ledger?key=2
 ```
 
 * NOTE: keypair url parameters are ignored in **zsh**
@@ -70,7 +70,7 @@ easy-to-remember path might be to use the address at `key=0`. View this address
 with:
 
 ```bash
-solana-keygen pubkey usb://ledger?key=0
+safecoin-keygen pubkey usb://ledger?key=0
 ```
 
 Now you have a wallet address (or multiple addresses), you can share any of
@@ -129,7 +129,7 @@ both buttons on the "Approve" screen, otherwise push both buttons on the "Reject
 screen.
 
 ```bash
-~$ solana-keygen pubkey usb://ledger?key=42
+~$ safecoin-keygen pubkey usb://ledger?key=42
 CjeqzArkZt6xwdnZ9NZSf8D1CNJN1rjeFiyd8q7iLWAV
 
 ~$ solana balance CjeqzArkZt6xwdnZ9NZSf8D1CNJN1rjeFiyd8q7iLWAV
@@ -206,7 +206,7 @@ character, you can disable it explictly with a backslash in your keypair URLs.
 For example:
 
 ```bash
-solana-keygen pubkey usb://ledger\?key=0
+safecoin-keygen pubkey usb://ledger\?key=0
 ```
 
 ## Support

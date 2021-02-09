@@ -155,7 +155,7 @@ You will need access to the _withdraw authority_ keypair for the vote account to
 change the validator identity.  The follow steps assume that
 `~/withdraw-authority.json` is that keypair.
 
-1. Create the new validator identity keypair, `solana-keygen new -o ~/new-validator-keypair.json`.
+1. Create the new validator identity keypair, `safecoin-keygen new -o ~/new-validator-keypair.json`.
 2. Ensure that the new identity account has been funded, `solana transfer ~/new-validator-keypair.json 500`.
 3. Run `solana vote-update-validator ~/vote-account-keypair.json ~/new-validator-keypair.json ~/withdraw-authority.json`
    to modify the validator identity in your vote account
@@ -169,7 +169,7 @@ migration.
 1. Run `solana epoch-info`.  If there is not much time remaining time in the
    current epoch, consider waiting for the next epoch to allow your validator
    plenty of time to restart and catch up.
-2. Create the new vote authority keypair, `solana-keygen new -o ~/new-vote-authority.json`.
+2. Create the new vote authority keypair, `safecoin-keygen new -o ~/new-vote-authority.json`.
 3. Determine the current _vote authority_ keypair by running `solana
    vote-account ~/vote-account-keypair.json`.  It may be validator's
    identity account (the default) or some other keypair.  The following steps
