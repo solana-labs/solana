@@ -7,19 +7,19 @@ use solana_sdk::{
 use std::collections::{HashMap, HashSet};
 
 pub mod instructions_sysvar_enabled {
-    solana_sdk::declare_id!("EnvhHCLvg55P7PDtbvR1NwuTuAeodqpusV3MR5QEK8gs");
+    solana_sdk::declare_id!("7TfFp6Tf2XqXQQfx16qvXbjekXtn68kiQj9pPfXZ5Bua");
 }
 
 pub mod secp256k1_program_enabled {
-    solana_sdk::declare_id!("E3PHP7w8kB7np3CTQ1qQ2tW3KCtjRSXBQgW9vM2mWv2Y");
+    solana_sdk::declare_id!("3tF9nXQrHzTV5jdDqzn6LVWMoJagN1zRgr4APfY6qmpi");
 }
 
 pub mod consistent_recent_blockhashes_sysvar {
-    solana_sdk::declare_id!("3h1BQWPDS5veRsq6mDBWruEpgPxRJkfwGexg5iiQ9mYg");
+    solana_sdk::declare_id!("ApdySrEmykK3PBLExdN2ehGCRPyVT6athFgu4H7H8e9J");
 }
 
 pub mod deprecate_rewards_sysvar {
-    solana_sdk::declare_id!("GaBtBJvmS4Arjj5W1NmFcyvPjsHN38UGYDq2MDwbs9Qu");
+    solana_sdk::declare_id!("GVriKcZATdgSzmhmu9PtimfheaKYksK5mhgoN5fbRhXg");
 }
 
 pub mod pico_inflation {
@@ -28,7 +28,7 @@ pub mod pico_inflation {
 
 pub mod full_inflation {
     pub mod devnet_and_testnet {
-        solana_sdk::declare_id!("DT4n6ABDqs6w4bnfwrXT9rsprcPf6cdDga1egctaPkLC");
+        solana_sdk::declare_id!("JC1GQujpgHz92Am65FxcxByqqDGTdYJs6jLjgebnDpJF");
     }
 
     // `candidate_example` is an example to follow by a candidate that wishes to enable full
@@ -51,179 +51,179 @@ pub mod full_inflation {
 
     pub mod bl {
         pub mod vote {
-            solana_sdk::declare_id!("HRzoLj4jufnYEWosm9kWVgBVFdxAuqB1hu7vLckCuQHa");
+            solana_sdk::declare_id!("842B1qCrf8s91KvzE12p6oJ319BivjLpyVGy7rcZvooY");
         }
         pub mod enable {
-            solana_sdk::declare_id!("BLxyQtJPzYZLHyj1p9n5QHUvbPoJt4TtRh7BXbG4M6rR");
+            solana_sdk::declare_id!("4Nn1zsBpxmhqQhQVwXHxJZyKpZao1etCUFX1KCmJSVvL");
         }
     }
 
     pub mod buburuza {
         pub mod vote {
-            solana_sdk::declare_id!("4qp2VKAPgmi53N7DkobejdbPgkpP2316mSAZnKaWeDtR");
+            solana_sdk::declare_id!("5vPiNPSwXaoBJJZ16jxbyBJu46dBTj5cQcTBZota3smN");
         }
         pub mod enable {
-            solana_sdk::declare_id!("BSsRT3AcddKioKwfHqzDNmgMPuzWeHKwocWokj21Xxnf");
+            solana_sdk::declare_id!("BVVPxvgDuaZgf2LP21DuThXUWUxc8WeUV96Wqwdkdrcw");
         }
     }
 
     pub mod bunghi {
         pub mod vote {
-            solana_sdk::declare_id!("E9hFUVEz29H8XMXk7ygk7ZpCuEuZQ8DJvJKJSTGu1RM6");
+            solana_sdk::declare_id!("E6MQE9rVNUtNGuin4JLYDc9JhkWKuUMKZKcjm5mA7R4Z");
         }
         pub mod enable {
-            solana_sdk::declare_id!("5S9JDUb4vKY1CUxLf5oc96ZxjGrephj1jcPeTi62sYmP");
+            solana_sdk::declare_id!("57iLBrqiq6JmLdJeztxrNCicJeBFNAACRLgPtKsiTEnN");
         }
     }
 
     pub mod certusone {
         pub mod vote {
-            solana_sdk::declare_id!("BzBBveUDymEYoYzcMWNQCx3cd4jQs7puaVFHLtsbB6fm");
+            solana_sdk::declare_id!("7Ra6gKzEBFyYJ7fdsrCuzihZcxKu7AbmDy2FBEQFzap2");
         }
         pub mod enable {
-            solana_sdk::declare_id!("7XRJcS5Ud5vxGB54JbK9N2vBZVwnwdBNeJW1ibRgD9gx");
+            solana_sdk::declare_id!("54ZqXvMyCKShnBrGj2ni6m4kXTjRUrkc21dFoT9npJZk");
         }
     }
 
     pub mod diman {
         pub mod vote {
-            solana_sdk::declare_id!("9fHeFGjnequiB366D28ELiAQQ6vqzxwxgsATJ5ELxEvd");
+            solana_sdk::declare_id!("3Z4xtD9nrdSsri3c51khB4J9nh8aMTESTAf8HZDk8bj2");
         }
         pub mod enable {
-            solana_sdk::declare_id!("DimAnioV7WQM2L41fckvg2ei3NLHV2ACy5qoTKpi8Uz5");
+            solana_sdk::declare_id!("3Z4xtD9nrdSsri3c51khB4J9nh8aMTESTAf8HZDk8bj2");
         }
     }
 
     pub mod lowfeevalidation {
         pub mod vote {
-            solana_sdk::declare_id!("DcbTexLyN3fM3Y6UtteiYEpgDPbr3PrapczHYFagTPci");
+            solana_sdk::declare_id!("6ohQjMpYRrPUYhMbTyfr6yQUD4LAF7ZQi2eLw6JWeipx");
         }
         pub mod enable {
-            solana_sdk::declare_id!("2wftmZhmArxv3eKjoRz4ffw385eZunydQU3Ruku1kvRX");
+            solana_sdk::declare_id!("58TGJinPCed9229Bk1twVtEwpYaw25HisynEYaj759qh");
         }
     }
 
     pub mod nam {
         pub mod vote {
-            solana_sdk::declare_id!("Hb6tvjY81EmgapxNS4dos1v8Q2RSjQABphu7cnzM4ELa");
+            solana_sdk::declare_id!("HK5dB1Pdi3YRXLC7JbMHyVpz8oC8mv9jp8MNtYzQjg9c");
         }
         pub mod enable {
-            solana_sdk::declare_id!("NamwT9ejvrfcPXrCHEwp7BvUUFKPgVznu66HZUgFD9w");
+            solana_sdk::declare_id!("BRgHmABQDCCKgYkioXWQ2p8x8afDWvdcg5bBP9tFWEVa");
         }
     }
 
     pub mod p2pvalidator {
         pub mod vote {
-            solana_sdk::declare_id!("89xUFJyCb3JQ7WbYBK4vza5uyCCTXXv8UQEUCQjo4SbC");
+            solana_sdk::declare_id!("6Dh3jzTtGViAT4UqpV49W5HqFVh2UngXU8uri5in8MPP");
         }
         pub mod enable {
-            solana_sdk::declare_id!("C89S2MdjXuP6UmgmqKpszoUahfXLd4xVeikP8vJMioNE");
+            solana_sdk::declare_id!("CaMb255xHwUop3tbKHNLuwvKgxLnGFT7jCRt8rwC47CA");
         }
     }
 
     pub mod rockx {
         pub mod vote {
-            solana_sdk::declare_id!("8DaPPAGV9mf1YCHzrettgSMFcAT1ePtS3GSGfYka9Rjw");
+            solana_sdk::declare_id!("7zwjVo7JAiiAvZtyAt4d3wmsi4AZBUs5fNnqNtrNK82w");
         }
         pub mod enable {
-            solana_sdk::declare_id!("26Bq2mgEJr93MtGTErrHNnhkDYWMoW7r7VB54r9erb5u");
+            solana_sdk::declare_id!("GzhLBMdjFuGHGoZHm4koFpd2pYFwqV8H82k6488CxQEf");
         }
     }
 
     pub mod sotcsa {
         pub mod vote {
-            solana_sdk::declare_id!("EgoekfqCYoraFE5ZkiECGQ945Y5rGBXh3n85sQPuR85r");
+            solana_sdk::declare_id!("GzhLBMdjFuGHGoZHm4koFpd2pYFwqV8H82k6488CxQEf");
         }
         pub mod enable {
-            solana_sdk::declare_id!("6f8Y2dACzRjM9R9RwiLp9HuAxo43QwtztgHm4BKUGyxU");
+            solana_sdk::declare_id!("8oQF7WqrH5hfzz7SEiUyaRrxMsZ7Ti82t42YFsmH3wTd");
         }
     }
 
     pub mod stakeconomy {
         pub mod vote {
-            solana_sdk::declare_id!("JCergKv4GcywaBzn4JHi3sYJfG7mWenTG3QQDNUJiGS4");
+            solana_sdk::declare_id!("Ux4oZ1pcT77ac3A4t7cu4QHPYJdfxHqAkSQuc2tFkXD");
         }
         pub mod enable {
-            solana_sdk::declare_id!("5NUfXNZUsP1ndyShQJ37H2dgHaEGaUNqgT9zn3BTiwct");
+            solana_sdk::declare_id!("FMGyB5hiUGTCLhsjRtyUDN7E33Zui4Lm8bteGJiPN4Pg");
         }
     }
 
     pub mod w3m {
         pub mod vote {
-            solana_sdk::declare_id!("H44JGZCFs9uViWBeC8LodrbCn8VWjg8GkjtdeRx4LCLM");
+            solana_sdk::declare_id!("5XF21NKqrnD1zHrfcPofYE9S8nUjTvm4xQwBEjCx319U");
         }
         pub mod enable {
-            solana_sdk::declare_id!("3dG48jJJT3nDBLiGyFABCpTEacP8JNYzjrmCZFv7mbUU");
+            solana_sdk::declare_id!("Fnx26HcyPVC4uXGsXJLx5T6joapruYqPiiz4UmmVutem");
         }
     }
 }
 
 pub mod spl_token_v2_multisig_fix {
-    solana_sdk::declare_id!("E5JiFDQCwyC6QfT9REFyMpfK2mHcmv1GUDySU1Ue7TYv");
+    solana_sdk::declare_id!("EwSWSBRpzYZSEqdZ215WMmnce6WiEsk57rSEB3e7ghh6");
 }
 
 pub mod bpf_loader2_program {
-    solana_sdk::declare_id!("DFBnrgThdzH4W6wZ12uGPoWcMnvfZj11EHnxHcVxLPhD");
+    solana_sdk::declare_id!("ABqqzVii2PyyptQtoAan5EVB1tJ4J2n3E5PwEBDGDQPN");
 }
 
 pub mod bpf_compute_budget_balancing {
-    solana_sdk::declare_id!("HxvjqDSiF5sYdSYuCXsUnS8UeAoWsMT9iGoFP8pgV1mB");
+    solana_sdk::declare_id!("BvapmuKgtYnqpBgiKQT23n4i3CMm4mr1pNKT9Na8DY7R");
 }
 
 pub mod sha256_syscall_enabled {
-    solana_sdk::declare_id!("D7KfP7bZxpkYtD4Pc38t9htgs1k5k47Yhxe4rp6WDVi8");
+    solana_sdk::declare_id!("6vA2VMgG7cv7Y9H4TaUFzVwE4LtgMiHdRkQjE18SkgZC");
 }
 
 pub mod no_overflow_rent_distribution {
-    solana_sdk::declare_id!("4kpdyrcj5jS47CZb2oJGfVxjYbsMm2Kx97gFyZrxxwXz");
+    solana_sdk::declare_id!("9TyDRDhs933rTCWGwzSUTSx1XeJT14sc17o1cNQzUaBq");
 }
 
 pub mod ristretto_mul_syscall_enabled {
-    solana_sdk::declare_id!("HRe7A6aoxgjKzdjbBv6HTy7tJ4YWqE6tVmYCGho6S9Aq");
+    solana_sdk::declare_id!("4mS77eMqwiUZMcV3M6xzDYprbDchxhbNHVyBateEhqST");
 }
 
 pub mod max_invoke_depth_4 {
-    solana_sdk::declare_id!("EdM9xggY5y7AhNMskRG8NgGMnaP4JFNsWi8ZZtyT1af5");
+    solana_sdk::declare_id!("G52msoGhByUrkBjbVG4353XSmNG74k2zRtcyfT1e4Svd");
 }
 
 pub mod max_program_call_depth_64 {
-    solana_sdk::declare_id!("YCKSgA6XmjtkQrHBQjpyNrX6EMhJPcYcLWMVgWn36iv");
+    solana_sdk::declare_id!("C2Wx87UuoV8gUvdD1HyT3gn6MsGAt7AEQBkZiKpcG1ta");
 }
 
 pub mod timestamp_correction {
-    solana_sdk::declare_id!("3zydSLUwuqqsV3wL5wBsaVgyvMox3XTHx7zLEuQf1U2Z");
+    solana_sdk::declare_id!("Bki2J33Mr1kZ6ozrqzd7w4j1eK7jeUeSKJBGttDSYwNK");
 }
 
 pub mod cumulative_rent_related_fixes {
-    solana_sdk::declare_id!("FtjnuAtJTWwX3Kx9m24LduNEhzaGuuPfDW6e14SX2Fy5");
+    solana_sdk::declare_id!("HtaE9dEZDmqMPVysYQCiLx6i6wTeic4NVbqGRoGDkD5w");
 }
 
 pub mod sol_log_compute_units_syscall {
-    solana_sdk::declare_id!("BHuZqHAj7JdZc68wVgZZcy51jZykvgrx4zptR44RyChe");
+    solana_sdk::declare_id!("EAxZL2BF6Jfug7jsgykUZ8SumuPF75RQ3gqmG99nvASb");
 }
 
 pub mod pubkey_log_syscall_enabled {
-    solana_sdk::declare_id!("MoqiU1vryuCGQSxFKA1SZ316JdLEFFhoAu6cKUNk7dN");
+    solana_sdk::declare_id!("BNwVU7MhnDnGEQGAqpJ1dGKVtaYw4SvxbTvoACcdENd2");
 }
 
 pub mod pull_request_ping_pong_check {
-    solana_sdk::declare_id!("5RzEHTnf6D7JPZCvwEzjM19kzBsyjSU3HoMfXaQmVgnZ");
+    solana_sdk::declare_id!("A9VXyn5BYwNva8zUvfG1qWFEuPq6p6mTWwQ9s3qJFWNp");
 }
 
 pub mod timestamp_bounding {
-    solana_sdk::declare_id!("2cGj3HJYPhBrtQizd7YbBxEsifFs5qhzabyFjUAp6dBa");
+    solana_sdk::declare_id!("FmFhFzszHFPJYFuqKhGtijwUL7h43d6FrQn7RUrbqYRC");
 }
 
 pub mod stake_program_v2 {
-    solana_sdk::declare_id!("Gvd9gGJZDHGMNf1b3jkxrfBQSR5etrfTQSBNKCvLSFJN");
+    solana_sdk::declare_id!("BpCWufPmpbYaT1xRbdCeZKXDxQ4Wj1Z8ijaG6tWFrJg1");
 }
 
 pub mod rewrite_stake {
-    solana_sdk::declare_id!("6ap2eGy7wx5JmsWUmQ5sHwEWrFSDUxSti2k5Hbfv5BZG");
+    solana_sdk::declare_id!("HpGqShCRhP7QwMBXTs1KbATiHWa383EUWjg3kbQjN2Kf");
 }
 
 pub mod filter_stake_delegation_accounts {
-    solana_sdk::declare_id!("GE7fRxmW46K6EmCD9AMZSbnaJ2e3LfqCZzdHi9hmYAgi");
+    solana_sdk::declare_id!("HpGqShCRhP7QwMBXTs1KbATiHWa383EUWjg3kbQjN2Kf");
 }
 
 pub mod simple_capitalization {
@@ -231,63 +231,63 @@ pub mod simple_capitalization {
 }
 
 pub mod bpf_loader_upgradeable_program {
-    solana_sdk::declare_id!("FbhK8HN9qvNHvJcoFVHAEUCNkagHvu7DTWzdnLuVQ5u4");
+    solana_sdk::declare_id!("Cv6gGxiakDF6nd9Sxx53MbC4kij69qXpap8guiC6aK9U");
 }
 
 pub mod try_find_program_address_syscall_enabled {
-    solana_sdk::declare_id!("EMsMNadQNhCYDyGpYH5Tx6dGHxiUqKHk782PU5XaWfmi");
+    solana_sdk::declare_id!("7seUWJM7vNLxmCgGZDfDPqMbX7xvfzBKCwVbWZriq1Bu");
 }
 
 pub mod warp_timestamp {
-    solana_sdk::declare_id!("Bfqm7fGk5MBptqa2WHXWFLH7uJvq8hkJcAQPipy2bAMk");
+    solana_sdk::declare_id!("BJHdqjFAorV7KKRkZTbYGDkDF2ncnheM3a6ZpUeXe5nM");
 }
 
 pub mod stake_program_v3 {
-    solana_sdk::declare_id!("Ego6nTu7WsBcZBvVqJQKp6Yku2N3mrfG8oYCfaLZkAeK");
+    solana_sdk::declare_id!("6tYrCsaWbGqgeW9tN3NRbViw6BBLYjnNsJBqLJZZoo5B");
 }
 
 pub mod max_cpi_instruction_size_ipv6_mtu {
-    solana_sdk::declare_id!("5WLtuUJA5VVA1Cc28qULPfGs8anhoBev8uNqaaXeasnf");
+    solana_sdk::declare_id!("FgWHTV7zQFUQtydsAmsFi8HCgVpmWz4Ym2BsB2syUqR2");
 }
 
 pub mod limit_cpi_loader_invoke {
-    solana_sdk::declare_id!("xGbcW7EEC7zMRJ6LaJCob65EJxKryWjwM4rv8f57SRM");
+    solana_sdk::declare_id!("7iEuE399ZuQwgKJCyvoXHDrh3SHPu3k4neQVUS9gBNwN");
 }
 
 pub mod use_loaded_program_accounts {
-    solana_sdk::declare_id!("FLjgLeg1PJkZimQCVa5sVFtaq6VmSDPw3NvH8iQ3nyHn");
+    solana_sdk::declare_id!("4wDfa45DctTYgZgbnxvqNjRV4TRGnZ9hkGeg9ewwX7zb");
 }
 
 pub mod abort_on_all_cpi_failures {
-    solana_sdk::declare_id!("ED5D5a2hQaECHaMmKpnU48GdsfafdCjkb3pgAw5RKbb2");
+    solana_sdk::declare_id!("GMCVqcrChEbiGPkSFEWDywmdmwvJBzvT8HtYhQQWj4kA");
 }
 
 pub mod use_loaded_executables {
-    solana_sdk::declare_id!("3Jq7mE2chDpf6oeEDsuGK7orTYEgyQjCPvaRppTNdVGK");
+    solana_sdk::declare_id!("7xk3jJ6kYsCU3qbwtZ3CSppdjxkMNbwMh8NC1cVmeW9S");
 }
 
 pub mod turbine_retransmit_peers_patch {
-    solana_sdk::declare_id!("5Lu3JnWSFwRYpXzwDMkanWSk6XqSuF2i5fpnVhzB5CTc");
+    solana_sdk::declare_id!("BZJfMk71bwWeYHFo2G6xHrXR2KNWxrAuFLLZi5VoF1fM");
 }
 
 pub mod prevent_upgrade_and_invoke {
-    solana_sdk::declare_id!("BiNjYd8jCYDgAwMqP91uwZs6skWpuHtKrZbckuKESs8N");
+    solana_sdk::declare_id!("DrHEazpxSC3VpWYgYyvBqzCYvojnidg9SKs4J59xRL8T");
 }
 
 pub mod track_writable_deescalation {
-    solana_sdk::declare_id!("HVPSxqskEtRLRT2ZeEMmkmt9FWqoFX4vrN6f5VaadLED");
+    solana_sdk::declare_id!("4iEEhiZKhMa5KG9YAQbC9u2bLMwYxhQuNmfGEV8jQnz4");
 }
 
 pub mod require_custodian_for_locked_stake_authorize {
-    solana_sdk::declare_id!("D4jsDcXaqdW8tDAWn8H4R25Cdns2YwLneujSL1zvjW6R");
+    solana_sdk::declare_id!("FKWSvfcXATHSBBNvr5VE6ns4tNsTG3EGzcDw2xVtowZQ");
 }
 
 pub mod spl_token_v2_self_transfer_fix {
-    solana_sdk::declare_id!("BL99GYhdjjcv6ys22C9wPgn2aTVERDbPHHo4NbS3hgp7");
+    solana_sdk::declare_id!("2XDc17ZmSTbpqV3B5fmEGac4CKCYnbJj7vnfASvdzqyN");
 }
 
 pub mod matching_buffer_upgrade_authorities {
-    solana_sdk::declare_id!("B5PSjDEJvKJEUQSL7q94N7XCEoWJCYum8XfUg7yuugUU");
+    solana_sdk::declare_id!("5gkzmKnnZbm7bcQm4v3d7BZjSRczE9oH8eFDdebxubXH");
 }
 
 lazy_static! {
