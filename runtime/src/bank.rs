@@ -10182,19 +10182,19 @@ pub(crate) mod tests {
             if bank.slot == 32 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "9FwpFSUvbCfzQMGXDSdvnNhNPpvHUsEJyNA9P3nqiLaJ"
+                    "4syPxVrVFUpksTre5BB5w7qd3BxSU4WzUT6R2fjFgMJ2"
                 );
             }
             if bank.slot == 64 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "7p6g7GmE9quceefLtPe97fr9YQeYWB562os2ttiG3Anq"
+                    "4GKgnCxQs6AJxcqYQkxa8oF8gEp13bfRNCm2uzCceA26"
                 );
             }
             if bank.slot == 128 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "DfeuEsVvVRUkce31sM1d4Vhhp6Si99JdVEtYddbBgLKV"
+                    "9YwXsk2qpM7bZLnWGdtqCmDEygiu1KpEcr4zWWBTUKw6"
                 );
                 break;
             }
