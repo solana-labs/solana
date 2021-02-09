@@ -3868,12 +3868,12 @@ impl AccountsDB {
 
     fn calculate_accounts_hash_helper(
         &self,
-        do_not_use_index: bool,
+        use_index: bool,
         slot: Slot,
         ancestors: &Ancestors,
         simple_capitalization_enabled: bool,
     ) -> (Hash, u64) {
-        if do_not_use_index {
+        if !use_index {
             let combined_maps = self.get_snapshot_storages(slot);
 
             Self::calculate_accounts_hash_without_index(
@@ -3897,7 +3897,7 @@ impl AccountsDB {
         expected_capitalization: Option<u64>,
     ) -> (Hash, u64) {
         let (hash, total_lamports) = self.calculate_accounts_hash_helper(
-            !use_index,
+            use_index,
             slot,
             ancestors,
             simple_capitalization_enabled,
@@ -3905,7 +3905,7 @@ impl AccountsDB {
         if debug_verify {
             // calculate the other way (store or non-store) and verify results match.
             let (hash_other, total_lamports_other) = self.calculate_accounts_hash_helper(
-                use_index,
+                !use_index,
                 slot,
                 ancestors,
                 simple_capitalization_enabled,
