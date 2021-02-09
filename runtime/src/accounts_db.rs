@@ -3629,6 +3629,7 @@ impl AccountsDB {
             slot,
             ancestors,
             simple_capitalization_enabled,
+            None,
         )
     }
 
@@ -3644,6 +3645,7 @@ impl AccountsDB {
             slot,
             ancestors,
             simple_capitalization_enabled,
+            None,
         )
     }
 
@@ -3892,6 +3894,7 @@ impl AccountsDB {
         slot: Slot,
         ancestors: &Ancestors,
         simple_capitalization_enabled: bool,
+        expected_capitalization: Option<u64>,
     ) -> (Hash, u64) {
         let (hash, total_lamports) = self.calculate_accounts_hash_helper(
             do_not_use_index,
@@ -3908,8 +3911,10 @@ impl AccountsDB {
                 simple_capitalization_enabled,
             );
 
-            assert_eq!(hash, hash_other);
-            assert_eq!(total_lamports, total_lamports_other);
+            let succeed = hash == hash_other
+                && total_lamports == total_lamports_other
+                && total_lamports == expected_capitalization.unwrap_or(total_lamports);
+            assert!(succeed, "update_accounts_hash_with_index_option mismatch. hashes: {}, {}; lamports: {}, {}; expected lamports: {:?}, using index: {}", hash, hash_other, total_lamports, total_lamports_other, expected_capitalization, !do_not_use_index);
         }
         let mut bank_hashes = self.bank_hashes.write().unwrap();
         let mut bank_hash_info = bank_hashes.get_mut(&slot).unwrap();
