@@ -41,7 +41,7 @@ export function TokensProvider({ children }: ProviderProps) {
 }
 
 export const TOKEN_PROGRAM_ID = new PublicKey(
-  "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+  "Hzh8yCZjpxAPqRPZYi5L7eDkt5jubmSxAZ7jrdXbDdPu"
 );
 
 async function fetchAccountTokens(

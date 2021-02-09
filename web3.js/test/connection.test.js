@@ -1042,7 +1042,7 @@ test('get parsed confirmed transaction coerces public keys of inner instructions
                 accounts: ['va12u4o9DipLEB2z4fuoHszroq1U9NcAB9aooFDPJSf'],
                 data:
                   '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
-                programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+                programId: 'Hzh8yCZjpxAPqRPZYi5L7eDkt5jubmSxAZ7jrdXbDdPu',
               },
             ],
             recentBlockhash: 'GeyAFFRY3WGpmam2hbgrKw4rbU2RKzfVLm5QLSeZwTZE',
@@ -1078,7 +1078,7 @@ test('get parsed confirmed transaction coerces public keys of inner instructions
     getMockData({
       parsed: {},
       program: 'spl-token',
-      programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+      programId: 'Hzh8yCZjpxAPqRPZYi5L7eDkt5jubmSxAZ7jrdXbDdPu',
     }),
   ]);
 
@@ -1109,7 +1109,7 @@ test('get parsed confirmed transaction coerces public keys of inner instructions
         '6tVrjJhFm5SAvvdh6tysjotQurCSELpxuW3JaAAYeC1m',
       ],
       data: 'ai3535',
-      programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+      programId: 'Hzh8yCZjpxAPqRPZYi5L7eDkt5jubmSxAZ7jrdXbDdPu',
     }),
   ]);
 
@@ -1467,7 +1467,7 @@ test('get performance samples limit too high', async () => {
 });
 
 const TOKEN_PROGRAM_ID = new PublicKey(
-  'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+  'Hzh8yCZjpxAPqRPZYi5L7eDkt5jubmSxAZ7jrdXbDdPu',
 );
 
 describe('token methods', () => {

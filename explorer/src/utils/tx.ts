@@ -31,10 +31,10 @@ export const PROGRAM_IDS = {
   [SystemProgram.programId.toBase58()]: "System Program",
   Vest111111111111111111111111111111111111111: "Vest Program",
   [VOTE_PROGRAM_ID.toBase58()]: "Vote Program",
-  TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA: "SPL Token Program",
-  ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL:
+  Hzh8yCZjpxAPqRPZYi5L7eDkt5jubmSxAZ7jrdXbDdPu: "SPL Token Program",
+  CA6qXxzup4Fh4q4yRAoFcry4FHmgcHwA46r8D17AKQbn:
     "SPL Associated Token Account Program",
-  Memo1UhkJRfHyvLMcVucJwxXeuD728EqVDDwQDxFMNo: "Memo Program",
+  EhZwV2YD7JxAmGpMSaKY3M5WEGj6xM35QXdzBF5X8dNJ: "Memo Program",
   SwaPpA9LAaLfeLi3a68M4DjnLqgtticKg6CnyNwgAC8: "Token Swap Program",
 } as const;
 

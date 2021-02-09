@@ -1,13 +1,13 @@
 use solana_sdk::{account::Account, pubkey::Pubkey, rent::Rent};
 
 mod spl_token {
-    solana_sdk::declare_id!("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+    solana_sdk::declare_id!("Hzh8yCZjpxAPqRPZYi5L7eDkt5jubmSxAZ7jrdXbDdPu");
 }
 mod spl_memo {
-    solana_sdk::declare_id!("Memo1UhkJRfHyvLMcVucJwxXeuD728EqVDDwQDxFMNo");
+    solana_sdk::declare_id!("EhZwV2YD7JxAmGpMSaKY3M5WEGj6xM35QXdzBF5X8dNJ");
 }
 mod spl_associated_token_account {
-    solana_sdk::declare_id!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+    solana_sdk::declare_id!("CA6qXxzup4Fh4q4yRAoFcry4FHmgcHwA46r8D17AKQbn");
 }
 
 static SPL_PROGRAMS: &[(Pubkey, &[u8])] = &[

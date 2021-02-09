@@ -2409,7 +2409,7 @@ curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
     "params": [
       "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T",
       {
-        "programId": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        "programId": "Hzh8yCZjpxAPqRPZYi5L7eDkt5jubmSxAZ7jrdXbDdPu"
       },
       {
         "encoding": "jsonParsed"
@@ -2450,7 +2450,7 @@ Result:
         },
         "executable": false,
         "lamports": 1726080,
-        "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "owner": "Hzh8yCZjpxAPqRPZYi5L7eDkt5jubmSxAZ7jrdXbDdPu",
         "rentEpoch": 4
       }
     ]
@@ -2539,7 +2539,7 @@ Result:
         },
         "executable": false,
         "lamports": 1726080,
-        "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "owner": "Hzh8yCZjpxAPqRPZYi5L7eDkt5jubmSxAZ7jrdXbDdPu",
         "rentEpoch": 4
       }
     ]
