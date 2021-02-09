@@ -40,7 +40,7 @@ fetch_program() {
 
 fetch_program token 2.0.6 HMGr16f8Ct1Zeb9TGPypt9rPgzCkmhCQB8Not8vwiPW1 BPFLoader2111111111111111111111111111111111
 fetch_program memo  1.0.0 4DDUJ1rA8Vd7e6SFWanf4V8JnsfapjCGNutQYw8Vtt45 BPFLoader1111111111111111111111111111111111
-fetch_program associated-token-account 1.0.1 CA6qXxzup4Fh4q4yRAoFcry4FHmgcHwA46r8D17AKQbn BPFLoader2111111111111111111111111111111111
+fetch_program associated-token-account 1.0.1 PUFQTv9BK3ax6bKPFnyjBTbVa3782mcfvb22TZovvrm BPFLoader2111111111111111111111111111111111
 fetch_program feature-proposal 1.0.0 Feat1YXHhH6t1juaWF74WLcfv4XoNocjXA6sPWHNgAse BPFLoader2111111111111111111111111111111111
 
 echo "${genesis_args[@]}" > spl-genesis-args.sh

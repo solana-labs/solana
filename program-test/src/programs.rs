@@ -7,7 +7,7 @@ mod spl_memo {
     solana_sdk::declare_id!("4DDUJ1rA8Vd7e6SFWanf4V8JnsfapjCGNutQYw8Vtt45");
 }
 mod spl_associated_token_account {
-    solana_sdk::declare_id!("CA6qXxzup4Fh4q4yRAoFcry4FHmgcHwA46r8D17AKQbn");
+    solana_sdk::declare_id!("PUFQTv9BK3ax6bKPFnyjBTbVa3782mcfvb22TZovvrm");
 }
 
 static SPL_PROGRAMS: &[(Pubkey, &[u8])] = &[
