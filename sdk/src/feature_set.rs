@@ -230,10 +230,6 @@ pub mod try_find_program_address_syscall_enabled {
     solana_sdk::declare_id!("EMsMNadQNhCYDyGpYH5Tx6dGHxiUqKHk782PU5XaWfmi");
 }
 
-pub mod warp_timestamp {
-    solana_sdk::declare_id!("Bfqm7fGk5MBptqa2WHXWFLH7uJvq8hkJcAQPipy2bAMk");
-}
-
 pub mod stake_program_v3 {
     solana_sdk::declare_id!("Ego6nTu7WsBcZBvVqJQKp6Yku2N3mrfG8oYCfaLZkAeK");
 }
@@ -282,6 +278,10 @@ pub mod matching_buffer_upgrade_authorities {
     solana_sdk::declare_id!("B5PSjDEJvKJEUQSL7q94N7XCEoWJCYum8XfUg7yuugUU");
 }
 
+pub mod warp_timestamp_again {
+    solana_sdk::declare_id!("GvDsGDkH5gyzwpDhxNixx8vtx1kwYHH13RiNAPw27zXb");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -309,7 +309,6 @@ lazy_static! {
         (simple_capitalization::id(), "simple capitalization"),
         (bpf_loader_upgradeable_program::id(), "upgradeable bpf loader"),
         (try_find_program_address_syscall_enabled::id(), "add try_find_program_address syscall"),
-        (warp_timestamp::id(), "warp timestamp to current, adjust bounding to 50% #14210 & #14531"),
         (stake_program_v3::id(), "solana_stake_program v3"),
         (max_cpi_instruction_size_ipv6_mtu::id(), "max cross-program invocation size 1280"),
         (limit_cpi_loader_invoke::id(), "loader not authorized via CPI"),
@@ -348,6 +347,7 @@ lazy_static! {
         (full_inflation::stakeconomy::vote::id(), "Community vote allowing Stakeconomy.com to enable full inflation"),
         (full_inflation::w3m::vote::id(), "Community vote allowing w3m to enable full inflation"),
         (full_inflation::w3m::enable::id(), "Full inflation enabled by w3m"),
+        (warp_timestamp_again::id(), "warp timestamp again, adjust bounding to 25% fast 80% slow #TODO"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
