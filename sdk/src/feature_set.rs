@@ -206,10 +206,6 @@ pub mod pull_request_ping_pong_check {
     solana_sdk::declare_id!("5RzEHTnf6D7JPZCvwEzjM19kzBsyjSU3HoMfXaQmVgnZ");
 }
 
-pub mod timestamp_bounding {
-    solana_sdk::declare_id!("2cGj3HJYPhBrtQizd7YbBxEsifFs5qhzabyFjUAp6dBa");
-}
-
 pub mod stake_program_v2 {
     solana_sdk::declare_id!("Gvd9gGJZDHGMNf1b3jkxrfBQSR5etrfTQSBNKCvLSFJN");
 }
@@ -307,7 +303,6 @@ lazy_static! {
         (sol_log_compute_units_syscall::id(), "sol_log_compute_units syscall (#13243)"),
         (pubkey_log_syscall_enabled::id(), "pubkey log syscall"),
         (pull_request_ping_pong_check::id(), "ping-pong packet check #12794"),
-        (timestamp_bounding::id(), "add timestamp-correction bounding #13120"),
         (stake_program_v2::id(), "solana_stake_program v2"),
         (rewrite_stake::id(), "rewrite stake"),
         (filter_stake_delegation_accounts::id(), "filter stake_delegation_accounts #14062"),
