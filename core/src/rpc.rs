@@ -334,6 +334,8 @@ impl JsonRpcRequestProcessor {
         let keyed_accounts = {
             if let Some(owner) = get_spl_token_owner_filter(program_id, &filters) {
                 self.get_filtered_spl_token_accounts_by_owner(&bank, &owner, filters)
+            } else if let Some(mint) = get_spl_token_mint_filter(program_id, &filters) {
+                self.get_filtered_spl_token_accounts_by_mint(&bank, &mint, filters)
             } else {
                 self.get_filtered_program_accounts(&bank, program_id, filters)
             }
@@ -1578,6 +1580,34 @@ fn get_spl_token_owner_filter(program_id: &Pubkey, filters: &[RpcFilterType]) ->
     }
     if data_size_filter == Some(TokenAccount::get_packed_len() as u64) {
         owner_key
+    } else {
+        None
+    }
+}
+
+fn get_spl_token_mint_filter(program_id: &Pubkey, filters: &[RpcFilterType]) -> Option<Pubkey> {
+    if program_id != &spl_token_id_v2_0() {
+        return None;
+    }
+    let mut data_size_filter: Option<u64> = None;
+    let mut mint: Option<Pubkey> = None;
+    for filter in filters {
+        match filter {
+            RpcFilterType::DataSize(size) => data_size_filter = Some(*size),
+            RpcFilterType::Memcmp(Memcmp {
+                offset: SPL_TOKEN_ACCOUNT_MINT_OFFSET,
+                bytes: MemcmpEncodedBytes::Binary(bytes),
+                ..
+            }) => {
+                if let Ok(key) = Pubkey::from_str(bytes) {
+                    mint = Some(key)
+                }
+            }
+            _ => {}
+        }
+    }
+    if data_size_filter == Some(TokenAccount::get_packed_len() as u64) {
+        mint
     } else {
         None
     }
