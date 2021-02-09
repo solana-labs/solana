@@ -1,7 +1,7 @@
 // Utility to print ValidatorInfo structs for `genesis_accounts.rs`
 //
 // Usage:
-//   cargo run --bin solana-csv-to-validator-infos < validators.csv
+//   cargo run --bin safecoin-csv-to-validator-infos < validators.csv
 
 use serde::Deserialize;
 use std::error::Error;

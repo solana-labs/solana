@@ -14,4 +14,4 @@ export PATH="$PWD/safecoin-install/releases/$solana_version/solana-release/bin/:
 
 set -x
 safecoin --version
-exec solana-stake-o-matic "$@"
+exec safecoin-stake-o-matic "$@"

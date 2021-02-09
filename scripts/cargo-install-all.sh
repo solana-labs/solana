@@ -93,7 +93,7 @@ else
     safecoin-net-shaper
     safecoin-stake-accounts
     safecoin-stake-monitor
-    solana-stake-o-matic
+    safecoin-stake-o-matic
     safecoin-sys-tuner
     safecoin-test-validator
     safecoin-tokens
