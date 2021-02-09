@@ -1,7 +1,7 @@
 use solana_sdk::{account::Account, pubkey::Pubkey, rent::Rent};
 
 mod spl_token {
-    solana_sdk::declare_id!("Hzh8yCZjpxAPqRPZYi5L7eDkt5jubmSxAZ7jrdXbDdPu");
+    solana_sdk::declare_id!("EsdvRxR3aUKRB5bk47oEpWFcEkGg1ZoBbwpx4mvGnyVe");
 }
 mod spl_memo {
     solana_sdk::declare_id!("EhZwV2YD7JxAmGpMSaKY3M5WEGj6xM35QXdzBF5X8dNJ");

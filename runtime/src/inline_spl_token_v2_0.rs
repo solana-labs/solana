@@ -1,5 +1,5 @@
 // Partial SPL Token v2.0.x declarations inlined to avoid an external dependency on the spl-token crate
-solana_sdk::declare_id!("Hzh8yCZjpxAPqRPZYi5L7eDkt5jubmSxAZ7jrdXbDdPu");
+solana_sdk::declare_id!("EsdvRxR3aUKRB5bk47oEpWFcEkGg1ZoBbwpx4mvGnyVe");
 
 /*
     spl_token::state::Account {
