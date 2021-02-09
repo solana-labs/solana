@@ -61,8 +61,8 @@ use solana_sdk::{
     slot_hashes::SlotHashes,
     slot_history::SlotHistory,
     stake_weighted_timestamp::{
-        calculate_stake_weighted_timestamp, DEPRECATED_MAX_ALLOWABLE_DRIFT_PERCENTAGE,
-        MAX_ALLOWABLE_DRIFT_PERCENTAGE,
+        calculate_stake_weighted_timestamp, MaxAllowableDrift,
+        DEPRECATED_MAX_ALLOWABLE_DRIFT_PERCENTAGE, MAX_ALLOWABLE_DRIFT_PERCENTAGE,
     },
     system_transaction,
     sysvar::{self},
@@ -1373,9 +1373,15 @@ impl Bank {
             .feature_set
             .is_active(&feature_set::warp_timestamp::id())
         {
-            MAX_ALLOWABLE_DRIFT_PERCENTAGE
+            MaxAllowableDrift {
+                fast: MAX_ALLOWABLE_DRIFT_PERCENTAGE,
+                slow: MAX_ALLOWABLE_DRIFT_PERCENTAGE,
+            }
         } else {
-            DEPRECATED_MAX_ALLOWABLE_DRIFT_PERCENTAGE
+            MaxAllowableDrift {
+                fast: DEPRECATED_MAX_ALLOWABLE_DRIFT_PERCENTAGE,
+                slow: DEPRECATED_MAX_ALLOWABLE_DRIFT_PERCENTAGE,
+            }
         };
 
         let ancestor_timestamp = self.clock().unix_timestamp;
@@ -1888,7 +1894,7 @@ impl Bank {
 
     fn get_timestamp_estimate(
         &self,
-        max_allowable_drift: u32,
+        max_allowable_drift: MaxAllowableDrift,
         epoch_start_timestamp: Option<(Slot, UnixTimestamp)>,
     ) -> Option<UnixTimestamp> {
         let mut get_timestamp_estimate_time = Measure::start("get_timestamp_estimate");
