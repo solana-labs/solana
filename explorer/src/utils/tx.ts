@@ -34,7 +34,7 @@ export const PROGRAM_IDS = {
   HMGr16f8Ct1Zeb9TGPypt9rPgzCkmhCQB8Not8vwiPW1: "SPL Token Program",
   CA6qXxzup4Fh4q4yRAoFcry4FHmgcHwA46r8D17AKQbn:
     "SPL Associated Token Account Program",
-  EhZwV2YD7JxAmGpMSaKY3M5WEGj6xM35QXdzBF5X8dNJ: "Memo Program",
+  4DDUJ1rA8Vd7e6SFWanf4V8JnsfapjCGNutQYw8Vtt45: "Memo Program",
   SwaPpA9LAaLfeLi3a68M4DjnLqgtticKg6CnyNwgAC8: "Token Swap Program",
 } as const;
 
