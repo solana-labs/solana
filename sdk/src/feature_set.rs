@@ -347,7 +347,7 @@ lazy_static! {
         (full_inflation::stakeconomy::vote::id(), "Community vote allowing Stakeconomy.com to enable full inflation"),
         (full_inflation::w3m::vote::id(), "Community vote allowing w3m to enable full inflation"),
         (full_inflation::w3m::enable::id(), "Full inflation enabled by w3m"),
-        (warp_timestamp_again::id(), "warp timestamp again, adjust bounding to 25% fast 80% slow #TODO"),
+        (warp_timestamp_again::id(), "warp timestamp again, adjust bounding to 25% fast 80% slow #15204"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
