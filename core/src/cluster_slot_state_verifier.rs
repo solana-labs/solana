@@ -192,7 +192,7 @@ fn apply_state_changes(
                     slot,
                     descendants.get(&slot).unwrap_or(&HashSet::default()),
                 );
-                fork_choice.mark_slot_invalid_candidate(slot);
+                fork_choice.mark_fork_invalid_candidate(slot);
             }
             ResultingStateChange::RepairConfirmedVersion(cluster_confirmed_hash) => {
                 // TODO: Should consider moving the updating of the duplicate slots in the
@@ -204,7 +204,7 @@ fn apply_state_changes(
                     slot,
                     descendants.get(&slot).unwrap_or(&HashSet::default()),
                 );
-                fork_choice.mark_slots_valid_candidate(&[slot]);
+                fork_choice.mark_fork_valid_candidate(slot);
             }
         }
     }

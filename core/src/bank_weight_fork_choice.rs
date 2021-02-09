@@ -149,6 +149,6 @@ impl ForkChoice for BankWeightForkChoice {
         (rv.0.clone(), heaviest_bank_on_same_fork)
     }
 
-    fn mark_slot_invalid_candidate(&mut self, _invalid_slot: Slot) {}
-    fn mark_slots_valid_candidate(&mut self, _valid_slots: &[Slot]) {}
+    fn mark_fork_invalid_candidate(&mut self, _invalid_slot: Slot) {}
+    fn mark_fork_valid_candidate(&mut self, _valid_slots: &[Slot]) {}
 }

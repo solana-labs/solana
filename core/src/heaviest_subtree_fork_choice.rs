@@ -25,6 +25,7 @@ const MAX_ROOT_PRINT_SECONDS: u64 = 30;
 enum UpdateLabel {
     Aggregate,
     Add,
+    MarkValid,
     Subtract,
 }
 
@@ -32,6 +33,7 @@ enum UpdateLabel {
 enum UpdateOperation {
     Aggregate,
     Add(u64),
+    MarkValid,
     Subtract(u64),
 }
 
@@ -40,6 +42,7 @@ impl UpdateOperation {
         match self {
             Self::Aggregate => panic!("Should not get here"),
             Self::Add(stake) => *stake += new_stake,
+            Self::MarkValid => panic!("Should not get here"),
             Self::Subtract(stake) => *stake += new_stake,
         }
     }
@@ -361,14 +364,19 @@ impl HeaviestSubtreeForkChoice {
     fn insert_aggregate_operations(
         &self,
         update_operations: &mut BTreeMap<(Slot, UpdateLabel), UpdateOperation>,
+        mark_valid: bool,
         slot: Slot,
     ) {
         for parent in self.ancestor_iterator(slot) {
-            let label = (parent, UpdateLabel::Aggregate);
-            if update_operations.contains_key(&label) {
+            let aggregate_label = (parent, UpdateLabel::Aggregate);
+            if update_operations.contains_key(&aggregate_label) {
                 break;
             } else {
-                update_operations.insert(label, UpdateOperation::Aggregate);
+                if mark_valid {
+                    update_operations
+                        .insert((parent, UpdateLabel::MarkValid), UpdateOperation::MarkValid);
+                }
+                update_operations.insert(aggregate_label, UpdateOperation::Aggregate);
             }
         }
     }
@@ -434,6 +442,12 @@ impl HeaviestSubtreeForkChoice {
         fork_info.best_slot = best_slot;
     }
 
+    fn mark_slot_valid(&mut self, valid_slot: Slot) {
+        if let Some(fork_info) = self.fork_infos.get_mut(&valid_slot) {
+            fork_info.is_candidate = true;
+        }
+    }
+
     fn generate_update_operations(
         &mut self,
         pubkey_votes: &[(Pubkey, Slot)],
@@ -463,7 +477,11 @@ impl HeaviestSubtreeForkChoice {
                         .entry((old_latest_vote_slot, UpdateLabel::Subtract))
                         .and_modify(|update| update.update_stake(stake_update))
                         .or_insert(UpdateOperation::Subtract(stake_update));
-                    self.insert_aggregate_operations(&mut update_operations, old_latest_vote_slot);
+                    self.insert_aggregate_operations(
+                        &mut update_operations,
+                        false,
+                        old_latest_vote_slot,
+                    );
                 }
             }
 
@@ -477,7 +495,7 @@ impl HeaviestSubtreeForkChoice {
                 .entry((new_vote_slot, UpdateLabel::Add))
                 .and_modify(|update| update.update_stake(stake_update))
                 .or_insert(UpdateOperation::Add(stake_update));
-            self.insert_aggregate_operations(&mut update_operations, new_vote_slot);
+            self.insert_aggregate_operations(&mut update_operations, false, new_vote_slot);
         }
 
         update_operations
@@ -490,6 +508,7 @@ impl HeaviestSubtreeForkChoice {
         // Iterate through the update operations from greatest to smallest slot
         for ((slot, _), operation) in update_operations.into_iter().rev() {
             match operation {
+                UpdateOperation::MarkValid => self.mark_slot_valid(slot),
                 UpdateOperation::Aggregate => self.aggregate_slot(slot),
                 UpdateOperation::Add(stake) => self.add_slot_stake(slot, stake),
                 UpdateOperation::Subtract(stake) => self.subtract_slot_stake(slot, stake),
@@ -640,28 +659,28 @@ impl ForkChoice for HeaviestSubtreeForkChoice {
         )
     }
 
-    fn mark_slot_invalid_candidate(&mut self, invalid_slot: Slot) {
+    fn mark_fork_invalid_candidate(&mut self, invalid_slot: Slot) {
         let fork_info = self.fork_infos.get_mut(&invalid_slot);
         if let Some(fork_info) = fork_info {
             if fork_info.is_candidate {
                 fork_info.is_candidate = false;
                 // Aggregate to find the new best slots excluding this fork
                 let mut aggregate_operations = BTreeMap::new();
-                self.insert_aggregate_operations(&mut aggregate_operations, invalid_slot);
+                self.insert_aggregate_operations(&mut aggregate_operations, false, invalid_slot);
                 self.process_update_operations(aggregate_operations);
             }
         }
     }
 
-    fn mark_slots_valid_candidate(&mut self, valid_slots: &[Slot]) {
+    fn mark_fork_valid_candidate(&mut self, valid_slot: Slot) {
         let mut aggregate_operations = BTreeMap::new();
-        for valid_slot in valid_slots {
-            let fork_info = self.fork_infos.get_mut(&valid_slot);
-            if let Some(fork_info) = fork_info {
-                if !fork_info.is_candidate {
-                    fork_info.is_candidate = true;
-                    self.insert_aggregate_operations(&mut aggregate_operations, *valid_slot);
-                }
+        let fork_info = self.fork_infos.get_mut(&valid_slot);
+        if let Some(fork_info) = fork_info {
+            // If a bunch of slots on the same fork are confirmed at once, then only the latest
+            // slot will incur this aggregation operation
+            if !fork_info.is_candidate {
+                fork_info.is_candidate = true;
+                self.insert_aggregate_operations(&mut aggregate_operations, true, valid_slot);
             }
         }
 

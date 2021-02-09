@@ -1999,6 +1999,7 @@ impl ReplayStage {
         };
         for (slot, bank_hash) in confirmed_forks.iter().zip(bank_hashes.into_iter()) {
             progress.set_confirmed_slot(*slot);
+            // Only need to do this for the latest slot confirmed on this fork
             check_slot_agrees_with_cluster(
                 *slot,
                 root_slot,
