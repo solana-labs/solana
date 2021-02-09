@@ -3914,7 +3914,7 @@ impl AccountsDB {
             let succeed = hash == hash_other
                 && total_lamports == total_lamports_other
                 && total_lamports == expected_capitalization.unwrap_or(total_lamports);
-            assert!(succeed, "update_accounts_hash_with_index_option mismatch. hashes: {}, {}; lamports: {}, {}; expected lamports: {:?}, using index: {}", hash, hash_other, total_lamports, total_lamports_other, expected_capitalization, use_index);
+            assert!(succeed, "update_accounts_hash_with_index_option mismatch. hashes: {}, {}; lamports: {}, {}; expected lamports: {:?}, using index: {}, slot: {}", hash, hash_other, total_lamports, total_lamports_other, expected_capitalization, use_index, slot);
         }
         let mut bank_hashes = self.bank_hashes.write().unwrap();
         let mut bank_hash_info = bank_hashes.get_mut(&slot).unwrap();
