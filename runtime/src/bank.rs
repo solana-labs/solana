@@ -4322,7 +4322,7 @@ impl Bank {
             .accounts
             .accounts_db
             .update_accounts_hash_with_index_option(
-                !use_index,
+                use_index,
                 debug_verify,
                 self.slot(),
                 &self.ancestors,
