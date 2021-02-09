@@ -1557,7 +1557,7 @@ impl fmt::Display for CliUpgradeableProgram {
 pub struct CliUpgradeableBuffer {
     pub address: String,
     pub authority: String,
-    pub program_len: usize,
+    pub data_len: usize,
 }
 impl QuietDisplay for CliUpgradeableBuffer {}
 impl VerboseDisplay for CliUpgradeableBuffer {}
@@ -1568,8 +1568,8 @@ impl fmt::Display for CliUpgradeableBuffer {
         writeln_name_value(f, "Authority:", &self.authority)?;
         writeln_name_value(
             f,
-            "Program Length:",
-            &format!("{:?} ({:#x?}) bytes", self.program_len, self.program_len),
+            "Data Length:",
+            &format!("{:?} ({:#x?}) bytes", self.data_len, self.data_len),
         )?;
         Ok(())
     }
