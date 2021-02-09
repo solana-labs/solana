@@ -90,7 +90,7 @@ pub mod full_inflation {
             solana_sdk::declare_id!("3Z4xtD9nrdSsri3c51khB4J9nh8aMTESTAf8HZDk8bj2");
         }
         pub mod enable {
-            solana_sdk::declare_id!("3Z4xtD9nrdSsri3c51khB4J9nh8aMTESTAf8HZDk8bj2");
+            solana_sdk::declare_id!("CnFq96h8LrGPNcwPd9WBunh1q6m5CJBR1Q55j4UUANf1");
         }
     }
 
@@ -132,7 +132,7 @@ pub mod full_inflation {
 
     pub mod sotcsa {
         pub mod vote {
-            solana_sdk::declare_id!("GzhLBMdjFuGHGoZHm4koFpd2pYFwqV8H82k6488CxQEf");
+            solana_sdk::declare_id!("DzXnJ8gieQ3FEPSmDJBMMh4Axsgc7Gs3gwbDPggSwTyA");
         }
         pub mod enable {
             solana_sdk::declare_id!("8oQF7WqrH5hfzz7SEiUyaRrxMsZ7Ti82t42YFsmH3wTd");
@@ -227,7 +227,7 @@ pub mod filter_stake_delegation_accounts {
 }
 
 pub mod simple_capitalization {
-    solana_sdk::declare_id!("9r69RnnxABmpcPFfj1yhg4n9YFR2MNaLdKJCC6v3Speb");
+    solana_sdk::declare_id!("6MB3LnR8gFRdZpSD6c3gadQPZDkkKjPVZvJ6ZmdzrbXY");
 }
 
 pub mod bpf_loader_upgradeable_program {
