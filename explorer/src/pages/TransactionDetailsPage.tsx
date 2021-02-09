@@ -37,17 +37,20 @@ import { FetchStatus } from "providers/cache";
 import { SerumDetailsCard } from "components/instruction/SerumDetailsCard";
 import { Slot } from "components/common/Slot";
 import { isTokenSwapInstruction } from "components/instruction/token-swap/types";
+import { isTokenLendingInstruction } from "components/instruction/token-lending/types";
 import { TokenSwapDetailsCard } from "components/instruction/TokenSwapDetailsCard";
 import { TokenLendingDetailsCard } from "components/instruction/TokenLendingDetailsCard";
 import { isSerumInstruction } from "components/instruction/serum/types";
 import { MemoDetailsCard } from "components/instruction/MemoDetailsCard";
-import { isTokenLendingInstruction } from "components/instruction/token-lending/types";
+import { BigNumber } from "bignumber.js";
+import { BalanceDelta } from "components/common/BalanceDelta";
+import { TokenBalancesCard } from "components/transaction/TokenBalancesCard";
 
 const AUTO_REFRESH_INTERVAL = 2000;
 const ZERO_CONFIRMATION_BAILOUT = 5;
 export const INNER_INSTRUCTIONS_START_SLOT = 46915769;
 
-type SignatureProps = {
+export type SignatureProps = {
   signature: TransactionSignature;
 };
 
@@ -119,6 +122,7 @@ export function TransactionDetailsPage({ signature: raw }: SignatureProps) {
         <>
           <StatusCard signature={signature} autoRefresh={autoRefresh} />
           <AccountsCard signature={signature} autoRefresh={autoRefresh} />
+          <TokenBalancesCard signature={signature} />
           <SignatureContext.Provider value={signature}>
             <InstructionsSection signature={signature} />
           </SignatureContext.Provider>
@@ -354,23 +358,16 @@ function AccountsCard({
     const post = meta.postBalances[index];
     const pubkey = account.pubkey;
     const key = account.pubkey.toBase58();
-    const renderChange = () => {
-      const change = post - pre;
-      if (change === 0) return "";
-      const sols = lamportsToSolString(change);
-      if (change > 0) {
-        return <span className="badge badge-soft-success">+{sols}</span>;
-      } else {
-        return <span className="badge badge-soft-warning">-{sols}</span>;
-      }
-    };
+    const delta = new BigNumber(post).minus(new BigNumber(pre));
 
     return (
       <tr key={key}>
         <td>
           <Address pubkey={pubkey} link />
         </td>
-        <td>{renderChange()}</td>
+        <td>
+          <BalanceDelta delta={delta} isSol />
+        </td>
         <td>{lamportsToSolString(post)}</td>
         <td>
           {index === 0 && (

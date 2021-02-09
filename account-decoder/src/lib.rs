@@ -4,6 +4,7 @@ extern crate lazy_static;
 extern crate serde_derive;
 
 pub mod parse_account_data;
+pub mod parse_bpf_loader;
 pub mod parse_config;
 pub mod parse_nonce;
 pub mod parse_stake;

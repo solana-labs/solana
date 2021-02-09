@@ -54,6 +54,15 @@ export const DeactivateInfo = pick({
   stakeAuthority: Pubkey,
 });
 
+export type MergeInfo = StructType<typeof MergeInfo>;
+export const MergeInfo = pick({
+  source: Pubkey,
+  destination: Pubkey,
+  stakeAuthority: Pubkey,
+  stakeHistorySysvar: Pubkey,
+  clockSysvar: Pubkey,
+});
+
 export type StakeInstructionType = StructType<typeof StakeInstructionType>;
 export const StakeInstructionType = enums([
   "initialize",
@@ -62,4 +71,5 @@ export const StakeInstructionType = enums([
   "split",
   "withdraw",
   "deactivate",
+  "merge",
 ]);
