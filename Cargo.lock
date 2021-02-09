@@ -3399,6 +3399,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "retain_mut"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "53552c6c49e1e13f1a203ef0080ab3bbef0beb570a528993e83df057a9d9bba1"
+
+[[package]]
 name = "ring"
 version = "0.16.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4268,6 +4274,7 @@ dependencies = [
  "rayon",
  "regex",
  "reqwest 0.10.8",
+ "retain_mut",
  "rustc_version",
  "rustversion",
  "serde",
