@@ -32,14 +32,14 @@ Try running following command to join the gossip network and view all the other
 nodes in the cluster:
 
 ```bash
-solana-gossip spy --entrypoint devnet.solana.com:8001
+safecoin-gossip spy --entrypoint devnet.solana.com:8001
 # Press ^C to exit
 ```
 
 ## Enabling CUDA
 
 If your machine has a GPU with CUDA installed \(Linux-only currently\), include
-the `--cuda` argument to `solana-validator`.
+the `--cuda` argument to `safecoin-validator`.
 
 When your validator is started look for the following log message to indicate
 that CUDA is enabled: `"[<timestamp> solana::validator] CUDA is enabled"`
@@ -235,7 +235,7 @@ Read more about [creating and managing a vote account](vote-accounts.md).
 ## Trusted validators
 
 If you know and trust other validator nodes, you can specify this on the command line with the `--trusted-validator <PUBKEY>`
-argument to `solana-validator`. You can specify multiple ones by repeating the argument `--trusted-validator <PUBKEY1> --trusted-validator <PUBKEY2>`.
+argument to `safecoin-validator`. You can specify multiple ones by repeating the argument `--trusted-validator <PUBKEY1> --trusted-validator <PUBKEY2>`.
 This has two effects, one is when the validator is booting with `--no-untrusted-rpc`, it will only ask that set of
 trusted nodes for downloading genesis and snapshot data. Another is that in combination with the `--halt-on-trusted-validator-hash-mismatch` option,
 it will monitor the merkle root hash of the entire accounts state of other trusted nodes on gossip and if the hashes produce any mismatch,
@@ -251,14 +251,14 @@ account state divergence.
 Connect to the cluster by running:
 
 ```bash
-solana-validator \
+safecoin-validator \
   --identity ~/validator-keypair.json \
   --vote-account ~/vote-account-keypair.json \
   --ledger ~/validator-ledger \
   --rpc-port 8899 \
   --entrypoint devnet.solana.com:8001 \
   --limit-ledger-size \
-  --log ~/solana-validator.log
+  --log ~/safecoin-validator.log
 ```
 
 To force validator logging to the console add a `--log -` argument, otherwise
@@ -268,14 +268,14 @@ the validator will automatically log to a file.
 > [paper wallet seed phrase](../wallet-guide/paper-wallet.md)
 > for your `--identity` and/or
 > `--authorized-voter` keypairs. To use these, pass the respective argument as
-> `solana-validator --identity ASK ... --authorized-voter ASK ...` and you will be
+> `safecoin-validator --identity ASK ... --authorized-voter ASK ...` and you will be
 > prompted to enter your seed phrases and optional passphrase.
 
 Confirm your validator connected to the network by opening a new terminal and
 running:
 
 ```bash
-solana-gossip spy --entrypoint devnet.solana.com:8001
+safecoin-gossip spy --entrypoint devnet.solana.com:8001
 ```
 
 If your validator is connected, its public key and IP address will appear in the list.
@@ -284,7 +284,7 @@ If your validator is connected, its public key and IP address will appear in the
 
 By default the validator will dynamically select available network ports in the
 8000-10000 range, and may be overridden with `--dynamic-port-range`. For
-example, `solana-validator --dynamic-port-range 11000-11010 ...` will restrict
+example, `safecoin-validator --dynamic-port-range 11000-11010 ...` will restrict
 the validator to ports 11000-11010.
 
 ### Limiting ledger size to conserve disk space
@@ -295,7 +295,7 @@ out of disk space.
 
 The default value attempts to keep the ledger disk usage under 500GB.  More or
 less disk usage may be requested by adding an argument to `--limit-ledger-size`
-if desired. Check `solana-validator --help` for the default limit value used by
+if desired. Check `safecoin-validator --help` for the default limit value used by
 `--limit-ledger-size`.  More information about
 selecting a custom limit value is [available
 here](https://github.com/solana-labs/solana/blob/583cec922b6107e0f85c7e14cb5e642bc7dfb340/core/src/ledger_cleanup_service.rs#L15-L26).
@@ -327,7 +327,7 @@ ExecStart=/home/sol/bin/validator.sh
 WantedBy=multi-user.target
 ```
 
-Now create `/home/sol/bin/validator.sh` to include the desired `solana-validator`
+Now create `/home/sol/bin/validator.sh` to include the desired `safecoin-validator`
 command-line.  Ensure that running `/home/sol/bin/validator.sh` manually starts
 the validator as expected. Don't forget to mark it executable with `chmod +x /home/sol/bin/validator.sh`
 
@@ -349,7 +349,7 @@ to be reverted and the issue reproduced before help can be provided.
 
 #### Log rotation
 
-The validator log file, as specified by `--log ~/solana-validator.log`, can get
+The validator log file, as specified by `--log ~/safecoin-validator.log`, can get
 very large over time and it's recommended that log rotation be configured.
 
 The validator will re-open its when it receives the `USR1` signal, which is the
@@ -359,12 +359,12 @@ basic primitive that enables log rotation.
 
 An example setup for the `logrotate`, which assumes that the validator is
 running as a systemd service called `sol.service` and writes a log file at
-/home/sol/solana-validator.log:
+/home/sol/safecoin-validator.log:
 ```bash
 # Setup log rotation
 
 cat > logrotate.sol <<EOF
-/home/sol/solana-validator.log {
+/home/sol/safecoin-validator.log {
   rotate 7
   daily
   missingok
@@ -380,14 +380,14 @@ systemctl restart logrotate.service
 ### Disable port checks to speed up restarts
 Once your validator is operating normally, you can reduce the time it takes to
 restart your validator by adding the `--no-port-check` flag to your
-`solana-validator` command-line.
+`safecoin-validator` command-line.
 
 ### Disable snapshot compression to reduce CPU usage
 If you are not serving snapshots to other validators, snapshot compression can
 be disabled to reduce CPU load at the expense of slightly more disk usage for
 local snapshot storage.
 
-Add the `--snapshot-compression none` argument to your `solana-validator`
+Add the `--snapshot-compression none` argument to your `safecoin-validator`
 command-line arguments and restart the validator.
 
 ### Using a ramdisk with spill-over into swap for the accounts database to reduce SSD wear
@@ -418,7 +418,7 @@ Example configuration:
 5. Enable swap with `sudo swapon -a` and mount the tmpfs with `sudo mount /mnt/solana-accounts/`
 6. Confirm swap is active with `free -g` and the tmpfs is mounted with `mount`
 
-Now add the `--accounts /mnt/solana-accounts` argument to your `solana-validator`
+Now add the `--accounts /mnt/solana-accounts` argument to your `safecoin-validator`
 command-line arguments and restart the validator.
 
 ### Account indexing

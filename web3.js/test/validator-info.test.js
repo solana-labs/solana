@@ -20,11 +20,11 @@ test('from config account data', () => {
   // Config data string steps:
   // 1) Generate a keypair
   // 2) Airdrop lamports to the account
-  // 3) Modify the `solana-validator-info` tool
+  // 3) Modify the `safecoin-validator-info` tool
   //   a) Remove the keybase id verification step
   //   b) Print base64 account data in the `get --all` codepath
   //   c) Add `println!("Account data: {:?}", base64::encode(&account.data));`
-  // 4) Use modified `solana-validator-info` tool to publish validator info
+  // 4) Use modified `safecoin-validator-info` tool to publish validator info
   // 5) And then use it again to fetch the data! (feel free to trim some A's)
   const configData = Buffer.from(
     'AgdRlwF0SPKsXcI8nrx6x4wKJyV6xhRFjeCk8W+AAAAAABOY9ixtGkV8UbpqS189vS9p/KkyFiGNyJl+QWvRfZPKATUAAAAAAAAAeyJrZXliYXNlVXNlcm5hbWUiOiJ2YWxpZGF0b3JfaWQiLCJuYW1lIjoiVmFsaWRhdG9yIn0',

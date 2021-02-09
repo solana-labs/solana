@@ -60,7 +60,7 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --no-airdrop ]]; then
       airdrops_enabled=0
       shift
-    # solana-validator options
+    # safecoin-validator options
     elif [[ $1 = --expected-genesis-hash ]]; then
       args+=("$1" "$2")
       shift 2

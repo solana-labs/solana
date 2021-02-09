@@ -89,7 +89,7 @@ for v in "${otherVersions[@]}"; do
   echo "--- Looking for bootstrap validator on gossip"
   (
     set -x
-    "$SAFECOIN_BIN"/solana-gossip spy \
+    "$SAFECOIN_BIN"/safecoin-gossip spy \
       --entrypoint 127.0.0.1:8001 \
       --num-nodes-exactly 1 \
       --timeout 30
@@ -113,13 +113,13 @@ for v in "${otherVersions[@]}"; do
   (
     set -x
     tmux new-window -t abi -n "$v" " \
-      $SAFECOIN_BIN/solana-validator \
+      $SAFECOIN_BIN/safecoin-validator \
       --ledger $ledger \
       --no-snapshot-fetch \
       --entrypoint 127.0.0.1:8001 \
       -o - 2>&1 | tee $logDir/$v.log \
     "
-    "$SAFECOIN_BIN"/solana-gossip spy \
+    "$SAFECOIN_BIN"/safecoin-gossip spy \
       --entrypoint 127.0.0.1:8001 \
       --num-nodes-exactly $nodeCount \
       --timeout 30

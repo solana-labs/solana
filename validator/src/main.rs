@@ -737,7 +737,7 @@ fn rpc_bootstrap(
                 )
                 .unwrap_or_else(|err| {
                     // Consider failures here to be more likely due to user error (eg,
-                    // incorrect `solana-validator` command-line arguments) rather than the
+                    // incorrect `safecoin-validator` command-line arguments) rather than the
                     // RPC node failing.
                     //
                     // Power users can always use the `--no-check-vote-account` option to
@@ -1837,7 +1837,7 @@ pub fn main() {
         let logfile = matches
             .value_of("logfile")
             .map(|s| s.into())
-            .unwrap_or_else(|| format!("solana-validator-{}.log", identity_keypair.pubkey()));
+            .unwrap_or_else(|| format!("safecoin-validator-{}.log", identity_keypair.pubkey()));
 
         if logfile == "-" {
             None

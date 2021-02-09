@@ -4498,7 +4498,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-gossip"
+name = "safecoin-gossip"
 version = "1.6.0"
 dependencies = [
  "clap",
@@ -5357,7 +5357,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-validator"
+name = "safecoin-validator"
 version = "1.6.0"
 dependencies = [
  "base64 0.12.3",

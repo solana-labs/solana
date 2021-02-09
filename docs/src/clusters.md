@@ -36,10 +36,10 @@ export SAFECOIN_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=devnet,u
 solana config set --url https://devnet.solana.com
 ```
 
-##### Example `solana-validator` command-line
+##### Example `safecoin-validator` command-line
 
 ```bash
-$ solana-validator \
+$ safecoin-validator \
     --identity ~/validator-keypair.json \
     --vote-account ~/vote-account-keypair.json \
     --trusted-validator dv1LfzJvDF7S1fBKpFgKoKXK5yoSosmkAdfbxBo1GqJ \
@@ -81,10 +81,10 @@ export SAFECOIN_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=tds,u=te
 solana config set --url https://testnet.solana.com
 ```
 
-##### Example `solana-validator` command-line
+##### Example `safecoin-validator` command-line
 
 ```bash
-$ solana-validator \
+$ safecoin-validator \
     --identity ~/validator-keypair.json \
     --vote-account ~/vote-account-keypair.json \
     --trusted-validator 5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on \
@@ -132,10 +132,10 @@ export SAFECOIN_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=mainnet-
 solana config set --url https://api.mainnet-beta.solana.com
 ```
 
-##### Example `solana-validator` command-line
+##### Example `safecoin-validator` command-line
 
 ```bash
-$ solana-validator \
+$ safecoin-validator \
     --identity ~/validator-keypair.json \
     --vote-account ~/vote-account-keypair.json \
     --trusted-validator 7Np41oeYqPefeNQEHSv1UDhYrehxin3NStELsSKCT4K2 \

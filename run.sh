@@ -108,7 +108,7 @@ args=(
   --require-tower
 )
 # shellcheck disable=SC2086
-solana-validator "${args[@]}" $SAFECOIN_RUN_SH_VALIDATOR_ARGS &
+safecoin-validator "${args[@]}" $SAFECOIN_RUN_SH_VALIDATOR_ARGS &
 validator=$!
 
 wait "$validator"

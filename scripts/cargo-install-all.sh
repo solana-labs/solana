@@ -84,7 +84,7 @@ else
     solana-bench-tps
     solana-dos
     solana-faucet
-    solana-gossip
+    safecoin-gossip
     solana-install
     solana-install-init
     safecoin-keygen
@@ -97,7 +97,7 @@ else
     solana-sys-tuner
     solana-test-validator
     solana-tokens
-    solana-validator
+    safecoin-validator
     solana-watchtower
   )
 

@@ -64,7 +64,7 @@ local|tar|skip)
   PATH="$HOME"/.cargo/bin:"$PATH"
   export USE_INSTALL=1
   solana_cli=solana
-  solana_gossip=solana-gossip
+  solana_gossip=safecoin-gossip
   solana_install=solana-install
   ;;
 *)

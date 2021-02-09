@@ -87,7 +87,7 @@ The vote authority can be changed at most once per epoch.  If the authority is
 changed with [vote-authorize-voter](../cli/usage.md#solana-vote-authorize-voter),
 this will not take effect until the beginning of the next epoch.
 To support a smooth transition of the vote signing,
-`solana-validator` allows the `--authorized-voter` argument to be specified
+`safecoin-validator` allows the `--authorized-voter` argument to be specified
 multiple times.  This allows the validator process to keep voting successfully
 when the network reaches an epoch boundary at which the validator's vote
 authority account changes.
@@ -163,7 +163,7 @@ change the validator identity.  The follow steps assume that
 
 ### Vote Account Authorized Voter
 The _vote authority_ keypair may only be changed at epoch boundaries and
-requires some additional arguments to `solana-validator` for a seamless
+requires some additional arguments to `safecoin-validator` for a seamless
 migration.
 
 1. Run `solana epoch-info`.  If there is not much time remaining time in the
@@ -176,13 +176,13 @@ migration.
    assume that ` ~/validator-keypair.json` is that keypair.
 4. Run `solana vote-authorize-voter ~/vote-account-keypair.json ~/validator-keypair.json ~/new-vote-authority.json`.
    The new vote authority is scheduled to become active starting at the next epoch.
-5. `solana-validator` now needs to be restarted with the old and new vote
+5. `safecoin-validator` now needs to be restarted with the old and new vote
    authority keypairs, so that it can smoothly transition at the next epoch. Add
    the two arguments on restart: `--authorized-voter ~/validator-keypair.json
    --authorized-voter ~/new-vote-authority.json`
 6. After the cluster reaches the next epoch, remove the
    `--authorized-voter ~/validator-keypair.json` argument and restart
-   `solana-validator`, as the old vote authority keypair is no longer required.
+   `safecoin-validator`, as the old vote authority keypair is no longer required.
 
 
 ### Vote Account Authorized Withdrawer

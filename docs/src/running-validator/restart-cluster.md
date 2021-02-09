@@ -49,7 +49,7 @@ Post something like the following to #announcements (adjusting the text as appro
 >   a. Preferred method, start from your local ledger with:
 >
 > ```bash
-> solana-validator
+> safecoin-validator
 >   --wait-for-supermajority SLOT_X     # <-- NEW! IMPORTANT! REMOVE AFTER THIS RESTART
 >   --expected-bank-hash NEW_BANK_HASH  # <-- NEW! IMPORTANT! REMOVE AFTER THIS RESTART
 >   --hard-fork SLOT_X                  # <-- NEW! IMPORTANT! REMOVE AFTER THIS RESTART
@@ -63,7 +63,7 @@ Post something like the following to #announcements (adjusting the text as appro
 > ```
 >   b. If your validator doesn't have ledger up to slot SLOT_X or if you have deleted your ledger, have it instead download a snapshot with:
 > ```bash
-> solana-validator
+> safecoin-validator
 >   --wait-for-supermajority SLOT_X     # <-- NEW! IMPORTANT! REMOVE AFTER THIS RESTART
 >   --expected-bank-hash NEW_BANK_HASH  # <-- NEW! IMPORTANT! REMOVE AFTER THIS RESTART
 >   --entrypoint entrypoint.testnet.solana.com:8001
