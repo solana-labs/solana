@@ -234,13 +234,6 @@ pub mod try_find_program_address_syscall_enabled {
     solana_sdk::declare_id!("EMsMNadQNhCYDyGpYH5Tx6dGHxiUqKHk782PU5XaWfmi");
 }
 
-<<<<<<< HEAD
-=======
-pub mod stake_program_v3 {
-    solana_sdk::declare_id!("Ego6nTu7WsBcZBvVqJQKp6Yku2N3mrfG8oYCfaLZkAeK");
-}
-
->>>>>>> da6753b8c... Warp timestamp and extend max-allowable-drift for accommodate slow blocks (#15204)
 pub mod max_cpi_instruction_size_ipv6_mtu {
     solana_sdk::declare_id!("5WLtuUJA5VVA1Cc28qULPfGs8anhoBev8uNqaaXeasnf");
 }

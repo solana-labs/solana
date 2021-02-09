@@ -1669,32 +1669,6 @@ impl Blockstore {
         self.blocktime_cf.get(slot)
     }
 
-<<<<<<< HEAD
-    fn get_timestamp_slots(&self, slot: Slot, timestamp_sample_range: usize) -> Vec<Slot> {
-        let root_iterator = self
-            .db
-            .iter::<cf::Root>(IteratorMode::From(slot, IteratorDirection::Reverse));
-        if !self.is_root(slot) || root_iterator.is_err() {
-            return vec![];
-        }
-        let mut get_slots = Measure::start("get_slots");
-        let mut timestamp_slots: Vec<Slot> = root_iterator
-            .unwrap()
-            .map(|(iter_slot, _)| iter_slot)
-            .take(timestamp_sample_range)
-            .collect();
-        timestamp_slots.sort();
-        get_slots.stop();
-        datapoint_info!(
-            "blockstore-get-timestamp-slots",
-            ("slot", slot as i64, i64),
-            ("get_slots_us", get_slots.as_us() as i64, i64)
-        );
-        timestamp_slots
-    }
-
-=======
->>>>>>> da6753b8c... Warp timestamp and extend max-allowable-drift for accommodate slow blocks (#15204)
     pub fn cache_block_time(&self, slot: Slot, timestamp: UnixTimestamp) -> Result<()> {
         if !self.is_root(slot) {
             return Err(BlockstoreError::SlotNotRooted);
@@ -3529,12 +3503,7 @@ pub mod tests {
     };
     use solana_storage_proto::convert::generated;
     use solana_transaction_status::{InnerInstructions, Reward, Rewards};
-<<<<<<< HEAD
-    use solana_vote_program::{vote_instruction, vote_state::Vote};
     use std::{iter::FromIterator, time::Duration};
-=======
-    use std::time::Duration;
->>>>>>> da6753b8c... Warp timestamp and extend max-allowable-drift for accommodate slow blocks (#15204)
 
     // used for tests only
     pub(crate) fn make_slot_entries_with_transactions(num_entries: u64) -> Vec<Entry> {
