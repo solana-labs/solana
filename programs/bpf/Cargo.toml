@@ -1,6 +1,6 @@
 [package]
 name = "solana-bpf-programs"
-description = "Blockchain, Rebuilt for Scale"
+description = "Safecoin: Enterprise Security for the Community by the Community"
 version = "1.6.0"
 documentation = "https://docs.rs/solana"
 homepage = "https://solana.com/"

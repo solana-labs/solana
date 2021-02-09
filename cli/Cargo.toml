@@ -2,7 +2,7 @@
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 edition = "2018"
 name = "solana-cli"
-description = "Blockchain, Rebuilt for Scale"
+description = "Safecoin: Enterprise Security for the Community by the Community"
 version = "1.6.0"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
