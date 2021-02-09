@@ -38,8 +38,10 @@ import { SerumDetailsCard } from "components/instruction/SerumDetailsCard";
 import { Slot } from "components/common/Slot";
 import { isTokenSwapInstruction } from "components/instruction/token-swap/types";
 import { TokenSwapDetailsCard } from "components/instruction/TokenSwapDetailsCard";
+import { TokenLendingDetailsCard } from "components/instruction/TokenLendingDetailsCard";
 import { isSerumInstruction } from "components/instruction/serum/types";
 import { MemoDetailsCard } from "components/instruction/MemoDetailsCard";
+import { isTokenLendingInstruction } from "components/instruction/token-lending/types";
 
 const AUTO_REFRESH_INTERVAL = 2000;
 const ZERO_CONFIRMATION_BAILOUT = 5;
@@ -616,6 +618,8 @@ function renderInstructionCard({
     return <SerumDetailsCard key={key} {...props} />;
   } else if (isTokenSwapInstruction(transactionIx)) {
     return <TokenSwapDetailsCard key={key} {...props} />;
+  } else if (isTokenLendingInstruction(transactionIx)) {
+    return <TokenLendingDetailsCard key={key} {...props} />;
   } else {
     return <UnknownDetailsCard key={key} {...props} />;
   }

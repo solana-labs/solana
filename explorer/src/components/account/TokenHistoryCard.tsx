@@ -38,6 +38,10 @@ import {
   parseTokenSwapInstructionTitle,
 } from "components/instruction/token-swap/types";
 import {
+  isTokenLendingInstruction,
+  parseTokenLendingInstructionTitle,
+} from "components/instruction/token-lending/types";
+import {
   isSerumInstruction,
   parseSerumInstructionTitle,
 } from "components/instruction/serum/types";
@@ -485,6 +489,16 @@ const TokenTransactionRow = React.memo(
           ) {
             try {
               name = parseTokenSwapInstructionTitle(transactionInstruction);
+            } catch (error) {
+              reportError(error, { signature: tx.signature });
+              return undefined;
+            }
+          } else if (
+            transactionInstruction &&
+            isTokenLendingInstruction(transactionInstruction)
+          ) {
+            try {
+              name = parseTokenLendingInstructionTitle(transactionInstruction);
             } catch (error) {
               reportError(error, { signature: tx.signature });
               return undefined;
