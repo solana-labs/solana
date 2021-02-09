@@ -40,19 +40,9 @@ impl ClusterSlots {
                 self.insert_node_id(*slot, epoch_slots.from);
             }
         }
-        let old_slots: Vec<_> = self
-            .cluster_slots
-            .read()
-            .unwrap()
-            .keys()
-            .take_while(|slot| **slot <= root)
-            .copied()
-            .collect();
         {
             let mut cluster_slots = self.cluster_slots.write().unwrap();
-            for slot in old_slots {
-                cluster_slots.remove(&slot);
-            }
+            *cluster_slots = cluster_slots.split_off(&(root + 1));
         }
         *self.since.write().unwrap() = since;
     }
