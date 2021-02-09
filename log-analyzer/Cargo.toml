@@ -1,5 +1,5 @@
 [package]
-authors = ["Safecoin Maintainers <maintainers@solana.com>"]
+authors = ["Solana Maintainers <maintainers@solana.com>"]
 edition = "2018"
 name = "solana-log-analyzer"
 description = "The solana cluster network analysis tool"

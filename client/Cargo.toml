@@ -2,7 +2,7 @@
 name = "solana-client"
 version = "1.6.0"
 description = "Safecoin Client"
-authors = ["Safecoin Maintainers <maintainers@solana.foundation>"]
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
 homepage = "https://solana.com/"
 license = "Apache-2.0"

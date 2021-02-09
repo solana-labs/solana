@@ -2,7 +2,7 @@
 name = "solana-streamer"
 version = "1.6.0"
 description = "Safecoin Streamer"
-authors = ["Safecoin Maintainers <maintainers@solana.foundation>"]
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
