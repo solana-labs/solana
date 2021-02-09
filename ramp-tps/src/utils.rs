@@ -95,7 +95,7 @@ pub fn bail(notifier: &Notifier, msg: &str) -> ! {
     std::process::exit(1);
 }
 
-/// Inspired by solana_validator::download_tar_bz2
+/// Inspired by safecoin_validator::download_tar_bz2
 pub fn download_genesis(rpc_addr: &SocketAddr, download_path: &Path) -> Result<(), String> {
     let archive_name = GENESIS_ARCHIVE_NAME;
     let archive_path = download_path.join(archive_name);

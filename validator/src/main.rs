@@ -42,7 +42,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signer},
 };
-use solana_validator::{dashboard::Dashboard, record_start, redirect_stderr_to_file};
+use safecoin_validator::{dashboard::Dashboard, record_start, redirect_stderr_to_file};
 use std::{
     collections::HashSet,
     env,
@@ -912,7 +912,7 @@ pub fn main() {
                 .long("rpc-port")
                 .value_name("PORT")
                 .takes_value(true)
-                .validator(solana_validator::port_validator)
+                .validator(safecoin_validator::port_validator)
                 .help("Use this port for JSON RPC and the next port for the RPC websocket"),
         )
         .arg(

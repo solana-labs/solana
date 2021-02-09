@@ -64,7 +64,7 @@ local|tar|skip)
   PATH="$HOME"/.cargo/bin:"$PATH"
   export USE_INSTALL=1
   solana_cli=solana
-  solana_gossip=safecoin-gossip
+  safecoin_gossip=safecoin-gossip
   solana_install=solana-install
   ;;
 *)
@@ -97,7 +97,7 @@ echo "--- $sanityTargetIp: node count ($numSanityNodes expected)"
     nodeArg="num-nodes-exactly"
   fi
 
-  $solana_gossip spy --entrypoint "$sanityTargetIp:8001" \
+  $safecoin_gossip spy --entrypoint "$sanityTargetIp:8001" \
     --$nodeArg "$numSanityNodes" --timeout 60 \
 )
 

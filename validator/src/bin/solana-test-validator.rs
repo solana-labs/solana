@@ -20,7 +20,7 @@ use {
         signature::{read_keypair_file, write_keypair_file, Keypair, Signer},
         system_program,
     },
-    solana_validator::{
+    safecoin_validator::{
         dashboard::Dashboard, record_start, redirect_stderr_to_file, test_validator::*,
     },
     std::{
@@ -125,7 +125,7 @@ fn main() {
                 .value_name("PORT")
                 .takes_value(true)
                 .default_value(&default_rpc_port)
-                .validator(solana_validator::port_validator)
+                .validator(safecoin_validator::port_validator)
                 .help("Use this port for JSON RPC and the next port for the RPC websocket"),
         )
         .arg(

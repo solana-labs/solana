@@ -14,9 +14,9 @@ if [[ "$SAFECOIN_GPU_MISSING" -eq 1 ]]; then
 fi
 
 if [[ -n $SAFECOIN_CUDA ]]; then
-  program=$solana_validator_cuda
+  program=$safecoin_validator_cuda
 else
-  program=$solana_validator
+  program=$safecoin_validator
 fi
 
 no_restart=0
