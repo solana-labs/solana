@@ -8,7 +8,7 @@ mod tests {
     use solana_ledger::shred::Shred;
     use std::collections::VecDeque;
     use std::str::FromStr;
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
     use std::thread::{self, Builder, JoinHandle};
@@ -223,8 +223,14 @@ mod tests {
 
         let (sender, receiver) = channel();
         let exit = Arc::new(AtomicBool::new(false));
-        let cleaner =
-            LedgerCleanupService::new(receiver, blockstore.clone(), max_ledger_shreds, &exit);
+        let cleaner = LedgerCleanupService::new(
+            receiver,
+            blockstore.clone(),
+            max_ledger_shreds,
+            &exit,
+            None,
+            None,
+        );
 
         let exit_cpu = Arc::new(AtomicBool::new(false));
         let sys = CpuStatsUpdater::new(&exit_cpu);
@@ -375,17 +381,27 @@ mod tests {
         let (sender, receiver) = channel();
         sender.send(n).unwrap();
         let mut last_purge_slot = 0;
-        let mut last_compaction_slot = 0;
+        let highest_compact_slot = Arc::new(AtomicU64::new(0));
         LedgerCleanupService::cleanup_ledger(
             &receiver,
             &blockstore,
             max_ledger_shreds,
             &mut last_purge_slot,
             10,
-            &mut last_compaction_slot,
-            10,
+            &highest_compact_slot,
         )
         .unwrap();
+
+        let mut compaction_jitter = 0;
+        let mut last_compaction_slot = 0;
+        LedgerCleanupService::compact_ledger(
+            &blockstore,
+            &mut last_compaction_slot,
+            10,
+            &highest_compact_slot,
+            &mut compaction_jitter,
+            None,
+        );
 
         thread::sleep(Duration::from_secs(2));
 
