@@ -23,7 +23,7 @@
     accountPublicKey.innerHTML = account.publicKey;
 
     // Fetch account balance
-    let url = 'http://localhost:8899';
+    let url = 'http://localhost:8328';
     const connection = new solanaWeb3.Connection(url);
 
     connection.getBalance(account.publicKey)

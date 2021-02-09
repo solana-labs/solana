@@ -85,7 +85,7 @@ up)
       --name solana-localnet
       --rm
       --publish 8001:8001/tcp # entrypoint
-      --publish 8899:8899/tcp # rpc http
+      --publish 8328:8328/tcp # rpc http
       --publish 8900:8900/tcp # rpc pubsub
       --publish 8901:8901/tcp # (future) bank service
       --publish 8902:8902/tcp # bank service
@@ -114,7 +114,7 @@ up)
           -X POST \
           -H "Content-Type: application/json" \
           -d '{"jsonrpc":"2.0","id":1, "method":"getTransactionCount"}' \
-          http://localhost:8899; then
+          http://localhost:8328; then
         break;
       fi
       sleep 1

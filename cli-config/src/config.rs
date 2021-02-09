@@ -116,7 +116,7 @@ mod test {
         );
 
         assert_eq!(
-            Config::compute_websocket_url(&"http://example.com:8899"),
+            Config::compute_websocket_url(&"http://example.com:8328"),
             "ws://example.com:8900/".to_string()
         );
         assert_eq!(

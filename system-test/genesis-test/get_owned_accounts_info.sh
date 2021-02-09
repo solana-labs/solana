@@ -18,7 +18,7 @@ usage: $0 [cluster_rpc_url] [identity_pubkey]
  Also report the system account balance for that same key.
 
  Required arguments:
-   cluster_rpc_url  - RPC URL and port for a running Safecoin cluster (ex: http://34.83.146.144:8899)
+   cluster_rpc_url  - RPC URL and port for a running Safecoin cluster (ex: http://34.83.146.144:8328)
    identity_pubkey  - Base58 pubkey that is an authorized staker for at least one stake account on the cluster.
 EOF
   exit $exitcode

@@ -10,7 +10,7 @@ cd "$(dirname "$0")"/..
 source multinode-demo/common.sh
 
 if [[ -z $1 ]]; then # no network argument, use localhost by default
-  args=(--url http://127.0.0.1:8899)
+  args=(--url http://127.0.0.1:8328)
 else
   args=("$@")
 fi

@@ -169,7 +169,7 @@ pub fn normalize_to_url_if_moniker<T: AsRef<str>>(url_or_moniker: T) -> String {
         "m" | "mainnet-beta" => "https://api.mainnet-beta.solana.com",
         "t" | "testnet" => "https://testnet.solana.com",
         "d" | "devnet" => "https://devnet.solana.com",
-        "l" | "localhost" => "http://localhost:8899",
+        "l" | "localhost" => "http://localhost:8328",
         url => url,
     }
     .to_string()

@@ -80,7 +80,7 @@ killSession
     fi
   done
 
-  safecoin --url http://127.0.0.1:8899 show-validators
+  safecoin --url http://127.0.0.1:8328 show-validators
 )
 
 # Ensure all versions can see the bootstrap validator

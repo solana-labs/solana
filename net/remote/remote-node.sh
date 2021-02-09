@@ -333,7 +333,7 @@ EOF
     args=(
       --entrypoint "$entrypointIp:8001"
       --gossip-port 8001
-      --rpc-port 8899
+      --rpc-port 8328
       --expected-shred-version "$(cat "$SAFECOIN_CONFIG_DIR"/shred-version)"
     )
     if [[ $nodeType = blockstreamer ]]; then
@@ -417,10 +417,10 @@ EOF
     if [[ $skipSetup != true && $nodeType != blockstreamer && -z $maybeSkipAccountsCreation ]]; then
       # Wait for the validator to catch up to the bootstrap validator before
       # delegating stake to it
-      safecoin --url http://"$entrypointIp":8899 catchup config/validator-identity.json
+      safecoin --url http://"$entrypointIp":8328 catchup config/validator-identity.json
 
       args=(
-        --url http://"$entrypointIp":8899
+        --url http://"$entrypointIp":8328
       )
       if [[ $airdropsEnabled != true ]]; then
         args+=(--no-airdrop)

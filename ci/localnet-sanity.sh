@@ -6,7 +6,7 @@ iterations=1
 restartInterval=never
 rollingRestart=false
 extraNodes=0
-walletRpcPort=:8899
+walletRpcPort=:8328
 
 usage() {
   exitcode=0
@@ -57,7 +57,7 @@ while getopts "ch?i:k:brxR" opt; do
     extraNodes=$((extraNodes + 1))
     ;;
   r)
-    walletRpcPort=":18899"
+    walletRpcPort=":18328"
     ;;
   R)
     rollingRestart=true
@@ -82,7 +82,7 @@ nodes=(
     --no-restart \
     --dynamic-port-range 8050-8100
     --init-complete-file init-complete-node1.log \
-    --rpc-port 18899"
+    --rpc-port 18328"
 )
 
 if [[ extraNodes -gt 0 ]]; then
@@ -177,7 +177,7 @@ startNodes() {
       (
         set -x
         $solana_cli --keypair config/bootstrap-validator/identity.json \
-          --url http://127.0.0.1:8899 genesis-hash
+          --url http://127.0.0.1:8328 genesis-hash
       ) | tee genesis-hash.log
       maybeExpectedGenesisHash="--expected-genesis-hash $(tail -n1 genesis-hash.log)"
     fi
@@ -203,7 +203,7 @@ killNodes() {
   # Try to use the RPC exit API to cleanly exit the first two nodes
   # (dynamic nodes, -x, are just killed since their RPC port is not known)
   echo "--- RPC exit"
-  for port in 8899 18899; do
+  for port in 8328 18328; do
     (
       set -x
       curl --retry 5 --retry-delay 2 --retry-connrefused \
@@ -336,7 +336,7 @@ while [[ $iteration -le $iterations ]]; do
       -X POST -H 'Content-Type: application/json' \
       -d '{"jsonrpc":"2.0","id":1, "method":"getTransactionCount"}' \
       -o log-transactionCount.txt \
-      http://localhost:8899
+      http://localhost:8328
     cat log-transactionCount.txt
   ) || flag_error
 
@@ -346,7 +346,7 @@ while [[ $iteration -le $iterations ]]; do
     curl --retry 5 --retry-delay 2 --retry-connrefused \
       -X POST -H 'Content-Type: application/json' \
       -d '{"jsonrpc":"2.0","id":1, "method":"getTransactionCount"}' \
-      http://localhost:18899
+      http://localhost:18328
   ) || flag_error
 
   # Verify transaction count as reported by the bootstrap-validator node is advancing

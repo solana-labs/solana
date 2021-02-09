@@ -67,7 +67,7 @@
     "test": "npm run build:fixtures && cross-env NODE_ENV=test jest --useStderr",
     "test:cover": "npm run build:fixtures && cross-env NODE_ENV=test jest --coverage --useStderr",
     "test:live": "npm run build:fixtures && cross-env NODE_ENV=test TEST_LIVE=1 jest --useStderr",
-    "test:live-with-test-validator": "start-server-and-test 'safecoin-test-validator --reset --quiet' http://localhost:8899/health test:live",
+    "test:live-with-test-validator": "start-server-and-test 'safecoin-test-validator --reset --quiet' http://localhost:8328/health test:live",
     "test:watch": "npm run build:fixtures && cross-env NODE_ENV=test jest --watch --useStderr"
   },
   "jest": {

@@ -203,7 +203,7 @@ fn main() {
 
     let entrypoint_str = matches.value_of("entrypoint").unwrap();
     debug!("Connecting to {}", entrypoint_str);
-    let entrypoint_addr = solana_net_utils::parse_host_port(&format!("{}:8899", entrypoint_str))
+    let entrypoint_addr = solana_net_utils::parse_host_port(&format!("{}:8328", entrypoint_str))
         .expect("failed to parse entrypoint address");
     utils::download_genesis(&entrypoint_addr, &tmp_ledger_path).expect("genesis download failed");
     let genesis_config =

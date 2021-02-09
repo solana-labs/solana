@@ -1,7 +1,7 @@
 FROM debian:buster
 
 # JSON RPC port
-EXPOSE 8899/tcp
+EXPOSE 8328/tcp
 
 RUN apt update && \
     apt-get install -y bzip2 libssl-dev && \

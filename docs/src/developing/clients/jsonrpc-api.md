@@ -10,7 +10,7 @@ gives a convenient interface for the RPC methods.
 
 ## RPC HTTP Endpoint
 
-**Default port:** 8899 eg. [http://localhost:8899](http://localhost:8899), [http://192.168.1.88:8899](http://192.168.1.88:8899)
+**Default port:** 8328 eg. [http://localhost:8328](http://localhost:8328), [http://192.168.1.88:8328](http://192.168.1.88:8328)
 
 ## RPC PubSub WebSocket Endpoint
 
@@ -96,7 +96,7 @@ application/json` header. The JSON request data should contain 4 fields:
 Example using curl:
 
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {
     "jsonrpc": "2.0",
     "id": 1,
@@ -154,7 +154,7 @@ For total safety, it's recommended to use`"finalized"` commitment.
 The commitment parameter should be included as the last element in the `params` array:
 
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {
     "jsonrpc": "2.0",
     "id": 1,
@@ -229,7 +229,7 @@ The result will be an RpcResponse JSON object with `value` equal to:
 
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {
     "jsonrpc": "2.0",
     "id": 1,
@@ -269,7 +269,7 @@ Response:
 #### Example:
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {
     "jsonrpc": "2.0",
     "id": 1,
@@ -330,7 +330,7 @@ Returns the balance of the account of provided Pubkey
 
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0", "id":1, "method":"getBalance", "params":["83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri"]}
 '
 ```
@@ -361,7 +361,7 @@ The result field will be a JSON object containing:
 
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getBlockCommitment","params":[5]}
 '
 ```
@@ -405,7 +405,7 @@ query a node that is built from genesis and retains the entire ledger.
 
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getBlockTime","params":[5]}
 '
 ```
@@ -437,7 +437,7 @@ The result field will be an array of JSON objects, each with the following sub f
 
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0", "id":1, "method":"getClusterNodes"}
 '
 ```
@@ -450,7 +450,7 @@ Result:
     {
       "gossip": "10.239.6.48:8001",
       "pubkey": "9QzsJf7LPLj8GkXbYT3LFDKqsj2hHG7TA3xinJHu8epQ",
-      "rpc": "10.239.6.48:8899",
+      "rpc": "10.239.6.48:8328",
       "tpu": "10.239.6.48:8856",
       "version": "1.0.0 c375ce1f"
     }
@@ -503,7 +503,7 @@ The result field will be an object with the following fields:
 
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc": "2.0","id":1,"method":"getConfirmedBlock","params":[430, "json"]}
 '
 ```
@@ -587,7 +587,7 @@ Result:
 #### Example:
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc": "2.0","id":1,"method":"getConfirmedBlock","params":[430, "base64"]}
 '
 ```
@@ -702,7 +702,7 @@ inclusive.  Max range allowed is 500,000 slots.
 
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc": "2.0","id":1,"method":"getConfirmedBlocks","params":[5, 10]}
 '
 ```
@@ -730,7 +730,7 @@ starting at `start_slot` for up to `limit` blocks, inclusive.
 
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc": "2.0","id":1,"method":"getConfirmedBlocksWithLimit","params":[5, 3]}
 '
 ```
@@ -765,7 +765,7 @@ The signatures will be ordered based on the Slot in which they were confirmed in
 
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {
     "jsonrpc": "2.0",
     "id": 1,
@@ -818,7 +818,7 @@ from newest to oldest transaction:
 #### Example:
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {
     "jsonrpc": "2.0",
     "id": 1,
@@ -884,7 +884,7 @@ Returns transaction details for a confirmed transaction
 #### Example:
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {
     "jsonrpc": "2.0",
     "id": 1,
@@ -968,7 +968,7 @@ Result:
 #### Example:
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {
     "jsonrpc": "2.0",
     "id": 1,
@@ -1042,7 +1042,7 @@ The result field will be an object with the following fields:
 
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getEpochInfo"}
 '
 ```
@@ -1084,7 +1084,7 @@ The result field will be an object with the following fields:
 
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getEpochSchedule"}
 '
 ```
@@ -1125,7 +1125,7 @@ The result will be an RpcResponse JSON object with `value` equal to:
 
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {
     "jsonrpc": "2.0",
     "id": 1,
@@ -1177,7 +1177,7 @@ The `result` field will be an `object` with the following fields:
 
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getFeeRateGovernor"}
 '
 ```
@@ -1226,7 +1226,7 @@ The result will be an RpcResponse JSON object with `value` set to a JSON object 
 
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getFees"}
 '
 ```
@@ -1267,7 +1267,7 @@ None
 
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getFirstAvailableBlock"}
 '
 ```
@@ -1293,7 +1293,7 @@ None
 
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getGenesisHash"}
 '
 ```
@@ -1328,7 +1328,7 @@ of the error response are **UNSTABLE** and may change in the future
 
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getHealth"}
 '
 ```
@@ -1384,7 +1384,7 @@ The result field will be a JSON object with the following fields:
 
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getIdentity"}
 '
 ```
@@ -1416,7 +1416,7 @@ The result field will be a JSON object with the following fields:
 
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getInflationGovernor"}
 '
 ```
@@ -1457,7 +1457,7 @@ The result field will be a JSON object with the following fields:
 
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getInflationRate"}
 '
 ```
@@ -1489,7 +1489,7 @@ The result will be an RpcResponse JSON object with `value` equal to an array of:
 
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getLargestAccounts"}
 '
 ```
@@ -1601,7 +1601,7 @@ Returns the leader schedule for an epoch
 
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getLeaderSchedule"}
 '
 ```
@@ -1634,7 +1634,7 @@ Returns minimum balance required to make account rent exempt.
 
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0", "id":1, "method":"getMinimumBalanceForRentExemption", "params":[50]}
 '
 ```
@@ -1679,7 +1679,7 @@ An array of:
 
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {
     "jsonrpc": "2.0",
     "id": 1,
@@ -1738,7 +1738,7 @@ Result:
 #### Example:
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {
     "jsonrpc": "2.0",
     "id": 1,
@@ -1830,7 +1830,7 @@ The result field will be an array of JSON objects, which will contain:
 #### Example:
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0", "id":1, "method":"getProgramAccounts", "params":["4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T"]}
 '
 ```
@@ -1858,7 +1858,7 @@ Result:
 #### Example:
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {
     "jsonrpc": "2.0",
     "id": 1,
@@ -1923,7 +1923,7 @@ An RpcResponse containing a JSON object consisting of a string blockhash and Fee
 
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d 'i
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d 'i
   {"jsonrpc":"2.0","id":1, "method":"getRecentBlockhash"}
 '
 ```
@@ -1970,7 +1970,7 @@ An array of:
 Request:
 ```bash
 // Request
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0", "id":1, "method":"getRecentPerformanceSamples", "params": [4]}
 '
 ```
@@ -2026,7 +2026,7 @@ None
 
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getSnapshotSlot"}
 '
 ```
@@ -2076,7 +2076,7 @@ An array of:
 
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {
     "jsonrpc": "2.0",
     "id": 1,
@@ -2119,7 +2119,7 @@ Result:
 #### Example:
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {
     "jsonrpc": "2.0",
     "id": 1,
@@ -2177,7 +2177,7 @@ Returns the current slot the node is processing
 
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getSlot"}
 '
 ```
@@ -2203,7 +2203,7 @@ Returns the current slot leader
 
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getSlotLeader"}
 '
 ```
@@ -2235,7 +2235,7 @@ The result will be a JSON object with the following fields:
 #### Example:
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getStakeActivation", "params": ["CYRJWqiSjLitBAcRxPvWpgX3s5TvmN2SuRY3eEYypFvT"]}
 '
 ```
@@ -2248,7 +2248,7 @@ Result:
 #### Example:
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {
     "jsonrpc": "2.0",
     "id": 1,
@@ -2297,7 +2297,7 @@ The result will be an RpcResponse JSON object with `value` equal to a JSON objec
 
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0", "id":1, "method":"getSupply"}
 '
 ```
@@ -2347,7 +2347,7 @@ The result will be an RpcResponse JSON object with `value` equal to a JSON objec
 
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0", "id":1, "method":"getTokenAccountBalance", "params": ["7fUAJdStEuGbc3sM84cKRL6yYaaSstyLSU4ve5oovLS7"]}
 '
 ```
@@ -2401,7 +2401,7 @@ The result will be an RpcResponse JSON object with `value` equal to an array of 
 #### Example:
 
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {
     "jsonrpc": "2.0",
     "id": 1,
@@ -2490,7 +2490,7 @@ The result will be an RpcResponse JSON object with `value` equal to an array of 
 #### Example:
 
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {
     "jsonrpc": "2.0",
     "id": 1,
@@ -2569,7 +2569,7 @@ The result will be an RpcResponse JSON object with `value` equal to an array of 
 #### Example:
 
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0", "id":1, "method":"getTokenLargestAccounts", "params": ["3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E"]}
 '
 ```
@@ -2621,7 +2621,7 @@ The result will be an RpcResponse JSON object with `value` equal to a JSON objec
 #### Example:
 
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0", "id":1, "method":"getTokenSupply", "params": ["3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E"]}
 '
 ```
@@ -2659,7 +2659,7 @@ Returns the current Transaction count from the ledger
 #### Example:
 
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getTransactionCount"}
 '
 
@@ -2689,7 +2689,7 @@ The result field will be a JSON object with the following fields:
 
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getVersion"}
 '
 ```
@@ -2722,7 +2722,7 @@ The result field will be a JSON object of `current` and `delinquent` accounts, e
 #### Example:
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getVoteAccounts"}
 '
 ```
@@ -2778,7 +2778,7 @@ None
 #### Example:
 
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"minimumLedgerSlot"}
 '
 
@@ -2806,7 +2806,7 @@ Requests an airdrop of lamports to a Pubkey
 #### Example:
 
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"requestAirdrop", "params":["83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri", 50]}
 '
 
@@ -2863,7 +2863,7 @@ submission.
 #### Example:
 
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {
     "jsonrpc": "2.0",
     "id": 1,
@@ -2904,7 +2904,7 @@ The result will be an RpcResponse JSON object with `value` set to a JSON object 
 #### Example:
 
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {
     "jsonrpc": "2.0",
     "id": 1,
@@ -2950,7 +2950,7 @@ Sets the log filter on the validator
 #### Example:
 
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"setLogFilter", "params":["solana_core=debug"]}
 '
 ```
@@ -2975,7 +2975,7 @@ None
 #### Example:
 
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+curl http://localhost:8328 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"validatorExit"}
 '
 

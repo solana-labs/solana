@@ -101,7 +101,7 @@ args+=(
   --enable-rpc-set-log-filter
   --require-tower
   --ledger "$ledger_dir"
-  --rpc-port 8899
+  --rpc-port 8328
   --snapshot-interval-slots 200
   --identity "$identity"
   --vote-account "$vote_account"

@@ -31,7 +31,7 @@ safecoin-validator \
   --ledger <LEDGER_PATH> \
   --entrypoint <CLUSTER_ENTRYPOINT> \
   --expected-genesis-hash <EXPECTED_GENESIS_HASH> \
-  --rpc-port 8899 \
+  --rpc-port 8328 \
   --no-voting \
   --enable-rpc-transaction-history \
   --limit-ledger-size \
@@ -159,7 +159,7 @@ query the
 [`getMinimumBalanceForRentExemption` endpoint](developing/clients/jsonrpc-api.md#getminimumbalanceforrentexemption):
 
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getMinimumBalanceForRentExemption","params":[0]}' localhost:8899
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getMinimumBalanceForRentExemption","params":[0]}' localhost:8328
 
 {"jsonrpc":"2.0","result":890880,"id":1}
 ```
@@ -185,7 +185,7 @@ Safecoin API node.
   passing the last block you have already processed as the start-slot parameter:
 
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedBlocks","params":[5]}' localhost:8899
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedBlocks","params":[5]}' localhost:8328
 
 {"jsonrpc":"2.0","result":[5,6,8,9,11],"id":1}
 ```
@@ -195,7 +195,7 @@ Not every slot produces a block, so there may be gaps in the sequence of integer
 - For each block, request its contents with a [`getConfirmedBlock` request](developing/clients/jsonrpc-api.md#getconfirmedblock):
 
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedBlock","params":[5, "json"]}' localhost:8899
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedBlock","params":[5, "json"]}' localhost:8328
 
 {
   "jsonrpc": "2.0",
@@ -282,7 +282,7 @@ time.
   request to the api node:
 
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedSignaturesForAddress2","params":["6H94zdiaYfRfPfKjYLjyr2VFBg6JHXygy84r3qhc3NsC", {"limit": 3}]}' localhost:8899
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedSignaturesForAddress2","params":["6H94zdiaYfRfPfKjYLjyr2VFBg6JHXygy84r3qhc3NsC", {"limit": 3}]}' localhost:8328
 
 {
   "jsonrpc": "2.0",
@@ -314,7 +314,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
   [`getConfirmedTransaction`](developing/clients/jsonrpc-api.md#getconfirmedtransaction) request:
 
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedTransaction","params":["dhjhJp2V2ybQGVfELWM1aZy98guVVsxRCB5KhNiXFjCBMK5KEyzV8smhkVvs3xwkAug31KnpzJpiNPtcD5bG1t6", "json"]}' localhost:8899
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedTransaction","params":["dhjhJp2V2ybQGVfELWM1aZy98guVVsxRCB5KhNiXFjCBMK5KEyzV8smhkVvs3xwkAug31KnpzJpiNPtcD5bG1t6", "json"]}' localhost:8328
 
 // Result
 {
@@ -388,7 +388,7 @@ will wait and track progress on stderr until the transaction has been finalized
 by the cluster. If the transaction fails, it will report any transaction errors.
 
 ```bash
-safecoin transfer <USER_ADDRESS> <AMOUNT> --keypair <KEYPAIR> --url http://localhost:8899
+safecoin transfer <USER_ADDRESS> <AMOUNT> --keypair <KEYPAIR> --url http://localhost:8328
 ```
 
 The [Safecoin Javascript SDK](https://github.com/solana-labs/solana-web3.js)
@@ -413,14 +413,14 @@ First, get a recent blockhash using the [`getFees` endpoint](developing/clients/
 or the CLI command:
 
 ```bash
-safecoin fees --url http://localhost:8899
+safecoin fees --url http://localhost:8328
 ```
 
 In the command-line tool, pass the `--no-wait` argument to send a transfer
 asynchronously, and include your recent blockhash with the `--blockhash` argument:
 
 ```bash
-safecoin transfer <USER_ADDRESS> <AMOUNT> --no-wait --blockhash <RECENT_BLOCKHASH> --keypair <KEYPAIR> --url http://localhost:8899
+safecoin transfer <USER_ADDRESS> <AMOUNT> --no-wait --blockhash <RECENT_BLOCKHASH> --keypair <KEYPAIR> --url http://localhost:8328
 ```
 
 You can also build, sign, and serialize the transaction manually, and fire it off to
@@ -435,7 +435,7 @@ The `confirmations` field reports how many
 transaction was processed. If `confirmations: null`, it is [finalized](../terminology.md#finality).
 
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getSignatureStatuses", "params":[["5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW", "5j7s6NiJS3JAkvgkoc18WVAsiSaci2pxB2A6ueCJP4tprA2TFg9wSyTLeYouxPBJEMzJinENTkpA52YStRW5Dia7"]]}' http://localhost:8899
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getSignatureStatuses", "params":[["5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW", "5j7s6NiJS3JAkvgkoc18WVAsiSaci2pxB2A6ueCJP4tprA2TFg9wSyTLeYouxPBJEMzJinENTkpA52YStRW5Dia7"]]}' http://localhost:8328
 
 {
   "jsonrpc": "2.0",

@@ -29,7 +29,7 @@ if [[ -n "$1" ]]; then
 fi
 
 if [[ -z "$url" ]]; then
-  echo Provide complete URL, ex: "$0" http://devnet.solana.com:8899
+  echo Provide complete URL, ex: "$0" http://devnet.solana.com:8328
   exit 1
 fi
 safecoin config set --url $url

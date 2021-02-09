@@ -107,7 +107,7 @@ minified version of the module suitable for direct use in a browser environment
 
 The `solana-localnet` program is provided to easily start a test Safecoin cluster
 locally on your machine.  Docker must be installed.  The JSON RPC endpoint of
-the local cluster is `http://localhost:8899`.
+the local cluster is `http://localhost:8328`.
 
 To start, first fetch the latest Docker image by running:
 ```bash

@@ -9,7 +9,7 @@ here=$(dirname "$0")
 source "$here"/common.sh
 
 stake_sol=1   # default number of SAFE to assign as stake (1 SAFE)
-url=http://127.0.0.1:8899   # default RPC url
+url=http://127.0.0.1:8328   # default RPC url
 
 usage() {
   if [[ -n $1 ]]; then

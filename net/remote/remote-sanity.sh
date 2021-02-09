@@ -85,7 +85,7 @@ fi
 echo "--- $sanityTargetIp: validators"
 (
   set -x
-  $solana_cli --url http://"$sanityTargetIp":8899 validators
+  $solana_cli --url http://"$sanityTargetIp":8328 validators
 )
 
 echo "--- $sanityTargetIp: node count ($numSanityNodes expected)"
@@ -107,14 +107,14 @@ echo "--- $sanityTargetIp: RPC API: getTransactionCount"
   curl --retry 5 --retry-delay 2 --retry-connrefused \
     -X POST -H 'Content-Type: application/json' \
     -d '{"jsonrpc":"2.0","id":1, "method":"getTransactionCount"}' \
-    http://"$sanityTargetIp":8899
+    http://"$sanityTargetIp":8328
 )
 
 if [[ "$airdropsEnabled" = true ]]; then
   echo "--- $sanityTargetIp: wallet sanity"
   (
     set -x
-    scripts/wallet-sanity.sh --url http://"$sanityTargetIp":8899
+    scripts/wallet-sanity.sh --url http://"$sanityTargetIp":8328
   )
 else
   echo "^^^ +++"
@@ -130,7 +130,7 @@ if $installCheck && [[ -r update_manifest_keypair.json ]]; then
     $safecoin_install init \
       --no-modify-path \
       --data-dir install-data-dir \
-      --url http://"$sanityTargetIp":8899 \
+      --url http://"$sanityTargetIp":8328 \
 
     $safecoin_install info
   )

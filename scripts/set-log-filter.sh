@@ -7,7 +7,7 @@ if [[ -n $1 ]]; then
   url=$1
 else
   # Default to the local node
-  url=http://127.0.0.1:8899
+  url=http://127.0.0.1:8328
 fi
 
 if [[ -z $RUST_LOG ]]; then

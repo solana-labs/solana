@@ -10,7 +10,7 @@ const account = new solanaWeb3.Account();
 
 let url;
 url = 'http://devnet.solana.com';
-//url = 'http://localhost:8899';
+//url = 'http://localhost:8328';
 const connection = new solanaWeb3.Connection(url);
 
 connection.getBalance(account.publicKey).then(balance => {

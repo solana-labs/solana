@@ -49,7 +49,7 @@ stable)
   URL=http://devnet.solana.com
   ;;
 localhost)
-  URL=http://localhost:8899
+  URL=http://localhost:8328
   ;;
 *)
   ;;
