@@ -23,70 +23,6 @@ pub fn calculate_stake_weighted_timestamp<I, K, V, T>(
     stakes: &HashMap<Pubkey, (u64, T /*Account|ArcVoteAccount*/)>,
     slot: Slot,
     slot_duration: Duration,
-    estimate_type: EstimateType,
-    epoch_start_timestamp: Option<(Slot, UnixTimestamp)>,
-) -> Option<UnixTimestamp>
-where
-    I: IntoIterator<Item = (K, V)>,
-    K: Borrow<Pubkey>,
-    V: Borrow<(Slot, UnixTimestamp)>,
-{
-    match estimate_type {
-        EstimateType::Bounded(max_allowable_drift) => calculate_bounded_stake_weighted_timestamp(
-            unique_timestamps,
-            stakes,
-            slot,
-            slot_duration,
-            epoch_start_timestamp,
-            max_allowable_drift,
-        ),
-        EstimateType::Unbounded => calculate_unbounded_stake_weighted_timestamp(
-            unique_timestamps,
-            stakes,
-            slot,
-            slot_duration,
-        ),
-    }
-}
-
-fn calculate_unbounded_stake_weighted_timestamp<I, K, V, T>(
-    unique_timestamps: I,
-    stakes: &HashMap<Pubkey, (u64, T /*Account|ArcVoteAccount*/)>,
-    slot: Slot,
-    slot_duration: Duration,
-) -> Option<UnixTimestamp>
-where
-    I: IntoIterator<Item = (K, V)>,
-    K: Borrow<Pubkey>,
-    V: Borrow<(Slot, UnixTimestamp)>,
-{
-    let (stake_weighted_timestamps_sum, total_stake) = unique_timestamps
-        .into_iter()
-        .filter_map(|(vote_pubkey, slot_timestamp)| {
-            let (timestamp_slot, timestamp) = slot_timestamp.borrow();
-            let offset = (slot - timestamp_slot) as u32 * slot_duration;
-            stakes.get(vote_pubkey.borrow()).map(|(stake, _account)| {
-                (
-                    (*timestamp as u128 + offset.as_secs() as u128) * *stake as u128,
-                    stake,
-                )
-            })
-        })
-        .fold((0, 0), |(timestamps, stakes), (timestamp, stake)| {
-            (timestamps + timestamp, stakes + *stake as u128)
-        });
-    if total_stake > 0 {
-        Some((stake_weighted_timestamps_sum / total_stake) as i64)
-    } else {
-        None
-    }
-}
-
-fn calculate_bounded_stake_weighted_timestamp<I, K, V, T>(
-    unique_timestamps: I,
-    stakes: &HashMap<Pubkey, (u64, T /*Account|ArcVoteAccount*/)>,
-    slot: Slot,
-    slot_duration: Duration,
     epoch_start_timestamp: Option<(Slot, UnixTimestamp)>,
     max_allowable_drift_percentage: u32,
 ) -> Option<UnixTimestamp>
@@ -156,114 +92,7 @@ pub mod tests {
     use solana_sdk::{account::Account, native_token::sol_to_lamports};
 
     #[test]
-    fn test_calculate_stake_weighted_timestamp() {
-        let recent_timestamp: UnixTimestamp = 1_578_909_061;
-        let slot = 5;
-        let slot_duration = Duration::from_millis(400);
-        let expected_offset = (slot * slot_duration).as_secs();
-        let pubkey0 = solana_sdk::pubkey::new_rand();
-        let pubkey1 = solana_sdk::pubkey::new_rand();
-        let pubkey2 = solana_sdk::pubkey::new_rand();
-        let pubkey3 = solana_sdk::pubkey::new_rand();
-        let unique_timestamps: HashMap<Pubkey, (Slot, UnixTimestamp)> = [
-            (pubkey0, (0, recent_timestamp)),
-            (pubkey1, (0, recent_timestamp)),
-            (pubkey2, (0, recent_timestamp)),
-            (pubkey3, (0, recent_timestamp)),
-        ]
-        .iter()
-        .cloned()
-        .collect();
-
-        let stakes: HashMap<Pubkey, (u64, Account)> = [
-            (
-                pubkey0,
-                (
-                    sol_to_lamports(4_500_000_000.0),
-                    Account::new(1, 0, &Pubkey::default()),
-                ),
-            ),
-            (
-                pubkey1,
-                (
-                    sol_to_lamports(4_500_000_000.0),
-                    Account::new(1, 0, &Pubkey::default()),
-                ),
-            ),
-            (
-                pubkey2,
-                (
-                    sol_to_lamports(4_500_000_000.0),
-                    Account::new(1, 0, &Pubkey::default()),
-                ),
-            ),
-            (
-                pubkey3,
-                (
-                    sol_to_lamports(4_500_000_000.0),
-                    Account::new(1, 0, &Pubkey::default()),
-                ),
-            ),
-        ]
-        .iter()
-        .cloned()
-        .collect();
-        assert_eq!(
-            calculate_unbounded_stake_weighted_timestamp(
-                &unique_timestamps,
-                &stakes,
-                slot as Slot,
-                slot_duration
-            ),
-            Some(recent_timestamp + expected_offset as i64)
-        );
-
-        let stakes: HashMap<Pubkey, (u64, Account)> = [
-            (
-                pubkey0,
-                (
-                    sol_to_lamports(15_000_000_000.0),
-                    Account::new(1, 0, &Pubkey::default()),
-                ),
-            ),
-            (
-                pubkey1,
-                (
-                    sol_to_lamports(1_000_000_000.0),
-                    Account::new(1, 0, &Pubkey::default()),
-                ),
-            ),
-            (
-                pubkey2,
-                (
-                    sol_to_lamports(1_000_000_000.0),
-                    Account::new(1, 0, &Pubkey::default()),
-                ),
-            ),
-            (
-                pubkey3,
-                (
-                    sol_to_lamports(1_000_000_000.0),
-                    Account::new(1, 0, &Pubkey::default()),
-                ),
-            ),
-        ]
-        .iter()
-        .cloned()
-        .collect();
-        assert_eq!(
-            calculate_unbounded_stake_weighted_timestamp(
-                &unique_timestamps,
-                &stakes,
-                slot as Slot,
-                slot_duration
-            ),
-            Some(recent_timestamp + expected_offset as i64)
-        );
-    }
-
-    #[test]
-    fn test_calculate_bounded_stake_weighted_timestamp_uses_median() {
+    fn test_calculate_stake_weighted_timestamp_uses_median() {
         let recent_timestamp: UnixTimestamp = 1_578_909_061;
         let slot = 5;
         let slot_duration = Duration::from_millis(400);
@@ -321,15 +150,7 @@ pub mod tests {
         .cloned()
         .collect();
 
-        let unbounded = calculate_unbounded_stake_weighted_timestamp(
-            &unique_timestamps,
-            &stakes,
-            slot as Slot,
-            slot_duration,
-        )
-        .unwrap();
-
-        let bounded = calculate_bounded_stake_weighted_timestamp(
+        let bounded = calculate_stake_weighted_timestamp(
             &unique_timestamps,
             &stakes,
             slot as Slot,
@@ -338,7 +159,7 @@ pub mod tests {
             max_allowable_drift,
         )
         .unwrap();
-        assert_eq!(bounded - unbounded, 527); // timestamp w/ 0.00003% of the stake can shift the timestamp backward 8min
+        // With no bounding, timestamp w/ 0.00003% of the stake can shift the timestamp backward 8min
         assert_eq!(bounded, recent_timestamp); // low-staked outlier cannot affect bounded timestamp
 
         let unique_timestamps: HashMap<Pubkey, (Slot, UnixTimestamp)> = [
@@ -352,15 +173,7 @@ pub mod tests {
         .cloned()
         .collect();
 
-        let unbounded = calculate_unbounded_stake_weighted_timestamp(
-            &unique_timestamps,
-            &stakes,
-            slot as Slot,
-            slot_duration,
-        )
-        .unwrap();
-
-        let bounded = calculate_bounded_stake_weighted_timestamp(
+        let bounded = calculate_stake_weighted_timestamp(
             &unique_timestamps,
             &stakes,
             slot as Slot,
@@ -369,7 +182,7 @@ pub mod tests {
             max_allowable_drift,
         )
         .unwrap();
-        assert_eq!(unbounded - bounded, 3074455295455); // timestamp w/ 0.00003% of the stake can shift the timestamp forward 97k years!
+        // With no bounding, timestamp w/ 0.00003% of the stake can shift the timestamp forward 97k years!
         assert_eq!(bounded, recent_timestamp); // low-staked outlier cannot affect bounded timestamp
 
         let unique_timestamps: HashMap<Pubkey, (Slot, UnixTimestamp)> = [
@@ -383,7 +196,7 @@ pub mod tests {
         .cloned()
         .collect();
 
-        let bounded = calculate_bounded_stake_weighted_timestamp(
+        let bounded = calculate_stake_weighted_timestamp(
             &unique_timestamps,
             &stakes,
             slot as Slot,
@@ -431,7 +244,7 @@ pub mod tests {
         .cloned()
         .collect();
 
-        let bounded = calculate_bounded_stake_weighted_timestamp(
+        let bounded = calculate_stake_weighted_timestamp(
             &unique_timestamps,
             &stakes,
             slot as Slot,
@@ -468,7 +281,7 @@ pub mod tests {
                 .cloned()
                 .collect();
 
-        let bounded = calculate_bounded_stake_weighted_timestamp(
+        let bounded = calculate_stake_weighted_timestamp(
             &unique_timestamps,
             &stakes,
             slot as Slot,
@@ -481,7 +294,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_calculate_bounded_stake_weighted_timestamp_poh() {
+    fn test_calculate_stake_weighted_timestamp_poh() {
         let epoch_start_timestamp: UnixTimestamp = 1_578_909_061;
         let slot = 20;
         let slot_duration = Duration::from_millis(400);
@@ -530,7 +343,7 @@ pub mod tests {
         .cloned()
         .collect();
 
-        let bounded = calculate_bounded_stake_weighted_timestamp(
+        let bounded = calculate_stake_weighted_timestamp(
             &unique_timestamps,
             &stakes,
             slot as Slot,
@@ -551,7 +364,7 @@ pub mod tests {
         .cloned()
         .collect();
 
-        let bounded = calculate_bounded_stake_weighted_timestamp(
+        let bounded = calculate_stake_weighted_timestamp(
             &unique_timestamps,
             &stakes,
             slot as Slot,
@@ -572,7 +385,7 @@ pub mod tests {
         .cloned()
         .collect();
 
-        let bounded = calculate_bounded_stake_weighted_timestamp(
+        let bounded = calculate_stake_weighted_timestamp(
             &unique_timestamps,
             &stakes,
             slot as Slot,
@@ -592,7 +405,7 @@ pub mod tests {
         .cloned()
         .collect();
 
-        let bounded = calculate_bounded_stake_weighted_timestamp(
+        let bounded = calculate_stake_weighted_timestamp(
             &unique_timestamps,
             &stakes,
             slot as Slot,
@@ -605,7 +418,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_calculate_bounded_stake_weighted_timestamp_levels() {
+    fn test_calculate_stake_weighted_timestamp_levels() {
         let epoch_start_timestamp: UnixTimestamp = 1_578_909_061;
         let slot = 20;
         let slot_duration = Duration::from_millis(400);
@@ -666,7 +479,7 @@ pub mod tests {
         .cloned()
         .collect();
 
-        let bounded = calculate_bounded_stake_weighted_timestamp(
+        let bounded = calculate_stake_weighted_timestamp(
             &unique_timestamps,
             &stakes,
             slot as Slot,
@@ -677,7 +490,7 @@ pub mod tests {
         .unwrap();
         assert_eq!(bounded, poh_estimate + acceptable_delta_25);
 
-        let bounded = calculate_bounded_stake_weighted_timestamp(
+        let bounded = calculate_stake_weighted_timestamp(
             &unique_timestamps,
             &stakes,
             slot as Slot,
@@ -707,7 +520,7 @@ pub mod tests {
         .cloned()
         .collect();
 
-        let bounded = calculate_bounded_stake_weighted_timestamp(
+        let bounded = calculate_stake_weighted_timestamp(
             &unique_timestamps,
             &stakes,
             slot as Slot,
@@ -718,7 +531,7 @@ pub mod tests {
         .unwrap();
         assert_eq!(bounded, poh_estimate + acceptable_delta_25);
 
-        let bounded = calculate_bounded_stake_weighted_timestamp(
+        let bounded = calculate_stake_weighted_timestamp(
             &unique_timestamps,
             &stakes,
             slot as Slot,
