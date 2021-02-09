@@ -37,7 +37,7 @@ ledgerDir=$PWD/config/ledger
 SAFECOIN_RUN_SH_CLUSTER_TYPE=${SAFECOIN_RUN_SH_CLUSTER_TYPE:-development}
 
 set -x
-if ! solana address; then
+if ! safecoin address; then
   echo Generating default keypair
   safecoin-keygen new --no-passphrase
 fi

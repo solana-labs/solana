@@ -120,9 +120,9 @@ To determine which features are activated use the [Safecoin command-line
 tools](cli/install-solana-cli-tools.md):
 
 ```bash
-solana feature status
+safecoin feature status
 ```
 
 If you encounter problems first ensure that the Safecoin tools version you are
-using match the version returned by `solana cluster-version`.  If they do not
+using match the version returned by `safecoin cluster-version`.  If they do not
 match [install the correct tool suite](cli/install-solana-cli-tools.md).

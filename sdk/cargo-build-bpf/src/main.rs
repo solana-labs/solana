@@ -213,7 +213,7 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
 
         println!();
         println!("To deploy this program:");
-        println!("  $ solana program deploy {}", program_so.display());
+        println!("  $ safecoin program deploy {}", program_so.display());
     } else if config.dump {
         println!("Note: --dump is only available for crates with a cdylib target");
     }

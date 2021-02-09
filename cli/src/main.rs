@@ -285,7 +285,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             .takes_value(true)
             .global(true)
             .validator(is_url)
-            .help("WebSocket URL for the solana cluster"),
+            .help("WebSocket URL for the safecoin cluster"),
     )
     .arg(
         Arg::with_name("keypair")

@@ -48,7 +48,7 @@ use {
     tokio::task::JoinHandle,
 };
 
-// Export types so test clients can limit their solana crate dependencies
+// Export types so test clients can limit their safecoin crate dependencies
 pub use solana_banks_client::BanksClient;
 pub mod programs;
 

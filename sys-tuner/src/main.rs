@@ -134,7 +134,7 @@ fn main() {
     // set socket permission
     if let Some(user) = users::get_user_by_name(&user) {
         peer_uid = user.uid();
-        info!("UID for solana is {}", peer_uid);
+        info!("UID for safecoin is {}", peer_uid);
         nix::unistd::chown(
             solana_sys_tuner::SAFECOIN_SYS_TUNER_PATH,
             Some(nix::unistd::Uid::from_raw(peer_uid)),

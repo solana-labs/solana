@@ -64,7 +64,7 @@ Optional parameters to consider:
 ### Automatic Restarts and Monitoring
 
 We recommend configuring each of your nodes to restart automatically on exit, to
-ensure you miss as little data as possible. Running the solana software as a
+ensure you miss as little data as possible. Running the safecoin software as a
 systemd service is one great option.
 
 For monitoring, we provide
@@ -382,13 +382,13 @@ cluster.
 Sending a synchronous transfer to the Safecoin cluster allows you to easily ensure
 that a transfer is successful and finalized by the cluster.
 
-Safecoin's command-line tool offers a simple command, `solana transfer`, to
+Safecoin's command-line tool offers a simple command, `safecoin transfer`, to
 generate, submit, and confirm transfer transactions. By default, this method
 will wait and track progress on stderr until the transaction has been finalized
 by the cluster. If the transaction fails, it will report any transaction errors.
 
 ```bash
-solana transfer <USER_ADDRESS> <AMOUNT> --keypair <KEYPAIR> --url http://localhost:8899
+safecoin transfer <USER_ADDRESS> <AMOUNT> --keypair <KEYPAIR> --url http://localhost:8899
 ```
 
 The [Safecoin Javascript SDK](https://github.com/solana-labs/solana-web3.js)
@@ -413,14 +413,14 @@ First, get a recent blockhash using the [`getFees` endpoint](developing/clients/
 or the CLI command:
 
 ```bash
-solana fees --url http://localhost:8899
+safecoin fees --url http://localhost:8899
 ```
 
 In the command-line tool, pass the `--no-wait` argument to send a transfer
 asynchronously, and include your recent blockhash with the `--blockhash` argument:
 
 ```bash
-solana transfer <USER_ADDRESS> <AMOUNT> --no-wait --blockhash <RECENT_BLOCKHASH> --keypair <KEYPAIR> --url http://localhost:8899
+safecoin transfer <USER_ADDRESS> <AMOUNT> --no-wait --blockhash <RECENT_BLOCKHASH> --keypair <KEYPAIR> --url http://localhost:8899
 ```
 
 You can also build, sign, and serialize the transaction manually, and fire it off to
@@ -632,7 +632,7 @@ spl-token balance <TOKEN_ACCOUNT_ADDRESS>
 
 #### Example
 ```
-$ solana balance 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
+$ safecoin balance 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
 0
 ```
 
@@ -714,4 +714,4 @@ Be sure to test your complete workflow on Safecoin devnet and testnet
 [clusters](../clusters.md) before moving to production on mainnet-beta. Devnet
 is the most open and flexible, and ideal for initial development, while testnet
 offers more realistic cluster configuration. Both devnet and testnet support a faucet,
-run `solana airdrop 10` to obtain some devnet or testnet SAFE for developement and testing.
+run `safecoin airdrop 10` to obtain some devnet or testnet SAFE for developement and testing.

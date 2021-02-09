@@ -20,7 +20,7 @@ $ safecoin-keygen pubkey
 
 ```bash
 // Command
-$ solana airdrop 2
+$ safecoin airdrop 2
 
 // Return
 "2.00000000 SAFE"
@@ -30,7 +30,7 @@ $ solana airdrop 2
 
 ```bash
 // Command
-$ solana balance
+$ safecoin balance
 
 // Return
 "3.00050001 SAFE"
@@ -40,7 +40,7 @@ $ solana balance
 
 ```bash
 // Command
-$ solana confirm <TX_SIGNATURE>
+$ safecoin confirm <TX_SIGNATURE>
 
 // Return
 "Confirmed" / "Not found" / "Transaction failed with error <ERR>"
@@ -50,7 +50,7 @@ $ solana confirm <TX_SIGNATURE>
 
 ```bash
 // Command
-$ solana program deploy <PATH>
+$ safecoin program deploy <PATH>
 
 // Return
 <PROGRAM_ID>

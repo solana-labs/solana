@@ -16,6 +16,6 @@ for key in "${SAFECOIN_PUBKEYS[@]}"; do
   echo "$key" >> /solana-scratch/authorized_keys
 done
 
-sudo -u solana bash -c "
+sudo -u safecoin bash -c "
   cat /solana-scratch/authorized_keys >> /home/solana/.ssh/authorized_keys
 "

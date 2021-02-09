@@ -124,7 +124,7 @@ pub fn main() -> Result<(), String> {
                         .takes_value(true)
                         .default_value(defaults::JSON_RPC_URL)
                         .validator(is_url)
-                        .help("JSON RPC URL for the solana cluster"),
+                        .help("JSON RPC URL for the safecoin cluster"),
                 )
                 .arg(
                     Arg::with_name("no_modify_path")
@@ -192,14 +192,14 @@ pub fn main() -> Result<(), String> {
                         .takes_value(true)
                         .default_value(defaults::JSON_RPC_URL)
                         .validator(is_url)
-                        .help("JSON RPC URL for the solana cluster"),
+                        .help("JSON RPC URL for the safecoin cluster"),
                 )
                 .arg(
                     Arg::with_name("download_url")
                         .index(1)
                         .required(true)
                         .validator(is_url)
-                        .help("URL to the solana release archive"),
+                        .help("URL to the safecoin release archive"),
                 )
                 .arg(
                     Arg::with_name("update_manifest_keypair_file")
@@ -314,7 +314,7 @@ pub fn main_init() -> Result<(), String> {
                 .takes_value(true)
                 .default_value(defaults::JSON_RPC_URL)
                 .validator(is_url)
-                .help("JSON RPC URL for the solana cluster"),
+                .help("JSON RPC URL for the safecoin cluster"),
         )
         .arg(
             Arg::with_name("no_modify_path")

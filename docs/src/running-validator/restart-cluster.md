@@ -12,7 +12,7 @@ Call this slot `SLOT_X`
 
 ### Step 2. Stop the validator(s)
 
-### Step 3. Optionally install the new solana version
+### Step 3. Optionally install the new safecoin version
 
 ### Step 4. Create a new snapshot for slot `SLOT_X` with a hard fork at slot `SLOT_X`
 
@@ -80,7 +80,7 @@ Post something like the following to #announcements (adjusting the text as appro
 >
 > To confirm your restarted validator is correctly waiting for the 80%:
 > a. Look for `N% of active stake visible in gossip` log messages
-> b. Ask it over RPC what slot it's on: `solana --url http://127.0.0.1:8899 slot`.  It should return `SLOT_X` until we get to 80% stake
+> b. Ask it over RPC what slot it's on: `safecoin --url http://127.0.0.1:8899 slot`.  It should return `SLOT_X` until we get to 80% stake
 >
 > Thanks!
 

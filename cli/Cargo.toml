@@ -53,7 +53,7 @@ solana-core = { path = "../core", version = "1.6.0" }
 tempfile = "3.1.0"
 
 [[bin]]
-name = "solana"
+name = "safecoin"
 path = "src/main.rs"
 
 [package.metadata.docs.rs]

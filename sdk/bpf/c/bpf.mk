@@ -172,7 +172,7 @@ ifeq (,$(wildcard $(subst .so,-keypair.json,$1)))
 	$(_@)safecoin-keygen new --no-passphrase --silent -o $(subst .so,-keypair.json,$1)
 endif
 	@echo To deploy this program:
-	@echo $$$$ solana program deploy $(realpath $1)
+	@echo $$$$ safecoin program deploy $(realpath $1)
 endef
 
 define TEST_C_RULE

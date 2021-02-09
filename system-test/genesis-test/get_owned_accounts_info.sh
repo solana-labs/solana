@@ -29,7 +29,7 @@ function parse_stake_account_data_to_file {
   filter_key="$2"
   csvfile="$3"
 
-  account_data="$(solana --url "$url" show-stake-account "$account_key")"
+  account_data="$(safecoin --url "$url" show-stake-account "$account_key")"
   staker="$(echo "$account_data" | grep -i 'authorized staker' | cut -f3 -d " ")"
   lockup_epoch="$(echo "$account_data" | grep -i 'lockup epoch' | cut -f3 -d " ")"
   if [[ "$staker" == "$filter_key" ]] ; then

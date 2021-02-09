@@ -2672,7 +2672,7 @@ Result:
 
 ### getVersion
 
-Returns the current solana versions running on the node
+Returns the current safecoin versions running on the node
 
 #### Parameters:
 

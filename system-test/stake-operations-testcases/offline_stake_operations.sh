@@ -32,12 +32,12 @@ if [[ -z "$url" ]]; then
   echo Provide complete URL, ex: "$0" http://devnet.solana.com:8899
   exit 1
 fi
-solana config set --url $url
+safecoin config set --url $url
 
 # Create a dummy keypair file with no balance for operations that require a "client keypair file" to exist even if they don't touch it
 dummy_keypair=dummy.json
 safecoin-keygen new -o "$dummy_keypair" --no-passphrase --force --silent
-solana config set --keypair $dummy_keypair
+safecoin config set --keypair $dummy_keypair
 
 ### Offline stake account creation
 
@@ -68,17 +68,17 @@ offline_staker_pubkey="$(safecoin-keygen pubkey $offline_staker_keypair)"
 offline_custodian_pubkey="$(safecoin-keygen pubkey $offline_custodian_keypair)"
 
 # Airdrop some funds to the offline account.
-solana airdrop 100 $offline_system_account_pubkey
-solana airdrop 2 $online_system_account_pubkey
+safecoin airdrop 100 $offline_system_account_pubkey
+safecoin airdrop 2 $online_system_account_pubkey
 
 # Create a nonce account funded by the online account, with the authority given to the offline account
-solana create-nonce-account $online_nonce_account_keypair 1 --nonce-authority $offline_system_account_pubkey --keypair $online_system_account_keypair
-nonce="$(solana nonce $nonce_account_pubkey)"
+safecoin create-nonce-account $online_nonce_account_keypair 1 --nonce-authority $offline_system_account_pubkey --keypair $online_system_account_keypair
+nonce="$(safecoin nonce $nonce_account_pubkey)"
 
 execution_step OFFLINE SYSTEM ACCOUNT BALANCE BEFORE CREATING STAKE ACCOUNTS
 (
   set -x
-  solana balance $offline_system_account_pubkey
+  safecoin balance $offline_system_account_pubkey
 )
 
 ################################
@@ -91,7 +91,7 @@ stake_account_keypair=stake_account_keypair.json
 safecoin-keygen new -o "$stake_account_keypair" --no-passphrase --force --silent
 stake_account_address="$(safecoin-keygen pubkey $stake_account_keypair)"
 
-sign_only="$(solana create-stake-account $stake_account_keypair 50 \
+sign_only="$(safecoin create-stake-account $stake_account_keypair 50 \
   --sign-only --blockhash $nonce --nonce $nonce_account_pubkey --nonce-authority $offline_system_account_keypair \
   --stake-authority $offline_staker_pubkey --withdraw-authority $offline_withdrawer_pubkey \
   --custodian $offline_custodian_pubkey \
@@ -100,7 +100,7 @@ sign_only="$(solana create-stake-account $stake_account_keypair 50 \
 
 signers="$(get_signers_string "${sign_only[@]}")"
 
-solana create-stake-account $stake_account_keypair 50 \
+safecoin create-stake-account $stake_account_keypair 50 \
   --blockhash $nonce --nonce $nonce_account_pubkey --nonce-authority $offline_system_account_pubkey \
   --stake-authority $offline_staker_pubkey --withdraw-authority $offline_withdrawer_pubkey \
   --custodian $offline_custodian_pubkey \
@@ -110,14 +110,14 @@ solana create-stake-account $stake_account_keypair 50 \
 execution_step VIEW STAKE ACCOUNT AFTER CREATION
 (
   set -x
-  solana stake-account $stake_account_address
+  safecoin stake-account $stake_account_address
 )
 
 
 execution_step VIEW OFFLINE SYSTEM ACCOUNT BALANCE AFTER CREATING FIRST STAKE ACCOUNT
 (
   set -x
-  solana balance $offline_system_account_pubkey
+  safecoin balance $offline_system_account_pubkey
 )
 
 #####################
@@ -130,28 +130,28 @@ split_stake_account_keypair=split_stake_account_keypair.json
 safecoin-keygen new -o $split_stake_account_keypair --no-passphrase --force --silent
 split_stake_account_address=$(safecoin-keygen pubkey $split_stake_account_keypair)
 
-nonce="$(solana nonce $nonce_account_pubkey)"
+nonce="$(safecoin nonce $nonce_account_pubkey)"
 
-sign_only="$(solana split-stake --blockhash $nonce --nonce $nonce_account_pubkey --nonce-authority $offline_system_account_keypair \
+sign_only="$(safecoin split-stake --blockhash $nonce --nonce $nonce_account_pubkey --nonce-authority $offline_system_account_keypair \
   --stake-authority $offline_staker_keypair $stake_account_address $split_stake_account_keypair 10 \
   --keypair $offline_system_account_keypair --sign-only --url http://0.0.0.0)"
 
 signers="$(get_signers_string "${sign_only[@]}")"
 
-solana split-stake --blockhash $nonce --nonce $nonce_account_pubkey --nonce-authority $offline_system_account_pubkey \
+safecoin split-stake --blockhash $nonce --nonce $nonce_account_pubkey --nonce-authority $offline_system_account_pubkey \
   --stake-authority $offline_staker_pubkey $stake_account_address $split_stake_account_keypair 10 \
   --fee-payer $offline_system_account_pubkey ${signers[@]}
 
 execution_step VIEW ORIGINAL STAKE ACCOUNT AFTER SPLITTING
 (
   set -x
-  solana stake-account $stake_account_address
+  safecoin stake-account $stake_account_address
 )
 
 execution_step VIEW NEW STAKE ACCOUNT CREATED FROM SPLITTING ORIGINAL
 (
   set -x
-  solana stake-account $split_stake_account_address
+  safecoin stake-account $split_stake_account_address
 )
 
 #####################
@@ -160,22 +160,22 @@ execution_step CHANGE CUSTODIAN LOCKUP
 
 # Set the lockup epoch to 0 to allow stake to be withdrawn
 
-nonce="$(solana nonce $nonce_account_pubkey)"
+nonce="$(safecoin nonce $nonce_account_pubkey)"
 
-sign_only="$(solana stake-set-lockup --blockhash $nonce --nonce $nonce_account_pubkey --nonce-authority $offline_system_account_keypair \
+sign_only="$(safecoin stake-set-lockup --blockhash $nonce --nonce $nonce_account_pubkey --nonce-authority $offline_system_account_keypair \
   $split_stake_account_address --custodian $offline_custodian_keypair --lockup-epoch 0 \
   --keypair $offline_system_account_keypair --sign-only --url http://0.0.0.0)"
 
 signers="$(get_signers_string "${sign_only[@]}")"
 
-solana stake-set-lockup --blockhash $nonce --nonce $nonce_account_pubkey --nonce-authority $offline_system_account_keypair \
+safecoin stake-set-lockup --blockhash $nonce --nonce $nonce_account_pubkey --nonce-authority $offline_system_account_keypair \
   $split_stake_account_address --custodian $offline_custodian_pubkey --lockup-epoch 0 \
   --fee-payer $offline_system_account_pubkey ${signers[@]}
 
 execution_step VIEW SPLIT STAKE ACCOUNT AFTER CHANGING LOCKUP
 (
   set -x
-  solana stake-account $split_stake_account_address
+  safecoin stake-account $split_stake_account_address
 )
 
 ##########################
@@ -184,16 +184,16 @@ execution_step OFFLINE STAKE WITHDRAWAL
 
 # Withdraw the lamports from the stake account that was split off and return them to the offline system account
 
-nonce="$(solana nonce $nonce_account_pubkey)"
+nonce="$(safecoin nonce $nonce_account_pubkey)"
 
-sign_only="$(solana withdraw-stake --blockhash $nonce --nonce $nonce_account_pubkey --nonce-authority $offline_system_account_keypair \
+sign_only="$(safecoin withdraw-stake --blockhash $nonce --nonce $nonce_account_pubkey --nonce-authority $offline_system_account_keypair \
    $split_stake_account_address $offline_system_account_pubkey 10 \
   --withdraw-authority $offline_withdrawer_keypair \
   --keypair $offline_system_account_keypair --sign-only --url http://0.0.0.0)"
 
 signers="$(get_signers_string "${sign_only[@]}")"
 
-solana withdraw-stake --blockhash $nonce --nonce $nonce_account_pubkey --nonce-authority $offline_system_account_pubkey \
+safecoin withdraw-stake --blockhash $nonce --nonce $nonce_account_pubkey --nonce-authority $offline_system_account_pubkey \
   $split_stake_account_address $offline_system_account_pubkey 10 \
   --withdraw-authority $offline_withdrawer_pubkey \
   --fee-payer $offline_system_account_pubkey ${signers[@]}
@@ -201,7 +201,7 @@ solana withdraw-stake --blockhash $nonce --nonce $nonce_account_pubkey --nonce-a
 execution_step VIEW OFFLINE SYSTEM ACCOUNT BALANCE AFTER WITHDRAWING SPLIT STAKE
 (
   set -x
-  solana balance $offline_system_account_pubkey
+  safecoin balance $offline_system_account_pubkey
 )
 
 ##########################
@@ -210,25 +210,25 @@ execution_step OFFLINE STAKE DELEGATION
 
 # Delegate stake from the original account to a vote account
 
-vote_account_pubkey="$(awk '{if(NR==4) print $2}'<<<"$(solana show-validators)")"
-nonce="$(solana nonce $nonce_account_pubkey)"
+vote_account_pubkey="$(awk '{if(NR==4) print $2}'<<<"$(safecoin show-validators)")"
+nonce="$(safecoin nonce $nonce_account_pubkey)"
 
 # Sign a stake delegation, assuming the authorized staker is held offline
-sign_only="$(solana delegate-stake --blockhash $nonce --nonce $nonce_account_pubkey --nonce-authority $offline_system_account_keypair \
+sign_only="$(safecoin delegate-stake --blockhash $nonce --nonce $nonce_account_pubkey --nonce-authority $offline_system_account_keypair \
 --stake-authority $offline_staker_keypair $stake_account_address $vote_account_pubkey \
 --keypair $offline_system_account_keypair --sign-only --url http://0.0.0.0)"
 
 signers="$(get_signers_string "${sign_only[@]}")"
 
 # Send the signed transaction on the cluster
-solana delegate-stake --blockhash $nonce --nonce $nonce_account_pubkey --nonce-authority $offline_system_account_pubkey \
+safecoin delegate-stake --blockhash $nonce --nonce $nonce_account_pubkey --nonce-authority $offline_system_account_pubkey \
 --stake-authority $offline_staker_pubkey $stake_account_address $vote_account_pubkey \
 --fee-payer $offline_system_account_pubkey ${signers[@]}
 
 execution_step VIEW ORIGINAL STAKE ACCOUNT AFTER DELEGATION
 (
   set -x
-  solana stake-account $stake_account_address
+  safecoin stake-account $stake_account_address
 )
 
 ##########################
@@ -237,22 +237,22 @@ execution_step VIEW ORIGINAL STAKE ACCOUNT AFTER DELEGATION
 
 # Deactivate delegated stake
 
-nonce="$(solana nonce $nonce_account_pubkey)"
+nonce="$(safecoin nonce $nonce_account_pubkey)"
 
 # Sign a stake delegation, assuming the authorized staker is held offline
-sign_only="$(solana deactivate-stake --blockhash $nonce --nonce $nonce_account_pubkey --nonce-authority $offline_system_account_keypair \
+sign_only="$(safecoin deactivate-stake --blockhash $nonce --nonce $nonce_account_pubkey --nonce-authority $offline_system_account_keypair \
 --stake-authority $offline_staker_keypair $stake_account_address \
 --keypair $offline_system_account_keypair --sign-only --url http://0.0.0.0)"
 
 signers="$(get_signers_string "${sign_only[@]}")"
 
 # Send the signed transaction on the cluster
-solana deactivate-stake --blockhash $nonce --nonce $nonce_account_pubkey --nonce-authority $offline_system_account_pubkey \
+safecoin deactivate-stake --blockhash $nonce --nonce $nonce_account_pubkey --nonce-authority $offline_system_account_pubkey \
 --stake-authority $offline_staker_pubkey $stake_account_address \
 --fee-payer $offline_system_account_pubkey ${signers[@]}
 
 execution_step VIEW ORIGINAL STAKE ACCOUNT AFTER DEACTIVATION
 (
    set -x
-   solana stake-account $stake_account_address
+   safecoin stake-account $stake_account_address
 )

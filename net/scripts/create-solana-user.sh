@@ -4,19 +4,19 @@ set -ex
 [[ $(uname) = Linux ]] || exit 1
 [[ $USER = root ]] || exit 1
 
-if grep -q solana /etc/passwd ; then
-  echo "User solana already exists"
+if grep -q safecoin /etc/passwd ; then
+  echo "User safecoin already exists"
 else
-  adduser solana --gecos "" --disabled-password --quiet
-  adduser solana sudo
-  adduser solana adm
-  echo "solana ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+  adduser safecoin --gecos "" --disabled-password --quiet
+  adduser safecoin sudo
+  adduser safecoin adm
+  echo "safecoin ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
   id solana
 
   [[ -r /solana-scratch/id_ecdsa ]] || exit 1
   [[ -r /solana-scratch/id_ecdsa.pub ]] || exit 1
 
-  sudo -u solana bash -c "
+  sudo -u safecoin bash -c "
     echo 'PATH=\"/home/solana/.cargo/bin:$PATH\"' > /home/solana/.profile
     mkdir -p /home/solana/.ssh/
     cd /home/solana/.ssh/

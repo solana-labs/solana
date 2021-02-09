@@ -26,7 +26,7 @@ solanaInstallGlobalOpts=(
   --no-modify-path
 )
 
-# Install all the solana versions
+# Install all the safecoin versions
 bootstrapInstall() {
   declare v=$1
   if [[ ! -h $solanaInstallDataDir/active_release ]]; then
@@ -38,14 +38,14 @@ bootstrapInstall() {
 bootstrapInstall "$baselineVersion"
 for v in "${otherVersions[@]}"; do
   solana-install-init "${solanaInstallGlobalOpts[@]}" "$v"
-  solana -V
+  safecoin -V
 done
 
 
 ORIGINAL_PATH=$PATH
 solanaInstallUse() {
   declare version=$1
-  echo "--- Now using solana $version"
+  echo "--- Now using safecoin $version"
   SAFECOIN_BIN="$solanaInstallDataDir/releases/$version/solana-release/bin"
   export PATH="$SAFECOIN_BIN:$ORIGINAL_PATH"
 }
@@ -80,7 +80,7 @@ killSession
     fi
   done
 
-  solana --url http://127.0.0.1:8899 show-validators
+  safecoin --url http://127.0.0.1:8899 show-validators
 )
 
 # Ensure all versions can see the bootstrap validator

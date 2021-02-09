@@ -18,16 +18,16 @@ validator submits votes, and increase after serving as the leader. Pass the
 `--lamports` are to observe in finer detail:
 
 ```bash
-solana balance --lamports
+safecoin balance --lamports
 ```
 
 ## Check Vote Activity
 
-The `solana vote-account` command displays the recent voting activity from
+The `safecoin vote-account` command displays the recent voting activity from
 your validator:
 
 ```bash
-solana vote-account ~/vote-account-keypair.json
+safecoin vote-account ~/vote-account-keypair.json
 ```
 
 ## Get Cluster Info

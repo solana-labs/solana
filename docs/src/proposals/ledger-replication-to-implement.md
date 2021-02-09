@@ -12,7 +12,7 @@ parts of the solution never implemented.
 
 ## Proof of Replication
 
-At full capacity on a 1gbps network solana will generate 4 petabytes of data per year. To prevent the network from centralizing around validators that have to store the full data set this protocol proposes a way for mining nodes to provide storage capacity for pieces of the data.
+At full capacity on a 1gbps network safecoin will generate 4 petabytes of data per year. To prevent the network from centralizing around validators that have to store the full data set this protocol proposes a way for mining nodes to provide storage capacity for pieces of the data.
 
 The basic idea to Proof of Replication is encrypting a dataset with a public symmetric key using CBC encryption, then hash the encrypted dataset. The main problem with the naive approach is that a dishonest storage node can stream the encryption and delete the data as it's hashed. The simple solution is to periodically regenerate the hash based on a signed PoH value. This ensures that all the data is present during the generation of the proof and it also requires validators to have the entirety of the encrypted data present for verification of every proof of every identity. So the space required to validate is `number_of_proofs * data_size`
 

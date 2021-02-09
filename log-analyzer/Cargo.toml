@@ -2,7 +2,7 @@
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 edition = "2018"
 name = "solana-log-analyzer"
-description = "The solana cluster network analysis tool"
+description = "The safecoin cluster network analysis tool"
 version = "1.6.0"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"

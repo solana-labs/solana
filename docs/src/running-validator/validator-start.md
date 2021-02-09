@@ -4,11 +4,11 @@ title: Starting a Validator
 
 ## Configure Safecoin CLI
 
-The solana cli includes `get` and `set` configuration commands to automatically
+The safecoin cli includes `get` and `set` configuration commands to automatically
 set the `--url` argument for cli commands. For example:
 
 ```bash
-solana config set --url http://devnet.solana.com
+safecoin config set --url http://devnet.solana.com
 ```
 
 While this section demonstrates how to connect to the Devnet cluster, the steps
@@ -20,7 +20,7 @@ Before attaching a validator node, sanity check that the cluster is accessible
 to your machine by fetching the transaction count:
 
 ```bash
-solana transaction-count
+safecoin transaction-count
 ```
 
 View the [metrics dashboard](https://metrics.solana.com:3000/d/monitor/cluster-telemetry) for more
@@ -48,10 +48,10 @@ that CUDA is enabled: `"[<timestamp> solana::validator] CUDA is enabled"`
 
 ### Linux
 #### Automatic
-The solana repo includes a daemon to adjust system settings to optimize performance
+The safecoin repo includes a daemon to adjust system settings to optimize performance
 (namely by increasing the OS UDP buffer and file mapping limits).
 
-The daemon (`solana-sys-tuner`) is included in the solana binary release. Restart
+The daemon (`solana-sys-tuner`) is included in the safecoin binary release. Restart
 it, *before* restarting your validator, after each software upgrade to ensure that
 the latest recommended settings are applied.
 
@@ -173,11 +173,11 @@ To back-up your validator identify keypair, **back-up your
 
 ## More Safecoin CLI Configuration
 
-Now that you have a keypair, set the solana configuration to use your validator
+Now that you have a keypair, set the safecoin configuration to use your validator
 keypair for all following commands:
 
 ```bash
-solana config set --keypair ~/validator-keypair.json
+safecoin config set --keypair ~/validator-keypair.json
 ```
 
 You should see the following output:
@@ -193,7 +193,7 @@ Wallet Config Updated: /home/solana/.config/solana/wallet/config.yml
 Airdrop yourself some SAFE to get started:
 
 ```bash
-solana airdrop 10
+safecoin airdrop 10
 ```
 
 Note that airdrops are only available on Devnet and Testnet. Both are limited
@@ -202,13 +202,13 @@ to 10 SAFE per request.
 To view your current balance:
 
 ```text
-solana balance
+safecoin balance
 ```
 
 Or to see in finer detail:
 
 ```text
-solana balance --lamports
+safecoin balance --lamports
 ```
 
 Read more about the [difference between SAFE and lamports here](../introduction.md#what-are-sols).
@@ -227,7 +227,7 @@ The following command can be used to create your vote account on the blockchain
 with all the default options:
 
 ```bash
-solana create-vote-account ~/vote-account-keypair.json ~/validator-keypair.json
+safecoin create-vote-account ~/vote-account-keypair.json ~/validator-keypair.json
 ```
 
 Read more about [creating and managing a vote account](vote-accounts.md).

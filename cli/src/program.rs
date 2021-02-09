@@ -1557,7 +1557,7 @@ fn report_ephemeral_mnemonic(words: usize, mnemonic: bip39::Mnemonic) {
         words
     );
     eprintln!(
-        "then pass it as the [BUFFER_SIGNER] argument to `solana deploy` or `solana write-buffer`\n{}\n{}\n{}",
+        "then pass it as the [BUFFER_SIGNER] argument to `safecoin deploy` or `safecoin write-buffer`\n{}\n{}\n{}",
         divider, phrase, divider
     );
 }

@@ -14,7 +14,7 @@ set -ex
 apt update
 apt upgrade -y
 
-cat >/etc/apt/apt.conf.d/99-solana <<'EOF'
+cat >/etc/apt/apt.conf.d/99-safecoin <<'EOF'
 // Set and persist extra caps on iftop binary
 Dpkg::Post-Invoke { "which iftop 2>&1 >/dev/null && setcap cap_net_raw=eip $(which iftop) || true"; };
 EOF

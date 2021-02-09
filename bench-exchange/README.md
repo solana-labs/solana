@@ -84,7 +84,7 @@ matching orders.  All the transactions can execute concurrently.
     orders in which case the orders are adjusted appropriately. Upon execution,
     tokens are distributed to the traders' accounts and any overlap or 
     "negative spread" between orders is deposited into the Matcher's profit
-    account.  All successful trades are recorded in the data of a new solana 
+    account.  All successful trades are recorded in the data of a new safecoin 
     account for posterity.
 - Investor
   - Individual investors who hold a number of tokens and wish to trade them on

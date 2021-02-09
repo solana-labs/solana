@@ -42,7 +42,7 @@ Update successful
   to
 
 ```bash
-Please update your PATH environment variable to include the solana programs:
+Please update your PATH environment variable to include the safecoin programs:
 ```
 
 - If you get the above message, copy and paste the recommended command below
@@ -50,7 +50,7 @@ Please update your PATH environment variable to include the solana programs:
 - Confirm you have the desired version of `solana` installed by running:
 
 ```bash
-solana --version
+safecoin --version
 ```
 
 - After a successful install, `solana-install update` may be used to easily
@@ -91,7 +91,7 @@ C:\solana-install-tmp\solana-install-init.exe LATEST_SAFECOIN_RELEASE_VERSION
 - Confirm you have the desired version of `solana` installed by entering:
 
 ```bash
-solana --version
+safecoin --version
 ```
 
 - After a successful install, `solana-install update` may be used to easily

@@ -49,7 +49,7 @@ for i in "${!validatorIpList[@]}"; do
   "$NET_SH" stopnode -i "$ipAddress"
   "$NET_SH" startnode -r -i "$ipAddress"
 
-  # This could be replaced with something based on `solana catchup`
+  # This could be replaced with something based on `safecoin catchup`
   sleep_if_positive "$UPGRADE_INTERVALIDATOR_DELAY"
 
   "$NET_SH" sanity

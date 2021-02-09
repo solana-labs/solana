@@ -33,7 +33,7 @@ export SAFECOIN_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=devnet,u
 ##### Example `solana` command-line configuration
 
 ```bash
-solana config set --url https://devnet.solana.com
+safecoin config set --url https://devnet.solana.com
 ```
 
 ##### Example `safecoin-validator` command-line
@@ -78,7 +78,7 @@ export SAFECOIN_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=tds,u=te
 ##### Example `solana` command-line configuration
 
 ```bash
-solana config set --url https://testnet.solana.com
+safecoin config set --url https://testnet.solana.com
 ```
 
 ##### Example `safecoin-validator` command-line
@@ -129,7 +129,7 @@ export SAFECOIN_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=mainnet-
 ##### Example `solana` command-line configuration
 
 ```bash
-solana config set --url https://api.mainnet-beta.solana.com
+safecoin config set --url https://api.mainnet-beta.solana.com
 ```
 
 ##### Example `safecoin-validator` command-line

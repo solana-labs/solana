@@ -202,7 +202,7 @@ pub trait RemoteWallet {
         dev_info: &hidapi::DeviceInfo,
     ) -> Result<RemoteWalletInfo, RemoteWalletError>;
 
-    /// Get solana pubkey from a RemoteWallet
+    /// Get safecoin pubkey from a RemoteWallet
     fn get_pubkey(
         &self,
         derivation_path: &DerivationPath,
