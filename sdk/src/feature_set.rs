@@ -190,10 +190,6 @@ pub mod max_program_call_depth_64 {
     solana_sdk::declare_id!("YCKSgA6XmjtkQrHBQjpyNrX6EMhJPcYcLWMVgWn36iv");
 }
 
-pub mod timestamp_correction {
-    solana_sdk::declare_id!("3zydSLUwuqqsV3wL5wBsaVgyvMox3XTHx7zLEuQf1U2Z");
-}
-
 pub mod cumulative_rent_related_fixes {
     solana_sdk::declare_id!("FtjnuAtJTWwX3Kx9m24LduNEhzaGuuPfDW6e14SX2Fy5");
 }
@@ -307,7 +303,6 @@ lazy_static! {
         (ristretto_mul_syscall_enabled::id(), "ristretto multiply syscall"),
         (max_invoke_depth_4::id(), "max invoke call depth 4"),
         (max_program_call_depth_64::id(), "max program call depth 64"),
-        (timestamp_correction::id(), "correct bank timestamps"),
         (cumulative_rent_related_fixes::id(), "rent fixes (#10206, #10468, #11342)"),
         (sol_log_compute_units_syscall::id(), "sol_log_compute_units syscall (#13243)"),
         (pubkey_log_syscall_enabled::id(), "pubkey log syscall"),

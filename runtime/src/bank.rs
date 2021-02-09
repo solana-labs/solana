@@ -1355,76 +1355,69 @@ impl Bank {
     }
 
     fn update_clock(&self, parent_epoch: Option<Epoch>) {
-        let mut unix_timestamp = self.unix_timestamp_from_genesis();
-        if self
-            .feature_set
-            .is_active(&feature_set::timestamp_correction::id())
-        {
-            unix_timestamp = self.clock().unix_timestamp;
-            let (estimate_type, epoch_start_timestamp) =
-                if let Some(timestamp_bounding_activation_slot) = self
-                    .feature_set
-                    .activated_slot(&feature_set::timestamp_bounding::id())
-                {
-                    // This check avoids a chicken-egg problem with epoch_start_timestamp, which is
-                    // needed for timestamp bounding, but isn't yet corrected for the activation slot
-                    let epoch_start_timestamp = if self.slot() > timestamp_bounding_activation_slot
-                    {
-                        let warp_timestamp = self
-                            .feature_set
-                            .activated_slot(&feature_set::warp_timestamp::id());
-                        if warp_timestamp == Some(self.slot()) {
-                            None
-                        } else {
-                            let epoch = if let Some(epoch) = parent_epoch {
-                                epoch
-                            } else {
-                                self.epoch()
-                            };
-                            let first_slot_in_epoch =
-                                self.epoch_schedule.get_first_slot_in_epoch(epoch);
-                            Some((first_slot_in_epoch, self.clock().epoch_start_timestamp))
-                        }
-                    } else {
-                        None
-                    };
-                    let max_allowable_drift = if self
-                        .feature_set
-                        .is_active(&feature_set::warp_timestamp::id())
-                    {
-                        MAX_ALLOWABLE_DRIFT_PERCENTAGE
-                    } else {
-                        DEPRECATED_MAX_ALLOWABLE_DRIFT_PERCENTAGE
-                    };
-                    (
-                        EstimateType::Bounded(max_allowable_drift),
-                        epoch_start_timestamp,
-                    )
-                } else {
-                    (EstimateType::Unbounded, None)
-                };
-
-            let ancestor_timestamp = self.clock().unix_timestamp;
-            if let Some(timestamp_estimate) =
-                self.get_timestamp_estimate(estimate_type, epoch_start_timestamp)
+        let mut unix_timestamp = self.clock().unix_timestamp;
+        let (estimate_type, epoch_start_timestamp) =
+            if let Some(timestamp_bounding_activation_slot) = self
+                .feature_set
+                .activated_slot(&feature_set::timestamp_bounding::id())
             {
-                unix_timestamp = timestamp_estimate;
-                if self
+                // This check avoids a chicken-egg problem with epoch_start_timestamp, which is
+                // needed for timestamp bounding, but isn't yet corrected for the activation slot
+                let epoch_start_timestamp = if self.slot() > timestamp_bounding_activation_slot {
+                    let warp_timestamp = self
+                        .feature_set
+                        .activated_slot(&feature_set::warp_timestamp::id());
+                    if warp_timestamp == Some(self.slot()) {
+                        None
+                    } else {
+                        let epoch = if let Some(epoch) = parent_epoch {
+                            epoch
+                        } else {
+                            self.epoch()
+                        };
+                        let first_slot_in_epoch =
+                            self.epoch_schedule.get_first_slot_in_epoch(epoch);
+                        Some((first_slot_in_epoch, self.clock().epoch_start_timestamp))
+                    }
+                } else {
+                    None
+                };
+                let max_allowable_drift = if self
                     .feature_set
-                    .is_active(&feature_set::timestamp_bounding::id())
-                    && timestamp_estimate < ancestor_timestamp
+                    .is_active(&feature_set::warp_timestamp::id())
                 {
-                    unix_timestamp = ancestor_timestamp;
-                }
+                    MAX_ALLOWABLE_DRIFT_PERCENTAGE
+                } else {
+                    DEPRECATED_MAX_ALLOWABLE_DRIFT_PERCENTAGE
+                };
+                (
+                    EstimateType::Bounded(max_allowable_drift),
+                    epoch_start_timestamp,
+                )
+            } else {
+                (EstimateType::Unbounded, None)
+            };
+
+        let ancestor_timestamp = self.clock().unix_timestamp;
+        if let Some(timestamp_estimate) =
+            self.get_timestamp_estimate(estimate_type, epoch_start_timestamp)
+        {
+            unix_timestamp = timestamp_estimate;
+            if self
+                .feature_set
+                .is_active(&feature_set::timestamp_bounding::id())
+                && timestamp_estimate < ancestor_timestamp
+            {
+                unix_timestamp = ancestor_timestamp;
             }
-            datapoint_info!(
-                "bank-timestamp-correction",
-                ("slot", self.slot(), i64),
-                ("from_genesis", self.unix_timestamp_from_genesis(), i64),
-                ("corrected", unix_timestamp, i64),
-                ("ancestor_timestamp", ancestor_timestamp, i64),
-            );
         }
+        datapoint_info!(
+            "bank-timestamp-correction",
+            ("slot", self.slot(), i64),
+            ("from_genesis", self.unix_timestamp_from_genesis(), i64),
+            ("corrected", unix_timestamp, i64),
+            ("ancestor_timestamp", ancestor_timestamp, i64),
+        );
         let mut epoch_start_timestamp = if self
             .feature_set
             .is_active(&feature_set::timestamp_bounding::id())
@@ -11196,62 +11189,6 @@ pub(crate) mod tests {
         assert_eq!(
             bank.get_timestamp_estimate(EstimateType::Unbounded, None),
             None
-        );
-    }
-
-    #[test]
-    fn test_timestamp_correction_feature() {
-        let leader_pubkey = solana_sdk::pubkey::new_rand();
-        let GenesisConfigInfo {
-            mut genesis_config,
-            voting_keypair,
-            ..
-        } = create_genesis_config_with_leader(5, &leader_pubkey, 3);
-        genesis_config
-            .accounts
-            .remove(&feature_set::timestamp_correction::id())
-            .unwrap();
-        genesis_config
-            .accounts
-            .remove(&feature_set::timestamp_bounding::id())
-            .unwrap();
-        let bank = Bank::new(&genesis_config);
-
-        let recent_timestamp: UnixTimestamp = bank.unix_timestamp_from_genesis();
-        let additional_secs = 1;
-        update_vote_account_timestamp(
-            BlockTimestamp {
-                slot: bank.slot(),
-                timestamp: recent_timestamp + additional_secs,
-            },
-            &bank,
-            &voting_keypair.pubkey(),
-        );
-
-        // Bank::new_from_parent should not adjust timestamp before feature activation
-        let mut bank = new_from_parent(&Arc::new(bank));
-        assert_eq!(
-            bank.clock().unix_timestamp,
-            bank.unix_timestamp_from_genesis()
-        );
-
-        // Request `timestamp_correction` activation
-        bank.store_account(
-            &feature_set::timestamp_correction::id(),
-            &feature::create_account(
-                &Feature {
-                    activated_at: Some(bank.slot),
-                },
-                42,
-            ),
-        );
-        bank.compute_active_feature_set(true);
-
-        // Now Bank::new_from_parent should adjust timestamp
-        let bank = Arc::new(new_from_parent(&Arc::new(bank)));
-        assert_eq!(
-            bank.clock().unix_timestamp,
-            bank.unix_timestamp_from_genesis() + additional_secs
         );
     }
 
