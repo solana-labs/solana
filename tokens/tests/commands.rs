@@ -1,7 +1,7 @@
 use solana_client::rpc_client::RpcClient;
 use solana_core::test_validator::TestValidator;
 use solana_sdk::signature::{Keypair, Signer};
-use solana_tokens::commands::test_process_distribute_tokens_with_client;
+use safecoin_tokens::commands::test_process_distribute_tokens_with_client;
 
 #[test]
 fn test_process_distribute_with_rpc_client() {

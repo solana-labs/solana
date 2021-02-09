@@ -10,7 +10,7 @@
 # except according to those terms.
 
 # This is just a little script that can be downloaded from the internet to
-# install solana-install. It just does platform detection, downloads the installer
+# install safecoin-install. It just does platform detection, downloads the installer
 # and runs it.
 
 { # this ensures the entire script is downloaded #
@@ -24,11 +24,11 @@ set -e
 
 usage() {
     cat 1>&2 <<EOF
-solana-install-init
+safecoin-install-init
 initializes a new installation
 
 USAGE:
-    solana-install-init [FLAGS] [OPTIONS] --data_dir <PATH> --pubkey <PUBKEY>
+    safecoin-install-init [FLAGS] [OPTIONS] --data_dir <PATH> --pubkey <PUBKEY>
 
 FLAGS:
     -h, --help              Prints help information
@@ -74,7 +74,7 @@ main() {
       ;;
     esac
 
-    temp_dir="$(mktemp -d 2>/dev/null || ensure mktemp -d -t solana-install-init)"
+    temp_dir="$(mktemp -d 2>/dev/null || ensure mktemp -d -t safecoin-install-init)"
     ensure mkdir -p "$temp_dir"
 
     # Check for SAFECOIN_RELEASE environment variable override.  Otherwise fetch
@@ -94,36 +94,36 @@ main() {
       fi
     fi
 
-    download_url="$SAFECOIN_DOWNLOAD_ROOT/$release/solana-install-init-$TARGET"
-    solana_install_init="$temp_dir/solana-install-init"
+    download_url="$SAFECOIN_DOWNLOAD_ROOT/$release/safecoin-install-init-$TARGET"
+    safecoin_install_init="$temp_dir/safecoin-install-init"
 
     printf 'downloading %s installer\n' "$release" 1>&2
 
     ensure mkdir -p "$temp_dir"
-    ensure downloader "$download_url" "$solana_install_init"
-    ensure chmod u+x "$solana_install_init"
-    if [ ! -x "$solana_install_init" ]; then
-        printf '%s\n' "Cannot execute $solana_install_init (likely because of mounting /tmp as noexec)." 1>&2
-        printf '%s\n' "Please copy the file to a location where you can execute binaries and run ./solana-install-init." 1>&2
+    ensure downloader "$download_url" "$safecoin_install_init"
+    ensure chmod u+x "$safecoin_install_init"
+    if [ ! -x "$safecoin_install_init" ]; then
+        printf '%s\n' "Cannot execute $safecoin_install_init (likely because of mounting /tmp as noexec)." 1>&2
+        printf '%s\n' "Please copy the file to a location where you can execute binaries and run ./safecoin-install-init." 1>&2
         exit 1
     fi
 
     if [ -z "$1" ]; then
       #shellcheck disable=SC2086
-      ignore "$solana_install_init" $SAFECOIN_INSTALL_INIT_ARGS
+      ignore "$safecoin_install_init" $SAFECOIN_INSTALL_INIT_ARGS
     else
-      ignore "$solana_install_init" "$@"
+      ignore "$safecoin_install_init" "$@"
     fi
     retval=$?
 
-    ignore rm "$solana_install_init"
+    ignore rm "$safecoin_install_init"
     ignore rm -rf "$temp_dir"
 
     return "$retval"
 }
 
 err() {
-    printf 'solana-install-init: %s\n' "$1" >&2
+    printf 'safecoin-install-init: %s\n' "$1" >&2
     exit 1
 }
 

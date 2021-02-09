@@ -1,11 +1,11 @@
 use log::*;
-use solana_bench_exchange::bench::{airdrop_lamports, do_bench_exchange, Config};
+use safecoin_bench_exchange::bench::{airdrop_lamports, do_bench_exchange, Config};
 use solana_core::gossip_service::{discover_cluster, get_multi_client};
 use solana_core::validator::ValidatorConfig;
 use solana_exchange_program::exchange_processor::process_instruction;
 use solana_exchange_program::id;
 use solana_exchange_program::solana_exchange_program;
-use solana_faucet::faucet::run_local_faucet_with_port;
+use safecoin_faucet::faucet::run_local_faucet_with_port;
 use solana_local_cluster::local_cluster::{ClusterConfig, LocalCluster};
 use solana_runtime::bank::Bank;
 use solana_runtime::bank_client::BankClient;

@@ -24,10 +24,10 @@ awk '{ if ($3 ~ "=>") { print $2, $7 } else if ($2 ~ "<=") { print $1, $6 }} ' <
   | awk '{ print "{ \"a\": \""$1"\", " "\"b\": \""$3"\", \"a_to_b\": \""$2"\", \"b_to_a\": \""$4"\"}," }' > "$2"
 
 if [ "$#" -lt 3 ]; then
-  solana-log-analyzer iftop -f "$2"
+  safecoin-log-analyzer iftop -f "$2"
 else
   list=$(cat "$3")
-  solana-log-analyzer iftop -f "$2" map-IP --list "$list"
+  safecoin-log-analyzer iftop -f "$2" map-IP --list "$list"
 fi
 
 exit 1

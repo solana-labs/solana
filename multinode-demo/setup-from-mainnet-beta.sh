@@ -48,7 +48,7 @@ fi
 $solana_keygen new --no-passphrase -so "$SAFECOIN_CONFIG_DIR"/bootstrap-validator/vote-account.json
 $solana_keygen new --no-passphrase -so "$SAFECOIN_CONFIG_DIR"/bootstrap-validator/stake-account.json
 
-$solana_ledger_tool create-snapshot \
+$safecoin_ledger_tool create-snapshot \
   --ledger "$SAFECOIN_CONFIG_DIR"/latest-mainnet-beta-snapshot \
   --faucet-pubkey "$SAFECOIN_CONFIG_DIR"/faucet.json \
   --faucet-lamports 500000000000000000 \
@@ -58,7 +58,7 @@ $solana_ledger_tool create-snapshot \
   --hashes-per-tick sleep \
   "$snapshot_slot" "$SAFECOIN_CONFIG_DIR"/bootstrap-validator
 
-$solana_ledger_tool modify-genesis \
+$safecoin_ledger_tool modify-genesis \
   --ledger "$SAFECOIN_CONFIG_DIR"/latest-mainnet-beta-snapshot \
   --hashes-per-tick sleep \
   "$SAFECOIN_CONFIG_DIR"/bootstrap-validator

@@ -10,7 +10,7 @@ use {
     },
     solana_client::rpc_client::RpcClient,
     solana_core::rpc::JsonRpcConfig,
-    solana_faucet::faucet::{run_local_faucet_with_port, FAUCET_PORT},
+    safecoin_faucet::faucet::{run_local_faucet_with_port, FAUCET_PORT},
     solana_sdk::{
         account::Account,
         clock::Slot,
@@ -44,7 +44,7 @@ enum Output {
 fn main() {
     let default_rpc_port = rpc_port::DEFAULT_RPC_PORT.to_string();
 
-    let matches = App::new("solana-test-validator")
+    let matches = App::new("safecoin-test-validator")
         .about("Test Validator")
         .version(solana_version::version!())
         .arg({

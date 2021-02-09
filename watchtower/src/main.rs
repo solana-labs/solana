@@ -41,7 +41,7 @@ fn get_config() -> Config {
         .version(solana_version::version!())
         .after_help("ADDITIONAL HELP:
         To receive a Slack, Discord and/or Telegram notification on sanity failure,
-        define environment variables before running `solana-watchtower`:
+        define environment variables before running `safecoin-watchtower`:
 
         export SLACK_WEBHOOK=...
         export DISCORD_WEBHOOK=...
@@ -53,7 +53,7 @@ fn get_config() -> Config {
 
         To receive a Twilio SMS notification on failure, having a Twilio account,
         and a sending number owned by that account,
-        define environment variable before running `solana-watchtower`:
+        define environment variable before running `safecoin-watchtower`:
 
         export TWILIO_CONFIG='ACCOUNT=<account>,TOKEN=<securityToken>,TO=<receivingNumber>,FROM=<sendingNumber>'")
         .arg({
@@ -336,7 +336,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
         if let Some((failure_test_name, failure_error_message)) = &failure {
             let notification_msg = format!(
-                "solana-watchtower: Error: {}: {}",
+                "safecoin-watchtower: Error: {}: {}",
                 failure_test_name, failure_error_message
             );
             num_consecutive_failures += 1;
@@ -369,7 +369,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     humantime::format_duration(alarm_duration)
                 );
                 info!("{}", all_clear_msg);
-                notifier.send(&format!("solana-watchtower: {}", all_clear_msg));
+                notifier.send(&format!("safecoin-watchtower: {}", all_clear_msg));
             }
             last_notification_msg = "".into();
             last_success = Instant::now();

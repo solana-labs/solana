@@ -3,7 +3,7 @@ use std::net::{SocketAddr, TcpListener};
 
 fn main() {
     solana_logger::setup();
-    let matches = App::new("solana-ip-address-server")
+    let matches = App::new("safecoin-ip-address-server")
         .version(solana_version::version!())
         .arg(
             Arg::with_name("port")

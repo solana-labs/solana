@@ -177,7 +177,7 @@ pub fn print_token_balances(
 #[cfg(test)]
 mod tests {
     // The following unit tests were written for v1.4 using the ProgramTest framework, passing its
-    // BanksClient into the `solana-tokens` methods. With the revert to RpcClient in this module
+    // BanksClient into the `safecoin-tokens` methods. With the revert to RpcClient in this module
     // (https://github.com/solana-labs/solana/pull/13623), that approach was no longer viable.
     // These tests were removed rather than rewritten to avoid accruing technical debt. Once a new
     // rpc/client framework is implemented, they should be restored.

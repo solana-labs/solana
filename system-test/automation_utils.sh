@@ -56,7 +56,7 @@ function analyze_packet_loss {
     done
 
     execution_step "Analyzing Packet Loss"
-    "${REPO_ROOT}"/solana-release/bin/solana-log-analyzer analyze -f ./iftop-logs/ | sort -k 2 -g
+    "${REPO_ROOT}"/solana-release/bin/safecoin-log-analyzer analyze -f ./iftop-logs/ | sort -k 2 -g
   )
 }
 

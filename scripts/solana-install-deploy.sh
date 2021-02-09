@@ -26,7 +26,7 @@ if [[ -z $URL || -z $TAG ]]; then
 fi
 
 if [[ ! -f update_manifest_keypair.json ]]; then
-  "$SAFECOIN_ROOT"/scripts/solana-install-update-manifest-keypair.sh "$OS"
+  "$SAFECOIN_ROOT"/scripts/safecoin-install-update-manifest-keypair.sh "$OS"
 fi
 
 case "$OS" in
@@ -76,4 +76,4 @@ if [[ $balance = "0 lamports" ]]; then
 fi
 
 # shellcheck disable=SC2086 # Don't want to double quote $maybeKeypair
-solana-install deploy $maybeKeypair --url "$URL" "$DOWNLOAD_URL" update_manifest_keypair.json
+safecoin-install deploy $maybeKeypair --url "$URL" "$DOWNLOAD_URL" update_manifest_keypair.json

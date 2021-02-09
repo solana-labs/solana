@@ -29,9 +29,9 @@ use solana_client::{
     rpc_response::RpcKeyedAccount,
 };
 #[cfg(not(test))]
-use solana_faucet::faucet::request_airdrop_transaction;
+use safecoin_faucet::faucet::request_airdrop_transaction;
 #[cfg(test)]
-use solana_faucet::faucet_mock::request_airdrop_transaction;
+use safecoin_faucet::faucet_mock::request_airdrop_transaction;
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
     clock::{Epoch, Slot},
@@ -1889,7 +1889,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .long("faucet-port")
                         .value_name("PORT_NUMBER")
                         .takes_value(true)
-                        .default_value(solana_faucet::faucet::FAUCET_PORT_STR)
+                        .default_value(safecoin_faucet::faucet::FAUCET_PORT_STR)
                         .help("Faucet port to use"),
                 )
                 .arg(
@@ -2255,7 +2255,7 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::Airdrop {
                     faucet_host: None,
-                    faucet_port: solana_faucet::faucet::FAUCET_PORT,
+                    faucet_port: safecoin_faucet::faucet::FAUCET_PORT,
                     pubkey: Some(pubkey),
                     lamports: 50_000_000_000,
                 },

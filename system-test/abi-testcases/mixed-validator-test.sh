@@ -30,14 +30,14 @@ solanaInstallGlobalOpts=(
 bootstrapInstall() {
   declare v=$1
   if [[ ! -h $solanaInstallDataDir/active_release ]]; then
-    sh "$SAFECOIN_ROOT"/install/solana-install-init.sh "$v" "${solanaInstallGlobalOpts[@]}"
+    sh "$SAFECOIN_ROOT"/install/safecoin-install-init.sh "$v" "${solanaInstallGlobalOpts[@]}"
   fi
   export PATH="$solanaInstallDataDir/active_release/bin/:$PATH"
 }
 
 bootstrapInstall "$baselineVersion"
 for v in "${otherVersions[@]}"; do
-  solana-install-init "${solanaInstallGlobalOpts[@]}" "$v"
+  safecoin-install-init "${solanaInstallGlobalOpts[@]}" "$v"
   safecoin -V
 done
 

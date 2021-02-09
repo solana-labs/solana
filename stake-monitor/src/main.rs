@@ -10,7 +10,7 @@ use solana_clap_utils::{
 use solana_client::rpc_client::RpcClient;
 use solana_metrics::datapoint_error;
 use solana_sdk::{clock::Slot, native_token::lamports_to_sol, pubkey::Pubkey, system_program};
-use solana_stake_monitor::*;
+use safecoin_stake_monitor::*;
 use std::{fs, io, process};
 
 fn load_accounts_info(data_file: &str) -> AccountsInfo {

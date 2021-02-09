@@ -1,5 +1,5 @@
 [package]
-name = "solana-faucet"
+name = "safecoin-faucet"
 version = "1.6.0"
 description = "Safecoin Faucet"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
@@ -25,10 +25,10 @@ tokio = { version = "1.1", features = ["full"] }
 
 [lib]
 crate-type = ["lib"]
-name = "solana_faucet"
+name = "safecoin_faucet"
 
 [[bin]]
-name = "solana-faucet"
+name = "safecoin-faucet"
 path = "src/bin/faucet.rs"
 
 [package.metadata.docs.rs]

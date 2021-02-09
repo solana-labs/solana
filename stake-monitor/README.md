@@ -1,5 +1,5 @@
 ## Overview
-`solana-stake-monitor` is a utility that scans all transactions to ensure that stake accounts remain in compliance with the following rules:
+`safecoin-stake-monitor` is a utility that scans all transactions to ensure that stake accounts remain in compliance with the following rules:
 
 1. The stake account must be created after genesis
 1. The "compliant balance" of a stake account is set upon stake account initialization, system transfers of additional funds into a compliant stake account are excluded from the "compliant balance"
@@ -13,5 +13,5 @@ In terms of `solana` command-line subcommands:
 * `withdraw-stake` / `stake-set-lockup`: These commands will cause non-compliance
 * `transfer`:  Any additional funds transferred after `create-stake-account` are excluded from the "compliant balance"
 
-System accounts can also be manually enrolled with the `solana-stake-monitor enroll` subcommand.
+System accounts can also be manually enrolled with the `safecoin-stake-monitor enroll` subcommand.
 An enrolled system account must always maintain a balance greater than the balance it had at enrollment minus 1 SAFE.

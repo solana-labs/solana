@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Starts an instance of solana-faucet
+# Starts an instance of safecoin-faucet
 #
 here=$(dirname "$0")
 
@@ -15,5 +15,5 @@ source "$here"/common.sh
 }
 
 set -x
-# shellcheck disable=SC2086 # Don't want to double quote $solana_faucet
-exec $solana_faucet --keypair "$SAFECOIN_CONFIG_DIR"/faucet.json "$@"
+# shellcheck disable=SC2086 # Don't want to double quote $safecoin_faucet
+exec $safecoin_faucet --keypair "$SAFECOIN_CONFIG_DIR"/faucet.json "$@"

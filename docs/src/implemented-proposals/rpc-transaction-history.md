@@ -65,7 +65,7 @@ results of BigTable queries more complicated but is not a significant issue.
 
 ## Data Population
 The ongoing population of instance data will occur on an epoch cadence through the
-use of a new `solana-ledger-tool` command that will convert rocksdb data for a
+use of a new `safecoin-ledger-tool` command that will convert rocksdb data for a
 given slot range into the instance schema.
 
 The same process will be run once, manually, to backfill the existing ledger

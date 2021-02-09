@@ -27,11 +27,11 @@ url = "2.1.1"
 name = "solana_net_utils"
 
 [[bin]]
-name = "solana-ip-address"
+name = "safecoin-ip-address"
 path = "src/bin/ip_address.rs"
 
 [[bin]]
-name = "solana-ip-address-server"
+name = "safecoin-ip-address-server"
 path = "src/bin/ip_address_server.rs"
 
 [package.metadata.docs.rs]

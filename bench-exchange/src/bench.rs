@@ -8,8 +8,8 @@ use rayon::prelude::*;
 use solana_client::perf_utils::{sample_txs, SampleStats};
 use solana_core::gen_keys::GenKeys;
 use solana_exchange_program::{exchange_instruction, exchange_state::*, id};
-use solana_faucet::faucet::request_airdrop_transaction;
-use solana_genesis::Base64Account;
+use safecoin_faucet::faucet::request_airdrop_transaction;
+use safecoin_genesis::Base64Account;
 use solana_metrics::datapoint_info;
 use solana_sdk::{
     client::{Client, SyncClient},

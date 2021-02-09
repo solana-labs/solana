@@ -65,7 +65,7 @@ local|tar|skip)
   export USE_INSTALL=1
   solana_cli=solana
   safecoin_gossip=safecoin-gossip
-  solana_install=solana-install
+  safecoin_install=safecoin-install
   ;;
 *)
   echo "Unknown deployment method: $deployMethod"
@@ -122,17 +122,17 @@ else
 fi
 
 if $installCheck && [[ -r update_manifest_keypair.json ]]; then
-  echo "--- $sanityTargetIp: solana-install test"
+  echo "--- $sanityTargetIp: safecoin-install test"
 
   (
     set -x
     rm -rf install-data-dir
-    $solana_install init \
+    $safecoin_install init \
       --no-modify-path \
       --data-dir install-data-dir \
       --url http://"$sanityTargetIp":8899 \
 
-    $solana_install info
+    $safecoin_install info
   )
 fi
 

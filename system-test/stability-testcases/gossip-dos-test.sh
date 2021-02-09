@@ -19,25 +19,25 @@ solanaInstallGlobalOpts=(
 bootstrapInstall() {
   declare v=$1
   if [[ ! -h $solanaInstallDataDir/active_release ]]; then
-    sh "$SAFECOIN_ROOT"/install/solana-install-init.sh "$v" "${solanaInstallGlobalOpts[@]}"
+    sh "$SAFECOIN_ROOT"/install/safecoin-install-init.sh "$v" "${solanaInstallGlobalOpts[@]}"
   fi
   export PATH="$solanaInstallDataDir/active_release/bin/:$PATH"
 }
 
 bootstrapInstall "edge"
-solana-install-init --version
-solana-install-init edge
+safecoin-install-init --version
+safecoin-install-init edge
 safecoin-gossip --version
-solana-dos --version
+safecoin-dos --version
 
 killall safecoin-gossip || true
 safecoin-gossip spy --gossip-port 8001 > "$logDir"/gossip.log 2>&1 &
 solanaGossipPid=$!
 echo "safecoin-gossip pid: $solanaGossipPid"
 sleep 5
-solana-dos --mode gossip --data-type random --data-size 1232 &
+safecoin-dos --mode gossip --data-type random --data-size 1232 &
 dosPid=$!
-echo "solana-dos pid: $dosPid"
+echo "safecoin-dos pid: $dosPid"
 
 pass=true
 
@@ -49,7 +49,7 @@ while ((SECONDS < 600)); do
     break
   fi
   if ! kill -0 $dosPid; then
-    echo "solana-dos is no longer running after $SECONDS seconds"
+    echo "safecoin-dos is no longer running after $SECONDS seconds"
     pass=false
     break
   fi

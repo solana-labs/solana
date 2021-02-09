@@ -1,6 +1,6 @@
 use log::*;
 
-pub const SAFECOIN_SYS_TUNER_PATH: &str = "/tmp/solana-sys-tuner";
+pub const SAFECOIN_SYS_TUNER_PATH: &str = "/tmp/safecoin-sys-tuner";
 
 #[cfg(unix)]
 pub fn request_realtime_poh() {
@@ -9,7 +9,7 @@ pub fn request_realtime_poh() {
     match status {
         Ok(_) => info!("Successfully sent tuning request"),
         Err(err) => warn!(
-            "Failed to send tuning request, is `solana-sys-tuner` running? {:?}",
+            "Failed to send tuning request, is `safecoin-sys-tuner` running? {:?}",
             err
         ),
     }

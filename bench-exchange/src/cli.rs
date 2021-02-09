@@ -1,6 +1,6 @@
 use clap::{crate_description, crate_name, value_t, App, Arg, ArgMatches};
 use solana_core::gen_keys::GenKeys;
-use solana_faucet::faucet::FAUCET_PORT;
+use safecoin_faucet::faucet::FAUCET_PORT;
 use solana_sdk::signature::{read_keypair_file, Keypair};
 use std::net::SocketAddr;
 use std::process::exit;

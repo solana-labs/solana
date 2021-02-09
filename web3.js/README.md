@@ -103,7 +103,7 @@ minified version of the module suitable for direct use in a browser environment
 
 ### Local Network
 
-**Please use `solana-test-validator` from the latest Safecoin release instead of the information in this section**
+**Please use `safecoin-test-validator` from the latest Safecoin release instead of the information in this section**
 
 The `solana-localnet` program is provided to easily start a test Safecoin cluster
 locally on your machine.  Docker must be installed.  The JSON RPC endpoint of

@@ -469,11 +469,11 @@ in client_demo/src/demo.rs::test_exchange_local_cluster.
 The following command runs the bench:
 
 ```bash
-$ RUST_LOG=solana_bench_exchange=info cargo test --release -- --nocapture test_exchange_local_cluster
+$ RUST_LOG=safecoin_bench_exchange=info cargo test --release -- --nocapture test_exchange_local_cluster
 ```
 
 To also see the cluster messages:
 
 ```bash
-$ RUST_LOG=solana_bench_exchange=info,solana=info cargo test --release -- --nocapture test_exchange_local_cluster
+$ RUST_LOG=safecoin_bench_exchange=info,solana=info cargo test --release -- --nocapture test_exchange_local_cluster
 ```

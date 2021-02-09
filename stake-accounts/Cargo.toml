@@ -1,5 +1,5 @@
 [package]
-name = "solana-stake-accounts"
+name = "safecoin-stake-accounts"
 description = "Blockchain, Rebuilt for Scale"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 edition = "2018"

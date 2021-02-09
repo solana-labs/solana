@@ -68,13 +68,13 @@ ensure you miss as little data as possible. Running the safecoin software as a
 systemd service is one great option.
 
 For monitoring, we provide
-[`solana-watchtower`](https://github.com/solana-labs/solana/blob/master/watchtower/README.md),
+[`safecoin-watchtower`](https://github.com/solana-labs/solana/blob/master/watchtower/README.md),
 which can monitor your validator and detect with the `safecoin-validator` process
 is unhealthy. It can directly be configured to alert you via Slack, Telegram,
-Discord, or Twillio. For details, run `solana-watchtower --help`.
+Discord, or Twillio. For details, run `safecoin-watchtower --help`.
 
 ```bash
-solana-watchtower --validator-identity <YOUR VALIDATOR IDENTITY>
+safecoin-watchtower --validator-identity <YOUR VALIDATOR IDENTITY>
 ```
 
 #### New Software Release Announcements

@@ -3,7 +3,7 @@ use log::*;
 use rayon::prelude::*;
 use solana_client::perf_utils::{sample_txs, SampleStats};
 use solana_core::gen_keys::GenKeys;
-use solana_faucet::faucet::request_airdrop_transaction;
+use safecoin_faucet::faucet::request_airdrop_transaction;
 use solana_measure::measure::Measure;
 use solana_metrics::{self, datapoint_info};
 use solana_sdk::{
@@ -876,7 +876,7 @@ pub fn generate_and_fund_keypairs<T: 'static + Client + Send + Sync>(
     let (mut keypairs, extra) = generate_keypairs(funding_key, keypair_count as u64);
     info!("Get lamports...");
 
-    // Sample the first keypair, to prevent lamport loss on repeated solana-bench-tps executions
+    // Sample the first keypair, to prevent lamport loss on repeated safecoin-bench-tps executions
     let first_key = keypairs[0].pubkey();
     let first_keypair_balance = client.get_balance(&first_key).unwrap_or(0);
 

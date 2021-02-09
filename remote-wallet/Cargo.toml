@@ -30,7 +30,7 @@ linux-shared-libusb = ["hidapi/linux-shared-libusb"]
 linux-shared-hidraw = ["hidapi/linux-shared-hidraw"]
 
 [[bin]]
-name = "solana-ledger-udev"
+name = "safecoin-ledger-udev"
 path = "src/bin/ledger-udev.rs"
 
 [package.metadata.docs.rs]

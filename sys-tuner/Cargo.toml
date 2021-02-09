@@ -1,7 +1,7 @@
 [package]
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 edition = "2018"
-name = "solana-sys-tuner"
+name = "safecoin-sys-tuner"
 description = "The safecoin cluster system tuner daemon"
 version = "1.6.0"
 repository = "https://github.com/solana-labs/solana"
@@ -27,7 +27,7 @@ sysctl = "0.4.0"
 name = "solana_sys_tuner"
 
 [[bin]]
-name = "solana-sys-tuner"
+name = "safecoin-sys-tuner"
 path = "src/main.rs"
 
 [package.metadata.docs.rs]

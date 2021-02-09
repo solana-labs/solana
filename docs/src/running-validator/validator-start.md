@@ -51,14 +51,14 @@ that CUDA is enabled: `"[<timestamp> solana::validator] CUDA is enabled"`
 The safecoin repo includes a daemon to adjust system settings to optimize performance
 (namely by increasing the OS UDP buffer and file mapping limits).
 
-The daemon (`solana-sys-tuner`) is included in the safecoin binary release. Restart
+The daemon (`safecoin-sys-tuner`) is included in the safecoin binary release. Restart
 it, *before* restarting your validator, after each software upgrade to ensure that
 the latest recommended settings are applied.
 
 To run it:
 
 ```bash
-sudo solana-sys-tuner --user $(whoami) > sys-tuner.log 2>&1 &
+sudo safecoin-sys-tuner --user $(whoami) > sys-tuner.log 2>&1 &
 ```
 
 #### Manual
@@ -310,7 +310,7 @@ the following:
 [Unit]
 Description=Safecoin Validator
 After=network.target
-Wants=solana-sys-tuner.service
+Wants=safecoin-sys-tuner.service
 StartLimitIntervalSec=0
 
 [Service]

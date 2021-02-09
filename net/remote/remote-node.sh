@@ -105,7 +105,7 @@ cat >> ~/solana/on-reboot <<EOF
   PATH="$HOME"/.cargo/bin:"$PATH"
   export USE_INSTALL=1
 
-  sudo RUST_LOG=info ~solana/.cargo/bin/solana-sys-tuner --user $(whoami) > sys-tuner.log 2>&1 &
+  sudo RUST_LOG=info ~solana/.cargo/bin/safecoin-sys-tuner --user $(whoami) > sys-tuner.log 2>&1 &
   echo \$! > sys-tuner.pid
 
   (
@@ -188,7 +188,7 @@ EOF
 
       for i in $(seq 0 $((numBenchTpsClients-1))); do
         # shellcheck disable=SC2086 # Do not want to quote $benchTpsExtraArgs
-        solana-bench-tps --write-client-keys config/bench-tps"$i".yml \
+        safecoin-bench-tps --write-client-keys config/bench-tps"$i".yml \
           --target-lamports-per-signature "$lamports_per_signature" $benchTpsExtraArgs
         # Skip first line, as it contains header
         tail -n +2 -q config/bench-tps"$i".yml >> config/client-accounts.yml
@@ -196,7 +196,7 @@ EOF
       done
       for i in $(seq 0 $((numBenchExchangeClients-1))); do
         # shellcheck disable=SC2086 # Do not want to quote $benchExchangeExtraArgs
-        solana-bench-exchange --batch-size 1000 --fund-amount 20000 \
+        safecoin-bench-exchange --batch-size 1000 --fund-amount 20000 \
           --write-client-keys config/bench-exchange"$i".yml $benchExchangeExtraArgs
         tail -n +2 -q config/bench-exchange"$i".yml >> config/client-accounts.yml
         echo "" >> config/client-accounts.yml
@@ -259,13 +259,13 @@ EOF
 
       if [[ -n "$maybeWarpSlot" ]]; then
         # shellcheck disable=SC2086 # Do not want to quote $maybeWarSlot
-        solana-ledger-tool -l config/bootstrap-validator create-snapshot 0 config/bootstrap-validator $maybeWarpSlot
+        safecoin-ledger-tool -l config/bootstrap-validator create-snapshot 0 config/bootstrap-validator $maybeWarpSlot
       fi
 
-      solana-ledger-tool -l config/bootstrap-validator shred-version --max-genesis-archive-unpacked-size 1073741824 | tee config/shred-version
+      safecoin-ledger-tool -l config/bootstrap-validator shred-version --max-genesis-archive-unpacked-size 1073741824 | tee config/shred-version
 
       if [[ -n "$maybeWaitForSupermajority" ]]; then
-        bankHash=$(solana-ledger-tool -l config/bootstrap-validator bank-hash)
+        bankHash=$(safecoin-ledger-tool -l config/bootstrap-validator bank-hash)
         extraNodeArgs="$extraNodeArgs --expected-bank-hash $bankHash"
         echo "$bankHash" > config/bank-hash
       fi

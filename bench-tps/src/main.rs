@@ -1,8 +1,8 @@
 use log::*;
-use solana_bench_tps::bench::{do_bench_tps, generate_and_fund_keypairs, generate_keypairs};
-use solana_bench_tps::cli;
+use safecoin_bench_tps::bench::{do_bench_tps, generate_and_fund_keypairs, generate_keypairs};
+use safecoin_bench_tps::cli;
 use solana_core::gossip_service::{discover_cluster, get_client, get_multi_client};
-use solana_genesis::Base64Account;
+use safecoin_genesis::Base64Account;
 use solana_sdk::fee_calculator::FeeRateGovernor;
 use solana_sdk::signature::{Keypair, Signer};
 use solana_sdk::system_program;

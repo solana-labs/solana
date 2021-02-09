@@ -1,5 +1,5 @@
 use clap::{crate_description, crate_name, App, Arg, ArgMatches};
-use solana_faucet::faucet::FAUCET_PORT;
+use safecoin_faucet::faucet::FAUCET_PORT;
 use solana_sdk::fee_calculator::FeeRateGovernor;
 use solana_sdk::{
     pubkey::Pubkey,

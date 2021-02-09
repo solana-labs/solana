@@ -48,4 +48,4 @@ default_arg --faucet-lamports 500000000000000000
 default_arg --hashes-per-tick auto
 default_arg --cluster-type development
 
-$solana_genesis "${args[@]}"
+$safecoin_genesis "${args[@]}"

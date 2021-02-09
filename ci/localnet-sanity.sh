@@ -279,7 +279,7 @@ verifyLedger() {
     echo "--- $ledger ledger verification"
     (
       set -x
-      $solana_ledger_tool --ledger "$SAFECOIN_CONFIG_DIR"/$ledger verify
+      $safecoin_ledger_tool --ledger "$SAFECOIN_CONFIG_DIR"/$ledger verify
     ) || flag_error
   done
 }

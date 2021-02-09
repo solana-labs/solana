@@ -1,5 +1,5 @@
 [package]
-name = "solana-upload-perf"
+name = "safecoin-upload-perf"
 version = "1.6.0"
 description = "Metrics Upload Utility"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
@@ -14,7 +14,7 @@ serde_json = "1.0.56"
 solana-metrics = { path = "../metrics", version = "1.6.0" }
 
 [[bin]]
-name = "solana-upload-perf"
+name = "safecoin-upload-perf"
 path = "src/upload-perf.rs"
 
 

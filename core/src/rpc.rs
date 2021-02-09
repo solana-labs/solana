@@ -33,7 +33,7 @@ use solana_client::{
     rpc_response::Response as RpcResponse,
     rpc_response::*,
 };
-use solana_faucet::faucet::request_airdrop_transaction;
+use safecoin_faucet::faucet::request_airdrop_transaction;
 use solana_ledger::{blockstore::Blockstore, blockstore_db::BlockstoreError, get_tmp_ledger_path};
 use solana_metrics::inc_new_counter_info;
 use solana_perf::packet::PACKET_DATA_SIZE;

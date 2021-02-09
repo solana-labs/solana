@@ -2,7 +2,7 @@ use clap::{App, Arg};
 
 fn main() {
     solana_logger::setup();
-    let matches = App::new("solana-ip-address")
+    let matches = App::new("safecoin-ip-address")
         .version(solana_version::version!())
         .arg(
             Arg::with_name("host_port")

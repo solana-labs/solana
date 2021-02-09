@@ -1,7 +1,7 @@
 [package]
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 edition = "2018"
-name = "solana-bench-tps"
+name = "safecoin-bench-tps"
 version = "1.6.0"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
@@ -17,9 +17,9 @@ serde_json = "1.0.56"
 serde_yaml = "0.8.13"
 solana-clap-utils = { path = "../clap-utils", version = "1.6.0" }
 solana-core = { path = "../core", version = "1.6.0" }
-solana-genesis = { path = "../genesis", version = "1.6.0" }
+safecoin-genesis = { path = "../genesis", version = "1.6.0" }
 solana-client = { path = "../client", version = "1.6.0" }
-solana-faucet = { path = "../faucet", version = "1.6.0" }
+safecoin-faucet = { path = "../faucet", version = "1.6.0" }
 solana-logger = { path = "../logger", version = "1.6.0" }
 solana-metrics = { path = "../metrics", version = "1.6.0" }
 solana-measure = { path = "../measure", version = "1.6.0" }
