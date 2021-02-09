@@ -141,6 +141,12 @@ fn main() {
                 ),
         )
         .arg(
+            Arg::with_name("no_bpf_jit")
+                .long("no-bpf-jit")
+                .takes_value(false)
+                .help("Disable the just-in-time compiler and instead use the interpreter for BPF"),
+        )
+        .arg(
             Arg::with_name("clone_account")
                 .long("clone")
                 .short("c")
@@ -203,6 +209,7 @@ fn main() {
         IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
         FAUCET_PORT,
     ));
+    let bpf_jit = !matches.is_present("no_bpf_jit");
 
     let mut programs = vec![];
     if let Some(values) = matches.values_of("bpf_program") {
@@ -376,6 +383,7 @@ fn main() {
                 faucet_addr,
                 ..JsonRpcConfig::default()
             })
+            .bpf_jit(bpf_jit)
             .rpc_port(rpc_port)
             .add_programs_with_path(&programs);
 
