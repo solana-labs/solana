@@ -31,7 +31,7 @@ pub const MAX_LOCKOUT_HISTORY: usize = 31;
 pub const INITIAL_LOCKOUT: usize = 2;
 
 // Maximum number of credits history to keep around
-const MAX_EPOCH_CREDITS_HISTORY: usize = 64;
+pub const MAX_EPOCH_CREDITS_HISTORY: usize = 64;
 
 #[frozen_abi(digest = "Ch2vVEwos2EjAVqSHCyJjnN2MNX1yrpapZTGhMSCjWUH")]
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample)]
