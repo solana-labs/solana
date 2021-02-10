@@ -11844,7 +11844,8 @@ pub(crate) mod tests {
         bank = new_from_parent(&Arc::new(bank));
         assert_eq!(bank.slot(), 3);
 
-        // Request `full_inflation::devnet_and_testnet` activation, which takes priority over pico_inflation
+        // Request `full_inflation::devnet_and_testnet` activation,
+        // which takes priority over pico_inflation
         bank.store_account(
             &feature_set::full_inflation::devnet_and_testnet::id(),
             &feature::create_account(
@@ -11857,9 +11858,10 @@ pub(crate) mod tests {
         bank.compute_active_feature_set(true);
         assert_eq!(bank.get_inflation_start_slot(), 2);
 
-        // Request `full_inflation::candidate_example` activation, which should have no effect on `get_inflation_start_slot`
+        // Request `full_inflation::mainnet::certusone` activation,
+        // which should have no effect on `get_inflation_start_slot`
         bank.store_account(
-            &feature_set::full_inflation::candidate_example::vote::id(),
+            &feature_set::full_inflation::mainnet::certusone::vote::id(),
             &feature::create_account(
                 &Feature {
                     activated_at: Some(3),
@@ -11868,7 +11870,7 @@ pub(crate) mod tests {
             ),
         );
         bank.store_account(
-            &feature_set::full_inflation::candidate_example::enable::id(),
+            &feature_set::full_inflation::mainnet::certusone::enable::id(),
             &feature::create_account(
                 &Feature {
                     activated_at: Some(3),
@@ -11923,9 +11925,10 @@ pub(crate) mod tests {
         bank = new_from_parent(&Arc::new(bank));
         assert_eq!(bank.slot(), 3);
 
-        // Request `full_inflation::candidate_example` activation, which takes priority over pico_inflation
+        // Request `full_inflation::mainnet::certusone` activation,
+        // which takes priority over pico_inflation
         bank.store_account(
-            &feature_set::full_inflation::candidate_example::vote::id(),
+            &feature_set::full_inflation::mainnet::certusone::vote::id(),
             &feature::create_account(
                 &Feature {
                     activated_at: Some(2),
@@ -11934,7 +11937,7 @@ pub(crate) mod tests {
             ),
         );
         bank.store_account(
-            &feature_set::full_inflation::candidate_example::enable::id(),
+            &feature_set::full_inflation::mainnet::certusone::enable::id(),
             &feature::create_account(
                 &Feature {
                     activated_at: Some(2),
@@ -11949,8 +11952,8 @@ pub(crate) mod tests {
         bank = new_from_parent(&Arc::new(bank));
         assert_eq!(bank.slot(), 4);
 
-        // Request `full_inflation::devnet_and_testnet` activation, which should have no effect on
-        // `get_inflation_start_slot`
+        // Request `full_inflation::devnet_and_testnet` activation,
+        // which should have no effect on `get_inflation_start_slot`
         bank.store_account(
             &feature_set::full_inflation::devnet_and_testnet::id(),
             &feature::create_account(
