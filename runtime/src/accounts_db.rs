@@ -3816,6 +3816,13 @@ impl AccountsDB {
                         i = k;
                         look_for_first_key = false;
                         continue 'outer;
+                    } else {
+                        let prev = &slice[k - 1];
+                        assert!(
+                            !(prev.slot == now.slot
+                                && prev.version == now.version
+                                && (prev.hash != now.hash || prev.lamports != now.lamports))
+                        );
                     }
                 }
 
