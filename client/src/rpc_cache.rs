@@ -1,7 +1,11 @@
-use crate::rpc_config::RpcLargestAccountsFilter;
-use crate::rpc_response::RpcAccountBalance;
-use std::collections::HashMap;
-use std::time::{Duration, SystemTime};
+use crate::{
+    rpc_config::RpcLargestAccountsFilter,
+    rpc_response::RpcAccountBalance,
+};
+use std::{
+    collections::HashMap,
+    time::{Duration, SystemTime},
+};
 
 #[derive(Debug, Clone)]
 pub struct LargestAccountsCache {
@@ -54,10 +58,7 @@ impl LargestAccountsCache {
 
 #[cfg(test)]
 pub mod test {
-    use crate::rpc_cache::LargestAccountsCache;
-    use crate::rpc_config::RpcLargestAccountsFilter;
-    use crate::rpc_response::RpcAccountBalance;
-    use std::time::Duration;
+    use super::*;
 
     #[test]
     fn test_old_entries_expire() {
