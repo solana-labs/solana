@@ -5,10 +5,10 @@ import Select, { InputActionMeta, ActionMeta, ValueType } from "react-select";
 import StateManager from "react-select";
 import {
   LOADER_IDS,
-  PROGRAM_IDS,
+  PROGRAM_NAME_BY_ID,
   SYSVAR_IDS,
-  ProgramName,
   LoaderName,
+  SEARCHABLE_PROGRAMS,
 } from "utils/tx";
 import { TokenRegistry } from "tokenRegistry";
 import { Cluster, useCluster } from "providers/cluster";
@@ -64,18 +64,8 @@ export function SearchBar() {
   );
 }
 
-const SEARCHABLE_PROGRAMS: ProgramName[] = [
-  "Break Solana Program",
-  "Config Program",
-  "Stake Program",
-  "System Program",
-  "Vote Program",
-  "SPL Token Program",
-  "Memo Program",
-];
-
 function buildProgramOptions(search: string) {
-  const matchedPrograms = Object.entries(PROGRAM_IDS).filter(
+  const matchedPrograms = Object.entries(PROGRAM_NAME_BY_ID).filter(
     ([address, name]) => {
       return (
         SEARCHABLE_PROGRAMS.includes(name) &&

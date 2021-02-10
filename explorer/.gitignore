@@ -10,6 +10,7 @@
 
 # production
 /build
+/wasm/target
 
 # misc
 .DS_Store
