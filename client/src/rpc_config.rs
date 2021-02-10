@@ -38,7 +38,7 @@ pub enum RpcLargestAccountsFilter {
     NonCirculating,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcLargestAccountsConfig {
     #[serde(flatten)]

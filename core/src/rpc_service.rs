@@ -36,7 +36,6 @@ use std::{
 use tokio::runtime;
 use tokio_util::codec::{BytesCodec, FramedRead};
 
-const LARGEST_ACCOUNTS_CACHE_SIZE: usize = 16;
 const LARGEST_ACCOUNTS_CACHE_DURATION: u64 = 60 * 60 * 2;
 
 pub struct JsonRpcService {
@@ -267,7 +266,6 @@ impl JsonRpcService {
         ));
 
         let largest_accounts_cache = Arc::new(RwLock::new(LargestAccountsCache::new(
-            LARGEST_ACCOUNTS_CACHE_SIZE,
             LARGEST_ACCOUNTS_CACHE_DURATION,
         )));
 

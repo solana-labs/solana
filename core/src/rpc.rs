@@ -278,7 +278,7 @@ impl JsonRpcRequestProcessor {
             optimistically_confirmed_bank: Arc::new(RwLock::new(OptimisticallyConfirmedBank {
                 bank: bank.clone(),
             })),
-            largest_accounts_cache: Arc::new(RwLock::new(LargestAccountsCache::new(16, 30))),
+            largest_accounts_cache: Arc::new(RwLock::new(LargestAccountsCache::new(30))),
         }
     }
 
@@ -512,19 +512,19 @@ impl JsonRpcRequestProcessor {
 
     fn get_cached_largest_accounts(
         &self,
-        config: &RpcLargestAccountsConfig,
+        filter: &Option<RpcLargestAccountsFilter>,
     ) -> Option<Vec<RpcAccountBalance>> {
         let largest_accounts_cache = self.largest_accounts_cache.read().unwrap();
-        largest_accounts_cache.get_largest_accounts(config)
+        largest_accounts_cache.get_largest_accounts(filter)
     }
 
     fn set_cached_largest_accounts(
         &self,
-        config: &RpcLargestAccountsConfig,
+        filter: &Option<RpcLargestAccountsFilter>,
         accounts: &[RpcAccountBalance],
     ) {
         let mut largest_accounts_cache = self.largest_accounts_cache.write().unwrap();
-        largest_accounts_cache.set_largest_accounts(config, accounts)
+        largest_accounts_cache.set_largest_accounts(filter, accounts)
     }
 
     fn get_largest_accounts(
@@ -534,7 +534,7 @@ impl JsonRpcRequestProcessor {
         let config = config.unwrap_or_default();
         let bank = self.bank(config.commitment);
 
-        if let Some(accounts) = self.get_cached_largest_accounts(&config) {
+        if let Some(accounts) = self.get_cached_largest_accounts(&config.filter) {
             new_response(&bank, accounts)
         } else {
             let (addresses, address_filter) = if let Some(filter) = config.clone().filter {
@@ -557,7 +557,7 @@ impl JsonRpcRequestProcessor {
                 })
                 .collect::<Vec<RpcAccountBalance>>();
 
-            self.set_cached_largest_accounts(&config, &accounts);
+            self.set_cached_largest_accounts(&config.filter, &accounts);
             new_response(&bank, accounts)
         }
     }
@@ -3213,7 +3213,7 @@ pub mod tests {
             Arc::new(tokio::runtime::Runtime::new().unwrap()),
             None,
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
-            Arc::new(RwLock::new(LargestAccountsCache::new(16, 30))),
+            Arc::new(RwLock::new(LargestAccountsCache::new(30))),
         );
         SendTransactionService::new(tpu_address, &bank_forks, None, receiver, 1000, 1);
 
@@ -4623,7 +4623,7 @@ pub mod tests {
             Arc::new(tokio::runtime::Runtime::new().unwrap()),
             None,
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
-            Arc::new(RwLock::new(LargestAccountsCache::new(16, 30))),
+            Arc::new(RwLock::new(LargestAccountsCache::new(30))),
         );
         SendTransactionService::new(tpu_address, &bank_forks, None, receiver, 1000, 1);
 
@@ -4820,7 +4820,7 @@ pub mod tests {
             Arc::new(tokio::runtime::Runtime::new().unwrap()),
             None,
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
-            Arc::new(RwLock::new(LargestAccountsCache::new(16, 30))),
+            Arc::new(RwLock::new(LargestAccountsCache::new(30))),
         );
         SendTransactionService::new(tpu_address, &bank_forks, None, receiver, 1000, 1);
         assert_eq!(request_processor.validator_exit(), false);
@@ -4854,7 +4854,7 @@ pub mod tests {
             Arc::new(tokio::runtime::Runtime::new().unwrap()),
             None,
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
-            Arc::new(RwLock::new(LargestAccountsCache::new(16, 30))),
+            Arc::new(RwLock::new(LargestAccountsCache::new(30))),
         );
         SendTransactionService::new(tpu_address, &bank_forks, None, receiver, 1000, 1);
         assert_eq!(request_processor.validator_exit(), true);
@@ -4947,7 +4947,7 @@ pub mod tests {
             Arc::new(tokio::runtime::Runtime::new().unwrap()),
             None,
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
-            Arc::new(RwLock::new(LargestAccountsCache::new(16, 30))),
+            Arc::new(RwLock::new(LargestAccountsCache::new(30))),
         );
         SendTransactionService::new(tpu_address, &bank_forks, None, receiver, 1000, 1);
         assert_eq!(
@@ -6177,7 +6177,7 @@ pub mod tests {
             Arc::new(tokio::runtime::Runtime::new().unwrap()),
             None,
             optimistically_confirmed_bank.clone(),
-            Arc::new(RwLock::new(LargestAccountsCache::new(16, 30))),
+            Arc::new(RwLock::new(LargestAccountsCache::new(30))),
         );
 
         let mut io = MetaIoHandler::default();

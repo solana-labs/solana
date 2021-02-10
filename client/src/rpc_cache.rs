@@ -1,13 +1,12 @@
-use crate::rpc_config::RpcLargestAccountsConfig;
+use crate::rpc_config::RpcLargestAccountsFilter;
 use crate::rpc_response::RpcAccountBalance;
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
 
 #[derive(Debug, Clone)]
 pub struct LargestAccountsCache {
-    size: usize,
     duration: u64,
-    cache: HashMap<RpcLargestAccountsConfig, LargestAccountsCacheValue>,
+    cache: HashMap<Option<RpcLargestAccountsFilter>, LargestAccountsCacheValue>,
 }
 
 #[derive(Debug, Clone)]
@@ -17,9 +16,8 @@ struct LargestAccountsCacheValue {
 }
 
 impl LargestAccountsCache {
-    pub fn new(size: usize, duration: u64) -> Self {
+    pub fn new(duration: u64) -> Self {
         Self {
-            size,
             duration,
             cache: HashMap::new(),
         }
@@ -27,12 +25,12 @@ impl LargestAccountsCache {
 
     pub fn get_largest_accounts(
         &self,
-        config: &RpcLargestAccountsConfig,
+        filter: &Option<RpcLargestAccountsFilter>,
     ) -> Option<Vec<RpcAccountBalance>> {
-        self.cache.get(&config).and_then(|value| {
+        self.cache.get(&filter).and_then(|value| {
             if let Ok(elapsed) = value.cached_time.elapsed() {
                 if elapsed < Duration::from_secs(self.duration) {
-                    return Some(value.accounts.clone())
+                    return Some(value.accounts.clone());
                 }
             }
             None
@@ -41,128 +39,36 @@ impl LargestAccountsCache {
 
     pub fn set_largest_accounts(
         &mut self,
-        config: &RpcLargestAccountsConfig,
+        filter: &Option<RpcLargestAccountsFilter>,
         accounts: &[RpcAccountBalance],
     ) {
-        if self.cache.len() >= self.size {
-            self.evict();
-        }
-
-        if self.cache.len() < self.size {
-            self.cache.insert(
-                config.clone(),
-                LargestAccountsCacheValue {
-                    accounts: accounts.to_owned(),
-                    cached_time: SystemTime::now(),
-                },
-            );
-        }
-    }
-
-    fn evict(&mut self) {
-        let duration = Duration::from_secs(self.duration);
-        self.cache.retain(|_key, value| {
-            if let Ok(elapsed) = value.cached_time.elapsed() {
-                elapsed < duration
-            } else {
-                false
-            }
-        });
+        self.cache.insert(
+            filter.clone(),
+            LargestAccountsCacheValue {
+                accounts: accounts.to_owned(),
+                cached_time: SystemTime::now(),
+            },
+        );
     }
 }
 
 #[cfg(test)]
 pub mod test {
     use crate::rpc_cache::LargestAccountsCache;
-    use crate::rpc_config::{RpcLargestAccountsConfig, RpcLargestAccountsFilter};
+    use crate::rpc_config::RpcLargestAccountsFilter;
     use crate::rpc_response::RpcAccountBalance;
     use std::time::Duration;
 
     #[test]
-    fn test_cache_stays_within_size_limit() {
-        let mut cache = LargestAccountsCache::new(2, 30);
-
-        let config = RpcLargestAccountsConfig {
-            commitment: None,
-            filter: None,
-        };
-
-        let config2 = RpcLargestAccountsConfig {
-            commitment: None,
-            filter: Some(RpcLargestAccountsFilter::Circulating),
-        };
-
-        let config3 = RpcLargestAccountsConfig {
-            commitment: None,
-            filter: Some(RpcLargestAccountsFilter::NonCirculating),
-        };
-
-        let accounts: Vec<RpcAccountBalance> = Vec::new();
-
-        cache.set_largest_accounts(&config, &accounts);
-        cache.set_largest_accounts(&config2, &accounts);
-        cache.set_largest_accounts(&config3, &accounts);
-
-        assert_eq!(cache.cache.len(), 2);
-    }
-
-    #[test]
     fn test_old_entries_expire() {
-        let mut cache = LargestAccountsCache::new(2, 1);
+        let mut cache = LargestAccountsCache::new(1);
 
-        let config = RpcLargestAccountsConfig {
-            commitment: None,
-            filter: None,
-        };
+        let filter = Some(RpcLargestAccountsFilter::Circulating);
 
         let accounts: Vec<RpcAccountBalance> = Vec::new();
 
-        cache.set_largest_accounts(&config, &accounts);
+        cache.set_largest_accounts(&filter, &accounts);
         std::thread::sleep(Duration::from_secs(1));
-        assert_eq!(cache.get_largest_accounts(&config), None);
-    }
-
-    #[test]
-    fn test_old_entries_get_evicted() {
-        let mut cache = LargestAccountsCache::new(2, 1);
-
-        let config = RpcLargestAccountsConfig {
-            commitment: None,
-            filter: None,
-        };
-
-        let config2 = RpcLargestAccountsConfig {
-            commitment: None,
-            filter: Some(RpcLargestAccountsFilter::Circulating),
-        };
-
-        let config3 = RpcLargestAccountsConfig {
-            commitment: None,
-            filter: Some(RpcLargestAccountsFilter::NonCirculating),
-        };
-
-        let accounts: Vec<RpcAccountBalance> = Vec::new();
-
-        cache.set_largest_accounts(&config, &accounts);
-        cache.set_largest_accounts(&config2, &accounts);
-        std::thread::sleep(Duration::from_secs(1));
-        cache.set_largest_accounts(&config3, &accounts);
-        assert_eq!(cache.cache.len(), 1);
-    }
-
-    #[test]
-    fn test_entries_hashed_the_same() {
-        let mut cache = LargestAccountsCache::new(2, 2);
-
-        let config = RpcLargestAccountsConfig {
-            commitment: None,
-            filter: None,
-        };
-
-        let accounts: Vec<RpcAccountBalance> = vec![];
-
-        cache.set_largest_accounts(&config, &accounts);
-        cache.set_largest_accounts(&config, &accounts);
-        assert_eq!(cache.cache.len(), 1);
+        assert_eq!(cache.get_largest_accounts(&filter), None);
     }
 }
