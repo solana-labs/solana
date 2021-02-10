@@ -23,9 +23,9 @@ if [[ -n $USE_INSTALL || ! -f "$SAFECOIN_ROOT"/Cargo.toml ]]; then
   solana_program() {
     declare program="$1"
     if [[ -z $program ]]; then
-      printf "solana"
+      printf "safecoin"
     else
-      printf "solana-%s" "$program"
+      printf "safecoin-%s" "$program"
     fi
   }
 else
@@ -34,13 +34,13 @@ else
     declare crate="$program"
     if [[ -z $program ]]; then
       crate="cli"
-      program="solana"
+      program="safecoin"
     else
-      program="solana-$program"
+      program="safecoin-$program"
     fi
 
     if [[ -r "$SAFECOIN_ROOT/$crate"/Cargo.toml ]]; then
-      maybe_package="--package solana-$crate"
+      maybe_package="--package safecoin-$crate"
     fi
     if [[ -n $NDEBUG ]]; then
       maybe_release=--release
@@ -56,7 +56,7 @@ safecoin_validator=$(solana_program validator)
 safecoin_validator_cuda="$safecoin_validator --cuda"
 safecoin_genesis=$(solana_program genesis)
 safecoin_gossip=$(solana_program gossip)
-solana_keygen=$(solana_program keygen)
+safecoin_keygen=$(solana_program keygen)
 safecoin_ledger_tool=$(solana_program ledger-tool)
 solana_cli=$(solana_program)
 

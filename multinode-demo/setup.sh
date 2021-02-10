@@ -13,17 +13,17 @@ mkdir -p "$SAFECOIN_CONFIG_DIR"/bootstrap-validator
 if [[ -r $FAUCET_KEYPAIR ]]; then
   cp -f "$FAUCET_KEYPAIR" "$SAFECOIN_CONFIG_DIR"/faucet.json
 else
-  $solana_keygen new --no-passphrase -fso "$SAFECOIN_CONFIG_DIR"/faucet.json
+  $safecoin_keygen new --no-passphrase -fso "$SAFECOIN_CONFIG_DIR"/faucet.json
 fi
 
 if [[ -f $BOOTSTRAP_VALIDATOR_IDENTITY_KEYPAIR ]]; then
   cp -f "$BOOTSTRAP_VALIDATOR_IDENTITY_KEYPAIR" "$SAFECOIN_CONFIG_DIR"/bootstrap-validator/identity.json
 else
-  $solana_keygen new --no-passphrase -so "$SAFECOIN_CONFIG_DIR"/bootstrap-validator/identity.json
+  $safecoin_keygen new --no-passphrase -so "$SAFECOIN_CONFIG_DIR"/bootstrap-validator/identity.json
 fi
 
-$solana_keygen new --no-passphrase -so "$SAFECOIN_CONFIG_DIR"/bootstrap-validator/vote-account.json
-$solana_keygen new --no-passphrase -so "$SAFECOIN_CONFIG_DIR"/bootstrap-validator/stake-account.json
+$safecoin_keygen new --no-passphrase -so "$SAFECOIN_CONFIG_DIR"/bootstrap-validator/vote-account.json
+$safecoin_keygen new --no-passphrase -so "$SAFECOIN_CONFIG_DIR"/bootstrap-validator/stake-account.json
 
 args=(
   "$@"
