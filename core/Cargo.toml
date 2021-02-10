@@ -1,7 +1,7 @@
 [package]
 name = "solana-core"
 description = "Blockchain, Rebuilt for Scale"
-version = "1.5.6"
+version = "1.5.7"
 documentation = "https://docs.rs/solana"
 homepage = "https://solana.com/"
 readme = "../README.md"
@@ -49,30 +49,30 @@ serde = "1.0.112"
 serde_bytes = "0.11"
 serde_derive = "1.0.103"
 serde_json = "1.0.56"
-solana-account-decoder = { path = "../account-decoder", version = "1.5.6" }
-solana-banks-server = { path = "../banks-server", version = "1.5.6" }
-solana-clap-utils = { path = "../clap-utils", version = "1.5.6" }
-solana-client = { path = "../client", version = "1.5.6" }
-solana-faucet = { path = "../faucet", version = "1.5.6" }
-solana-ledger = { path = "../ledger", version = "1.5.6" }
-solana-logger = { path = "../logger", version = "1.5.6" }
-solana-merkle-tree = { path = "../merkle-tree", version = "1.5.6" }
-solana-metrics = { path = "../metrics", version = "1.5.6" }
-solana-measure = { path = "../measure", version = "1.5.6" }
-solana-net-utils = { path = "../net-utils", version = "1.5.6" }
-solana-perf = { path = "../perf", version = "1.5.6" }
-solana-program-test = { path = "../program-test", version = "1.5.6" }
-solana-runtime = { path = "../runtime", version = "1.5.6" }
-solana-sdk = { path = "../sdk", version = "1.5.6" }
-solana-frozen-abi = { path = "../frozen-abi", version = "1.5.6" }
-solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "1.5.6" }
-solana-stake-program = { path = "../programs/stake", version = "1.5.6" }
-solana-storage-bigtable = { path = "../storage-bigtable", version = "1.5.6" }
-solana-streamer = { path = "../streamer", version = "1.5.6" }
-solana-sys-tuner = { path = "../sys-tuner", version = "1.5.6" }
-solana-transaction-status = { path = "../transaction-status", version = "1.5.6" }
-solana-version = { path = "../version", version = "1.5.6" }
-solana-vote-program = { path = "../programs/vote", version = "1.5.6" }
+solana-account-decoder = { path = "../account-decoder", version = "1.5.7" }
+solana-banks-server = { path = "../banks-server", version = "1.5.7" }
+solana-clap-utils = { path = "../clap-utils", version = "1.5.7" }
+solana-client = { path = "../client", version = "1.5.7" }
+solana-faucet = { path = "../faucet", version = "1.5.7" }
+solana-ledger = { path = "../ledger", version = "1.5.7" }
+solana-logger = { path = "../logger", version = "1.5.7" }
+solana-merkle-tree = { path = "../merkle-tree", version = "1.5.7" }
+solana-metrics = { path = "../metrics", version = "1.5.7" }
+solana-measure = { path = "../measure", version = "1.5.7" }
+solana-net-utils = { path = "../net-utils", version = "1.5.7" }
+solana-perf = { path = "../perf", version = "1.5.7" }
+solana-program-test = { path = "../program-test", version = "1.5.7" }
+solana-runtime = { path = "../runtime", version = "1.5.7" }
+solana-sdk = { path = "../sdk", version = "1.5.7" }
+solana-frozen-abi = { path = "../frozen-abi", version = "1.5.7" }
+solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "1.5.7" }
+solana-stake-program = { path = "../programs/stake", version = "1.5.7" }
+solana-storage-bigtable = { path = "../storage-bigtable", version = "1.5.7" }
+solana-streamer = { path = "../streamer", version = "1.5.7" }
+solana-sys-tuner = { path = "../sys-tuner", version = "1.5.7" }
+solana-transaction-status = { path = "../transaction-status", version = "1.5.7" }
+solana-version = { path = "../version", version = "1.5.7" }
+solana-vote-program = { path = "../programs/vote", version = "1.5.7" }
 spl-token-v2-0 = { package = "spl-token", version = "=3.0.1", features = ["no-entrypoint"] }
 tempfile = "3.1.0"
 thiserror = "1.0"
@@ -82,7 +82,7 @@ tokio_01_bytes = { version = "0.4.7", package = "bytes" }
 tokio_fs_01 = { version = "0.1", package = "tokio-fs" }
 tokio_io_01 = { version = "0.1", package = "tokio-io" }
 tokio_codec_01 = { version = "0.1", package = "tokio-codec" }
-solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "1.5.6" }
+solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "1.5.7" }
 trees = "0.2.1"
 
 [dev-dependencies]
