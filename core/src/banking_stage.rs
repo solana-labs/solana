@@ -185,6 +185,7 @@ impl BankingStage {
         buffered_packets: &mut UnprocessedPackets,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
+        test_fn: Option<impl Fn()>,
     ) {
         let mut rebuffered_packets_len = 0;
         let mut new_tx_count = 0;
@@ -223,7 +224,6 @@ impl BankingStage {
                         transaction_status_sender.clone(),
                         gossip_vote_sender,
                     );
-
                 new_tx_count += processed;
 
                 // Out of the buffered packets just retried, collect any still unprocessed
@@ -237,6 +237,9 @@ impl BankingStage {
                     Self::packet_has_more_unprocessed_transactions(&new_unprocessed_indexes);
                 if has_more_unprocessed_transactions {
                     *old_unprocessed_indexes = new_unprocessed_indexes;
+                }
+                if let Some(test_fn) = &test_fn {
+                    test_fn();
                 }
                 has_more_unprocessed_transactions
             }
@@ -323,6 +326,7 @@ impl BankingStage {
                     buffered_packets,
                     transaction_status_sender,
                     gossip_vote_sender,
+                    None::<Box<dyn Fn()>>,
                 );
             }
             BufferedPacketsDecision::Forward => {
@@ -1108,6 +1112,7 @@ mod tests {
     };
     use solana_perf::packet::to_packets_chunked;
     use solana_sdk::{
+        hash::Hash,
         instruction::InstructionError,
         signature::{Keypair, Signer},
         system_instruction::SystemError,
@@ -1115,7 +1120,7 @@ mod tests {
         transaction::TransactionError,
     };
     use solana_transaction_status::TransactionWithStatusMeta;
-    use std::{sync::atomic::Ordering, thread::sleep};
+    use std::{path::Path, sync::atomic::Ordering, thread::sleep};
 
     #[test]
     fn test_banking_stage_shutdown1() {
@@ -2090,6 +2095,179 @@ mod tests {
                     assert_eq!(meta, None);
                 }
             }
+        }
+        Blockstore::destroy(&ledger_path).unwrap();
+    }
+
+    fn setup_conflicting_transactions(
+        ledger_path: &Path,
+    ) -> (
+        Vec<Transaction>,
+        Arc<Bank>,
+        Arc<Mutex<PohRecorder>>,
+        Receiver<WorkingBankEntry>,
+    ) {
+        Blockstore::destroy(&ledger_path).unwrap();
+        let genesis_config_info = create_genesis_config(10_000);
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = &genesis_config_info;
+        let blockstore =
+            Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger");
+        let bank = Arc::new(Bank::new(&genesis_config));
+        let (poh_recorder, entry_receiver) = PohRecorder::new(
+            bank.tick_height(),
+            bank.last_blockhash(),
+            bank.slot(),
+            Some((4, 4)),
+            bank.ticks_per_slot(),
+            &solana_sdk::pubkey::new_rand(),
+            &Arc::new(blockstore),
+            &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+            &Arc::new(PohConfig::default()),
+        );
+        let poh_recorder = Arc::new(Mutex::new(poh_recorder));
+
+        // Set up conflicting transactions
+        let pubkey0 = solana_sdk::pubkey::new_rand();
+        let pubkey1 = solana_sdk::pubkey::new_rand();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
+        let transactions = vec![
+            system_transaction::transfer(&mint_keypair, &pubkey0, 1, genesis_config.hash()),
+            system_transaction::transfer(&mint_keypair, &pubkey1, 1, genesis_config.hash()),
+            system_transaction::transfer(&mint_keypair, &pubkey2, 1, genesis_config.hash()),
+        ];
+        (transactions, bank, poh_recorder, entry_receiver)
+    }
+
+    #[test]
+    fn test_consume_buffered_packets() {
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let (transactions, bank, poh_recorder, _entry_receiver) =
+                setup_conflicting_transactions(&ledger_path);
+            let num_conflicting_transactions = transactions.len();
+            let mut packets = to_packets_chunked(&transactions, num_conflicting_transactions);
+            assert_eq!(packets.len(), 1);
+            assert_eq!(packets[0].packets.len(), num_conflicting_transactions);
+            let all_packets = packets.pop().unwrap();
+            let mut buffered_packets: UnprocessedPackets = vec![(
+                all_packets,
+                (0..num_conflicting_transactions).into_iter().collect(),
+            )]
+            .into_iter()
+            .collect();
+
+            let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
+
+            // When the working bank in poh_recorder is None, no packets should be processed
+            BankingStage::consume_buffered_packets(
+                &Pubkey::default(),
+                &poh_recorder,
+                &mut buffered_packets,
+                None,
+                &gossip_vote_sender,
+                None::<Box<dyn Fn()>>,
+            );
+            assert_eq!(buffered_packets[0].1.len(), num_conflicting_transactions);
+
+            // When the poh recorder has a bank, should process all non conflicting buffered packets.
+            // Processes one packet per iteration of the loop
+            for i in 0..num_conflicting_transactions {
+                poh_recorder.lock().unwrap().set_bank(&bank);
+                BankingStage::consume_buffered_packets(
+                    &Pubkey::default(),
+                    &poh_recorder,
+                    &mut buffered_packets,
+                    None,
+                    &gossip_vote_sender,
+                    None::<Box<dyn Fn()>>,
+                );
+                let num_expected_unprocessed = num_conflicting_transactions - i - 1;
+                if num_expected_unprocessed == 0 {
+                    assert!(buffered_packets.is_empty())
+                } else {
+                    assert_eq!(buffered_packets[0].1.len(), num_expected_unprocessed);
+                }
+            }
+        }
+        Blockstore::destroy(&ledger_path).unwrap();
+    }
+
+    #[test]
+    fn test_consume_buffered_packets_interrupted() {
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let (transactions, bank, poh_recorder, _entry_receiver) =
+                setup_conflicting_transactions(&ledger_path);
+            let num_conflicting_transactions = transactions.len();
+            let packets = to_packets_chunked(&transactions, 1);
+            assert_eq!(packets.len(), num_conflicting_transactions);
+            for single_packets in &packets {
+                assert_eq!(single_packets.packets.len(), 1);
+            }
+            let mut buffered_packets: UnprocessedPackets = packets
+                .clone()
+                .into_iter()
+                .map(|single_packets| (single_packets, vec![0]))
+                .collect();
+
+            let (continue_sender, continue_receiver) = unbounded();
+            let (finished_packet_sender, finished_packet_receiver) = unbounded();
+
+            let test_fn = Some(move || {
+                finished_packet_sender.send(1).unwrap();
+                continue_receiver.recv().unwrap();
+            });
+            // When the poh recorder has a bank, should process all non conflicting buffered packets.
+            // Processes one packet per iteration of the loop
+            let interrupted_iteration = 1;
+            poh_recorder.lock().unwrap().set_bank(&bank);
+            let poh_recorder_ = poh_recorder.clone();
+            let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
+            // Start up thread to process the banks
+            let t_consume = Builder::new()
+                .name("consume-buffered-packets".to_string())
+                .spawn(move || {
+                    BankingStage::consume_buffered_packets(
+                        &Pubkey::default(),
+                        &poh_recorder_,
+                        &mut buffered_packets,
+                        None,
+                        &gossip_vote_sender,
+                        test_fn,
+                    );
+
+                    // Check everything is correct. All indexes after `interrupted_iteration`
+                    // should still be unprocessed
+                    assert_eq!(
+                        buffered_packets.len(),
+                        num_conflicting_transactions - interrupted_iteration - 1
+                    );
+                    for ((remaining_unprocessed_packet, _), original_packet) in buffered_packets
+                        .iter()
+                        .zip(&packets[interrupted_iteration + 1..])
+                    {
+                        assert_eq!(
+                            remaining_unprocessed_packet.packets[0],
+                            original_packet.packets[0]
+                        );
+                    }
+                })
+                .unwrap();
+
+            for i in 0..=interrupted_iteration {
+                finished_packet_receiver.recv().unwrap();
+                if i == interrupted_iteration {
+                    // Set up a MaxHeightReached failure by clearing the working bank
+                    poh_recorder.lock().unwrap().reset(Hash::default(), 1, None);
+                }
+                continue_sender.send(1).unwrap();
+            }
+
+            t_consume.join().unwrap();
         }
         Blockstore::destroy(&ledger_path).unwrap();
     }
