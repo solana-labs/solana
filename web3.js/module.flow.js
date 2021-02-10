@@ -90,10 +90,7 @@ declare module '@solana/web3.js' {
     value: T,
   };
 
-  declare export type Commitment =
-    | 'processed'
-    | 'confirmed'
-    | 'finalized';
+  declare export type Commitment = 'processed' | 'confirmed' | 'finalized';
 
   declare export type LargestAccountsFilter = 'circulating' | 'nonCirculating';
 

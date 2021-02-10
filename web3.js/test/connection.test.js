@@ -1483,8 +1483,8 @@ describe('Connection', () => {
       expect(activation.inactive).to.eq(80);
 
       await addStakeActivationMock('invalid');
-      await expect(connection.getStakeActivation(publicKey, 'confirmed')).to
-        .be.rejected;
+      await expect(connection.getStakeActivation(publicKey, 'confirmed')).to.be
+        .rejected;
     });
   }
 
@@ -1515,10 +1515,7 @@ describe('Connection', () => {
       withContext: true,
     });
 
-    const balance = await connection.getBalance(
-      account.publicKey,
-      'confirmed',
-    );
+    const balance = await connection.getBalance(account.publicKey, 'confirmed');
     expect(balance).to.eq(LAMPORTS_PER_SOL);
 
     await mockRpcResponse({

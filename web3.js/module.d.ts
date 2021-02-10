@@ -76,10 +76,7 @@ declare module '@solana/web3.js' {
     value: T;
   };
 
-  export type Commitment =
-    | 'processed'
-    | 'confirmed'
-    | 'finalized';
+  export type Commitment = 'processed' | 'confirmed' | 'finalized';
 
   export type LargestAccountsFilter = 'circulating' | 'nonCirculating';
 
