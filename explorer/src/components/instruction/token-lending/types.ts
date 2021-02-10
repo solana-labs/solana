@@ -5,15 +5,15 @@ export const PROGRAM_IDS: string[] = [
 ];
 
 const INSTRUCTION_LOOKUP: { [key: number]: string } = {
-  0: "Initialize LendingMarket",
+  0: "Initialize Lending Market",
   1: "Initialize Reserve",
   2: "Initialize Obligation",
-  3: "Reserve deposit",
-  4: "Reserve withdraw",
+  3: "Reserve Deposit",
+  4: "Reserve Withdraw",
   5: "Borrow",
-  6: "Repay loan",
-  7: "Liquidate loan",
-  8: "Accrue interest",
+  6: "Repay Loan",
+  7: "Liquidate Loan",
+  8: "Accrue Interest",
 };
 
 export function isTokenLendingInstruction(
