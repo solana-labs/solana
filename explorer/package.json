@@ -17,7 +17,7 @@
     "@types/classnames": "^2.2.11",
     "@types/jest": "^26.0.20",
     "@types/node": "^14.14.22",
-    "@types/react": "^17.0.0",
+    "@types/react": "^17.0.1",
     "@types/react-dom": "^17.0.0",
     "@types/react-router-dom": "^5.1.7",
     "@types/react-select": "^3.1.2",
@@ -37,7 +37,7 @@
     "react-countup": "^4.3.3",
     "react-dom": "^17.0.1",
     "react-router-dom": "^5.2.0",
-    "react-scripts": "^4.0.1",
+    "react-scripts": "^4.0.2",
     "react-select": "^3.2.0",
     "superstruct": "github:solana-labs/superstruct",
     "typescript": "^4.1.3"
