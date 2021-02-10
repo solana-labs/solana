@@ -3838,7 +3838,7 @@ impl AccountsDB {
     fn rest_of_hash_calculation(
         accounts: (Vec<Vec<CalculateHashIntermediate>>, Measure, usize, Measure),
     ) -> (Hash, u64) {
-        let (data_sections_by_pubkey, time_scan, num_snapshot_storage, time_pre_scan_flatten) =
+        let (data_sections_by_pubkey, time_scan, num_snapshot_storage, pre_scan_flatten_time) =
             accounts;
 
         let (outer, flatten_time, raw_len) =
@@ -3857,6 +3857,13 @@ impl AccountsDB {
                 (*t, 0)
             });
         hash_time.stop();
+        let total_time = time_scan.as_us()
+            + zeros.as_us()
+            + hash_time.as_us()
+            + sort_time.as_us()
+            + flatten_time.as_us()
+            + flat2_time.as_us()
+            + pre_scan_flatten_time.as_us();
         datapoint_info!(
             "calculate_accounts_hash_without_index",
             ("accounts_scan", time_scan.as_us(), i64),
@@ -3870,9 +3877,10 @@ impl AccountsDB {
             ("num_snapshot_storage", num_snapshot_storage as i64, i64),
             (
                 "pre_scan_flatten",
-                time_pre_scan_flatten.as_us() as i64,
+                pre_scan_flatten_time.as_us() as i64,
                 i64
             ),
+            ("total", total_time as i64, i64),
         );
 
         (hash, total_lamports)
