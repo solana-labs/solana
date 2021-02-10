@@ -108,11 +108,12 @@ fn main() {
             time.stop();
             let mut time_store = Measure::start("hash using store");
             let results_store = accounts.accounts_db.update_accounts_hash_with_index_option(
-                true,
+                false,
                 false,
                 solana_sdk::clock::Slot::default(),
                 &ancestors,
                 true,
+                None,
             );
             time_store.stop();
             if results != results_store {
