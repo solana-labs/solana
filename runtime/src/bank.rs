@@ -10710,7 +10710,7 @@ pub(crate) mod tests {
     #[test]
     #[should_panic(
         expected = "Can't change frozen bank by adding not-existing new native \
-                   program (mock_program, CiXgo2KHKSDmDnV1F6B69eWFgNAPiSBjjYvfB4cvRNre). \
+                   program (mock_program, EJ7BZ5wk1brwAGwnVmsGauQCRS4btvabkrdn1MpDrUHK). \
                    Maybe, inconsistent program activation is detected on snapshot restore?"
     )]
     fn test_add_native_program_after_frozen() {
@@ -10718,7 +10718,7 @@ pub(crate) mod tests {
         let (genesis_config, _mint_keypair) = create_genesis_config(100_000);
 
         let slot = 123;
-        let program_id = Pubkey::from_str("CiXgo2KHKSDmDnV1F6B69eWFgNAPiSBjjYvfB4cvRNre").unwrap();
+        let program_id = Pubkey::from_str("EJ7BZ5wk1brwAGwnVmsGauQCRS4btvabkrdn1MpDrUHK").unwrap();
 
         let bank = Bank::new_from_parent(
             &Arc::new(Bank::new(&genesis_config)),
@@ -10733,14 +10733,14 @@ pub(crate) mod tests {
     #[test]
     #[should_panic(
         expected = "There is no account to replace with native program (mock_program, \
-                    CiXgo2KHKSDmDnV1F6B69eWFgNAPiSBjjYvfB4cvRNre)."
+                    EJ7BZ5wk1brwAGwnVmsGauQCRS4btvabkrdn1MpDrUHK)."
     )]
     fn test_add_native_program_replace_none() {
         use std::str::FromStr;
         let (genesis_config, _mint_keypair) = create_genesis_config(100_000);
 
         let slot = 123;
-        let program_id = Pubkey::from_str("CiXgo2KHKSDmDnV1F6B69eWFgNAPiSBjjYvfB4cvRNre").unwrap();
+        let program_id = Pubkey::from_str("EJ7BZ5wk1brwAGwnVmsGauQCRS4btvabkrdn1MpDrUHK").unwrap();
 
         let bank = Bank::new_from_parent(
             &Arc::new(Bank::new(&genesis_config)),
