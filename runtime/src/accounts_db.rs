@@ -3624,11 +3624,12 @@ impl AccountsDB {
         simple_capitalization_enabled: bool,
     ) -> (Hash, u64) {
         self.update_accounts_hash_with_index_option(
-            false,
+            true,
             false,
             slot,
             ancestors,
             simple_capitalization_enabled,
+            None,
         )
     }
 
@@ -3639,11 +3640,12 @@ impl AccountsDB {
         simple_capitalization_enabled: bool,
     ) -> (Hash, u64) {
         self.update_accounts_hash_with_index_option(
-            false,
+            true,
             true,
             slot,
             ancestors,
             simple_capitalization_enabled,
+            None,
         )
     }
 
@@ -3866,12 +3868,12 @@ impl AccountsDB {
 
     fn calculate_accounts_hash_helper(
         &self,
-        do_not_use_index: bool,
+        use_index: bool,
         slot: Slot,
         ancestors: &Ancestors,
         simple_capitalization_enabled: bool,
     ) -> (Hash, u64) {
-        if do_not_use_index {
+        if !use_index {
             let combined_maps = self.get_snapshot_storages(slot);
 
             Self::calculate_accounts_hash_without_index(
@@ -3887,14 +3889,15 @@ impl AccountsDB {
 
     pub fn update_accounts_hash_with_index_option(
         &self,
-        do_not_use_index: bool,
+        use_index: bool,
         debug_verify: bool,
         slot: Slot,
         ancestors: &Ancestors,
         simple_capitalization_enabled: bool,
+        expected_capitalization: Option<u64>,
     ) -> (Hash, u64) {
         let (hash, total_lamports) = self.calculate_accounts_hash_helper(
-            do_not_use_index,
+            use_index,
             slot,
             ancestors,
             simple_capitalization_enabled,
@@ -3902,14 +3905,16 @@ impl AccountsDB {
         if debug_verify {
             // calculate the other way (store or non-store) and verify results match.
             let (hash_other, total_lamports_other) = self.calculate_accounts_hash_helper(
-                !do_not_use_index,
+                !use_index,
                 slot,
                 ancestors,
                 simple_capitalization_enabled,
             );
 
-            assert_eq!(hash, hash_other);
-            assert_eq!(total_lamports, total_lamports_other);
+            let success = hash == hash_other
+                && total_lamports == total_lamports_other
+                && total_lamports == expected_capitalization.unwrap_or(total_lamports);
+            assert!(success, "update_accounts_hash_with_index_option mismatch. hashes: {}, {}; lamports: {}, {}; expected lamports: {:?}, using index: {}, slot: {}", hash, hash_other, total_lamports, total_lamports_other, expected_capitalization, use_index, slot);
         }
         let mut bank_hashes = self.bank_hashes.write().unwrap();
         let mut bank_hash_info = bank_hashes.get_mut(&slot).unwrap();

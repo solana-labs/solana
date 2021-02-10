@@ -4280,7 +4280,7 @@ impl Bank {
 
     pub fn update_accounts_hash_with_index_option(
         &self,
-        do_not_use_index: bool,
+        use_index: bool,
         debug_verify: bool,
     ) -> Hash {
         let (hash, total_lamports) = self
@@ -4288,18 +4288,19 @@ impl Bank {
             .accounts
             .accounts_db
             .update_accounts_hash_with_index_option(
-                do_not_use_index,
+                use_index,
                 debug_verify,
                 self.slot(),
                 &self.ancestors,
                 self.simple_capitalization_enabled(),
+                Some(self.capitalization()),
             );
         assert_eq!(total_lamports, self.capitalization());
         hash
     }
 
     pub fn update_accounts_hash(&self) -> Hash {
-        self.update_accounts_hash_with_index_option(false, false)
+        self.update_accounts_hash_with_index_option(true, false)
     }
 
     /// A snapshot bank should be purged of 0 lamport accounts which are not part of the hash
