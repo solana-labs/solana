@@ -4,7 +4,7 @@
 use std::str::FromStr;
 use thiserror::Error;
 
-#[derive(Serialize, Deserialize, Default, Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize, Default, Clone, Copy, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct CommitmentConfig {
     pub commitment: CommitmentLevel,
