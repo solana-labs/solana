@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
-    "@project-serum/serum": "^0.13.19",
+    "@project-serum/serum": "^0.13.20",
     "@react-hook/debounce": "^3.0.0",
     "@sentry/react": "^6.0.1",
     "@solana/web3.js": "^0.91.1",
