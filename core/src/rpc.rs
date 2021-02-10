@@ -515,9 +515,7 @@ impl JsonRpcRequestProcessor {
         config: &RpcLargestAccountsConfig,
     ) -> Option<Vec<RpcAccountBalance>> {
         let largest_accounts_cache = self.largest_accounts_cache.read().unwrap();
-        let results = largest_accounts_cache.get_largest_accounts(config);
-        drop(largest_accounts_cache);
-        results
+        largest_accounts_cache.get_largest_accounts(config)
     }
 
     fn set_cached_largest_accounts(
@@ -526,8 +524,7 @@ impl JsonRpcRequestProcessor {
         accounts: &[RpcAccountBalance],
     ) {
         let mut largest_accounts_cache = self.largest_accounts_cache.write().unwrap();
-        largest_accounts_cache.set_largest_accounts(config, accounts);
-        drop(largest_accounts_cache);
+        largest_accounts_cache.set_largest_accounts(config, accounts)
     }
 
     fn get_largest_accounts(

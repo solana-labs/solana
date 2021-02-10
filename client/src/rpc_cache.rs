@@ -29,15 +29,14 @@ impl LargestAccountsCache {
         &self,
         config: &RpcLargestAccountsConfig,
     ) -> Option<Vec<RpcAccountBalance>> {
-        self.cache.get(&config).map(|value| {
-            value.cached_time.elapsed().ok().map(|elapsed| {
+        self.cache.get(&config).and_then(|value| {
+            if let Ok(elapsed) = value.cached_time.elapsed() {
                 if elapsed < Duration::from_secs(self.duration) {
-                    Some(value.accounts.clone())
-                } else {
-                    None
+                    return Some(value.accounts.clone())
                 }
-            })?
-        })?
+            }
+            None
+        })
     }
 
     pub fn set_largest_accounts(
