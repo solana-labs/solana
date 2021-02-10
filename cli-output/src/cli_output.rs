@@ -610,10 +610,13 @@ fn show_votes_and_credits(
         return Ok(());
     }
 
+    // Existence of this should guarantee the occurrence of vote truncation
+    let newest_history_entry = epoch_voting_history.iter().rev().next();
+
     writeln!(
         f,
         "{} Votes (using {}/{} entries):",
-        (if votes.len() < MAX_LOCKOUT_HISTORY {
+        (if newest_history_entry.is_none() {
             "All"
         } else {
             "Recent"
@@ -623,9 +626,13 @@ fn show_votes_and_credits(
     )?;
 
     for vote in votes.iter().rev() {
-        writeln!(f, "- slot: {} (confirmation count: {})", vote.slot, vote.confirmation_count)?;
+        writeln!(
+            f,
+            "- slot: {} (confirmation count: {})",
+            vote.slot, vote.confirmation_count
+        )?;
     }
-    if let Some(newest) = epoch_voting_history.iter().rev().next() {
+    if let Some(newest) = newest_history_entry {
         writeln!(
             f,
             "- ... (truncated older {} votes, which was rooted and became credits)",
