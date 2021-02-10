@@ -6,7 +6,7 @@
 
 export const MOCK_PORT = 9999;
 export const url = process.env.TEST_LIVE
-  ? 'http://localhost:8899/'
+  ? 'http://192.168.0.187:8899/'
   : 'http://localhost:9999/';
 
 //export const url = 'https://devnet.solana.com/';

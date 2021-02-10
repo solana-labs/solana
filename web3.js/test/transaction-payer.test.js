@@ -75,7 +75,7 @@ describe('Transaction Payer', () => {
       connection,
       transaction,
       signers: [accountPayer, accountFrom],
-      commitment: 'singleGossip',
+      commitment: 'confirmed',
     });
 
     const signature = base58.encode(transaction.signature);
@@ -103,7 +103,7 @@ describe('Transaction Payer', () => {
 
     await mockRpcResponse({
       method: 'getBalance',
-      params: [accountPayer.publicKey.toBase58(), {commitment: 'singleGossip'}],
+      params: [accountPayer.publicKey.toBase58(), {commitment: 'confirmed'}],
       value: LAMPORTS_PER_SOL - 1,
       withContext: true,
     });
@@ -112,7 +112,7 @@ describe('Transaction Payer', () => {
     // (exact amount less depends on the current cluster fees)
     const balance = await connection.getBalance(
       accountPayer.publicKey,
-      'singleGossip',
+      'confirmed',
     );
     expect(balance).to.be.greaterThan(0);
     expect(balance).to.be.at.most(LAMPORTS_PER_SOL);
@@ -120,12 +120,12 @@ describe('Transaction Payer', () => {
     // accountFrom should have exactly 2, since it didn't pay for the transaction
     await mockRpcResponse({
       method: 'getBalance',
-      params: [accountFrom.publicKey.toBase58(), {commitment: 'singleGossip'}],
+      params: [accountFrom.publicKey.toBase58(), {commitment: 'confirmed'}],
       value: minimumAmount + 2,
       withContext: true,
     });
     expect(
-      await connection.getBalance(accountFrom.publicKey, 'singleGossip'),
+      await connection.getBalance(accountFrom.publicKey, 'confirmed'),
     ).to.eq(minimumAmount + 2);
   });
 });

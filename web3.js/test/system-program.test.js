@@ -290,7 +290,7 @@ describe('SystemProgram', () => {
 
   if (process.env.TEST_LIVE) {
     it('live Nonce actions', async () => {
-      const connection = new Connection(url, 'singleGossip');
+      const connection = new Connection(url, 'confirmed');
       const nonceAccount = new Account();
       const from = new Account();
       await helpers.airdrop({
@@ -323,7 +323,7 @@ describe('SystemProgram', () => {
         connection,
         createNonceAccount,
         [from, nonceAccount],
-        {preflightCommitment: 'singleGossip'},
+        {preflightCommitment: 'confirmed'},
       );
       const nonceBalance = await connection.getBalance(nonceAccount.publicKey);
       expect(nonceBalance).to.eq(minimumAmount);
@@ -352,7 +352,7 @@ describe('SystemProgram', () => {
         }),
       );
       await sendAndConfirmTransaction(connection, advanceNonce, [from], {
-        preflightCommitment: 'singleGossip',
+        preflightCommitment: 'confirmed',
       });
       const nonceQuery3 = await connection.getNonce(nonceAccount.publicKey);
       if (nonceQuery3 === null) {
@@ -373,7 +373,7 @@ describe('SystemProgram', () => {
         }),
       );
       await sendAndConfirmTransaction(connection, authorizeNonce, [from], {
-        preflightCommitment: 'singleGossip',
+        preflightCommitment: 'confirmed',
       });
 
       let transfer = new Transaction().add(
@@ -396,7 +396,7 @@ describe('SystemProgram', () => {
         transfer,
         [from, newAuthority],
         {
-          preflightCommitment: 'singleGossip',
+          preflightCommitment: 'confirmed',
         },
       );
       const toBalance = await connection.getBalance(to.publicKey);
@@ -419,7 +419,7 @@ describe('SystemProgram', () => {
         withdrawNonce,
         [newAuthority],
         {
-          preflightCommitment: 'singleGossip',
+          preflightCommitment: 'confirmed',
         },
       );
       expect(await connection.getBalance(nonceAccount.publicKey)).to.eq(0);
@@ -430,7 +430,7 @@ describe('SystemProgram', () => {
     }).timeout(10 * 1000);
 
     it('live withSeed actions', async () => {
-      const connection = new Connection(url, 'singleGossip');
+      const connection = new Connection(url, 'confirmed');
       const baseAccount = new Account();
       await helpers.airdrop({
         connection,
@@ -468,7 +468,7 @@ describe('SystemProgram', () => {
         connection,
         createAccountWithSeedTransaction,
         [baseAccount],
-        {preflightCommitment: 'singleGossip'},
+        {preflightCommitment: 'confirmed'},
       );
       const createAccountWithSeedBalance = await connection.getBalance(
         createAccountWithSeedAddress,
@@ -492,7 +492,7 @@ describe('SystemProgram', () => {
           }),
         ),
         [baseAccount],
-        {preflightCommitment: 'singleGossip'},
+        {preflightCommitment: 'confirmed'},
       );
       let transferWithSeedAddressBalance = await connection.getBalance(
         transferWithSeedAddress,
@@ -521,7 +521,7 @@ describe('SystemProgram', () => {
         connection,
         transferWithSeedTransaction,
         [baseAccount],
-        {preflightCommitment: 'singleGossip'},
+        {preflightCommitment: 'confirmed'},
       );
       const toBalance = await connection.getBalance(toPubkey);
       expect(toBalance).to.eq(2 * minimumAmount);
@@ -545,7 +545,7 @@ describe('SystemProgram', () => {
         connection,
         allocateWithSeedTransaction,
         [baseAccount],
-        {preflightCommitment: 'singleGossip'},
+        {preflightCommitment: 'confirmed'},
       );
       let account = await connection.getAccountInfo(toPubkey);
       if (account === null) {
@@ -568,7 +568,7 @@ describe('SystemProgram', () => {
         connection,
         assignWithSeedTransaction,
         [baseAccount],
-        {preflightCommitment: 'singleGossip'},
+        {preflightCommitment: 'confirmed'},
       );
       account = await connection.getAccountInfo(toPubkey);
       if (account === null) {

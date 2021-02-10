@@ -91,11 +91,9 @@ declare module '@solana/web3.js' {
   };
 
   declare export type Commitment =
-    | 'max'
-    | 'recent'
-    | 'root'
-    | 'single'
-    | 'singleGossip';
+    | 'processed'
+    | 'confirmed'
+    | 'finalized';
 
   declare export type LargestAccountsFilter = 'circulating' | 'nonCirculating';
 

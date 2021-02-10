@@ -77,11 +77,9 @@ declare module '@solana/web3.js' {
   };
 
   export type Commitment =
-    | 'max'
-    | 'recent'
-    | 'root'
-    | 'single'
-    | 'singleGossip';
+    | 'processed'
+    | 'confirmed'
+    | 'finalized';
 
   export type LargestAccountsFilter = 'circulating' | 'nonCirculating';
 

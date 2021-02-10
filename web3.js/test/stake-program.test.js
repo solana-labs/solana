@@ -326,7 +326,7 @@ describe('StakeProgram', () => {
 
   if (process.env.TEST_LIVE) {
     it('live staking actions', async () => {
-      const connection = new Connection(url, 'singleGossip');
+      const connection = new Connection(url, 'confirmed');
 
       const voteAccounts = await connection.getVoteAccounts();
       const voteAccount = voteAccounts.current.concat(
@@ -377,7 +377,7 @@ describe('StakeProgram', () => {
           connection,
           createAndInitialize,
           [payer, newStakeAccount],
-          {preflightCommitment: 'singleGossip'},
+          {preflightCommitment: 'confirmed'},
         );
         expect(await connection.getBalance(newStakeAccount.publicKey)).to.eq(
           minimumAmount + 42,
@@ -389,7 +389,7 @@ describe('StakeProgram', () => {
           votePubkey,
         });
         await sendAndConfirmTransaction(connection, delegation, [authorized], {
-          commitment: 'singleGossip',
+          commitment: 'confirmed',
         });
       }
 
@@ -415,7 +415,7 @@ describe('StakeProgram', () => {
         connection,
         createAndInitializeWithSeed,
         [payer],
-        {preflightCommitment: 'singleGossip'},
+        {preflightCommitment: 'confirmed'},
       );
       let originalStakeBalance = await connection.getBalance(newAccountPubkey);
       expect(originalStakeBalance).to.eq(3 * minimumAmount + 42);
@@ -426,7 +426,7 @@ describe('StakeProgram', () => {
         votePubkey,
       });
       await sendAndConfirmTransaction(connection, delegation, [authorized], {
-        preflightCommitment: 'singleGossip',
+        preflightCommitment: 'confirmed',
       });
 
       // Test that withdraw fails before deactivation
@@ -439,7 +439,7 @@ describe('StakeProgram', () => {
       });
       await expect(
         sendAndConfirmTransaction(connection, withdraw, [authorized], {
-          preflightCommitment: 'singleGossip',
+          preflightCommitment: 'confirmed',
         }),
       ).to.be.rejected;
 
@@ -449,7 +449,7 @@ describe('StakeProgram', () => {
         authorizedPubkey: authorized.publicKey,
       });
       await sendAndConfirmTransaction(connection, deactivate, [authorized], {
-        preflightCommitment: 'singleGossip',
+        preflightCommitment: 'confirmed',
       });
 
       let stakeActivationState;
@@ -468,7 +468,7 @@ describe('StakeProgram', () => {
       });
 
       await sendAndConfirmTransaction(connection, withdraw, [authorized], {
-        preflightCommitment: 'singleGossip',
+        preflightCommitment: 'confirmed',
       });
       const recipientBalance = await connection.getBalance(recipient.publicKey);
       expect(recipientBalance).to.eq(minimumAmount + 20);
@@ -486,7 +486,7 @@ describe('StakeProgram', () => {
         split,
         [authorized, newStake],
         {
-          preflightCommitment: 'singleGossip',
+          preflightCommitment: 'confirmed',
         },
       );
       const balance = await connection.getBalance(newAccountPubkey);
@@ -506,7 +506,7 @@ describe('StakeProgram', () => {
         stakeAuthorizationType: StakeAuthorizationLayout.Withdrawer,
       });
       await sendAndConfirmTransaction(connection, authorize, [authorized], {
-        preflightCommitment: 'singleGossip',
+        preflightCommitment: 'confirmed',
       });
       authorize = StakeProgram.authorize({
         stakePubkey: newAccountPubkey,
@@ -515,7 +515,7 @@ describe('StakeProgram', () => {
         stakeAuthorizationType: StakeAuthorizationLayout.Staker,
       });
       await sendAndConfirmTransaction(connection, authorize, [authorized], {
-        preflightCommitment: 'singleGossip',
+        preflightCommitment: 'confirmed',
       });
 
       // Test old authorized can't delegate
@@ -530,7 +530,7 @@ describe('StakeProgram', () => {
           delegateNotAuthorized,
           [authorized],
           {
-            preflightCommitment: 'singleGossip',
+            preflightCommitment: 'confirmed',
           },
         ),
       ).to.be.rejected;
@@ -543,7 +543,7 @@ describe('StakeProgram', () => {
         stakeAuthorizationType: StakeAuthorizationLayout.Withdrawer,
       });
       await sendAndConfirmTransaction(connection, authorize, [newAuthorized], {
-        preflightCommitment: 'singleGossip',
+        preflightCommitment: 'confirmed',
       });
 
       // Restore the previous authority using a derived address
@@ -556,7 +556,7 @@ describe('StakeProgram', () => {
         stakeAuthorizationType: StakeAuthorizationLayout.Withdrawer,
       });
       await sendAndConfirmTransaction(connection, authorize, [payer], {
-        preflightCommitment: 'singleGossip',
+        preflightCommitment: 'confirmed',
       });
     }).timeout(10 * 1000);
   }
