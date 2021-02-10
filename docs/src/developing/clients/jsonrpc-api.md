@@ -387,11 +387,6 @@ intermittently adding a timestamp to a Vote for a particular block. A requested
 block's time is calculated from the stake-weighted mean of the Vote timestamps
 in a set of recent blocks recorded on the ledger.
 
-Nodes that are booting from snapshot or limiting ledger size (by purging old
-slots) will return null timestamps for blocks below their lowest root +
-`TIMESTAMP_SLOT_RANGE`. Users interested in having this historical data must
-query a node that is built from genesis and retains the entire ledger.
-
 #### Parameters:
 
 - `<u64>` - block, identified by Slot

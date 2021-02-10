@@ -190,10 +190,6 @@ pub mod max_program_call_depth_64 {
     solana_sdk::declare_id!("YCKSgA6XmjtkQrHBQjpyNrX6EMhJPcYcLWMVgWn36iv");
 }
 
-pub mod timestamp_correction {
-    solana_sdk::declare_id!("3zydSLUwuqqsV3wL5wBsaVgyvMox3XTHx7zLEuQf1U2Z");
-}
-
 pub mod cumulative_rent_related_fixes {
     solana_sdk::declare_id!("FtjnuAtJTWwX3Kx9m24LduNEhzaGuuPfDW6e14SX2Fy5");
 }
@@ -208,10 +204,6 @@ pub mod pubkey_log_syscall_enabled {
 
 pub mod pull_request_ping_pong_check {
     solana_sdk::declare_id!("5RzEHTnf6D7JPZCvwEzjM19kzBsyjSU3HoMfXaQmVgnZ");
-}
-
-pub mod timestamp_bounding {
-    solana_sdk::declare_id!("2cGj3HJYPhBrtQizd7YbBxEsifFs5qhzabyFjUAp6dBa");
 }
 
 pub mod stake_program_v2 {
@@ -236,10 +228,6 @@ pub mod bpf_loader_upgradeable_program {
 
 pub mod try_find_program_address_syscall_enabled {
     solana_sdk::declare_id!("EMsMNadQNhCYDyGpYH5Tx6dGHxiUqKHk782PU5XaWfmi");
-}
-
-pub mod warp_timestamp {
-    solana_sdk::declare_id!("Bfqm7fGk5MBptqa2WHXWFLH7uJvq8hkJcAQPipy2bAMk");
 }
 
 pub mod stake_program_v3 {
@@ -290,6 +278,10 @@ pub mod matching_buffer_upgrade_authorities {
     solana_sdk::declare_id!("B5PSjDEJvKJEUQSL7q94N7XCEoWJCYum8XfUg7yuugUU");
 }
 
+pub mod warp_timestamp_again {
+    solana_sdk::declare_id!("GvDsGDkH5gyzwpDhxNixx8vtx1kwYHH13RiNAPw27zXb");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -307,19 +299,16 @@ lazy_static! {
         (ristretto_mul_syscall_enabled::id(), "ristretto multiply syscall"),
         (max_invoke_depth_4::id(), "max invoke call depth 4"),
         (max_program_call_depth_64::id(), "max program call depth 64"),
-        (timestamp_correction::id(), "correct bank timestamps"),
         (cumulative_rent_related_fixes::id(), "rent fixes (#10206, #10468, #11342)"),
         (sol_log_compute_units_syscall::id(), "sol_log_compute_units syscall (#13243)"),
         (pubkey_log_syscall_enabled::id(), "pubkey log syscall"),
         (pull_request_ping_pong_check::id(), "ping-pong packet check #12794"),
-        (timestamp_bounding::id(), "add timestamp-correction bounding #13120"),
         (stake_program_v2::id(), "solana_stake_program v2"),
         (rewrite_stake::id(), "rewrite stake"),
         (filter_stake_delegation_accounts::id(), "filter stake_delegation_accounts #14062"),
         (simple_capitalization::id(), "simple capitalization"),
         (bpf_loader_upgradeable_program::id(), "upgradeable bpf loader"),
         (try_find_program_address_syscall_enabled::id(), "add try_find_program_address syscall"),
-        (warp_timestamp::id(), "warp timestamp to current, adjust bounding to 50% #14210 & #14531"),
         (stake_program_v3::id(), "solana_stake_program v3"),
         (max_cpi_instruction_size_ipv6_mtu::id(), "max cross-program invocation size 1280"),
         (limit_cpi_loader_invoke::id(), "loader not authorized via CPI"),
@@ -358,6 +347,7 @@ lazy_static! {
         (full_inflation::stakeconomy::vote::id(), "Community vote allowing Stakeconomy.com to enable full inflation"),
         (full_inflation::w3m::vote::id(), "Community vote allowing w3m to enable full inflation"),
         (full_inflation::w3m::enable::id(), "Full inflation enabled by w3m"),
+        (warp_timestamp_again::id(), "warp timestamp again, adjust bounding to 25% fast 80% slow #15204"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

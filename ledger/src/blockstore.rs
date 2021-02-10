@@ -24,20 +24,13 @@ use rocksdb::DBRawIterator;
 use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_debug, datapoint_error};
 use solana_rayon_threadlimit::get_thread_count;
-use solana_runtime::{
-    hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
-    vote_account::ArcVoteAccount,
-};
+use solana_runtime::hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE};
 use solana_sdk::{
     clock::{Slot, UnixTimestamp, DEFAULT_TICKS_PER_SECOND, MS_PER_TICK},
     genesis_config::GenesisConfig,
     hash::Hash,
-    program_utils::limited_deserialize,
     pubkey::Pubkey,
     signature::{Keypair, Signature, Signer},
-    stake_weighted_timestamp::{
-        calculate_stake_weighted_timestamp, EstimateType, TIMESTAMP_SLOT_RANGE,
-    },
     timing::timestamp,
     transaction::Transaction,
 };
@@ -46,7 +39,6 @@ use solana_transaction_status::{
     ConfirmedBlock, ConfirmedTransaction, ConfirmedTransactionStatusWithSignature, Rewards,
     TransactionStatusMeta, TransactionWithStatusMeta,
 };
-use solana_vote_program::vote_instruction::VoteInstruction;
 use std::{
     cell::RefCell,
     cmp,
@@ -59,7 +51,6 @@ use std::{
         mpsc::{sync_channel, Receiver, SyncSender, TrySendError},
         Arc, Mutex, RwLock,
     },
-    time::Duration,
 };
 use thiserror::Error;
 use trees::{Tree, TreeWalk};
@@ -1682,83 +1673,11 @@ impl Blockstore {
         self.blocktime_cf.get(slot)
     }
 
-    fn get_timestamp_slots(&self, slot: Slot, timestamp_sample_range: usize) -> Vec<Slot> {
-        let root_iterator = self
-            .db
-            .iter::<cf::Root>(IteratorMode::From(slot, IteratorDirection::Reverse));
-        if !self.is_root(slot) || root_iterator.is_err() {
-            return vec![];
-        }
-        let mut get_slots = Measure::start("get_slots");
-        let mut timestamp_slots: Vec<Slot> = root_iterator
-            .unwrap()
-            .map(|(iter_slot, _)| iter_slot)
-            .take(timestamp_sample_range)
-            .collect();
-        timestamp_slots.sort_unstable();
-        get_slots.stop();
-        datapoint_info!(
-            "blockstore-get-timestamp-slots",
-            ("slot", slot as i64, i64),
-            ("get_slots_us", get_slots.as_us() as i64, i64)
-        );
-        timestamp_slots
-    }
-
     pub fn cache_block_time(&self, slot: Slot, timestamp: UnixTimestamp) -> Result<()> {
         if !self.is_root(slot) {
             return Err(BlockstoreError::SlotNotRooted);
         }
         self.blocktime_cf.put(slot, &timestamp)
-    }
-
-    // DEPRECATED as of feature_set::timestamp_correction
-    pub fn cache_block_time_from_slot_entries(
-        &self,
-        slot: Slot,
-        slot_duration: Duration,
-        stakes: &HashMap<Pubkey, (u64, ArcVoteAccount)>,
-    ) -> Result<()> {
-        if !self.is_root(slot) {
-            return Err(BlockstoreError::SlotNotRooted);
-        }
-        let mut get_unique_timestamps = Measure::start("get_unique_timestamps");
-        let unique_timestamps: HashMap<Pubkey, (Slot, UnixTimestamp)> = self
-            .get_timestamp_slots(slot, TIMESTAMP_SLOT_RANGE)
-            .into_iter()
-            .flat_map(|query_slot| self.get_block_timestamps(query_slot).unwrap_or_default())
-            .collect();
-        get_unique_timestamps.stop();
-        if unique_timestamps.is_empty() {
-            return Err(BlockstoreError::NoVoteTimestampsInRange);
-        }
-
-        let mut calculate_timestamp = Measure::start("calculate_timestamp");
-        let stake_weighted_timestamp = calculate_stake_weighted_timestamp(
-            &unique_timestamps,
-            stakes,
-            slot,
-            slot_duration,
-            EstimateType::Unbounded,
-            None,
-        )
-        .ok_or(BlockstoreError::EmptyEpochStakes)?;
-        calculate_timestamp.stop();
-        datapoint_info!(
-            "blockstore-get-block-time",
-            ("slot", slot as i64, i64),
-            (
-                "get_unique_timestamps_us",
-                get_unique_timestamps.as_us() as i64,
-                i64
-            ),
-            (
-                "calculate_stake_weighted_timestamp_us",
-                calculate_timestamp.as_us() as i64,
-                i64
-            )
-        );
-        self.cache_block_time(slot, stake_weighted_timestamp)
     }
 
     pub fn get_first_available_block(&self) -> Result<Slot> {
@@ -2383,36 +2302,6 @@ impl Blockstore {
     pub fn write_rewards(&self, index: Slot, rewards: Rewards) -> Result<()> {
         let rewards = rewards.into();
         self.rewards_cf.put_protobuf(index, &rewards)
-    }
-
-    fn get_block_timestamps(&self, slot: Slot) -> Result<Vec<(Pubkey, (Slot, UnixTimestamp))>> {
-        let slot_entries = self.get_slot_entries(slot, 0)?;
-        Ok(slot_entries
-            .iter()
-            .cloned()
-            .flat_map(|entry| entry.transactions)
-            .flat_map(|transaction| {
-                let mut timestamps: Vec<(Pubkey, (Slot, UnixTimestamp))> = Vec::new();
-                for instruction in transaction.message.instructions {
-                    let program_id = instruction.program_id(&transaction.message.account_keys);
-                    if program_id == &solana_vote_program::id() {
-                        if let Ok(VoteInstruction::Vote(vote)) =
-                            limited_deserialize(&instruction.data)
-                        {
-                            if let Some(timestamp) = vote.timestamp {
-                                let timestamp_slot = vote.slots.iter().max();
-                                if let Some(timestamp_slot) = timestamp_slot {
-                                    let vote_pubkey = transaction.message.account_keys
-                                        [instruction.accounts[0] as usize];
-                                    timestamps.push((vote_pubkey, (*timestamp_slot, timestamp)));
-                                }
-                            }
-                        }
-                    }
-                }
-                timestamps
-            })
-            .collect())
     }
 
     pub fn get_recent_perf_samples(&self, num: usize) -> Result<Vec<(Slot, PerfSample)>> {
@@ -3595,7 +3484,6 @@ fn adjust_ulimit_nofile(enforce_ulimit_nofile: bool) -> Result<()> {
 pub mod tests {
     use super::*;
     use crate::{
-        blockstore_processor::fill_blockstore_slot_with_ticks,
         entry::{next_entry, next_entry_mut},
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         leader_schedule::{FixedSchedule, LeaderSchedule},
@@ -3609,7 +3497,6 @@ pub mod tests {
     use solana_sdk::{
         hash::{self, hash, Hash},
         instruction::CompiledInstruction,
-        message::Message,
         packet::PACKET_DATA_SIZE,
         pubkey::Pubkey,
         signature::Signature,
@@ -3617,7 +3504,6 @@ pub mod tests {
     };
     use solana_storage_proto::convert::generated;
     use solana_transaction_status::{InnerInstructions, Reward, Rewards};
-    use solana_vote_program::{vote_instruction, vote_state::Vote};
     use std::time::Duration;
 
     // used for tests only
@@ -5749,92 +5635,6 @@ pub mod tests {
     }
 
     #[test]
-    fn test_get_timestamp_slots() {
-        let timestamp_sample_range = 5;
-        let ticks_per_slot = 5;
-        /*
-            Build a blockstore with < TIMESTAMP_SLOT_RANGE roots
-        */
-        let blockstore_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&blockstore_path).unwrap();
-        blockstore.set_roots(&[0]).unwrap();
-        let mut last_entry_hash = Hash::default();
-        for slot in 0..=3 {
-            let parent = {
-                if slot == 0 {
-                    0
-                } else {
-                    slot - 1
-                }
-            };
-            last_entry_hash = fill_blockstore_slot_with_ticks(
-                &blockstore,
-                ticks_per_slot,
-                slot,
-                parent,
-                last_entry_hash,
-            );
-        }
-        blockstore.set_roots(&[1, 2, 3]).unwrap();
-
-        assert_eq!(
-            blockstore.get_timestamp_slots(2, timestamp_sample_range),
-            vec![0, 1, 2]
-        );
-        assert_eq!(
-            blockstore.get_timestamp_slots(3, timestamp_sample_range),
-            vec![0, 1, 2, 3]
-        );
-
-        drop(blockstore);
-        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
-
-        /*
-            Build a blockstore in the ledger with gaps in rooted slot sequence
-
-        */
-        let blockstore_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&blockstore_path).unwrap();
-        blockstore.set_roots(&[0]).unwrap();
-        let desired_roots = vec![1, 2, 3, 5, 6, 8, 11];
-        let mut last_entry_hash = Hash::default();
-        for (i, slot) in desired_roots.iter().enumerate() {
-            let parent = {
-                if i == 0 {
-                    0
-                } else {
-                    desired_roots[i - 1]
-                }
-            };
-            last_entry_hash = fill_blockstore_slot_with_ticks(
-                &blockstore,
-                ticks_per_slot,
-                *slot,
-                parent,
-                last_entry_hash,
-            );
-        }
-        blockstore.set_roots(&desired_roots).unwrap();
-
-        assert_eq!(
-            blockstore.get_timestamp_slots(2, timestamp_sample_range),
-            vec![0, 1, 2]
-        );
-        assert_eq!(
-            blockstore.get_timestamp_slots(6, timestamp_sample_range),
-            vec![1, 2, 3, 5, 6]
-        );
-        assert_eq!(
-            blockstore.get_timestamp_slots(8, timestamp_sample_range),
-            vec![2, 3, 5, 6, 8]
-        );
-        assert_eq!(
-            blockstore.get_timestamp_slots(11, timestamp_sample_range),
-            vec![3, 5, 6, 8, 11]
-        );
-    }
-
-    #[test]
     fn test_get_confirmed_block() {
         let slot = 10;
         let entries = make_slot_entries_with_transactions(100);
@@ -5961,130 +5761,6 @@ pub mod tests {
 
         drop(ledger);
         Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
-    }
-
-    #[test]
-    fn test_get_block_timestamps() {
-        let vote_keypairs: Vec<Keypair> = (0..6).map(|_| Keypair::new()).collect();
-        let base_timestamp = 1_576_183_541;
-        let mut expected_timestamps: Vec<(Pubkey, (Slot, UnixTimestamp))> = Vec::new();
-
-        // Populate slot 1 with vote transactions, some of which have timestamps
-        let mut vote_entries: Vec<Entry> = Vec::new();
-        for (i, keypair) in vote_keypairs.iter().enumerate() {
-            let timestamp = if i % 2 == 0 {
-                let unique_timestamp = base_timestamp + i as i64;
-                expected_timestamps.push((keypair.pubkey(), (1, unique_timestamp)));
-                Some(unique_timestamp)
-            } else {
-                None
-            };
-            let vote = Vote {
-                slots: vec![1],
-                hash: Hash::default(),
-                timestamp,
-            };
-            let vote_ix = vote_instruction::vote(&keypair.pubkey(), &keypair.pubkey(), vote);
-            let vote_msg = Message::new(&[vote_ix], Some(&keypair.pubkey()));
-            let vote_tx = Transaction::new(&[keypair], vote_msg, Hash::default());
-
-            vote_entries.push(next_entry_mut(&mut Hash::default(), 0, vec![vote_tx]));
-            let mut tick = create_ticks(1, 0, hash(&serialize(&i).unwrap()));
-            vote_entries.append(&mut tick);
-        }
-        let shreds = entries_to_test_shreds(vote_entries, 1, 0, true, 0);
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
-        blockstore.insert_shreds(shreds, None, false).unwrap();
-        // Populate slot 2 with ticks only
-        fill_blockstore_slot_with_ticks(&blockstore, 6, 2, 1, Hash::default());
-        blockstore.set_roots(&[0, 1, 2]).unwrap();
-
-        assert_eq!(
-            blockstore.get_block_timestamps(1).unwrap(),
-            expected_timestamps
-        );
-        assert_eq!(blockstore.get_block_timestamps(2).unwrap(), vec![]);
-
-        blockstore.set_roots(&[3, 8]).unwrap();
-        let mut stakes = HashMap::new();
-        let slot_duration = Duration::from_millis(400);
-        for slot in &[1, 2, 3, 8] {
-            assert!(blockstore
-                .cache_block_time_from_slot_entries(*slot, slot_duration, &stakes)
-                .is_err());
-        }
-
-        // Build epoch vote_accounts HashMap to test stake-weighted block time
-        for (i, keypair) in vote_keypairs.iter().enumerate() {
-            stakes.insert(keypair.pubkey(), (1 + i as u64, ArcVoteAccount::default()));
-        }
-        for slot in &[1, 2, 3, 8] {
-            blockstore
-                .cache_block_time_from_slot_entries(*slot, slot_duration, &stakes)
-                .unwrap();
-        }
-        let block_time_slot_3 = blockstore.get_block_time(3);
-
-        let mut total_stake = 0;
-        let mut expected_time: u64 = (0..6)
-            .map(|x| {
-                if x % 2 == 0 {
-                    total_stake += 1 + x;
-                    (base_timestamp as u64 + x) * (1 + x)
-                } else {
-                    0
-                }
-            })
-            .sum();
-        expected_time /= total_stake;
-        assert_eq!(block_time_slot_3.unwrap().unwrap() as u64, expected_time);
-        assert_eq!(
-            blockstore.get_block_time(8).unwrap().unwrap() as u64,
-            expected_time + 2 // At 400ms block duration, 5 slots == 2sec
-        );
-    }
-
-    #[test]
-    fn test_get_block_time_no_timestamps() {
-        let vote_keypairs: Vec<Keypair> = (0..6).map(|_| Keypair::new()).collect();
-
-        // Populate slot 1 with vote transactions, none of which have timestamps
-        let mut vote_entries: Vec<Entry> = Vec::new();
-        for (i, keypair) in vote_keypairs.iter().enumerate() {
-            let vote = Vote {
-                slots: vec![1],
-                hash: Hash::default(),
-                timestamp: None,
-            };
-            let vote_ix = vote_instruction::vote(&keypair.pubkey(), &keypair.pubkey(), vote);
-            let vote_msg = Message::new(&[vote_ix], Some(&keypair.pubkey()));
-            let vote_tx = Transaction::new(&[keypair], vote_msg, Hash::default());
-
-            vote_entries.push(next_entry_mut(&mut Hash::default(), 0, vec![vote_tx]));
-            let mut tick = create_ticks(1, 0, hash(&serialize(&i).unwrap()));
-            vote_entries.append(&mut tick);
-        }
-        let shreds = entries_to_test_shreds(vote_entries, 1, 0, true, 0);
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
-        blockstore.insert_shreds(shreds, None, false).unwrap();
-        // Populate slot 2 with ticks only
-        fill_blockstore_slot_with_ticks(&blockstore, 6, 2, 1, Hash::default());
-        blockstore.set_roots(&[0, 1, 2]).unwrap();
-
-        // Build epoch vote_accounts HashMap to test stake-weighted block time
-        let mut stakes = HashMap::new();
-        for (i, keypair) in vote_keypairs.iter().enumerate() {
-            stakes.insert(keypair.pubkey(), (1 + i as u64, ArcVoteAccount::default()));
-        }
-        let slot_duration = Duration::from_millis(400);
-        for slot in &[1, 2, 3, 8] {
-            assert!(blockstore
-                .cache_block_time_from_slot_entries(*slot, slot_duration, &stakes)
-                .is_err());
-            assert_eq!(blockstore.get_block_time(*slot).unwrap(), None);
-        }
     }
 
     #[test]
