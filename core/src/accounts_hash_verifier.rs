@@ -155,6 +155,12 @@ impl AccountsHashVerifier {
             }
         }
 
+        info!("ahv: Checking hash for package: {}", accounts_package.slot);
+        for s in accounts_package.storages.iter().flatten() {
+            s.check_hash();
+        }
+        info!("ahv: Done hash for package: {}", accounts_package.slot);
+
         if accounts_package.block_height % snapshot_interval_slots == 0 {
             if let Some(pending_snapshot_package) = pending_snapshot_package.as_ref() {
                 *pending_snapshot_package.lock().unwrap() = Some(accounts_package);

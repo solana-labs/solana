@@ -267,8 +267,10 @@ pub fn archive_snapshot_package(snapshot_package: &AccountsPackage) -> Result<()
         &staging_snapshots_dir,
     )?;
 
+    let mut storages_len = 0;
     // Add the AppendVecs into the compressible list
-    for storage in snapshot_package.storages.iter().flatten() {
+    for (i, storage) in snapshot_package.storages.iter().flatten().enumerate() {
+        storage.check_hash();
         storage.flush()?;
         let storage_path = storage.get_path();
         let output_path =
@@ -285,7 +287,12 @@ pub fn archive_snapshot_package(snapshot_package: &AccountsPackage) -> Result<()
         if !output_path.is_file() {
             return Err(SnapshotError::StoragePathSymlinkInvalid);
         }
+        storages_len = i;
     }
+    info!(
+        "Finished storage flush slot: {} storages.len: {}",
+        snapshot_package.slot, storages_len
+    );
 
     // Write version file
     {
@@ -891,6 +898,9 @@ pub fn snapshot_bank(
     hash_for_testing: Option<Hash>,
 ) -> Result<()> {
     let storages: Vec<_> = root_bank.get_snapshot_storages();
+    for store in storages.iter().flatten() {
+        store.acquire_in_snapshot();
+    }
     let mut add_snapshot_time = Measure::start("add-snapshot-ms");
     add_snapshot(snapshot_path, &root_bank, &storages, snapshot_version)?;
     add_snapshot_time.stop();
@@ -901,6 +911,15 @@ pub fn snapshot_bank(
     let latest_slot_snapshot_paths = slot_snapshot_paths
         .last()
         .expect("no snapshots found in config snapshot_path");
+
+    info!(
+        "updating hash for snapshot stores slot: {}",
+        root_bank.slot()
+    );
+    for store in storages.iter().flatten() {
+        store.update_hash();
+    }
+    info!("Done hash for snapshot stores slot: {}", root_bank.slot());
 
     let package = package_snapshot(
         &root_bank,
@@ -957,7 +976,7 @@ pub fn bank_to_snapshot_archive<P: AsRef<Path>, Q: AsRef<Path>>(
     let package = process_accounts_package_pre(package, thread_pool);
 
     archive_snapshot_package(&package)?;
-    Ok(package.tar_output_file)
+    Ok(package.tar_output_file.clone())
 }
 
 pub fn process_accounts_package_pre(
