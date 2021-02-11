@@ -1230,7 +1230,7 @@ mod tests {
         transaction::TransactionError,
     };
     use solana_transaction_status::TransactionWithStatusMeta;
-    use std::{path::Path, sync::atomic::Ordering, thread::sleep};
+    use std::{net::SocketAddr, path::Path, sync::atomic::Ordering, thread::sleep};
 
     #[test]
     fn test_banking_stage_shutdown1() {
@@ -2386,5 +2386,72 @@ mod tests {
             t_consume.join().unwrap();
         }
         Blockstore::destroy(&ledger_path).unwrap();
+    }
+
+    #[test]
+    fn test_push_unprocessed_batch_limit() {
+        // Create `Packets` with 1 unprocessed element
+        let single_element_packets = Packets::new(vec![Packet::default()]);
+        let mut unprocessed_packets: UnprocessedPackets =
+            vec![(single_element_packets.clone(), vec![0])]
+                .into_iter()
+                .collect();
+        // Set the limit to 2
+        let batch_limit = 2;
+        // Create some new unprocessed packets
+        let new_packets = single_element_packets;
+        let packet_indexes = vec![];
+
+        let mut dropped_batches_count = 0;
+        let mut newly_buffered_packets_count = 0;
+        // Because the unprocessed `packet_indexes` is empty, this packets are not aded to
+        // the unprocessed queue
+        BankingStage::push_unprocessed(
+            &mut unprocessed_packets,
+            new_packets.clone(),
+            packet_indexes,
+            &mut dropped_batches_count,
+            &mut newly_buffered_packets_count,
+            batch_limit,
+        );
+        assert_eq!(unprocessed_packets.len(), 1);
+        assert_eq!(dropped_batches_count, 0);
+        assert_eq!(newly_buffered_packets_count, 0);
+
+        // Because the unprocessed `packet_indexes` is non-empty, the packets are aded to
+        // the unprocessed queue
+        let packet_indexes = vec![0];
+        BankingStage::push_unprocessed(
+            &mut unprocessed_packets,
+            new_packets,
+            packet_indexes.clone(),
+            &mut dropped_batches_count,
+            &mut newly_buffered_packets_count,
+            batch_limit,
+        );
+        assert_eq!(unprocessed_packets.len(), 2);
+        assert_eq!(dropped_batches_count, 0);
+        assert_eq!(newly_buffered_packets_count, 1);
+
+        // Because we've reached the batch limit, old unprocessed packets are
+        // dropped and the new one is appended to the end
+        let new_packets = Packets::new(vec![Packet::from_data(
+            &SocketAddr::from(([127, 0, 0, 1], 8001)),
+            42,
+        )
+        .unwrap()]);
+        assert_eq!(unprocessed_packets.len(), batch_limit);
+        BankingStage::push_unprocessed(
+            &mut unprocessed_packets,
+            new_packets.clone(),
+            packet_indexes,
+            &mut dropped_batches_count,
+            &mut newly_buffered_packets_count,
+            batch_limit,
+        );
+        assert_eq!(unprocessed_packets.len(), 2);
+        assert_eq!(unprocessed_packets[1].0.packets[0], new_packets.packets[0]);
+        assert_eq!(dropped_batches_count, 1);
+        assert_eq!(newly_buffered_packets_count, 2);
     }
 }
