@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
-    "@project-serum/serum": "^0.13.20",
+    "@project-serum/serum": "^0.13.21",
     "@react-hook/debounce": "^3.0.0",
     "@sentry/react": "^6.1.0",
     "@solana/web3.js": "^0.91.1",
@@ -40,7 +40,7 @@
     "react-scripts": "^4.0.2",
     "react-select": "^4.1.0",
     "superstruct": "github:solana-labs/superstruct",
-    "typescript": "^4.1.4"
+    "typescript": "^4.1.5"
   },
   "scripts": {
     "start": "react-scripts start",
