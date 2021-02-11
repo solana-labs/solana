@@ -29,7 +29,7 @@ use {
     solana_stake_program::stake_state::{Authorized, Lockup},
     solana_vote_program::{
         authorized_voters::AuthorizedVoters,
-        vote_state::{BlockTimestamp, Lockout},
+        vote_state::{BlockTimestamp, Lockout, MAX_EPOCH_CREDITS_HISTORY, MAX_LOCKOUT_HISTORY},
     },
     std::{
         collections::{BTreeMap, HashMap},
@@ -610,17 +610,55 @@ fn show_votes_and_credits(
         return Ok(());
     }
 
-    writeln!(f, "Recent Votes:")?;
-    for vote in votes {
-        writeln!(f, "- slot: {}", vote.slot)?;
-        writeln!(f, "  confirmation count: {}", vote.confirmation_count)?;
-    }
-    writeln!(f, "Epoch Voting History:")?;
+    // Existence of this should guarantee the occurrence of vote truncation
+    let newest_history_entry = epoch_voting_history.iter().rev().next();
+
     writeln!(
         f,
-        "* missed credits include slots unavailable to vote on due to delinquent leaders",
+        "{} Votes (using {}/{} entries):",
+        (if newest_history_entry.is_none() {
+            "All"
+        } else {
+            "Recent"
+        }),
+        votes.len(),
+        MAX_LOCKOUT_HISTORY
     )?;
-    for entry in epoch_voting_history {
+
+    for vote in votes.iter().rev() {
+        writeln!(
+            f,
+            "- slot: {} (confirmation count: {})",
+            vote.slot, vote.confirmation_count
+        )?;
+    }
+    if let Some(newest) = newest_history_entry {
+        writeln!(
+            f,
+            "- ... (truncated {} rooted votes, which have been credited)",
+            newest.credits
+        )?;
+    }
+
+    if !epoch_voting_history.is_empty() {
+        writeln!(
+            f,
+            "{} Epoch Voting History (using {}/{} entries):",
+            (if epoch_voting_history.len() < MAX_EPOCH_CREDITS_HISTORY {
+                "All"
+            } else {
+                "Recent"
+            }),
+            epoch_voting_history.len(),
+            MAX_EPOCH_CREDITS_HISTORY
+        )?;
+        writeln!(
+            f,
+            "* missed credits include slots unavailable to vote on due to delinquent leaders",
+        )?;
+    }
+
+    for entry in epoch_voting_history.iter().rev() {
         writeln!(
             f, // tame fmt so that this will be folded like following
             "- epoch: {}",
@@ -628,7 +666,7 @@ fn show_votes_and_credits(
         )?;
         writeln!(
             f,
-            "  credits range: [{}..{})",
+            "  credits range: ({}..{}]",
             entry.prev_credits, entry.credits
         )?;
         writeln!(
@@ -637,6 +675,22 @@ fn show_votes_and_credits(
             entry.credits_earned, entry.slots_in_epoch
         )?;
     }
+    if let Some(oldest) = epoch_voting_history.iter().next() {
+        if oldest.prev_credits > 0 {
+            // Oldest entry doesn't start with 0. so history must be truncated...
+
+            // count of this combined pseudo credits range: (0..=oldest.prev_credits] like the above
+            // (or this is just [1..=oldest.prev_credits] for human's simpler minds)
+            let count = oldest.prev_credits;
+
+            writeln!(
+                f,
+                "- ... (omitting {} past rooted votes, which have already been credited)",
+                count
+            )?;
+        }
+    }
+
     Ok(())
 }
 
