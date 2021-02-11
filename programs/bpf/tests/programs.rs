@@ -1215,8 +1215,8 @@ fn assert_instruction_count() {
             ("multiple_static", 8),
             ("noop", 57),
             ("relative_call", 10),
-            ("sanity", 176),
-            ("sanity++", 176),
+            ("sanity", 175),
+            ("sanity++", 177),
             ("struct_pass", 8),
             ("struct_ret", 22),
         ]);
