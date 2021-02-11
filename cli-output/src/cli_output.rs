@@ -635,7 +635,7 @@ fn show_votes_and_credits(
     if let Some(newest) = newest_history_entry {
         writeln!(
             f,
-            "- ... (truncated older {} votes, which was rooted and became credits)",
+            "- ... (truncated {} rooted votes, which have been credited)",
             newest.credits
         )?;
     }
@@ -685,7 +685,7 @@ fn show_votes_and_credits(
 
             writeln!(
                 f,
-                "- ... (truncated older history covering {} credits/rooted votes)",
+                "- ... (omitting {} past rooted votes, which have already been credited)",
                 count
             )?;
         }
