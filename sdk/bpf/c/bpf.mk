@@ -14,14 +14,8 @@ TEST_PREFIX ?= test_
 OUT_DIR ?= ./out
 OS := $(shell uname)
 
-ifeq ($(DOCKER),1)
-$(warning DOCKER=1 is experimential and may not work as advertised)
-LLVM_DIR = $(LOCAL_PATH)../dependencies/llvm-docker/
-LLVM_SYSTEM_INC_DIRS := /usr/local/lib/clang/8.0.0/include
-else
-LLVM_DIR = $(LOCAL_PATH)../dependencies/llvm-native/
+LLVM_DIR = $(LOCAL_PATH)../dependencies/bpf-tools/llvm/
 LLVM_SYSTEM_INC_DIRS := $(LLVM_DIR)/lib/clang/8.0.0/include
-endif
 
 ifdef LLVM_DIR
 CC := $(LLVM_DIR)/bin/clang

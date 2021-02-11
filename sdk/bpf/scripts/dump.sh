@@ -20,14 +20,6 @@ if ! command -v rustfilt > /dev/null; then
   echo "Error: rustfilt not found.  It can be installed by running: cargo install rustfilt"
   exit 1
 fi
-if ! command -v readelf > /dev/null; then
-  if [[ $(uname) = Darwin ]]; then
-      echo "Error: readelf not found.  It can be installed by running: brew install binutils"
-  else
-      echo "Error: readelf not found."
-  fi
-  exit 1
-fi
 
 set -e
 out_dir=$(dirname "$dump")
@@ -39,7 +31,7 @@ dump_mangled=$dump.mangled
 (
   set -ex
   ls -la "$so" > "$dump_mangled"
-  readelf -aW "$so" >>"$dump_mangled"
+  "$bpf_sdk"/dependencies/bpf-tools/llvm/bin/llvm-readelf -aW "$so" >>"$dump_mangled"
   "$OBJDUMP" -print-imm-hex --source --disassemble "$so" >> "$dump_mangled"
   sed s/://g < "$dump_mangled" | rustfilt > "$dump"
 )
