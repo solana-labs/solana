@@ -3442,6 +3442,89 @@ impl AccountsDB {
         }
     }
 
+    // This function is designed to allow hashes to be located in multiple, perhaps multiply deep vecs.
+    // The caller provides a callback to return a slice from the source data.
+    // This function groups together larger sections than fanout to make the # of calls more efficient.
+    fn compute_merkle_root_from_slices<'a, F>(
+        total_hashes: usize,
+        fanout: usize,
+        get_hashes: F,
+    ) -> Hash
+    where
+        F: Fn(usize, usize) -> &'a [Hash] + std::marker::Sync,
+    {
+        let fanout_pow = fanout.pow(3); // this 3 is tied to the number of loop unrolls below
+        if total_hashes < fanout_pow {
+            // less hashes than our efficient ideal, so flatten the vector and call the normal code
+            let mut accumulate = Vec::with_capacity(total_hashes);
+            while accumulate.len() < total_hashes {
+                let data = get_hashes(accumulate.len(), total_hashes);
+                accumulate.extend(data);
+            }
+
+            return Self::compute_merkle_root_and_capitalization_loop(accumulate, fanout, |item| {
+                (*item, 0)
+            })
+            .0;
+        }
+
+        let mut time = Measure::start("time");
+
+        let chunks = total_hashes.div_ceil(&fanout_pow);
+
+        let result: Vec<_> = (0..chunks)
+            .into_par_iter()
+            .map(|i| {
+                let start_index = i * fanout_pow;
+                let end_index = std::cmp::min(start_index + fanout_pow, total_hashes);
+
+                let mut i = start_index;
+                let mut hasher = Hasher::default();
+                let mut data: &[Hash] = &[];
+                let mut data_len = data.len();
+                let mut data_index = 0;
+
+                for _j in 0..fanout {
+                    let mut hasher_j = Hasher::default();
+                    for _k in 0..fanout {
+                        let mut hasher_k = Hasher::default();
+                        let end = std::cmp::min(i + fanout, end_index);
+                        let loop_start = i;
+                        for _l in loop_start..end {
+                            if data_index >= data_len {
+                                // fetch next slice
+                                data = get_hashes(i, total_hashes);
+                                data_len = data.len();
+                                data_index = 0;
+                            }
+
+                            hasher_k.hash(data[data_index].as_ref());
+                            data_index += 1;
+                            i += 1;
+                        }
+                        hasher_j.hash(hasher_k.result().as_ref());
+                        if i >= end_index {
+                            break;
+                        }
+                    }
+                    hasher.hash(hasher_j.result().as_ref());
+                    if i >= end_index {
+                        break;
+                    }
+                }
+                (hasher.result(), 0)
+            })
+            .collect();
+        time.stop();
+        debug!("hashing {} {}", total_hashes, time);
+
+        if result.len() == 1 {
+            result[0].0
+        } else {
+            Self::compute_merkle_root_and_capitalization_recurse(result, fanout).0
+        }
+    }
+
     fn accumulate_account_hashes(
         hashes: Vec<(Pubkey, Hash, u64)>,
         slot: Slot,
@@ -3810,14 +3893,45 @@ impl AccountsDB {
         (result, sum)
     }
 
-    fn flatten_hashes(hashes: Vec<Vec<Hash>>) -> (Vec<Hash>, Measure, usize) {
-        // flatten vec/vec into 1d vec of hashes in order
+    fn flatten_hashes_and_hash(hashes: Vec<Vec<Hash>>, fanout: usize) -> (Hash, Measure, usize) {
         let mut flat2_time = Measure::start("flat2");
-        let hashes: Vec<Hash> = hashes.into_iter().flatten().collect();
-        flat2_time.stop();
-        let hash_total = hashes.len();
+        let mut size: usize = 0;
+        let mut cumulative_len = Vec::new();
+        hashes.iter().enumerate().for_each(|(i, v)| {
+            let len = v.len();
+            cumulative_len.push((i, size, size + len));
+            size += len;
+        });
 
-        (hashes, flat2_time, hash_total)
+        let mut hash_bkup = Hash::default();
+        let test = false;
+        if test {
+            let hashes_bk: Vec<Hash> = hashes.clone().into_iter().flatten().collect();
+            hash_bkup =
+                Self::compute_merkle_root_and_capitalization_loop(hashes_bk, fanout, |t: &Hash| {
+                    (*t, 0)
+                })
+                .0;
+        }
+
+        let get_slice = |start: usize, end: usize| -> &[Hash] {
+            for index in &cumulative_len {
+                if start >= index.1 && start < index.2 {
+                    let start = start - index.1;
+                    let end = std::cmp::min(end, index.2) - index.1;
+                    return &hashes[index.0][start..end];
+                }
+            }
+            panic!("didn't find: {}, {}, len: {}", start, end, size);
+        };
+        let hash = Self::compute_merkle_root_from_slices(size, fanout, get_slice);
+        if test {
+            assert_eq!(hash_bkup, hash);
+        }
+
+        flat2_time.stop();
+
+        (hash, flat2_time, size)
     }
 
     // input:
@@ -3838,14 +3952,8 @@ impl AccountsDB {
         let (hashes, zeros, total_lamports) =
             Self::de_dup_and_eliminate_zeros(sorted_data_by_pubkey);
 
-        let (hashes, flat2_time, hash_total) = Self::flatten_hashes(hashes);
+        let (hash, hash_time, hash_total) = Self::flatten_hashes_and_hash(hashes, MERKLE_FANOUT);
 
-        let mut hash_time = Measure::start("hashes");
-        let (hash, _) =
-            Self::compute_merkle_root_and_capitalization_loop(hashes, MERKLE_FANOUT, |t: &Hash| {
-                (*t, 0)
-            });
-        hash_time.stop();
         datapoint_info!(
             "calculate_accounts_hash_without_index",
             ("accounts_scan", time_scan.as_us(), i64),
@@ -3854,7 +3962,6 @@ impl AccountsDB {
             ("sort", sort_time.as_us(), i64),
             ("hash_total", hash_total, i64),
             ("flatten", flatten_time.as_us(), i64),
-            ("flatten_after_zeros", flat2_time.as_us(), i64),
             ("unreduced_entries", raw_len as i64, i64),
         );
 
@@ -5419,15 +5526,26 @@ pub mod tests {
             .into_iter()
             .map(|i| Hash::new(&[(i) as u8; 32]))
             .collect();
-        let expected = hashes.clone();
+        let expected = AccountsDB::compute_merkle_root_and_capitalization_loop(
+            hashes.clone(),
+            MERKLE_FANOUT,
+            |i| (*i, 0),
+        )
+        .0;
 
-        assert_eq!(AccountsDB::flatten_hashes(vec![hashes.clone()]).0, expected);
+        assert_eq!(
+            AccountsDB::flatten_hashes_and_hash(vec![hashes.clone()], MERKLE_FANOUT).0,
+            expected
+        );
         for in_first in 1..COUNT - 1 {
             assert_eq!(
-                AccountsDB::flatten_hashes(vec![
-                    hashes.clone()[0..in_first].to_vec(),
-                    hashes.clone()[in_first..COUNT].to_vec()
-                ])
+                AccountsDB::flatten_hashes_and_hash(
+                    vec![
+                        hashes.clone()[0..in_first].to_vec(),
+                        hashes.clone()[in_first..COUNT].to_vec()
+                    ],
+                    MERKLE_FANOUT
+                )
                 .0,
                 expected
             );
@@ -5615,6 +5733,54 @@ pub mod tests {
         assert_eq!(len, expected.len());
     }
 
+    fn test_hashing_larger(hashes: Vec<(Pubkey, Hash, u64)>, fanout: usize) -> (Hash, u64) {
+        let result = AccountsDB::compute_merkle_root_and_capitalization(hashes.clone(), fanout);
+        if hashes.len() >= fanout * fanout * fanout {
+            let reduced: Vec<_> = hashes.iter().map(|x| x.1).collect();
+            let result2 =
+                AccountsDB::compute_merkle_root_from_slices(hashes.len(), fanout, |start, end| {
+                    &reduced[start..end]
+                });
+            assert_eq!(result.0, result2);
+
+            let reduced2: Vec<_> = hashes.iter().map(|x| vec![x.1]).collect();
+            let result2 = AccountsDB::flatten_hashes_and_hash(reduced2, fanout);
+            assert_eq!(result.0, result2.0);
+        }
+        result
+    }
+
+    fn test_hashing(hashes: Vec<Hash>, fanout: usize) -> (Hash, u64) {
+        let temp: Vec<_> = hashes.iter().map(|h| (Pubkey::default(), *h, 0)).collect();
+        let result = AccountsDB::compute_merkle_root_and_capitalization(temp, fanout);
+        if hashes.len() >= fanout * fanout * fanout {
+            let reduced: Vec<_> = hashes.clone();
+            let result2 =
+                AccountsDB::compute_merkle_root_from_slices(hashes.len(), fanout, |start, end| {
+                    &reduced[start..end]
+                });
+            assert_eq!(result.0, result2, "len: {}", hashes.len());
+
+            let reduced2: Vec<_> = hashes.iter().map(|x| vec![*x]).collect();
+            let result2 = AccountsDB::flatten_hashes_and_hash(reduced2, fanout);
+            assert_eq!(result.0, result2.0, "len: {}", hashes.len());
+        }
+        result
+    }
+
+    #[test]
+    fn test_accountsdb_compute_merkle_root_and_capitalization_large() {
+        solana_logger::setup();
+
+        let mut num = 100;
+        for _pass in 0..2 {
+            num *= 10;
+            let hashes: Vec<_> = (0..num).into_iter().map(|_| Hash::new_unique()).collect();
+
+            test_hashing(hashes, MERKLE_FANOUT);
+        }
+    }
+
     #[test]
     fn test_accountsdb_compute_merkle_root_and_capitalization() {
         solana_logger::setup();
@@ -5663,8 +5829,7 @@ pub mod tests {
                     .collect();
                 let result;
                 if pass == 0 {
-                    result =
-                        AccountsDB::compute_merkle_root_and_capitalization(input.clone(), fanout);
+                    result = test_hashing_larger(input.clone(), fanout);
                 } else {
                     result = AccountsDB::accumulate_account_hashes_and_capitalization(
                         input.clone(),
