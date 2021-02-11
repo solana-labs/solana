@@ -85,6 +85,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
                 None,
                 &s,
                 None::<Box<dyn Fn()>>,
+                None,
             );
         });
 

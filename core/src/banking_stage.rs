@@ -50,7 +50,7 @@ use std::{
     collections::{HashMap, VecDeque},
     env,
     net::UdpSocket,
-    sync::atomic::AtomicBool,
+    sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
     sync::mpsc::Receiver,
     sync::{Arc, Mutex},
     thread::{self, Builder, JoinHandle},
@@ -70,6 +70,80 @@ pub const NUM_THREADS: u32 = 4;
 const TOTAL_BUFFERED_PACKETS: usize = 500_000;
 
 const MAX_NUM_TRANSACTIONS_PER_BATCH: usize = 128;
+
+#[derive(Debug, Default)]
+pub struct BankingStageStats {
+    last_report: AtomicU64,
+    id: u32,
+    process_packets_count: AtomicUsize,
+    new_tx_count: AtomicUsize,
+    dropped_batches_count: AtomicUsize,
+    newly_buffered_packets_count: AtomicUsize,
+    current_buffered_packets_count: AtomicUsize,
+    rebuffered_packets_count: AtomicUsize,
+    consumed_buffered_packets_count: AtomicUsize,
+}
+
+impl BankingStageStats {
+    pub fn new(id: u32) -> Self {
+        BankingStageStats {
+            id,
+            ..BankingStageStats::default()
+        }
+    }
+
+    fn report(&self, report_interval_ms: u64) {
+        let should_report = {
+            let last = self.last_report.load(Ordering::Relaxed);
+            let now = solana_sdk::timing::timestamp();
+            now.saturating_sub(last) > report_interval_ms
+                && self.last_report.compare_exchange(
+                    last,
+                    now,
+                    Ordering::Relaxed,
+                    Ordering::Relaxed,
+                ) == Ok(last)
+        };
+
+        if should_report {
+            datapoint_info!(
+                "banking_stage-loop-stats",
+                ("id", self.id as i64, i64),
+                (
+                    "process_packets_count",
+                    self.process_packets_count.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "new_tx_count",
+                    self.new_tx_count.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "dropped_batches_count",
+                    self.dropped_batches_count.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "newly_buffered_packets_count",
+                    self.newly_buffered_packets_count.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "current_buffered_packets_count",
+                    self.current_buffered_packets_count
+                        .swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "rebuffered_packets_count",
+                    self.rebuffered_packets_count.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+            );
+        }
+    }
+}
 
 /// Stores the stage's thread handle and output receiver.
 pub struct BankingStage {
@@ -179,6 +253,20 @@ impl BankingStage {
         Ok(())
     }
 
+    // Returns whether the given `Packets` has any more remaining unprocessed
+    // transactions
+    fn update_buffered_packets_with_new_unprocessed(
+        old_unprocessed_indexes: &mut Vec<usize>,
+        new_unprocessed_indexes: Vec<usize>,
+    ) -> bool {
+        let has_more_unprocessed_transactions =
+            Self::packet_has_more_unprocessed_transactions(&new_unprocessed_indexes);
+        if has_more_unprocessed_transactions {
+            *old_unprocessed_indexes = new_unprocessed_indexes
+        };
+        has_more_unprocessed_transactions
+    }
+
     pub fn consume_buffered_packets(
         my_pubkey: &Pubkey,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
@@ -186,6 +274,7 @@ impl BankingStage {
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
         test_fn: Option<impl Fn()>,
+        banking_stage_stats: Option<&BankingStageStats>,
     ) {
         let mut rebuffered_packets_len = 0;
         let mut new_tx_count = 0;
@@ -203,45 +292,43 @@ impl BankingStage {
                     my_pubkey,
                     *next_leader,
                 );
-                *old_unprocessed_indexes = new_unprocessed_indexes;
-                Self::packet_has_more_unprocessed_transactions(&old_unprocessed_indexes)
+                Self::update_buffered_packets_with_new_unprocessed(
+                    old_unprocessed_indexes,
+                    new_unprocessed_indexes,
+                )
             } else {
                 let bank = poh_recorder.lock().unwrap().bank();
-                if bank.is_none() {
+                if let Some(bank) = bank {
+                    let (processed, verified_txs_len, new_unprocessed_indexes) =
+                        Self::process_received_packets(
+                            &bank,
+                            &poh_recorder,
+                            &msgs,
+                            old_unprocessed_indexes.to_owned(),
+                            transaction_status_sender.clone(),
+                            gossip_vote_sender,
+                        );
+                    new_tx_count += processed;
+                    // Out of the buffered packets just retried, collect any still unprocessed
+                    // transactions in this batch for forwarding
+                    rebuffered_packets_len += new_unprocessed_indexes.len();
+                    if processed < verified_txs_len {
+                        reached_end_of_slot =
+                            Some((poh_recorder.lock().unwrap().next_slot_leader(), bank));
+                    }
+                    let has_more_unprocessed_transactions =
+                        Self::update_buffered_packets_with_new_unprocessed(
+                            old_unprocessed_indexes,
+                            new_unprocessed_indexes,
+                        );
+                    if let Some(test_fn) = &test_fn {
+                        test_fn();
+                    }
+                    has_more_unprocessed_transactions
+                } else {
                     rebuffered_packets_len += old_unprocessed_indexes.len();
-                    return Self::packet_has_more_unprocessed_transactions(
-                        &old_unprocessed_indexes,
-                    );
+                    Self::packet_has_more_unprocessed_transactions(&old_unprocessed_indexes)
                 }
-                let bank = bank.unwrap();
-
-                let (processed, verified_txs_len, new_unprocessed_indexes) =
-                    Self::process_received_packets(
-                        &bank,
-                        &poh_recorder,
-                        &msgs,
-                        old_unprocessed_indexes.to_owned(),
-                        transaction_status_sender.clone(),
-                        gossip_vote_sender,
-                    );
-                new_tx_count += processed;
-
-                // Out of the buffered packets just retried, collect any still unprocessed
-                // transactions in this batch for forwarding
-                rebuffered_packets_len += new_unprocessed_indexes.len();
-                if processed < verified_txs_len {
-                    reached_end_of_slot =
-                        Some((poh_recorder.lock().unwrap().next_slot_leader(), bank));
-                }
-                let has_more_unprocessed_transactions =
-                    Self::packet_has_more_unprocessed_transactions(&new_unprocessed_indexes);
-                if has_more_unprocessed_transactions {
-                    *old_unprocessed_indexes = new_unprocessed_indexes;
-                }
-                if let Some(test_fn) = &test_fn {
-                    test_fn();
-                }
-                has_more_unprocessed_transactions
             }
         });
 
@@ -256,9 +343,14 @@ impl BankingStage {
             (new_tx_count as f32) / (proc_start.as_s())
         );
 
-        inc_new_counter_info!("banking_stage-rebuffered_packets", rebuffered_packets_len);
-        inc_new_counter_info!("banking_stage-consumed_buffered_packets", new_tx_count);
-        inc_new_counter_debug!("banking_stage-process_transactions", new_tx_count);
+        if let Some(stats) = banking_stage_stats {
+            stats
+                .rebuffered_packets_count
+                .fetch_add(rebuffered_packets_len, Ordering::Relaxed);
+            stats
+                .consumed_buffered_packets_count
+                .fetch_add(new_tx_count, Ordering::Relaxed);
+        }
     }
 
     fn consume_or_forward_packets(
@@ -299,6 +391,7 @@ impl BankingStage {
         enable_forwarding: bool,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
+        banking_stage_stats: &BankingStageStats,
     ) -> BufferedPacketsDecision {
         let (leader_at_slot_offset, poh_has_bank, would_be_leader) = {
             let poh = poh_recorder.lock().unwrap();
@@ -327,6 +420,7 @@ impl BankingStage {
                     transaction_status_sender,
                     gossip_vote_sender,
                     None::<Box<dyn Fn()>>,
+                    Some(banking_stage_stats),
                 );
             }
             BufferedPacketsDecision::Forward => {
@@ -374,6 +468,7 @@ impl BankingStage {
     ) {
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut buffered_packets = VecDeque::with_capacity(batch_limit);
+        let banking_stage_stats = BankingStageStats::new(id);
         loop {
             while !buffered_packets.is_empty() {
                 let decision = Self::process_buffered_packets(
@@ -385,6 +480,7 @@ impl BankingStage {
                     enable_forwarding,
                     transaction_status_sender.clone(),
                     &gossip_vote_sender,
+                    &banking_stage_stats,
                 );
                 if decision == BufferedPacketsDecision::Hold {
                     // If we are waiting on a new bank,
@@ -414,11 +510,13 @@ impl BankingStage {
                 transaction_status_sender.clone(),
                 &gossip_vote_sender,
                 &mut buffered_packets,
+                &banking_stage_stats,
             ) {
-                Err(RecvTimeoutError::Timeout) => (),
+                Ok(()) | Err(RecvTimeoutError::Timeout) => (),
                 Err(RecvTimeoutError::Disconnected) => break,
-                _ => (),
             }
+
+            banking_stage_stats.report(100);
         }
     }
 
@@ -479,7 +577,6 @@ impl BankingStage {
                 .lock()
                 .unwrap()
                 .record(bank_slot, hash, processed_transactions);
-
             match res {
                 Ok(()) => (),
                 Err(PohRecorderError::MaxHeightReached) => {
@@ -921,6 +1018,7 @@ impl BankingStage {
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
         buffered_packets: &mut UnprocessedPackets,
+        banking_stage_stats: &BankingStageStats,
     ) -> Result<(), RecvTimeoutError> {
         let mut recv_time = Measure::start("process_packets_recv");
         let mms = verified_receiver.recv_timeout(recv_timeout)?;
@@ -1017,13 +1115,21 @@ impl BankingStage {
             count,
             id,
         );
-        inc_new_counter_debug!("banking_stage-process_packets", count);
-        inc_new_counter_debug!("banking_stage-process_transactions", new_tx_count);
-        inc_new_counter_debug!("banking_stage-dropped_batches_count", dropped_batches_count);
-        inc_new_counter_info!(
-            "banking_stage-newly_buffered_packets_count",
-            newly_buffered_packets_count
-        );
+        banking_stage_stats
+            .process_packets_count
+            .fetch_add(count, Ordering::Relaxed);
+        banking_stage_stats
+            .new_tx_count
+            .fetch_add(new_tx_count, Ordering::Relaxed);
+        banking_stage_stats
+            .dropped_batches_count
+            .fetch_add(dropped_batches_count, Ordering::Relaxed);
+        banking_stage_stats
+            .newly_buffered_packets_count
+            .fetch_add(newly_buffered_packets_count, Ordering::Relaxed);
+        banking_stage_stats
+            .current_buffered_packets_count
+            .swap(buffered_packets.len(), Ordering::Relaxed);
         *recv_start = Instant::now();
         Ok(())
     }
@@ -1112,7 +1218,6 @@ mod tests {
     };
     use solana_perf::packet::to_packets_chunked;
     use solana_sdk::{
-        hash::Hash,
         instruction::InstructionError,
         signature::{Keypair, Signer},
         system_instruction::SystemError,
@@ -2130,7 +2235,7 @@ mod tests {
         );
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
-        // Set up conflicting transactions
+        // Set up unparallelizable conflicting transactions
         let pubkey0 = solana_sdk::pubkey::new_rand();
         let pubkey1 = solana_sdk::pubkey::new_rand();
         let pubkey2 = solana_sdk::pubkey::new_rand();
@@ -2163,6 +2268,7 @@ mod tests {
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
 
             // When the working bank in poh_recorder is None, no packets should be processed
+            assert!(!poh_recorder.lock().unwrap().has_bank());
             BankingStage::consume_buffered_packets(
                 &Pubkey::default(),
                 &poh_recorder,
@@ -2170,12 +2276,12 @@ mod tests {
                 None,
                 &gossip_vote_sender,
                 None::<Box<dyn Fn()>>,
+                None,
             );
             assert_eq!(buffered_packets[0].1.len(), num_conflicting_transactions);
-
             // When the poh recorder has a bank, should process all non conflicting buffered packets.
             // Processes one packet per iteration of the loop
-            for i in 0..num_conflicting_transactions {
+            for num_expected_unprocessed in (0..num_conflicting_transactions).rev() {
                 poh_recorder.lock().unwrap().set_bank(&bank);
                 BankingStage::consume_buffered_packets(
                     &Pubkey::default(),
@@ -2184,8 +2290,8 @@ mod tests {
                     None,
                     &gossip_vote_sender,
                     None::<Box<dyn Fn()>>,
+                    None,
                 );
-                let num_expected_unprocessed = num_conflicting_transactions - i - 1;
                 if num_expected_unprocessed == 0 {
                     assert!(buffered_packets.is_empty())
                 } else {
@@ -2203,12 +2309,12 @@ mod tests {
             let (transactions, bank, poh_recorder, _entry_receiver) =
                 setup_conflicting_transactions(&ledger_path);
             let num_conflicting_transactions = transactions.len();
-            let packets = to_packets_chunked(&transactions, 1);
-            assert_eq!(packets.len(), num_conflicting_transactions);
-            for single_packets in &packets {
+            let packets_vec = to_packets_chunked(&transactions, 1);
+            assert_eq!(packets_vec.len(), num_conflicting_transactions);
+            for single_packets in &packets_vec {
                 assert_eq!(single_packets.packets.len(), 1);
             }
-            let mut buffered_packets: UnprocessedPackets = packets
+            let mut buffered_packets: UnprocessedPackets = packets_vec
                 .clone()
                 .into_iter()
                 .map(|single_packets| (single_packets, vec![0]))
@@ -2218,7 +2324,7 @@ mod tests {
             let (finished_packet_sender, finished_packet_receiver) = unbounded();
 
             let test_fn = Some(move || {
-                finished_packet_sender.send(1).unwrap();
+                finished_packet_sender.send(()).unwrap();
                 continue_receiver.recv().unwrap();
             });
             // When the poh recorder has a bank, should process all non conflicting buffered packets.
@@ -2238,17 +2344,18 @@ mod tests {
                         None,
                         &gossip_vote_sender,
                         test_fn,
+                        None,
                     );
 
                     // Check everything is correct. All indexes after `interrupted_iteration`
                     // should still be unprocessed
                     assert_eq!(
                         buffered_packets.len(),
-                        num_conflicting_transactions - interrupted_iteration - 1
+                        packets_vec[interrupted_iteration + 1..].iter().count()
                     );
                     for ((remaining_unprocessed_packet, _), original_packet) in buffered_packets
                         .iter()
-                        .zip(&packets[interrupted_iteration + 1..])
+                        .zip(&packets_vec[interrupted_iteration + 1..])
                     {
                         assert_eq!(
                             remaining_unprocessed_packet.packets[0],
@@ -2261,8 +2368,10 @@ mod tests {
             for i in 0..=interrupted_iteration {
                 finished_packet_receiver.recv().unwrap();
                 if i == interrupted_iteration {
-                    // Set up a MaxHeightReached failure by clearing the working bank
-                    poh_recorder.lock().unwrap().reset(Hash::default(), 1, None);
+                    poh_recorder
+                        .lock()
+                        .unwrap()
+                        .schedule_dummy_max_height_reached_failure();
                 }
                 continue_sender.send(1).unwrap();
             }
