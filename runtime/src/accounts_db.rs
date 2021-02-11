@@ -3381,6 +3381,10 @@ impl AccountsDB {
         Self::compute_merkle_root_and_capitalization_loop(hashes, fanout, |t| (t.1, t.2))
     }
 
+    pub fn compute_merkle_root(hashes: Vec<(Pubkey, Hash)>, fanout: usize) -> Hash {
+        Self::compute_merkle_root_and_capitalization_loop(hashes, fanout, |t| (t.1, 0)).0
+    }
+
     // this function avoids an infinite recursion compiler error
     fn compute_merkle_root_and_capitalization_recurse(
         hashes: Vec<(Hash, u64)>,
@@ -3445,40 +3449,17 @@ impl AccountsDB {
         }
     }
 
-    fn accumulate_account_hashes(
-        hashes: Vec<(Pubkey, Hash, u64)>,
-        slot: Slot,
-        debug: bool,
-    ) -> Hash {
-        let ((hash, ..), ..) =
-            Self::accumulate_account_hashes_and_capitalization(hashes, slot, debug);
-        hash
-    }
-
-    fn sort_hashes_by_pubkey(hashes: &mut Vec<(Pubkey, Hash, u64)>) {
-        hashes.par_sort_unstable_by(|a, b| a.0.cmp(&b.0));
-    }
-
-    fn accumulate_account_hashes_and_capitalization(
-        mut hashes: Vec<(Pubkey, Hash, u64)>,
-        slot: Slot,
-        debug: bool,
-    ) -> ((Hash, u64), (Measure, Measure)) {
-        let mut sort_time = Measure::start("sort");
+    fn accumulate_account_hashes(mut hashes: Vec<(Pubkey, Hash)>) -> Hash {
         Self::sort_hashes_by_pubkey(&mut hashes);
-        sort_time.stop();
 
-        if debug {
-            for (key, hash, _lamports) in &hashes {
-                info!("slot: {} key {} hash {}", slot, key, hash);
-            }
-        }
+        let res =
+            Self::compute_merkle_root_and_capitalization_loop(hashes, MERKLE_FANOUT, |i| (i.1, 0));
 
-        let mut hash_time = Measure::start("hash");
-        let res = Self::compute_merkle_root_and_capitalization(hashes, MERKLE_FANOUT);
-        hash_time.stop();
+        res.0
+    }
 
-        (res, (sort_time, hash_time))
+    fn sort_hashes_by_pubkey(hashes: &mut Vec<(Pubkey, Hash)>) {
+        hashes.par_sort_unstable_by(|a, b| a.0.cmp(&b.0));
     }
 
     pub fn checked_cast_for_capitalization(balance: u128) -> u64 {
@@ -4020,16 +4001,12 @@ impl AccountsDB {
     pub fn get_accounts_delta_hash(&self, slot: Slot) -> Hash {
         let mut scan = Measure::start("scan");
 
-        let scan_result: ScanStorageResult<(Pubkey, Hash, u64), DashMapVersionHash> = self
+        let scan_result: ScanStorageResult<(Pubkey, Hash), DashMapVersionHash> = self
             .scan_account_storage(
                 slot,
                 |loaded_account: LoadedAccount| {
                     // Cache only has one version per key, don't need to worry about versioning
-                    Some((
-                        *loaded_account.pubkey(),
-                        *loaded_account.loaded_hash(),
-                        CACHE_VIRTUAL_WRITE_VERSION,
-                    ))
+                    Some((*loaded_account.pubkey(), *loaded_account.loaded_hash()))
                 },
                 |accum: &DashMap<Pubkey, (u64, Hash)>, loaded_account: LoadedAccount| {
                     let loaded_write_version = loaded_account.write_version();
@@ -4064,14 +4041,12 @@ impl AccountsDB {
             ScanStorageResult::Cached(cached_result) => cached_result,
             ScanStorageResult::Stored(stored_result) => stored_result
                 .into_iter()
-                .map(|(pubkey, (_latest_write_version, hash))| (pubkey, hash, 0))
+                .map(|(pubkey, (_latest_write_version, hash))| (pubkey, hash))
                 .collect(),
         };
-        let dirty_keys = hashes
-            .iter()
-            .map(|(pubkey, _hash, _lamports)| *pubkey)
-            .collect();
-        let ret = Self::accumulate_account_hashes(hashes, slot, false);
+        let dirty_keys = hashes.iter().map(|(pubkey, _hash)| *pubkey).collect();
+
+        let ret = Self::accumulate_account_hashes(hashes);
         accumulate.stop();
         let mut uncleaned_time = Measure::start("uncleaned_index");
         self.uncleaned_pubkeys.insert(slot, dirty_keys);
@@ -5614,6 +5589,10 @@ pub mod tests {
         assert_eq!(len, expected.len());
     }
 
+    fn sort_hashes_and_lamports_by_pubkey(hashes: &mut Vec<(Pubkey, Hash, u64)>) {
+        hashes.par_sort_unstable_by(|a, b| a.0.cmp(&b.0));
+    }
+
     #[test]
     fn test_accountsdb_compute_merkle_root_and_capitalization() {
         solana_logger::setup();
@@ -5660,27 +5639,19 @@ pub mod tests {
                         (key, hash, i as u64)
                     })
                     .collect();
-                let result;
-                if pass == 0 {
-                    result =
-                        AccountsDB::compute_merkle_root_and_capitalization(input.clone(), fanout);
+                let result = if pass == 0 {
+                    AccountsDB::compute_merkle_root_and_capitalization(input.clone(), fanout)
                 } else {
-                    result = AccountsDB::accumulate_account_hashes_and_capitalization(
-                        input.clone(),
-                        Slot::default(),
-                        false,
-                    )
-                    .0;
-                    assert_eq!(
-                        AccountsDB::accumulate_account_hashes(
-                            input.clone(),
-                            Slot::default(),
-                            false
-                        ),
-                        result.0
+                    // this sorts inside
+                    let early_result = AccountsDB::accumulate_account_hashes(
+                        input.iter().map(|i| (i.0, i.1)).collect::<Vec<_>>(),
                     );
-                    AccountsDB::sort_hashes_by_pubkey(&mut input);
-                }
+                    sort_hashes_and_lamports_by_pubkey(&mut input);
+                    let result =
+                        AccountsDB::compute_merkle_root_and_capitalization(input.clone(), fanout);
+                    assert_eq!(early_result, result.0);
+                    result
+                };
                 let mut expected = 0;
                 if count > 0 {
                     let count = count as u64;
