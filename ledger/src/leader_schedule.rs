@@ -65,8 +65,9 @@ impl LeaderSchedule {
         self.slot_leaders.len()
     }
 
-    /// Returns indices starting from 'offset' where pubkey is the leader.
-    pub(crate) fn get_schedule(
+    /// 'offset' is an index into the leader schedule. The function returns an
+    /// iterator of indices i >= offset where the given pubkey is the leader.
+    pub(crate) fn get_indices(
         &self,
         pubkey: &Pubkey,
         offset: usize, // Starting index.
@@ -84,6 +85,10 @@ impl LeaderSchedule {
                 + offset / num_slots * size;
             offset..=usize::MAX
         };
+        // The modular arithmetic here and above replicate Index implementation
+        // for LeaderSchedule, where the schedule keeps repeating endlessly.
+        // The '%' returns where in a cycle we are and the '/' returns how many
+        // times the schedule is repeated.
         range.map(move |k| index[k % size] + k / size * num_slots)
     }
 }
@@ -197,11 +202,11 @@ mod tests {
     }
 
     #[test]
-    fn test_get_schedule() {
+    fn test_get_indices() {
         const NUM_SLOTS: usize = 97;
         let mut rng = rand::thread_rng();
-        let pubkeys: Vec<_> = repeat_with(Pubkey::new_unique).take(3).collect();
-        let schedule: Vec<_> = repeat_with(|| pubkeys[rng.gen_range(0, pubkeys.len())])
+        let pubkeys: Vec<_> = repeat_with(Pubkey::new_unique).take(4).collect();
+        let schedule: Vec<_> = repeat_with(|| pubkeys[rng.gen_range(0, 3)])
             .take(19)
             .collect();
         let schedule = LeaderSchedule::new_from_schedule(schedule);
@@ -209,20 +214,15 @@ mod tests {
             .map(|i| (schedule[i as u64], i))
             .into_group_map();
         for pubkey in &pubkeys {
-            let index = leaders[pubkey].clone();
+            let index = leaders.get(pubkey).cloned().unwrap_or_default();
             for offset in 0..NUM_SLOTS {
                 let schedule: Vec<_> = schedule
-                    .get_schedule(pubkey, offset)
+                    .get_indices(pubkey, offset)
                     .take_while(|s| *s < NUM_SLOTS)
                     .collect();
                 let index: Vec<_> = index.iter().copied().skip_while(|s| *s < offset).collect();
                 assert_eq!(schedule, index);
             }
-        }
-        let pubkey = Pubkey::new_unique();
-        for offset in 0..NUM_SLOTS {
-            let mut schedule = schedule.get_schedule(&pubkey, offset);
-            assert!(schedule.next().is_none());
         }
     }
 }
