@@ -1012,13 +1012,7 @@ describe('Connection', () => {
   });
 
   it('get recent blockhash', async () => {
-    for (const commitment of [
-      'max',
-      'confirmed',
-      'root',
-      'single',
-      'confirmed',
-    ]) {
+    for (const commitment of ['processed', 'confirmed', 'finalized']) {
       const {blockhash, feeCalculator} = await helpers.recentBlockhash({
         connection,
         commitment,
@@ -1205,7 +1199,7 @@ describe('Connection', () => {
           new u64(1),
         );
 
-        await connection.confirmTransaction(testSignature, 'max');
+        await connection.confirmTransaction(testSignature, 'finalized');
 
         testOwner = accountOwner;
         testToken = token;

@@ -141,8 +141,8 @@ if (process.env.TEST_LIVE) {
           transaction,
           [payerAccount],
           {
-            commitment: 'max', // `getParsedConfirmedTransaction` requires max commitment
-            preflightCommitment: connection.commitment || 'max',
+            commitment: 'finalized', // `getParsedConfirmedTransaction` requires max commitment
+            preflightCommitment: connection.commitment || 'finalized',
           },
         );
 
