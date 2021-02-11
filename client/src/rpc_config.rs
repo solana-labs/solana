@@ -31,7 +31,7 @@ pub struct RpcSimulateTransactionConfig {
     pub encoding: Option<UiTransactionEncoding>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum RpcLargestAccountsFilter {
     Circulating,
