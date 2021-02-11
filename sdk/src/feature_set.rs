@@ -167,6 +167,10 @@ pub mod warp_timestamp_again {
     solana_sdk::declare_id!("GvDsGDkH5gyzwpDhxNixx8vtx1kwYHH13RiNAPw27zXb");
 }
 
+pub mod per_byte_logging_cost {
+    solana_sdk::declare_id!("59dM4SV6dPEKXPfkrkhFkRdn4K6xwKxdNAPMyXG7J1wT");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -209,6 +213,7 @@ lazy_static! {
         (full_inflation::mainnet::certusone::enable::id(), "Full inflation enabled by Certus One"),
         (full_inflation::mainnet::certusone::vote::id(), "Community vote allowing Certus One to enable full inflation"),
         (warp_timestamp_again::id(), "warp timestamp again, adjust bounding to 25% fast 80% slow #15204"),
+        (per_byte_logging_cost::id(), "charge the compute budget per byte for logging")
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
