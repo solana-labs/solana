@@ -594,7 +594,8 @@ impl AccountStorageEntry {
         for account in self.accounts.accounts(0) {
             let hash_to_add =
                 AccountsDB::hash_stored_account(0, &account, &ClusterType::Development);
-            //hasher.hash(account.hash.as_ref());
+            hasher.hash(&account.meta.write_version.to_le_bytes());
+            hasher.hash(account.hash.as_ref());
             hasher.hash(hash_to_add.as_ref());
         }
         hasher.result()
