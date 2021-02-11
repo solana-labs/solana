@@ -172,6 +172,10 @@ mod tests {
             SnapshotVersion::default(),
         );
 
+        for store in snapshot_package.storages.iter().flatten() {
+            store.update_hash();
+        }
+
         // Make tarball from packageable snapshot
         snapshot_utils::archive_snapshot_package(&snapshot_package).unwrap();
 
