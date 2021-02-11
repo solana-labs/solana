@@ -181,8 +181,8 @@ export function decodeConsumeEvents(ix: TransactionInstruction): ConsumeEvents {
 
   const consumeEvents: ConsumeEvents = {
     openOrdersAccounts: ix.keys.slice(0, -2).map((k) => k.pubkey),
-    market: ix.keys[ix.keys.length - 3].pubkey,
-    eventQueue: ix.keys[ix.keys.length - 2].pubkey,
+    market: ix.keys[ix.keys.length - 2].pubkey,
+    eventQueue: ix.keys[ix.keys.length - 3].pubkey,
     programId: ix.programId,
     limit: decoded.limit,
   };
