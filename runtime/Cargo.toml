@@ -26,6 +26,7 @@ libc = "0.2.81"
 libloading = "0.6.2"
 log = "0.4.11"
 memmap2 = "0.1.0"
+num = "0.3.1"
 num-derive = { version = "0.3" }
 num-traits = { version = "0.2" }
 num_cpus = "1.13.0"

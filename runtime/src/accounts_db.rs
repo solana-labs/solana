@@ -34,6 +34,7 @@ use dashmap::{
 };
 use lazy_static::lazy_static;
 use log::*;
+use num::integer::Integer;
 use rand::{prelude::SliceRandom, thread_rng, Rng};
 use rayon::{prelude::*, ThreadPool};
 use serde::{Deserialize, Serialize};
@@ -3409,11 +3410,7 @@ impl AccountsDB {
         let mut time = Measure::start("time");
 
         let total_hashes = hashes.len();
-        // we need div_ceil here
-        let mut chunks = total_hashes / fanout;
-        if total_hashes % fanout != 0 {
-            chunks += 1;
-        }
+        let chunks = total_hashes.div_ceil(&fanout);
 
         let result: Vec<_> = (0..chunks)
             .into_par_iter()
@@ -5199,6 +5196,15 @@ pub mod tests {
             ancestors.insert(i, (i - 1) as usize);
         }
         ancestors
+    }
+
+    #[test]
+    fn test_accountsdb_div_ceil() {
+        assert_eq!(10usize.div_ceil(&3), 4);
+        assert_eq!(0usize.div_ceil(&1), 0);
+        assert_eq!(0usize.div_ceil(&5), 0);
+        assert_eq!(9usize.div_ceil(&3), 3);
+        assert_eq!(9usize.div_ceil(&9), 1);
     }
 
     #[test]
