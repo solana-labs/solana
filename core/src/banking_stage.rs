@@ -256,13 +256,13 @@ impl BankingStage {
     // Returns whether the given `Packets` has any more remaining unprocessed
     // transactions
     fn update_buffered_packets_with_new_unprocessed(
-        old_unprocessed_indexes: &mut Vec<usize>,
+        original_unprocessed_indexes: &mut Vec<usize>,
         new_unprocessed_indexes: Vec<usize>,
     ) -> bool {
         let has_more_unprocessed_transactions =
             Self::packet_has_more_unprocessed_transactions(&new_unprocessed_indexes);
         if has_more_unprocessed_transactions {
-            *old_unprocessed_indexes = new_unprocessed_indexes
+            *original_unprocessed_indexes = new_unprocessed_indexes
         };
         has_more_unprocessed_transactions
     }
@@ -281,19 +281,19 @@ impl BankingStage {
         let buffered_len = buffered_packets.len();
         let mut proc_start = Measure::start("consume_buffered_process");
         let mut reached_end_of_slot = None;
-        buffered_packets.retain_mut(|(msgs, ref mut old_unprocessed_indexes)| {
+        buffered_packets.retain_mut(|(msgs, ref mut original_unprocessed_indexes)| {
             if let Some((next_leader, bank)) = &reached_end_of_slot {
                 // We've hit the end of this slot, no need to perform more processing,
                 // just filter the remaining packets for the invalid (e.g. too old) ones
                 let new_unprocessed_indexes = Self::filter_unprocessed_packets(
                     &bank,
                     &msgs,
-                    &old_unprocessed_indexes,
+                    &original_unprocessed_indexes,
                     my_pubkey,
                     *next_leader,
                 );
                 Self::update_buffered_packets_with_new_unprocessed(
-                    old_unprocessed_indexes,
+                    original_unprocessed_indexes,
                     new_unprocessed_indexes,
                 )
             } else {
@@ -304,21 +304,21 @@ impl BankingStage {
                             &bank,
                             &poh_recorder,
                             &msgs,
-                            old_unprocessed_indexes.to_owned(),
+                            original_unprocessed_indexes.to_owned(),
                             transaction_status_sender.clone(),
                             gossip_vote_sender,
                         );
-                    new_tx_count += processed;
-                    // Out of the buffered packets just retried, collect any still unprocessed
-                    // transactions in this batch for forwarding
-                    rebuffered_packets_len += new_unprocessed_indexes.len();
                     if processed < verified_txs_len {
                         reached_end_of_slot =
                             Some((poh_recorder.lock().unwrap().next_slot_leader(), bank));
                     }
+                    new_tx_count += processed;
+                    // Out of the buffered packets just retried, collect any still unprocessed
+                    // transactions in this batch for forwarding
+                    rebuffered_packets_len += new_unprocessed_indexes.len();
                     let has_more_unprocessed_transactions =
                         Self::update_buffered_packets_with_new_unprocessed(
-                            old_unprocessed_indexes,
+                            original_unprocessed_indexes,
                             new_unprocessed_indexes,
                         );
                     if let Some(test_fn) = &test_fn {
@@ -326,8 +326,13 @@ impl BankingStage {
                     }
                     has_more_unprocessed_transactions
                 } else {
-                    rebuffered_packets_len += old_unprocessed_indexes.len();
-                    Self::packet_has_more_unprocessed_transactions(&old_unprocessed_indexes)
+                    rebuffered_packets_len += original_unprocessed_indexes.len();
+                    // `original_unprocessed_indexes` must have remaining packets to process
+                    // if not yet processed.
+                    assert!(Self::packet_has_more_unprocessed_transactions(
+                        &original_unprocessed_indexes
+                    ));
+                    true
                 }
             }
         });
@@ -1144,8 +1149,8 @@ impl BankingStage {
     ) {
         if Self::packet_has_more_unprocessed_transactions(&packet_indexes) {
             if unprocessed_packets.len() >= batch_limit {
-                unprocessed_packets.pop_front();
                 *dropped_batches_count += 1;
+                unprocessed_packets.pop_front();
             }
             *newly_buffered_packets_count += packet_indexes.len();
             unprocessed_packets.push_back((packets, packet_indexes));
@@ -2254,10 +2259,10 @@ mod tests {
             let (transactions, bank, poh_recorder, _entry_receiver) =
                 setup_conflicting_transactions(&ledger_path);
             let num_conflicting_transactions = transactions.len();
-            let mut packets = to_packets_chunked(&transactions, num_conflicting_transactions);
-            assert_eq!(packets.len(), 1);
-            assert_eq!(packets[0].packets.len(), num_conflicting_transactions);
-            let all_packets = packets.pop().unwrap();
+            let mut packets_vec = to_packets_chunked(&transactions, num_conflicting_transactions);
+            assert_eq!(packets_vec.len(), 1);
+            assert_eq!(packets_vec[0].packets.len(), num_conflicting_transactions);
+            let all_packets = packets_vec.pop().unwrap();
             let mut buffered_packets: UnprocessedPackets = vec![(
                 all_packets,
                 (0..num_conflicting_transactions).into_iter().collect(),
@@ -2327,8 +2332,10 @@ mod tests {
                 finished_packet_sender.send(()).unwrap();
                 continue_receiver.recv().unwrap();
             });
-            // When the poh recorder has a bank, should process all non conflicting buffered packets.
-            // Processes one packet per iteration of the loop
+            // When the poh recorder has a bank, it should process all non conflicting buffered packets.
+            // Because each conflicting transaction is in it's own `Packet` within `packets_vec`, then
+            // each iteration of this loop will process one element of `packets_vec`per iteration of the
+            // loop.
             let interrupted_iteration = 1;
             poh_recorder.lock().unwrap().set_bank(&bank);
             let poh_recorder_ = poh_recorder.clone();
@@ -2373,7 +2380,7 @@ mod tests {
                         .unwrap()
                         .schedule_dummy_max_height_reached_failure();
                 }
-                continue_sender.send(1).unwrap();
+                continue_sender.send(()).unwrap();
             }
 
             t_consume.join().unwrap();
