@@ -513,7 +513,7 @@ impl JsonRpcRequestProcessor {
     fn get_cached_largest_accounts(
         &self,
         filter: &Option<RpcLargestAccountsFilter>,
-    ) -> Option<Vec<RpcAccountBalance>> {
+    ) -> Option<(u64, Vec<RpcAccountBalance>)> {
         let largest_accounts_cache = self.largest_accounts_cache.read().unwrap();
         largest_accounts_cache.get_largest_accounts(filter)
     }
@@ -521,10 +521,11 @@ impl JsonRpcRequestProcessor {
     fn set_cached_largest_accounts(
         &self,
         filter: &Option<RpcLargestAccountsFilter>,
+        slot: u64,
         accounts: &[RpcAccountBalance],
     ) {
         let mut largest_accounts_cache = self.largest_accounts_cache.write().unwrap();
-        largest_accounts_cache.set_largest_accounts(filter, accounts)
+        largest_accounts_cache.set_largest_accounts(filter, slot, accounts)
     }
 
     fn get_largest_accounts(
@@ -534,8 +535,11 @@ impl JsonRpcRequestProcessor {
         let config = config.unwrap_or_default();
         let bank = self.bank(config.commitment);
 
-        if let Some(accounts) = self.get_cached_largest_accounts(&config.filter) {
-            new_response(&bank, accounts)
+        if let Some((slot, accounts)) = self.get_cached_largest_accounts(&config.filter) {
+            Response {
+                context: RpcResponseContext { slot },
+                value: accounts,
+            }
         } else {
             let (addresses, address_filter) = if let Some(filter) = config.clone().filter {
                 let non_circulating_supply = calculate_non_circulating_supply(&bank);
@@ -557,7 +561,7 @@ impl JsonRpcRequestProcessor {
                 })
                 .collect::<Vec<RpcAccountBalance>>();
 
-            self.set_cached_largest_accounts(&config.filter, &accounts);
+            self.set_cached_largest_accounts(&config.filter, bank.slot(), &accounts);
             new_response(&bank, accounts)
         }
     }
