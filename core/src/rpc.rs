@@ -21,6 +21,7 @@ use solana_account_decoder::{
     UiAccount, UiAccountData, UiAccountEncoding, UiDataSliceConfig,
 };
 use solana_client::{
+    rpc_cache::LargestAccountsCache,
     rpc_config::*,
     rpc_custom_error::RpcCustomError,
     rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
@@ -136,6 +137,7 @@ pub struct JsonRpcRequestProcessor {
     runtime: Arc<Runtime>,
     bigtable_ledger_storage: Option<solana_storage_bigtable::LedgerStorage>,
     optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
+    largest_accounts_cache: Arc<RwLock<LargestAccountsCache>>,
 }
 impl Metadata for JsonRpcRequestProcessor {}
 
@@ -218,6 +220,7 @@ impl JsonRpcRequestProcessor {
         runtime: Arc<Runtime>,
         bigtable_ledger_storage: Option<solana_storage_bigtable::LedgerStorage>,
         optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
+        largest_accounts_cache: Arc<RwLock<LargestAccountsCache>>,
     ) -> (Self, Receiver<TransactionInfo>) {
         let (sender, receiver) = channel();
         (
@@ -235,6 +238,7 @@ impl JsonRpcRequestProcessor {
                 runtime,
                 bigtable_ledger_storage,
                 optimistically_confirmed_bank,
+                largest_accounts_cache,
             },
             receiver,
         )
@@ -274,6 +278,7 @@ impl JsonRpcRequestProcessor {
             optimistically_confirmed_bank: Arc::new(RwLock::new(OptimisticallyConfirmedBank {
                 bank: bank.clone(),
             })),
+            largest_accounts_cache: Arc::new(RwLock::new(LargestAccountsCache::new(30))),
         }
     }
 
@@ -505,33 +510,60 @@ impl JsonRpcRequestProcessor {
         self.bank(commitment).capitalization()
     }
 
+    fn get_cached_largest_accounts(
+        &self,
+        filter: &Option<RpcLargestAccountsFilter>,
+    ) -> Option<(u64, Vec<RpcAccountBalance>)> {
+        let largest_accounts_cache = self.largest_accounts_cache.read().unwrap();
+        largest_accounts_cache.get_largest_accounts(filter)
+    }
+
+    fn set_cached_largest_accounts(
+        &self,
+        filter: &Option<RpcLargestAccountsFilter>,
+        slot: u64,
+        accounts: &[RpcAccountBalance],
+    ) {
+        let mut largest_accounts_cache = self.largest_accounts_cache.write().unwrap();
+        largest_accounts_cache.set_largest_accounts(filter, slot, accounts)
+    }
+
     fn get_largest_accounts(
         &self,
         config: Option<RpcLargestAccountsConfig>,
     ) -> RpcResponse<Vec<RpcAccountBalance>> {
         let config = config.unwrap_or_default();
         let bank = self.bank(config.commitment);
-        let (addresses, address_filter) = if let Some(filter) = config.filter {
-            let non_circulating_supply = calculate_non_circulating_supply(&bank);
-            let addresses = non_circulating_supply.accounts.into_iter().collect();
-            let address_filter = match filter {
-                RpcLargestAccountsFilter::Circulating => AccountAddressFilter::Exclude,
-                RpcLargestAccountsFilter::NonCirculating => AccountAddressFilter::Include,
-            };
-            (addresses, address_filter)
+
+        if let Some((slot, accounts)) = self.get_cached_largest_accounts(&config.filter) {
+            Response {
+                context: RpcResponseContext { slot },
+                value: accounts,
+            }
         } else {
-            (HashSet::new(), AccountAddressFilter::Exclude)
-        };
-        new_response(
-            &bank,
-            bank.get_largest_accounts(NUM_LARGEST_ACCOUNTS, &addresses, address_filter)
+            let (addresses, address_filter) = if let Some(filter) = config.clone().filter {
+                let non_circulating_supply = calculate_non_circulating_supply(&bank);
+                let addresses = non_circulating_supply.accounts.into_iter().collect();
+                let address_filter = match filter {
+                    RpcLargestAccountsFilter::Circulating => AccountAddressFilter::Exclude,
+                    RpcLargestAccountsFilter::NonCirculating => AccountAddressFilter::Include,
+                };
+                (addresses, address_filter)
+            } else {
+                (HashSet::new(), AccountAddressFilter::Exclude)
+            };
+            let accounts = bank
+                .get_largest_accounts(NUM_LARGEST_ACCOUNTS, &addresses, address_filter)
                 .into_iter()
                 .map(|(address, lamports)| RpcAccountBalance {
                     address: address.to_string(),
                     lamports,
                 })
-                .collect(),
-        )
+                .collect::<Vec<RpcAccountBalance>>();
+
+            self.set_cached_largest_accounts(&config.filter, bank.slot(), &accounts);
+            new_response(&bank, accounts)
+        }
     }
 
     fn get_supply(&self, commitment: Option<CommitmentConfig>) -> RpcResponse<RpcSupply> {
@@ -3185,6 +3217,7 @@ pub mod tests {
             Arc::new(tokio::runtime::Runtime::new().unwrap()),
             None,
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
+            Arc::new(RwLock::new(LargestAccountsCache::new(30))),
         );
         SendTransactionService::new(tpu_address, &bank_forks, None, receiver, 1000, 1);
 
@@ -4594,6 +4627,7 @@ pub mod tests {
             Arc::new(tokio::runtime::Runtime::new().unwrap()),
             None,
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
+            Arc::new(RwLock::new(LargestAccountsCache::new(30))),
         );
         SendTransactionService::new(tpu_address, &bank_forks, None, receiver, 1000, 1);
 
@@ -4790,6 +4824,7 @@ pub mod tests {
             Arc::new(tokio::runtime::Runtime::new().unwrap()),
             None,
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
+            Arc::new(RwLock::new(LargestAccountsCache::new(30))),
         );
         SendTransactionService::new(tpu_address, &bank_forks, None, receiver, 1000, 1);
         assert_eq!(request_processor.validator_exit(), false);
@@ -4823,6 +4858,7 @@ pub mod tests {
             Arc::new(tokio::runtime::Runtime::new().unwrap()),
             None,
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
+            Arc::new(RwLock::new(LargestAccountsCache::new(30))),
         );
         SendTransactionService::new(tpu_address, &bank_forks, None, receiver, 1000, 1);
         assert_eq!(request_processor.validator_exit(), true);
@@ -4915,6 +4951,7 @@ pub mod tests {
             Arc::new(tokio::runtime::Runtime::new().unwrap()),
             None,
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
+            Arc::new(RwLock::new(LargestAccountsCache::new(30))),
         );
         SendTransactionService::new(tpu_address, &bank_forks, None, receiver, 1000, 1);
         assert_eq!(
@@ -6144,6 +6181,7 @@ pub mod tests {
             Arc::new(tokio::runtime::Runtime::new().unwrap()),
             None,
             optimistically_confirmed_bank.clone(),
+            Arc::new(RwLock::new(LargestAccountsCache::new(30))),
         );
 
         let mut io = MetaIoHandler::default();

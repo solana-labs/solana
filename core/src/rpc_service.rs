@@ -16,6 +16,7 @@ use jsonrpc_http_server::{
     RequestMiddlewareAction, ServerBuilder,
 };
 use regex::Regex;
+use solana_client::rpc_cache::LargestAccountsCache;
 use solana_ledger::blockstore::Blockstore;
 use solana_metrics::inc_new_counter_info;
 use solana_runtime::{
@@ -34,6 +35,8 @@ use std::{
 };
 use tokio::runtime;
 use tokio_util::codec::{BytesCodec, FramedRead};
+
+const LARGEST_ACCOUNTS_CACHE_DURATION: u64 = 60 * 60 * 2;
 
 pub struct JsonRpcService {
     thread_hdl: JoinHandle<()>,
@@ -262,6 +265,10 @@ impl JsonRpcService {
             override_health_check,
         ));
 
+        let largest_accounts_cache = Arc::new(RwLock::new(LargestAccountsCache::new(
+            LARGEST_ACCOUNTS_CACHE_DURATION,
+        )));
+
         let tpu_address = cluster_info.my_contact_info().tpu;
         let runtime = Arc::new(
             runtime::Builder::new_multi_thread()
@@ -322,6 +329,7 @@ impl JsonRpcService {
             runtime,
             bigtable_ledger_storage,
             optimistically_confirmed_bank,
+            largest_accounts_cache,
         );
 
         let leader_info =
