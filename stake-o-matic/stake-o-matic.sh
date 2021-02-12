@@ -2,6 +2,7 @@
 #
 # Downloads and runs the latest stake-o-matic binary
 #
+set -e
 
 solana_version=edge
 curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v1.0.0/install/solana-install-init.sh \
@@ -10,7 +11,8 @@ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v1.0.0/install/so
         --data-dir ./solana-install \
         --config ./solana-install/config.yml
 
-export PATH="$PWD/solana-install/releases/$solana_version/solana-release/bin/:$PATH"
+PATH="$(realpath "$PWD"/solana-install/releases/"$solana_version"*/solana-release/bin/):$PATH"
+echo PATH="$PATH"
 
 set -x
 solana --version
