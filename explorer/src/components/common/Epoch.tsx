@@ -4,20 +4,20 @@ import { clusterPath } from "utils/url";
 import { Copyable } from "./Copyable";
 
 type Props = {
-  slot: number;
+  epoch: number;
   link?: boolean;
 };
-export function Slot({ slot, link }: Props) {
+export function Epoch({ epoch, link }: Props) {
   return (
     <span className="text-monospace">
       {link ? (
-        <Copyable text={slot.toString()}>
-          <Link to={clusterPath(`/block/${slot}`)}>
-            {slot.toLocaleString("en-US")}
+        <Copyable text={epoch.toString()}>
+          <Link to={clusterPath(`/epoch/${epoch}`)}>
+            {epoch.toLocaleString("en-US")}
           </Link>
         </Copyable>
       ) : (
-        slot.toLocaleString("en-US")
+        epoch.toLocaleString("en-US")
       )}
     </span>
   );

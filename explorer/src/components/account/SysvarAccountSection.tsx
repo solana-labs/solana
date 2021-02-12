@@ -20,6 +20,7 @@ import {
 } from "components/common/Account";
 import { displayTimestamp } from "utils/date";
 import { Slot } from "components/common/Slot";
+import { Epoch } from "components/common/Epoch";
 
 export function SysvarAccountSection({
   account,
@@ -318,13 +319,15 @@ function SysvarAccountClockCard({
 
         <tr>
           <td>Epoch</td>
-          <td className="text-lg-right">{sysvarAccount.info.epoch}</td>
+          <td className="text-lg-right">
+            <Epoch epoch={sysvarAccount.info.epoch} link />
+          </td>
         </tr>
 
         <tr>
           <td>Leader Schedule Epoch</td>
           <td className="text-lg-right">
-            {sysvarAccount.info.leaderScheduleEpoch}
+            <Epoch epoch={sysvarAccount.info.leaderScheduleEpoch} link />
           </td>
         </tr>
 
