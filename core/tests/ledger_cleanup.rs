@@ -9,6 +9,8 @@ mod tests {
     use solana_ledger::get_tmp_ledger_path;
     use solana_ledger::shred::Shred;
     use solana_measure::measure::Measure;
+    use solana_sdk::signature::Signature;
+    use solana_transaction_status::TransactionStatusMeta;
     use std::collections::VecDeque;
     use std::str::FromStr;
     use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -275,7 +277,9 @@ mod tests {
         let mut total_slots = 0;
         let mut time = Instant::now();
         let mut start = Measure::start("start");
-        let shreds: Arc<Mutex<VecDeque<Vec<Shred>>>> = Arc::new(Mutex::new(VecDeque::new()));
+        //let shreds: Arc<Mutex<VecDeque<Vec<Shred>>>> = Arc::new(Mutex::new(VecDeque::new()));
+        let shreds: Arc<Mutex<VecDeque<(u64, Signature, TransactionStatusMeta)>>> =
+            Arc::new(Mutex::new(VecDeque::new()));
         let shreds1 = shreds.clone();
         let insert_exit = Arc::new(AtomicBool::new(false));
         let insert_exit1 = insert_exit.clone();
@@ -314,11 +318,21 @@ mod tests {
                         num_shreds = 0;
                     }
                     if let Some(new_shreds) = new_shreds {
-                        total += new_shreds.len();
+                        //total += new_shreds.len();
                         total_batches += 1;
-                        let br = blockstore1.insert_shreds(new_shreds, None, false).unwrap();
-                        total_inserted_shreds += br.1.len();
-                        num_shreds += br.1.len();
+                        //let br = blockstore1.insert_shreds(new_shreds, None, false).unwrap();
+                        num_shreds += 1;
+                        blockstore1
+                            .write_transaction_status(
+                                new_shreds.0,
+                                new_shreds.1,
+                                vec![],
+                                vec![],
+                                &new_shreds.2,
+                            )
+                            .unwrap();
+                    //total_inserted_shreds += br.1.len();
+                    //num_shreds += br.1.len();
                     } else {
                         thread::sleep(Duration::from_millis(200));
                     }
@@ -332,14 +346,14 @@ mod tests {
                 }
             })
             .unwrap();
-        let mut entries_batch = make_many_slot_entries(0, batch_size, entries_per_slot).0;
-        info!(
+        //let mut entries_batch = make_many_slot_entries(0, batch_size, entries_per_slot).0;
+        /*info!(
             "batch size: {} entries_per_slot: {} shreds_per_slot: {}",
             batch_size,
             entries_per_slot,
             entries_batch.len()
-        );
-        shreds.lock().unwrap().push_back(entries_batch.clone());
+        );*/
+        //shreds.lock().unwrap().push_back(entries_batch.clone());
         for i in 0..batches {
             let start_slot = i * batch_size;
 
@@ -358,7 +372,7 @@ mod tests {
 
             if shreds.lock().unwrap().len() < 50 {
                 let mut make_time = Measure::start("make_entries");
-                let new_shreds = if pre_generate_data {
+                /*let new_shreds = if pre_generate_data {
                     generated_batches.pop_front().unwrap()
                 } else {
                     num_slots += batch_size;
@@ -367,7 +381,12 @@ mod tests {
                         .iter_mut()
                         .for_each(|shred| shred.set_slot(shred.slot() + batch_size));
                     entries_batch.clone()
-                };
+                };*/
+                let new_shreds = (
+                    i,
+                    Signature::new(&[0u8; 64]),
+                    TransactionStatusMeta::default(),
+                );
                 shreds.lock().unwrap().push_back(new_shreds);
                 make_time.stop();
                 total_make += make_time.as_us();
