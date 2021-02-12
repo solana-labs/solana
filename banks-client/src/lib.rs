@@ -225,7 +225,7 @@ impl BanksClient {
     ) -> impl Future<Output = io::Result<T>> + '_ {
         self.get_account(address).map(|result| {
             let account =
-                result?.ok_or(io::Error::new(io::ErrorKind::Other, "Account not found"))?;
+                result?.ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Account not found"))?;
             T::unpack_from_slice(&account.data)
                 .map_err(|_| io::Error::new(io::ErrorKind::Other, "Failed to deserialize account"))
         })
@@ -239,7 +239,7 @@ impl BanksClient {
     ) -> impl Future<Output = io::Result<T>> + '_ {
         self.get_account(address).map(|result| {
             let account =
-                result?.ok_or(io::Error::new(io::ErrorKind::Other, "account not found"))?;
+                result?.ok_or_else(|| io::Error::new(io::ErrorKind::Other, "account not found"))?;
             T::try_from_slice(&account.data)
         })
     }
