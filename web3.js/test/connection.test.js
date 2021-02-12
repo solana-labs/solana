@@ -1361,6 +1361,25 @@ describe('Connection', () => {
         ).to.be.rejected;
       });
     });
+
+    it('consistent preflightCommitment', async () => {
+      const connection = new Connection(url, 'singleGossip');
+      const sender = new Account();
+      const recipient = new Account();
+      let signature = await connection.requestAirdrop(
+        sender.publicKey,
+        2 * LAMPORTS_PER_SOL,
+      );
+      await connection.confirmTransaction(signature, 'singleGossip');
+      const transaction = new Transaction().add(
+        SystemProgram.transfer({
+          fromPubkey: sender.publicKey,
+          toPubkey: recipient.publicKey,
+          lamports: LAMPORTS_PER_SOL,
+        }),
+      );
+      await sendAndConfirmTransaction(connection, transaction, [sender]);
+    });
   }
 
   it('get largest accounts', async () => {

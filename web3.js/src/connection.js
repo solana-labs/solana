@@ -3034,7 +3034,8 @@ export class Connection {
     const config: any = {encoding: 'base64'};
     const args = [encodedTransaction, config];
     const skipPreflight = options && options.skipPreflight;
-    const preflightCommitment = options && options.preflightCommitment;
+    const preflightCommitment =
+      (options && options.preflightCommitment) || this.commitment;
 
     if (skipPreflight) {
       config.skipPreflight = skipPreflight;
