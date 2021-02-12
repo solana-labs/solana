@@ -303,7 +303,6 @@ mod tests {
         let mut snapshot_test_config = SnapshotTestConfig::new(snapshot_version, cluster_type, 1);
 
         let bank_forks = &mut snapshot_test_config.bank_forks;
-        let accounts_dir = &snapshot_test_config.accounts_dir;
         let snapshots_dir = &snapshot_test_config.snapshot_dir;
         let snapshot_config = &snapshot_test_config.snapshot_config;
         let snapshot_path = &snapshot_config.snapshot_path;
@@ -370,8 +369,27 @@ mod tests {
 
             bank_forks.insert(bank);
             if slot == saved_slot as u64 {
-                let options = CopyOptions::new();
-                fs_extra::dir::copy(accounts_dir, &saved_accounts_dir, &options).unwrap();
+                // Find the relevant snapshot storages
+                let snapshot_storage_files: HashSet<_> = bank_forks[slot]
+                    .get_snapshot_storages()
+                    .into_iter()
+                    .flatten()
+                    .map(|s| s.get_path())
+                    .collect();
+
+                // Only save off the files returned by `get_snapshot_storages`. This is because
+                // some of the storage entries in the accounts directory may be filtered out by
+                // `get_snapshot_storages()` and will not be included in the snapshot. Ultimately,
+                // this means copying naitvely everything in `accounts_dir` to the `saved_accounts_dir`
+                // will lead to test failure by mismatch when `saved_accounts_dir` is compared to
+                // the unpacked snapshot later in this test's call to `verify_snapshot_archive()`.
+                for file in snapshot_storage_files {
+                    fs::copy(
+                        &file,
+                        &saved_accounts_dir.path().join(file.file_name().unwrap()),
+                    )
+                    .unwrap();
+                }
                 let last_snapshot_path = fs::read_dir(snapshot_path)
                     .unwrap()
                     .filter_map(|entry| {
@@ -387,6 +405,7 @@ mod tests {
                     .last()
                     .unwrap();
                 // only save off the snapshot of this slot, we don't need the others.
+                let options = CopyOptions::new();
                 fs_extra::dir::copy(&last_snapshot_path, &saved_snapshots_dir, &options).unwrap();
 
                 saved_archive_path = Some(snapshot_utils::get_snapshot_archive_path(
@@ -480,9 +499,7 @@ mod tests {
         snapshot_utils::verify_snapshot_archive(
             saved_archive_path.unwrap(),
             saved_snapshots_dir.path(),
-            saved_accounts_dir
-                .path()
-                .join(accounts_dir.path().file_name().unwrap()),
+            saved_accounts_dir.path(),
             ArchiveFormat::TarBzip2,
         );
     }
