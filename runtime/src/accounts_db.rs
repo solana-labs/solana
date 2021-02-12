@@ -53,7 +53,7 @@ use std::{
     collections::{hash_map::Entry, BTreeMap, BTreeSet, HashMap, HashSet},
     convert::{TryFrom, TryInto},
     io::{Error as IOError, Result as IOResult},
-    ops::RangeBounds,
+    ops::{Range, RangeBounds},
     path::{Path, PathBuf},
     sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
     sync::{Arc, Mutex, MutexGuard, RwLock},
@@ -235,13 +235,13 @@ impl CalculateHashIntermediate {
 }
 
 #[derive(Default, Debug)]
-struct CumulativeOffset1D {
-    pub index: usize,
+struct CumulativeOffset {
+    pub index: Vec<usize>,
     pub start_offset: usize,
 }
 
-impl CumulativeOffset1D {
-    pub fn new(index: usize, start_offset: usize) -> CumulativeOffset1D {
+impl CumulativeOffset {
+    pub fn new(index: Vec<usize>, start_offset: usize) -> CumulativeOffset {
         Self {
             index,
             start_offset,
@@ -252,13 +252,13 @@ impl CumulativeOffset1D {
 // Allow retreiving &[start..end] from a logical src: Vec<T>, where src is really Vec<Vec<T>> (or later Vec<Vec<Vec<T>>>)
 // This model prevents callers from having to flatten which saves both working memory and time.
 #[derive(Default, Debug)]
-struct CumulativeOffsets1D {
-    cumulative_offsets: Vec<CumulativeOffset1D>,
+struct CumulativeOffsets {
+    cumulative_offsets: Vec<CumulativeOffset>,
     total_count: usize,
 }
 
-impl CumulativeOffsets1D {
-    pub fn from_raw<T>(raw: &[Vec<T>]) -> CumulativeOffsets1D {
+impl CumulativeOffsets {
+    pub fn from_raw<T>(raw: &[Vec<T>]) -> CumulativeOffsets {
         let mut total_count: usize = 0;
         let cumulative_offsets: Vec<_> = raw
             .iter()
@@ -266,13 +266,42 @@ impl CumulativeOffsets1D {
             .filter_map(|(i, v)| {
                 let len = v.len();
                 if len > 0 {
-                    let result = CumulativeOffset1D::new(i, total_count);
+                    let result = CumulativeOffset::new(vec![i], total_count);
                     total_count += len;
                     Some(result)
                 } else {
                     None
                 }
             })
+            .collect();
+
+        Self {
+            cumulative_offsets,
+            total_count,
+        }
+    }
+
+    pub fn from_raw_2d<T>(raw: &[Vec<Vec<T>>]) -> CumulativeOffsets {
+        let mut total_count: usize = 0;
+        let cumulative_offsets: Vec<CumulativeOffset> = raw
+            .iter()
+            .enumerate()
+            .map(|(i, v)| {
+                v.iter()
+                    .enumerate()
+                    .filter_map(|(j, v)| {
+                        let len = v.len();
+                        if len > 0 {
+                            let result = CumulativeOffset::new(vec![i, j], total_count);
+                            total_count += len;
+                            Some(result)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .flatten()
             .collect();
 
         Self {
@@ -288,7 +317,8 @@ impl CumulativeOffsets1D {
             let index = &self.cumulative_offsets[i];
             if start >= index.start_offset {
                 let start = start - index.start_offset;
-                return &raw[index.index][start..];
+                const DIMENSION: usize = 0;
+                return &raw[index.index[DIMENSION]][start..];
             }
         }
         panic!(
@@ -296,6 +326,31 @@ impl CumulativeOffsets1D {
             start, self.total_count
         );
     }
+
+    // return the biggest slice possible that starts at 'start'
+    pub fn get_slice_2d<'a, T>(&self, raw: &'a [Vec<Vec<T>>], start: usize) -> &'a [T] {
+        // This could be binary search, but we expect a small number of vectors.
+        for i in (0..self.cumulative_offsets.len()).into_iter().rev() {
+            let index = &self.cumulative_offsets[i];
+            if start >= index.start_offset {
+                let start = start - index.start_offset;
+                const DIMENSION_0: usize = 0;
+                const DIMENSION_1: usize = 1;
+                return &raw[index.index[DIMENSION_0]][index.index[DIMENSION_1]][start..];
+            }
+        }
+        panic!(
+            "get_slice didn't find: {}, len: {}",
+            start, self.total_count
+        );
+    }
+}
+
+#[derive(Default, Debug)]
+struct PreviousPass {
+    pub reduced_hashes: Vec<Vec<Hash>>,
+    pub remaining_unhashed: Vec<Hash>,
+    pub lamports: u64,
 }
 
 trait Versioned {
@@ -3546,12 +3601,13 @@ impl AccountsDB {
         total_hashes: usize,
         fanout: usize,
         get_hashes: F,
-    ) -> Hash
+        one_iteration_only: bool,
+    ) -> (Hash, Vec<Hash>)
     where
         F: Fn(usize) -> &'a [Hash] + std::marker::Sync,
     {
         if total_hashes == 0 {
-            return Hasher::default().result();
+            return (Hasher::default().result(), vec![]);
         }
 
         let mut time = Measure::start("time");
@@ -3591,10 +3647,17 @@ impl AccountsDB {
         time.stop();
         debug!("hashing {} {}", total_hashes, time);
 
-        if result.len() == 1 {
-            result[0]
+        if one_iteration_only {
+            (Hash::default(), result)
         } else {
-            Self::compute_merkle_root_recurse(result, fanout)
+            (
+                if result.len() == 1 {
+                    result[0]
+                } else {
+                    Self::compute_merkle_root_recurse(result, fanout)
+                },
+                vec![], // no intermediate results needed by caller
+            )
         }
     }
 
@@ -3738,16 +3801,18 @@ impl AccountsDB {
             return Err(MismatchedAccountHash);
         }
 
-        let cumulative_offsets = CumulativeOffsets1D::from_raw(&hashes);
+        let cumulative_offsets = CumulativeOffsets::from_raw(&hashes);
 
         scan.stop();
         let hash_total = cumulative_offsets.total_count;
         let total_lamports = *total_lamports.lock().unwrap();
         let mut hash_time = Measure::start("hash");
-        let accumulated_hash =
-            Self::compute_merkle_root_from_slices(hash_total, MERKLE_FANOUT, |start: usize| {
-                cumulative_offsets.get_slice(&hashes, start)
-            });
+        let accumulated_hash = Self::compute_merkle_root_from_slices(
+            hash_total,
+            MERKLE_FANOUT,
+            |start: usize| cumulative_offsets.get_slice(&hashes, start),
+            false,
+        );
         hash_time.stop();
         datapoint_info!(
             "update_accounts_hash",
@@ -3755,7 +3820,7 @@ impl AccountsDB {
             ("hash", hash_time.as_us(), i64),
             ("hash_total", hash_total, i64),
         );
-        Ok((accumulated_hash, total_lamports))
+        Ok((accumulated_hash.0, total_lamports))
     }
 
     pub fn get_accounts_hash(&self, slot: Slot) -> Hash {
@@ -3835,15 +3900,35 @@ impl AccountsDB {
     }
 
     fn flatten_hash_intermediate(
-        data_sections_by_pubkey: Vec<Vec<CalculateHashIntermediate>>,
+        data_sections_by_pubkey: Vec<Vec<Vec<CalculateHashIntermediate>>>,
         stats: &mut HashStats,
-    ) -> Vec<CalculateHashIntermediate> {
+        bins: usize,
+    ) -> Vec<Vec<CalculateHashIntermediate>> {
+        // flatten this:
+        // vec: just a level of hierarchy
+        //   vec: 1 vec per PUBKEY_BINS_FOR_CALCULATING_HASHES
+        //     vec: Intermediate data whose pubkey belongs in this division
+        // into this:
+        // vec: 1 vec per PUBKEY_BINS_FOR_CALCULATING_HASHES
+        //   vec: Intermediate data whose pubkey belongs in this division
         let mut flatten_time = Measure::start("flatten");
-        let result: Vec<_> = data_sections_by_pubkey.into_iter().flatten().collect();
+        let mut data_by_pubkey: Vec<Vec<CalculateHashIntermediate>> = vec![Vec::new(); bins];
+        let mut raw_len = 0;
+        for mut outer in data_sections_by_pubkey {
+            let outer_len = outer.len();
+            assert!(outer_len <= bins, "{}, {}", outer_len, bins);
+            for pubkey_index in 0..outer_len {
+                raw_len += outer[pubkey_index].len();
+                let mut data = vec![];
+                std::mem::swap(&mut data, &mut outer[pubkey_index]);
+
+                data_by_pubkey[pubkey_index].extend(data);
+            }
+        }
         flatten_time.stop();
         stats.flatten_time_total_us += flatten_time.as_us();
-        stats.unreduced_entries = result.len();
-        result
+        stats.unreduced_entries = raw_len;
+        data_by_pubkey
     }
 
     fn compare_two_hash_entries(
@@ -3861,21 +3946,27 @@ impl AccountsDB {
     }
 
     fn sort_hash_intermediate(
-        mut data_by_pubkey: Vec<CalculateHashIntermediate>,
+        data_by_pubkey: Vec<Vec<CalculateHashIntermediate>>,
         stats: &mut HashStats,
-    ) -> Vec<CalculateHashIntermediate> {
+    ) -> Vec<Vec<CalculateHashIntermediate>> {
         // sort each PUBKEY_DIVISION vec
         let mut sort_time = Measure::start("sort");
-        data_by_pubkey.par_sort_unstable_by(Self::compare_two_hash_entries);
+        let sorted_data_by_pubkey: Vec<Vec<_>> = data_by_pubkey
+            .into_par_iter()
+            .map(|mut pk_range| {
+                pk_range.par_sort_unstable_by(Self::compare_two_hash_entries);
+                pk_range
+            })
+            .collect();
         sort_time.stop();
         stats.sort_time_total_us += sort_time.as_us();
-        data_by_pubkey
+        sorted_data_by_pubkey
     }
 
     fn de_dup_and_eliminate_zeros(
-        sorted_data_by_pubkey: Vec<CalculateHashIntermediate>,
+        sorted_data_by_pubkey: Vec<Vec<CalculateHashIntermediate>>,
         stats: &mut HashStats,
-    ) -> (Vec<Vec<Hash>>, u64) {
+    ) -> (Vec<Vec<Vec<Hash>>>, u64) {
         // 1. eliminate zero lamport accounts
         // 2. pick the highest slot or (slot = and highest version) of each pubkey
         // 3. produce this output:
@@ -3883,10 +3974,20 @@ impl AccountsDB {
         //   vec: sorted sections from parallelism, in pubkey order
         //     vec: individual hashes in pubkey order
         let mut zeros = Measure::start("eliminate zeros");
+        let overall_sum = Mutex::new(0u64);
         const CHUNKS: usize = 10;
-        let (hashes, sum) = Self::de_dup_accounts_in_parallel(&sorted_data_by_pubkey, CHUNKS);
+        let hashes: Vec<Vec<Vec<Hash>>> = sorted_data_by_pubkey
+            .into_iter()
+            .map(|pubkey_division| {
+                let (hashes, sum) = Self::de_dup_accounts_in_parallel(&pubkey_division, CHUNKS);
+                let mut overall = overall_sum.lock().unwrap();
+                *overall = Self::checked_cast_for_capitalization(sum as u128 + *overall as u128);
+                hashes
+            })
+            .collect();
         zeros.stop();
         stats.zeros_time_total_us += zeros.as_us();
+        let sum = *overall_sum.lock().unwrap();
         (hashes, sum)
     }
 
@@ -3972,46 +4073,96 @@ impl AccountsDB {
         (result, sum)
     }
 
-    fn flatten_hashes_and_hash(
-        hashes: Vec<Vec<Hash>>,
-        fanout: usize,
-        stats: &mut HashStats,
-    ) -> Hash {
-        // flatten vec/vec into 1d vec of hashes in order
-        let mut hash_time = Measure::start("flat2");
-
-        let offsets = CumulativeOffsets1D::from_raw(&hashes);
-
-        let get_slice = |start: usize| -> &[Hash] { offsets.get_slice(&hashes, start) };
-        let hash = Self::compute_merkle_root_from_slices(offsets.total_count, fanout, get_slice);
-        hash_time.stop();
-        stats.hash_time_total_us += hash_time.as_us();
-        stats.hash_total = offsets.total_count;
-
-        hash
-    }
-
     // input:
     // vec: unordered, created by parallelism
     //   vec: [0..bins] - where bins are pubkey ranges
     //     vec: [..] - items which fin in the containing bin, unordered within this vec
     // so, assumption is middle vec is bins sorted by pubkey
     fn rest_of_hash_calculation(
-        data_sections_by_pubkey: Vec<Vec<CalculateHashIntermediate>>,
+        data_sections_by_pubkey: Vec<Vec<Vec<CalculateHashIntermediate>>>,
         mut stats: &mut HashStats,
-    ) -> (Hash, u64) {
-        let outer = Self::flatten_hash_intermediate(data_sections_by_pubkey, &mut stats);
+        bins: usize,
+        last_pass: bool,
+        mut previous_state: PreviousPass,
+    ) -> (Hash, u64, PreviousPass) {
+        let outer = Self::flatten_hash_intermediate(data_sections_by_pubkey, &mut stats, bins);
 
         let sorted_data_by_pubkey = Self::sort_hash_intermediate(outer, &mut stats);
 
-        let (hashes, total_lamports) =
+        let (mut hashes, mut total_lamports) =
             Self::de_dup_and_eliminate_zeros(sorted_data_by_pubkey, &mut stats);
 
-        let hash = Self::flatten_hashes_and_hash(hashes, MERKLE_FANOUT, &mut stats);
+        total_lamports += previous_state.lamports;
 
-        stats.log();
+        // debugging
+        // error!("hashes: {}, last: {}, previous hashes: {}, last remaining: {}", hashes.len(), last_pass, previous_state.reduced_hashes.len(), previous_state.remaining_unhashed.len());
 
-        (hash, total_lamports)
+        if !previous_state.remaining_unhashed.is_empty() {
+            // these items were not hashes last iteration because they didn't divide evenly
+            hashes.insert(0, vec![previous_state.remaining_unhashed]);
+            previous_state.remaining_unhashed = Vec::new();
+        }
+
+        let mut next_pass = PreviousPass::default();
+        let cumulative = CumulativeOffsets::from_raw_2d(&hashes);
+        let mut hash_total = cumulative.total_count;
+        stats.hash_total += hash_total;
+
+        if !last_pass {
+            next_pass.lamports = total_lamports;
+            total_lamports = 0;
+
+            // Save hashes that don't evenly hash. They will be combined with hashes from the next pass.
+            let left_over_hashes = hash_total % MERKLE_FANOUT;
+
+            // move tail hashes that don't evenly hash into a 1d vector for next time
+            let mut i = hash_total - left_over_hashes;
+            while i < hash_total {
+                let data = cumulative.get_slice_2d(&hashes, i);
+                next_pass.remaining_unhashed.extend(data);
+                i += data.len();
+            }
+
+            hash_total -= left_over_hashes; // this is enough to cause the hashes at the end of the data set to be ignored
+        }
+
+        if !hashes.is_empty() {
+            let partial_hashes = Self::compute_merkle_root_from_slices(
+                hash_total, // note this does not include the ones that didn't divide evenly, unless we're in the last iteration
+                MERKLE_FANOUT,
+                |start| cumulative.get_slice_2d(&hashes, start),
+                true,
+            )
+            .1;
+            next_pass.reduced_hashes.push(partial_hashes);
+        }
+
+        let hash = if last_pass {
+            let cumulative = CumulativeOffsets::from_raw(&next_pass.reduced_hashes);
+
+            let hash = if cumulative.total_count == 1 {
+                // all the passes resulted in a single hash, that means we're done, so we had <= MERKLE_ROOT total hashes
+                cumulative.get_slice(&next_pass.reduced_hashes, 0)[0]
+            } else {
+                // hash all the rest and combine and hash until we have only 1 hash left
+                let (hash, _) = Self::compute_merkle_root_from_slices(
+                    cumulative.total_count,
+                    MERKLE_FANOUT,
+                    |start| cumulative.get_slice(&next_pass.reduced_hashes, start),
+                    false,
+                );
+                hash
+            };
+            next_pass.reduced_hashes = Vec::new();
+            hash
+        } else {
+            Hash::default()
+        };
+
+        if last_pass {
+            stats.log();
+        }
+        (hash, total_lamports, next_pass)
     }
 
     fn calculate_accounts_hash_helper(
@@ -4074,15 +4225,24 @@ impl AccountsDB {
         storage: &[SnapshotStorage],
         simple_capitalization_enabled: bool,
         mut stats: &mut HashStats,
-    ) -> Vec<Vec<CalculateHashIntermediate>> {
-        let mut time = Measure::start("scan all accounts");
+        bins: usize,
+        bin_range: &Range<usize>,
+    ) -> Vec<Vec<Vec<CalculateHashIntermediate>>> {
+        assert!(bins <= std::u8::MAX as usize);
         stats.num_snapshot_storage = storage.len();
-        let result: Vec<Vec<CalculateHashIntermediate>> = Self::scan_account_storage_no_bank(
+        let mut time = Measure::start("scan all accounts");
+        let result: Vec<Vec<Vec<CalculateHashIntermediate>>> = Self::scan_account_storage_no_bank(
             &storage,
             &mut stats,
             |loaded_account: LoadedAccount,
-             accum: &mut Vec<CalculateHashIntermediate>,
+             accum: &mut Vec<Vec<CalculateHashIntermediate>>,
              slot: Slot| {
+                let pubkey = *loaded_account.pubkey();
+                let rng_index = pubkey.as_ref()[0] as usize * bins / ((std::u8::MAX) as usize + 1);
+                if !bin_range.contains(&rng_index) {
+                    return;
+                }
+
                 let version = loaded_account.write_version();
                 let raw_lamports = loaded_account.lamports();
                 let zero_raw_lamports = raw_lamports == 0;
@@ -4097,7 +4257,6 @@ impl AccountsDB {
                     )
                 };
 
-                let pubkey = *loaded_account.pubkey();
                 let source_item = CalculateHashIntermediate::new(
                     version,
                     *loaded_account.loaded_hash(),
@@ -4105,10 +4264,15 @@ impl AccountsDB {
                     slot,
                     pubkey,
                 );
-                accum.push(source_item);
+                let max = accum.len();
+                if max == 0 {
+                    accum.extend(vec![Vec::new(); bins]);
+                }
+                accum[rng_index].push(source_item);
             },
         );
         time.stop();
+
         stats.scan_time_total_us += time.as_us();
         result
     }
@@ -4122,10 +4286,39 @@ impl AccountsDB {
     ) -> (Hash, u64) {
         let scan_and_hash = || {
             let mut stats = HashStats::default();
-            let result =
-                Self::scan_snapshot_stores(storages, simple_capitalization_enabled, &mut stats);
+            // When calculating hashes, it is helpful to break the pubkeys found into bins based on the pubkey value.
+            const PUBKEY_BINS_FOR_CALCULATING_HASHES: usize = 64;
 
-            Self::rest_of_hash_calculation(result, &mut stats)
+            const PASSES: usize = 16;
+            let bins_per_pass = PUBKEY_BINS_FOR_CALCULATING_HASHES / PASSES;
+            assert_eq!(bins_per_pass * PASSES, PUBKEY_BINS_FOR_CALCULATING_HASHES); // evenly divisible
+            let mut previous_pass = PreviousPass::default();
+            let mut final_result = (Hash::default(), 0);
+
+            for pass in 0..PASSES {
+                let bounds = Range {
+                    start: pass * bins_per_pass,
+                    end: (pass + 1) * bins_per_pass,
+                };
+                let result = Self::scan_snapshot_stores(
+                    storages,
+                    simple_capitalization_enabled,
+                    &mut stats,
+                    PUBKEY_BINS_FOR_CALCULATING_HASHES,
+                    &bounds,
+                );
+
+                let (hash, lamports, for_next_pass) = Self::rest_of_hash_calculation(
+                    result,
+                    &mut stats,
+                    PUBKEY_BINS_FOR_CALCULATING_HASHES,
+                    pass == PASSES - 1,
+                    previous_pass,
+                );
+                previous_pass = for_next_pass;
+                final_result = (hash, lamports);
+            }
+            final_result
         };
         if let Some(thread_pool) = thread_pool {
             thread_pool.install(scan_and_hash)
@@ -5353,18 +5546,43 @@ pub mod tests {
         ancestors
     }
 
+    fn flatten_hashes_and_hash(
+        hashes: Vec<Vec<Vec<Hash>>>,
+        fanout: usize,
+        stats: &mut HashStats,
+    ) -> Hash {
+        let mut hash_time = Measure::start("flat2");
+
+        let offsets = CumulativeOffsets::from_raw_2d(&hashes);
+
+        let get_slice = |start: usize| -> &[Hash] { offsets.get_slice_2d(&hashes, start) };
+        let hash = AccountsDB::compute_merkle_root_from_slices(
+            offsets.total_count,
+            fanout,
+            get_slice,
+            false,
+        )
+        .0;
+        hash_time.stop();
+        stats.hash_time_total_us += hash_time.as_us();
+        stats.hash_total = offsets.total_count;
+
+        hash
+    }
+
     #[test]
     fn test_accountsdb_cumulative_offsets1_d() {
         let input = vec![vec![0, 1], vec![], vec![2, 3, 4], vec![]];
-        let cumulative = CumulativeOffsets1D::from_raw(&input);
+        let cumulative = CumulativeOffsets::from_raw(&input);
 
         let src: Vec<_> = input.clone().into_iter().flatten().collect();
         let len = src.len();
         assert_eq!(cumulative.total_count, len);
         assert_eq!(cumulative.cumulative_offsets.len(), 2); // 2 non-empty vectors
 
-        assert_eq!(cumulative.cumulative_offsets[0].index, 0);
-        assert_eq!(cumulative.cumulative_offsets[1].index, 2);
+        const DIMENSION: usize = 0;
+        assert_eq!(cumulative.cumulative_offsets[0].index[DIMENSION], 0);
+        assert_eq!(cumulative.cumulative_offsets[1].index[DIMENSION], 2);
 
         assert_eq!(cumulative.cumulative_offsets[0].start_offset, 0);
         assert_eq!(cumulative.cumulative_offsets[1].start_offset, 2);
@@ -5377,15 +5595,15 @@ pub mod tests {
         }
 
         let input = vec![vec![], vec![0, 1], vec![], vec![2, 3, 4], vec![]];
-        let cumulative = CumulativeOffsets1D::from_raw(&input);
+        let cumulative = CumulativeOffsets::from_raw(&input);
 
         let src: Vec<_> = input.clone().into_iter().flatten().collect();
         let len = src.len();
         assert_eq!(cumulative.total_count, len);
         assert_eq!(cumulative.cumulative_offsets.len(), 2); // 2 non-empty vectors
 
-        assert_eq!(cumulative.cumulative_offsets[0].index, 1);
-        assert_eq!(cumulative.cumulative_offsets[1].index, 3);
+        assert_eq!(cumulative.cumulative_offsets[0].index[DIMENSION], 1);
+        assert_eq!(cumulative.cumulative_offsets[1].index[DIMENSION], 3);
 
         assert_eq!(cumulative.cumulative_offsets[0].start_offset, 0);
         assert_eq!(cumulative.cumulative_offsets[1].start_offset, 2);
@@ -5398,7 +5616,7 @@ pub mod tests {
         }
 
         let input: Vec<Vec<u32>> = vec![vec![]];
-        let cumulative = CumulativeOffsets1D::from_raw(&input);
+        let cumulative = CumulativeOffsets::from_raw(&input);
 
         let src: Vec<_> = input.into_iter().flatten().collect();
         let len = src.len();
@@ -5444,12 +5662,17 @@ pub mod tests {
         );
         account_maps.push(val);
 
+        const BINS: usize = 1;
+
         let result = AccountsDB::rest_of_hash_calculation(
-            vec![account_maps.clone()],
+            vec![vec![account_maps.clone()]],
             &mut HashStats::default(),
+            BINS,
+            true,
+            PreviousPass::default(),
         );
         let expected_hash = Hash::from_str("8j9ARGFv4W2GfML7d3sVJK2MePwrikqYnu6yqer28cCa").unwrap();
-        assert_eq!(result, (expected_hash, 88));
+        assert_eq!((result.0, result.1), (expected_hash, 88));
 
         // 3rd key - with pubkey value before 1st key so it will be sorted first
         let key = Pubkey::new(&[10u8; 32]);
@@ -5458,11 +5681,14 @@ pub mod tests {
         account_maps.push(val);
 
         let result = AccountsDB::rest_of_hash_calculation(
-            vec![account_maps.clone()],
+            vec![vec![account_maps.clone()]],
             &mut HashStats::default(),
+            BINS,
+            true,
+            PreviousPass::default(),
         );
         let expected_hash = Hash::from_str("EHv9C5vX7xQjjMpsJMzudnDTzoTSRwYkqLzY8tVMihGj").unwrap();
-        assert_eq!(result, (expected_hash, 108));
+        assert_eq!((result.0, result.1), (expected_hash, 108));
 
         // 3rd key - with later slot
         let key = Pubkey::new(&[10u8; 32]);
@@ -5470,10 +5696,15 @@ pub mod tests {
         let val = CalculateHashIntermediate::new(0, hash, 30, Slot::default() + 1, key);
         account_maps.push(val);
 
-        let result =
-            AccountsDB::rest_of_hash_calculation(vec![account_maps], &mut HashStats::default());
+        let result = AccountsDB::rest_of_hash_calculation(
+            vec![vec![account_maps]],
+            &mut HashStats::default(),
+            BINS,
+            true,
+            PreviousPass::default(),
+        );
         let expected_hash = Hash::from_str("7NNPg5A8Xsg1uv4UFm6KZNwsipyyUnmgCrznP6MBWoBZ").unwrap();
-        assert_eq!(result, (expected_hash, 118));
+        assert_eq!((result.0, result.1), (expected_hash, 118));
     }
 
     #[test]
@@ -5561,7 +5792,7 @@ pub mod tests {
                     let (hashes2, lamports2) = AccountsDB::de_dup_accounts_in_parallel(slice, 1);
                     let (hashes3, lamports3) = AccountsDB::de_dup_accounts_in_parallel(slice, 2);
                     let (hashes4, lamports4) = AccountsDB::de_dup_and_eliminate_zeros(
-                        slice.to_vec(),
+                        vec![slice.to_vec()],
                         &mut HashStats::default(),
                     );
 
@@ -5571,7 +5802,12 @@ pub mod tests {
                     );
                     assert_eq!(
                         hashes2.iter().flatten().collect::<Vec<_>>(),
-                        hashes4.iter().flatten().collect::<Vec<_>>()
+                        hashes4
+                            .iter()
+                            .flatten()
+                            .into_iter()
+                            .flatten()
+                            .collect::<Vec<_>>()
                     );
                     assert_eq!(lamports2, lamports3);
                     assert_eq!(lamports2, lamports4);
@@ -5643,8 +5879,8 @@ pub mod tests {
         let expected = AccountsDB::compute_merkle_root_loop(hashes.clone(), MERKLE_FANOUT, |i| *i);
 
         assert_eq!(
-            AccountsDB::flatten_hashes_and_hash(
-                vec![hashes.clone()],
+            flatten_hashes_and_hash(
+                vec![vec![hashes.clone()]],
                 MERKLE_FANOUT,
                 &mut HashStats::default()
             ),
@@ -5652,11 +5888,11 @@ pub mod tests {
         );
         for in_first in 1..COUNT - 1 {
             assert_eq!(
-                AccountsDB::flatten_hashes_and_hash(
-                    vec![
+                flatten_hashes_and_hash(
+                    vec![vec![
                         hashes.clone()[0..in_first].to_vec(),
                         hashes.clone()[in_first..COUNT].to_vec()
-                    ],
+                    ]],
                     MERKLE_FANOUT,
                     &mut HashStats::default()
                 ),
@@ -5683,14 +5919,14 @@ pub mod tests {
         let list = vec![val.clone(), val2.clone()];
         let mut list_bkup = list.clone();
         list_bkup.sort_by(AccountsDB::compare_two_hash_entries);
-        let list = AccountsDB::sort_hash_intermediate(list, &mut HashStats::default());
-        assert_eq!(list, list_bkup);
+        let list = AccountsDB::sort_hash_intermediate(vec![list], &mut HashStats::default());
+        assert_eq!(list, vec![list_bkup]);
 
         let list = vec![val2, val.clone()]; // reverse args
         let mut list_bkup = list.clone();
         list_bkup.sort_by(AccountsDB::compare_two_hash_entries);
-        let list = AccountsDB::sort_hash_intermediate(list, &mut HashStats::default());
-        assert_eq!(list, list_bkup);
+        let list = AccountsDB::sort_hash_intermediate(vec![list], &mut HashStats::default());
+        assert_eq!(list, vec![list_bkup]);
 
         // slot same, vers =
         let hash3 = Hash::new_unique();
@@ -5811,43 +6047,50 @@ pub mod tests {
     #[test]
     fn test_accountsdb_flatten_hash_intermediate() {
         solana_logger::setup();
-        let test = vec![vec![CalculateHashIntermediate::new(
+        let test = vec![vec![vec![CalculateHashIntermediate::new(
             1,
             Hash::new_unique(),
             2,
             3,
             Pubkey::new_unique(),
-        )]];
+        )]]];
         let mut stats = HashStats::default();
-        let result = AccountsDB::flatten_hash_intermediate(test.clone(), &mut stats);
+        const BINS: usize = 1;
+        let result = AccountsDB::flatten_hash_intermediate(test.clone(), &mut stats, BINS);
         assert_eq!(result, test[0]);
         assert_eq!(stats.unreduced_entries, 1);
 
         let mut stats = HashStats::default();
         let result = AccountsDB::flatten_hash_intermediate(
-            vec![vec![CalculateHashIntermediate::default(); 0]],
+            vec![vec![vec![CalculateHashIntermediate::default(); 0]]],
             &mut stats,
+            BINS,
         );
-        assert_eq!(result.len(), 0);
+        assert_eq!(result.iter().flatten().count(), 0);
         assert_eq!(stats.unreduced_entries, 0);
 
         let test = vec![
-            vec![
+            vec![vec![
                 CalculateHashIntermediate::new(1, Hash::new_unique(), 2, 3, Pubkey::new_unique()),
                 CalculateHashIntermediate::new(8, Hash::new_unique(), 9, 10, Pubkey::new_unique()),
-            ],
-            vec![CalculateHashIntermediate::new(
+            ]],
+            vec![vec![CalculateHashIntermediate::new(
                 4,
                 Hash::new_unique(),
                 5,
                 6,
                 Pubkey::new_unique(),
-            )],
+            )]],
         ];
         let mut stats = HashStats::default();
-        let result = AccountsDB::flatten_hash_intermediate(test.clone(), &mut stats);
-        let expected = test.into_iter().flatten().collect::<Vec<_>>();
-        assert_eq!(result, expected);
+        let result = AccountsDB::flatten_hash_intermediate(test.clone(), &mut stats, BINS);
+        let expected = test
+            .into_iter()
+            .flatten()
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+        assert_eq!(result.into_iter().flatten().collect::<Vec<_>>(), expected);
         assert_eq!(stats.unreduced_entries, expected.len());
     }
 
@@ -5855,15 +6098,17 @@ pub mod tests {
         let result = AccountsDB::compute_merkle_root(hashes.clone(), fanout);
         if hashes.len() >= fanout * fanout * fanout {
             let reduced: Vec<_> = hashes.iter().map(|x| x.1).collect();
-            let result2 =
-                AccountsDB::compute_merkle_root_from_slices(hashes.len(), fanout, |start| {
-                    &reduced[start..]
-                });
-            assert_eq!(result, result2);
+            let result2 = AccountsDB::compute_merkle_root_from_slices(
+                hashes.len(),
+                fanout,
+                |start| &reduced[start..],
+                false,
+            );
+            assert_eq!(result, result2.0);
 
             let reduced2: Vec<_> = hashes.iter().map(|x| vec![x.1]).collect();
             let result2 =
-                AccountsDB::flatten_hashes_and_hash(reduced2, fanout, &mut HashStats::default());
+                flatten_hashes_and_hash(vec![reduced2], fanout, &mut HashStats::default());
             assert_eq!(result, result2);
         }
         result
@@ -5874,15 +6119,17 @@ pub mod tests {
         let result = AccountsDB::compute_merkle_root(temp, fanout);
         if hashes.len() >= fanout * fanout * fanout {
             let reduced: Vec<_> = hashes.clone();
-            let result2 =
-                AccountsDB::compute_merkle_root_from_slices(hashes.len(), fanout, |start| {
-                    &reduced[start..]
-                });
-            assert_eq!(result, result2, "len: {}", hashes.len());
+            let result2 = AccountsDB::compute_merkle_root_from_slices(
+                hashes.len(),
+                fanout,
+                |start| &reduced[start..],
+                false,
+            );
+            assert_eq!(result, result2.0, "len: {}", hashes.len());
 
             let reduced2: Vec<_> = hashes.iter().map(|x| vec![*x]).collect();
             let result2 =
-                AccountsDB::flatten_hashes_and_hash(reduced2, fanout, &mut HashStats::default());
+                flatten_hashes_and_hash(vec![reduced2], fanout, &mut HashStats::default());
             assert_eq!(result, result2, "len: {}", hashes.len());
         }
         result
@@ -5981,7 +6228,7 @@ pub mod tests {
         solana_logger::setup();
 
         let offset = 2;
-        let input = vec![
+        let input = vec![vec![
             CalculateHashIntermediate::new(
                 0,
                 Hash::new_unique(),
@@ -5996,7 +6243,7 @@ pub mod tests {
                 0,
                 Pubkey::new_unique(),
             ),
-        ];
+        ]];
         AccountsDB::de_dup_and_eliminate_zeros(input, &mut HashStats::default());
     }
 
