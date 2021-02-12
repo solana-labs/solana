@@ -100,7 +100,8 @@ impl LeaderScheduleCache {
         }
     }
 
-    /// Return the (next slot, last slot) after the given current_slot that the given node will be leader
+    /// Returns the (next slot, last slot) consecutive range of slots after
+    /// the given current_slot that the given node will be leader.
     pub fn next_leader_slot(
         &self,
         pubkey: &Pubkey,
