@@ -2404,8 +2404,8 @@ mod tests {
 
         let mut dropped_batches_count = 0;
         let mut newly_buffered_packets_count = 0;
-        // Because the unprocessed `packet_indexes` is empty, this packets are not aded to
-        // the unprocessed queue
+        // Because the set of unprocessed `packet_indexes` is empty, the
+        // packets are not added to the unprocessed queue
         BankingStage::push_unprocessed(
             &mut unprocessed_packets,
             new_packets.clone(),
@@ -2418,8 +2418,8 @@ mod tests {
         assert_eq!(dropped_batches_count, 0);
         assert_eq!(newly_buffered_packets_count, 0);
 
-        // Because the unprocessed `packet_indexes` is non-empty, the packets are aded to
-        // the unprocessed queue
+        // Because the set of unprocessed `packet_indexes` is non-empty, the
+        // packets are added to the unprocessed queue
         let packet_indexes = vec![0];
         BankingStage::push_unprocessed(
             &mut unprocessed_packets,
