@@ -17,10 +17,10 @@ use solana_sdk::{
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     feature_set::{
-        abort_on_all_cpi_failures, limit_cpi_loader_invoke, pubkey_log_syscall_enabled,
-        ristretto_mul_syscall_enabled, sha256_syscall_enabled, sol_log_compute_units_syscall,
-        try_find_program_address_syscall_enabled, use_loaded_executables,
-        use_loaded_program_accounts,
+        abort_on_all_cpi_failures, limit_cpi_loader_invoke, per_byte_logging_cost,
+        pubkey_log_syscall_enabled, ristretto_mul_syscall_enabled, sha256_syscall_enabled,
+        sol_log_compute_units_syscall, try_find_program_address_syscall_enabled,
+        use_loaded_executables, use_loaded_program_accounts,
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
@@ -172,9 +172,20 @@ pub fn bind_syscall_context_objects<'a>(
     // Syscall functions common across languages
 
     vm.bind_syscall_context_object(Box::new(SyscallAbort {}), None)?;
-    vm.bind_syscall_context_object(Box::new(SyscallPanic { loader_id }), None)?;
+    vm.bind_syscall_context_object(
+        Box::new(SyscallPanic {
+            compute_meter: if invoke_context.is_feature_active(&per_byte_logging_cost::id()) {
+                Some(invoke_context.get_compute_meter())
+            } else {
+                None
+            },
+            loader_id,
+        }),
+        None,
+    )?;
     vm.bind_syscall_context_object(
         Box::new(SyscallLog {
+            per_byte_cost: invoke_context.is_feature_active(&per_byte_logging_cost::id()),
             cost: bpf_compute_budget.log_units,
             compute_meter: invoke_context.get_compute_meter(),
             logger: invoke_context.get_logger(),
@@ -425,6 +436,7 @@ impl SyscallObject<BPFError> for SyscallAbort {
 /// Causes the BPF program to be halted immediately
 /// Log a user's info message
 pub struct SyscallPanic<'a> {
+    compute_meter: Option<Rc<RefCell<dyn ComputeMeter>>>,
     loader_id: &'a Pubkey,
 }
 impl<'a> SyscallObject<BPFError> for SyscallPanic<'a> {
@@ -438,6 +450,9 @@ impl<'a> SyscallObject<BPFError> for SyscallPanic<'a> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BPFError>>,
     ) {
+        if let Some(ref mut compute_meter) = self.compute_meter {
+            question_mark!(compute_meter.consume(len), result);
+        }
         *result = translate_string_and_do(
             memory_mapping,
             file,
@@ -450,6 +465,7 @@ impl<'a> SyscallObject<BPFError> for SyscallPanic<'a> {
 
 /// Log a user's info message
 pub struct SyscallLog<'a> {
+    per_byte_cost: bool,
     cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     logger: Rc<RefCell<dyn Logger>>,
@@ -466,7 +482,11 @@ impl<'a> SyscallObject<BPFError> for SyscallLog<'a> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BPFError>>,
     ) {
-        question_mark!(self.compute_meter.consume(self.cost), result);
+        if self.per_byte_cost {
+            question_mark!(self.compute_meter.consume(len), result);
+        } else {
+            question_mark!(self.compute_meter.consume(self.cost), result);
+        }
         question_mark!(
             translate_string_and_do(
                 memory_mapping,
@@ -2001,7 +2021,34 @@ mod tests {
             }],
             &DEFAULT_CONFIG,
         );
+
+        let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
+            Rc::new(RefCell::new(MockComputeMeter {
+                remaining: string.len() as u64 - 1,
+            }));
         let mut syscall_panic = SyscallPanic {
+            compute_meter: Some(compute_meter),
+            loader_id: &bpf_loader::id(),
+        };
+        let mut result: Result<u64, EbpfError<BPFError>> = Ok(0);
+        syscall_panic.call(
+            100,
+            string.len() as u64,
+            42,
+            84,
+            0,
+            &memory_mapping,
+            &mut result,
+        );
+        assert_eq!(
+            Err(EbpfError::UserError(BPFError::SyscallError(
+                SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded)
+            ))),
+            result
+        );
+
+        let mut syscall_panic = SyscallPanic {
+            compute_meter: None,
             loader_id: &bpf_loader::id(),
         };
         let mut result: Result<u64, EbpfError<BPFError>> = Ok(0);
@@ -2028,6 +2075,7 @@ mod tests {
         let logger: Rc<RefCell<dyn Logger>> =
             Rc::new(RefCell::new(MockLogger { log: log.clone() }));
         let mut syscall_sol_log = SyscallLog {
+            per_byte_cost: false,
             cost: 1,
             compute_meter,
             logger,
@@ -2080,6 +2128,46 @@ mod tests {
             &mut result,
         );
         assert_access_violation!(result, 100, string.len() as u64 * 2);
+        let mut result: Result<u64, EbpfError<BPFError>> = Ok(0);
+        syscall_sol_log.call(
+            100,
+            string.len() as u64,
+            0,
+            0,
+            0,
+            &memory_mapping,
+            &mut result,
+        );
+        assert_eq!(
+            Err(EbpfError::UserError(BPFError::SyscallError(
+                SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded)
+            ))),
+            result
+        );
+
+        let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
+            Rc::new(RefCell::new(MockComputeMeter {
+                remaining: (string.len() as u64 * 2) - 1,
+            }));
+        let logger: Rc<RefCell<dyn Logger>> = Rc::new(RefCell::new(MockLogger { log }));
+        let mut syscall_sol_log = SyscallLog {
+            per_byte_cost: true,
+            cost: 1,
+            compute_meter,
+            logger,
+            loader_id: &bpf_loader::id(),
+        };
+        let mut result: Result<u64, EbpfError<BPFError>> = Ok(0);
+        syscall_sol_log.call(
+            100,
+            string.len() as u64,
+            0,
+            0,
+            0,
+            &memory_mapping,
+            &mut result,
+        );
+        result.unwrap();
         let mut result: Result<u64, EbpfError<BPFError>> = Ok(0);
         syscall_sol_log.call(
             100,
