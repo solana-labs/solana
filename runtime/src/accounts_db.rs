@@ -3395,6 +3395,14 @@ impl AccountsDB {
         })
     }
 
+    fn div_ceil(x: usize, y: usize) -> usize {
+        let mut result = x / y;
+        if x % y != 0 {
+            result += 1;
+        }
+        result
+    }
+
     // For the first iteration, there could be more items in the tuple than just hash and lamports.
     // Using extractor allows us to avoid an unnecessary array copy on the first iteration.
     fn compute_merkle_root_and_capitalization_loop<T, F>(
@@ -3413,11 +3421,7 @@ impl AccountsDB {
         let mut time = Measure::start("time");
 
         let total_hashes = hashes.len();
-        // we need div_ceil here
-        let mut chunks = total_hashes / fanout;
-        if total_hashes % fanout != 0 {
-            chunks += 1;
-        }
+        let chunks = Self::div_ceil(total_hashes, fanout);
 
         let result: Vec<_> = (0..chunks)
             .into_par_iter()
@@ -5179,6 +5183,21 @@ pub mod tests {
             ancestors.insert(i, (i - 1) as usize);
         }
         ancestors
+    }
+
+    #[test]
+    fn test_accountsdb_div_ceil() {
+        assert_eq!(AccountsDB::div_ceil(10, 3), 4);
+        assert_eq!(AccountsDB::div_ceil(0, 1), 0);
+        assert_eq!(AccountsDB::div_ceil(0, 5), 0);
+        assert_eq!(AccountsDB::div_ceil(9, 3), 3);
+        assert_eq!(AccountsDB::div_ceil(9, 9), 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "attempt to divide by zero")]
+    fn test_accountsdb_div_ceil_fail() {
+        assert_eq!(AccountsDB::div_ceil(10, 0), 0);
     }
 
     #[test]
