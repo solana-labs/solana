@@ -5977,7 +5977,7 @@ pub mod tests {
 
     #[test]
     #[should_panic(expected = "overflow is detected while summing capitalization")]
-    fn test_accountsdb_compute_merkle_root_overflow() {
+    fn test_accountsdb_lamport_overflow() {
         solana_logger::setup();
 
         let offset = 2;
