@@ -169,6 +169,57 @@ type ShrinkCandidates = HashMap<Slot, HashMap<AppendVecId, Arc<AccountStorageEnt
 
 const ZERO_RAW_LAMPORTS_SENTINEL: u64 = std::u64::MAX;
 
+#[derive(Debug, Default)]
+pub struct HashStats {
+    pub scan_time_total_us: u64,
+    pub zeros_time_total_us: u64,
+    pub hash_time_total_us: u64,
+    pub sort_time_total_us: u64,
+    pub flatten_time_total_us: u64,
+    pub flatten_after_zeros_time_total_us: u64,
+    pub pre_scan_flatten_time_total_us: u64,
+    pub hash_total: usize,
+    pub unreduced_entries: usize,
+    pub num_snapshot_storage: usize,
+}
+impl HashStats {
+    fn log(&mut self) {
+        let total_time_us = self.scan_time_total_us
+            + self.zeros_time_total_us
+            + self.hash_time_total_us
+            + self.sort_time_total_us
+            + self.flatten_time_total_us
+            + self.flatten_after_zeros_time_total_us
+            + self.pre_scan_flatten_time_total_us;
+        datapoint_info!(
+            "calculate_accounts_hash_without_index",
+            ("accounts_scan", self.scan_time_total_us, i64),
+            ("eliminate_zeros", self.zeros_time_total_us, i64),
+            ("hash", self.hash_time_total_us, i64),
+            ("sort", self.sort_time_total_us, i64),
+            ("hash_total", self.hash_total, i64),
+            ("flatten", self.flatten_time_total_us, i64),
+            (
+                "flatten_after_zeros",
+                self.flatten_after_zeros_time_total_us,
+                i64
+            ),
+            ("unreduced_entries", self.unreduced_entries as i64, i64),
+            (
+                "num_snapshot_storage",
+                self.num_snapshot_storage as i64,
+                i64
+            ),
+            (
+                "pre_scan_flatten",
+                self.pre_scan_flatten_time_total_us as i64,
+                i64
+            ),
+            ("total", total_time_us as i64, i64),
+        );
+    }
+}
+
 #[derive(Default, Debug, PartialEq, Clone)]
 struct CalculateHashIntermediate {
     pub version: u64,
@@ -3637,13 +3688,17 @@ impl AccountsDB {
     /// Scan through all the account storage in parallel
     fn scan_account_storage_no_bank<F, B>(
         snapshot_storages: &[SnapshotStorage],
+        stats: &mut HashStats,
         scan_func: F,
     ) -> Vec<B>
     where
         F: Fn(LoadedAccount, &mut B, Slot) + Send + Sync,
         B: Send + Default,
     {
+        let mut time = Measure::start("flatten");
         let items: Vec<_> = snapshot_storages.iter().flatten().collect();
+        time.stop();
+        stats.pre_scan_flatten_time_total_us += time.as_us();
 
         // Without chunks, we end up with 1 output vec for each outer snapshot storage.
         // This results in too many vectors to be efficient.
@@ -3670,12 +3725,14 @@ impl AccountsDB {
 
     fn flatten_hash_intermediate(
         data_sections_by_pubkey: Vec<Vec<CalculateHashIntermediate>>,
-    ) -> (Vec<CalculateHashIntermediate>, Measure, usize) {
+        stats: &mut HashStats,
+    ) -> Vec<CalculateHashIntermediate> {
         let mut flatten_time = Measure::start("flatten");
         let result: Vec<_> = data_sections_by_pubkey.into_iter().flatten().collect();
-        let raw_len = result.len();
         flatten_time.stop();
-        (result, flatten_time, raw_len)
+        stats.flatten_time_total_us += flatten_time.as_us();
+        stats.unreduced_entries = result.len();
+        result
     }
 
     fn compare_two_hash_entries(
@@ -3694,17 +3751,20 @@ impl AccountsDB {
 
     fn sort_hash_intermediate(
         mut data_by_pubkey: Vec<CalculateHashIntermediate>,
-    ) -> (Vec<CalculateHashIntermediate>, Measure) {
+        stats: &mut HashStats,
+    ) -> Vec<CalculateHashIntermediate> {
         // sort each PUBKEY_DIVISION vec
         let mut sort_time = Measure::start("sort");
         data_by_pubkey.par_sort_unstable_by(Self::compare_two_hash_entries);
         sort_time.stop();
-        (data_by_pubkey, sort_time)
+        stats.sort_time_total_us += sort_time.as_us();
+        data_by_pubkey
     }
 
     fn de_dup_and_eliminate_zeros(
         sorted_data_by_pubkey: Vec<CalculateHashIntermediate>,
-    ) -> (Vec<Vec<Hash>>, Measure, u64) {
+        stats: &mut HashStats,
+    ) -> (Vec<Vec<Hash>>, u64) {
         // 1. eliminate zero lamport accounts
         // 2. pick the highest slot or (slot = and highest version) of each pubkey
         // 3. produce this output:
@@ -3715,7 +3775,8 @@ impl AccountsDB {
         const CHUNKS: usize = 10;
         let (hashes, sum) = Self::de_dup_accounts_in_parallel(&sorted_data_by_pubkey, CHUNKS);
         zeros.stop();
-        (hashes, zeros, sum)
+        stats.zeros_time_total_us += zeros.as_us();
+        (hashes, sum)
     }
 
     // 1. eliminate zero lamport accounts
@@ -3800,14 +3861,15 @@ impl AccountsDB {
         (result, sum)
     }
 
-    fn flatten_hashes(hashes: Vec<Vec<Hash>>) -> (Vec<Hash>, Measure, usize) {
+    fn flatten_hashes(hashes: Vec<Vec<Hash>>, stats: &mut HashStats) -> Vec<Hash> {
         // flatten vec/vec into 1d vec of hashes in order
         let mut flat2_time = Measure::start("flat2");
         let hashes: Vec<Hash> = hashes.into_iter().flatten().collect();
         flat2_time.stop();
-        let hash_total = hashes.len();
+        stats.flatten_after_zeros_time_total_us += flat2_time.as_us();
+        stats.hash_total = hashes.len();
 
-        (hashes, flat2_time, hash_total)
+        hashes
     }
 
     // input:
@@ -3816,19 +3878,17 @@ impl AccountsDB {
     //     vec: [..] - items which fin in the containing bin, unordered within this vec
     // so, assumption is middle vec is bins sorted by pubkey
     fn rest_of_hash_calculation(
-        accounts: (Vec<Vec<CalculateHashIntermediate>>, Measure),
+        data_sections_by_pubkey: Vec<Vec<CalculateHashIntermediate>>,
+        mut stats: &mut HashStats,
     ) -> (Hash, u64) {
-        let (data_sections_by_pubkey, time_scan) = accounts;
+        let outer = Self::flatten_hash_intermediate(data_sections_by_pubkey, &mut stats);
 
-        let (outer, flatten_time, raw_len) =
-            Self::flatten_hash_intermediate(data_sections_by_pubkey);
+        let sorted_data_by_pubkey = Self::sort_hash_intermediate(outer, &mut stats);
 
-        let (sorted_data_by_pubkey, sort_time) = Self::sort_hash_intermediate(outer);
+        let (hashes, total_lamports) =
+            Self::de_dup_and_eliminate_zeros(sorted_data_by_pubkey, &mut stats);
 
-        let (hashes, zeros, total_lamports) =
-            Self::de_dup_and_eliminate_zeros(sorted_data_by_pubkey);
-
-        let (hashes, flat2_time, hash_total) = Self::flatten_hashes(hashes);
+        let hashes = Self::flatten_hashes(hashes, &mut stats);
 
         let mut hash_time = Measure::start("hashes");
         let (hash, _) =
@@ -3836,18 +3896,8 @@ impl AccountsDB {
                 (*t, 0)
             });
         hash_time.stop();
-        datapoint_info!(
-            "calculate_accounts_hash_without_index",
-            ("accounts_scan", time_scan.as_us(), i64),
-            ("eliminate_zeros", zeros.as_us(), i64),
-            ("hash", hash_time.as_us(), i64),
-            ("sort", sort_time.as_us(), i64),
-            ("hash_total", hash_total, i64),
-            ("flatten", flatten_time.as_us(), i64),
-            ("flatten_after_zeros", flat2_time.as_us(), i64),
-            ("unreduced_entries", raw_len as i64, i64),
-        );
-
+        stats.hash_time_total_us += hash_time.as_us();
+        stats.log();
         (hash, total_lamports)
     }
 
@@ -3910,10 +3960,13 @@ impl AccountsDB {
     fn scan_snapshot_stores(
         storage: &[SnapshotStorage],
         simple_capitalization_enabled: bool,
-    ) -> (Vec<Vec<CalculateHashIntermediate>>, Measure) {
+        mut stats: &mut HashStats,
+    ) -> Vec<Vec<CalculateHashIntermediate>> {
         let mut time = Measure::start("scan all accounts");
+        stats.num_snapshot_storage = storage.len();
         let result: Vec<Vec<CalculateHashIntermediate>> = Self::scan_account_storage_no_bank(
             &storage,
+            &mut stats,
             |loaded_account: LoadedAccount,
              accum: &mut Vec<CalculateHashIntermediate>,
              slot: Slot| {
@@ -3943,8 +3996,8 @@ impl AccountsDB {
             },
         );
         time.stop();
-
-        (result, time)
+        stats.scan_time_total_us += time.as_us();
+        result
     }
 
     // modeled after get_accounts_delta_hash
@@ -3955,9 +4008,11 @@ impl AccountsDB {
         thread_pool: Option<&ThreadPool>,
     ) -> (Hash, u64) {
         let scan_and_hash = || {
-            let result = Self::scan_snapshot_stores(storages, simple_capitalization_enabled);
+            let mut stats = HashStats::default();
+            let result =
+                Self::scan_snapshot_stores(storages, simple_capitalization_enabled, &mut stats);
 
-            Self::rest_of_hash_calculation(result)
+            Self::rest_of_hash_calculation(result, &mut stats)
         };
         if let Some(thread_pool) = thread_pool {
             thread_pool.install(scan_and_hash)
@@ -5223,8 +5278,10 @@ pub mod tests {
         );
         account_maps.push(val);
 
-        let result =
-            AccountsDB::rest_of_hash_calculation((vec![account_maps.clone()], Measure::start("")));
+        let result = AccountsDB::rest_of_hash_calculation(
+            vec![account_maps.clone()],
+            &mut HashStats::default(),
+        );
         let expected_hash = Hash::from_str("8j9ARGFv4W2GfML7d3sVJK2MePwrikqYnu6yqer28cCa").unwrap();
         assert_eq!(result, (expected_hash, 88));
 
@@ -5234,8 +5291,10 @@ pub mod tests {
         let val = CalculateHashIntermediate::new(0, hash, 20, Slot::default(), key);
         account_maps.push(val);
 
-        let result =
-            AccountsDB::rest_of_hash_calculation((vec![account_maps.clone()], Measure::start("")));
+        let result = AccountsDB::rest_of_hash_calculation(
+            vec![account_maps.clone()],
+            &mut HashStats::default(),
+        );
         let expected_hash = Hash::from_str("EHv9C5vX7xQjjMpsJMzudnDTzoTSRwYkqLzY8tVMihGj").unwrap();
         assert_eq!(result, (expected_hash, 108));
 
@@ -5245,7 +5304,8 @@ pub mod tests {
         let val = CalculateHashIntermediate::new(0, hash, 30, Slot::default() + 1, key);
         account_maps.push(val);
 
-        let result = AccountsDB::rest_of_hash_calculation((vec![account_maps], Measure::start("")));
+        let result =
+            AccountsDB::rest_of_hash_calculation(vec![account_maps], &mut HashStats::default());
         let expected_hash = Hash::from_str("7NNPg5A8Xsg1uv4UFm6KZNwsipyyUnmgCrznP6MBWoBZ").unwrap();
         assert_eq!(result, (expected_hash, 118));
     }
@@ -5334,8 +5394,10 @@ pub mod tests {
                     let result = AccountsDB::de_dup_accounts_from_stores(is_first_slice, slice);
                     let (hashes2, lamports2) = AccountsDB::de_dup_accounts_in_parallel(slice, 1);
                     let (hashes3, lamports3) = AccountsDB::de_dup_accounts_in_parallel(slice, 2);
-                    let (hashes4, _, lamports4) =
-                        AccountsDB::de_dup_and_eliminate_zeros(slice.to_vec());
+                    let (hashes4, lamports4) = AccountsDB::de_dup_and_eliminate_zeros(
+                        slice.to_vec(),
+                        &mut HashStats::default(),
+                    );
 
                     assert_eq!(
                         hashes2.iter().flatten().collect::<Vec<_>>(),
@@ -5414,14 +5476,19 @@ pub mod tests {
             .collect();
         let expected = hashes.clone();
 
-        assert_eq!(AccountsDB::flatten_hashes(vec![hashes.clone()]).0, expected);
+        assert_eq!(
+            AccountsDB::flatten_hashes(vec![hashes.clone()], &mut HashStats::default()),
+            expected
+        );
         for in_first in 1..COUNT - 1 {
             assert_eq!(
-                AccountsDB::flatten_hashes(vec![
-                    hashes.clone()[0..in_first].to_vec(),
-                    hashes.clone()[in_first..COUNT].to_vec()
-                ])
-                .0,
+                AccountsDB::flatten_hashes(
+                    vec![
+                        hashes.clone()[0..in_first].to_vec(),
+                        hashes.clone()[in_first..COUNT].to_vec()
+                    ],
+                    &mut HashStats::default()
+                ),
                 expected
             );
         }
@@ -5445,13 +5512,13 @@ pub mod tests {
         let list = vec![val.clone(), val2.clone()];
         let mut list_bkup = list.clone();
         list_bkup.sort_by(AccountsDB::compare_two_hash_entries);
-        let (list, _) = AccountsDB::sort_hash_intermediate(list);
+        let list = AccountsDB::sort_hash_intermediate(list, &mut HashStats::default());
         assert_eq!(list, list_bkup);
 
         let list = vec![val2, val.clone()]; // reverse args
         let mut list_bkup = list.clone();
         list_bkup.sort_by(AccountsDB::compare_two_hash_entries);
-        let (list, _) = AccountsDB::sort_hash_intermediate(list);
+        let list = AccountsDB::sort_hash_intermediate(list, &mut HashStats::default());
         assert_eq!(list, list_bkup);
 
         // slot same, vers =
@@ -5558,6 +5625,7 @@ pub mod tests {
         let calls = AtomicU64::new(0);
         let result = AccountsDB::scan_account_storage_no_bank(
             &storages,
+            &mut HashStats::default(),
             |loaded_account: LoadedAccount, accum: &mut Vec<u64>, slot: Slot| {
                 calls.fetch_add(1, Ordering::Relaxed);
                 assert_eq!(loaded_account.pubkey(), &pubkey);
@@ -5579,15 +5647,18 @@ pub mod tests {
             3,
             Pubkey::new_unique(),
         )]];
-        let (result, _, len) = AccountsDB::flatten_hash_intermediate(test.clone());
+        let mut stats = HashStats::default();
+        let result = AccountsDB::flatten_hash_intermediate(test.clone(), &mut stats);
         assert_eq!(result, test[0]);
-        assert_eq!(len, 1);
+        assert_eq!(stats.unreduced_entries, 1);
 
-        let (result, _, len) = AccountsDB::flatten_hash_intermediate(vec![
-            vec![CalculateHashIntermediate::default(); 0],
-        ]);
+        let mut stats = HashStats::default();
+        let result = AccountsDB::flatten_hash_intermediate(
+            vec![vec![CalculateHashIntermediate::default(); 0]],
+            &mut stats,
+        );
         assert_eq!(result.len(), 0);
-        assert_eq!(len, 0);
+        assert_eq!(stats.unreduced_entries, 0);
 
         let test = vec![
             vec![
@@ -5602,10 +5673,11 @@ pub mod tests {
                 Pubkey::new_unique(),
             )],
         ];
-        let (result, _, len) = AccountsDB::flatten_hash_intermediate(test.clone());
+        let mut stats = HashStats::default();
+        let result = AccountsDB::flatten_hash_intermediate(test.clone(), &mut stats);
         let expected = test.into_iter().flatten().collect::<Vec<_>>();
         assert_eq!(result, expected);
-        assert_eq!(len, expected.len());
+        assert_eq!(stats.unreduced_entries, expected.len());
     }
 
     fn sort_hashes_and_lamports_by_pubkey(hashes: &mut Vec<(Pubkey, Hash, u64)>) {
