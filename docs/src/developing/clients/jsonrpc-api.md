@@ -1464,7 +1464,7 @@ Result:
 
 ### getLargestAccounts
 
-Returns the 20 largest accounts, by lamport balance
+Returns the 20 largest accounts, by lamport balance (results may be cached up to two hours)
 
 #### Parameters:
 
