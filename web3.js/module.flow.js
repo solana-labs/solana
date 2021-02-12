@@ -10,11 +10,10 @@
  *
  */
 
-import {Buffer} from 'buffer';
-import * as BufferLayout from 'buffer-layout';
-import {PublicKey} from './src/publickey';
-
 declare module '@solana/web3.js' {
+  import typeof {Buffer} from 'buffer';
+  import typeof * as BufferLayout from 'buffer-layout';
+
   // === src/publickey.js ===
   declare export var MAX_SEED_LENGTH: number;
   declare export type PublicKeyNonce = [PublicKey, number];
@@ -613,7 +612,7 @@ declare module '@solana/web3.js' {
   // === src/instruction.js ===
   declare export type InstructionType = {|
     index: number,
-    layout: typeof BufferLayout,
+    layout: BufferLayout,
   |};
 
   declare export function encodeData(type: InstructionType, fields: {}): Buffer;
