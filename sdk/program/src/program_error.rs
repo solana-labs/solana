@@ -40,6 +40,8 @@ pub enum ProgramError {
     InvalidSeeds,
     #[error("Failed to serialize or deserialize account state: {0}")]
     SerializationError(String),
+    #[error("An account does not have enough lamports to be rent-exempt")]
+    AccountNotRentExempt,
 }
 
 pub trait PrintProgramError {
@@ -75,6 +77,7 @@ impl PrintProgramError for ProgramError {
             Self::MaxSeedLengthExceeded => msg!("Error: MaxSeedLengthExceeded"),
             Self::InvalidSeeds => msg!("Error: InvalidSeeds"),
             Self::SerializationError(_) => msg!("Error: SerializationError"),
+            Self::AccountNotRentExempt => msg!("Error: AccountNotRentExempt"),
         }
     }
 }
@@ -102,6 +105,7 @@ pub const ACCOUNT_BORROW_FAILED: u64 = to_builtin!(12);
 pub const MAX_SEED_LENGTH_EXCEEDED: u64 = to_builtin!(13);
 pub const INVALID_SEEDS: u64 = to_builtin!(14);
 pub const SERIALIZATION_ERROR: u64 = to_builtin!(15);
+pub const ACCOUNT_NOT_RENT_EXEMPT: u64 = to_builtin!(16);
 
 impl From<ProgramError> for u64 {
     fn from(error: ProgramError) -> Self {
@@ -120,6 +124,7 @@ impl From<ProgramError> for u64 {
             ProgramError::MaxSeedLengthExceeded => MAX_SEED_LENGTH_EXCEEDED,
             ProgramError::InvalidSeeds => INVALID_SEEDS,
             ProgramError::SerializationError(_) => SERIALIZATION_ERROR,
+            ProgramError::AccountNotRentExempt => ACCOUNT_NOT_RENT_EXEMPT,
 
             ProgramError::Custom(error) => {
                 if error == 0 {
