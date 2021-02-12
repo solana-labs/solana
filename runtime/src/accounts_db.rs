@@ -5114,7 +5114,7 @@ impl AccountsDB {
         } else {
             self.stats
                 .dropped_stores
-                .fetch_add(recycle_stores.entry_count() as u64, Ordering::Relaxed);
+                .fetch_add(dead_storages.len() as u64, Ordering::Relaxed);
             drop(recycle_stores);
             drop(dead_storages);
         }
