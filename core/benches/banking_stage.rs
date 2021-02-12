@@ -28,6 +28,7 @@ use solana_sdk::system_instruction;
 use solana_sdk::system_transaction;
 use solana_sdk::timing::{duration_as_us, timestamp};
 use solana_sdk::transaction::Transaction;
+use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc::Receiver;
 use std::sync::Arc;
@@ -68,10 +69,10 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
         let len = 4096;
         let chunk_size = 1024;
         let batches = to_packets_chunked(&vec![tx; len], chunk_size);
-        let mut packets = vec![];
+        let mut packets = VecDeque::new();
         for batch in batches {
             let batch_len = batch.packets.len();
-            packets.push((batch, vec![0usize; batch_len]));
+            packets.push_back((batch, vec![0usize; batch_len]));
         }
         let (s, _r) = unbounded();
         // This tests the performance of buffering packets.
@@ -81,9 +82,10 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
                 &my_pubkey,
                 &poh_recorder,
                 &mut packets,
-                10_000,
                 None,
                 &s,
+                None::<Box<dyn Fn()>>,
+                None,
             );
         });
 

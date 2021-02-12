@@ -501,6 +501,11 @@ impl PohRecorder {
             poh_config,
         )
     }
+
+    #[cfg(test)]
+    pub fn schedule_dummy_max_height_reached_failure(&mut self) {
+        self.reset(Hash::default(), 1, None);
+    }
 }
 
 #[cfg(test)]
