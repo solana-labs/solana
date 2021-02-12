@@ -714,8 +714,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         .unwrap();
 
         debug!(
-            "\nidentity: {}\n - vote address: {}\n - baseline stake: {}\n - bonus stake: {}",
-            node_pubkey, vote_pubkey, baseline_stake_address, bonus_stake_address
+            "\nidentity: {}\n - vote address: {}\n - root slot: {}\n - baseline stake: {}\n - bonus stake: {}",
+            node_pubkey, vote_pubkey, root_slot, baseline_stake_address, bonus_stake_address
         );
 
         // Transactions to create the baseline and bonus stake accounts
@@ -839,6 +839,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 ("cluster", config.cluster, String),
                 ("id", node_pubkey.to_string(), String),
                 ("slot", epoch_info.absolute_slot, i64),
+                ("root-slot", *root_slot, i64),
                 ("ok", true, bool)
             );
 
@@ -947,6 +948,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     ("cluster", config.cluster, String),
                     ("id", node_pubkey.to_string(), String),
                     ("slot", epoch_info.absolute_slot, i64),
+                    ("root-slot", *root_slot, i64),
                     ("ok", false, bool)
                 );
             } else {
@@ -956,6 +958,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     ("cluster", config.cluster, String),
                     ("id", node_pubkey.to_string(), String),
                     ("slot", epoch_info.absolute_slot, i64),
+                    ("root-slot", *root_slot, i64),
                     ("ok", true, bool)
                 );
             }
