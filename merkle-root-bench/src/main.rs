@@ -29,24 +29,24 @@ fn main() {
     let num_accounts = value_t!(matches, "num_accounts", usize).unwrap_or(10_000);
     let iterations = value_t!(matches, "iterations", usize).unwrap_or(20);
     let hashes: Vec<_> = (0..num_accounts)
-        .map(|_| (Pubkey::new_unique(), Hash::new_unique(), 1))
+        .map(|_| (Pubkey::new_unique(), Hash::new_unique()))
         .collect();
     let elapsed: Vec<_> = (0..iterations)
         .map(|_| {
             let hashes = hashes.clone(); // done outside timing
-            let mut time = Measure::start("compute_merkle_root_and_capitalization");
+            let mut time = Measure::start("compute_merkle_root");
             let fanout = 16;
-            AccountsDB::compute_merkle_root_and_capitalization(hashes, fanout);
+            AccountsDB::compute_merkle_root(hashes, fanout);
             time.stop();
             time.as_us()
         })
         .collect();
 
     for result in &elapsed {
-        println!("compute_merkle_root_and_capitalization(us),{}", result);
+        println!("compute_merkle_root(us),{}", result);
     }
     println!(
-        "compute_merkle_root_and_capitalization(us) avg: {}",
+        "compute_merkle_root(us) avg: {}",
         elapsed.into_iter().sum::<u64>() as f64 / iterations as f64
     );
 }

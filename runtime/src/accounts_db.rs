@@ -3482,25 +3482,13 @@ impl AccountsDB {
         );
     }
 
-    pub fn compute_merkle_root_and_capitalization(
-        hashes: Vec<(Pubkey, Hash, u64)>,
-        fanout: usize,
-    ) -> (Hash, u64) {
-        Self::compute_merkle_root_and_capitalization_loop(hashes, fanout, |t| (t.1, t.2))
-    }
-
     pub fn compute_merkle_root(hashes: Vec<(Pubkey, Hash)>, fanout: usize) -> Hash {
-        Self::compute_merkle_root_and_capitalization_loop(hashes, fanout, |t| (t.1, 0)).0
+        Self::compute_merkle_root_loop(hashes, fanout, |t| t.1)
     }
 
     // this function avoids an infinite recursion compiler error
-    fn compute_merkle_root_and_capitalization_recurse(
-        hashes: Vec<(Hash, u64)>,
-        fanout: usize,
-    ) -> (Hash, u64) {
-        Self::compute_merkle_root_and_capitalization_loop(hashes, fanout, |t: &(Hash, u64)| {
-            (t.0, t.1)
-        })
+    fn compute_merkle_root_recurse(hashes: Vec<Hash>, fanout: usize) -> Hash {
+        Self::compute_merkle_root_loop(hashes, fanout, |t: &Hash| *t)
     }
 
     fn div_ceil(x: usize, y: usize) -> usize {
@@ -3513,17 +3501,13 @@ impl AccountsDB {
 
     // For the first iteration, there could be more items in the tuple than just hash and lamports.
     // Using extractor allows us to avoid an unnecessary array copy on the first iteration.
-    fn compute_merkle_root_and_capitalization_loop<T, F>(
-        hashes: Vec<T>,
-        fanout: usize,
-        extractor: F,
-    ) -> (Hash, u64)
+    fn compute_merkle_root_loop<T, F>(hashes: Vec<T>, fanout: usize, extractor: F) -> Hash
     where
-        F: Fn(&T) -> (Hash, u64) + std::marker::Sync,
+        F: Fn(&T) -> Hash + std::marker::Sync,
         T: std::marker::Sync,
     {
         if hashes.is_empty() {
-            return (Hasher::default().result(), 0);
+            return Hasher::default().result();
         }
 
         let mut time = Measure::start("time");
@@ -3538,17 +3522,12 @@ impl AccountsDB {
                 let end_index = std::cmp::min(start_index + fanout, total_hashes);
 
                 let mut hasher = Hasher::default();
-                let mut this_sum = 0u128;
                 for item in hashes.iter().take(end_index).skip(start_index) {
-                    let (h, l) = extractor(&item);
-                    this_sum += l as u128;
+                    let h = extractor(&item);
                     hasher.hash(h.as_ref());
                 }
 
-                (
-                    hasher.result(),
-                    Self::checked_cast_for_capitalization(this_sum),
-                )
+                hasher.result()
             })
             .collect();
         time.stop();
@@ -3557,7 +3536,7 @@ impl AccountsDB {
         if result.len() == 1 {
             result[0]
         } else {
-            Self::compute_merkle_root_and_capitalization_recurse(result, fanout)
+            Self::compute_merkle_root_recurse(result, fanout)
         }
     }
 
@@ -3606,26 +3585,23 @@ impl AccountsDB {
                     data_index += 1;
                 }
 
-                (hasher.result(), 0)
+                hasher.result()
             })
             .collect();
         time.stop();
         debug!("hashing {} {}", total_hashes, time);
 
         if result.len() == 1 {
-            result[0].0
+            result[0]
         } else {
-            Self::compute_merkle_root_and_capitalization_recurse(result, fanout).0
+            Self::compute_merkle_root_recurse(result, fanout)
         }
     }
 
     fn accumulate_account_hashes(mut hashes: Vec<(Pubkey, Hash)>) -> Hash {
         Self::sort_hashes_by_pubkey(&mut hashes);
 
-        let res =
-            Self::compute_merkle_root_and_capitalization_loop(hashes, MERKLE_FANOUT, |i| (i.1, 0));
-
-        res.0
+        Self::compute_merkle_root_loop(hashes, MERKLE_FANOUT, |i| i.1)
     }
 
     fn sort_hashes_by_pubkey(hashes: &mut Vec<(Pubkey, Hash)>) {
@@ -5664,12 +5640,7 @@ pub mod tests {
             .into_iter()
             .map(|i| Hash::new(&[(i) as u8; 32]))
             .collect();
-        let expected = AccountsDB::compute_merkle_root_and_capitalization_loop(
-            hashes.clone(),
-            MERKLE_FANOUT,
-            |i| (*i, 0),
-        )
-        .0;
+        let expected = AccountsDB::compute_merkle_root_loop(hashes.clone(), MERKLE_FANOUT, |i| *i);
 
         assert_eq!(
             AccountsDB::flatten_hashes_and_hash(
@@ -5880,49 +5851,45 @@ pub mod tests {
         assert_eq!(stats.unreduced_entries, expected.len());
     }
 
-    fn sort_hashes_and_lamports_by_pubkey(hashes: &mut Vec<(Pubkey, Hash, u64)>) {
-        hashes.par_sort_unstable_by(|a, b| a.0.cmp(&b.0));
-    }
-
-    fn test_hashing_larger(hashes: Vec<(Pubkey, Hash, u64)>, fanout: usize) -> (Hash, u64) {
-        let result = AccountsDB::compute_merkle_root_and_capitalization(hashes.clone(), fanout);
+    fn test_hashing_larger(hashes: Vec<(Pubkey, Hash)>, fanout: usize) -> Hash {
+        let result = AccountsDB::compute_merkle_root(hashes.clone(), fanout);
         if hashes.len() >= fanout * fanout * fanout {
             let reduced: Vec<_> = hashes.iter().map(|x| x.1).collect();
             let result2 =
                 AccountsDB::compute_merkle_root_from_slices(hashes.len(), fanout, |start| {
                     &reduced[start..]
                 });
-            assert_eq!(result.0, result2);
+            assert_eq!(result, result2);
 
             let reduced2: Vec<_> = hashes.iter().map(|x| vec![x.1]).collect();
             let result2 =
                 AccountsDB::flatten_hashes_and_hash(reduced2, fanout, &mut HashStats::default());
-            assert_eq!(result.0, result2);
+            assert_eq!(result, result2);
         }
         result
     }
 
-    fn test_hashing(hashes: Vec<Hash>, fanout: usize) -> (Hash, u64) {
-        let temp: Vec<_> = hashes.iter().map(|h| (Pubkey::default(), *h, 0)).collect();
-        let result = AccountsDB::compute_merkle_root_and_capitalization(temp, fanout);
+    fn test_hashing(hashes: Vec<Hash>, fanout: usize) -> Hash {
+        let temp: Vec<_> = hashes.iter().map(|h| (Pubkey::default(), *h)).collect();
+        let result = AccountsDB::compute_merkle_root(temp, fanout);
         if hashes.len() >= fanout * fanout * fanout {
             let reduced: Vec<_> = hashes.clone();
             let result2 =
                 AccountsDB::compute_merkle_root_from_slices(hashes.len(), fanout, |start| {
                     &reduced[start..]
                 });
-            assert_eq!(result.0, result2, "len: {}", hashes.len());
+            assert_eq!(result, result2, "len: {}", hashes.len());
 
             let reduced2: Vec<_> = hashes.iter().map(|x| vec![*x]).collect();
             let result2 =
                 AccountsDB::flatten_hashes_and_hash(reduced2, fanout, &mut HashStats::default());
-            assert_eq!(result.0, result2, "len: {}", hashes.len());
+            assert_eq!(result, result2, "len: {}", hashes.len());
         }
         result
     }
 
     #[test]
-    fn test_accountsdb_compute_merkle_root_and_capitalization_large() {
+    fn test_accountsdb_compute_merkle_root_large() {
         solana_logger::setup();
 
         let mut num = 100;
@@ -5935,7 +5902,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_accountsdb_compute_merkle_root_and_capitalization() {
+    fn test_accountsdb_compute_merkle_root() {
         solana_logger::setup();
 
         let expected_results = vec![
@@ -5977,7 +5944,7 @@ pub mod tests {
                     .map(|i| {
                         let key = Pubkey::new(&[(pass * iterations + count) as u8; 32]);
                         let hash = Hash::new(&[(pass * iterations + count + i + 1) as u8; 32]);
-                        (key, hash, i as u64)
+                        (key, hash)
                     })
                     .collect();
 
@@ -5988,31 +5955,19 @@ pub mod tests {
                     let early_result = AccountsDB::accumulate_account_hashes(
                         input.iter().map(|i| (i.0, i.1)).collect::<Vec<_>>(),
                     );
-                    sort_hashes_and_lamports_by_pubkey(&mut input);
-                    let result =
-                        AccountsDB::compute_merkle_root_and_capitalization(input.clone(), fanout);
-                    assert_eq!(early_result, result.0);
+                    AccountsDB::sort_hashes_by_pubkey(&mut input);
+                    let result = AccountsDB::compute_merkle_root(input.clone(), fanout);
+                    assert_eq!(early_result, result);
                     result
                 };
-                let mut expected = 0;
-                if count > 0 {
-                    let count = count as u64;
-                    let last_number = count - 1;
-                    expected = count * last_number / 2;
-                }
-
-                // compare against calculated result for lamports
-                assert_eq!(
-                    result.1,
-                    expected,
-                    "failed at size: {}, with inputs: {:?}",
-                    count,
-                    input.into_iter().map(|x| x.2).collect::<Vec<u64>>()
-                );
-
                 // compare against captured, expected results for hash (and lamports)
                 assert_eq!(
-                    (pass, count, &*(result.0.to_string()), result.1),
+                    (
+                        pass,
+                        count,
+                        &*(result.to_string()),
+                        expected_results[expected_index].3
+                    ), // we no longer calculate lamports
                     expected_results[expected_index]
                 );
                 expected_index += 1;
@@ -6022,15 +5977,27 @@ pub mod tests {
 
     #[test]
     #[should_panic(expected = "overflow is detected while summing capitalization")]
-    fn test_accountsdb_compute_merkle_root_and_capitalization_overflow() {
+    fn test_accountsdb_lamport_overflow() {
         solana_logger::setup();
 
-        let fanout = 2;
+        let offset = 2;
         let input = vec![
-            (Pubkey::new_unique(), Hash::new_unique(), u64::MAX),
-            (Pubkey::new_unique(), Hash::new_unique(), 1),
+            CalculateHashIntermediate::new(
+                0,
+                Hash::new_unique(),
+                u64::MAX - offset,
+                0,
+                Pubkey::new_unique(),
+            ),
+            CalculateHashIntermediate::new(
+                0,
+                Hash::new_unique(),
+                offset + 1,
+                0,
+                Pubkey::new_unique(),
+            ),
         ];
-        AccountsDB::compute_merkle_root_and_capitalization(input, fanout);
+        AccountsDB::de_dup_and_eliminate_zeros(input, &mut HashStats::default());
     }
 
     #[test]
