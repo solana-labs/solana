@@ -70,6 +70,13 @@ impl Default for StakeState {
     }
 }
 
+fn checked_add(a: u64, b: u64) -> Result<u64, InstructionError> {
+    match a.checked_add(b) {
+        Some(sum) => Ok(sum),
+        None => Err(InstructionError::InsufficientFunds),
+    }
+}
+
 impl StakeState {
     pub fn get_rent_exempt_reserve(rent: &Rent) -> u64 {
         rent.minimum_balance(std::mem::size_of::<StakeState>())
@@ -1247,7 +1254,8 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                     stake.delegation.stake
                 };
 
-                (meta.lockup, staked + meta.rent_exempt_reserve, staked != 0)
+                let staked_and_reserve = checked_add(staked, meta.rent_exempt_reserve)?;
+                (meta.lockup, staked_and_reserve, staked != 0)
             }
             StakeState::Initialized(meta) => {
                 meta.authorized
@@ -1271,15 +1279,16 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
             return Err(StakeError::LockupInForce.into());
         }
 
+        let lamports_and_reserve = checked_add(lamports, reserve)?;
         // if the stake is active, we mustn't allow the account to go away
         if is_staked // line coverage for branch coverage
-            && lamports + reserve > self.lamports()?
+            && lamports_and_reserve > self.lamports()?
         {
             return Err(InstructionError::InsufficientFunds);
         }
 
         if lamports != self.lamports()? // not a full withdrawal
-            && lamports + reserve > self.lamports()?
+            && lamports_and_reserve > self.lamports()?
         {
             assert!(!is_staked);
             return Err(InstructionError::InsufficientFunds);
