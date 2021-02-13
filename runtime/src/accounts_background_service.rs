@@ -12,7 +12,7 @@ use crossbeam_channel::{Receiver, SendError, Sender};
 use log::*;
 use rand::{thread_rng, Rng};
 use solana_measure::measure::Measure;
-use solana_sdk::clock::Slot;
+use solana_sdk::{clock::Slot, hash::Hash};
 use std::{
     boxed::Box,
     fmt::{Debug, Formatter},
@@ -91,6 +91,14 @@ impl SnapshotRequestHandler {
                     status_cache_slot_deltas,
                 } = snapshot_request;
 
+                let previous_hash = if test_hash_calculation {
+                    // We have to use the index version here.
+                    // We cannot calculate the non-index way because cache has not been flushed and stores don't match reality.
+                    snapshot_root_bank.update_accounts_hash_with_index_option(true, false)
+                } else {
+                    Hash::default()
+                };
+
                 let mut shrink_time = Measure::start("shrink_time");
                 if !accounts_db_caching_enabled {
                     snapshot_root_bank
@@ -122,9 +130,10 @@ impl SnapshotRequestHandler {
 
                 let mut hash_time = Measure::start("hash_time");
                 const USE_INDEX: bool = true;
-                snapshot_root_bank
+                let this_hash = snapshot_root_bank
                     .update_accounts_hash_with_index_option(USE_INDEX, test_hash_calculation);
                 let hash_for_testing = if test_hash_calculation {
+                    assert_eq!(previous_hash, this_hash);
                     Some(snapshot_root_bank.get_accounts_hash())
                 } else {
                     None
