@@ -13,5 +13,5 @@ export const FeeCalculatorLayout = BufferLayout.nu64('lamportsPerSignature');
  * @property {number} lamportsPerSignature lamports Cost in lamports to validate a signature
  */
 export type FeeCalculator = {
-  lamportsPerSignature: number,
+  lamportsPerSignature: number;
 };

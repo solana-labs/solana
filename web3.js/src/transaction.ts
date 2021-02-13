@@ -42,9 +42,9 @@ const SIGNATURE_LENGTH = 64;
  * @property {boolean} isWritable True if the `pubkey` can be loaded as a read-write account.
  */
 export type AccountMeta = {
-  pubkey: PublicKey,
-  isSigner: boolean,
-  isWritable: boolean,
+  pubkey: PublicKey;
+  isSigner: boolean;
+  isWritable: boolean;
 };
 
 /**
@@ -55,11 +55,11 @@ export type AccountMeta = {
  * @property {?PublicKey} programId
  * @property {?Buffer} data
  */
-export type TransactionInstructionCtorFields = {|
-  keys?: Array<AccountMeta>,
-  programId?: PublicKey,
-  data?: Buffer,
-|};
+export type TransactionInstructionCtorFields = {
+  keys?: Array<AccountMeta>;
+  programId?: PublicKey;
+  data?: Buffer;
+};
 
 /**
  * Configuration object for Transaction.serialize()
@@ -69,8 +69,8 @@ export type TransactionInstructionCtorFields = {|
  * @property {boolean|undefined} verifySignatures Verify provided signatures (default: true)
  */
 export type SerializeConfig = {
-  requireAllSignatures?: boolean,
-  verifySignatures?: boolean,
+  requireAllSignatures?: boolean;
+  verifySignatures?: boolean;
 };
 
 /**
@@ -101,10 +101,10 @@ export class TransactionInstruction {
 /**
  * @private
  */
-type SignaturePubkeyPair = {|
-  signature: Buffer | null,
-  publicKey: PublicKey,
-|};
+type SignaturePubkeyPair = {
+  signature: Buffer | null;
+  publicKey: PublicKey;
+};
 
 /**
  * List of Transaction object fields that may be initialized at construction
@@ -115,12 +115,12 @@ type SignaturePubkeyPair = {|
  * @property {?Array<SignaturePubkeyPair>} signatures One or more signatures
  *
  */
-type TransactionCtorFields = {|
-  recentBlockhash?: Blockhash | null,
-  nonceInfo?: NonceInformation | null,
-  feePayer?: PublicKey | null,
-  signatures?: Array<SignaturePubkeyPair>,
-|};
+type TransactionCtorFields = {
+  recentBlockhash?: Blockhash | null;
+  nonceInfo?: NonceInformation | null;
+  feePayer?: PublicKey | null;
+  signatures?: Array<SignaturePubkeyPair>;
+};
 
 /**
  * NonceInformation to be used to build a Transaction.
@@ -129,10 +129,10 @@ type TransactionCtorFields = {|
  * @property {Blockhash} nonce The current Nonce blockhash
  * @property {TransactionInstruction} nonceInstruction AdvanceNonceAccount Instruction
  */
-type NonceInformation = {|
-  nonce: Blockhash,
-  nonceInstruction: TransactionInstruction,
-|};
+type NonceInformation = {
+  nonce: Blockhash;
+  nonceInstruction: TransactionInstruction;
+};
 
 /**
  * Transaction class
@@ -187,7 +187,7 @@ export class Transaction {
    */
   add(
     ...items: Array<
-      Transaction | TransactionInstruction | TransactionInstructionCtorFields,
+      Transaction | TransactionInstruction | TransactionInstructionCtorFields
     >
   ): Transaction {
     if (items.length === 0) {

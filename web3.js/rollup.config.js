@@ -1,7 +1,6 @@
 import babel from '@rollup/plugin-babel';
 import commonjs from '@rollup/plugin-commonjs';
 import copy from 'rollup-plugin-copy';
-import typescript from '@rollup/plugin-typescript';
 import json from '@rollup/plugin-json';
 import nodeResolve from '@rollup/plugin-node-resolve';
 import nodePolyfills from 'rollup-plugin-node-polyfills';
@@ -18,8 +17,7 @@ function generateConfig(configType, format) {
   const config = {
     input: 'src/index.ts',
     plugins: [
-      // typescript(),
-      // commonjs(),
+      commonjs(),
       nodeResolve({
         browser,
         dedupe: ['bn.js', 'buffer'],

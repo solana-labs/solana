@@ -18,9 +18,9 @@ import * as shortvec from './util/shortvec-encoding';
  * @property {number} numReadonlyUnsignedAccounts The last `numReadonlySignedAccounts` of the unsigned keys are read-only accounts
  */
 export type MessageHeader = {
-  numRequiredSignatures: number,
-  numReadonlySignedAccounts: number,
-  numReadonlyUnsignedAccounts: number,
+  numRequiredSignatures: number;
+  numReadonlySignedAccounts: number;
+  numReadonlyUnsignedAccounts: number;
 };
 
 /**
@@ -32,9 +32,9 @@ export type MessageHeader = {
  * @property {string} data The program input data encoded as base 58
  */
 export type CompiledInstruction = {
-  programIdIndex: number,
-  accounts: number[],
-  data: string,
+  programIdIndex: number;
+  accounts: number[];
+  data: string;
 };
 
 /**
@@ -47,10 +47,10 @@ export type CompiledInstruction = {
  * @property {CompiledInstruction[]} instructions Instructions that will be executed in sequence and committed in one atomic transaction if all succeed.
  */
 type MessageArgs = {
-  header: MessageHeader,
-  accountKeys: string[],
-  recentBlockhash: Blockhash,
-  instructions: CompiledInstruction[],
+  header: MessageHeader;
+  accountKeys: string[];
+  recentBlockhash: Blockhash;
+  instructions: CompiledInstruction[];
 };
 
 const PUBKEY_LENGTH = 32;

@@ -52,13 +52,13 @@ export class Lockup {
  * @property {Lockup} lockup
  * @property {number} lamports
  */
-export type CreateStakeAccountParams = {|
-  fromPubkey: PublicKey,
-  stakePubkey: PublicKey,
-  authorized: Authorized,
-  lockup: Lockup,
-  lamports: number,
-|};
+export type CreateStakeAccountParams = {
+  fromPubkey: PublicKey;
+  stakePubkey: PublicKey;
+  authorized: Authorized;
+  lockup: Lockup;
+  lamports: number;
+};
 
 /**
  * Create stake account with seed transaction params
@@ -71,15 +71,15 @@ export type CreateStakeAccountParams = {|
  * @property {Lockup} lockup
  * @property {number} lamports
  */
-export type CreateStakeAccountWithSeedParams = {|
-  fromPubkey: PublicKey,
-  stakePubkey: PublicKey,
-  basePubkey: PublicKey,
-  seed: string,
-  authorized: Authorized,
-  lockup: Lockup,
-  lamports: number,
-|};
+export type CreateStakeAccountWithSeedParams = {
+  fromPubkey: PublicKey;
+  stakePubkey: PublicKey;
+  basePubkey: PublicKey;
+  seed: string;
+  authorized: Authorized;
+  lockup: Lockup;
+  lamports: number;
+};
 
 /**
  * Initialize stake instruction params
@@ -88,11 +88,11 @@ export type CreateStakeAccountWithSeedParams = {|
  * @property {Authorized} authorized
  * @property {Lockup} lockup
  */
-export type InitializeStakeParams = {|
-  stakePubkey: PublicKey,
-  authorized: Authorized,
-  lockup: Lockup,
-|};
+export type InitializeStakeParams = {
+  stakePubkey: PublicKey;
+  authorized: Authorized;
+  lockup: Lockup;
+};
 
 /**
  * Delegate stake instruction params
@@ -101,11 +101,11 @@ export type InitializeStakeParams = {|
  * @property {PublicKey} authorizedPubkey
  * @property {PublicKey} votePubkey
  */
-export type DelegateStakeParams = {|
-  stakePubkey: PublicKey,
-  authorizedPubkey: PublicKey,
-  votePubkey: PublicKey,
-|};
+export type DelegateStakeParams = {
+  stakePubkey: PublicKey;
+  authorizedPubkey: PublicKey;
+  votePubkey: PublicKey;
+};
 
 /**
  * Authorize stake instruction params
@@ -116,13 +116,13 @@ export type DelegateStakeParams = {|
  * @property {StakeAuthorizationType} stakeAuthorizationType
  * @property {PublicKey} custodianPubkey
  */
-export type AuthorizeStakeParams = {|
-  stakePubkey: PublicKey,
-  authorizedPubkey: PublicKey,
-  newAuthorizedPubkey: PublicKey,
-  stakeAuthorizationType: StakeAuthorizationType,
-  custodianPubkey?: PublicKey,
-|};
+export type AuthorizeStakeParams = {
+  stakePubkey: PublicKey;
+  authorizedPubkey: PublicKey;
+  newAuthorizedPubkey: PublicKey;
+  stakeAuthorizationType: StakeAuthorizationType;
+  custodianPubkey?: PublicKey;
+};
 
 /**
  * Authorize stake instruction params using a derived key
@@ -135,15 +135,15 @@ export type AuthorizeStakeParams = {|
  * @property {StakeAuthorizationType} stakeAuthorizationType
  * @property {PublicKey} custodianPubkey
  */
-export type AuthorizeWithSeedStakeParams = {|
-  stakePubkey: PublicKey,
-  authorityBase: PublicKey,
-  authoritySeed: string,
-  authorityOwner: PublicKey,
-  newAuthorizedPubkey: PublicKey,
-  stakeAuthorizationType: StakeAuthorizationType,
-  custodianPubkey?: PublicKey,
-|};
+export type AuthorizeWithSeedStakeParams = {
+  stakePubkey: PublicKey;
+  authorityBase: PublicKey;
+  authoritySeed: string;
+  authorityOwner: PublicKey;
+  newAuthorizedPubkey: PublicKey;
+  stakeAuthorizationType: StakeAuthorizationType;
+  custodianPubkey?: PublicKey;
+};
 
 /**
  * Split stake instruction params
@@ -153,12 +153,12 @@ export type AuthorizeWithSeedStakeParams = {|
  * @property {PublicKey} splitStakePubkey
  * @property {number} lamports
  */
-export type SplitStakeParams = {|
-  stakePubkey: PublicKey,
-  authorizedPubkey: PublicKey,
-  splitStakePubkey: PublicKey,
-  lamports: number,
-|};
+export type SplitStakeParams = {
+  stakePubkey: PublicKey;
+  authorizedPubkey: PublicKey;
+  splitStakePubkey: PublicKey;
+  lamports: number;
+};
 
 /**
  * Withdraw stake instruction params
@@ -169,13 +169,13 @@ export type SplitStakeParams = {|
  * @property {number} lamports
  * @property {PublicKey} custodianPubkey
  */
-export type WithdrawStakeParams = {|
-  stakePubkey: PublicKey,
-  authorizedPubkey: PublicKey,
-  toPubkey: PublicKey,
-  lamports: number,
-  custodianPubkey?: PublicKey,
-|};
+export type WithdrawStakeParams = {
+  stakePubkey: PublicKey;
+  authorizedPubkey: PublicKey;
+  toPubkey: PublicKey;
+  lamports: number;
+  custodianPubkey?: PublicKey;
+};
 
 /**
  * Deactivate stake instruction params
@@ -183,10 +183,10 @@ export type WithdrawStakeParams = {|
  * @property {PublicKey} stakePubkey
  * @property {PublicKey} authorizedPubkey
  */
-export type DeactivateStakeParams = {|
-  stakePubkey: PublicKey,
-  authorizedPubkey: PublicKey,
-|};
+export type DeactivateStakeParams = {
+  stakePubkey: PublicKey;
+  authorizedPubkey: PublicKey;
+};
 
 /**
  * Stake Instruction class
@@ -470,9 +470,9 @@ export const STAKE_INSTRUCTION_LAYOUTS = Object.freeze({
  * @typedef {Object} StakeAuthorizationType
  * @property (index} The Stake Authorization index (from solana-stake-program)
  */
-export type StakeAuthorizationType = {|
-  index: number,
-|};
+export type StakeAuthorizationType = {
+  index: number;
+};
 
 /**
  * An enumeration of valid StakeAuthorizationLayout's

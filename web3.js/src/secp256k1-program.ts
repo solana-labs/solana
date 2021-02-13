@@ -23,12 +23,12 @@ const SIGNATURE_OFFSETS_SERIALIZED_SIZE = 11;
  * @property {Buffer | Uint8Array | Array<number>} signature
  * @property {number} recoveryId
  */
-export type CreateSecp256k1InstructionWithPublicKeyParams = {|
-  publicKey: Buffer | Uint8Array | Array<number>,
-  message: Buffer | Uint8Array | Array<number>,
-  signature: Buffer | Uint8Array | Array<number>,
-  recoveryId: number,
-|};
+export type CreateSecp256k1InstructionWithPublicKeyParams = {
+  publicKey: Buffer | Uint8Array | Array<number>;
+  message: Buffer | Uint8Array | Array<number>;
+  signature: Buffer | Uint8Array | Array<number>;
+  recoveryId: number;
+};
 
 /**
  * Create a Secp256k1 instruction using a private key params
@@ -36,10 +36,10 @@ export type CreateSecp256k1InstructionWithPublicKeyParams = {|
  * @property {Buffer | Uint8Array | Array<number>} privateKey
  * @property {Buffer | Uint8Array | Array<number>} message
  */
-export type CreateSecp256k1InstructionWithPrivateKeyParams = {|
-  privateKey: Buffer | Uint8Array | Array<number>,
-  message: Buffer | Uint8Array | Array<number>,
-|};
+export type CreateSecp256k1InstructionWithPrivateKeyParams = {
+  privateKey: Buffer | Uint8Array | Array<number>;
+  message: Buffer | Uint8Array | Array<number>;
+};
 
 const SECP256K1_INSTRUCTION_LAYOUT = BufferLayout.struct([
   BufferLayout.u8('numSignatures'),

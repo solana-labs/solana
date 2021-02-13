@@ -27,12 +27,12 @@ export const BLOCKHASH_CACHE_TIMEOUT_MS = 30 * 1000;
 type RpcRequest = (methodName: string, args: Array<any>) => any;
 
 type TokenAccountsFilter =
-  | {|
-      mint: PublicKey,
-    |}
-  | {|
-      programId: PublicKey,
-    |};
+  | {
+      mint: PublicKey;
+    }
+  | {
+      programId: PublicKey;
+    };
 
 /**
  * Extra contextual information for RPC responses
@@ -41,7 +41,7 @@ type TokenAccountsFilter =
  * @property {number} slot
  */
 type Context = {
-  slot: number,
+  slot: number;
 };
 
 /**
@@ -52,8 +52,8 @@ type Context = {
  * @property {Commitment | undefined} preflightCommitment preflight commitment level
  */
 export type SendOptions = {
-  skipPreflight?: boolean,
-  preflightCommitment?: Commitment,
+  skipPreflight?: boolean;
+  preflightCommitment?: Commitment;
 };
 
 /**
@@ -65,9 +65,9 @@ export type SendOptions = {
  * @property {Commitment | undefined} preflightCommitment preflight commitment level
  */
 export type ConfirmOptions = {
-  skipPreflight?: boolean,
-  commitment?: Commitment,
-  preflightCommitment?: Commitment,
+  skipPreflight?: boolean;
+  commitment?: Commitment;
+  preflightCommitment?: Commitment;
 };
 
 /**
@@ -80,8 +80,8 @@ export type ConfirmOptions = {
  *
  */
 export type ConfirmedSignaturesForAddress2Options = {
-  before?: TransactionSignature,
-  limit?: number,
+  before?: TransactionSignature;
+  limit?: number;
 };
 
 /**
@@ -92,8 +92,8 @@ export type ConfirmedSignaturesForAddress2Options = {
  * @property {T} value response
  */
 type RpcResponseAndContext<T> = {
-  context: Context,
-  value: T,
+  context: Context;
+  value: T;
 };
 
 /**
@@ -179,8 +179,8 @@ export type LargestAccountsFilter = 'circulating' | 'nonCirculating';
  * @property {LargestAccountsFilter|undefined} filter Filter largest accounts by whether they are part of the circulating supply
  */
 type GetLargestAccountsConfig = {
-  commitment: ?Commitment,
-  filter: ?LargestAccountsFilter,
+  commitment: ?Commitment;
+  filter: ?LargestAccountsFilter;
 };
 
 /**
@@ -190,7 +190,7 @@ type GetLargestAccountsConfig = {
  * @property {boolean} searchTransactionHistory enable searching status history, not needed for recent transactions
  */
 export type SignatureStatusConfig = {
-  searchTransactionHistory: boolean,
+  searchTransactionHistory: boolean;
 };
 
 /**
@@ -204,11 +204,11 @@ export type SignatureStatusConfig = {
  * @property {string|null} version Software version of the node (null if not available)
  */
 type ContactInfo = {
-  pubkey: string,
-  gossip: string | null,
-  tpu: string | null,
-  rpc: string | null,
-  version: string | null,
+  pubkey: string;
+  gossip: string | null;
+  tpu: string | null;
+  rpc: string | null;
+  version: string | null;
 };
 
 /**
@@ -224,13 +224,13 @@ type ContactInfo = {
  * @property {number} lastVote Most recent slot voted on by this vote account
  */
 type VoteAccountInfo = {
-  votePubkey: string,
-  nodePubkey: string,
-  activatedStake: number,
-  epochVoteAccount: boolean,
-  epochCredits: Array<[number, number, number]>,
-  commission: number,
-  lastVote: number,
+  votePubkey: string;
+  nodePubkey: string;
+  activatedStake: number;
+  epochVoteAccount: boolean;
+  epochCredits: Array<[number, number, number]>;
+  commission: number;
+  lastVote: number;
 };
 
 /**
@@ -241,8 +241,8 @@ type VoteAccountInfo = {
  * @property {Array<VoteAccountInfo>} delinquent Inactive vote accounts
  */
 type VoteAccountStatus = {
-  current: Array<VoteAccountInfo>,
-  delinquent: Array<VoteAccountInfo>,
+  current: Array<VoteAccountInfo>;
+  delinquent: Array<VoteAccountInfo>;
 };
 
 /**
@@ -257,11 +257,11 @@ type VoteAccountStatus = {
  * @property {number} terminal
  */
 type InflationGovernor = {
-  foundation: number,
-  foundationTerm: number,
-  initial: number,
-  taper: number,
-  terminal: number,
+  foundation: number;
+  foundationTerm: number;
+  initial: number;
+  taper: number;
+  terminal: number;
 };
 
 const GetInflationGovernorResult = struct({
@@ -284,12 +284,12 @@ const GetInflationGovernorResult = struct({
  * @property {number} transactionCount
  */
 type EpochInfo = {
-  epoch: number,
-  slotIndex: number,
-  slotsInEpoch: number,
-  absoluteSlot: number,
-  blockHeight: number | null,
-  transactionCount: number | null,
+  epoch: number;
+  slotIndex: number;
+  slotsInEpoch: number;
+  absoluteSlot: number;
+  blockHeight: number | null;
+  transactionCount: number | null;
 };
 
 const GetEpochInfoResult = struct({
@@ -313,11 +313,11 @@ const GetEpochInfoResult = struct({
  * @property {number} firstNormalSlot The first slot of `firstNormalEpoch`
  */
 type EpochSchedule = {
-  slotsPerEpoch: number,
-  leaderScheduleSlotOffset: number,
-  warmup: boolean,
-  firstNormalEpoch: number,
-  firstNormalSlot: number,
+  slotsPerEpoch: number;
+  leaderScheduleSlotOffset: number;
+  warmup: boolean;
+  firstNormalEpoch: number;
+  firstNormalSlot: number;
 };
 
 const GetEpochScheduleResult = struct({
@@ -335,7 +335,7 @@ const GetEpochScheduleResult = struct({
  * @typedef {Object} LeaderSchedule
  */
 type LeaderSchedule = {
-  [address: string]: number[],
+  [address: string]: number[];
 };
 
 const GetLeaderScheduleResult = struct.record([
@@ -365,8 +365,8 @@ const Version = struct.pick({
 });
 
 type SimulatedTransactionResponse = {
-  err: TransactionError | string | null,
-  logs: Array<string> | null,
+  err: TransactionError | string | null;
+  logs: Array<string> | null;
 };
 
 const SimulatedTransactionResponseValidator = jsonRpcResultAndContext(
@@ -377,14 +377,14 @@ const SimulatedTransactionResponseValidator = jsonRpcResultAndContext(
 );
 
 type ParsedInnerInstruction = {
-  index: number,
-  instructions: (ParsedInstruction | PartiallyDecodedInstruction)[],
+  index: number;
+  instructions: (ParsedInstruction | PartiallyDecodedInstruction)[];
 };
 
 type TokenBalance = {
-  accountIndex: number,
-  mint: string,
-  uiTokenAmount: TokenAmount,
+  accountIndex: number;
+  mint: string;
+  uiTokenAmount: TokenAmount;
 };
 
 /**
@@ -401,19 +401,19 @@ type TokenBalance = {
  * @property {object|null} err The error result of transaction processing
  */
 type ParsedConfirmedTransactionMeta = {
-  fee: number,
-  innerInstructions?: ParsedInnerInstruction[],
-  preBalances: Array<number>,
-  postBalances: Array<number>,
-  logMessages?: Array<string>,
-  preTokenBalances?: Array<TokenBalance>,
-  postTokenBalances?: Array<TokenBalance>,
-  err: TransactionError | null,
+  fee: number;
+  innerInstructions?: ParsedInnerInstruction[];
+  preBalances: Array<number>;
+  postBalances: Array<number>;
+  logMessages?: Array<string>;
+  preTokenBalances?: Array<TokenBalance>;
+  postTokenBalances?: Array<TokenBalance>;
+  err: TransactionError | null;
 };
 
 type CompiledInnerInstruction = {
-  index: number,
-  instructions: CompiledInstruction[],
+  index: number;
+  instructions: CompiledInstruction[];
 };
 
 /**
@@ -430,14 +430,14 @@ type CompiledInnerInstruction = {
  * @property {object|null} err The error result of transaction processing
  */
 type ConfirmedTransactionMeta = {
-  fee: number,
-  innerInstructions?: CompiledInnerInstruction[],
-  preBalances: Array<number>,
-  postBalances: Array<number>,
-  logMessages?: Array<string>,
-  preTokenBalances?: Array<TokenBalance>,
-  postTokenBalances?: Array<TokenBalance>,
-  err: TransactionError | null,
+  fee: number;
+  innerInstructions?: CompiledInnerInstruction[];
+  preBalances: Array<number>;
+  postBalances: Array<number>;
+  logMessages?: Array<string>;
+  preTokenBalances?: Array<TokenBalance>;
+  postTokenBalances?: Array<TokenBalance>;
+  err: TransactionError | null;
 };
 
 /**
@@ -450,10 +450,10 @@ type ConfirmedTransactionMeta = {
  * @property {number|null|undefined} blockTime The unix timestamp of when the transaction was processed
  */
 type ConfirmedTransaction = {
-  slot: number,
-  transaction: Transaction,
-  meta: ConfirmedTransactionMeta | null,
-  blockTime?: number | null,
+  slot: number;
+  transaction: Transaction;
+  meta: ConfirmedTransactionMeta | null;
+  blockTime?: number | null;
 };
 
 /**
@@ -464,11 +464,11 @@ type ConfirmedTransaction = {
  * @property {PublicKey} accounts Indicates if the account signed the transaction
  * @property {string} data Raw base-58 instruction data
  */
-type PartiallyDecodedInstruction = {|
-  programId: PublicKey,
-  accounts: Array<PublicKey>,
-  data: string,
-|};
+type PartiallyDecodedInstruction = {
+  programId: PublicKey;
+  accounts: Array<PublicKey>;
+  data: string;
+};
 
 /**
  * A parsed transaction message account
@@ -479,9 +479,9 @@ type PartiallyDecodedInstruction = {|
  * @property {boolean} writable Indicates if the account is writable for this transaction
  */
 type ParsedMessageAccount = {
-  pubkey: PublicKey,
-  signer: boolean,
-  writable: boolean,
+  pubkey: PublicKey;
+  signer: boolean;
+  writable: boolean;
 };
 
 /**
@@ -492,11 +492,11 @@ type ParsedMessageAccount = {
  * @property {PublicKey} programId ID of the program for this instruction
  * @property {any} parsed Parsed instruction info
  */
-type ParsedInstruction = {|
-  program: string,
-  programId: PublicKey,
-  parsed: any,
-|};
+type ParsedInstruction = {
+  program: string;
+  programId: PublicKey;
+  parsed: any;
+};
 
 /**
  * A parsed transaction message
@@ -507,9 +507,9 @@ type ParsedInstruction = {|
  * @property {string} recentBlockhash Recent blockhash
  */
 type ParsedMessage = {
-  accountKeys: ParsedMessageAccount[],
-  instructions: (ParsedInstruction | PartiallyDecodedInstruction)[],
-  recentBlockhash: string,
+  accountKeys: ParsedMessageAccount[];
+  instructions: (ParsedInstruction | PartiallyDecodedInstruction)[];
+  recentBlockhash: string;
 };
 
 /**
@@ -520,8 +520,8 @@ type ParsedMessage = {
  * @property {ParsedMessage} message Message of the transaction
  */
 type ParsedTransaction = {
-  signatures: Array<string>,
-  message: ParsedMessage,
+  signatures: Array<string>;
+  message: ParsedMessage;
 };
 
 /**
@@ -534,10 +534,10 @@ type ParsedTransaction = {
  * @property {number|null|undefined} blockTime The unix timestamp of when the transaction was processed
  */
 type ParsedConfirmedTransaction = {
-  slot: number,
-  transaction: ParsedTransaction,
-  meta: ParsedConfirmedTransactionMeta | null,
-  blockTime?: number | null,
+  slot: number;
+  transaction: ParsedTransaction;
+  meta: ParsedConfirmedTransactionMeta | null;
+  blockTime?: number | null;
 };
 
 /**
@@ -551,19 +551,19 @@ type ParsedConfirmedTransaction = {
  * @property {Array<object>} rewards Vector of block rewards
  */
 type ConfirmedBlock = {
-  blockhash: Blockhash,
-  previousBlockhash: Blockhash,
-  parentSlot: number,
+  blockhash: Blockhash;
+  previousBlockhash: Blockhash;
+  parentSlot: number;
   transactions: Array<{
-    transaction: Transaction,
-    meta: ConfirmedTransactionMeta | null,
-  }>,
+    transaction: Transaction;
+    meta: ConfirmedTransactionMeta | null;
+  }>;
   rewards: Array<{
-    pubkey: string,
-    lamports: number,
-    postBalance: number | null,
-    rewardType: string | null,
-  }>,
+    pubkey: string;
+    lamports: number;
+    postBalance: number | null;
+    rewardType: string | null;
+  }>;
 };
 
 /**
@@ -576,10 +576,10 @@ type ConfirmedBlock = {
  * @property {number} samplePeriodSecs Sample window in seconds
  */
 type PerfSample = {
-  slot: number,
-  numTransactions: number,
-  numSlots: number,
-  samplePeriodSecs: number,
+  slot: number;
+  numTransactions: number;
+  numSlots: number;
+  samplePeriodSecs: number;
 };
 
 function createRpcRequest(url: string, useHttps: boolean): RpcRequest {
@@ -715,10 +715,10 @@ const SlotRpcResult = struct({
  * @property {Array<PublicKey>} nonCirculatingAccounts List of non-circulating account addresses
  */
 type Supply = {
-  total: number,
-  circulating: number,
-  nonCirculating: number,
-  nonCirculatingAccounts: Array<PublicKey>,
+  total: number;
+  circulating: number;
+  nonCirculating: number;
+  nonCirculatingAccounts: Array<PublicKey>;
 };
 
 /**
@@ -743,9 +743,9 @@ const GetSupplyRpcResult = jsonRpcResultAndContext(
  * @property {number} uiAmount Token account as float, accounts for decimals
  */
 type TokenAmount = {
-  amount: string,
-  decimals: number,
-  uiAmount: number,
+  amount: string;
+  decimals: number;
+  uiAmount: number;
 };
 
 /**
@@ -767,10 +767,10 @@ const TokenAmountResult = struct.object({
  * @property {number} uiAmount Token account as float, accounts for decimals
  */
 type TokenAccountBalancePair = {
-  address: PublicKey,
-  amount: string,
-  decimals: number,
-  uiAmount: number,
+  address: PublicKey;
+  amount: string;
+  decimals: number;
+  uiAmount: number;
 };
 
 /**
@@ -845,8 +845,8 @@ const GetParsedTokenAccountsByOwner = jsonRpcResultAndContext(
  * @property {number} lamports
  */
 type AccountBalancePair = {
-  address: PublicKey,
-  lamports: number,
+  address: PublicKey;
+  lamports: number;
 };
 
 /**
@@ -1428,9 +1428,9 @@ const SendTransactionRpcResult = jsonRpcResult('string');
  * @property {number} root The root block of the current slot's fork
  */
 export type SlotInfo = {
-  slot: number,
-  parent: number,
-  root: number,
+  slot: number;
+  parent: number;
+  root: number;
 };
 
 /**
@@ -1442,9 +1442,9 @@ export type SlotInfo = {
  * @property {number} space Space used by account data
  */
 type ParsedAccountData = {
-  program: string,
-  parsed: any,
-  space: number,
+  program: string;
+  parsed: any;
+  space: number;
 };
 
 /**
@@ -1456,9 +1456,9 @@ type ParsedAccountData = {
  * @property {number} inactive: stake inactive during the epoch
  */
 type StakeActivationData = {
-  state: 'active' | 'inactive' | 'activating' | 'deactivating',
-  active: number,
-  inactive: number,
+  state: 'active' | 'inactive' | 'activating' | 'deactivating';
+  active: number;
+  inactive: number;
 };
 
 /**
@@ -1471,10 +1471,10 @@ type StakeActivationData = {
  * @property {boolean} executable `true` if this account's data contains a loaded program
  */
 type AccountInfo<T> = {
-  executable: boolean,
-  owner: PublicKey,
-  lamports: number,
-  data: T,
+  executable: boolean;
+  owner: PublicKey;
+  lamports: number;
+  data: T;
 };
 
 /**
@@ -1485,8 +1485,8 @@ type AccountInfo<T> = {
  * @property {AccountInfo<Buffer>} accountInfo
  */
 export type KeyedAccountInfo = {
-  accountId: PublicKey,
-  accountInfo: AccountInfo<Buffer>,
+  accountId: PublicKey;
+  accountInfo: AccountInfo<Buffer>;
 };
 
 /**
@@ -1506,10 +1506,10 @@ type SubscriptionId = 'subscribing' | number;
  * @private
  */
 type AccountSubscriptionInfo = {
-  publicKey: string, // PublicKey of the account as a base 58 string
-  callback: AccountChangeCallback,
-  commitment: ?Commitment,
-  subscriptionId: ?SubscriptionId, // null when there's no current server subscription id
+  publicKey: string; // PublicKey of the account as a base 58 string
+  callback: AccountChangeCallback;
+  commitment: ?Commitment;
+  subscriptionId: ?SubscriptionId; // null when there's no current server subscription id
 };
 
 /**
@@ -1524,10 +1524,10 @@ export type ProgramAccountChangeCallback = (
  * @private
  */
 type ProgramAccountSubscriptionInfo = {
-  programId: string, // PublicKey of the program as a base 58 string
-  callback: ProgramAccountChangeCallback,
-  commitment: ?Commitment,
-  subscriptionId: ?SubscriptionId, // null when there's no current server subscription id
+  programId: string; // PublicKey of the program as a base 58 string
+  callback: ProgramAccountChangeCallback;
+  commitment: ?Commitment;
+  subscriptionId: ?SubscriptionId; // null when there's no current server subscription id
 };
 
 /**
@@ -1539,8 +1539,8 @@ export type SlotChangeCallback = (slotInfo: SlotInfo) => void;
  * @private
  */
 type SlotSubscriptionInfo = {
-  callback: SlotChangeCallback,
-  subscriptionId: ?SubscriptionId, // null when there's no current server subscription id
+  callback: SlotChangeCallback;
+  subscriptionId: ?SubscriptionId; // null when there's no current server subscription id
 };
 
 /**
@@ -1555,10 +1555,10 @@ export type SignatureResultCallback = (
  * @private
  */
 type SignatureSubscriptionInfo = {
-  signature: TransactionSignature, // TransactionSignature as a base 58 string
-  callback: SignatureResultCallback,
-  commitment: ?Commitment,
-  subscriptionId: ?SubscriptionId, // null when there's no current server subscription id
+  signature: TransactionSignature; // TransactionSignature as a base 58 string
+  callback: SignatureResultCallback;
+  commitment: ?Commitment;
+  subscriptionId: ?SubscriptionId; // null when there's no current server subscription id
 };
 
 /**
@@ -1570,8 +1570,8 @@ export type RootChangeCallback = (root: number) => void;
  * @private
  */
 type RootSubscriptionInfo = {
-  callback: RootChangeCallback,
-  subscriptionId: ?SubscriptionId, // null when there's no current server subscription id
+  callback: RootChangeCallback;
+  subscriptionId: ?SubscriptionId; // null when there's no current server subscription id
 };
 
 /**
@@ -1579,9 +1579,9 @@ type RootSubscriptionInfo = {
  *
  * @typedef {Object} SignatureResult
  */
-export type SignatureResult = {|
-  err: TransactionError | null,
-|};
+export type SignatureResult = {
+  err: TransactionError | null;
+};
 
 /**
  * Transaction error
@@ -1600,10 +1600,10 @@ export type TransactionError = {};
  * @property {string | null} confirmationStatus the transaction's cluster confirmation status, if data available. Possible non-null responses: `processed`, `confirmed`, `finalized`
  */
 export type SignatureStatus = {
-  slot: number,
-  confirmations: number | null,
-  err: TransactionError | null,
-  confirmationStatus: string | null,
+  slot: number;
+  confirmations: number | null;
+  err: TransactionError | null;
+  confirmationStatus: string | null;
 };
 
 /**
@@ -1617,11 +1617,11 @@ export type SignatureStatus = {
  * @property {number | null | undefined} blockTime The unix timestamp of when the transaction was processed
  */
 export type ConfirmedSignatureInfo = {
-  signature: string,
-  slot: number,
-  err: TransactionError | null,
-  memo: string | null,
-  blockTime?: number | null,
+  signature: string;
+  slot: number;
+  err: TransactionError | null;
+  memo: string | null;
+  blockTime?: number | null;
 };
 
 /**
@@ -1637,30 +1637,25 @@ export class Connection {
 
   _commitment: ?Commitment;
   _blockhashInfo: {
-    recentBlockhash: Blockhash | null,
-    lastFetch: Date,
-    simulatedSignatures: Array<string>,
-    transactionSignatures: Array<string>,
+    recentBlockhash: Blockhash | null;
+    lastFetch: Date;
+    simulatedSignatures: Array<string>;
+    transactionSignatures: Array<string>;
   };
   _disableBlockhashCaching: boolean = false;
   _pollingBlockhash: boolean = false;
-  _accountChangeSubscriptions: {[number]: AccountSubscriptionInfo} = {};
+  _accountChangeSubscriptions: Map<number, AccountSubscriptionInfo> = new Map();
   _accountChangeSubscriptionCounter: number = 0;
-  _programAccountChangeSubscriptions: {
-    [number]: ProgramAccountSubscriptionInfo,
-  } = {};
+  _programAccountChangeSubscriptions: Map<
+    number,
+    ProgramAccountSubscriptionInfo
+  > = new Map();
   _programAccountChangeSubscriptionCounter: number = 0;
-  _slotSubscriptions: {
-    [number]: SlotSubscriptionInfo,
-  } = {};
+  _slotSubscriptions: Map<number, SlotSubscriptionInfo> = new Map();
   _slotSubscriptionCounter: number = 0;
-  _signatureSubscriptions: {
-    [number]: SignatureSubscriptionInfo,
-  } = {};
+  _signatureSubscriptions: Map<number, SignatureSubscriptionInfo> = new Map();
   _signatureSubscriptionCounter: number = 0;
-  _rootSubscriptions: {
-    [number]: RootSubscriptionInfo,
-  } = {};
+  _rootSubscriptions: Map<number, RootSubscriptionInfo> = new Map();
   _rootSubscriptionCounter: number = 0;
 
   /**
@@ -1881,8 +1876,8 @@ export class Connection {
     commitment: ?Commitment,
   ): Promise<
     RpcResponseAndContext<
-      Array<{pubkey: PublicKey, account: AccountInfo<Buffer>}>,
-    >,
+      Array<{pubkey: PublicKey; account: AccountInfo<Buffer>}>
+    >
   > {
     let _args = [ownerAddress.toBase58()];
     if (filter.mint) {
@@ -1935,8 +1930,8 @@ export class Connection {
     commitment: ?Commitment,
   ): Promise<
     RpcResponseAndContext<
-      Array<{pubkey: PublicKey, account: AccountInfo<ParsedAccountData>}>,
-    >,
+      Array<{pubkey: PublicKey; account: AccountInfo<ParsedAccountData>}>
+    >
   > {
     let _args = [ownerAddress.toBase58()];
     if (filter.mint) {
@@ -2070,7 +2065,7 @@ export class Connection {
     publicKey: PublicKey,
     commitment: ?Commitment,
   ): Promise<
-    RpcResponseAndContext<AccountInfo<Buffer | ParsedAccountData> | null>,
+    RpcResponseAndContext<AccountInfo<Buffer | ParsedAccountData> | null>
   > {
     const args = this._buildArgs(
       [publicKey.toBase58()],
@@ -2169,7 +2164,7 @@ export class Connection {
   async getProgramAccounts(
     programId: PublicKey,
     commitment: ?Commitment,
-  ): Promise<Array<{pubkey: PublicKey, account: AccountInfo<Buffer>}>> {
+  ): Promise<Array<{pubkey: PublicKey; account: AccountInfo<Buffer>}>> {
     const args = this._buildArgs([programId.toBase58()], commitment, 'base64');
     const unsafeRes = await this._rpcRequest('getProgramAccounts', args);
     const res = GetProgramAccountsRpcResult(unsafeRes);
@@ -2209,9 +2204,9 @@ export class Connection {
     commitment: ?Commitment,
   ): Promise<
     Array<{
-      pubkey: PublicKey,
-      account: AccountInfo<Buffer | ParsedAccountData>,
-    }>,
+      pubkey: PublicKey;
+      account: AccountInfo<Buffer | ParsedAccountData>;
+    }>
   > {
     const args = this._buildArgs(
       [programId.toBase58()],
@@ -2535,7 +2530,7 @@ export class Connection {
   async getRecentBlockhashAndContext(
     commitment: ?Commitment,
   ): Promise<
-    RpcResponseAndContext<{blockhash: Blockhash, feeCalculator: FeeCalculator}>,
+    RpcResponseAndContext<{blockhash: Blockhash; feeCalculator: FeeCalculator}>
   > {
     const args = this._buildArgs([], commitment);
     const unsafeRes = await this._rpcRequest('getRecentBlockhash', args);
@@ -2603,7 +2598,7 @@ export class Connection {
    */
   async getRecentBlockhash(
     commitment: ?Commitment,
-  ): Promise<{blockhash: Blockhash, feeCalculator: FeeCalculator}> {
+  ): Promise<{blockhash: Blockhash; feeCalculator: FeeCalculator}> {
     return await this.getRecentBlockhashAndContext(commitment)
       .then(x => x.value)
       .catch(e => {
@@ -3108,7 +3103,7 @@ export class Connection {
   /**
    * @private
    */
-  async _subscribe<SubInfo: {subscriptionId: ?SubscriptionId}, RpcArgs>(
+  async _subscribe<SubInfo extends {subscriptionId: ?SubscriptionId}, RpcArgs>(
     sub: SubInfo,
     rpcMethod: string,
     rpcArgs: RpcArgs,
@@ -3134,7 +3129,7 @@ export class Connection {
   /**
    * @private
    */
-  async _unsubscribe<SubInfo: {subscriptionId: ?SubscriptionId}>(
+  async _unsubscribe<SubInfo extends {subscriptionId: ?SubscriptionId}>(
     sub: SubInfo,
     rpcMethod: string,
   ) {
@@ -3153,19 +3148,19 @@ export class Connection {
    * @private
    */
   _resetSubscriptions() {
-    (Object.values(this._accountChangeSubscriptions): any).forEach(
+    Object.values(this._accountChangeSubscriptions).forEach(
       s => (s.subscriptionId = null),
     );
-    (Object.values(this._programAccountChangeSubscriptions): any).forEach(
+    Object.values(this._programAccountChangeSubscriptions).forEach(
       s => (s.subscriptionId = null),
     );
-    (Object.values(this._signatureSubscriptions): any).forEach(
+    Object.values(this._signatureSubscriptions).forEach(
       s => (s.subscriptionId = null),
     );
-    (Object.values(this._slotSubscriptions): any).forEach(
+    Object.values(this._slotSubscriptions).forEach(
       s => (s.subscriptionId = null),
     );
-    (Object.values(this._rootSubscriptions): any).forEach(
+    Object.values(this._rootSubscriptions).forEach(
       s => (s.subscriptionId = null),
     );
   }

@@ -9,19 +9,19 @@ export const VOTE_PROGRAM_ID = new PublicKey(
   'Vote111111111111111111111111111111111111111',
 );
 
-export type Lockout = {|
-  slot: number,
-  confirmationCount: number,
-|};
+export type Lockout = {
+  slot: number;
+  confirmationCount: number;
+};
 
 /**
  * History of how many credits earned by the end of each epoch
  */
-export type EpochCredits = {|
-  epoch: number,
-  credits: number,
-  prevCredits: number,
-|};
+export type EpochCredits = {
+  epoch: number;
+  credits: number;
+  prevCredits: number;
+};
 
 /**
  * See https://github.com/solana-labs/solana/blob/8a12ed029cfa38d4a45400916c2463fb82bbec8c/programs/vote_api/src/vote_state.rs#L68-L88

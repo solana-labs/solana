@@ -8,10 +8,10 @@ import * as Layout from './layout';
  * @property (index} The Instruction index (from solana upstream program)
  * @property (BufferLayout} The BufferLayout to use to build data
  */
-export type InstructionType = {|
-  index: number,
-  layout: typeof BufferLayout,
-|};
+export type InstructionType = {
+  index: number;
+  layout: typeof BufferLayout;
+};
 
 /**
  * Populate a buffer of instruction data using an InstructionType
