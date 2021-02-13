@@ -3239,6 +3239,60 @@ mod tests {
         );
         assert_eq!(stake_account.borrow().lamports, 0);
         assert_eq!(stake_keyed_account.state(), Ok(StakeState::Uninitialized));
+
+        // overflow
+        let rent = Rent::default();
+        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let authority_pubkey = Pubkey::new_unique();
+        let stake_pubkey = Pubkey::new_unique();
+        let stake_account = Account::new_ref_data_with_space(
+            1_000_000_000,
+            &StakeState::Initialized(Meta {
+                rent_exempt_reserve,
+                authorized: Authorized {
+                    staker: authority_pubkey,
+                    withdrawer: authority_pubkey,
+                },
+                lockup: Lockup::default(),
+            }),
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .expect("stake_account");
+
+        let stake2_pubkey = Pubkey::new_unique();
+        let stake2_account = Account::new_ref_data_with_space(
+            1_000_000_000,
+            &StakeState::Initialized(Meta {
+                rent_exempt_reserve,
+                authorized: Authorized {
+                    staker: authority_pubkey,
+                    withdrawer: authority_pubkey,
+                },
+                lockup: Lockup::default(),
+            }),
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .expect("stake2_account");
+
+        let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
+        let stake2_keyed_account = KeyedAccount::new(&stake2_pubkey, false, &stake2_account);
+        let authority_account = Account::new_ref(42, 0, &system_program::id());
+        let authority_keyed_account =
+            KeyedAccount::new(&authority_pubkey, true, &authority_account);
+
+        assert_eq!(
+            stake_keyed_account.withdraw(
+                u64::MAX - 10,
+                &stake2_keyed_account,
+                &clock,
+                &StakeHistory::default(),
+                &authority_keyed_account,
+                None,
+            ),
+            Err(InstructionError::InsufficientFunds),
+        );
     }
 
     #[test]
