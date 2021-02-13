@@ -86,7 +86,7 @@ up)
       --rm
       --publish 8001:8001/tcp # entrypoint
       --publish 8328:8328/tcp # rpc http
-      --publish 8900:8900/tcp # rpc pubsub
+      --publish 8329:8329/tcp # rpc pubsub
       --publish 8901:8901/tcp # (future) bank service
       --publish 8902:8902/tcp # bank service
       --publish 9900:9900/tcp # faucet

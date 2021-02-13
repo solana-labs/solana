@@ -14,7 +14,7 @@ gives a convenient interface for the RPC methods.
 
 ## RPC PubSub WebSocket Endpoint
 
-**Default port:** 8900 eg. ws://localhost:8900, [http://192.168.1.88:8900](http://192.168.1.88:8900)
+**Default port:** 8329 eg. ws://localhost:8329, [http://192.168.1.88:8329](http://192.168.1.88:8329)
 
 ## Methods
 
