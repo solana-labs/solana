@@ -44,8 +44,8 @@ fi
 
 default_arg --ledger "$SAFECOIN_CONFIG_DIR"/bootstrap-validator
 default_arg --faucet-pubkey "$SAFECOIN_CONFIG_DIR"/faucet.json
-default_arg --faucet-lamports 1000
+default_arg --faucet-lamports 500000000000000000
 default_arg --hashes-per-tick auto
-default_arg --cluster-type mainnet-beta
+default_arg --cluster-type development
 
 $safecoin_genesis "${args[@]}"
