@@ -6,6 +6,8 @@ use std::{convert::TryFrom, fmt, mem, str::FromStr};
 use thiserror::Error;
 
 pub const HASH_BYTES: usize = 32;
+/// Maximum string length of a base58 encoded hash
+const MAX_BASE58_LEN: usize = 44;
 #[derive(
     Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash, AbiExample,
 )]
@@ -65,6 +67,9 @@ impl FromStr for Hash {
     type Err = ParseHashError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.len() > MAX_BASE58_LEN {
+            return Err(ParseHashError::WrongSize);
+        }
         let bytes = bs58::decode(s)
             .into_vec()
             .map_err(|_| ParseHashError::Invalid)?;
@@ -170,6 +175,13 @@ mod tests {
         hash_base58_str.truncate(hash_base58_str.len() / 2);
         assert_eq!(
             hash_base58_str.parse::<Hash>(),
+            Err(ParseHashError::WrongSize)
+        );
+
+        let input_too_big = bs58::encode(&[0xffu8; HASH_BYTES + 1]).into_string();
+        assert!(input_too_big.len() > MAX_BASE58_LEN);
+        assert_eq!(
+            input_too_big.parse::<Hash>(),
             Err(ParseHashError::WrongSize)
         );
 
