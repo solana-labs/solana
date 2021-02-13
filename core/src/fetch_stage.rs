@@ -46,7 +46,7 @@ impl FetchStage {
         exit: &Arc<AtomicBool>,
         sender: &PacketSender,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
-        allocated_packet_limit: Option<usize>,
+        allocated_packet_limit: Option<u32>,
     ) -> Self {
         let tx_sockets = sockets.into_iter().map(Arc::new).collect();
         let tpu_forwards_sockets = tpu_forwards_sockets.into_iter().map(Arc::new).collect();
@@ -101,7 +101,7 @@ impl FetchStage {
         exit: &Arc<AtomicBool>,
         sender: &PacketSender,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
-        limit: Option<usize>,
+        limit: Option<u32>,
     ) -> Self {
         let recycler: PacketsRecycler = Recycler::warmed(1000, 1024, limit);
 

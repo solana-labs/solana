@@ -167,7 +167,7 @@ impl ShredFetchStage {
         sender: &PacketSender,
         bank_forks: Option<Arc<RwLock<BankForks>>>,
         exit: &Arc<AtomicBool>,
-        limit: Option<usize>,
+        limit: Option<u32>,
     ) -> Self {
         let recycler: PacketsRecycler = Recycler::warmed(100, 1024, limit);
 

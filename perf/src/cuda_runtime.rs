@@ -76,6 +76,9 @@ impl<T: Default + Clone + Sized> Reset for PinnedVec<T> {
     fn set_recycler(&mut self, recycler: Weak<RecyclerX<Self>>) {
         self.recycler = Some(recycler);
     }
+    fn unset_recycler(&mut self) {
+        self.recycler = None;
+    }
 }
 
 impl<T: Clone + Default + Sized> Default for PinnedVec<T> {
