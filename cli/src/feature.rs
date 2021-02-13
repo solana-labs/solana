@@ -283,7 +283,7 @@ fn feature_activation_allowed(rpc_client: &RpcClient, quiet: bool) -> Result<boo
         }
         println!(
             "{}",
-            style(format!("Tool Feture Set: {}", my_feature_set)).bold()
+            style(format!("Tool Feature Set: {}", my_feature_set)).bold()
         );
         println!("{}", style("Cluster Feature Sets and Stakes:").bold());
         for (feature_set, percentage) in active_stake_by_feature_set.iter() {
