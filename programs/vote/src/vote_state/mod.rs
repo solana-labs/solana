@@ -464,9 +464,7 @@ impl VoteState {
     where
         F: Fn(Pubkey) -> Result<(), InstructionError>,
     {
-        let epoch_authorized_voter = self.get_and_update_authorized_voter(current_epoch).expect(
-            "the clock epoch is monotonically increasing, so authorized voter must be known",
-        );
+        let epoch_authorized_voter = self.get_and_update_authorized_voter(current_epoch)?;
 
         verify(epoch_authorized_voter)?;
 
@@ -480,10 +478,10 @@ impl VoteState {
         }
 
         // Get the latest authorized_voter
-        let (latest_epoch, latest_authorized_pubkey) = self.authorized_voters.last().expect(
-            "Earlier call to `get_and_update_authorized_voter()` guarantees
-            at least the voter for `epoch` exists in the map",
-        );
+        let (latest_epoch, latest_authorized_pubkey) = self
+            .authorized_voters
+            .last()
+            .ok_or(InstructionError::InvalidAccountData)?;
 
         // If we're not setting the same pubkey as authorized pubkey again,
         // then update the list of prior voters to mark the expiration
@@ -515,17 +513,17 @@ impl VoteState {
         Ok(())
     }
 
-    fn get_and_update_authorized_voter(&mut self, current_epoch: Epoch) -> Option<Pubkey> {
+    fn get_and_update_authorized_voter(
+        &mut self,
+        current_epoch: Epoch,
+    ) -> Result<Pubkey, InstructionError> {
         let pubkey = self
             .authorized_voters
             .get_and_cache_authorized_voter_for_epoch(current_epoch)
-            .expect(
-                "Internal functions should
-        only call this will monotonically increasing current_epoch",
-            );
+            .ok_or(InstructionError::InvalidAccountData)?;
         self.authorized_voters
             .purge_authorized_voters(current_epoch);
-        Some(pubkey)
+        Ok(pubkey)
     }
 
     fn pop_expired_votes(&mut self, slot: Slot) {
@@ -708,9 +706,7 @@ pub fn process_vote<S: std::hash::BuildHasher>(
     }
 
     let mut vote_state = versioned.convert_to_current();
-    let authorized_voter = vote_state
-        .get_and_update_authorized_voter(clock.epoch)
-        .expect("the clock epoch is monotonically increasing, so authorized voter must be known");
+    let authorized_voter = vote_state.get_and_update_authorized_voter(clock.epoch)?;
     verify_authorized_signer(&authorized_voter, signers)?;
 
     vote_state.process_vote(vote, slot_hashes, clock.epoch)?;
