@@ -1087,10 +1087,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                         // if not full withdrawal
                         || (lamports != self.lamports()?
                             // verify more than 0 stake left in previous stake
-                            && (lamports + meta.rent_exempt_reserve >= self.lamports()?
-                                // and verify more than 0 stake in new split account
-                                || lamports
-                                    <= split_rent_exempt_reserve.saturating_sub(split.lamports()?)))
+                            && lamports + meta.rent_exempt_reserve >= self.lamports()?)
                     {
                         return Err(InstructionError::InsufficientFunds);
                     }
