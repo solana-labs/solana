@@ -472,7 +472,7 @@ impl VoteState {
     where
         F: Fn(Pubkey) -> Result<(), InstructionError>,
     {
-        let epoch_authorized_voter = self.get_and_update_authorized_voter(current_epoch);
+        let epoch_authorized_voter = self.get_and_update_authorized_voter(current_epoch)?;
         verify(epoch_authorized_voter)?;
 
         // The offset in slots `n` on which the target_epoch
@@ -485,10 +485,10 @@ impl VoteState {
         }
 
         // Get the latest authorized_voter
-        let (latest_epoch, latest_authorized_pubkey) = self.authorized_voters.last().expect(
-            "Earlier call to `get_and_update_authorized_voter()` guarantees
-            at least the voter for `epoch` exists in the map",
-        );
+        let (latest_epoch, latest_authorized_pubkey) = self
+            .authorized_voters
+            .last()
+            .ok_or(InstructionError::InvalidAccountData)?;
 
         // If we're not setting the same pubkey as authorized pubkey again,
         // then update the list of prior voters to mark the expiration
@@ -520,16 +520,17 @@ impl VoteState {
         Ok(())
     }
 
-    fn get_and_update_authorized_voter(&mut self, current_epoch: Epoch) -> Pubkey {
+    fn get_and_update_authorized_voter(
+        &mut self,
+        current_epoch: Epoch,
+    ) -> Result<Pubkey, InstructionError> {
         let pubkey = self
             .authorized_voters
             .get_and_cache_authorized_voter_for_epoch(current_epoch)
-            .expect(
-                "Internal functions should only call this will monotonically increasing current_epoch",
-            );
+            .ok_or(InstructionError::InvalidAccountData)?;
         self.authorized_voters
             .purge_authorized_voters(current_epoch);
-        pubkey
+        Ok(pubkey)
     }
 
     fn pop_expired_votes(&mut self, slot: Slot) {
@@ -712,7 +713,7 @@ pub fn process_vote<S: std::hash::BuildHasher>(
     }
 
     let mut vote_state = versioned.convert_to_current();
-    let authorized_voter = vote_state.get_and_update_authorized_voter(clock.epoch);
+    let authorized_voter = vote_state.get_and_update_authorized_voter(clock.epoch)?;
     verify_authorized_signer(&authorized_voter, signers)?;
 
     vote_state.process_vote(vote, slot_hashes, clock.epoch)?;
@@ -1811,14 +1812,14 @@ mod tests {
         // If no new authorized voter was set, the same authorized voter
         // is locked into the next epoch
         assert_eq!(
-            vote_state.get_and_update_authorized_voter(1),
+            vote_state.get_and_update_authorized_voter(1).unwrap(),
             original_voter
         );
 
         // Try to get the authorized voter for epoch 5, implies
         // the authorized voter for epochs 1-4 were unchanged
         assert_eq!(
-            vote_state.get_and_update_authorized_voter(5),
+            vote_state.get_and_update_authorized_voter(5).unwrap(),
             original_voter
         );
 
@@ -1840,7 +1841,7 @@ mod tests {
 
         // Try to get the authorized voter for epoch 6, unchanged
         assert_eq!(
-            vote_state.get_and_update_authorized_voter(6),
+            vote_state.get_and_update_authorized_voter(6).unwrap(),
             original_voter
         );
 
@@ -1848,7 +1849,7 @@ mod tests {
         // be the new authorized voter
         for i in 7..10 {
             assert_eq!(
-                vote_state.get_and_update_authorized_voter(i),
+                vote_state.get_and_update_authorized_voter(i).unwrap(),
                 new_authorized_voter
             );
         }
@@ -1924,22 +1925,31 @@ mod tests {
         // voters is correct
         for i in 9..epoch_offset {
             assert_eq!(
-                vote_state.get_and_update_authorized_voter(i),
+                vote_state.get_and_update_authorized_voter(i).unwrap(),
                 original_voter
             );
         }
         for i in epoch_offset..3 + epoch_offset {
-            assert_eq!(vote_state.get_and_update_authorized_voter(i), new_voter);
+            assert_eq!(
+                vote_state.get_and_update_authorized_voter(i).unwrap(),
+                new_voter
+            );
         }
         for i in 3 + epoch_offset..6 + epoch_offset {
-            assert_eq!(vote_state.get_and_update_authorized_voter(i), new_voter2);
+            assert_eq!(
+                vote_state.get_and_update_authorized_voter(i).unwrap(),
+                new_voter2
+            );
         }
         for i in 6 + epoch_offset..9 + epoch_offset {
-            assert_eq!(vote_state.get_and_update_authorized_voter(i), new_voter3);
+            assert_eq!(
+                vote_state.get_and_update_authorized_voter(i).unwrap(),
+                new_voter3
+            );
         }
         for i in 9 + epoch_offset..=10 + epoch_offset {
             assert_eq!(
-                vote_state.get_and_update_authorized_voter(i),
+                vote_state.get_and_update_authorized_voter(i).unwrap(),
                 original_voter
             );
         }
