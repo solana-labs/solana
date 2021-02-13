@@ -1,7 +1,7 @@
 import babel from '@rollup/plugin-babel';
 import commonjs from '@rollup/plugin-commonjs';
 import copy from 'rollup-plugin-copy';
-import flowRemoveTypes from 'flow-remove-types';
+import typescript from '@rollup/plugin-typescript';
 import json from '@rollup/plugin-json';
 import nodeResolve from '@rollup/plugin-node-resolve';
 import nodePolyfills from 'rollup-plugin-node-polyfills';
@@ -9,23 +9,26 @@ import replace from '@rollup/plugin-replace';
 import {terser} from 'rollup-plugin-terser';
 
 const env = process.env.NODE_ENV;
+const extensions = ['.js', '.ts'];
 
 function generateConfig(configType, format) {
   const browser = configType === 'browser';
   const bundle = format === 'iife';
 
   const config = {
-    input: 'src/index.js',
+    input: 'src/index.ts',
     plugins: [
-      flow(),
-      commonjs(),
+      // typescript(),
+      // commonjs(),
       nodeResolve({
         browser,
-        preferBuiltins: !browser,
         dedupe: ['bn.js', 'buffer'],
+        extensions,
+        preferBuiltins: !browser,
       }),
       babel({
         exclude: '**/node_modules/**',
+        extensions,
         babelHelpers: bundle ? 'bundled' : 'runtime',
         plugins: bundle ? [] : ['@babel/plugin-transform-runtime'],
       }),
@@ -150,15 +153,3 @@ export default [
   generateConfig('browser', 'esm'),
   generateConfig('browser', 'iife'),
 ];
-
-// Using this instead of rollup-plugin-flow due to
-// https://github.com/leebyron/rollup-plugin-flow/issues/5
-function flow() {
-  return {
-    name: 'flow-remove-types',
-    transform: code => ({
-      code: flowRemoveTypes(code).toString(),
-      map: null,
-    }),
-  };
-}

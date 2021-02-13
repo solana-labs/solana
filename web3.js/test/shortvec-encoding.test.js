@@ -1,5 +1,3 @@
-// @flow
-
 import {expect} from 'chai';
 
 import {decodeLength, encodeLength} from '../src/util/shortvec-encoding';

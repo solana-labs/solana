@@ -1,5 +1,3 @@
-// @flow
-
 import {Buffer} from 'buffer';
 import {expect} from 'chai';
 

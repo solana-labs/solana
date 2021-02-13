@@ -19,9 +19,7 @@ All other commit types will trigger no new release.
 ## Reference
 
 ### Static Analysis
-eslint and flow-type are used.
-
-Helpful link: https://www.saltycrane.com/flow-type-cheat-sheet/latest/
+eslint and TypeScript are used.
 
 ### Testing Framework
 https://mochajs.org/

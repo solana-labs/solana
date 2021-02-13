@@ -1,5 +1,3 @@
-// @flow
-
 import {expect} from 'chai';
 
 import {clusterApiUrl} from '../src/util/cluster';

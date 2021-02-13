@@ -1,5 +1,3 @@
-// @flow
-
 import {Client as LiveClient} from 'rpc-websockets';
 import {expect} from 'chai';
 import sinon from 'sinon';

@@ -1,5 +1,3 @@
-// @flow
-
 import fs from 'mz/fs';
 import {expect, use} from 'chai';
 import chaiAsPromised from 'chai-as-promised';

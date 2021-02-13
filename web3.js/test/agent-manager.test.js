@@ -1,5 +1,3 @@
-// @flow
-
 import {expect} from 'chai';
 
 import {AgentManager, DESTROY_TIMEOUT_MS} from '../src/agent-manager';
