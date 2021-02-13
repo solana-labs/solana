@@ -554,14 +554,15 @@ impl EntrySlice for [Entry] {
             .take(self.len())
             .collect();
 
-        let mut hashes_pinned = recyclers.hash_recycler.allocate("poh_verify_hash");
+        let mut hashes_pinned = recyclers.hash_recycler.allocate("poh_verify_hash").unwrap();
         hashes_pinned.set_pinnable();
         hashes_pinned.resize(hashes.len(), Hash::default());
         hashes_pinned.copy_from_slice(&hashes);
 
         let mut num_hashes_vec = recyclers
             .tick_count_recycler
-            .allocate("poh_verify_num_hashes");
+            .allocate("poh_verify_num_hashes")
+            .unwrap();
         num_hashes_vec.reserve_and_pin(cmp::max(1, self.len()));
         for entry in self {
             num_hashes_vec.push(entry.num_hashes.saturating_sub(1));

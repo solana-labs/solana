@@ -67,6 +67,7 @@ impl Tpu {
             &exit,
             &packet_sender,
             &poh_recorder,
+            Some(TOTAL_BUFFERED_PACKETS),
         );
         let (verified_sender, verified_receiver) = unbounded();
 

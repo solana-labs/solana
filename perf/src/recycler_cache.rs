@@ -11,8 +11,8 @@ pub struct RecyclerCache {
 impl RecyclerCache {
     pub fn warmed() -> Self {
         Self {
-            recycler_offsets: Recycler::warmed(50, 4096),
-            recycler_buffer: Recycler::warmed(50, 4096),
+            recycler_offsets: Recycler::warmed(50, 4096, None),
+            recycler_buffer: Recycler::warmed(50, 4096, None),
         }
     }
     pub fn offsets(&self) -> &Recycler<TxOffset> {

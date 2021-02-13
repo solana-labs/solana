@@ -502,7 +502,8 @@ impl ServeRepair {
                     recycler,
                     "run_window_request",
                     vec![packet],
-                ));
+                ))
+                .unwrap();
             }
         }
 
@@ -538,11 +539,11 @@ impl ServeRepair {
                 from_addr,
                 nonce,
             )?;
-            return Some(Packets::new_with_recycler_data(
+            return Packets::new_with_recycler_data(
                 recycler,
                 "run_highest_window_request",
                 vec![packet],
-            ));
+            );
         }
         None
     }
@@ -555,7 +556,7 @@ impl ServeRepair {
         max_responses: usize,
         nonce: Nonce,
     ) -> Option<Packets> {
-        let mut res = Packets::new_with_recycler(recycler.clone(), 64, "run_orphan");
+        let mut res = Packets::new_with_recycler(recycler.clone(), 64, "run_orphan").unwrap();
         if let Some(blockstore) = blockstore {
             // Try to find the next "n" parent slots of the input slot
             while let Ok(Some(meta)) = blockstore.meta(slot) {

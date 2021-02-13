@@ -66,6 +66,9 @@ pub struct PinnedVec<T: Default + Clone + Sized> {
 }
 
 impl<T: Default + Clone + Sized> Reset for PinnedVec<T> {
+    fn len(&self) -> usize {
+        self.len()
+    }
     fn reset(&mut self) {
         self.resize(0, T::default());
     }

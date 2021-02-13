@@ -21,6 +21,8 @@ pub struct RecyclerX<T> {
     gc: Mutex<Vec<T>>,
     stats: RecyclerStats,
     id: usize,
+    outstanding_len: AtomicUsize,
+    limit: Option<usize>,
 }
 
 impl<T: Default> Default for RecyclerX<T> {
@@ -31,11 +33,23 @@ impl<T: Default> Default for RecyclerX<T> {
             gc: Mutex::new(vec![]),
             stats: RecyclerStats::default(),
             id,
+            limit: None,
+            outstanding_len: AtomicUsize::default(),
+        }
+    }
+}
+
+impl<T: Default> RecyclerX<T> {
+    fn new(limit: Option<usize>) -> Self {
+        RecyclerX {
+            limit,
+            ..Self::default()
         }
     }
 }
 
 pub trait Reset {
+    fn len(&self) -> usize;
     fn reset(&mut self);
     fn warm(&mut self, size_hint: usize);
     fn set_recycler(&mut self, recycler: Weak<RecyclerX<Self>>)
@@ -56,12 +70,15 @@ fn warm_recyclers() -> bool {
 }
 
 impl<T: Default + Reset + Sized> Recycler<T> {
-    pub fn warmed(num: usize, size_hint: usize) -> Self {
-        let new = Self::default();
+    pub fn warmed(num: usize, size_hint: usize, limit: Option<usize>) -> Self {
+        assert!(num <= limit.unwrap_or(std::usize::MAX));
+        let new = Self {
+            recycler: Arc::new(RecyclerX::new(limit)),
+        };
         if warm_recyclers() {
             let warmed_items: Vec<_> = (0..num)
                 .map(|_| {
-                    let mut item = new.allocate("warming");
+                    let mut item = new.allocate("warming").unwrap();
                     item.warm(size_hint);
                     item
                 })
@@ -73,7 +90,7 @@ impl<T: Default + Reset + Sized> Recycler<T> {
         new
     }
 
-    pub fn allocate(&self, name: &'static str) -> T {
+    pub fn allocate(&self, name: &'static str) -> Option<T> {
         let new = self
             .recycler
             .gc
@@ -84,12 +101,12 @@ impl<T: Default + Reset + Sized> Recycler<T> {
         if let Some(mut x) = new {
             self.recycler.stats.reuse.fetch_add(1, Ordering::Relaxed);
             x.reset();
-            return x;
+            return Some(x);
         }
 
         let total = self.recycler.stats.total.fetch_add(1, Ordering::Relaxed);
-        trace!(
-            "allocating new: total {} {:?} id: {} reuse: {} max_gc: {}",
+        info!(
+            "RECYCLER: allocating new: total {} {:?} id: {} reuse: {} max_gc: {}",
             total,
             name,
             self.recycler.id,
@@ -99,7 +116,19 @@ impl<T: Default + Reset + Sized> Recycler<T> {
 
         let mut t = T::default();
         t.set_recycler(Arc::downgrade(&self.recycler));
-        t
+        let should_allocate = self
+            .recycler
+            .limit
+            .map(|limit| self.recycler.outstanding_len.load(Ordering::SeqCst) + t.len() <= limit)
+            .unwrap_or(true);
+        if should_allocate {
+            self.recycler
+                .outstanding_len
+                .fetch_add(t.len(), Ordering::SeqCst);
+            Some(t)
+        } else {
+            None
+        }
     }
 }
 
@@ -124,13 +153,20 @@ impl<T: Default + Reset> RecyclerX<T> {
         let total = self.stats.total.load(Ordering::Relaxed);
         let reuse = self.stats.reuse.load(Ordering::Relaxed);
         let freed = self.stats.total.fetch_add(1, Ordering::Relaxed);
-        datapoint_debug!(
-            "recycler",
-            ("gc_len", len as i64, i64),
-            ("total", total as i64, i64),
-            ("freed", freed as i64, i64),
-            ("reuse", reuse as i64, i64),
-        );
+        if self.gc.lock().unwrap().len() % 1000 == 0 {
+            datapoint_info!(
+                "recycler",
+                ("gc_len", len as i64, i64),
+                (
+                    "outstanding_len",
+                    self.outstanding_len.load(Ordering::Relaxed) as i64,
+                    i64
+                ),
+                ("total", total as i64, i64),
+                ("freed", freed as i64, i64),
+                ("reuse", reuse as i64, i64),
+            );
+        }
     }
 }
 
@@ -141,6 +177,9 @@ mod tests {
     impl Reset for u64 {
         fn reset(&mut self) {
             *self = 10;
+        }
+        fn len(&self) -> usize {
+            1
         }
         fn warm(&mut self, _size_hint: usize) {}
         fn set_recycler(&mut self, _recycler: Weak<RecyclerX<Self>>) {}

@@ -29,19 +29,26 @@ impl Packets {
         Packets { packets }
     }
 
-    pub fn new_with_recycler(recycler: PacketsRecycler, size: usize, name: &'static str) -> Self {
-        let mut packets = recycler.allocate(name);
-        packets.reserve_and_pin(size);
-        Packets { packets }
+    pub fn new_with_recycler(
+        recycler: PacketsRecycler,
+        size: usize,
+        name: &'static str,
+    ) -> Option<Self> {
+        let maybe_packets = recycler.allocate(name);
+        maybe_packets.map(|mut packets| {
+            packets.reserve_and_pin(size);
+            Packets { packets }
+        })
     }
     pub fn new_with_recycler_data(
         recycler: &PacketsRecycler,
         name: &'static str,
         mut packets: Vec<Packet>,
-    ) -> Self {
-        let mut vec = Self::new_with_recycler(recycler.clone(), packets.len(), name);
-        vec.packets.append(&mut packets);
-        vec
+    ) -> Option<Self> {
+        Self::new_with_recycler(recycler.clone(), packets.len(), name).map(|mut vec| {
+            vec.packets.append(&mut packets);
+            vec
+        })
     }
 
     pub fn set_addr(&mut self, addr: &SocketAddr) {
@@ -81,7 +88,8 @@ pub fn to_packets_with_destination<T: Serialize>(
         recycler,
         dests_and_data.len(),
         "to_packets_with_destination",
-    );
+    )
+    .unwrap();
     out.packets.resize(dests_and_data.len(), Packet::default());
     for (dest_and_data, o) in dests_and_data.iter().zip(out.packets.iter_mut()) {
         if !dest_and_data.0.ip().is_unspecified() && dest_and_data.0.port() != 0 {
