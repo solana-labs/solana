@@ -98,7 +98,7 @@ where
     }
 
     pub fn send_unsubscribe(&self) -> Result<(), PubsubClientError> {
-        let method = format!("{}Unubscribe", self.operation);
+        let method = format!("{}Unsubscribe", self.operation);
         self.socket
             .write()
             .unwrap()
