@@ -1080,8 +1080,8 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                         split.data_len()? as u64,
                     );
 
-                    // verify enough lamports for rent in new split account
-                    if lamports < split_rent_exempt_reserve.saturating_sub(split.lamports()?)
+                    // verify enough lamports for rent and more than 0 stake in new split account
+                    if lamports <= split_rent_exempt_reserve.saturating_sub(split.lamports()?)
                         // verify full withdrawal can cover rent in new split account
                         || (lamports < split_rent_exempt_reserve && lamports == self.lamports()?)
                         // if not full withdrawal
@@ -1114,7 +1114,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                         let remaining_stake_delta =
                             lamports.saturating_sub(meta.rent_exempt_reserve);
                         let split_stake_amount = std::cmp::min(
-                            lamports - split_rent_exempt_reserve,
+                            lamports - split_rent_exempt_reserve.saturating_sub(split.lamports()?),
                             remaining_stake_delta,
                         );
                         (remaining_stake_delta, split_stake_amount)
