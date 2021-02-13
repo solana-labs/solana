@@ -4874,6 +4874,102 @@ mod tests {
     }
 
     #[test]
+    fn test_split_100_percent_of_equivalent_source_to_larger_account() {
+        // Test case where source stake account contains exactly the rent-exempt reserve of a
+        // larger split account
+        let stake_pubkey = solana_sdk::pubkey::new_rand();
+        let rent = Rent::default();
+        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let larger_rent_exempt_reserve =
+            rent.minimum_balance(std::mem::size_of::<StakeState>() + 100);
+        let stake_lamports = larger_rent_exempt_reserve;
+
+        let split_stake_pubkey = solana_sdk::pubkey::new_rand();
+        let signers = vec![stake_pubkey].into_iter().collect();
+
+        let meta = Meta {
+            authorized: Authorized::auto(&stake_pubkey),
+            rent_exempt_reserve,
+            ..Meta::default()
+        };
+
+        let starting_stake = stake_lamports - rent_exempt_reserve;
+        let state = StakeState::Stake(meta, Stake::just_stake(starting_stake));
+
+        let expected_rent_exempt_reserve = calculate_split_rent_exempt_reserve(
+            meta.rent_exempt_reserve,
+            std::mem::size_of::<StakeState>() as u64,
+            std::mem::size_of::<StakeState>() as u64 + 100,
+        );
+        assert_eq!(expected_rent_exempt_reserve, stake_lamports);
+
+        let split_lamport_balances = vec![
+            0,
+            1,
+            starting_stake,
+            starting_stake + 1,
+            expected_rent_exempt_reserve,
+            expected_rent_exempt_reserve + 1,
+        ];
+        for initial_balance in split_lamport_balances {
+            let split_stake_account = Account::new_ref_data_with_space(
+                initial_balance,
+                &StakeState::Uninitialized,
+                std::mem::size_of::<StakeState>() + 100,
+                &id(),
+            )
+            .expect("stake_account");
+
+            let split_stake_keyed_account =
+                KeyedAccount::new(&split_stake_pubkey, true, &split_stake_account);
+
+            let stake_account = Account::new_ref_data_with_space(
+                stake_lamports,
+                &state,
+                std::mem::size_of::<StakeState>(),
+                &id(),
+            )
+            .expect("stake_account");
+            let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
+
+            let split_result =
+                stake_keyed_account.split(stake_lamports, &split_stake_keyed_account, &signers);
+
+            let clock = Clock::default();
+            let to = solana_sdk::pubkey::new_rand();
+            let to_account = Account::new_ref(1, 0, &system_program::id());
+            let to_keyed_account = KeyedAccount::new(&to, false, &to_account);
+
+            // If initial_balance == 0: split should fail on creating a new stake account with 0
+            // stake. Otherwise, large withdraw fails because lamports -
+            // (expected_rent_exempt_reserve + stake) is too small.
+            assert!(split_stake_keyed_account
+                .withdraw(
+                    stake_lamports,
+                    &to_keyed_account,
+                    &clock,
+                    &StakeHistory::default(),
+                    &stake_keyed_account,
+                    None,
+                )
+                .is_err());
+
+            if initial_balance == 0 {
+                // should return error
+                assert_eq!(split_result, Err(InstructionError::InsufficientFunds));
+            } else {
+                assert_eq!(split_result, Ok(()));
+                if let StakeState::Stake(_, stake) = split_stake_keyed_account.state().unwrap() {
+                    assert_eq!(
+                        stake.delegation.stake,
+                        std::cmp::min(starting_stake, initial_balance)
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
     fn test_split_100_percent_of_source() {
         let stake_pubkey = solana_sdk::pubkey::new_rand();
         let rent = Rent::default();
