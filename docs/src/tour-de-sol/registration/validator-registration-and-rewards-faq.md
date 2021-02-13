@@ -14,19 +14,15 @@ Please see section “1 Eligibility; KYC Requirements” of the [TOUR DE SOL PAR
 
 ## Do I have to complete the KYC/AML process to participate?
 
-Yes. Completing the KYC/AML process is mandatory. If you do not complete the process before Stage 1 of the Tour de SOL, you cannot participate in the Tour de SOL.
-
-We’ve partnered with Coinlist to manage the Tour de Sol KYC/AML process. You can find a [walk-through of the process here](https://docs.google.com/presentation/d/1gz8e34piUzzwzCMKwVrKKbZiPXV64Uq2-Izt4-VcMR4/) and [complete your process here](https://docs.google.com/presentation/d/1gz8e34piUzzwzCMKwVrKKbZiPXV64Uq2-Izt4-VcMR4/edit#slide=id.g5dff17f5e5_0_44).
+Yes. Completing the KYC/AML process is mandatory.
 
 ## What are my responsibilities as a Tour de Sol participant?
 
 Please see section “2c Tour de SOL Details” of the [TOUR DE SOL PARTICIPATION TERMS](https://drive.google.com/file/d/15ueLG6VJoQ5Hx4rnpjFeuL3pG5DbrBbE/view) for details.
 
-### How is the “50% of the active Tour event time” responsibility calculated?
+## How is the “90% of the active Tour event time” responsibility calculated?
 
-To be eligible for rewards in a given stage, a validator must submit votes in &gt;= 50% of that stage’s slots.
-
-If a validator isn’t able to submit &gt;= 50% of votes for a stage and still feels they should receive awards for that stage, they can petition Solana for reconsideration.
+To be eligible for rewards in a given stage, a validator must submit votes in &gt;= 90% of that stage’s slots.
 
 ## Is there a relationship between the Tour de Sol testnet tokens and Solana mainnet tokens?
 
