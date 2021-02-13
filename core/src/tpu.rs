@@ -2,7 +2,7 @@
 //! multi-stage transaction processing pipeline in software.
 
 use crate::{
-    banking_stage::BankingStage,
+    banking_stage::{BankingStage, TOTAL_BUFFERED_PACKETS},
     broadcast_stage::{BroadcastStage, BroadcastStageType, RetransmitSlotsReceiver},
     cluster_info::ClusterInfo,
     cluster_info_vote_listener::{ClusterInfoVoteListener, VerifiedVoteSender, VoteTracker},
@@ -19,6 +19,7 @@ use solana_runtime::{
     bank_forks::BankForks,
     vote_sender_types::{ReplayVoteReceiver, ReplayVoteSender},
 };
+use solana_streamer::packet::PACKETS_PER_BATCH;
 use std::{
     net::UdpSocket,
     sync::{
@@ -67,7 +68,7 @@ impl Tpu {
             &exit,
             &packet_sender,
             &poh_recorder,
-            Some(TOTAL_BUFFERED_PACKETS),
+            Some((TOTAL_BUFFERED_PACKETS + PACKETS_PER_BATCH - 1) / PACKETS_PER_BATCH),
         );
         let (verified_sender, verified_receiver) = unbounded();
 
