@@ -107,7 +107,7 @@ args+=(
   --vote-account "$vote_account"
   --rpc-faucet-address 127.0.0.1:9900
 )
-default_arg --gossip-port 8001
+default_arg --gossip-port 8073
 default_arg --log -
 
 
@@ -152,3 +152,4 @@ while true; do
 
   kill_node
 done
+

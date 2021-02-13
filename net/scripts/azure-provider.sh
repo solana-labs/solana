@@ -166,7 +166,7 @@ cloud_Initialize() {
   create_nsg_rule "InboundHTTP" "80" "Allow" "Tcp" 1002
   create_nsg_rule "InboundNetworkExplorerAPI" "3001" "Allow" "Tcp" 1003
   create_nsg_rule "InboundDrone" "9900" "Allow" "Tcp" 1004
-  create_nsg_rule "InboundJsonRpc" "8328-8900" "Allow" "Tcp" 1005
+  create_nsg_rule "InboundJsonRpc" "8328-8329" "Allow" "Tcp" 1005
   create_nsg_rule "InboundRsync" "873" "Allow" "Tcp" 1006
   create_nsg_rule "InboundStun" "3478" "Allow" "Udp" 1007
   create_nsg_rule "InboundSSH" "22" "Allow" "Tcp" 1008
