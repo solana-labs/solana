@@ -912,6 +912,7 @@ mod tests {
             assert_eq!(shreds[0].slot(), 1);
             assert_eq!(shreds[0].index(), 0);
             shreds[0].payload.push(10);
+            shreds[0].data_header.size = shreds[0].payload.len() as u16;
             blockstore
                 .insert_shreds(shreds, None, false)
                 .expect("Expect successful ledger write");

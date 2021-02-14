@@ -350,6 +350,7 @@ impl Shred {
                 &data_header,
             )
             .expect("Failed to write data header into shred buffer");
+            assert!(data_header.size as usize >= start);
         } else if common_header.shred_type == ShredType(CODING_SHRED) {
             Self::serialize_obj_into(
                 &mut start,
@@ -359,7 +360,6 @@ impl Shred {
             )
             .expect("Failed to write data header into shred buffer");
         }
-        assert!(data_header.size as usize >= start);
         Shred {
             common_header,
             data_header,

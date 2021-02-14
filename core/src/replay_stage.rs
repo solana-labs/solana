@@ -2492,6 +2492,7 @@ pub(crate) mod tests {
             let gibberish = [0xa5u8; PACKET_DATA_SIZE];
             let mut data_header = DataShredHeader::default();
             data_header.flags |= DATA_COMPLETE_SHRED;
+            data_header.size = payload_len as u16;
             let mut shred = Shred::new_empty_from_header(
                 ShredCommonHeader::default(),
                 data_header,
