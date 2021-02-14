@@ -1136,15 +1136,12 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                         split.data_len()? as u64,
                     );
 
-                    // enough lamports for rent in new stake
-                    if lamports < split_rent_exempt_reserve
-                    // if not full withdrawal
-                    || (lamports != self.lamports()?
-                        // verify more than 0 stake left in previous stake
-                        && (lamports + meta.rent_exempt_reserve >= self.lamports()?
-                            // and verify more than 0 stake in new split account
-                            || lamports
-                                <= split_rent_exempt_reserve.saturating_sub(split.lamports()?)))
+                    // enough lamports for rent and more than 0 stake in new split account
+                    if lamports <= split_rent_exempt_reserve.saturating_sub(split.lamports()?)
+                        // if not full withdrawal
+                        || (lamports != self.lamports()?
+                            // verify more than 0 stake left in previous stake
+                            && lamports + meta.rent_exempt_reserve >= self.lamports()?)
                     {
                         return Err(InstructionError::InsufficientFunds);
                     }
