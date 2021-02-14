@@ -4879,6 +4879,8 @@ mod tests {
         let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
         let larger_rent_exempt_reserve =
             rent.minimum_balance(std::mem::size_of::<StakeState>() + 100);
+
+        // This is the critical setting
         let stake_lamports = larger_rent_exempt_reserve;
 
         let split_stake_pubkey = solana_sdk::pubkey::new_rand();
@@ -4899,6 +4901,8 @@ mod tests {
             std::mem::size_of::<StakeState>() as u64 + 100,
         );
         assert_eq!(expected_rent_exempt_reserve, stake_lamports);
+        let rent_delta = expected_rent_exempt_reserve - rent_exempt_reserve;
+        assert_eq!(starting_stake, rent_delta);
 
         let split_lamport_balances = vec![
             0,
@@ -4961,6 +4965,41 @@ mod tests {
                         stake.delegation.stake,
                         std::cmp::min(starting_stake, initial_balance)
                     );
+                }
+
+                if initial_balance <= starting_stake {
+                    assert!(split_stake_keyed_account
+                        .withdraw(
+                            1,
+                            &to_keyed_account,
+                            &clock,
+                            &StakeHistory::default(),
+                            &stake_keyed_account,
+                            None,
+                        )
+                        .is_err());
+                } else {
+                    let withdrawal_amount = initial_balance - starting_stake;
+                    assert!(split_stake_keyed_account
+                        .withdraw(
+                            withdrawal_amount + 1,
+                            &to_keyed_account,
+                            &clock,
+                            &StakeHistory::default(),
+                            &stake_keyed_account,
+                            None,
+                        )
+                        .is_err());
+                    assert!(split_stake_keyed_account
+                        .withdraw(
+                            withdrawal_amount,
+                            &to_keyed_account,
+                            &clock,
+                            &StakeHistory::default(),
+                            &stake_keyed_account,
+                            None,
+                        )
+                        .is_ok());
                 }
             }
         }
