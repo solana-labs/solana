@@ -104,6 +104,8 @@ pub struct ValidatorConfig {
     pub accounts_hash_fault_injection_slots: u64, // 0 = no fault injection
     pub frozen_accounts: Vec<Pubkey>,
     pub no_rocksdb_compaction: bool,
+    pub rocksdb_compaction_interval: Option<u64>,
+    pub rocksdb_max_compaction_jitter: Option<u64>,
     pub accounts_hash_interval_slots: u64,
     pub max_genesis_archive_unpacked_size: u64,
     pub wal_recovery_mode: Option<BlockstoreRecoveryMode>,
@@ -152,6 +154,8 @@ impl Default for ValidatorConfig {
             accounts_hash_fault_injection_slots: 0,
             frozen_accounts: vec![],
             no_rocksdb_compaction: false,
+            rocksdb_compaction_interval: None,
+            rocksdb_max_compaction_jitter: None,
             accounts_hash_interval_slots: std::u64::MAX,
             max_genesis_archive_unpacked_size: MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
             wal_recovery_mode: None,
@@ -644,6 +648,8 @@ impl Validator {
                 accounts_hash_fault_injection_slots: config.accounts_hash_fault_injection_slots,
                 accounts_db_caching_enabled: config.accounts_db_caching_enabled,
                 test_hash_calculation: config.accounts_db_test_hash_calculation,
+                rocksdb_compaction_interval: config.rocksdb_compaction_interval,
+                rocksdb_max_compaction_jitter: config.rocksdb_compaction_interval,
             },
         );
 
