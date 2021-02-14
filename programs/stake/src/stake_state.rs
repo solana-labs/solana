@@ -1082,8 +1082,6 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
 
                     // verify enough lamports for rent and more than 0 stake in new split account
                     if lamports <= split_rent_exempt_reserve.saturating_sub(split.lamports()?)
-                        // verify full withdrawal can cover rent in new split account
-                        || (lamports < split_rent_exempt_reserve && lamports == self.lamports()?)
                         // if not full withdrawal
                         || (lamports != self.lamports()?
                             // verify more than 0 stake left in previous stake
