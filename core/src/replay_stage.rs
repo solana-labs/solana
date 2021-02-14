@@ -2944,7 +2944,6 @@ pub(crate) mod tests {
     fn test_dead_fork_entry_deserialize_failure() {
         // Insert entry that causes deserialization failure
         let res = check_dead_fork(|_, _| {
-            let payload_len = SIZE_OF_DATA_SHRED_PAYLOAD;
             let gibberish = [0xa5u8; PACKET_DATA_SIZE];
             let mut data_header = DataShredHeader::default();
             data_header.flags |= DATA_COMPLETE_SHRED;
@@ -2957,7 +2956,7 @@ pub(crate) mod tests {
             );
             bincode::serialize_into(
                 &mut shred.payload[SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_DATA_SHRED_HEADER..],
-                &gibberish[..payload_len],
+                &gibberish[..SIZE_OF_DATA_SHRED_PAYLOAD],
             )
             .unwrap();
             vec![shred]
