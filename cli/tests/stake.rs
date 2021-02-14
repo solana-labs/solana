@@ -286,7 +286,7 @@ fn test_offline_stake_delegation_and_deactivation() {
     config_offline.command = CliCommand::ClusterVersion;
     let offline_keypair = Keypair::new();
     config_offline.signers = vec![&offline_keypair];
-    // Verfiy that we cannot reach the cluster
+    // Verify that we cannot reach the cluster
     process_command(&config_offline).unwrap_err();
 
     request_and_confirm_airdrop(
@@ -535,7 +535,7 @@ fn test_stake_authorize() {
     config_offline.json_rpc_url = String::default();
     let offline_authority_pubkey = config_offline.signers[0].pubkey();
     config_offline.command = CliCommand::ClusterVersion;
-    // Verfiy that we cannot reach the cluster
+    // Verify that we cannot reach the cluster
     process_command(&config_offline).unwrap_err();
 
     request_and_confirm_airdrop(
@@ -1295,7 +1295,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     let offline_pubkey = config_offline.signers[0].pubkey();
     config_offline.json_rpc_url = String::default();
     config_offline.command = CliCommand::ClusterVersion;
-    // Verfiy that we cannot reach the cluster
+    // Verify that we cannot reach the cluster
     process_command(&config_offline).unwrap_err();
 
     request_and_confirm_airdrop(
