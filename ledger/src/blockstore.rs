@@ -30,6 +30,7 @@ use solana_sdk::{
     genesis_config::GenesisConfig,
     hash::Hash,
     pubkey::Pubkey,
+    sanitize::Sanitize,
     signature::{Keypair, Signature, Signer},
     timing::timestamp,
     transaction::Transaction,
@@ -1711,7 +1712,18 @@ impl Blockstore {
                 let slot_transaction_iterator = slot_entries
                     .iter()
                     .cloned()
-                    .flat_map(|entry| entry.transactions);
+                    .flat_map(|entry| entry.transactions)
+                    .map(|transaction| {
+                        if let Err(err) = transaction.sanitize() {
+                            warn!(
+                                "Blockstore::get_confirmed_block sanitize failed: {:?}, \
+                                slot: {:?}, \
+                                {:?}",
+                                err, slot, transaction,
+                            );
+                        }
+                        transaction
+                    });
                 let parent_slot_entries = self
                     .get_slot_entries(slot_meta.parent_slot, 0)
                     .unwrap_or_default();
@@ -1967,6 +1979,17 @@ impl Blockstore {
             .iter()
             .cloned()
             .flat_map(|entry| entry.transactions)
+            .map(|transaction| {
+                if let Err(err) = transaction.sanitize() {
+                    warn!(
+                        "Blockstore::find_transaction_in_slot sanitize failed: {:?}, \
+                        slot: {:?}, \
+                        {:?}",
+                        err, slot, transaction,
+                    );
+                }
+                transaction
+            })
             .find(|transaction| transaction.signatures[0] == signature))
     }
 
