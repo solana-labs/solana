@@ -1085,7 +1085,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                         // if not full withdrawal
                         || (lamports != self.lamports()?
                             // verify more than 0 stake left in previous stake
-                            && lamports + meta.rent_exempt_reserve >= self.lamports()?)
+                            && checked_add(lamports, meta.rent_exempt_reserve)? >= self.lamports()?)
                     {
                         return Err(InstructionError::InsufficientFunds);
                     }
@@ -1141,7 +1141,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                         // if not full withdrawal
                         || (lamports != self.lamports()?
                             // verify more than 0 stake left in previous stake
-                            && lamports + meta.rent_exempt_reserve >= self.lamports()?)
+                            && checked_add(lamports, meta.rent_exempt_reserve)? >= self.lamports()?)
                     {
                         return Err(InstructionError::InsufficientFunds);
                     }
@@ -1428,16 +1428,18 @@ impl MergeKind {
             (Self::Inactive(_, _), Self::Inactive(_, _)) => None,
             (Self::Inactive(_, _), Self::ActivationEpoch(_, _)) => None,
             (Self::ActivationEpoch(meta, mut stake), Self::Inactive(_, source_lamports)) => {
-                stake.delegation.stake += source_lamports;
+                stake.delegation.stake = checked_add(stake.delegation.stake, source_lamports)?;
                 Some(StakeState::Stake(meta, stake))
             }
             (
                 Self::ActivationEpoch(meta, mut stake),
                 Self::ActivationEpoch(source_meta, source_stake),
             ) => {
-                let source_lamports =
-                    source_meta.rent_exempt_reserve + source_stake.delegation.stake;
-                stake.delegation.stake += source_lamports;
+                let source_lamports = checked_add(
+                    source_meta.rent_exempt_reserve,
+                    source_stake.delegation.stake,
+                )?;
+                stake.delegation.stake = checked_add(stake.delegation.stake, source_lamports)?;
                 Some(StakeState::Stake(meta, stake))
             }
             (Self::FullyActive(meta, mut stake), Self::FullyActive(_, source_stake)) => {
@@ -1445,7 +1447,8 @@ impl MergeKind {
                 // protect against the magic activation loophole. It will
                 // instead be moved into the destination account as extra,
                 // withdrawable `lamports`
-                stake.delegation.stake += source_stake.delegation.stake;
+                stake.delegation.stake =
+                    checked_add(stake.delegation.stake, source_stake.delegation.stake)?;
                 Some(StakeState::Stake(meta, stake))
             }
             _ => return Err(StakeError::MergeMismatch.into()),
