@@ -3,6 +3,7 @@ use crate::{
     leader_schedule::{FixedSchedule, LeaderSchedule},
     leader_schedule_utils,
 };
+use itertools::Itertools;
 use log::*;
 use solana_runtime::bank::Bank;
 use solana_sdk::{
@@ -99,18 +100,17 @@ impl LeaderScheduleCache {
         }
     }
 
-    /// Return the (next slot, last slot) after the given current_slot that the given node will be leader
+    /// Returns the (next slot, last slot) consecutive range of slots after
+    /// the given current_slot that the given node will be leader.
     pub fn next_leader_slot(
         &self,
         pubkey: &Pubkey,
-        mut current_slot: Slot,
+        current_slot: Slot,
         bank: &Bank,
         blockstore: Option<&Blockstore>,
         max_slot_range: u64,
     ) -> Option<(Slot, Slot)> {
-        let (mut epoch, mut start_index) = bank.get_epoch_and_slot_index(current_slot + 1);
-        let mut first_slot = None;
-        let mut last_slot = current_slot;
+        let (epoch, start_index) = bank.get_epoch_and_slot_index(current_slot + 1);
         let max_epoch = *self.max_epoch.read().unwrap();
         if epoch > max_epoch {
             debug!(
@@ -120,49 +120,40 @@ impl LeaderScheduleCache {
             );
             return None;
         }
-        while let Some(leader_schedule) = self.get_epoch_schedule_else_compute(epoch, bank) {
-            // clippy thinks I should do this:
-            //  for (i, <item>) in leader_schedule
-            //                           .iter()
-            //                           .enumerate()
-            //                           .take(bank.get_slots_in_epoch(epoch))
-            //                           .skip(from_slot_index + 1) {
-            //
-            //  but leader_schedule doesn't implement Iter...
-            #[allow(clippy::needless_range_loop)]
-            for i in start_index..bank.get_slots_in_epoch(epoch) {
-                current_slot += 1;
-                if *pubkey == leader_schedule[i] {
-                    if let Some(blockstore) = blockstore {
-                        if let Some(meta) = blockstore.meta(current_slot).unwrap() {
-                            // We have already sent a shred for this slot, so skip it
-                            if meta.received > 0 {
-                                continue;
-                            }
-                        }
-                    }
-
-                    if let Some(first_slot) = first_slot {
-                        if current_slot - first_slot + 1 >= max_slot_range {
-                            return Some((first_slot, current_slot));
-                        }
-                    } else {
-                        first_slot = Some(current_slot);
-                    }
-
-                    last_slot = current_slot;
-                } else if first_slot.is_some() {
-                    return Some((first_slot.unwrap(), last_slot));
+        // Slots after current_slot where pubkey is the leader.
+        let mut schedule = (epoch..=max_epoch)
+            .map(|epoch| self.get_epoch_schedule_else_compute(epoch, bank))
+            .while_some()
+            .zip(epoch..)
+            .flat_map(|(leader_schedule, k)| {
+                let offset = if k == epoch { start_index as usize } else { 0 };
+                let num_slots = bank.get_slots_in_epoch(k) as usize;
+                let first_slot = bank.epoch_schedule().get_first_slot_in_epoch(k);
+                leader_schedule
+                    .get_indices(pubkey, offset)
+                    .take_while(move |i| *i < num_slots)
+                    .map(move |i| i as Slot + first_slot)
+            })
+            .skip_while(|slot| {
+                match blockstore {
+                    None => false,
+                    // Skip slots we have already sent a shred for.
+                    Some(blockstore) => match blockstore.meta(*slot).unwrap() {
+                        Some(meta) => meta.received > 0,
+                        None => false,
+                    },
                 }
-            }
-
-            epoch += 1;
-            if epoch > max_epoch {
-                break;
-            }
-            start_index = 0;
-        }
-        first_slot.map(|slot| (slot, last_slot))
+            });
+        let first_slot = schedule.next()?;
+        let max_slot = first_slot.saturating_add(max_slot_range);
+        let last_slot = schedule
+            .take_while(|slot| *slot < max_slot)
+            .zip(first_slot + 1..)
+            .take_while(|(a, b)| a == b)
+            .map(|(s, _)| s)
+            .last()
+            .unwrap_or(first_slot);
+        Some((first_slot, last_slot))
     }
 
     pub fn set_fixed_leader_schedule(&mut self, fixed_schedule: Option<FixedSchedule>) {
