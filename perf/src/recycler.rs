@@ -1,4 +1,5 @@
 use rand::{thread_rng, Rng};
+use solana_measure::measure::Measure;
 use solana_sdk::timing::timestamp;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -15,6 +16,28 @@ struct RecyclerStats {
     freed: AtomicUsize,
     reuse: AtomicUsize,
     max_gc: AtomicUsize,
+}
+
+#[derive(Debug, Default)]
+struct RecyclerShrinkStats {
+    resulting_size: u32,
+    target_size: u32,
+    ideal_num_to_remove: u32,
+    shrink_elapsed: u64,
+    drop_elapsed: u64,
+}
+
+impl RecyclerShrinkStats {
+    fn report(&self) {
+        datapoint_info!(
+            "recycler_shrink",
+            ("target_size", self.target_size as i64, i64),
+            ("resulting_size", self.resulting_size as i64, i64),
+            ("ideal_num_to_remove", self.ideal_num_to_remove as i64, i64),
+            ("recycler_shrink_elapsed", self.shrink_elapsed as i64, i64),
+            ("drop_elapsed", self.drop_elapsed as i64, i64)
+        );
+    }
 }
 
 #[derive(Clone, Default)]
@@ -136,7 +159,8 @@ impl<T: Default + Reset + Sized> Recycler<T> {
     }
 
     pub fn allocate(&self, name: &'static str) -> Option<T> {
-        let (mut allocated_object, did_reuse, should_allocate_new) = {
+        let mut shrink_removed_objects = vec![];
+        let (mut allocated_object, did_reuse, should_allocate_new, mut shrink_stats) = {
             let mut object_pool = self
                 .recycler
                 .gc
@@ -144,6 +168,8 @@ impl<T: Default + Reset + Sized> Recycler<T> {
                 .expect("recycler lock in pb fn allocate");
 
             let now = timestamp();
+            let mut shrink_stats = None;
+
             if now.saturating_sub(object_pool.last_shrink_check_ts)
                 > object_pool.check_shrink_interval_ms as u64
             {
@@ -165,54 +191,62 @@ impl<T: Default + Reset + Sized> Recycler<T> {
                 if object_pool.above_shrink_ratio_count as usize
                     >= object_pool.max_above_shrink_ratio_count as usize
                 {
+                    let mut recycler_shrink_elapsed = Measure::start("recycler_shrink");
                     // Do the shrink
-                    let total_alocated_count_shrink_target =
+                    let target_size =
                         std::cmp::max(object_pool.minimum_object_count, shrink_threshold_count);
-                    let target_num_to_shrink =
-                        object_pool.total_allocated_count - total_alocated_count_shrink_target;
-                    for _ in 0..target_num_to_shrink {
+                    let ideal_num_to_remove = object_pool.total_allocated_count - target_size;
+                    for _ in 0..ideal_num_to_remove {
                         if let Some(mut expired_object) = object_pool.object_pool.pop() {
                             expired_object.unset_recycler();
-                            // May not be able to shrink exactly `target_num_to_shrink` objects sinc
+                            // Drop these outside of the lock because the Drop() implmentation for
+                            // certain objects like PinnedVec's can be expensive
+                            shrink_removed_objects.push(expired_object);
+                            // May not be able to shrink exactly `ideal_num_to_remove` objects sinc
                             // in the case of new allocations, `total_allocated_count` is incremented
                             // before the object is allocated (see `should_allocate_new` logic below).
                             // This race allows a difference of up to the number of threads allocating
                             // with this recycler.
                             object_pool.total_allocated_count -= 1;
+                        } else {
+                            break;
                         }
                     }
-
+                    recycler_shrink_elapsed.stop();
                     object_pool.above_shrink_ratio_count = 0;
-                    datapoint_info!(
-                        "recycler_shrink",
-                        (
-                            "total_alocated_count_shrink_target",
-                            total_alocated_count_shrink_target as i64,
-                            i64
-                        ),
-                        ("target_num_to_shrink", target_num_to_shrink as i64, i64),
-                        (
-                            "total_allocated_count",
-                            object_pool.total_allocated_count as i64,
-                            i64
-                        ),
-                    );
+                    shrink_stats = Some(RecyclerShrinkStats {
+                        resulting_size: object_pool.total_allocated_count,
+                        target_size,
+                        ideal_num_to_remove,
+                        shrink_elapsed: recycler_shrink_elapsed.as_us(),
+                        // Filled in later
+                        drop_elapsed: 0,
+                    })
                 }
             }
 
             let reused_object = object_pool.object_pool.pop();
             if reused_object.is_some() {
-                (reused_object, true, false)
+                (reused_object, true, false, shrink_stats)
             } else if let Some(limit) = object_pool.limit {
                 let should_allocate_new = object_pool.total_allocated_count < limit;
                 if should_allocate_new {
                     object_pool.total_allocated_count += 1;
                 }
-                (None, false, should_allocate_new)
+                (None, false, should_allocate_new, shrink_stats)
             } else {
-                (None, false, true)
+                (None, false, true, shrink_stats)
             }
         };
+
+        let mut shrink_removed_object_elapsed = Measure::start("shrink_removed_object_elapsed");
+        drop(shrink_removed_objects);
+        shrink_removed_object_elapsed.stop();
+
+        if let Some(shrink_stats) = shrink_stats.as_mut() {
+            shrink_stats.drop_elapsed = shrink_removed_object_elapsed.as_us();
+            shrink_stats.report();
+        }
 
         if did_reuse {
             if let Some(reused) = allocated_object.as_mut() {
