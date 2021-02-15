@@ -233,7 +233,7 @@ impl BanksClient {
 
     /// Return the unpacked account data at the given address
     /// If the account is not found, an error is returned
-    pub fn get_account_data<T: BorshDeserialize>(
+    pub fn get_account_data_with_borsh<T: BorshDeserialize>(
         &mut self,
         address: Pubkey,
     ) -> impl Future<Output = io::Result<T>> + '_ {

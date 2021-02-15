@@ -215,7 +215,7 @@ impl Instruction {
         }
     }
 
-    pub fn new_from_borsh<T: BorshSerialize>(
+    pub fn new_with_borsh<T: BorshSerialize>(
         program_id: Pubkey,
         data: &T,
         accounts: Vec<AccountMeta>,
