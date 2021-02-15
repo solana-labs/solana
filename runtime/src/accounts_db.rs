@@ -744,6 +744,43 @@ pub struct StoreAccountsTiming {
     update_index_elapsed: u64,
     handle_reclaims_elapsed: u64,
 }
+
+#[derive(Debug, Default)]
+struct RecycleStores {
+    entries: Vec<Arc<AccountStorageEntry>>,
+    total_bytes: u64,
+}
+
+impl RecycleStores {
+    fn add_entry(&mut self, new_entry: Arc<AccountStorageEntry>) {
+        self.total_bytes += new_entry.total_bytes();
+        self.entries.push(new_entry)
+    }
+
+    fn iter(&self) -> std::slice::Iter<Arc<AccountStorageEntry>> {
+        self.entries.iter()
+    }
+
+    fn add_entries(&mut self, new_entries: Vec<Arc<AccountStorageEntry>>) {
+        self.total_bytes += new_entries.iter().map(|e| e.total_bytes()).sum::<u64>();
+        self.entries.extend(new_entries);
+    }
+
+    fn remove_entry(&mut self, index: usize) -> Arc<AccountStorageEntry> {
+        let removed_entry = self.entries.swap_remove(index);
+        self.total_bytes -= removed_entry.total_bytes();
+        removed_entry
+    }
+
+    fn entry_count(&self) -> usize {
+        self.entries.len()
+    }
+
+    fn total_bytes(&self) -> u64 {
+        self.total_bytes
+    }
+}
+
 // This structure handles the load/store of the accounts
 #[derive(Debug)]
 pub struct AccountsDB {
@@ -754,7 +791,7 @@ pub struct AccountsDB {
 
     pub accounts_cache: AccountsCache,
 
-    recycle_stores: RwLock<Vec<Arc<AccountStorageEntry>>>,
+    recycle_stores: RwLock<RecycleStores>,
 
     /// distribute the accounts across storage lists
     pub next_id: AtomicUsize,
@@ -1122,7 +1159,7 @@ impl Default for AccountsDB {
             accounts_index: AccountsIndex::default(),
             storage: AccountStorage::default(),
             accounts_cache: AccountsCache::default(),
-            recycle_stores: RwLock::new(Vec::new()),
+            recycle_stores: RwLock::new(RecycleStores::default()),
             uncleaned_pubkeys: DashMap::new(),
             next_id: AtomicUsize::new(0),
             shrink_candidate_slots_v1: Mutex::new(Vec::new()),
@@ -1941,13 +1978,13 @@ impl AccountsDB {
         recycle_stores_write_elapsed.stop();
 
         let mut drop_storage_entries_elapsed = Measure::start("drop_storage_entries_elapsed");
-        if recycle_stores.len() < MAX_RECYCLE_STORES {
-            recycle_stores.extend(dead_storages);
+        if recycle_stores.entry_count() < MAX_RECYCLE_STORES {
+            recycle_stores.add_entries(dead_storages);
             drop(recycle_stores);
         } else {
             self.stats
                 .dropped_stores
-                .fetch_add(recycle_stores.len() as u64, Ordering::Relaxed);
+                .fetch_add(dead_storages.len() as u64, Ordering::Relaxed);
             drop(recycle_stores);
             drop(dead_storages);
         }
@@ -2362,7 +2399,7 @@ impl AccountsDB {
                 avail += 1;
 
                 if store.accounts.capacity() >= min_size && store.accounts.capacity() < max_size {
-                    let ret = recycle_stores.swap_remove(i);
+                    let ret = recycle_stores.remove_entry(i);
                     drop(recycle_stores);
                     let old_id = ret.append_vec_id();
                     ret.recycle(slot, self.next_id.fetch_add(1, Ordering::Relaxed));
@@ -2380,7 +2417,7 @@ impl AccountsDB {
             "no recycle stores max: {} min: {} len: {} looking: {}, {} avail: {}",
             max,
             min,
-            recycle_stores.len(),
+            recycle_stores.entry_count(),
             min_size,
             max_size,
             avail,
@@ -2583,14 +2620,14 @@ impl AccountsDB {
         for slot_entries in slot_stores {
             let entry = slot_entries.read().unwrap();
             for (_store_id, stores) in entry.iter() {
-                if recycle_stores.len() > MAX_RECYCLE_STORES {
+                if recycle_stores.entry_count() > MAX_RECYCLE_STORES {
                     let dropped_count = total_removed_storage_entries - recycled_count;
                     self.stats
                         .dropped_stores
                         .fetch_add(dropped_count as u64, Ordering::Relaxed);
                     return recycle_stores_write_elapsed.as_us();
                 }
-                recycle_stores.push(stores.clone());
+                recycle_stores.add_entry(stores.clone());
                 recycled_count += 1;
             }
         }
@@ -3454,7 +3491,7 @@ impl AccountsDB {
             ("total_count", total_count, i64),
             (
                 "recycle_count",
-                self.recycle_stores.read().unwrap().len() as u64,
+                self.recycle_stores.read().unwrap().entry_count() as u64,
                 i64
             ),
         );
@@ -4578,11 +4615,22 @@ impl AccountsDB {
                 ),
             );
 
+            let recycle_stores = self.recycle_stores.read().unwrap();
             datapoint_info!(
                 "accounts_db_store_timings2",
                 (
                     "recycle_store_count",
                     self.stats.recycle_store_count.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "current_recycle_store_count",
+                    recycle_stores.entry_count(),
+                    i64
+                ),
+                (
+                    "current_recycle_store_bytes",
+                    recycle_stores.total_bytes(),
                     i64
                 ),
                 (
@@ -5173,13 +5221,13 @@ impl AccountsDB {
         recycle_stores_write_elapsed.stop();
 
         let mut drop_storage_entries_elapsed = Measure::start("drop_storage_entries_elapsed");
-        if recycle_stores.len() < MAX_RECYCLE_STORES {
-            recycle_stores.extend(dead_storages);
+        if recycle_stores.entry_count() < MAX_RECYCLE_STORES {
+            recycle_stores.add_entries(dead_storages);
             drop(recycle_stores);
         } else {
             self.stats
                 .dropped_stores
-                .fetch_add(recycle_stores.len() as u64, Ordering::Relaxed);
+                .fetch_add(dead_storages.len() as u64, Ordering::Relaxed);
             drop(recycle_stores);
             drop(dead_storages);
         }
@@ -8784,7 +8832,7 @@ pub mod tests {
         accounts.clean_accounts(None);
         accounts.shrink_all_slots();
         accounts.print_accounts_stats("post-shrink");
-        let num_stores = accounts.recycle_stores.read().unwrap().len();
+        let num_stores = accounts.recycle_stores.read().unwrap().entry_count();
         assert!(num_stores > 0);
 
         let mut account_refs = Vec::new();
@@ -8798,7 +8846,7 @@ pub mod tests {
             accounts.store_uncached(2, &[(key, &account)]);
             account_refs.push(account);
         }
-        assert!(accounts.recycle_stores.read().unwrap().len() < num_stores);
+        assert!(accounts.recycle_stores.read().unwrap().entry_count() < num_stores);
 
         accounts.print_accounts_stats("post-store");
 
