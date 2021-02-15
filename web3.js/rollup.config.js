@@ -1,7 +1,7 @@
 import babel from '@rollup/plugin-babel';
 import commonjs from '@rollup/plugin-commonjs';
-import copy from 'rollup-plugin-copy';
 import json from '@rollup/plugin-json';
+import typescript from '@rollup/plugin-typescript';
 import nodeResolve from '@rollup/plugin-node-resolve';
 import nodePolyfills from 'rollup-plugin-node-polyfills';
 import replace from '@rollup/plugin-replace';
@@ -17,6 +17,11 @@ function generateConfig(configType, format) {
   const config = {
     input: 'src/index.ts',
     plugins: [
+      typescript({
+        declaration: true,
+        declarationDir: 'types/',
+        rootDir: 'src/',
+      }),
       commonjs(),
       nodeResolve({
         browser,
@@ -33,9 +38,6 @@ function generateConfig(configType, format) {
       replace({
         'process.env.NODE_ENV': JSON.stringify(env),
         'process.env.BROWSER': JSON.stringify(browser),
-      }),
-      copy({
-        targets: [{src: 'module.d.ts', dest: 'lib', rename: 'index.d.ts'}],
       }),
     ],
     onwarn: function (warning, rollupWarn) {

@@ -6,7 +6,7 @@ export const DESTROY_TIMEOUT_MS = 5000;
 export class AgentManager {
   _agent: http.Agent | https.Agent;
   _activeRequests = 0;
-  _destroyTimeout: TimeoutID | null = null;
+  _destroyTimeout?: NodeJS.Timeout;
   _useHttps: boolean;
 
   static _newAgent(useHttps: boolean): http.Agent | https.Agent {
@@ -25,14 +25,16 @@ export class AgentManager {
 
   requestStart(): http.Agent | https.Agent {
     this._activeRequests++;
-    clearTimeout(this._destroyTimeout);
-    this._destroyTimeout = null;
+    if (this._destroyTimeout !== undefined) {
+      clearTimeout(this._destroyTimeout);
+      this._destroyTimeout = undefined;
+    }
     return this._agent;
   }
 
   requestEnd() {
     this._activeRequests--;
-    if (this._activeRequests === 0 && this._destroyTimeout === null) {
+    if (this._activeRequests === 0 && this._destroyTimeout === undefined) {
       this._destroyTimeout = setTimeout(() => {
         this._agent.destroy();
         this._agent = AgentManager._newAgent(this._useHttps);

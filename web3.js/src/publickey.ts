@@ -4,8 +4,6 @@ import nacl from 'tweetnacl';
 import {sha256} from 'crypto-hash';
 import {Buffer} from 'buffer';
 
-let naclLowLevel = nacl.lowlevel;
-
 type PublicKeyNonce = [PublicKey, number]; // This type exists to workaround an esdoc parse error
 
 /**
@@ -111,7 +109,7 @@ export class PublicKey {
       Buffer.from('ProgramDerivedAddress'),
     ]);
     let hash = await sha256(new Uint8Array(buffer));
-    let publicKeyBytes = new BN(hash, 16).toArray(null, 32);
+    let publicKeyBytes = new BN(hash, 16).toArray(undefined, 32);
     if (is_on_curve(publicKeyBytes)) {
       throw new Error(`Invalid seeds, address must fall off the curve`);
     }
@@ -145,10 +143,13 @@ export class PublicKey {
   }
 }
 
+// @ts-ignore
+let naclLowLevel = nacl.lowlevel;
+
 // Check that a pubkey is on the curve.
 // This function and its dependents were sourced from:
 // https://github.com/dchest/tweetnacl-js/blob/f1ec050ceae0861f34280e62498b1d3ed9c350c6/nacl.js#L792
-function is_on_curve(p) {
+function is_on_curve(p: any) {
   var r = [
     naclLowLevel.gf(),
     naclLowLevel.gf(),
@@ -211,7 +212,7 @@ let I = naclLowLevel.gf([
   0x2480,
   0x2b83,
 ]);
-function neq25519(a, b) {
+function neq25519(a: any, b: any) {
   var c = new Uint8Array(32),
     d = new Uint8Array(32);
   naclLowLevel.pack25519(c, a);

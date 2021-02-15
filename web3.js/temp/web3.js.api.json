@@ -1,0 +1,1267 @@
+{
+  "metadata": {
+    "toolPackage": "@microsoft/api-extractor",
+    "toolVersion": "7.13.1",
+    "schemaVersion": 1003,
+    "oldestForwardsCompatibleVersion": 1001
+  },
+  "kind": "Package",
+  "canonicalReference": "@solana/web3.js!",
+  "docComment": "",
+  "name": "@solana/web3.js",
+  "members": [
+    {
+      "kind": "EntryPoint",
+      "canonicalReference": "@solana/web3.js!",
+      "name": "",
+      "members": [
+        {
+          "kind": "TypeAlias",
+          "canonicalReference": "@solana/web3.js!Commitment:type",
+          "docComment": "/**\n * The level of commitment desired when querying state.\n * ```\n * 'max':          Query the most recent block which has been finalized by the cluster\n * 'recent':       Query the most recent block which has reached 1 confirmation by the connected node\n * 'root':         Query the most recent block which has been rooted by the connected node\n * 'single':       Query the most recent block which has reached 1 confirmation by the cluster\n * 'singleGossip': Query the most recent block which has reached 1 confirmation according to votes seen in gossip\n * ```\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export declare type Commitment = "
+            },
+            {
+              "kind": "Content",
+              "text": "'max' | 'recent' | 'root' | 'single' | 'singleGossip'"
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "releaseTag": "Public",
+          "name": "Commitment",
+          "typeTokenRange": {
+            "startIndex": 1,
+            "endIndex": 2
+          }
+        },
+        {
+          "kind": "Class",
+          "canonicalReference": "@solana/web3.js!Connection:class",
+          "docComment": "/**\n * A connection to a fullnode JSON RPC endpoint.\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export declare class Connection "
+            }
+          ],
+          "releaseTag": "Public",
+          "name": "Connection",
+          "members": [
+            {
+              "kind": "Constructor",
+              "canonicalReference": "@solana/web3.js!Connection:constructor(1)",
+              "docComment": "/**\n * Establish a JSON RPC connection\n *\n * @param endpoint - URL to the fullnode JSON RPC endpoint\n *\n * @param commitment - optional default commitment level\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "constructor(endpoint: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string"
+                },
+                {
+                  "kind": "Content",
+                  "text": ", commitment?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Commitment",
+                  "canonicalReference": "@solana/web3.js!Commitment:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": ");"
+                }
+              ],
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "endpoint",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  }
+                },
+                {
+                  "parameterName": "commitment",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 3,
+                    "endIndex": 4
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "Method",
+              "canonicalReference": "@solana/web3.js!Connection#getSignatureStatuses:member(1)",
+              "docComment": "/**\n * Fetch the current statuses of a batch of signatures\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "getSignatureStatuses(signatures: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Array",
+                  "canonicalReference": "!Array:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<"
+                },
+                {
+                  "kind": "Reference",
+                  "text": "TransactionSignature",
+                  "canonicalReference": "@solana/web3.js!TransactionSignature:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": ">"
+                },
+                {
+                  "kind": "Content",
+                  "text": ", config?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "SignatureStatusConfig",
+                  "canonicalReference": "@solana/web3.js!SignatureStatusConfig:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Promise",
+                  "canonicalReference": "!Promise:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<"
+                },
+                {
+                  "kind": "Reference",
+                  "text": "RpcResponseAndContext",
+                  "canonicalReference": "@solana/web3.js!RpcResponseAndContext:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<"
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Array",
+                  "canonicalReference": "!Array:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<"
+                },
+                {
+                  "kind": "Reference",
+                  "text": "SignatureStatus",
+                  "canonicalReference": "@solana/web3.js!SignatureStatus:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | null>>>"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "isStatic": false,
+              "returnTypeTokenRange": {
+                "startIndex": 8,
+                "endIndex": 16
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "signatures",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 5
+                  }
+                },
+                {
+                  "parameterName": "config",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 6,
+                    "endIndex": 7
+                  }
+                }
+              ],
+              "name": "getSignatureStatuses"
+            },
+            {
+              "kind": "Method",
+              "canonicalReference": "@solana/web3.js!Connection#requestAirdrop:member(1)",
+              "docComment": "/**\n * Request an allocation of lamports to the specified account\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "requestAirdrop(to: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "PublicKey",
+                  "canonicalReference": "@solana/web3.js!PublicKey:class"
+                },
+                {
+                  "kind": "Content",
+                  "text": ", amount: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Promise",
+                  "canonicalReference": "!Promise:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<"
+                },
+                {
+                  "kind": "Reference",
+                  "text": "TransactionSignature",
+                  "canonicalReference": "@solana/web3.js!TransactionSignature:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": ">"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "isStatic": false,
+              "returnTypeTokenRange": {
+                "startIndex": 5,
+                "endIndex": 9
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "to",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  }
+                },
+                {
+                  "parameterName": "amount",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 3,
+                    "endIndex": 4
+                  }
+                }
+              ],
+              "name": "requestAirdrop"
+            }
+          ],
+          "implementsTokenRanges": []
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "@solana/web3.js!EpochInfo:interface",
+          "docComment": "/**\n * Information about the current epoch.\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface EpochInfo "
+            }
+          ],
+          "releaseTag": "Public",
+          "name": "EpochInfo",
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@solana/web3.js!EpochInfo#absoluteSlot:member",
+              "docComment": "/**\n * The current slot.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "absoluteSlot: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "absoluteSlot",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@solana/web3.js!EpochInfo#blockHeight:member",
+              "docComment": "/**\n * The current block height.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "blockHeight?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "blockHeight",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@solana/web3.js!EpochInfo#epoch:member",
+              "docComment": "/**\n * The current epoch.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "epoch: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "epoch",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@solana/web3.js!EpochInfo#slotIndex:member",
+              "docComment": "/**\n * The current slot relative to the start of the current epoch.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "slotIndex: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "slotIndex",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@solana/web3.js!EpochInfo#slotsInEpoch:member",
+              "docComment": "/**\n * The number of slots in this epoch.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "slotsInEpoch: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "slotsInEpoch",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@solana/web3.js!EpochInfo#transactionCount:member",
+              "docComment": "/**\n * The current number of transactions in the current epoch.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "transactionCount?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "transactionCount",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "@solana/web3.js!EpochSchedule:interface",
+          "docComment": "/**\n * Epoch schedule (see {@link https://docs.solana.com/terminology#epoch | terminology})\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface EpochSchedule "
+            }
+          ],
+          "releaseTag": "Public",
+          "name": "EpochSchedule",
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@solana/web3.js!EpochSchedule#firstNormalEpoch:member",
+              "docComment": "/**\n * The first epoch with `slotsPerEpoch` slots.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "firstNormalEpoch: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "firstNormalEpoch",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@solana/web3.js!EpochSchedule#firstNormalSlot:member",
+              "docComment": "/**\n * The first slot of `firstNormalEpoch`.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "firstNormalSlot: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "firstNormalSlot",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@solana/web3.js!EpochSchedule#leaderScheduleSlotOffset:member",
+              "docComment": "/**\n * The number of slots before beginning of an epoch to calculate a leader schedule for that epoch.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "leaderScheduleSlotOffset: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "leaderScheduleSlotOffset",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@solana/web3.js!EpochSchedule#slotsPerEpoch:member",
+              "docComment": "/**\n * The maximum number of slots in each epoch.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "slotsPerEpoch: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "slotsPerEpoch",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@solana/web3.js!EpochSchedule#warmup:member",
+              "docComment": "/**\n * Indicates whether epochs start short and grow.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "warmup: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "boolean"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "warmup",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "@solana/web3.js!InflationGovernor:interface",
+          "docComment": "/**\n * Network Inflation (see {@link https://docs.solana.com/inflation/inflation_schedule | proposed schedule})\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface InflationGovernor "
+            }
+          ],
+          "releaseTag": "Public",
+          "name": "InflationGovernor",
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@solana/web3.js!InflationGovernor#foundation:member",
+              "docComment": "/**\n * The percentage of total inflation allocated to the foundation.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "foundation: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "foundation",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@solana/web3.js!InflationGovernor#foundationTerm:member",
+              "docComment": "/**\n * The duration of foundation pool inflation in years.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "foundationTerm: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "foundationTerm",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@solana/web3.js!InflationGovernor#initial:member",
+              "docComment": "/**\n * The initial inflation percentage from time 0.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "initial: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "initial",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@solana/web3.js!InflationGovernor#taper:member",
+              "docComment": "/**\n * The rate per year at which inflation is lowered.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "taper: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "taper",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@solana/web3.js!InflationGovernor#terminal:member",
+              "docComment": "/**\n * The terminal inflation percentage.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "terminal: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "terminal",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "@solana/web3.js!PerfSample:interface",
+          "docComment": "/**\n * A performance sample\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface PerfSample "
+            }
+          ],
+          "releaseTag": "Public",
+          "name": "PerfSample",
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@solana/web3.js!PerfSample#numSlots:member",
+              "docComment": "/**\n * The number of slots in the sample period.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "numSlots: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "numSlots",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@solana/web3.js!PerfSample#numTransactions:member",
+              "docComment": "/**\n * The number of transactions in the sample period.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "numTransactions: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "numTransactions",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@solana/web3.js!PerfSample#samplePeriodSecs:member",
+              "docComment": "/**\n * The sample period in seconds.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "samplePeriodSecs: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "samplePeriodSecs",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@solana/web3.js!PerfSample#slot:member",
+              "docComment": "/**\n * The slot number of the sample.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "slot: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "slot",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "@solana/web3.js!RecentBlockhash:interface",
+          "docComment": "/**\n * Recent string blockhash and fee calculator\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface RecentBlockhash "
+            }
+          ],
+          "releaseTag": "Public",
+          "name": "RecentBlockhash",
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@solana/web3.js!RecentBlockhash#blockhash:member",
+              "docComment": "/**\n * A blockhash as base-58 encoded string.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "blockhash: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Blockhash",
+                  "canonicalReference": "@solana/web3.js!Blockhash:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "blockhash",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@solana/web3.js!RecentBlockhash#feeCalculator:member",
+              "docComment": "/**\n * The fee calculator for this blockhash.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "feeCalculator: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "FeeCalculator",
+                  "canonicalReference": "@solana/web3.js!FeeCalculator:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "feeCalculator",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "TypeAlias",
+          "canonicalReference": "@solana/web3.js!RpcResponseAndContext:type",
+          "docComment": "/**\n * RPC response which includes the slot at which the operation was evaluated.\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export declare type RpcResponseAndContext<T> = "
+            },
+            {
+              "kind": "Content",
+              "text": "{\n    context: {\n        slot: number;\n    };\n    value: T;\n}"
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "releaseTag": "Public",
+          "name": "RpcResponseAndContext",
+          "typeParameters": [
+            {
+              "typeParameterName": "T",
+              "constraintTokenRange": {
+                "startIndex": 0,
+                "endIndex": 0
+              },
+              "defaultTypeTokenRange": {
+                "startIndex": 0,
+                "endIndex": 0
+              }
+            }
+          ],
+          "typeTokenRange": {
+            "startIndex": 1,
+            "endIndex": 2
+          }
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "@solana/web3.js!SignatureStatus:interface",
+          "docComment": "/**\n * Transaction signature status.\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface SignatureStatus "
+            }
+          ],
+          "releaseTag": "Public",
+          "name": "SignatureStatus",
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@solana/web3.js!SignatureStatus#confirmations:member",
+              "docComment": "/**\n * The number of blocks that have been confirmed and voted on in the fork containing `slot`. (TODO)\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "confirmations: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number | null"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "confirmations",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@solana/web3.js!SignatureStatus#confirmationStatus:member",
+              "docComment": "/**\n * The transaction's cluster confirmation status, if data available. Possible non-null responses: `processed`, `confirmed`, `finalized`.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "confirmationStatus?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string | null"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "confirmationStatus",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@solana/web3.js!SignatureStatus#err:member",
+              "docComment": "/**\n * The transaction error if the transaction failed.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "err: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "TransactionError",
+                  "canonicalReference": "@solana/web3.js!TransactionError:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | null"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "err",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@solana/web3.js!SignatureStatus#slot:member",
+              "docComment": "/**\n * The slot when the transaction was processed;\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "slot: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "slot",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "@solana/web3.js!SignatureStatusConfig:interface",
+          "docComment": "/**\n * Configuration object for changing signature status query behavior.\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface SignatureStatusConfig "
+            }
+          ],
+          "releaseTag": "Public",
+          "name": "SignatureStatusConfig",
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@solana/web3.js!SignatureStatusConfig#searchTransactionHistory:member",
+              "docComment": "/**\n * Enable searching status history, not needed for recent transactions.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "searchTransactionHistory: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "boolean"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "searchTransactionHistory",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "TypeAlias",
+          "canonicalReference": "@solana/web3.js!TransactionError:type",
+          "docComment": "/**\n * Transaction error object.\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export declare type TransactionError = "
+            },
+            {
+              "kind": "Content",
+              "text": "object"
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "releaseTag": "Public",
+          "name": "TransactionError",
+          "typeTokenRange": {
+            "startIndex": 1,
+            "endIndex": 2
+          }
+        },
+        {
+          "kind": "TypeAlias",
+          "canonicalReference": "@solana/web3.js!TransactionSignature:type",
+          "docComment": "/**\n * Transaction signature as Base58 string.\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export declare type TransactionSignature = "
+            },
+            {
+              "kind": "Content",
+              "text": "string"
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "releaseTag": "Public",
+          "name": "TransactionSignature",
+          "typeTokenRange": {
+            "startIndex": 1,
+            "endIndex": 2
+          }
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "@solana/web3.js!Version:interface",
+          "docComment": "/**\n * Version info for a node.\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface Version "
+            }
+          ],
+          "releaseTag": "Public",
+          "name": "Version",
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@solana/web3.js!Version#\"feature-set\":member",
+              "docComment": "/**\n * The first 4 bytes of the FeatureSet identifier\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "'feature-set': "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number | null"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "\"feature-set\"",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@solana/web3.js!Version#\"solana-core\":member",
+              "docComment": "/**\n * The current version of solana-core.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "'solana-core': "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "\"solana-core\"",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        }
+      ]
+    }
+  ]
+}

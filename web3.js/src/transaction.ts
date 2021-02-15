@@ -86,7 +86,7 @@ export class TransactionInstruction {
   /**
    * Program Id to execute
    */
-  programId: PublicKey;
+  programId?: PublicKey;
 
   /**
    * Program input
@@ -157,7 +157,7 @@ export class Transaction {
   /**
    * The transaction fee payer
    */
-  feePayer: ?PublicKey;
+  feePayer?: PublicKey;
 
   /**
    * The instructions to atomically execute
@@ -167,13 +167,13 @@ export class Transaction {
   /**
    * A recent transaction id. Must be populated by the caller
    */
-  recentBlockhash: ?Blockhash;
+  recentBlockhash?: Blockhash;
 
   /**
    * Optional Nonce information. If populated, transaction will use a durable
    * Nonce hash instead of a recentBlockhash. Must be populated by the caller
    */
-  nonceInfo: ?NonceInformation;
+  nonceInfo?: NonceInformation;
 
   /**
    * Construct an empty Transaction
