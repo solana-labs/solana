@@ -2906,7 +2906,7 @@ pub mod tests {
             bank = Arc::new(Bank::new_from_parent(
                 &bank,
                 &Pubkey::default(),
-                bank.slot() + thread_rng().gen_range(1, 3),
+                bank.slot() + thread_rng().gen_range(1..3),
             ));
         }
     }
