@@ -4591,7 +4591,7 @@ dependencies = [
  "matches",
  "num_cpus",
  "prost",
- "rand 0.8.3",
+ "rand 0.7.3",
  "rand_chacha 0.3.0",
  "rayon",
  "reed-solomon-erasure",
