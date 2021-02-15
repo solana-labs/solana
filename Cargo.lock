@@ -4592,7 +4592,7 @@ dependencies = [
  "num_cpus",
  "prost",
  "rand 0.7.3",
- "rand_chacha 0.3.0",
+ "rand_chacha 0.2.2",
  "rayon",
  "reed-solomon-erasure",
  "rocksdb",
