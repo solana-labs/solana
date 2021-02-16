@@ -235,13 +235,13 @@ impl CalculateHashIntermediate {
 }
 
 #[derive(Default, Debug)]
-struct CumulativeOffset1D {
-    pub index: usize,
+struct CumulativeOffset {
+    pub index: Vec<usize>,
     pub start_offset: usize,
 }
 
-impl CumulativeOffset1D {
-    pub fn new(index: usize, start_offset: usize) -> CumulativeOffset1D {
+impl CumulativeOffset {
+    pub fn new(index: Vec<usize>, start_offset: usize) -> CumulativeOffset {
         Self {
             index,
             start_offset,
@@ -252,13 +252,13 @@ impl CumulativeOffset1D {
 // Allow retreiving &[start..end] from a logical src: Vec<T>, where src is really Vec<Vec<T>> (or later Vec<Vec<Vec<T>>>)
 // This model prevents callers from having to flatten which saves both working memory and time.
 #[derive(Default, Debug)]
-struct CumulativeOffsets1D {
-    cumulative_offsets: Vec<CumulativeOffset1D>,
+struct CumulativeOffsets {
+    cumulative_offsets: Vec<CumulativeOffset>,
     total_count: usize,
 }
 
-impl CumulativeOffsets1D {
-    pub fn from_raw<T>(raw: &[Vec<T>]) -> CumulativeOffsets1D {
+impl CumulativeOffsets {
+    pub fn from_raw<T>(raw: &[Vec<T>]) -> CumulativeOffsets {
         let mut total_count: usize = 0;
         let cumulative_offsets: Vec<_> = raw
             .iter()
@@ -266,7 +266,7 @@ impl CumulativeOffsets1D {
             .filter_map(|(i, v)| {
                 let len = v.len();
                 if len > 0 {
-                    let result = CumulativeOffset1D::new(i, total_count);
+                    let result = CumulativeOffset::new(vec![i], total_count);
                     total_count += len;
                     Some(result)
                 } else {
@@ -288,7 +288,8 @@ impl CumulativeOffsets1D {
             let index = &self.cumulative_offsets[i];
             if start >= index.start_offset {
                 let start = start - index.start_offset;
-                return &raw[index.index][start..];
+                const DIMENSION: usize = 0;
+                return &raw[index.index[DIMENSION]][start..];
             }
         }
         panic!(
@@ -3775,7 +3776,7 @@ impl AccountsDB {
             return Err(MismatchedAccountHash);
         }
 
-        let cumulative_offsets = CumulativeOffsets1D::from_raw(&hashes);
+        let cumulative_offsets = CumulativeOffsets::from_raw(&hashes);
 
         scan.stop();
         let hash_total = cumulative_offsets.total_count;
@@ -4017,7 +4018,7 @@ impl AccountsDB {
         // flatten vec/vec into 1d vec of hashes in order
         let mut hash_time = Measure::start("flat2");
 
-        let offsets = CumulativeOffsets1D::from_raw(&hashes);
+        let offsets = CumulativeOffsets::from_raw(&hashes);
 
         let get_slice = |start: usize| -> &[Hash] { offsets.get_slice(&hashes, start) };
         let hash = Self::compute_merkle_root_from_slices(offsets.total_count, fanout, get_slice);
@@ -5404,15 +5405,16 @@ pub mod tests {
     #[test]
     fn test_accountsdb_cumulative_offsets1_d() {
         let input = vec![vec![0, 1], vec![], vec![2, 3, 4], vec![]];
-        let cumulative = CumulativeOffsets1D::from_raw(&input);
+        let cumulative = CumulativeOffsets::from_raw(&input);
 
         let src: Vec<_> = input.clone().into_iter().flatten().collect();
         let len = src.len();
         assert_eq!(cumulative.total_count, len);
         assert_eq!(cumulative.cumulative_offsets.len(), 2); // 2 non-empty vectors
 
-        assert_eq!(cumulative.cumulative_offsets[0].index, 0);
-        assert_eq!(cumulative.cumulative_offsets[1].index, 2);
+        const DIMENSION: usize = 0;
+        assert_eq!(cumulative.cumulative_offsets[0].index[DIMENSION], 0);
+        assert_eq!(cumulative.cumulative_offsets[1].index[DIMENSION], 2);
 
         assert_eq!(cumulative.cumulative_offsets[0].start_offset, 0);
         assert_eq!(cumulative.cumulative_offsets[1].start_offset, 2);
@@ -5425,15 +5427,15 @@ pub mod tests {
         }
 
         let input = vec![vec![], vec![0, 1], vec![], vec![2, 3, 4], vec![]];
-        let cumulative = CumulativeOffsets1D::from_raw(&input);
+        let cumulative = CumulativeOffsets::from_raw(&input);
 
         let src: Vec<_> = input.clone().into_iter().flatten().collect();
         let len = src.len();
         assert_eq!(cumulative.total_count, len);
         assert_eq!(cumulative.cumulative_offsets.len(), 2); // 2 non-empty vectors
 
-        assert_eq!(cumulative.cumulative_offsets[0].index, 1);
-        assert_eq!(cumulative.cumulative_offsets[1].index, 3);
+        assert_eq!(cumulative.cumulative_offsets[0].index[DIMENSION], 1);
+        assert_eq!(cumulative.cumulative_offsets[1].index[DIMENSION], 3);
 
         assert_eq!(cumulative.cumulative_offsets[0].start_offset, 0);
         assert_eq!(cumulative.cumulative_offsets[1].start_offset, 2);
@@ -5446,7 +5448,7 @@ pub mod tests {
         }
 
         let input: Vec<Vec<u32>> = vec![vec![]];
-        let cumulative = CumulativeOffsets1D::from_raw(&input);
+        let cumulative = CumulativeOffsets::from_raw(&input);
 
         let src: Vec<_> = input.into_iter().flatten().collect();
         let len = src.len();
