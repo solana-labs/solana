@@ -14,7 +14,7 @@ use solana_sdk::{
     account_utils::{State, StateMut},
     clock::{Clock, Epoch, UnixTimestamp},
     ic_msg,
-    instruction::InstructionError,
+    instruction::{checked_add, InstructionError},
     keyed_account::KeyedAccount,
     process_instruction::InvokeContext,
     pubkey::Pubkey,
@@ -67,13 +67,6 @@ pub(crate) fn null_tracer() -> Option<impl FnMut(&InflationPointCalculationEvent
 impl Default for StakeState {
     fn default() -> Self {
         StakeState::Uninitialized
-    }
-}
-
-fn checked_add(a: u64, b: u64) -> Result<u64, InstructionError> {
-    match a.checked_add(b) {
-        Some(sum) => Ok(sum),
-        None => Err(InstructionError::InsufficientFunds),
     }
 }
 
