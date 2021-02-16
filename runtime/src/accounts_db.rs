@@ -4102,7 +4102,8 @@ impl AccountsDB {
                         assert!(
                             !(prev.slot == now.slot
                                 && prev.version == now.version
-                                && (prev.hash != now.hash || prev.lamports != now.lamports))
+                                && (prev.hash != now.hash || prev.lamports != now.lamports)),
+                            "Conflicting store data. Pubkey: {}, Slot: {}, Version: {}, Hashes: {}, {}, Lamports: {}, {}", now.pubkey, now.slot, now.version, prev.hash, now.hash, prev.lamports, now.lamports
                         );
                     }
                 }
