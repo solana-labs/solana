@@ -9,6 +9,10 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+// Limit the size of cluster-slots map in case
+// of receiving bogus epoch slots values.
+const CLUSTER_SLOTS_TRIM_SIZE: usize = 524_288; // 512K
+
 pub type SlotPubkeys = HashMap<Pubkey, u64>;
 
 #[derive(Default)]
@@ -43,6 +47,12 @@ impl ClusterSlots {
         {
             let mut cluster_slots = self.cluster_slots.write().unwrap();
             *cluster_slots = cluster_slots.split_off(&(root + 1));
+            // Trimming is done at 2x size so that amortized it has a constant
+            // cost. The slots furthest away from the root are discarded.
+            if cluster_slots.len() > 2 * CLUSTER_SLOTS_TRIM_SIZE {
+                let key = *cluster_slots.keys().nth(CLUSTER_SLOTS_TRIM_SIZE).unwrap();
+                cluster_slots.split_off(&key);
+            }
         }
         *self.since.write().unwrap() = since;
     }
