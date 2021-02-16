@@ -29,12 +29,8 @@ impl Packets {
         Packets { packets }
     }
 
-    pub fn new_with_recycler(
-        recycler: PacketsRecycler,
-        size: usize,
-        name: &'static str,
-    ) -> Option<Self> {
-        let maybe_packets = recycler.allocate(name);
+    pub fn new_with_recycler(recycler: PacketsRecycler, size: usize) -> Option<Self> {
+        let maybe_packets = recycler.allocate();
         maybe_packets.map(|mut packets| {
             packets.reserve_and_pin(size);
             Packets { packets }
@@ -42,10 +38,9 @@ impl Packets {
     }
     pub fn new_with_recycler_data(
         recycler: &PacketsRecycler,
-        name: &'static str,
         mut packets: Vec<Packet>,
     ) -> Option<Self> {
-        Self::new_with_recycler(recycler.clone(), packets.len(), name).map(|mut vec| {
+        Self::new_with_recycler(recycler.clone(), packets.len()).map(|mut vec| {
             vec.packets.append(&mut packets);
             vec
         })
@@ -84,12 +79,7 @@ pub fn to_packets_with_destination<T: Serialize>(
     recycler: PacketsRecycler,
     dests_and_data: &[(SocketAddr, T)],
 ) -> Packets {
-    let mut out = Packets::new_with_recycler(
-        recycler,
-        dests_and_data.len(),
-        "to_packets_with_destination",
-    )
-    .unwrap();
+    let mut out = Packets::new_with_recycler(recycler, dests_and_data.len()).unwrap();
     out.packets.resize(dests_and_data.len(), Packet::default());
     for (dest_and_data, o) in dests_and_data.iter().zip(out.packets.iter_mut()) {
         if !dest_and_data.0.ip().is_unspecified() && dest_and_data.0.port() != 0 {
@@ -147,9 +137,9 @@ mod tests {
 
     #[test]
     fn test_to_packets_pinning() {
-        let recycler = PacketsRecycler::default();
+        let recycler = PacketsRecycler::new("");
         for i in 0..2 {
-            let _first_packets = Packets::new_with_recycler(recycler.clone(), i + 1, "first one");
+            let _first_packets = Packets::new_with_recycler(recycler.clone(), i + 1);
         }
     }
 }

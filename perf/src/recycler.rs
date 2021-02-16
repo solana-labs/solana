@@ -28,9 +28,9 @@ struct RecyclerShrinkStats {
 }
 
 impl RecyclerShrinkStats {
-    fn report(&self) {
+    fn report(&self, shrink_metric_name: &'static str) {
         datapoint_info!(
-            "recycler_shrink",
+            shrink_metric_name,
             ("target_size", self.target_size as i64, i64),
             ("resulting_size", self.resulting_size as i64, i64),
             ("ideal_num_to_remove", self.ideal_num_to_remove as i64, i64),
@@ -40,9 +40,19 @@ impl RecyclerShrinkStats {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct Recycler<T: Reset> {
     recycler: Arc<RecyclerX<T>>,
+    shrink_metric_name: &'static str,
+}
+
+impl<T: Default + Reset> Recycler<T> {
+    pub fn new(shrink_metric_name: &'static str) -> Self {
+        Self {
+            recycler: Arc::new(RecyclerX::default()),
+            shrink_metric_name,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -138,15 +148,21 @@ fn warm_recyclers() -> bool {
 }
 
 impl<T: Default + Reset + Sized> Recycler<T> {
-    pub fn warmed(num: u32, size_hint: usize, limit: Option<u32>) -> Self {
+    pub fn warmed(
+        num: u32,
+        size_hint: usize,
+        limit: Option<u32>,
+        shrink_metric_name: &'static str,
+    ) -> Self {
         assert!(num <= limit.unwrap_or(std::u32::MAX));
         let new = Self {
             recycler: Arc::new(RecyclerX::new(limit)),
+            shrink_metric_name,
         };
         if warm_recyclers() {
             let warmed_items: Vec<_> = (0..num)
                 .map(|_| {
-                    let mut item = new.allocate("warming").unwrap();
+                    let mut item = new.allocate().unwrap();
                     item.warm(size_hint);
                     item
                 })
@@ -158,7 +174,7 @@ impl<T: Default + Reset + Sized> Recycler<T> {
         new
     }
 
-    pub fn allocate(&self, name: &'static str) -> Option<T> {
+    pub fn allocate(&self) -> Option<T> {
         let mut shrink_removed_objects = vec![];
         let (mut allocated_object, did_reuse, should_allocate_new, mut shrink_stats) = {
             let mut object_pool = self
@@ -245,7 +261,7 @@ impl<T: Default + Reset + Sized> Recycler<T> {
 
         if let Some(shrink_stats) = shrink_stats.as_mut() {
             shrink_stats.drop_elapsed = shrink_removed_object_elapsed.as_us();
-            shrink_stats.report();
+            shrink_stats.report(self.shrink_metric_name);
         }
 
         if did_reuse {
@@ -312,14 +328,14 @@ mod tests {
 
     #[test]
     fn test_recycler() {
-        let recycler = Recycler::default();
-        let mut y: u64 = recycler.allocate("test_recycler1");
+        let recycler = Recycler::new("");
+        let mut y: u64 = recycler.allocate().unwrap();
         assert_eq!(y, 0);
         y = 20;
         let recycler2 = recycler.clone();
         recycler2.recycler.recycle(y);
         assert_eq!(recycler.recycler.gc.lock().unwrap().len(), 1);
-        let z = recycler.allocate("test_recycler2");
+        let z = recycler.allocate().unwrap();
         assert_eq!(z, 10);
         assert_eq!(recycler.recycler.gc.lock().unwrap().len(), 0);
     }

@@ -103,7 +103,8 @@ impl FetchStage {
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         limit: Option<u32>,
     ) -> Self {
-        let recycler: PacketsRecycler = Recycler::warmed(1000, 1024, limit);
+        let recycler: PacketsRecycler =
+            Recycler::warmed(1000, 1024, limit, "fetch_stage_recycler_shrink");
 
         let tpu_threads = sockets.into_iter().map(|socket| {
             streamer::receiver(

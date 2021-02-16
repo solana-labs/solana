@@ -43,7 +43,7 @@ fn recv_loop(
     let mut num_max_received = 0; // Number of times maximum packets were received
     loop {
         let (mut msgs, should_send) =
-            Packets::new_with_recycler(recycler.clone(), PACKETS_PER_BATCH, name)
+            Packets::new_with_recycler(recycler.clone(), PACKETS_PER_BATCH)
                 .map(|allocated| (allocated, true))
                 .unwrap_or((Packets::with_capacity(PACKETS_PER_BATCH), false));
         loop {
@@ -201,7 +201,7 @@ mod test {
         let send = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let exit = Arc::new(AtomicBool::new(false));
         let (s_reader, r_reader) = channel();
-        let t_receiver = receiver(Arc::new(read), &exit, s_reader, Recycler::default(), "test");
+        let t_receiver = receiver(Arc::new(read), &exit, s_reader, Recycler::new(""), "test");
         let t_responder = {
             let (s_responder, r_responder) = channel();
             let t_responder = responder("streamer_send_test", Arc::new(send), r_responder);

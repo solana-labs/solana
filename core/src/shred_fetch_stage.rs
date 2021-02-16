@@ -169,7 +169,8 @@ impl ShredFetchStage {
         exit: &Arc<AtomicBool>,
         limit: Option<u32>,
     ) -> Self {
-        let recycler: PacketsRecycler = Recycler::warmed(100, 1024, limit);
+        let recycler: PacketsRecycler =
+            Recycler::warmed(100, 1024, limit, "shred_fetch_stage_recycler_shrink");
 
         let (mut tvu_threads, tvu_filter) = Self::packet_modifier(
             sockets,

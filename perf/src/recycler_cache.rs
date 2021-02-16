@@ -2,17 +2,24 @@ use crate::cuda_runtime::PinnedVec;
 use crate::recycler::Recycler;
 use crate::sigverify::TxOffset;
 
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct RecyclerCache {
     recycler_offsets: Recycler<TxOffset>,
     recycler_buffer: Recycler<PinnedVec<u8>>,
 }
 
 impl RecyclerCache {
-    pub fn warmed() -> Self {
+    pub fn new(offsets_shrink_name: &'static str, buffer_shrink_name: &'static str) -> Self {
         Self {
-            recycler_offsets: Recycler::warmed(50, 4096, None),
-            recycler_buffer: Recycler::warmed(50, 4096, None),
+            recycler_offsets: Recycler::new(offsets_shrink_name),
+            recycler_buffer: Recycler::new(buffer_shrink_name),
+        }
+    }
+
+    pub fn warmed(offsets_shrink_name: &'static str, buffer_shrink_name: &'static str) -> Self {
+        Self {
+            recycler_offsets: Recycler::warmed(50, 4096, None, offsets_shrink_name),
+            recycler_buffer: Recycler::warmed(50, 4096, None, buffer_shrink_name),
         }
     }
     pub fn offsets(&self) -> &Recycler<TxOffset> {
