@@ -81,6 +81,7 @@ impl SnapshotRequestHandler {
         &self,
         accounts_db_caching_enabled: bool,
         test_hash_calculation: bool,
+        use_index_hash_calculation: bool,
     ) -> Option<u64> {
         self.snapshot_request_receiver
             .try_iter()
@@ -129,9 +130,10 @@ impl SnapshotRequestHandler {
                 flush_accounts_cache_time.stop();
 
                 let mut hash_time = Measure::start("hash_time");
-                const USE_INDEX: bool = true;
-                let this_hash = snapshot_root_bank
-                    .update_accounts_hash_with_index_option(USE_INDEX, test_hash_calculation);
+                let this_hash = snapshot_root_bank.update_accounts_hash_with_index_option(
+                    use_index_hash_calculation,
+                    test_hash_calculation,
+                );
                 let hash_for_testing = if test_hash_calculation {
                     assert_eq!(previous_hash, this_hash);
                     Some(snapshot_root_bank.get_accounts_hash())
@@ -241,12 +243,16 @@ impl ABSRequestHandler {
         &self,
         accounts_db_caching_enabled: bool,
         test_hash_calculation: bool,
+        use_index_hash_calculation: bool,
     ) -> Option<u64> {
         self.snapshot_request_handler
             .as_ref()
             .and_then(|snapshot_request_handler| {
-                snapshot_request_handler
-                    .handle_snapshot_requests(accounts_db_caching_enabled, test_hash_calculation)
+                snapshot_request_handler.handle_snapshot_requests(
+                    accounts_db_caching_enabled,
+                    test_hash_calculation,
+                    use_index_hash_calculation,
+                )
             })
     }
 
@@ -272,6 +278,7 @@ impl AccountsBackgroundService {
         request_handler: ABSRequestHandler,
         accounts_db_caching_enabled: bool,
         test_hash_calculation: bool,
+        use_index_hash_calculation: bool,
     ) -> Self {
         info!("AccountsBackgroundService active");
         let exit = exit.clone();
@@ -314,8 +321,11 @@ impl AccountsBackgroundService {
                 // request for `N` to the snapshot request channel before setting a root `R > N`, and
                 // snapshot_request_handler.handle_requests() will always look for the latest
                 // available snapshot in the channel.
-                let snapshot_block_height = request_handler
-                    .handle_snapshot_requests(accounts_db_caching_enabled, test_hash_calculation);
+                let snapshot_block_height = request_handler.handle_snapshot_requests(
+                    accounts_db_caching_enabled,
+                    test_hash_calculation,
+                    use_index_hash_calculation,
+                );
                 if accounts_db_caching_enabled {
                     // Note that the flush will do an internal clean of the
                     // cache up to bank.slot(), so should be safe as long
