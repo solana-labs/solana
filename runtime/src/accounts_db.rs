@@ -283,26 +283,20 @@ impl CumulativeOffsets {
 
     pub fn from_raw_2d<T>(raw: &[Vec<Vec<T>>]) -> CumulativeOffsets {
         let mut total_count: usize = 0;
-        let cumulative_offsets: Vec<CumulativeOffset> = raw
-            .iter()
-            .enumerate()
-            .map(|(i, v)| {
-                v.iter()
-                    .enumerate()
-                    .filter_map(|(j, v)| {
-                        let len = v.len();
-                        if len > 0 {
-                            let result = CumulativeOffset::new(vec![i, j], total_count);
-                            total_count += len;
-                            Some(result)
-                        } else {
-                            None
-                        }
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .flatten()
-            .collect();
+        let mut cumulative_offsets = Vec::with_capacity(0);
+        for (i, v_outer) in raw.iter().enumerate() {
+            for (j, v) in v_outer.iter().enumerate() {
+                let len = v.len();
+                if len > 0 {
+                    if cumulative_offsets.is_empty() {
+                        // the first inner, non-empty vector we find gives us an approximate rectangular shape
+                        cumulative_offsets = Vec::with_capacity(raw.len() * v_outer.len());
+                    }
+                    cumulative_offsets.push(CumulativeOffset::new(vec![i, j], total_count));
+                    total_count += len;
+                }
+            }
+        }
 
         Self {
             cumulative_offsets,
