@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 pub mod packet;
 pub mod recvmmsg;
 pub mod sendmmsg;

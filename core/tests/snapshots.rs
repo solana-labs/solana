@@ -1,4 +1,5 @@
 // Long-running bank_forks tests
+#![allow(clippy::integer_arithmetic)]
 
 macro_rules! DEFINE_SNAPSHOT_VERSION_PARAMETERIZED_TEST_FUNCTIONS {
     ($x:ident, $y:ident, $z:ident) => {

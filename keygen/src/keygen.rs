@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 use bip39::{Language, Mnemonic, MnemonicType, Seed};
 use clap::{
     crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App, AppSettings,

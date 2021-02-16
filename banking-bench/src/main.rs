@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 use clap::{crate_description, crate_name, value_t, App, Arg};
 use crossbeam_channel::unbounded;
 use log::*;

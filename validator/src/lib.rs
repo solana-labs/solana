@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 pub use solana_core::test_validator;
 use {
     log::*,

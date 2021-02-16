@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 use rayon::iter::ParallelIterator;
 use rayon::prelude::*;
 use serial_test::serial;

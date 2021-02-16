@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 pub mod alloc;
 pub mod allocator_bump;
 pub mod bpf_verifier;

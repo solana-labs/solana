@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 use clap::{crate_description, crate_name, App, Arg};
 use solana_streamer::packet::{Packet, Packets, PacketsRecycler, PACKET_DATA_SIZE};
 use solana_streamer::streamer::{receiver, PacketReceiver};
