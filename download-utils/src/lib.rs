@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 use console::Emoji;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::*;

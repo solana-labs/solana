@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 #![feature(test)]
 
 extern crate test;
