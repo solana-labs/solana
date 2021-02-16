@@ -209,6 +209,13 @@ impl Instruction {
     }
 }
 
+pub fn checked_add(a: u64, b: u64) -> Result<u64, InstructionError> {
+    match a.checked_add(b) {
+        Some(sum) => Ok(sum),
+        None => Err(InstructionError::InsufficientFunds),
+    }
+}
+
 /// Account metadata used to define Instructions
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct AccountMeta {
