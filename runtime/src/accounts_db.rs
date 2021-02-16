@@ -4097,6 +4097,14 @@ impl AccountsDB {
                         i = k;
                         look_for_first_key = false;
                         continue 'outer;
+                    } else {
+                        let prev = &slice[k - 1];
+                        assert!(
+                            !(prev.slot == now.slot
+                                && prev.version == now.version
+                                && (prev.hash != now.hash || prev.lamports != now.lamports)),
+                            "Conflicting store data. Pubkey: {}, Slot: {}, Version: {}, Hashes: {}, {}, Lamports: {}, {}", now.pubkey, now.slot, now.version, prev.hash, now.hash, prev.lamports, now.lamports
+                        );
                     }
                 }
 
@@ -5938,7 +5946,13 @@ pub mod tests {
             .zip(keys.iter())
             .enumerate()
             .map(|(i, (hash, key))| {
-                CalculateHashIntermediate::new(VERSION, hash, (i + 1) as u64, Slot::default(), *key)
+                CalculateHashIntermediate::new(
+                    VERSION,
+                    hash,
+                    (i + 1) as u64,
+                    u64::MAX - i as u64,
+                    *key,
+                )
             })
             .collect();
 
