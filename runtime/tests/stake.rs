@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 use solana_runtime::{
     bank::Bank,
     bank_client::BankClient,

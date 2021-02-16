@@ -1,4 +1,5 @@
 //! A command-line executable for monitoring the health of a cluster
+#![allow(clippy::integer_arithmetic)]
 
 use {
     clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg},

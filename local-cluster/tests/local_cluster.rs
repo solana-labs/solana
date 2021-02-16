@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 use assert_matches::assert_matches;
 use crossbeam_channel::{unbounded, Receiver};
 use gag::BufferRedirect;

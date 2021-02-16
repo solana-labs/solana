@@ -1,4 +1,5 @@
 //! A command-line executable for generating the chain's genesis config.
+#![allow(clippy::integer_arithmetic)]
 
 #[macro_use]
 extern crate solana_budget_program;

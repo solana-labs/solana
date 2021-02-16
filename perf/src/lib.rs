@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 pub mod cuda_runtime;
 pub mod packet;
 pub mod perf_libs;
