@@ -307,6 +307,7 @@ impl Default for ClusterInfo {
     }
 }
 
+<<<<<<< HEAD
 #[derive(Default, Clone)]
 pub struct Locality {
     /// The bounds of the neighborhood represented by this locality
@@ -332,6 +333,9 @@ impl fmt::Debug for Locality {
 }
 
 #[derive(Debug, Default, Deserialize, Serialize, AbiExample)]
+=======
+#[derive(Clone, Debug, Default, Deserialize, Serialize, AbiExample)]
+>>>>>>> 076c20f1c... checks that prune-messages have the same inner/outer pubkey (#15352)
 pub struct PruneData {
     /// Pubkey of the node that sent this prune data
     pub pubkey: Pubkey,
@@ -431,6 +435,8 @@ enum Protocol {
     PullRequest(CrdsFilter, CrdsValue),
     PullResponse(Pubkey, Vec<CrdsValue>),
     PushMessage(Pubkey, Vec<CrdsValue>),
+    // TODO: Remove the redundant outer pubkey here,
+    // and use the inner PruneData.pubkey instead.
     PruneMessage(Pubkey, PruneData),
     PingMessage(Ping),
     PongMessage(Pong),
@@ -514,7 +520,13 @@ impl Sanitize for Protocol {
             }
             Protocol::PullResponse(_, val) => val.sanitize(),
             Protocol::PushMessage(_, val) => val.sanitize(),
-            Protocol::PruneMessage(_, val) => val.sanitize(),
+            Protocol::PruneMessage(from, val) => {
+                if *from != val.pubkey {
+                    Err(SanitizeError::InvalidValue)
+                } else {
+                    val.sanitize()
+                }
+            }
             Protocol::PingMessage(ping) => ping.sanitize(),
             Protocol::PongMessage(pong) => pong.sanitize(),
         }
@@ -4133,6 +4145,23 @@ mod tests {
         pd.wallclock = MAX_WALLCLOCK;
         let msg = Protocol::PruneMessage(Pubkey::default(), pd);
         assert_eq!(msg.sanitize(), Err(SanitizeError::ValueOutOfBounds));
+    }
+
+    #[test]
+    fn test_protocol_prune_message_sanitize() {
+        let keypair = Keypair::new();
+        let mut prune_data = PruneData {
+            pubkey: keypair.pubkey(),
+            prunes: vec![],
+            signature: Signature::default(),
+            destination: Pubkey::new_unique(),
+            wallclock: timestamp(),
+        };
+        prune_data.sign(&keypair);
+        let prune_message = Protocol::PruneMessage(keypair.pubkey(), prune_data.clone());
+        assert_eq!(prune_message.sanitize(), Ok(()));
+        let prune_message = Protocol::PruneMessage(Pubkey::new_unique(), prune_data);
+        assert_eq!(prune_message.sanitize(), Err(SanitizeError::InvalidValue));
     }
 
     // computes the maximum size for pull request blooms
