@@ -1,4 +1,3 @@
-#![allow(clippy::integer_arithmetic)]
 //! @brief Solana Rust-based BPF program entry point supported by the latest
 //! BPFLoader.  For more information see './bpf_loader.rs'
 
@@ -104,6 +103,10 @@ pub struct BumpAllocator {
     pub start: usize,
     pub len: usize,
 }
+/// Integer arithmetic in this global allocator implementation is safe when
+/// operating on the prescribed `HEAP_START_ADDRESS` and `HEAP_LENGTH`. Any
+/// other use may overflow and is thus unsupported and at one's own risk.
+#[allow(clippy::integer_arithmetic)]
 unsafe impl std::alloc::GlobalAlloc for BumpAllocator {
     #[inline]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
@@ -132,6 +135,11 @@ unsafe impl std::alloc::GlobalAlloc for BumpAllocator {
 pub const MAX_PERMITTED_DATA_INCREASE: usize = 1_024 * 10;
 
 /// Deserialize the input arguments
+///
+/// The integer arithmetic in this method is safe when called on a buffer that was
+/// serialized by runtime. Use with buffers serialized otherwise is unsupported and
+/// done at one's own risk.
+#[allow(clippy::integer_arithmetic)]
 ///
 /// # Safety
 #[allow(clippy::type_complexity)]
