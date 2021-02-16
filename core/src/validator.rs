@@ -124,6 +124,7 @@ pub struct ValidatorConfig {
     pub accounts_db_caching_enabled: bool,
     pub warp_slot: Option<Slot>,
     pub accounts_db_test_hash_calculation: bool,
+    pub accounts_db_use_index_hash_calculation: bool,
 }
 
 impl Default for ValidatorConfig {
@@ -174,6 +175,7 @@ impl Default for ValidatorConfig {
             accounts_db_caching_enabled: false,
             warp_slot: None,
             accounts_db_test_hash_calculation: false,
+            accounts_db_use_index_hash_calculation: true,
         }
     }
 }
@@ -648,6 +650,7 @@ impl Validator {
                 accounts_hash_fault_injection_slots: config.accounts_hash_fault_injection_slots,
                 accounts_db_caching_enabled: config.accounts_db_caching_enabled,
                 test_hash_calculation: config.accounts_db_test_hash_calculation,
+                use_index_hash_calculation: config.accounts_db_use_index_hash_calculation,
                 rocksdb_compaction_interval: config.rocksdb_compaction_interval,
                 rocksdb_max_compaction_jitter: config.rocksdb_compaction_interval,
             },
