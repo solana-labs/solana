@@ -19,12 +19,24 @@ import { NonceAccount } from "validators/accounts/nonce";
 import { SysvarAccount } from "validators/accounts/sysvar";
 import { ConfigAccount } from "validators/accounts/config";
 import { FlaggedAccountsProvider } from "./flagged-accounts";
+import {
+  ProgramAccount,
+  ProgramAccountInfo,
+  ProgramDataAccount,
+  ProgramDataAccountInfo,
+} from "validators/accounts/upgradeable-program";
 export { useAccountHistory } from "./history";
 
 export type StakeProgramData = {
   program: "stake";
   parsed: StakeAccount;
   activation?: StakeActivationData;
+};
+
+export type UpgradeableProgramAccountData = {
+  program: "bpf-upgradeable-loader";
+  programData: ProgramDataAccountInfo;
+  programAccount: ProgramAccountInfo;
 };
 
 export type TokenProgramData = {
@@ -53,6 +65,7 @@ export type ConfigProgramData = {
 };
 
 export type ProgramData =
+  | UpgradeableProgramAccountData
   | StakeProgramData
   | TokenProgramData
   | VoteProgramData
@@ -131,6 +144,8 @@ async function fetchAccountInfo(
       let space;
       if (!("parsed" in result.data)) {
         space = result.data.length;
+      } else {
+        space = result.data.space;
       }
 
       let data: ProgramData | undefined;
@@ -138,6 +153,40 @@ async function fetchAccountInfo(
         try {
           const info = coerce(result.data.parsed, ParsedInfo);
           switch (result.data.program) {
+            case "bpf-upgradeable-loader": {
+              let programAccount: ProgramAccountInfo;
+              let programData: ProgramDataAccountInfo;
+
+              if (info.type === "programData") {
+                break;
+              }
+
+              const parsed = coerce(info, ProgramAccount);
+              programAccount = parsed.info;
+              const result = (
+                await connection.getParsedAccountInfo(parsed.info.programData)
+              ).value;
+              if (
+                result &&
+                "parsed" in result.data &&
+                result.data.program === "bpf-upgradeable-loader"
+              ) {
+                const info = coerce(result.data.parsed, ParsedInfo);
+                programData = coerce(info, ProgramDataAccount).info;
+              } else {
+                throw new Error(
+                  `invalid program data account for program: ${pubkey.toBase58()}`
+                );
+              }
+
+              data = {
+                program: result.data.program,
+                programData,
+                programAccount,
+              };
+
+              break;
+            }
             case "stake": {
               const parsed = coerce(info, StakeAccount);
               const isDelegated = parsed.type === "delegated";
