@@ -733,6 +733,36 @@ mod test {
     }
 
     #[test]
+    fn withdraw_inx_overflow() {
+        let rent = Rent {
+            lamports_per_byte_year: 42,
+            ..Rent::default()
+        };
+        let min_lamports = rent.minimum_balance(State::size());
+        with_test_keyed_account(min_lamports + 42, true, |nonce_keyed| {
+            let recent_blockhashes = create_test_recent_blockhashes(95);
+            let authorized = *nonce_keyed.unsigned_key();
+            nonce_keyed
+                .initialize_nonce_account(&authorized, &recent_blockhashes, &rent)
+                .unwrap();
+            with_test_keyed_account(55, false, |to_keyed| {
+                let recent_blockhashes = create_test_recent_blockhashes(63);
+                let mut signers = HashSet::new();
+                signers.insert(*nonce_keyed.signer_key().unwrap());
+                let withdraw_lamports = u64::MAX - 54;
+                let result = nonce_keyed.withdraw_nonce_account(
+                    withdraw_lamports,
+                    &to_keyed,
+                    &recent_blockhashes,
+                    &rent,
+                    &signers,
+                );
+                assert_eq!(result, Err(InstructionError::InsufficientFunds));
+            })
+        })
+    }
+
+    #[test]
     fn initialize_inx_ok() {
         let rent = Rent {
             lamports_per_byte_year: 42,
