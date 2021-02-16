@@ -6541,8 +6541,22 @@ pub mod tests {
     fn test_accountsdb_compute_merkle_root_large() {
         solana_logger::setup();
 
-        let hash_counts = vec![8, 9, 10, 26, 27, 28, 80, 81, 82, 240, 241, 242];
+        // handle fanout^x -1, +0, +1 for a few 'x's
         const FANOUT: usize = 3;
+        let mut hash_counts: Vec<_> = (1..6)
+            .map(|x| {
+                let mark = FANOUT.pow(x);
+                vec![mark - 1, mark, mark + 1]
+            })
+            .flatten()
+            .collect();
+
+        // saturate the test space for threshold to threshold + target
+        // this hits right before we use the 3 deep optimization and all the way through all possible partial last chunks
+        let target = FANOUT.pow(3);
+        let threshold = target * FANOUT;
+        hash_counts.extend(threshold - 1..=threshold + target);
+
         for hash_count in hash_counts {
             let hashes: Vec<_> = (0..hash_count)
                 .into_iter()
