@@ -219,7 +219,7 @@ mod tests {
                 // set_root should send a snapshot request
                 bank_forks.set_root(bank.slot(), &request_sender, None);
                 bank.update_accounts_hash();
-                snapshot_request_handler.handle_snapshot_requests(false, false);
+                snapshot_request_handler.handle_snapshot_requests(false, false, false);
             }
         }
 
