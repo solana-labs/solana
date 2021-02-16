@@ -1661,8 +1661,7 @@ pub fn main() {
         account_indexes,
         accounts_db_caching_enabled: !matches.is_present("no_accounts_db_caching"),
         accounts_db_test_hash_calculation: matches.is_present("accounts_db_test_hash_calculation"),
-        accounts_db_use_non_index_hash_calculation: matches
-            .is_present("no_accounts_db_index_hashing"),
+        accounts_db_use_index_hash_calculation: !matches.is_present("no_accounts_db_index_hashing"),
         ..ValidatorConfig::default()
     };
 
