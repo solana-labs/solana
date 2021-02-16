@@ -291,8 +291,6 @@ fn enable_turbine_retransmit_peers_patch(shred_slot: Slot, root_bank: &Bank) -> 
 
 // Drops shred slot leader from retransmit peers.
 // TODO: decide which bank should be used here.
-// TODO: confirm that this should use shred.slot() as opposed to
-// packet.meta.slot.
 fn get_retransmit_peers(
     self_pubkey: Pubkey,
     shred_slot: Slot,
