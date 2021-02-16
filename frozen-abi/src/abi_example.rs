@@ -512,11 +512,11 @@ impl<O: AbiEnumVisitor, E: AbiEnumVisitor> AbiEnumVisitor for Result<O, E> {
 
         digester.update(&["enum Result (variants = 2)"]);
         let variant: Self = Result::Ok(O::example());
-        variant.serialize(digester.create_enum_child())?;
+        variant.serialize(digester.create_enum_child()?)?;
 
         let variant: Self = Result::Err(E::example());
-        variant.serialize(digester.create_enum_child())?;
+        variant.serialize(digester.create_enum_child()?)?;
 
-        Ok(digester.create_child())
+        digester.create_child()
     }
 }

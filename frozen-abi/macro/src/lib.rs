@@ -271,7 +271,7 @@ fn do_derive_abi_enum_visitor(input: ItemEnum) -> TokenStream {
         };
         serialized_variants.extend(quote! {
             #sample_variant;
-            Serialize::serialize(&sample_variant, digester.create_enum_child())?;
+            Serialize::serialize(&sample_variant, digester.create_enum_child()?)?;
         });
     }
 
@@ -284,7 +284,7 @@ fn do_derive_abi_enum_visitor(input: ItemEnum) -> TokenStream {
                 use ::solana_frozen_abi::abi_example::AbiExample;
                 digester.update_with_string(format!("enum {} (variants = {})", enum_name, #variant_count));
                 #serialized_variants
-                Ok(digester.create_child())
+                digester.create_child()
             }
         }
     }).into()
