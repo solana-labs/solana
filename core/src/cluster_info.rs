@@ -307,7 +307,6 @@ impl Default for ClusterInfo {
     }
 }
 
-<<<<<<< HEAD
 #[derive(Default, Clone)]
 pub struct Locality {
     /// The bounds of the neighborhood represented by this locality
@@ -332,10 +331,7 @@ impl fmt::Debug for Locality {
     }
 }
 
-#[derive(Debug, Default, Deserialize, Serialize, AbiExample)]
-=======
 #[derive(Clone, Debug, Default, Deserialize, Serialize, AbiExample)]
->>>>>>> 076c20f1c... checks that prune-messages have the same inner/outer pubkey (#15352)
 pub struct PruneData {
     /// Pubkey of the node that sent this prune data
     pub pubkey: Pubkey,
