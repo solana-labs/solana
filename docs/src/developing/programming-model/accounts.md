@@ -15,7 +15,7 @@ lifetime is expressed in "tokens", which is a number of fractional native
 tokens, called _lamports_. Accounts are held in validator memory and pay
 ["rent"](#rent) to stay there. Each validator periodically scans all accounts
 and collects rent. Any account that drops to zero lamports is purged.  Accounts
-can also be marked [rent-exempt](#rent-exemption) if they contain a sufficnet
+can also be marked [rent-exempt](#rent-exemption) if they contain a sufficient
 number of lamports.
 
 In the same way that a Linux user uses a path to look up a file, a Solana client
