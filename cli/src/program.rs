@@ -1639,9 +1639,7 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
             for pending_signatures_chunk in
                 pending_signatures.chunks(MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS)
             {
-                if let Ok(result) =
-                    rpc_client.get_signature_statuses_with_history(pending_signatures_chunk)
-                {
+                if let Ok(result) = rpc_client.get_signature_statuses(pending_signatures_chunk) {
                     let statuses = result.value;
                     for (signature, status) in
                         pending_signatures_chunk.iter().zip(statuses.into_iter())
