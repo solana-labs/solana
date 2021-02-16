@@ -24,6 +24,7 @@ pub async fn upload_confirmed_blocks(
     starting_slot: Slot,
     ending_slot: Option<Slot>,
     allow_missing_metadata: bool,
+    force_reupload: bool,
     exit: Arc<AtomicBool>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut measure = Measure::start("entire upload");
@@ -63,7 +64,7 @@ pub async fn upload_confirmed_blocks(
     );
 
     // Gather the blocks that are already present in bigtable, by slot
-    let bigtable_slots = {
+    let bigtable_slots = if !force_reupload {
         let mut bigtable_slots = vec![];
         let first_blockstore_slot = *blockstore_slots.first().unwrap();
         let last_blockstore_slot = *blockstore_slots.last().unwrap();
@@ -94,6 +95,8 @@ pub async fn upload_confirmed_blocks(
             .into_iter()
             .filter(|slot| *slot <= last_blockstore_slot)
             .collect::<Vec<_>>()
+    } else {
+        Vec::new()
     };
 
     // The blocks that still need to be uploaded is the difference between what's already in the
