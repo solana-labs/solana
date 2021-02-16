@@ -3,7 +3,7 @@ use crate::{
     nonce_account::create_account,
 };
 use solana_program::{
-    instruction::InstructionError,
+    instruction::{checked_add, InstructionError},
     nonce::{self, state::Versions, State},
     pubkey::Pubkey,
     system_instruction::NonceError,
@@ -93,7 +93,7 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
                     self.set_state(&Versions::new_current(State::Uninitialized))?;
                 } else {
                     let min_balance = rent.minimum_balance(self.data_len()?);
-                    if lamports + min_balance > self.lamports()? {
+                    if checked_add(lamports, min_balance)? > self.lamports()? {
                         return Err(InstructionError::InsufficientFunds);
                     }
                 }
