@@ -1,4 +1,3 @@
-#![allow(clippy::integer_arithmetic)]
 #[macro_use]
 extern crate lazy_static;
 

@@ -75,7 +75,8 @@ impl Config {
             .set_scheme(if is_secure { "wss" } else { "ws" })
             .expect("unable to set scheme");
         if let Some(port) = json_rpc_url.port() {
-            ws_url.set_port(Some(port + 1)).expect("unable to set port");
+            let port = port.checked_add(1).expect("port out of range");
+            ws_url.set_port(Some(port)).expect("unable to set port");
         }
         ws_url.to_string()
     }
