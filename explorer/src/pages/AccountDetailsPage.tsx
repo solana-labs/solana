@@ -29,6 +29,7 @@ import { StakeHistoryCard } from "components/account/StakeHistoryCard";
 import { BlockhashesCard } from "components/account/BlockhashesCard";
 import { ConfigAccountSection } from "components/account/ConfigAccountSection";
 import { useFlaggedAccounts } from "providers/accounts/flagged-accounts";
+import { UpgradeableProgramSection } from "components/account/UpgradeableProgramSection";
 
 const TABS_LOOKUP: { [id: string]: Tab } = {
   "spl-token:mint": {
@@ -174,7 +175,15 @@ function DetailsSections({ pubkey, tab }: { pubkey: PublicKey; tab?: string }) {
 function InfoSection({ account }: { account: Account }) {
   const data = account?.details?.data;
 
-  if (data && data.program === "stake") {
+  if (data && data.program === "bpf-upgradeable-loader") {
+    return (
+      <UpgradeableProgramSection
+        account={account}
+        programAccount={data.programAccount}
+        programData={data.programData}
+      />
+    );
+  } else if (data && data.program === "stake") {
     return (
       <StakeAccountSection
         account={account}
@@ -290,7 +299,7 @@ function getTabs(data?: ProgramData): Tab[] {
   ];
 
   let programTypeKey = "";
-  if (data && "type" in data.parsed) {
+  if (data && "parsed" in data && "type" in data.parsed) {
     programTypeKey = `${data.program}:${data.parsed.type}`;
   }
 
