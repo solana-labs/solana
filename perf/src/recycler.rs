@@ -53,6 +53,13 @@ impl<T: Default + Reset> Recycler<T> {
             shrink_metric_name,
         }
     }
+
+    pub fn new_with_limit(shrink_metric_name: &'static str, limit: u32) -> Self {
+        Self {
+            recycler: Arc::new(RecyclerX::new(Some(limit))),
+            shrink_metric_name,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -190,9 +197,10 @@ impl<T: Default + Reset + Sized> Recycler<T> {
                 > object_pool.check_shrink_interval_ms as u64
             {
                 object_pool.last_shrink_check_ts = now;
-                let shrink_threshold_count = (object_pool.shrink_ratio
-                    * object_pool.total_allocated_count as f64)
-                    .ceil() as u32;
+                let shrink_threshold_count = Self::get_shrink_target(
+                    object_pool.shrink_ratio,
+                    object_pool.total_allocated_count,
+                );
 
                 // If more than the shrink threshold of all allocated objects are sitting doing nothing,
                 // increment the `above_shrink_ratio_count`.
@@ -280,6 +288,10 @@ impl<T: Default + Reset + Sized> Recycler<T> {
             None
         }
     }
+
+    fn get_shrink_target(shrink_ratio: f64, current_size: u32) -> u32 {
+        (shrink_ratio * current_size as f64).ceil() as u32
+    }
 }
 
 impl<T: Default + Reset> RecyclerX<T> {
@@ -316,6 +328,8 @@ impl<T: Default + Reset> RecyclerX<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::packet::PacketsRecycler;
+    use std::{thread::sleep, time::Duration};
 
     impl Reset for u64 {
         fn reset(&mut self) {
@@ -338,5 +352,105 @@ mod tests {
         let z = recycler.allocate().unwrap();
         assert_eq!(z, 10);
         assert_eq!(recycler.recycler.gc.lock().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_recycler_limit() {
+        let limit = 10;
+        assert!(limit <= DEFAULT_MINIMUM_OBJECT_COUNT);
+        // Use PacketRecycler so that dropping the allocated object
+        // actually recycles
+        let recycler = PacketsRecycler::new_with_limit("", limit);
+        let mut allocated_items = vec![];
+        for i in 0..limit * 2 {
+            let x = recycler.allocate();
+            if i >= limit {
+                assert!(x.is_none());
+            } else {
+                allocated_items.push(x.unwrap());
+            }
+        }
+        assert_eq!(
+            recycler.recycler.gc.lock().unwrap().total_allocated_count,
+            limit
+        );
+        assert_eq!(recycler.recycler.gc.lock().unwrap().len(), 0_usize);
+        drop(allocated_items);
+        assert_eq!(
+            recycler.recycler.gc.lock().unwrap().total_allocated_count,
+            limit
+        );
+        assert_eq!(recycler.recycler.gc.lock().unwrap().len(), limit as usize);
+    }
+
+    #[test]
+    fn test_recycler_shrink() {
+        let limit = DEFAULT_MINIMUM_OBJECT_COUNT * 2;
+        let max_above_shrink_ratio_count = 2;
+        let shrink_ratio = 0.80;
+        let recycler = PacketsRecycler::new_with_limit("", limit);
+        {
+            let mut locked_recycler = recycler.recycler.gc.lock().unwrap();
+            // Make the shrink interval a long time so shrinking doesn't happen yet
+            locked_recycler.check_shrink_interval_ms = std::u32::MAX;
+            // Set the count to one so that we shrink on every other allocation later.
+            locked_recycler.max_above_shrink_ratio_count = max_above_shrink_ratio_count;
+            locked_recycler.shrink_ratio = shrink_ratio;
+        }
+
+        let mut allocated_items = vec![];
+        for _ in 0..limit {
+            allocated_items.push(recycler.allocate().unwrap());
+        }
+        assert_eq!(
+            recycler.recycler.gc.lock().unwrap().total_allocated_count,
+            limit
+        );
+        assert_eq!(recycler.recycler.gc.lock().unwrap().len(), 0);
+        drop(allocated_items);
+        assert_eq!(recycler.recycler.gc.lock().unwrap().len(), limit as usize);
+
+        let shrink_interval = 10;
+        {
+            let mut locked_recycler = recycler.recycler.gc.lock().unwrap();
+            locked_recycler.check_shrink_interval_ms = shrink_interval;
+        }
+
+        let mut current_total_allocated_count =
+            recycler.recycler.gc.lock().unwrap().total_allocated_count;
+
+        // Shrink the recycler until it hits the minimum
+        let mut i = 0;
+        while current_total_allocated_count != DEFAULT_MINIMUM_OBJECT_COUNT {
+            sleep(Duration::from_millis(shrink_interval as u64 * 2));
+            recycler.allocate().unwrap();
+            let expected_above_shrink_ratio_count = (i + 1) % max_above_shrink_ratio_count;
+            assert_eq!(
+                recycler
+                    .recycler
+                    .gc
+                    .lock()
+                    .unwrap()
+                    .above_shrink_ratio_count,
+                (i + 1) % max_above_shrink_ratio_count
+            );
+            if expected_above_shrink_ratio_count == 0 {
+                // Shrink happened, update the expected `current_total_allocated_count`;
+                current_total_allocated_count = std::cmp::max(
+                    Recycler::<u64>::get_shrink_target(shrink_ratio, current_total_allocated_count),
+                    DEFAULT_MINIMUM_OBJECT_COUNT,
+                );
+                assert_eq!(
+                    recycler.recycler.gc.lock().unwrap().total_allocated_count,
+                    current_total_allocated_count
+                );
+                assert_eq!(
+                    recycler.recycler.gc.lock().unwrap().len(),
+                    current_total_allocated_count as usize
+                );
+            }
+
+            i += 1;
+        }
     }
 }
