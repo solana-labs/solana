@@ -2769,6 +2769,7 @@ impl Blockstore {
                 .expect("fetch from DuplicateSlots column family failed")
         };
 
+        let new_shred = Shred::new_from_serialized_shred(new_shred_raw.to_vec()).unwrap();
         res.map(|existing_shred| {
             if existing_shred != new_shred.payload[..new_shred.data_header.size as usize] {
                 Some(existing_shred)
