@@ -1273,6 +1273,12 @@ impl Blockstore {
             false
         };
 
+
+        if shred.data_header.size == 0 {
+            return false;
+        }
+
+
         // Check that we do not receive shred_index >= than the last_index
         // for the slot
         let last_index = slot_meta.last_index;
@@ -1378,7 +1384,10 @@ impl Blockstore {
 
         // Commit step: commit all changes to the mutable structures at once, or none at all.
         // We don't want only a subset of these changes going through.
-        write_batch.put_bytes::<cf::ShredData>((slot, index), &shred.payload)?;
+        write_batch.put_bytes::<cf::ShredData>(
+            (slot, index),
+            &shred.payload[..shred.data_header.size as usize],
+        )?;
         data_index.set_present(index, true);
         let newly_completed_data_sets = update_slot_meta(
             last_in_slot,
@@ -1406,7 +1415,13 @@ impl Blockstore {
     }
 
     pub fn get_data_shred(&self, slot: Slot, index: u64) -> Result<Option<Vec<u8>>> {
-        self.data_shred_cf.get_bytes((slot, index))
+        use crate::shred::SHRED_PAYLOAD_SIZE;
+        self.data_shred_cf.get_bytes((slot, index)).map(|data| {
+            data.and_then(|mut d| {
+                d.resize(cmp::max(d.len(), SHRED_PAYLOAD_SIZE), 0);
+                Some(d)
+            })
+        })
     }
 
     pub fn get_data_shreds_for_slot(
@@ -2743,7 +2758,7 @@ impl Blockstore {
         &self,
         slot: u64,
         index: u32,
-        new_shred: &[u8],
+        new_shred_raw: &[u8],
         is_data: bool,
     ) -> Option<Vec<u8>> {
         let res = if is_data {
@@ -2755,7 +2770,7 @@ impl Blockstore {
         };
 
         res.map(|existing_shred| {
-            if existing_shred != new_shred {
+            if existing_shred != new_shred.payload[..new_shred.data_header.size as usize] {
                 Some(existing_shred)
             } else {
                 None
@@ -7130,7 +7145,7 @@ pub mod tests {
                         .get_data_shred(s.slot(), s.index() as u64)
                         .unwrap()
                         .unwrap(),
-                    buf
+                    buf[..s.data_header.size as usize]
                 );
             }
 
@@ -7371,7 +7386,7 @@ pub mod tests {
                     &duplicate_shred.payload,
                     duplicate_shred.is_data()
                 ),
-                Some(shred.payload.clone())
+                Some(shred.payload[..shred.data_header.size as usize].to_vec())
             );
             assert!(blockstore
                 .is_shred_duplicate(
