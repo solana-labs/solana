@@ -242,10 +242,10 @@ pub fn create_account(
 }
 
 // we accept `to` as a parameter so that callers do their own error handling when
-//   calling create_address_with_seed()
+//   calling create_with_seed()
 pub fn create_account_with_seed(
     from_pubkey: &Pubkey,
-    to_pubkey: &Pubkey, // must match create_address_with_seed(base, seed, owner)
+    to_pubkey: &Pubkey, // must match create_with_seed(base, seed, owner)
     base: &Pubkey,
     seed: &str,
     lamports: u64,
@@ -281,7 +281,7 @@ pub fn assign(pubkey: &Pubkey, owner: &Pubkey) -> Instruction {
 }
 
 pub fn assign_with_seed(
-    address: &Pubkey, // must match create_address_with_seed(base, seed, owner)
+    address: &Pubkey, // must match create_with_seed(base, seed, owner)
     base: &Pubkey,
     seed: &str,
     owner: &Pubkey,
@@ -314,7 +314,7 @@ pub fn transfer(from_pubkey: &Pubkey, to_pubkey: &Pubkey, lamports: u64) -> Inst
 }
 
 pub fn transfer_with_seed(
-    from_pubkey: &Pubkey, // must match create_address_with_seed(base, seed, owner)
+    from_pubkey: &Pubkey, // must match create_with_seed(base, seed, owner)
     from_base: &Pubkey,
     from_seed: String,
     from_owner: &Pubkey,
@@ -347,7 +347,7 @@ pub fn allocate(pubkey: &Pubkey, space: u64) -> Instruction {
 }
 
 pub fn allocate_with_seed(
-    address: &Pubkey, // must match create_address_with_seed(base, seed, owner)
+    address: &Pubkey, // must match create_with_seed(base, seed, owner)
     base: &Pubkey,
     seed: &str,
     space: u64,
