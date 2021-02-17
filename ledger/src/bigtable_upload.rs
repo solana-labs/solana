@@ -137,7 +137,7 @@ pub async fn upload_confirmed_blocks(
                         break;
                     }
 
-                    let _ = match blockstore.get_confirmed_block(*slot) {
+                    let _ = match blockstore.get_confirmed_block(*slot, true) {
                         Ok(confirmed_block) => sender.send((*slot, Some(confirmed_block))),
                         Err(err) => {
                             warn!(
