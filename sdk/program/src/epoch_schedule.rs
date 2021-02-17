@@ -1,4 +1,3 @@
-#![allow(clippy::integer_arithmetic)]
 //! configuration for epochs, slots
 
 /// 1 Epoch = 400 * 8192 ms ~= 55 minutes
@@ -86,7 +85,9 @@ impl EpochSchedule {
     /// get the length of the given epoch (in slots)
     pub fn get_slots_in_epoch(&self, epoch: Epoch) -> u64 {
         if epoch < self.first_normal_epoch {
-            2u64.pow(epoch as u32 + MINIMUM_SLOTS_PER_EPOCH.trailing_zeros() as u32)
+            2u64.saturating_pow(
+                (epoch as u32).saturating_add(MINIMUM_SLOTS_PER_EPOCH.trailing_zeros() as u32),
+            )
         } else {
             self.slots_per_epoch
         }
@@ -97,11 +98,17 @@ impl EpochSchedule {
     pub fn get_leader_schedule_epoch(&self, slot: Slot) -> Epoch {
         if slot < self.first_normal_slot {
             // until we get to normal slots, behave as if leader_schedule_slot_offset == slots_per_epoch
-            self.get_epoch_and_slot_index(slot).0 + 1
+            self.get_epoch_and_slot_index(slot).0.saturating_add(1)
         } else {
+            let new_slots_since_first_normal_slot = slot.saturating_sub(self.first_normal_slot);
+            let new_first_normal_leader_schedule_slot =
+                new_slots_since_first_normal_slot.saturating_add(self.leader_schedule_slot_offset);
+            let new_epochs_since_first_normal_leader_schedule =
+                new_first_normal_leader_schedule_slot
+                    .checked_div(self.slots_per_epoch)
+                    .unwrap_or(0);
             self.first_normal_epoch
-                + (slot - self.first_normal_slot + self.leader_schedule_slot_offset)
-                    / self.slots_per_epoch
+                .saturating_add(new_epochs_since_first_normal_leader_schedule)
         }
     }
 
@@ -113,36 +120,51 @@ impl EpochSchedule {
     /// get epoch and offset into the epoch for the given slot
     pub fn get_epoch_and_slot_index(&self, slot: Slot) -> (Epoch, u64) {
         if slot < self.first_normal_slot {
-            let epoch = (slot + MINIMUM_SLOTS_PER_EPOCH + 1)
+            let epoch = slot
+                .saturating_add(MINIMUM_SLOTS_PER_EPOCH)
+                .saturating_add(1)
                 .next_power_of_two()
                 .trailing_zeros()
-                - MINIMUM_SLOTS_PER_EPOCH.trailing_zeros()
-                - 1;
+                .saturating_sub(MINIMUM_SLOTS_PER_EPOCH.trailing_zeros())
+                .saturating_sub(1);
 
-            let epoch_len = 2u64.pow(epoch + MINIMUM_SLOTS_PER_EPOCH.trailing_zeros());
+            let epoch_len =
+                2u64.saturating_pow(epoch.saturating_add(MINIMUM_SLOTS_PER_EPOCH.trailing_zeros()));
 
             (
                 u64::from(epoch),
-                slot - (epoch_len - MINIMUM_SLOTS_PER_EPOCH),
+                slot.saturating_sub(epoch_len.saturating_sub(MINIMUM_SLOTS_PER_EPOCH)),
             )
         } else {
-            (
-                self.first_normal_epoch + ((slot - self.first_normal_slot) / self.slots_per_epoch),
-                (slot - self.first_normal_slot) % self.slots_per_epoch,
-            )
+            let normal_slot_index = slot.saturating_sub(self.first_normal_slot);
+            let normal_epoch_index = normal_slot_index
+                .checked_div(self.slots_per_epoch)
+                .unwrap_or(0);
+            let epoch = self.first_normal_epoch.saturating_add(normal_epoch_index);
+            let slot_index = normal_slot_index
+                .checked_rem(self.slots_per_epoch)
+                .unwrap_or(0);
+            (epoch, slot_index)
         }
     }
 
     pub fn get_first_slot_in_epoch(&self, epoch: Epoch) -> Slot {
         if epoch <= self.first_normal_epoch {
-            (2u64.pow(epoch as u32) - 1) * MINIMUM_SLOTS_PER_EPOCH
+            2u64.saturating_pow(epoch as u32)
+                .saturating_sub(1)
+                .saturating_mul(MINIMUM_SLOTS_PER_EPOCH)
         } else {
-            (epoch - self.first_normal_epoch) * self.slots_per_epoch + self.first_normal_slot
+            epoch
+                .saturating_sub(self.first_normal_epoch)
+                .saturating_mul(self.slots_per_epoch)
+                .saturating_add(self.first_normal_slot)
         }
     }
 
     pub fn get_last_slot_in_epoch(&self, epoch: Epoch) -> Slot {
-        self.get_first_slot_in_epoch(epoch) + self.get_slots_in_epoch(epoch) - 1
+        self.get_first_slot_in_epoch(epoch)
+            .saturating_add(self.get_slots_in_epoch(epoch))
+            .saturating_sub(1)
     }
 }
 
