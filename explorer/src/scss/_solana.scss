@@ -331,3 +331,12 @@ div.inner-cards {
   background: red;
   border: 1px solid red;
 }
+
+pre.data-wrap {
+  max-width: 23rem;
+  white-space: pre-wrap;
+  white-space: -moz-pre-wrap;
+  white-space: -pre-wrap;
+  white-space: -o-pre-wrap;
+  word-wrap: break-word;
+}
