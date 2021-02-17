@@ -3714,9 +3714,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.59"
+version = "1.0.62"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dcac07dbffa1c65e7f816ab9eba78eb142c6d44410f4eeba1e26e4f5dfa56b95"
+checksum = "ea1c6153794552ea7cf7cf63b1231a25de00ec90db326ba6264440fa08e31486"
 dependencies = [
  "itoa",
  "ryu",
@@ -5236,6 +5236,8 @@ dependencies = [
  "log 0.4.11",
  "reqwest 0.10.8",
  "semver 0.9.0",
+ "serde",
+ "serde_json",
  "serde_yaml",
  "solana-clap-utils",
  "solana-cli-config",
