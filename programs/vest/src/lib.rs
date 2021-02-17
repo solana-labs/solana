@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 pub mod vest_instruction;
 pub mod vest_processor;
 pub mod vest_schedule;

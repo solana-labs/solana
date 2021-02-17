@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 extern crate byte_unit;
 
 use byte_unit::Byte;

@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 #[macro_use]
 extern crate log;
 use clap::{crate_description, crate_name, value_t, App, Arg};

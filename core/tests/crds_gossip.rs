@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 use bincode::serialized_size;
 use log::*;
 use rayon::prelude::*;

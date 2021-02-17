@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 use {
     clap::{value_t, value_t_or_exit, App, Arg},
     console::style,

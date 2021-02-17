@@ -1,4 +1,5 @@
 //! Ramp up TPS for Tour de SOL until all validators drop out
+#![allow(clippy::integer_arithmetic)]
 
 mod results;
 mod stake;

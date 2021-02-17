@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 pub mod address_generator;
 pub mod genesis_accounts;
 pub mod stakes;
