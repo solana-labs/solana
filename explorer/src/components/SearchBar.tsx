@@ -87,7 +87,11 @@ function buildProgramOptions(search: string) {
   }
 }
 
-const SEARCHABLE_LOADERS: LoaderName[] = ["BPF Loader", "BPF Loader 2"];
+const SEARCHABLE_LOADERS: LoaderName[] = [
+  "BPF Loader",
+  "BPF Loader 2",
+  "BPF Upgradeable Loader",
+];
 
 function buildLoaderOptions(search: string) {
   const matchedLoaders = Object.entries(LOADER_IDS).filter(

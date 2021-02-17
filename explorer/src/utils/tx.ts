@@ -78,6 +78,7 @@ export const LOADER_IDS = {
   NativeLoader1111111111111111111111111111111: "Native Loader",
   [BPF_LOADER_DEPRECATED_PROGRAM_ID.toBase58()]: "BPF Loader",
   [BPF_LOADER_PROGRAM_ID.toBase58()]: "BPF Loader 2",
+  BPFLoaderUpgradeab1e11111111111111111111111: "BPF Upgradeable Loader",
 } as const;
 
 const SYSVAR_ID: { [key: string]: string } = {
