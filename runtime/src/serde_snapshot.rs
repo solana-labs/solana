@@ -322,7 +322,7 @@ where
                 std::fs::rename(append_vec_abs_path.clone(), target).or_else(|_| {
                     let mut copy_options = CopyOptions::new();
                     copy_options.overwrite = true;
-                    fs_extra::move_items(&vec![&append_vec_abs_path], &local_dir, &copy_options)
+                    fs_extra::move_items(&[&append_vec_abs_path], &local_dir, &copy_options)
                         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
                         .and(Ok(()))
                 })?;
