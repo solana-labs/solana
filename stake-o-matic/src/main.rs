@@ -42,7 +42,10 @@ use {
     },
 };
 
+mod confirmed_block_cache;
 mod validator_list;
+
+use confirmed_block_cache::ConfirmedBlockCache;
 
 pub fn is_release_version(string: String) -> Result<(), String> {
     if string.starts_with('v') && semver::Version::parse(string.split_at(1).1).is_ok() {
@@ -110,9 +113,21 @@ struct Config {
     /// Don't ever unstake more than this percentage of the cluster at one time for running an
     /// older software version
     max_old_release_version_percentage: usize,
+
+    /// Base path of confirmed block cache
+    confirmed_block_cache_path: PathBuf,
+}
+
+fn default_confirmed_block_cache_path() -> PathBuf {
+    let home_dir = std::env::var("HOME").unwrap();
+    PathBuf::from(home_dir).join(".cache/solana/som/confirmed-block-cache/")
 }
 
 fn get_config() -> Config {
+    let default_confirmed_block_cache_path = default_confirmed_block_cache_path()
+        .to_str()
+        .unwrap()
+        .to_string();
     let matches = App::new(crate_name!())
         .about(crate_description!())
         .version(crate_version!())
@@ -241,6 +256,14 @@ fn get_config() -> Config {
                        software versions if more than this percentage of \
                        all validators are running an older software version")
         )
+        .arg(
+            Arg::with_name("confirmed_block_cache_path")
+                .long("confirmed-block-cache-path")
+                .takes_value(true)
+                .value_name("PATH")
+                .default_value(&default_confirmed_block_cache_path)
+                .help("Base path of confirmed block cache")
+        )
         .get_matches();
 
     let config = if let Some(config_file) = matches.value_of("config_file") {
@@ -306,6 +329,10 @@ fn get_config() -> Config {
         _ => unreachable!(),
     };
     let validator_list = validator_list.into_iter().collect::<HashSet<_>>();
+    let confirmed_block_cache_path = matches
+        .value_of("confirmed_block_cache_path")
+        .map(PathBuf::from)
+        .unwrap();
 
     let config = Config {
         json_rpc_url,
@@ -323,6 +350,7 @@ fn get_config() -> Config {
         address_labels: config.address_labels,
         min_release_version,
         max_old_release_version_percentage,
+        confirmed_block_cache_path,
     };
 
     info!("RPC URL: {}", config.json_rpc_url);
@@ -360,7 +388,7 @@ fn get_stake_account(
         .map(|stake_state| (account.lamports, stake_state))
 }
 
-fn retry_rpc_operation<T, F>(mut retries: usize, op: F) -> client_error::Result<T>
+pub fn retry_rpc_operation<T, F>(mut retries: usize, op: F) -> client_error::Result<T>
 where
     F: Fn() -> client_error::Result<T>,
 {
@@ -420,34 +448,12 @@ fn classify_block_producers(
 
     let leader_schedule = rpc_client.get_leader_schedule(Some(first_slot))?.unwrap();
 
-    let mut confirmed_blocks = vec![];
-    // Fetching a large number of blocks from BigTable can cause timeouts, break up the requests
-    const LONGTERM_STORAGE_STEP: u64 = 5_000;
-    let mut next_slot = first_slot;
-    while next_slot < last_slot_in_epoch {
-        let last_slot = if next_slot >= minimum_ledger_slot {
-            last_slot_in_epoch
-        } else {
-            last_slot_in_epoch.min(next_slot + LONGTERM_STORAGE_STEP)
-        };
-        let slots_remaining = last_slot_in_epoch - last_slot;
-        info!(
-            "Fetching confirmed blocks between {} - {}{}",
-            next_slot,
-            last_slot,
-            if slots_remaining > 0 {
-                format!(" ({} remaining)", slots_remaining)
-            } else {
-                "".to_string()
-            }
-        );
-
-        confirmed_blocks.push(retry_rpc_operation(42, || {
-            rpc_client.get_confirmed_blocks(next_slot, Some(last_slot))
-        })?);
-        next_slot = last_slot + 1;
-    }
-    let confirmed_blocks: HashSet<Slot> = confirmed_blocks.into_iter().flatten().collect();
+    let cache_path = config.confirmed_block_cache_path.join(&config.cluster);
+    let cbc = ConfirmedBlockCache::open(cache_path, &config.json_rpc_url).unwrap();
+    let confirmed_blocks = cbc
+        .query(first_slot, last_slot_in_epoch)?
+        .into_iter()
+        .collect::<HashSet<_>>();
 
     let mut poor_block_producers = HashSet::new();
     let mut quality_block_producers = HashSet::new();
