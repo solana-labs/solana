@@ -958,6 +958,240 @@ fn test_cli_program_mismatch_buffer_authority() {
         max_len: None,
     });
     process_command(&config).unwrap();
+<<<<<<< HEAD
+=======
+}
+
+#[test]
+fn test_cli_program_show() {
+    solana_logger::setup();
+
+    let mut pathbuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    pathbuf.push("tests");
+    pathbuf.push("fixtures");
+    pathbuf.push("noop");
+    pathbuf.set_extension("so");
+
+    let mint_keypair = Keypair::new();
+    let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
+    let faucet_addr = run_local_faucet(mint_keypair, None);
+
+    let rpc_client =
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
+
+    let mut file = File::open(pathbuf.to_str().unwrap()).unwrap();
+    let mut program_data = Vec::new();
+    file.read_to_end(&mut program_data).unwrap();
+    let max_len = program_data.len();
+    let minimum_balance_for_buffer = rpc_client
+        .get_minimum_balance_for_rent_exemption(
+            UpgradeableLoaderState::programdata_len(max_len).unwrap(),
+        )
+        .unwrap();
+
+    let mut config = CliConfig::recent_for_tests();
+    let keypair = Keypair::new();
+    config.json_rpc_url = test_validator.rpc_url();
+    config.output_format = OutputFormat::Json;
+
+    // Airdrop
+    config.signers = vec![&keypair];
+    config.command = CliCommand::Airdrop {
+        faucet_host: None,
+        faucet_port: faucet_addr.port(),
+        pubkey: None,
+        lamports: 100 * minimum_balance_for_buffer,
+    };
+    process_command(&config).unwrap();
+
+    // Write a buffer
+    let buffer_keypair = Keypair::new();
+    let authority_keypair = Keypair::new();
+    config.signers = vec![&keypair, &buffer_keypair, &authority_keypair];
+    config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
+        program_location: pathbuf.to_str().unwrap().to_string(),
+        buffer_signer_index: Some(1),
+        buffer_pubkey: Some(buffer_keypair.pubkey()),
+        buffer_authority_signer_index: Some(2),
+        max_len: None,
+    });
+    process_command(&config).unwrap();
+
+    // Verify show
+    config.signers = vec![&keypair];
+    config.command = CliCommand::Program(ProgramCliCommand::Show {
+        account_pubkey: Some(buffer_keypair.pubkey()),
+    });
+    let response = process_command(&config);
+    let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
+    let address_str = json
+        .as_object()
+        .unwrap()
+        .get("address")
+        .unwrap()
+        .as_str()
+        .unwrap();
+    assert_eq!(
+        buffer_keypair.pubkey(),
+        Pubkey::from_str(&address_str).unwrap()
+    );
+    let authority_str = json
+        .as_object()
+        .unwrap()
+        .get("authority")
+        .unwrap()
+        .as_str()
+        .unwrap();
+    assert_eq!(
+        authority_keypair.pubkey(),
+        Pubkey::from_str(&authority_str).unwrap()
+    );
+    let data_len = json
+        .as_object()
+        .unwrap()
+        .get("dataLen")
+        .unwrap()
+        .as_u64()
+        .unwrap();
+    assert_eq!(max_len, data_len as usize);
+
+    // Deploy
+    let program_keypair = Keypair::new();
+    config.signers = vec![&keypair, &authority_keypair, &program_keypair];
+    config.command = CliCommand::Program(ProgramCliCommand::Deploy {
+        program_location: Some(pathbuf.to_str().unwrap().to_string()),
+        program_signer_index: Some(2),
+        program_pubkey: Some(program_keypair.pubkey()),
+        buffer_signer_index: None,
+        buffer_pubkey: None,
+        allow_excessive_balance: false,
+        upgrade_authority_signer_index: 1,
+        is_final: false,
+        max_len: Some(max_len),
+    });
+    config.output_format = OutputFormat::JsonCompact;
+    let min_slot = rpc_client.get_slot().unwrap();
+    process_command(&config).unwrap();
+    let max_slot = rpc_client.get_slot().unwrap();
+
+    // Verify show
+    config.signers = vec![&keypair];
+    config.command = CliCommand::Program(ProgramCliCommand::Show {
+        account_pubkey: Some(program_keypair.pubkey()),
+    });
+    let response = process_command(&config);
+    let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
+    let address_str = json
+        .as_object()
+        .unwrap()
+        .get("programId")
+        .unwrap()
+        .as_str()
+        .unwrap();
+    assert_eq!(
+        program_keypair.pubkey(),
+        Pubkey::from_str(&address_str).unwrap()
+    );
+    let programdata_address_str = json
+        .as_object()
+        .unwrap()
+        .get("programdataAddress")
+        .unwrap()
+        .as_str()
+        .unwrap();
+    let (programdata_pubkey, _) = Pubkey::find_program_address(
+        &[program_keypair.pubkey().as_ref()],
+        &bpf_loader_upgradeable::id(),
+    );
+    assert_eq!(
+        programdata_pubkey,
+        Pubkey::from_str(&programdata_address_str).unwrap()
+    );
+    let authority_str = json
+        .as_object()
+        .unwrap()
+        .get("authority")
+        .unwrap()
+        .as_str()
+        .unwrap();
+    assert_eq!(
+        authority_keypair.pubkey(),
+        Pubkey::from_str(&authority_str).unwrap()
+    );
+    let deployed_slot = json
+        .as_object()
+        .unwrap()
+        .get("lastDeploySlot")
+        .unwrap()
+        .as_u64()
+        .unwrap();
+    assert!(deployed_slot >= min_slot);
+    assert!(deployed_slot <= max_slot);
+    let data_len = json
+        .as_object()
+        .unwrap()
+        .get("dataLen")
+        .unwrap()
+        .as_u64()
+        .unwrap();
+    assert_eq!(max_len, data_len as usize);
+}
+
+#[test]
+fn test_cli_program_dump() {
+    solana_logger::setup();
+
+    let mut pathbuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    pathbuf.push("tests");
+    pathbuf.push("fixtures");
+    pathbuf.push("noop");
+    pathbuf.set_extension("so");
+
+    let mint_keypair = Keypair::new();
+    let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
+    let faucet_addr = run_local_faucet(mint_keypair, None);
+
+    let rpc_client =
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
+
+    let mut file = File::open(pathbuf.to_str().unwrap()).unwrap();
+    let mut program_data = Vec::new();
+    file.read_to_end(&mut program_data).unwrap();
+    let max_len = program_data.len();
+    let minimum_balance_for_buffer = rpc_client
+        .get_minimum_balance_for_rent_exemption(
+            UpgradeableLoaderState::programdata_len(max_len).unwrap(),
+        )
+        .unwrap();
+
+    let mut config = CliConfig::recent_for_tests();
+    let keypair = Keypair::new();
+    config.json_rpc_url = test_validator.rpc_url();
+    config.output_format = OutputFormat::Json;
+
+    // Airdrop
+    config.signers = vec![&keypair];
+    config.command = CliCommand::Airdrop {
+        faucet_host: None,
+        faucet_port: faucet_addr.port(),
+        pubkey: None,
+        lamports: 100 * minimum_balance_for_buffer,
+    };
+    process_command(&config).unwrap();
+
+    // Write a buffer
+    let buffer_keypair = Keypair::new();
+    let authority_keypair = Keypair::new();
+    config.signers = vec![&keypair, &buffer_keypair, &authority_keypair];
+    config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
+        program_location: pathbuf.to_str().unwrap().to_string(),
+        buffer_signer_index: Some(1),
+        buffer_pubkey: Some(buffer_keypair.pubkey()),
+        buffer_authority_signer_index: Some(2),
+        max_len: None,
+    });
+    process_command(&config).unwrap();
+>>>>>>> f5c564bc6... cli: Speed up program deploys (#15347)
 
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
