@@ -1727,11 +1727,10 @@ impl Blockstore {
                 let parent_slot_entries = self
                     .get_slot_entries(slot_meta.parent_slot, 0)
                     .unwrap_or_default();
-                let previous_blockhash = if !parent_slot_entries.is_empty() {
-                    get_last_hash(parent_slot_entries.iter()).unwrap()
-                } else {
-                    Hash::default()
-                };
+                if parent_slot_entries.is_empty() {
+                    return Err(BlockstoreError::ParentEntriesUnavailable);
+                }
+                let previous_blockhash = get_last_hash(parent_slot_entries.iter()).unwrap();
 
                 let blockhash = get_last_hash(slot_entries.iter())
                     .unwrap_or_else(|| panic!("Rooted slot {:?} must have blockhash", slot));
@@ -5743,20 +5742,13 @@ pub mod tests {
         let confirmed_block_err = ledger.get_confirmed_block(slot - 1).unwrap_err();
         assert_matches!(confirmed_block_err, BlockstoreError::SlotNotRooted);
 
-        let confirmed_block = ledger.get_confirmed_block(slot).unwrap();
-        assert_eq!(confirmed_block.transactions.len(), 100);
-
-        let expected_block = ConfirmedBlock {
-            transactions: expected_transactions.clone(),
-            parent_slot: slot - 1,
-            blockhash: blockhash.to_string(),
-            previous_blockhash: Hash::default().to_string(),
-            rewards: vec![],
-            block_time: None,
-        };
         // The previous_blockhash of `expected_block` is default because its parent slot is a
-        // root, but empty of entries. This is special handling for snapshot root slots.
-        assert_eq!(confirmed_block, expected_block);
+        // root, but empty of entries (eg. snapshot root slots). This now returns an error.
+        let confirmed_block_err = ledger.get_confirmed_block(slot).unwrap_err();
+        assert_matches!(
+            confirmed_block_err,
+            BlockstoreError::ParentEntriesUnavailable
+        );
 
         let confirmed_block = ledger.get_confirmed_block(slot + 1).unwrap();
         assert_eq!(confirmed_block.transactions.len(), 100);
