@@ -5,6 +5,7 @@ use {
         ArgMatches,
     },
     log::*,
+    reqwest::StatusCode,
     solana_clap_utils::{
         input_parsers::{keypair_of, pubkey_of},
         input_validators::{
@@ -371,7 +372,12 @@ where
             ..
         }) = result
         {
-            if reqwest_error.is_timeout() && retries > 0 {
+            let can_retry = reqwest_error.is_timeout()
+                || reqwest_error
+                    .status()
+                    .map(|s| s == StatusCode::BAD_GATEWAY || s == StatusCode::GATEWAY_TIMEOUT)
+                    .unwrap_or(false);
+            if can_retry && retries > 0 {
                 info!("RPC request timeout, {} retries remaining", retries);
                 retries -= 1;
                 continue;
