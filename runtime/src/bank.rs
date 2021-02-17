@@ -10466,7 +10466,7 @@ pub(crate) mod tests {
             bank.process_transaction(&tx),
             Err(TransactionError::InstructionError(
                 0,
-                InstructionError::InvalidAccountData
+                InstructionError::InvalidAccountOwner
             ))
         );
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 498); // transaction fee charged
@@ -10488,7 +10488,7 @@ pub(crate) mod tests {
             bank.process_transaction(&tx),
             Err(TransactionError::InstructionError(
                 0,
-                InstructionError::InvalidAccountData
+                InstructionError::InvalidAccountOwner
             ))
         );
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 496); // transaction fee charged
