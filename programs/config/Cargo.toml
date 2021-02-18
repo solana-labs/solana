@@ -12,12 +12,8 @@ edition = "2018"
 bincode = "1.3.1"
 chrono = { version = "0.4.11", features = ["serde"] }
 log = "0.4.11"
-<<<<<<< HEAD
 rand_core = "0.6.2"
-serde = "1.0.112"
-=======
 serde = "1.0.118"
->>>>>>> 1df93fa2b... chore: bump serde from 1.0.112 to 1.0.118 (#14828)
 serde_derive = "1.0.103"
 solana-sdk = { path = "../../sdk", version = "1.5.9" }
 
