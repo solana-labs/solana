@@ -1,9 +1,5 @@
 use solana_sdk::{
     account::Account,
-    feature_set::{
-        bpf_compute_budget_balancing, max_cpi_instruction_size_ipv6_mtu, max_invoke_depth_4,
-        max_program_call_depth_64, pubkey_log_syscall_enabled, FeatureSet,
-    },
     instruction::{CompiledInstruction, Instruction, InstructionError},
     keyed_account::KeyedAccount,
     message::Message,
@@ -127,64 +123,25 @@ pub struct BpfComputeBudget {
 }
 impl Default for BpfComputeBudget {
     fn default() -> Self {
-        Self::new(&FeatureSet::all_enabled())
+        Self::new()
     }
 }
 impl BpfComputeBudget {
-    pub fn new(feature_set: &FeatureSet) -> Self {
-        let mut bpf_compute_budget =
-        // Original
+    pub fn new() -> Self {
         BpfComputeBudget {
-            max_units: 100_000,
-            log_units: 0,
-            log_64_units: 0,
-            create_program_address_units: 0,
-            invoke_units: 0,
-            max_invoke_depth: 1,
+            max_units: 200_000,
+            log_units: 100,
+            log_64_units: 100,
+            create_program_address_units: 1500,
+            invoke_units: 1000,
+            max_invoke_depth: 4,
             sha256_base_cost: 85,
             sha256_byte_cost: 1,
-            max_call_depth: 20,
+            max_call_depth: 64,
             stack_frame_size: 4_096,
-            log_pubkey_units: 0,
-            max_cpi_instruction_size: std::usize::MAX,
-        };
-
-        if feature_set.is_active(&bpf_compute_budget_balancing::id()) {
-            bpf_compute_budget = BpfComputeBudget {
-                max_units: 200_000,
-                log_units: 100,
-                log_64_units: 100,
-                create_program_address_units: 1500,
-                invoke_units: 1000,
-                ..bpf_compute_budget
-            };
+            log_pubkey_units: 100,
+            max_cpi_instruction_size: 1280, // IPv6 Min MTU size
         }
-        if feature_set.is_active(&max_invoke_depth_4::id()) {
-            bpf_compute_budget = BpfComputeBudget {
-                max_invoke_depth: 4,
-                ..bpf_compute_budget
-            };
-        }
-
-        if feature_set.is_active(&max_program_call_depth_64::id()) {
-            bpf_compute_budget = BpfComputeBudget {
-                max_call_depth: 64,
-                ..bpf_compute_budget
-            };
-        }
-        if feature_set.is_active(&pubkey_log_syscall_enabled::id()) {
-            bpf_compute_budget = BpfComputeBudget {
-                log_pubkey_units: 100,
-                ..bpf_compute_budget
-            };
-        }
-        if feature_set.is_active(&max_cpi_instruction_size_ipv6_mtu::id()) {
-            bpf_compute_budget = BpfComputeBudget {
-                max_cpi_instruction_size: 1280, // IPv6 Min MTU size
-                ..bpf_compute_budget
-            };
-        }
-        bpf_compute_budget
     }
 }
 

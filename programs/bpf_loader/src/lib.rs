@@ -27,10 +27,7 @@ use solana_sdk::{
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     clock::Clock,
     entrypoint::SUCCESS,
-    feature_set::{
-        bpf_compute_budget_balancing, matching_buffer_upgrade_authorities,
-        prevent_upgrade_and_invoke,
-    },
+    feature_set::matching_buffer_upgrade_authorities,
     ic_logger_msg, ic_msg,
     instruction::InstructionError,
     keyed_account::{from_keyed_account, next_keyed_account, KeyedAccount},
@@ -90,11 +87,8 @@ pub fn create_and_cache_executor(
     let (_, elf_bytes) = program
         .get_text_bytes()
         .map_err(|e| map_ebpf_error(invoke_context, e))?;
-    bpf_verifier::check(
-        elf_bytes,
-        !invoke_context.is_feature_active(&bpf_compute_budget_balancing::id()),
-    )
-    .map_err(|e| map_ebpf_error(invoke_context, EbpfError::UserError(e)))?;
+    bpf_verifier::check(elf_bytes)
+        .map_err(|e| map_ebpf_error(invoke_context, EbpfError::UserError(e)))?;
     let syscall_registry = syscalls::register_syscalls(invoke_context).map_err(|e| {
         ic_msg!(invoke_context, "Failed to register syscalls: {}", e);
         InstructionError::ProgramEnvironmentSetupFailure
@@ -491,9 +485,7 @@ fn process_loader_upgradeable_instruction(
                 ic_logger_msg!(logger, "Program account not executable");
                 return Err(InstructionError::AccountNotExecutable);
             }
-            if !program.is_writable()
-                && invoke_context.is_feature_active(&prevent_upgrade_and_invoke::id())
-            {
+            if !program.is_writable() {
                 ic_logger_msg!(logger, "Program account not writeable");
                 return Err(InstructionError::InvalidArgument);
             }
@@ -911,7 +903,7 @@ mod tests {
         let prog = &[
             0x18, 0x00, 0x00, 0x00, 0x88, 0x77, 0x66, 0x55, // first half of lddw
         ];
-        bpf_verifier::check(prog, true).unwrap();
+        bpf_verifier::check(prog).unwrap();
     }
 
     #[test]

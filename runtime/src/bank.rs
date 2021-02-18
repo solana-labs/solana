@@ -2879,7 +2879,7 @@ impl Bank {
         let mut transaction_log_messages = Vec::with_capacity(txs.len());
         let bpf_compute_budget = self
             .bpf_compute_budget
-            .unwrap_or_else(|| BpfComputeBudget::new(&self.feature_set));
+            .unwrap_or_else(BpfComputeBudget::new);
 
         let executed: Vec<TransactionExecutionResult> = loaded_accounts
             .iter_mut()
