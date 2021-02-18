@@ -75,6 +75,7 @@ pub enum BlockstoreError {
     NoVoteTimestampsInRange,
     ProtobufEncodeError(#[from] prost::EncodeError),
     ProtobufDecodeError(#[from] prost::DecodeError),
+    ParentEntriesUnavailable,
 }
 pub type Result<T> = std::result::Result<T, BlockstoreError>;
 

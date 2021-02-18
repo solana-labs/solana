@@ -2761,7 +2761,7 @@ pub(crate) mod tests {
                 blockstore.clone(),
             );
 
-            let confirmed_block = blockstore.get_confirmed_block(slot).unwrap();
+            let confirmed_block = blockstore.get_confirmed_block(slot, false).unwrap();
             assert_eq!(confirmed_block.transactions.len(), 3);
 
             for TransactionWithStatusMeta { transaction, meta } in

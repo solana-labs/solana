@@ -1686,7 +1686,11 @@ impl Blockstore {
         Ok(root_iterator.next().unwrap_or_default())
     }
 
-    pub fn get_confirmed_block(&self, slot: Slot) -> Result<ConfirmedBlock> {
+    pub fn get_confirmed_block(
+        &self,
+        slot: Slot,
+        require_previous_blockhash: bool,
+    ) -> Result<ConfirmedBlock> {
         datapoint_info!(
             "blockstore-rpc-api",
             ("method", "get_confirmed_block".to_string(), String)
@@ -1727,6 +1731,9 @@ impl Blockstore {
                 let parent_slot_entries = self
                     .get_slot_entries(slot_meta.parent_slot, 0)
                     .unwrap_or_default();
+                if parent_slot_entries.is_empty() && require_previous_blockhash {
+                    return Err(BlockstoreError::ParentEntriesUnavailable);
+                }
                 let previous_blockhash = if !parent_slot_entries.is_empty() {
                     get_last_hash(parent_slot_entries.iter()).unwrap()
                 } else {
@@ -2073,12 +2080,13 @@ impl Blockstore {
                 match transaction_status {
                     None => return Ok(vec![]),
                     Some((slot, _)) => {
-                        let confirmed_block = self.get_confirmed_block(slot).map_err(|err| {
-                            BlockstoreError::IO(IOError::new(
-                                ErrorKind::Other,
-                                format!("Unable to get confirmed block: {}", err),
-                            ))
-                        })?;
+                        let confirmed_block =
+                            self.get_confirmed_block(slot, false).map_err(|err| {
+                                BlockstoreError::IO(IOError::new(
+                                    ErrorKind::Other,
+                                    format!("Unable to get confirmed block: {}", err),
+                                ))
+                            })?;
 
                         // Load all signatures for the block
                         let mut slot_signatures: Vec<_> = confirmed_block
@@ -2123,12 +2131,13 @@ impl Blockstore {
                 match transaction_status {
                     None => (0, HashSet::new()),
                     Some((slot, _)) => {
-                        let confirmed_block = self.get_confirmed_block(slot).map_err(|err| {
-                            BlockstoreError::IO(IOError::new(
-                                ErrorKind::Other,
-                                format!("Unable to get confirmed block: {}", err),
-                            ))
-                        })?;
+                        let confirmed_block =
+                            self.get_confirmed_block(slot, false).map_err(|err| {
+                                BlockstoreError::IO(IOError::new(
+                                    ErrorKind::Other,
+                                    format!("Unable to get confirmed block: {}", err),
+                                ))
+                            })?;
 
                         // Load all signatures for the block
                         let mut slot_signatures: Vec<_> = confirmed_block
@@ -5740,12 +5749,20 @@ pub mod tests {
             .collect();
 
         // Even if marked as root, a slot that is empty of entries should return an error
-        let confirmed_block_err = ledger.get_confirmed_block(slot - 1).unwrap_err();
+        let confirmed_block_err = ledger.get_confirmed_block(slot - 1, true).unwrap_err();
         assert_matches!(confirmed_block_err, BlockstoreError::SlotNotRooted);
 
-        let confirmed_block = ledger.get_confirmed_block(slot).unwrap();
-        assert_eq!(confirmed_block.transactions.len(), 100);
+        // The previous_blockhash of `expected_block` is default because its parent slot is a root,
+        // but empty of entries (eg. snapshot root slots). This now returns an error.
+        let confirmed_block_err = ledger.get_confirmed_block(slot, true).unwrap_err();
+        assert_matches!(
+            confirmed_block_err,
+            BlockstoreError::ParentEntriesUnavailable
+        );
 
+        // Test if require_previous_blockhash is false
+        let confirmed_block = ledger.get_confirmed_block(slot, false).unwrap();
+        assert_eq!(confirmed_block.transactions.len(), 100);
         let expected_block = ConfirmedBlock {
             transactions: expected_transactions.clone(),
             parent_slot: slot - 1,
@@ -5754,11 +5771,9 @@ pub mod tests {
             rewards: vec![],
             block_time: None,
         };
-        // The previous_blockhash of `expected_block` is default because its parent slot is a
-        // root, but empty of entries. This is special handling for snapshot root slots.
         assert_eq!(confirmed_block, expected_block);
 
-        let confirmed_block = ledger.get_confirmed_block(slot + 1).unwrap();
+        let confirmed_block = ledger.get_confirmed_block(slot + 1, true).unwrap();
         assert_eq!(confirmed_block.transactions.len(), 100);
 
         let mut expected_block = ConfirmedBlock {
@@ -5771,7 +5786,7 @@ pub mod tests {
         };
         assert_eq!(confirmed_block, expected_block);
 
-        let not_root = ledger.get_confirmed_block(slot + 2).unwrap_err();
+        let not_root = ledger.get_confirmed_block(slot + 2, true).unwrap_err();
         assert_matches!(not_root, BlockstoreError::SlotNotRooted);
 
         // Test block_time returns, if available
@@ -5779,7 +5794,7 @@ pub mod tests {
         ledger.blocktime_cf.put(slot + 1, &timestamp).unwrap();
         expected_block.block_time = Some(timestamp);
 
-        let confirmed_block = ledger.get_confirmed_block(slot + 1).unwrap();
+        let confirmed_block = ledger.get_confirmed_block(slot + 1, true).unwrap();
         assert_eq!(confirmed_block, expected_block);
 
         drop(ledger);

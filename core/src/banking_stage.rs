@@ -2183,7 +2183,7 @@ mod tests {
 
             transaction_status_service.join().unwrap();
 
-            let confirmed_block = blockstore.get_confirmed_block(bank.slot()).unwrap();
+            let confirmed_block = blockstore.get_confirmed_block(bank.slot(), false).unwrap();
             assert_eq!(confirmed_block.transactions.len(), 3);
 
             for TransactionWithStatusMeta { transaction, meta } in
