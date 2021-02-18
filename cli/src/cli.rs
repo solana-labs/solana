@@ -40,7 +40,7 @@ use solana_sdk::{
     hash::Hash,
     instruction::InstructionError,
     message::Message,
-    pubkey::{Pubkey, MAX_SEED_LEN},
+    pubkey::Pubkey,
     signature::{Signature, Signer, SignerError},
     system_instruction::{self, SystemError},
     system_program,
@@ -922,12 +922,6 @@ pub fn parse_create_address_with_seed(
     let program_id = resolve_derived_address_program_id(matches, "program_id").unwrap();
 
     let seed = matches.value_of("seed").unwrap().to_string();
-
-    if seed.len() > MAX_SEED_LEN {
-        return Err(CliError::BadParameter(
-            "Address seed must not be longer than 32 bytes".to_string(),
-        ));
-    }
 
     Ok(CliCommandInfo {
         command: CliCommand::CreateAddressWithSeed {
@@ -1971,6 +1965,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("SEED_STRING")
                         .takes_value(true)
                         .required(true)
+                        .validator(is_derived_address_seed)
                         .help("The seed.  Must not take more than 32 bytes to encode as utf-8"),
                 )
                 .arg(
