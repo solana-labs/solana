@@ -193,6 +193,16 @@ impl<T: Default + Reset + Sized> Recycler<T> {
             let now = timestamp();
             let mut shrink_stats = None;
 
+            let is_consistent = object_pool.total_allocated_count as usize >= object_pool.len();
+            if !is_consistent {
+                warn!(
+                    "Object pool inconsistent: {} {} {}",
+                    object_pool.total_allocated_count,
+                    object_pool.len(),
+                    self.shrink_metric_name,
+                );
+            }
+            assert!(is_consistent);
             if now.saturating_sub(object_pool.last_shrink_check_ts)
                 > object_pool.check_shrink_interval_ms as u64
             {
