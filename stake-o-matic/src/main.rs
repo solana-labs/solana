@@ -93,7 +93,8 @@ struct Config {
     /// cause a validator to go down
     delinquent_grace_slot_distance: u64,
 
-    /// Don't ever unstake more than this percentage of the cluster at one time
+    /// Don't ever unstake more than this percentage of the cluster at one time for poor block
+    /// production
     max_poor_block_producer_percentage: usize,
 
     /// Vote accounts with a larger commission than this amount will not be staked.
@@ -101,8 +102,13 @@ struct Config {
 
     address_labels: HashMap<String, String>,
 
-    /// If Some(), destake validators with a version less than this version
-    minimum_release_version: Option<semver::Version>,
+    /// If Some(), destake validators with a version less than this version subject to the
+    /// `max_old_release_version_percentage` limit
+    min_release_version: Option<semver::Version>,
+
+    /// Don't ever unstake more than this percentage of the cluster at one time for running an
+    /// older software version
+    max_old_release_version_percentage: usize,
 }
 
 fn get_config() -> Config {
@@ -215,12 +221,24 @@ fn get_config() -> Config {
                 .help("Vote accounts with a larger commission than this amount will not be staked")
         )
         .arg(
-            Arg::with_name("minimum_release_version")
-                .long("minimum-release-version")
+            Arg::with_name("min_release_version")
+                .long("min-release-version")
                 .value_name("SEMVER")
                 .takes_value(true)
                 .validator(is_release_version)
-                .help("Remove the base and bonus stake from validators with a release version older than this one")
+                .help("Remove the base and bonus stake from validators with \
+                       a release version older than this one")
+        )
+        .arg(
+            Arg::with_name("max_old_release_version_percentage")
+                .long("max-old-release-version-percentage")
+                .value_name("PERCENTAGE")
+                .takes_value(true)
+                .default_value("10")
+                .validator(is_valid_percentage)
+                .help("Do not remove stake from validators running older \
+                       software versions if more than this percentage of \
+                       all validators are running an older software version")
         )
         .get_matches();
 
@@ -239,10 +257,12 @@ fn get_config() -> Config {
     let max_commission = value_t_or_exit!(matches, "max_commission", u8);
     let max_poor_block_producer_percentage =
         value_t_or_exit!(matches, "max_poor_block_producer_percentage", usize);
+    let max_old_release_version_percentage =
+        value_t_or_exit!(matches, "max_old_release_version_percentage", usize);
     let baseline_stake_amount =
         sol_to_lamports(value_t_or_exit!(matches, "baseline_stake_amount", f64));
     let bonus_stake_amount = sol_to_lamports(value_t_or_exit!(matches, "bonus_stake_amount", f64));
-    let minimum_release_version = release_version_of(&matches, "minimum_release_version");
+    let min_release_version = release_version_of(&matches, "min_release_version");
 
     let (json_rpc_url, validator_list) = match cluster.as_str() {
         "mainnet-beta" => (
@@ -300,7 +320,8 @@ fn get_config() -> Config {
         max_commission,
         max_poor_block_producer_percentage,
         address_labels: config.address_labels,
-        minimum_release_version,
+        min_release_version,
+        max_old_release_version_percentage,
     };
 
     info!("RPC URL: {}", config.json_rpc_url);
@@ -695,8 +716,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         process::exit(1);
     });
 
-    let cluster_nodes_with_old_version: HashSet<String> = match config.minimum_release_version {
-        Some(ref minimum_release_version) => rpc_client
+    let cluster_nodes_with_old_version: HashSet<String> = match config.min_release_version {
+        Some(ref min_release_version) => rpc_client
             .get_cluster_nodes()?
             .into_iter()
             .filter_map(|rpc_contact_info| {
@@ -704,7 +725,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     if config.validator_list.contains(&pubkey) {
                         if let Some(ref version) = rpc_contact_info.version {
                             if let Ok(semver) = semver::Version::parse(version) {
-                                if semver < *minimum_release_version {
+                                if semver < *min_release_version {
                                     return Some(rpc_contact_info.pubkey);
                                 }
                             }
@@ -717,10 +738,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         None => HashSet::default(),
     };
 
-    if let Some(ref minimum_release_version) = config.minimum_release_version {
+    if let Some(ref min_release_version) = config.min_release_version {
         info!(
             "Validators running a release older than {}: {:?}",
-            minimum_release_version, cluster_nodes_with_old_version,
+            min_release_version, cluster_nodes_with_old_version,
         );
     }
 
@@ -737,10 +758,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let too_many_poor_block_producers = poor_block_producers.len()
         > quality_block_producers.len() * config.max_poor_block_producer_percentage / 100;
 
-    // If more than 10% of the cluster is running an older version, disable de-staking of old
-    // validators.  The user probably provided a bad `--minimum-release-version` argument
     let too_many_old_validators = cluster_nodes_with_old_version.len()
-        > (poor_block_producers.len() + quality_block_producers.len()) / 10;
+        > (poor_block_producers.len() + quality_block_producers.len())
+            * config.max_old_release_version_percentage
+            / 100;
 
     // Fetch vote account status for all the validator_listed validators
     let vote_account_status = rpc_client.get_vote_accounts()?;
@@ -1131,8 +1152,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     }
 
     if too_many_old_validators {
-        let message =
-            "Note: Something is wrong, too many validators classified as running an older release";
+        let message = format!(
+            "Note: Something is wrong, more than {}% of validators classified \
+                     as running an older release",
+            config.max_old_release_version_percentage
+        );
         warn!("{}", message);
         if !config.dry_run {
             notifier.send(&message);
