@@ -1374,7 +1374,7 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
     // Verify the program
     Executable::<BPFError, ThisInstructionMeter>::from_elf(
         &program_data,
-        Some(|x| bpf_verifier::check(x, false)),
+        Some(|x| bpf_verifier::check(x)),
         Config::default(),
     )
     .map_err(|err| format!("ELF error: {}", err))?;

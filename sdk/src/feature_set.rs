@@ -47,18 +47,6 @@ pub mod spl_token_v2_multisig_fix {
     solana_sdk::declare_id!("E5JiFDQCwyC6QfT9REFyMpfK2mHcmv1GUDySU1Ue7TYv");
 }
 
-pub mod bpf_loader2_program {
-    solana_sdk::declare_id!("DFBnrgThdzH4W6wZ12uGPoWcMnvfZj11EHnxHcVxLPhD");
-}
-
-pub mod bpf_compute_budget_balancing {
-    solana_sdk::declare_id!("HxvjqDSiF5sYdSYuCXsUnS8UeAoWsMT9iGoFP8pgV1mB");
-}
-
-pub mod sha256_syscall_enabled {
-    solana_sdk::declare_id!("D7KfP7bZxpkYtD4Pc38t9htgs1k5k47Yhxe4rp6WDVi8");
-}
-
 pub mod no_overflow_rent_distribution {
     solana_sdk::declare_id!("4kpdyrcj5jS47CZb2oJGfVxjYbsMm2Kx97gFyZrxxwXz");
 }
@@ -67,24 +55,8 @@ pub mod ristretto_mul_syscall_enabled {
     solana_sdk::declare_id!("HRe7A6aoxgjKzdjbBv6HTy7tJ4YWqE6tVmYCGho6S9Aq");
 }
 
-pub mod max_invoke_depth_4 {
-    solana_sdk::declare_id!("EdM9xggY5y7AhNMskRG8NgGMnaP4JFNsWi8ZZtyT1af5");
-}
-
-pub mod max_program_call_depth_64 {
-    solana_sdk::declare_id!("YCKSgA6XmjtkQrHBQjpyNrX6EMhJPcYcLWMVgWn36iv");
-}
-
 pub mod cumulative_rent_related_fixes {
     solana_sdk::declare_id!("FtjnuAtJTWwX3Kx9m24LduNEhzaGuuPfDW6e14SX2Fy5");
-}
-
-pub mod sol_log_compute_units_syscall {
-    solana_sdk::declare_id!("BHuZqHAj7JdZc68wVgZZcy51jZykvgrx4zptR44RyChe");
-}
-
-pub mod pubkey_log_syscall_enabled {
-    solana_sdk::declare_id!("MoqiU1vryuCGQSxFKA1SZ316JdLEFFhoAu6cKUNk7dN");
 }
 
 pub mod pull_request_ping_pong_check {
@@ -111,28 +83,8 @@ pub mod bpf_loader_upgradeable_program {
     solana_sdk::declare_id!("FbhK8HN9qvNHvJcoFVHAEUCNkagHvu7DTWzdnLuVQ5u4");
 }
 
-pub mod try_find_program_address_syscall_enabled {
-    solana_sdk::declare_id!("EMsMNadQNhCYDyGpYH5Tx6dGHxiUqKHk782PU5XaWfmi");
-}
-
 pub mod stake_program_v3 {
     solana_sdk::declare_id!("Ego6nTu7WsBcZBvVqJQKp6Yku2N3mrfG8oYCfaLZkAeK");
-}
-
-pub mod max_cpi_instruction_size_ipv6_mtu {
-    solana_sdk::declare_id!("5WLtuUJA5VVA1Cc28qULPfGs8anhoBev8uNqaaXeasnf");
-}
-
-pub mod limit_cpi_loader_invoke {
-    solana_sdk::declare_id!("xGbcW7EEC7zMRJ6LaJCob65EJxKryWjwM4rv8f57SRM");
-}
-
-pub mod use_loaded_program_accounts {
-    solana_sdk::declare_id!("FLjgLeg1PJkZimQCVa5sVFtaq6VmSDPw3NvH8iQ3nyHn");
-}
-
-pub mod abort_on_all_cpi_failures {
-    solana_sdk::declare_id!("ED5D5a2hQaECHaMmKpnU48GdsfafdCjkb3pgAw5RKbb2");
 }
 
 pub mod use_loaded_executables {
@@ -141,10 +93,6 @@ pub mod use_loaded_executables {
 
 pub mod turbine_retransmit_peers_patch {
     solana_sdk::declare_id!("5Lu3JnWSFwRYpXzwDMkanWSk6XqSuF2i5fpnVhzB5CTc");
-}
-
-pub mod prevent_upgrade_and_invoke {
-    solana_sdk::declare_id!("BiNjYd8jCYDgAwMqP91uwZs6skWpuHtKrZbckuKESs8N");
 }
 
 pub mod track_writable_deescalation {
@@ -181,31 +129,18 @@ lazy_static! {
         (pico_inflation::id(), "pico inflation"),
         (full_inflation::devnet_and_testnet::id(), "full inflation on devnet and testnet"),
         (spl_token_v2_multisig_fix::id(), "spl-token multisig fix"),
-        (bpf_loader2_program::id(), "bpf_loader2 program"),
-        (bpf_compute_budget_balancing::id(), "compute budget balancing"),
-        (sha256_syscall_enabled::id(), "sha256 syscall"),
         (no_overflow_rent_distribution::id(), "no overflow rent distribution"),
         (ristretto_mul_syscall_enabled::id(), "ristretto multiply syscall"),
-        (max_invoke_depth_4::id(), "max invoke call depth 4"),
-        (max_program_call_depth_64::id(), "max program call depth 64"),
         (cumulative_rent_related_fixes::id(), "rent fixes (#10206, #10468, #11342)"),
-        (sol_log_compute_units_syscall::id(), "sol_log_compute_units syscall (#13243)"),
-        (pubkey_log_syscall_enabled::id(), "pubkey log syscall"),
         (pull_request_ping_pong_check::id(), "ping-pong packet check #12794"),
         (stake_program_v2::id(), "solana_stake_program v2"),
         (rewrite_stake::id(), "rewrite stake"),
         (filter_stake_delegation_accounts::id(), "filter stake_delegation_accounts #14062"),
         (simple_capitalization::id(), "simple capitalization"),
         (bpf_loader_upgradeable_program::id(), "upgradeable bpf loader"),
-        (try_find_program_address_syscall_enabled::id(), "add try_find_program_address syscall"),
         (stake_program_v3::id(), "solana_stake_program v3"),
-        (max_cpi_instruction_size_ipv6_mtu::id(), "max cross-program invocation size 1280"),
-        (limit_cpi_loader_invoke::id(), "loader not authorized via CPI"),
-        (use_loaded_program_accounts::id(), "use loaded program accounts"),
-        (abort_on_all_cpi_failures::id(), "abort on all CPI failures"),
         (use_loaded_executables::id(), "use loaded executable accounts"),
         (turbine_retransmit_peers_patch::id(), "turbine retransmit peers patch #14631"),
-        (prevent_upgrade_and_invoke::id(), "prevent upgrade and invoke in same tx batch"),
         (track_writable_deescalation::id(), "track account writable deescalation"),
         (require_custodian_for_locked_stake_authorize::id(), "require custodian to authorize withdrawer change for locked stake"),
         (spl_token_v2_self_transfer_fix::id(), "spl-token self-transfer fix"),

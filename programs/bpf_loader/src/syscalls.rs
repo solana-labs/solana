@@ -16,25 +16,18 @@ use solana_sdk::{
     bpf_loader, bpf_loader_deprecated,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
-    feature_set::{
-        abort_on_all_cpi_failures, limit_cpi_loader_invoke, per_byte_logging_cost,
-        pubkey_log_syscall_enabled, ristretto_mul_syscall_enabled, sha256_syscall_enabled,
-        sol_log_compute_units_syscall, try_find_program_address_syscall_enabled,
-        use_loaded_executables, use_loaded_program_accounts,
-    },
+    feature_set::{per_byte_logging_cost, ristretto_mul_syscall_enabled, use_loaded_executables},
     hash::{Hasher, HASH_BYTES},
     ic_msg,
     instruction::{AccountMeta, Instruction, InstructionError},
     keyed_account::KeyedAccount,
     native_loader,
     process_instruction::{stable_log, ComputeMeter, InvokeContext, Logger},
-    program_error::ProgramError,
     pubkey::{Pubkey, PubkeyError, MAX_SEEDS},
 };
 use std::{
     alloc::Layout,
     cell::{Ref, RefCell, RefMut},
-    convert::TryFrom,
     mem::{align_of, size_of},
     rc::Rc,
     slice::from_raw_parts_mut,
@@ -110,18 +103,12 @@ pub fn register_syscalls(
     syscall_registry.register_syscall_by_name(b"sol_log_", SyscallLog::call)?;
     syscall_registry.register_syscall_by_name(b"sol_log_64_", SyscallLogU64::call)?;
 
-    if invoke_context.is_feature_active(&sol_log_compute_units_syscall::id()) {
-        syscall_registry
-            .register_syscall_by_name(b"sol_log_compute_units_", SyscallLogBpfComputeUnits::call)?;
-    }
+    syscall_registry
+        .register_syscall_by_name(b"sol_log_compute_units_", SyscallLogBpfComputeUnits::call)?;
 
-    if invoke_context.is_feature_active(&pubkey_log_syscall_enabled::id()) {
-        syscall_registry.register_syscall_by_name(b"sol_log_pubkey", SyscallLogPubkey::call)?;
-    }
+    syscall_registry.register_syscall_by_name(b"sol_log_pubkey", SyscallLogPubkey::call)?;
 
-    if invoke_context.is_feature_active(&sha256_syscall_enabled::id()) {
-        syscall_registry.register_syscall_by_name(b"sol_sha256", SyscallSha256::call)?;
-    }
+    syscall_registry.register_syscall_by_name(b"sol_sha256", SyscallSha256::call)?;
 
     if invoke_context.is_feature_active(&ristretto_mul_syscall_enabled::id()) {
         syscall_registry
@@ -132,12 +119,10 @@ pub fn register_syscalls(
         b"sol_create_program_address",
         SyscallCreateProgramAddress::call,
     )?;
-    if invoke_context.is_feature_active(&try_find_program_address_syscall_enabled::id()) {
-        syscall_registry.register_syscall_by_name(
-            b"sol_try_find_program_address",
-            SyscallTryFindProgramAddress::call,
-        )?;
-    }
+    syscall_registry.register_syscall_by_name(
+        b"sol_try_find_program_address",
+        SyscallTryFindProgramAddress::call,
+    )?;
     syscall_registry
         .register_syscall_by_name(b"sol_invoke_signed_c", SyscallInvokeSignedC::call)?;
     syscall_registry
@@ -202,40 +187,34 @@ pub fn bind_syscall_context_objects<'a>(
         None,
     )?;
 
-    bind_feature_gated_syscall_context_object!(
-        vm,
-        invoke_context,
-        &sol_log_compute_units_syscall::id(),
+    vm.bind_syscall_context_object(
         Box::new(SyscallLogBpfComputeUnits {
             cost: 0,
             compute_meter: invoke_context.get_compute_meter(),
             logger: invoke_context.get_logger(),
         }),
-    );
+        None,
+    )?;
 
-    bind_feature_gated_syscall_context_object!(
-        vm,
-        invoke_context,
-        &pubkey_log_syscall_enabled::id(),
+    vm.bind_syscall_context_object(
         Box::new(SyscallLogPubkey {
             cost: bpf_compute_budget.log_pubkey_units,
             compute_meter: invoke_context.get_compute_meter(),
             logger: invoke_context.get_logger(),
             loader_id,
         }),
-    );
+        None,
+    )?;
 
-    bind_feature_gated_syscall_context_object!(
-        vm,
-        invoke_context,
-        &sha256_syscall_enabled::id(),
+    vm.bind_syscall_context_object(
         Box::new(SyscallSha256 {
             sha256_base_cost: bpf_compute_budget.sha256_base_cost,
             sha256_byte_cost: bpf_compute_budget.sha256_byte_cost,
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
         }),
-    );
+        None,
+    )?;
 
     bind_feature_gated_syscall_context_object!(
         vm,
@@ -257,16 +236,14 @@ pub fn bind_syscall_context_objects<'a>(
         None,
     )?;
 
-    bind_feature_gated_syscall_context_object!(
-        vm,
-        invoke_context,
-        &try_find_program_address_syscall_enabled::id(),
+    vm.bind_syscall_context_object(
         Box::new(SyscallTryFindProgramAddress {
             cost: bpf_compute_budget.create_program_address_units,
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
         }),
-    );
+        None,
+    )?;
 
     // Cross-program invocation syscalls
 
@@ -1450,8 +1427,7 @@ where
             SyscallError::InstructionError(InstructionError::MissingAccount)
         })?;
 
-        if (invoke_context.is_feature_active(&use_loaded_program_accounts::id())
-            && i == program_account_index)
+        if i == program_account_index
             || (invoke_context.is_feature_active(&use_loaded_executables::id())
                 && account.borrow().executable)
         {
@@ -1511,7 +1487,6 @@ fn check_account_infos(
         > invoke_context
             .get_bpf_compute_budget()
             .max_cpi_instruction_size
-        && invoke_context.is_feature_active(&use_loaded_program_accounts::id())
     {
         // Cap the number of account_infos a caller can pass to approximate
         // maximum that accounts that could be passed in an instruction
@@ -1580,14 +1555,7 @@ fn call<'a>(
     signers_seeds_len: u64,
     memory_mapping: &MemoryMapping,
 ) -> Result<u64, EbpfError<BPFError>> {
-    let (
-        message,
-        executables,
-        accounts,
-        account_refs,
-        caller_privileges,
-        abort_on_all_cpi_failures,
-    ) = {
+    let (message, executables, accounts, account_refs, caller_privileges) = {
         let invoke_context = syscall.get_context()?;
 
         invoke_context
@@ -1633,9 +1601,7 @@ fn call<'a>(
                 }
             })
             .collect::<Vec<bool>>();
-        if invoke_context.is_feature_active(&limit_cpi_loader_invoke::id()) {
-            check_authorized_program(&callee_program_id, &instruction.data)?;
-        }
+        check_authorized_program(&callee_program_id, &instruction.data)?;
         let (accounts, account_refs) = syscall.translate_accounts(
             &message.account_keys,
             callee_program_id_index,
@@ -1668,7 +1634,6 @@ fn call<'a>(
             accounts,
             account_refs,
             caller_privileges,
-            invoke_context.is_feature_active(&abort_on_all_cpi_failures::id()),
         )
     };
 
@@ -1684,14 +1649,7 @@ fn call<'a>(
     ) {
         Ok(()) => (),
         Err(err) => {
-            if abort_on_all_cpi_failures {
-                return Err(SyscallError::InstructionError(err).into());
-            } else {
-                match ProgramError::try_from(err) {
-                    Ok(err) => return Ok(err.into()),
-                    Err(err) => return Err(SyscallError::InstructionError(err).into()),
-                }
-            }
+            return Err(SyscallError::InstructionError(err).into());
         }
     }
 
