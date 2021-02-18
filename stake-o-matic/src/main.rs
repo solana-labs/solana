@@ -1,41 +1,70 @@
 #![allow(clippy::integer_arithmetic)]
-use clap::{crate_description, crate_name, crate_version, value_t, value_t_or_exit, App, Arg};
-use log::*;
-use solana_clap_utils::{
-    input_parsers::{keypair_of, pubkey_of},
-    input_validators::{is_amount, is_keypair, is_pubkey_or_keypair, is_url, is_valid_percentage},
-};
-use solana_cli_output::display::format_labeled_address;
-use solana_client::{
-    client_error, rpc_client::RpcClient, rpc_config::RpcSimulateTransactionConfig,
-    rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS, rpc_response::RpcVoteAccountInfo,
-};
-use solana_metrics::datapoint_info;
-use solana_notifier::Notifier;
-use solana_sdk::{
-    account_utils::StateMut,
-    clock::{Epoch, Slot},
-    commitment_config::CommitmentConfig,
-    message::Message,
-    native_token::*,
-    pubkey::Pubkey,
-    signature::{Keypair, Signature, Signer},
-    transaction::Transaction,
-};
-use solana_stake_program::{stake_instruction, stake_state::StakeState};
-
-use std::{
-    collections::{HashMap, HashSet},
-    error,
-    fs::File,
-    path::PathBuf,
-    process,
-    str::FromStr,
-    thread::sleep,
-    time::Duration,
+use {
+    clap::{
+        crate_description, crate_name, crate_version, value_t, value_t_or_exit, App, Arg,
+        ArgMatches,
+    },
+    log::*,
+    solana_clap_utils::{
+        input_parsers::{keypair_of, pubkey_of},
+        input_validators::{
+            is_amount, is_keypair, is_pubkey_or_keypair, is_url, is_valid_percentage,
+        },
+    },
+    solana_cli_output::display::format_labeled_address,
+    solana_client::{
+        client_error, rpc_client::RpcClient, rpc_config::RpcSimulateTransactionConfig,
+        rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS, rpc_response::RpcVoteAccountInfo,
+    },
+    solana_metrics::datapoint_info,
+    solana_notifier::Notifier,
+    solana_sdk::{
+        account_utils::StateMut,
+        clock::{Epoch, Slot},
+        commitment_config::CommitmentConfig,
+        message::Message,
+        native_token::*,
+        pubkey::Pubkey,
+        signature::{Keypair, Signature, Signer},
+        transaction::Transaction,
+    },
+    solana_stake_program::{stake_instruction, stake_state::StakeState},
+    std::{
+        collections::{HashMap, HashSet},
+        error,
+        fs::File,
+        path::PathBuf,
+        process,
+        str::FromStr,
+        thread::sleep,
+        time::Duration,
+    },
 };
 
 mod validator_list;
+
+pub fn is_release_version(string: String) -> Result<(), String> {
+    if string.starts_with('v') && semver::Version::parse(string.split_at(1).1).is_ok() {
+        return Ok(());
+    }
+    semver::Version::parse(&string)
+        .map(|_| ())
+        .map_err(|err| format!("{:?}", err))
+}
+
+pub fn release_version_of(matches: &ArgMatches<'_>, name: &str) -> Option<semver::Version> {
+    matches
+        .value_of(name)
+        .map(ToString::to_string)
+        .map(|string| {
+            if string.starts_with('v') {
+                semver::Version::parse(string.split_at(1).1)
+            } else {
+                semver::Version::parse(&string)
+            }
+            .expect("semver::Version")
+        })
+}
 
 #[derive(Debug)]
 struct Config {
@@ -71,6 +100,9 @@ struct Config {
     max_commission: u8,
 
     address_labels: HashMap<String, String>,
+
+    /// If Some(), destake validators with a version less than this version
+    minimum_release_version: Option<semver::Version>,
 }
 
 fn get_config() -> Config {
@@ -182,6 +214,14 @@ fn get_config() -> Config {
                 .validator(is_valid_percentage)
                 .help("Vote accounts with a larger commission than this amount will not be staked")
         )
+        .arg(
+            Arg::with_name("minimum_release_version")
+                .long("minimum-release-version")
+                .value_name("SEMVER")
+                .takes_value(true)
+                .validator(is_release_version)
+                .help("Remove the base and bonus stake from validators with a release version older than this one")
+        )
         .get_matches();
 
     let config = if let Some(config_file) = matches.value_of("config_file") {
@@ -202,6 +242,7 @@ fn get_config() -> Config {
     let baseline_stake_amount =
         sol_to_lamports(value_t_or_exit!(matches, "baseline_stake_amount", f64));
     let bonus_stake_amount = sol_to_lamports(value_t_or_exit!(matches, "bonus_stake_amount", f64));
+    let minimum_release_version = release_version_of(&matches, "minimum_release_version");
 
     let (json_rpc_url, validator_list) = match cluster.as_str() {
         "mainnet-beta" => (
@@ -259,6 +300,7 @@ fn get_config() -> Config {
         max_commission,
         max_poor_block_producer_percentage,
         address_labels: config.address_labels,
+        minimum_release_version,
     };
 
     info!("RPC URL: {}", config.json_rpc_url);
@@ -653,6 +695,35 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         process::exit(1);
     });
 
+    let cluster_nodes_with_old_version: HashSet<String> = match config.minimum_release_version {
+        Some(ref minimum_release_version) => rpc_client
+            .get_cluster_nodes()?
+            .into_iter()
+            .filter_map(|rpc_contact_info| {
+                if let Ok(pubkey) = Pubkey::from_str(&rpc_contact_info.pubkey) {
+                    if config.validator_list.contains(&pubkey) {
+                        if let Some(ref version) = rpc_contact_info.version {
+                            if let Ok(semver) = semver::Version::parse(version) {
+                                if semver < *minimum_release_version {
+                                    return Some(rpc_contact_info.pubkey);
+                                }
+                            }
+                        }
+                    }
+                }
+                None
+            })
+            .collect(),
+        None => HashSet::default(),
+    };
+
+    if let Some(ref minimum_release_version) = config.minimum_release_version {
+        info!(
+            "Validators running a release older than {}: {:?}",
+            minimum_release_version, cluster_nodes_with_old_version,
+        );
+    }
+
     let source_stake_balance = validate_source_stake_account(&rpc_client, &config)?;
 
     let epoch_info = rpc_client.get_epoch_info()?;
@@ -665,6 +736,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let too_many_poor_block_producers = poor_block_producers.len()
         > quality_block_producers.len() * config.max_poor_block_producer_percentage / 100;
+
+    // If more than 10% of the cluster is running an older version, disable de-staking of old
+    // validators.  The user probably provided a bad `--minimum-release-version` argument
+    let too_many_old_validators = cluster_nodes_with_old_version.len()
+        > (poor_block_producers.len() + quality_block_producers.len()) / 10;
 
     // Fetch vote account status for all the validator_listed validators
     let vote_account_status = rpc_client.get_vote_accounts()?;
@@ -689,14 +765,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     for RpcVoteAccountInfo {
         commission,
-        node_pubkey,
+        node_pubkey: node_pubkey_str,
         root_slot,
         vote_pubkey,
         ..
     } in &vote_account_info
     {
-        let formatted_node_pubkey = format_labeled_address(&node_pubkey, &config.address_labels);
-        let node_pubkey = Pubkey::from_str(&node_pubkey).unwrap();
+        let formatted_node_pubkey =
+            format_labeled_address(&node_pubkey_str, &config.address_labels);
+        let node_pubkey = Pubkey::from_str(&node_pubkey_str).unwrap();
         let baseline_seed = &vote_pubkey.to_string()[..32];
         let bonus_seed = &format!("A{{{}", vote_pubkey)[..32];
         let vote_pubkey = Pubkey::from_str(&vote_pubkey).unwrap();
@@ -828,6 +905,40 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     formatted_node_pubkey,
                     commission,
                     config.max_commission,
+                    lamports_to_sol(config.bonus_stake_amount),
+                ),
+            ));
+        } else if !too_many_old_validators
+            && cluster_nodes_with_old_version.contains(node_pubkey_str)
+        {
+            // Deactivate baseline stake
+            delegate_stake_transactions.push((
+                Transaction::new_unsigned(Message::new(
+                    &[stake_instruction::deactivate_stake(
+                        &baseline_stake_address,
+                        &config.authorized_staker.pubkey(),
+                    )],
+                    Some(&config.authorized_staker.pubkey()),
+                )),
+                format!(
+                    "🧮 `{}` is running an old software release. Removed ◎{} baseline stake",
+                    formatted_node_pubkey,
+                    lamports_to_sol(config.baseline_stake_amount),
+                ),
+            ));
+
+            // Deactivate bonus stake
+            delegate_stake_transactions.push((
+                Transaction::new_unsigned(Message::new(
+                    &[stake_instruction::deactivate_stake(
+                        &bonus_stake_address,
+                        &config.authorized_staker.pubkey(),
+                    )],
+                    Some(&config.authorized_staker.pubkey()),
+                )),
+                format!(
+                    "🧮 `{}` is running an old software release. Removed ◎{} bonus stake",
+                    formatted_node_pubkey,
                     lamports_to_sol(config.bonus_stake_amount),
                 ),
             ));
@@ -1013,6 +1124,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                        as poor block producers in epoch {}.  Bonus stake frozen",
             config.max_poor_block_producer_percentage, last_epoch,
         );
+        warn!("{}", message);
+        if !config.dry_run {
+            notifier.send(&message);
+        }
+    }
+
+    if too_many_old_validators {
+        let message =
+            "Note: Something is wrong, too many validators classified as running an older release";
         warn!("{}", message);
         if !config.dry_run {
             notifier.send(&message);
