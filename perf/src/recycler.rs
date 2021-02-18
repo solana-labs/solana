@@ -255,6 +255,14 @@ impl<T: Default + Reset + Sized> Recycler<T> {
             } else if let Some(limit) = object_pool.limit {
                 let should_allocate_new = object_pool.total_allocated_count < limit;
                 if should_allocate_new {
+                    if object_pool.total_allocated_count % 1000 == 0 {
+                        datapoint_info!(
+                            "total_allocated_count",
+                            ("name", self.shrink_metric_name, String),
+                            ("count", object_pool.total_allocated_count as i64, i64),
+                            ("len", object_pool.len() as i64, i64),
+                        )
+                    }
                     object_pool.total_allocated_count += 1;
                 }
                 (None, false, should_allocate_new, shrink_stats)
