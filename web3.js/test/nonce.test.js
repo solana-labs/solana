@@ -78,14 +78,14 @@ describe('Nonce', () => {
       connection,
       transaction,
       signers: [from, nonceAccount],
-      commitment: 'singleGossip',
+      commitment: 'confirmed',
     });
 
     await mockRpcResponse({
       method: 'getAccountInfo',
       params: [
         nonceAccount.publicKey.toBase58(),
-        {encoding: 'base64', commitment: 'singleGossip'},
+        {encoding: 'base64', commitment: 'confirmed'},
       ],
       value: {
         owner: '11111111111111111111111111111111',
@@ -98,7 +98,7 @@ describe('Nonce', () => {
 
     const nonceAccountData = await connection.getNonce(
       nonceAccount.publicKey,
-      'singleGossip',
+      'confirmed',
     );
     if (nonceAccountData === null) {
       expect(nonceAccountData).not.to.be.null;
@@ -148,14 +148,14 @@ describe('Nonce', () => {
       connection,
       transaction,
       signers: [from],
-      commitment: 'singleGossip',
+      commitment: 'confirmed',
     });
 
     await mockRpcResponse({
       method: 'getAccountInfo',
       params: [
         noncePubkey.toBase58(),
-        {encoding: 'base64', commitment: 'singleGossip'},
+        {encoding: 'base64', commitment: 'confirmed'},
       ],
       value: {
         owner: '11111111111111111111111111111111',
@@ -168,7 +168,7 @@ describe('Nonce', () => {
 
     const nonceAccountData = await connection.getNonce(
       noncePubkey,
-      'singleGossip',
+      'confirmed',
     );
     if (nonceAccountData === null) {
       expect(nonceAccountData).not.to.be.null;

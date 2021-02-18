@@ -162,11 +162,11 @@ const airdrop = async ({
 
   await mockRpcMessage({
     method: 'signatureSubscribe',
-    params: [signature, {commitment: 'singleGossip'}],
+    params: [signature, {commitment: 'confirmed'}],
     result: {err: null},
   });
 
-  await connection.confirmTransaction(signature, 'singleGossip');
+  await connection.confirmTransaction(signature, 'confirmed');
   return signature;
 };
 

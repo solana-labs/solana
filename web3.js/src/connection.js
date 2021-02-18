@@ -145,16 +145,22 @@ function notificationResultAndContext(resultDescription: any) {
 /**
  * The level of commitment desired when querying state
  * <pre>
- *   'max':    Query the most recent block which has been finalized by the cluster
- *   'recent': Query the most recent block which has reached 1 confirmation by the connected node
- *   'root':   Query the most recent block which has been rooted by the connected node
- *   'single': Query the most recent block which has reached 1 confirmation by the cluster
- *   'singleGossip': Query the most recent block which has reached 1 confirmation according to votes seen in gossip
+ *   'processed': Query the most recent block which has reached 1 confirmation by the connected node
+ *   'confirmed': Query the most recent block which has reached 1 confirmation by the cluster
+ *   'finalized': Query the most recent block which has been finalized by the cluster
  * </pre>
  *
- * @typedef {'max' | 'recent' | 'root' | 'single' | 'singleGossip'} Commitment
+ * @typedef {'processed' | 'confirmed' | 'finalized'} Commitment
  */
-export type Commitment = 'max' | 'recent' | 'root' | 'single' | 'singleGossip';
+export type Commitment =
+  | 'processed'
+  | 'confirmed'
+  | 'finalized'
+  | 'recent' // Deprecated as of v1.5.5
+  | 'single' // Deprecated as of v1.5.5
+  | 'singleGossip' // Deprecated as of v1.5.5
+  | 'root' // Deprecated as of v1.5.5
+  | 'max'; // Deprecated as of v1.5.5
 
 /**
  * Filter for largest accounts query
@@ -2291,13 +2297,16 @@ export class Connection {
 
     let timeoutMs = 60 * 1000;
     switch (subscriptionCommitment) {
+      case 'processed':
       case 'recent':
       case 'single':
+      case 'confirmed':
       case 'singleGossip': {
         timeoutMs = 30 * 1000;
         break;
       }
       // exhaust enums to ensure full coverage
+      case 'finalized':
       case 'max':
       case 'root':
     }
@@ -2876,7 +2885,7 @@ export class Connection {
     try {
       const startTime = Date.now();
       for (let i = 0; i < 50; i++) {
-        const {blockhash} = await this.getRecentBlockhash('max');
+        const {blockhash} = await this.getRecentBlockhash('finalized');
 
         if (this._blockhashInfo.recentBlockhash != blockhash) {
           this._blockhashInfo = {

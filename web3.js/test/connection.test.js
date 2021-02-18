@@ -125,7 +125,7 @@ describe('Connection', () => {
         connection,
         transaction,
         signers: [account0],
-        commitment: 'singleGossip',
+        commitment: 'confirmed',
       });
     }
 
@@ -147,7 +147,7 @@ describe('Connection', () => {
         connection,
         transaction,
         signers: [account1],
-        commitment: 'singleGossip',
+        commitment: 'confirmed',
       });
     }
 
@@ -159,7 +159,7 @@ describe('Connection', () => {
         method: 'getProgramAccounts',
         params: [
           programId.publicKey.toBase58(),
-          {commitment: 'singleGossip', encoding: 'base64'},
+          {commitment: 'confirmed', encoding: 'base64'},
         ],
         value: [
           {
@@ -188,7 +188,7 @@ describe('Connection', () => {
 
       const programAccounts = await connection.getProgramAccounts(
         programId.publicKey,
-        'singleGossip',
+        'confirmed',
       );
       expect(programAccounts).to.have.length(2);
       programAccounts.forEach(function (keyedAccount) {
@@ -210,7 +210,7 @@ describe('Connection', () => {
         method: 'getProgramAccounts',
         params: [
           programId.publicKey.toBase58(),
-          {commitment: 'singleGossip', encoding: 'jsonParsed'},
+          {commitment: 'confirmed', encoding: 'jsonParsed'},
         ],
         value: [
           {
@@ -239,7 +239,7 @@ describe('Connection', () => {
 
       const programAccounts = await connection.getParsedProgramAccounts(
         programId.publicKey,
-        'singleGossip',
+        'confirmed',
       );
       expect(programAccounts).to.have.length(2);
 
@@ -319,7 +319,7 @@ describe('Connection', () => {
   it('get epoch info', async () => {
     await mockRpcResponse({
       method: 'getEpochInfo',
-      params: [{commitment: 'singleGossip'}],
+      params: [{commitment: 'confirmed'}],
       value: {
         epoch: 0,
         slotIndex: 1,
@@ -329,7 +329,7 @@ describe('Connection', () => {
       },
     });
 
-    const epochInfo = await connection.getEpochInfo('singleGossip');
+    const epochInfo = await connection.getEpochInfo('confirmed');
 
     for (const key of [
       'epoch',
@@ -1012,13 +1012,7 @@ describe('Connection', () => {
   });
 
   it('get recent blockhash', async () => {
-    for (const commitment of [
-      'max',
-      'singleGossip',
-      'root',
-      'single',
-      'singleGossip',
-    ]) {
+    for (const commitment of ['processed', 'confirmed', 'finalized']) {
       const {blockhash, feeCalculator} = await helpers.recentBlockhash({
         connection,
         commitment,
@@ -1032,7 +1026,7 @@ describe('Connection', () => {
     const {blockhash} = await helpers.recentBlockhash({connection});
     await mockRpcResponse({
       method: 'getFeeCalculatorForBlockhash',
-      params: [blockhash, {commitment: 'singleGossip'}],
+      params: [blockhash, {commitment: 'confirmed'}],
       value: {
         feeCalculator: {
           lamportsPerSignature: 5000,
@@ -1042,7 +1036,7 @@ describe('Connection', () => {
     });
 
     const feeCalculator = (
-      await connection.getFeeCalculatorForBlockhash(blockhash, 'singleGossip')
+      await connection.getFeeCalculatorForBlockhash(blockhash, 'confirmed')
     ).value;
     if (feeCalculator === null) {
       expect(feeCalculator).not.to.be.null;
@@ -1149,7 +1143,7 @@ describe('Connection', () => {
 
   if (process.env.TEST_LIVE) {
     describe('token methods', () => {
-      const connection = new Connection(url, 'singleGossip');
+      const connection = new Connection(url, 'confirmed');
       const newAccount = new Account().publicKey;
 
       let testToken: Token;
@@ -1205,7 +1199,7 @@ describe('Connection', () => {
           new u64(1),
         );
 
-        await connection.confirmTransaction(testSignature, 'max');
+        await connection.confirmTransaction(testSignature, 'finalized');
 
         testOwner = accountOwner;
         testToken = token;
@@ -1421,7 +1415,7 @@ describe('Connection', () => {
         authorized.publicKey,
         2 * LAMPORTS_PER_SOL,
       );
-      await connection.confirmTransaction(signature, 'singleGossip');
+      await connection.confirmTransaction(signature, 'confirmed');
 
       const minimumAmount = await connection.getMinimumBalanceForRentExemption(
         StakeProgram.space,
@@ -1441,8 +1435,8 @@ describe('Connection', () => {
         createAndInitialize,
         [authorized, newStakeAccount],
         {
-          preflightCommitment: 'singleGossip',
-          commitment: 'singleGossip',
+          preflightCommitment: 'confirmed',
+          commitment: 'confirmed',
         },
       );
       let delegation = StakeProgram.delegate({
@@ -1451,15 +1445,15 @@ describe('Connection', () => {
         votePubkey,
       });
       await sendAndConfirmTransaction(connection, delegation, [authorized], {
-        preflightCommitment: 'singleGossip',
-        commitment: 'singleGossip',
+        preflightCommitment: 'confirmed',
+        commitment: 'confirmed',
       });
 
       const LARGE_EPOCH = 4000;
       await expect(
         connection.getStakeActivation(
           newStakeAccount.publicKey,
-          'singleGossip',
+          'confirmed',
           LARGE_EPOCH,
         ),
       ).to.be.rejectedWith(
@@ -1468,7 +1462,7 @@ describe('Connection', () => {
 
       const activationState = await connection.getStakeActivation(
         newStakeAccount.publicKey,
-        'singleGossip',
+        'confirmed',
       );
       expect(activationState.state).to.eq('activating');
       expect(activationState.inactive).to.eq(42);
@@ -1495,15 +1489,15 @@ describe('Connection', () => {
       await addStakeActivationMock('active');
       let activation = await connection.getStakeActivation(
         publicKey,
-        'singleGossip',
+        'confirmed',
       );
       expect(activation.state).to.eq('active');
       expect(activation.active).to.eq(0);
       expect(activation.inactive).to.eq(80);
 
       await addStakeActivationMock('invalid');
-      await expect(connection.getStakeActivation(publicKey, 'singleGossip')).to
-        .be.rejected;
+      await expect(connection.getStakeActivation(publicKey, 'confirmed')).to.be
+        .rejected;
     });
   }
 
@@ -1529,22 +1523,19 @@ describe('Connection', () => {
 
     await mockRpcResponse({
       method: 'getBalance',
-      params: [account.publicKey.toBase58(), {commitment: 'singleGossip'}],
+      params: [account.publicKey.toBase58(), {commitment: 'confirmed'}],
       value: LAMPORTS_PER_SOL,
       withContext: true,
     });
 
-    const balance = await connection.getBalance(
-      account.publicKey,
-      'singleGossip',
-    );
+    const balance = await connection.getBalance(account.publicKey, 'confirmed');
     expect(balance).to.eq(LAMPORTS_PER_SOL);
 
     await mockRpcResponse({
       method: 'getAccountInfo',
       params: [
         account.publicKey.toBase58(),
-        {commitment: 'singleGossip', encoding: 'base64'},
+        {commitment: 'confirmed', encoding: 'base64'},
       ],
       value: {
         owner: '11111111111111111111111111111111',
@@ -1557,7 +1548,7 @@ describe('Connection', () => {
 
     const accountInfo = await connection.getAccountInfo(
       account.publicKey,
-      'singleGossip',
+      'confirmed',
     );
     if (accountInfo === null) {
       expect(accountInfo).not.to.be.null;
@@ -1571,7 +1562,7 @@ describe('Connection', () => {
       method: 'getAccountInfo',
       params: [
         account.publicKey.toBase58(),
-        {commitment: 'singleGossip', encoding: 'jsonParsed'},
+        {commitment: 'confirmed', encoding: 'jsonParsed'},
       ],
       value: {
         owner: '11111111111111111111111111111111',
@@ -1583,7 +1574,7 @@ describe('Connection', () => {
     });
 
     const parsedAccountInfo = (
-      await connection.getParsedAccountInfo(account.publicKey, 'singleGossip')
+      await connection.getParsedAccountInfo(account.publicKey, 'confirmed')
     ).value;
     if (parsedAccountInfo === null) {
       expect(parsedAccountInfo).not.to.be.null;
@@ -1621,7 +1612,7 @@ describe('Connection', () => {
       connection,
       transaction,
       signers: [payer, newAccount],
-      commitment: 'singleGossip',
+      commitment: 'confirmed',
     });
 
     // This should fail because the account is already created
@@ -1631,7 +1622,7 @@ describe('Connection', () => {
         connection,
         transaction,
         signers: [payer, newAccount],
-        commitment: 'singleGossip',
+        commitment: 'confirmed',
         err: expectedErr,
       })
     ).value;
@@ -1658,7 +1649,7 @@ describe('Connection', () => {
 
   if (process.env.TEST_LIVE) {
     it('transaction', async () => {
-      connection._commitment = 'singleGossip';
+      connection._commitment = 'confirmed';
 
       const accountFrom = new Account();
       const accountTo = new Account();
@@ -1689,7 +1680,7 @@ describe('Connection', () => {
         connection,
         transaction,
         [accountFrom],
-        {preflightCommitment: 'singleGossip'},
+        {preflightCommitment: 'confirmed'},
       );
 
       // Send again and ensure that new blockhash is used
@@ -1706,7 +1697,7 @@ describe('Connection', () => {
         connection,
         transaction2,
         [accountFrom],
-        {preflightCommitment: 'singleGossip'},
+        {preflightCommitment: 'confirmed'},
       );
 
       expect(signature).not.to.eq(signature2);
@@ -1723,7 +1714,7 @@ describe('Connection', () => {
         }),
       );
       await sendAndConfirmTransaction(connection, transaction3, [accountFrom], {
-        preflightCommitment: 'singleGossip',
+        preflightCommitment: 'confirmed',
       });
       expect(transaction2.recentBlockhash).to.eq(transaction3.recentBlockhash);
 
@@ -1744,7 +1735,7 @@ describe('Connection', () => {
       );
 
       await sendAndConfirmTransaction(connection, transaction4, [accountFrom], {
-        preflightCommitment: 'singleGossip',
+        preflightCommitment: 'confirmed',
       });
 
       expect(transaction4.recentBlockhash).not.to.eq(
@@ -1761,7 +1752,7 @@ describe('Connection', () => {
     }).timeout(45 * 1000); // waits 30s for cache timeout
 
     it('multi-instruction transaction', async () => {
-      connection._commitment = 'singleGossip';
+      connection._commitment = 'confirmed';
 
       const accountFrom = new Account();
       const accountTo = new Account();
@@ -1840,7 +1831,7 @@ describe('Connection', () => {
     //     return;
     //   }
 
-    //   const connection = new Connection(url, 'singleGossip');
+    //   const connection = new Connection(url, 'confirmed');
     //   const owner = new Account();
     //   const programAccount = new Account();
 
@@ -1849,7 +1840,7 @@ describe('Connection', () => {
     //   const subscriptionId = connection.onAccountChange(
     //     programAccount.publicKey,
     //     mockCallback,
-    //     'singleGossip',
+    //     'confirmed',
     //   );
 
     //   const balanceNeeded = Math.max(
@@ -1871,7 +1862,7 @@ describe('Connection', () => {
     //       }),
     //     );
     //     await sendAndConfirmTransaction(connection, transaction, [owner], {
-    //       commitment: 'singleGossip',
+    //       commitment: 'confirmed',
     //     });
     //   } catch (err) {
     //     await connection.removeAccountChangeListener(subscriptionId);
@@ -1900,7 +1891,7 @@ describe('Connection', () => {
     // });
 
     it('program account change notification', async () => {
-      connection._commitment = 'singleGossip';
+      connection._commitment = 'confirmed';
 
       const owner = new Account();
       const programAccount = new Account();
@@ -1942,7 +1933,7 @@ describe('Connection', () => {
           }),
         );
         await sendAndConfirmTransaction(connection, transaction, [owner], {
-          commitment: 'singleGossip',
+          commitment: 'confirmed',
         });
       } catch (err) {
         await connection.removeProgramAccountChangeListener(subscriptionId);
