@@ -4,7 +4,7 @@ use std::{cell::RefCell, cmp, fmt, rc::Rc};
 
 /// An Account with data that is stored on chain
 #[repr(C)]
-#[frozen_abi(digest = "727tKRcoDvPiAsXxfvfsUauvZ4tLSw2WSw4HQfRQJ9Xx")]
+#[frozen_abi(digest = "AXJTWWXfp49rHb34ayFzFLSEuaRbMUsVPNzBDyP3UPjc")]
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Default, AbiExample)]
 #[serde(rename_all = "camelCase")]
 pub struct Account {
