@@ -363,7 +363,7 @@ dependencies = [
  "borsh-schema-derive-internal",
  "proc-macro-crate",
  "proc-macro2 1.0.24",
- "syn 1.0.60",
+ "syn 1.0.48",
 ]
 
 [[package]]
@@ -374,7 +374,7 @@ checksum = "d813fa25eb0bed78c36492cff4415f38c760d6de833d255ba9095bd8ebb7d725"
 dependencies = [
  "proc-macro2 1.0.24",
  "quote 1.0.6",
- "syn 1.0.60",
+ "syn 1.0.48",
 ]
 
 [[package]]
@@ -385,7 +385,7 @@ checksum = "dcf78ee4a98c8cb9eba1bac3d3e2a1ea3d7673c719ce691e67b5cbafc472d3b7"
 dependencies = [
  "proc-macro2 1.0.24",
  "quote 1.0.6",
- "syn 1.0.60",
+ "syn 1.0.48",
 ]
 
 [[package]]
@@ -3835,7 +3835,7 @@ dependencies = [
  "mio 0.7.6",
  "solana-banks-interface",
  "solana-banks-server",
- "solana-program 1.6.0",
+ "solana-program 1.5.9",
  "solana-runtime",
  "solana-sdk",
  "tarpc",
