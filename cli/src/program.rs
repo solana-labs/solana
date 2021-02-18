@@ -1,4 +1,4 @@
-use crate::send_tpu::{get_leader_tpu, send_transaction_tpu};
+use crate::send_tpu::{get_leader_tpus, send_transaction_tpu};
 use crate::{
     checks::*,
     cli::{
@@ -55,6 +55,7 @@ use std::{
 };
 
 const DATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
+const NUM_TPU_LEADERS: u64 = 2;
 
 #[derive(Debug, PartialEq)]
 pub enum ProgramCliCommand {
@@ -1577,7 +1578,7 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
     let cluster_nodes = rpc_client.get_cluster_nodes().ok();
 
     loop {
-        progress_bar.set_message("Finding leader node...");
+        progress_bar.set_message("Finding leader nodes...");
         let epoch_info = rpc_client.get_epoch_info()?;
         let mut slot = epoch_info.absolute_slot;
         let mut last_epoch_fetch = Instant::now();
@@ -1586,8 +1587,9 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
             leader_schedule_epoch = epoch_info.epoch;
         }
 
-        let mut tpu_address = get_leader_tpu(
+        let mut tpu_addresses = get_leader_tpus(
             min(epoch_info.slot_index + 1, epoch_info.slots_in_epoch),
+            NUM_TPU_LEADERS,
             leader_schedule.as_ref(),
             cluster_nodes.as_ref(),
         );
@@ -1596,10 +1598,12 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
         let mut pending_transactions = HashMap::new();
         let num_transactions = transactions.len();
         for transaction in transactions {
-            if let Some(tpu_address) = tpu_address {
+            if !tpu_addresses.is_empty() {
                 let wire_transaction =
                     serialize(&transaction).expect("serialization should succeed");
-                send_transaction_tpu(&send_socket, &tpu_address, &wire_transaction);
+                for tpu_address in &tpu_addresses {
+                    send_transaction_tpu(&send_socket, &tpu_address, &wire_transaction);
+                }
             } else {
                 let _result = rpc_client
                     .send_transaction_with_config(
@@ -1625,8 +1629,9 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
             if last_epoch_fetch.elapsed() > Duration::from_millis(400) {
                 let epoch_info = rpc_client.get_epoch_info()?;
                 last_epoch_fetch = Instant::now();
-                tpu_address = get_leader_tpu(
+                tpu_addresses = get_leader_tpus(
                     min(epoch_info.slot_index + 1, epoch_info.slots_in_epoch),
+                    NUM_TPU_LEADERS,
                     leader_schedule.as_ref(),
                     cluster_nodes.as_ref(),
                 );
@@ -1677,17 +1682,20 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
             }
 
             let epoch_info = rpc_client.get_epoch_info()?;
-            tpu_address = get_leader_tpu(
+            tpu_addresses = get_leader_tpus(
                 min(epoch_info.slot_index + 1, epoch_info.slots_in_epoch),
+                NUM_TPU_LEADERS,
                 leader_schedule.as_ref(),
                 cluster_nodes.as_ref(),
             );
 
             for transaction in pending_transactions.values() {
-                if let Some(tpu_address) = tpu_address {
+                if !tpu_addresses.is_empty() {
                     let wire_transaction =
-                        serialize(transaction).expect("serialization should succeed");
-                    send_transaction_tpu(&send_socket, &tpu_address, &wire_transaction);
+                        serialize(&transaction).expect("serialization should succeed");
+                    for tpu_address in &tpu_addresses {
+                        send_transaction_tpu(&send_socket, &tpu_address, &wire_transaction);
+                    }
                 } else {
                     let _result = rpc_client
                         .send_transaction_with_config(
