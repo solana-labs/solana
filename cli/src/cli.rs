@@ -355,6 +355,8 @@ pub enum CliCommand {
         nonce_account: Option<Pubkey>,
         nonce_authority: SignerIndex,
         fee_payer: SignerIndex,
+        derived_address_seed: Option<String>,
+        derived_address_program_id: Option<Pubkey>,
     },
 }
 
@@ -858,6 +860,12 @@ pub fn parse_command(
             let signer_info =
                 default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
 
+            let derived_address_seed = matches
+                .value_of("derived_address_seed")
+                .map(|s| s.to_string());
+            let derived_address_program_id =
+                resolve_derived_address_program_id(matches, "derived_address_program_id");
+
             Ok(CliCommandInfo {
                 command: CliCommand::Transfer {
                     amount,
@@ -869,6 +877,8 @@ pub fn parse_command(
                     nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
                     fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
                     from: signer_info.index_of(from_pubkey).unwrap(),
+                    derived_address_seed,
+                    derived_address_program_id,
                 },
                 signers: signer_info.signers,
             })
@@ -1106,8 +1116,11 @@ fn process_transfer(
     nonce_account: Option<&Pubkey>,
     nonce_authority: SignerIndex,
     fee_payer: SignerIndex,
+    derived_address_seed: Option<String>,
+    derived_address_program_id: Option<&Pubkey>,
 ) -> ProcessResult {
     let from = config.signers[from];
+    let mut from_pubkey = from.pubkey();
 
     let (recent_blockhash, fee_calculator) =
         blockhash_query.get_blockhash_and_fee_calculator(rpc_client, config.commitment)?;
@@ -1115,8 +1128,28 @@ fn process_transfer(
     let nonce_authority = config.signers[nonce_authority];
     let fee_payer = config.signers[fee_payer];
 
+    let derived_parts = derived_address_seed.zip(derived_address_program_id);
+    let with_seed = if let Some((seed, program_id)) = derived_parts {
+        let base_pubkey = from_pubkey;
+        from_pubkey = Pubkey::create_with_seed(&base_pubkey, &seed, program_id)?;
+        Some((base_pubkey, seed, program_id, from_pubkey))
+    } else {
+        None
+    };
+
     let build_message = |lamports| {
-        let ixs = vec![system_instruction::transfer(&from.pubkey(), to, lamports)];
+        let ixs = if let Some((base_pubkey, seed, program_id, from_pubkey)) = with_seed.as_ref() {
+            vec![system_instruction::transfer_with_seed(
+                from_pubkey,
+                base_pubkey,
+                seed.clone(),
+                program_id,
+                to,
+                lamports,
+            )]
+        } else {
+            vec![system_instruction::transfer(&from_pubkey, to, lamports)]
+        };
 
         if let Some(nonce_account) = &nonce_account {
             Message::new_with_nonce(
@@ -1135,7 +1168,7 @@ fn process_transfer(
         sign_only,
         amount,
         &fee_calculator,
-        &from.pubkey(),
+        &from_pubkey,
         &fee_payer.pubkey(),
         build_message,
         config.commitment,
@@ -1741,6 +1774,8 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             ref nonce_account,
             nonce_authority,
             fee_payer,
+            derived_address_seed,
+            ref derived_address_program_id,
         } => process_transfer(
             &rpc_client,
             config,
@@ -1753,6 +1788,8 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             nonce_account.as_ref(),
             *nonce_authority,
             *fee_payer,
+            derived_address_seed.clone(),
+            derived_address_program_id.as_ref(),
         ),
     }
 }
@@ -2085,6 +2122,23 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .long("no-wait")
                         .takes_value(false)
                         .help("Return signature immediately after submitting the transaction, instead of waiting for confirmations"),
+                )
+                .arg(
+                    Arg::with_name("derived_address_seed")
+                        .long("derived-address-seed")
+                        .takes_value(true)
+                        .value_name("SEED_STRING")
+                        .requires("derived_address_program_id")
+                        .validator(is_derived_address_seed)
+                        .hidden(true)
+                )
+                .arg(
+                    Arg::with_name("derived_address_program_id")
+                        .long("derived-address-program-id")
+                        .takes_value(true)
+                        .value_name("PROGRAM_ID")
+                        .requires("derived_address_seed")
+                        .hidden(true)
                 )
                 .offline_args()
                 .nonce_args(false)
@@ -2787,6 +2841,8 @@ mod tests {
                     nonce_account: None,
                     nonce_authority: 0,
                     fee_payer: 0,
+                    derived_address_seed: None,
+                    derived_address_program_id: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
@@ -2809,6 +2865,8 @@ mod tests {
                     nonce_account: None,
                     nonce_authority: 0,
                     fee_payer: 0,
+                    derived_address_seed: None,
+                    derived_address_program_id: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
@@ -2835,6 +2893,8 @@ mod tests {
                     nonce_account: None,
                     nonce_authority: 0,
                     fee_payer: 0,
+                    derived_address_seed: None,
+                    derived_address_program_id: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
@@ -2865,6 +2925,8 @@ mod tests {
                     nonce_account: None,
                     nonce_authority: 0,
                     fee_payer: 0,
+                    derived_address_seed: None,
+                    derived_address_program_id: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
@@ -2903,6 +2965,8 @@ mod tests {
                     nonce_account: None,
                     nonce_authority: 0,
                     fee_payer: 0,
+                    derived_address_seed: None,
+                    derived_address_program_id: None,
                 },
                 signers: vec![Presigner::new(&from_pubkey, &from_sig).into()],
             }
@@ -2942,11 +3006,46 @@ mod tests {
                     nonce_account: Some(nonce_address),
                     nonce_authority: 1,
                     fee_payer: 0,
+                    derived_address_seed: None,
+                    derived_address_program_id: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
                     read_keypair_file(&nonce_authority_file).unwrap().into()
                 ],
+            }
+        );
+
+        //Test Transfer Subcommand, with seed
+        let derived_address_seed = "seed".to_string();
+        let derived_address_program_id = "STAKE";
+        let test_transfer = test_commands.clone().get_matches_from(vec![
+            "test",
+            "transfer",
+            &to_string,
+            "42",
+            "--derived-address-seed",
+            &derived_address_seed,
+            "--derived-address-program-id",
+            derived_address_program_id,
+        ]);
+        assert_eq!(
+            parse_command(&test_transfer, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Transfer {
+                    amount: SpendAmount::Some(42_000_000_000),
+                    to: to_pubkey,
+                    from: 0,
+                    sign_only: false,
+                    no_wait: false,
+                    blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+                    nonce_account: None,
+                    nonce_authority: 0,
+                    fee_payer: 0,
+                    derived_address_seed: Some(derived_address_seed),
+                    derived_address_program_id: Some(solana_stake_program::id()),
+                },
+                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into(),],
             }
         );
     }

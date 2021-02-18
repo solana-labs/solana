@@ -298,6 +298,8 @@ fn test_create_account_with_seed() {
         nonce_account: Some(nonce_address),
         nonce_authority: 0,
         fee_payer: 0,
+        derived_address_seed: None,
+        derived_address_program_id: None,
     };
     authority_config.output_format = OutputFormat::JsonCompact;
     let sign_only_reply = process_command(&authority_config).unwrap();
@@ -322,6 +324,8 @@ fn test_create_account_with_seed() {
         nonce_account: Some(nonce_address),
         nonce_authority: 0,
         fee_payer: 0,
+        derived_address_seed: None,
+        derived_address_program_id: None,
     };
     process_command(&submit_config).unwrap();
     check_recent_balance(241, &rpc_client, &nonce_address);
