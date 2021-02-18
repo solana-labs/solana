@@ -5,19 +5,18 @@
 //! but they are undocumented, may change over time, and are generally more
 //! cumbersome to use.
 
+use borsh::BorshDeserialize;
 use futures::{future::join_all, Future, FutureExt};
 pub use solana_banks_interface::{BanksClient as TarpcClient, TransactionStatus};
 use solana_banks_interface::{BanksRequest, BanksResponse};
+use solana_program::{
+    clock::Slot, fee_calculator::FeeCalculator, hash::Hash, program_pack::Pack, pubkey::Pubkey,
+    rent::Rent, sysvar,
+};
 use solana_sdk::{
     account::{from_account, Account},
-    clock::Slot,
     commitment_config::CommitmentLevel,
-    fee_calculator::FeeCalculator,
-    hash::Hash,
-    pubkey::Pubkey,
-    rent::Rent,
     signature::Signature,
-    sysvar,
     transaction::{self, Transaction},
     transport,
 };
@@ -216,6 +215,33 @@ impl BanksClient {
         address: Pubkey,
     ) -> impl Future<Output = io::Result<Option<Account>>> + '_ {
         self.get_account_with_commitment(address, CommitmentLevel::default())
+    }
+
+    /// Return the unpacked account data at the given address
+    /// If the account is not found, an error is returned
+    pub fn get_packed_account_data<T: Pack>(
+        &mut self,
+        address: Pubkey,
+    ) -> impl Future<Output = io::Result<T>> + '_ {
+        self.get_account(address).map(|result| {
+            let account =
+                result?.ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Account not found"))?;
+            T::unpack_from_slice(&account.data)
+                .map_err(|_| io::Error::new(io::ErrorKind::Other, "Failed to deserialize account"))
+        })
+    }
+
+    /// Return the unpacked account data at the given address
+    /// If the account is not found, an error is returned
+    pub fn get_account_data_with_borsh<T: BorshDeserialize>(
+        &mut self,
+        address: Pubkey,
+    ) -> impl Future<Output = io::Result<T>> + '_ {
+        self.get_account(address).map(|result| {
+            let account =
+                result?.ok_or_else(|| io::Error::new(io::ErrorKind::Other, "account not found"))?;
+            T::try_from_slice(&account.data)
+        })
     }
 
     /// Return the balance in lamports of an account at the given address at the slot
