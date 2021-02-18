@@ -6,6 +6,7 @@
 extern crate self as solana_program;
 
 pub mod account_info;
+pub mod borsh;
 pub mod bpf_loader;
 pub mod bpf_loader_deprecated;
 pub mod bpf_loader_upgradeable;
