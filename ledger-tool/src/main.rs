@@ -2256,6 +2256,7 @@ fn main() {
                             point_value: Option<PointValue>,
                             old_credits_observed: Option<u64>,
                             new_credits_observed: Option<u64>,
+                            skipped_reasons: String,
                         }
                         use solana_stake_program::stake_state::InflationPointCalculationEvent;
                         let mut stake_calcuration_details: HashMap<Pubkey, CalculationDetail> =
@@ -2313,7 +2314,7 @@ fn main() {
                                         new_credits_observed,
                                     ) => {
                                         detail.old_credits_observed = Some(*old_credits_observed);
-                                        detail.new_credits_observed = Some(*new_credits_observed);
+                                        detail.new_credits_observed = *new_credits_observed;
                                     }
                                     InflationPointCalculationEvent::Delegation(
                                         delegation,
@@ -2326,6 +2327,13 @@ fn main() {
                                         if delegation.deactivation_epoch < Epoch::max_value() {
                                             detail.deactivation_epoch =
                                                 Some(delegation.deactivation_epoch);
+                                        }
+                                    }
+                                    InflationPointCalculationEvent::Skipped(skipped_reason) => {
+                                        if detail.skipped_reasons.is_empty() {
+                                            detail.skipped_reasons = format!("{:?}", skipped_reason);
+                                        } else {
+                                            detail.skipped_reasons += &format!("/{:?}", skipped_reason);
                                         }
                                     }
                                 }
