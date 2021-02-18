@@ -802,7 +802,7 @@ impl MessageProcessor {
         instruction: &CompiledInstruction,
         accounts: &[Rc<RefCell<Account>>],
     ) -> Vec<PreAccount> {
-        let mut pre_accounts = Vec::with_capacity(accounts.len());
+        let mut pre_accounts = Vec::with_capacity(instruction.accounts.len());
         {
             let mut work = |_unique_index: usize, account_index: usize| {
                 let key = &message.account_keys[account_index];
