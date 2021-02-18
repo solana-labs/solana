@@ -2,7 +2,11 @@ use crate::retry_rpc_operation;
 use log::*;
 use serde::{Deserialize, Serialize};
 use solana_client::rpc_client::RpcClient;
-use solana_sdk::{clock::Slot, commitment_config::CommitmentConfig, epoch_info::EpochInfo};
+use solana_sdk::{
+    clock::{Slot, DEFAULT_SLOTS_PER_EPOCH},
+    commitment_config::CommitmentConfig,
+    epoch_info::EpochInfo,
+};
 use std::{
     cell::RefCell,
     fs::{self, File, OpenOptions},
@@ -59,12 +63,14 @@ impl Entry {
 
 const CACHE_VERSION: u64 = 0;
 const DEFAULT_SLOTS_PER_ENTRY: u64 = 2500;
+const DEFAULT_MAX_CACHED_SLOTS: u64 = 5 * DEFAULT_SLOTS_PER_EPOCH;
 const CONFIG_FILENAME: &str = "config.yaml";
 
 #[derive(Debug, Deserialize, Serialize)]
 struct Config {
     version: u64,
     slots_per_chunk: u64,
+    max_cached_slots: u64,
 }
 
 impl Default for Config {
@@ -72,6 +78,7 @@ impl Default for Config {
         Self {
             version: CACHE_VERSION,
             slots_per_chunk: DEFAULT_SLOTS_PER_ENTRY,
+            max_cached_slots: DEFAULT_MAX_CACHED_SLOTS,
         }
     }
 }
@@ -118,6 +125,7 @@ impl ConfirmedBlockCache {
         let path = path.as_ref();
         let config_path = path.join(CONFIG_FILENAME);
         let rpc_url = rpc_url.as_ref();
+        let rpc_client = RpcClient::new(rpc_url.to_string());
         let (config, entries) = match fs::read_dir(path) {
             Ok(dir_entries) => {
                 let config = Self::load_config(&config_path)?;
@@ -127,9 +135,31 @@ impl ConfirmedBlockCache {
                         "unexpected cache version",
                     ));
                 }
-                let mut entries = dir_entries
+                let current_slot = rpc_client
+                    .get_slot()
+                    .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("{}", e)))?;
+                let eviction_slot = current_slot.saturating_sub(config.max_cached_slots);
+                let (delete, mut entries) = dir_entries
                     .filter_map(|de| Entry::from_pathbuf(de.unwrap().path()))
-                    .collect::<Vec<_>>();
+                    .fold(
+                        (Vec::new(), Vec::new()),
+                        |(mut delete, mut entries), entry| {
+                            if entry.slots.end < eviction_slot {
+                                delete.push(entry);
+                            } else {
+                                entries.push(entry);
+                            }
+                            (delete, entries)
+                        },
+                    );
+                let mut evicted_ranges = Vec::new();
+                for d in &delete {
+                    match std::fs::remove_file(&d.path) {
+                        Ok(()) => evicted_ranges.push(format!("{:?}", d.slots)),
+                        Err(e) => warn!("entry eviction for slots {:?} failed: {}", d.slots, e),
+                    }
+                }
+                debug!("entries evicted for slots: {}", evicted_ranges.join(", "));
                 entries.sort_by(|l, r| l.slots.start.cmp(&r.slots.start));
                 Ok((config, entries))
             }
@@ -145,7 +175,7 @@ impl ConfirmedBlockCache {
             }
         }?;
         Ok(Self {
-            rpc_client: RpcClient::new(rpc_url.to_string()),
+            rpc_client,
             base_path: path.to_path_buf(),
             entries: RefCell::new(entries),
             config,
