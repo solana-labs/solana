@@ -700,6 +700,12 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                             InstructionError::IncorrectAuthority => {
                                 tx_by_addr::InstructionErrorType::IncorrectAuthority
                             }
+                            InstructionError::IOError(_) => {
+                                tx_by_addr::InstructionErrorType::IOError
+                            }
+                            InstructionError::AccountNotRentExempt => {
+                                tx_by_addr::InstructionErrorType::AccountNotRentExempt
+                            }
                         } as i32,
                         custom: match instruction_error {
                             InstructionError::Custom(custom) => {
