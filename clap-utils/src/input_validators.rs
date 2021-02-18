@@ -3,7 +3,7 @@ use chrono::DateTime;
 use solana_sdk::{
     clock::{Epoch, Slot},
     hash::Hash,
-    pubkey::Pubkey,
+    pubkey::{Pubkey, MAX_SEED_LEN},
     signature::{read_keypair_file, Signature},
 };
 use std::fmt::Display;
@@ -289,6 +289,21 @@ where
             }
         })
         .map(|_| ())
+}
+
+pub fn is_derived_address_seed<T>(value: T) -> Result<(), String>
+where
+    T: AsRef<str> + Display,
+{
+    let value = value.as_ref();
+    if value.len() > MAX_SEED_LEN {
+        Err(format!(
+            "Address seed must not be longer than {} bytes",
+            MAX_SEED_LEN
+        ))
+    } else {
+        Ok(())
+    }
 }
 
 #[cfg(test)]
