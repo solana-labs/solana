@@ -262,8 +262,12 @@ impl<T: Default + Reset + Sized> Recycler<T> {
             let reused_object = object_pool.object_pool.pop();
             if reused_object.is_some() {
                 (reused_object, true, false, shrink_stats)
-            } else if let Some(limit) = object_pool.limit {
-                let should_allocate_new = object_pool.total_allocated_count < limit;
+            } else {
+                let should_allocate_new = object_pool
+                    .limit
+                    .map(|limit| object_pool.total_allocated_count < limit)
+                    .unwrap_or(true);
+
                 if should_allocate_new {
                     if object_pool.total_allocated_count % 1000 == 0 {
                         datapoint_info!(
@@ -276,8 +280,6 @@ impl<T: Default + Reset + Sized> Recycler<T> {
                     object_pool.total_allocated_count += 1;
                 }
                 (None, false, should_allocate_new, shrink_stats)
-            } else {
-                (None, false, true, shrink_stats)
             }
         };
 
