@@ -43,7 +43,11 @@ $ npm install --save @solana/web3.js
 
 ### Browser bundle
 ```html
-<script src="https://github.com/solana-labs/solana-web3.js/releases/download/v0.0.6/solanaWeb3.min.js"></script>
+<!-- Development (un-minified) -->
+<script src="https://unpkg.com/@solana/web3.js@0.92.0/lib/index.iife.js"></script>
+
+<!-- Production (un-minified) -->
+<script src="https://unpkg.com/@solana/web3.js@0.92.0/lib/index.iife.min.js"></script>
 ```
 
 
