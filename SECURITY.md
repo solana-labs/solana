@@ -97,7 +97,7 @@ upgrade as quickly as possible.
 If this issue is eligible for a bounty, prefix the title of the security
 advisory with one of the following, depending on the severity:
 * `[Bounty Category: Critical: Loss of Funds]`
-* `[Bounty Category: Critical: Loss of of Availability]`
+* `[Bounty Category: Critical: Loss of Availability]`
 * `[Bounty Category: Critical: DoS]`
 * `[Bounty Category: Non-critical]`
 * `[Bounty Category: RPC]`
