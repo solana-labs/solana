@@ -7,7 +7,7 @@ type CopyableProps = {
   right?: boolean;
 };
 
-type State = "hide" | "copy" | "copied";
+type State = "hide" | "copy" | "copied" | "errored";
 
 function Popover({
   state,
@@ -19,7 +19,14 @@ function Popover({
   right?: boolean;
 }) {
   if (state === "hide") return null;
-  const text = state === "copy" ? "Copy" : "Copied!";
+
+  let text = "Copy";
+  if (state === "copied") {
+    text = "Copied!";
+  } else if (state === "errored") {
+    text = "Please check your browser's copy permissions.";
+  }
+
   return (
     <div
       className={`popover bs-popover-${bottom ? "bottom" : "top"}${
@@ -37,10 +44,14 @@ export function Copyable({ bottom, right, text, children }: CopyableProps) {
 
   const copyToClipboard = () => navigator.clipboard.writeText(text);
   const handleClick = () =>
-    copyToClipboard().then(() => {
-      setState("copied");
-      setTimeout(() => setState("hide"), 1000);
-    });
+    copyToClipboard()
+      .then(() => {
+        setState("copied");
+        setTimeout(() => setState("hide"), 1000);
+      })
+      .catch((error) => {
+        setState("errored");
+      });
 
   return (
     <div

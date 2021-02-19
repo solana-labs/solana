@@ -4,6 +4,7 @@ import { PublicKey } from "@solana/web3.js";
 import { clusterPath } from "utils/url";
 import { displayAddress } from "utils/tx";
 import { useCluster } from "providers/cluster";
+import { CopyButton } from "./CopyButton";
 
 type CopyState = "copy" | "copied";
 type Props = {
@@ -23,23 +24,8 @@ export function Address({
   truncate,
   truncateUnknown,
 }: Props) {
-  const [state, setState] = useState<CopyState>("copy");
   const address = pubkey.toBase58();
   const { cluster } = useCluster();
-
-  const copyToClipboard = () => navigator.clipboard.writeText(address);
-  const handleClick = () =>
-    copyToClipboard().then(() => {
-      setState("copied");
-      setTimeout(() => setState("copy"), 1000);
-    });
-
-  const copyIcon =
-    state === "copy" ? (
-      <span className="fe fe-copy" onClick={handleClick}></span>
-    ) : (
-      <span className="fe fe-check-circle"></span>
-    );
 
   if (truncateUnknown && address === displayAddress(address, cluster)) {
     truncate = true;
@@ -47,7 +33,7 @@ export function Address({
 
   const content = (
     <>
-      <span className="c-pointer font-size-tiny mr-2">{copyIcon}</span>
+      <CopyButton text={address} />
       <span className="text-monospace">
         {link ? (
           <Link
