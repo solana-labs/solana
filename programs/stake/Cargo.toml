@@ -27,7 +27,7 @@ thiserror = "1.0"
 solana-logger = { path = "../../logger", version = "1.6.0" }
 
 [build-dependencies]
-rustc_version = "0.2"
+rustc_version = "0.3"
 
 [lib]
 crate-type = ["lib"]

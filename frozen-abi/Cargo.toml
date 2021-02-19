@@ -24,4 +24,4 @@ generic-array = { version = "0.14.3", default-features = false, features = ["ser
 memmap2 = "0.1.0"
 
 [build-dependencies]
-rustc_version = "0.2"
+rustc_version = "0.3"

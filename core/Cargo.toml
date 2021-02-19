@@ -92,7 +92,7 @@ serial_test = "0.4.0"
 systemstat = "0.1.5"
 
 [build-dependencies]
-rustc_version = "0.2"
+rustc_version = "0.3"
 
 [[bench]]
 name = "banking_stage"
