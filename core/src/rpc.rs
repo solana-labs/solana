@@ -1402,7 +1402,7 @@ impl JsonRpcRequestProcessor {
         {
             bank.get_filtered_indexed_accounts(&IndexKey::ProgramId(*program_id), |account| {
                 // The program-id account index checks for Account owner on inclusion. However, due
-                // to the current AccountsDB implementation, an account may remain in storage as a
+                // to the current AccountsDb implementation, an account may remain in storage as a
                 // zero-lamport Account::Default() after being wiped and reinitialized in later
                 // updates. We include the redundant filters here to avoid returning these
                 // accounts.
@@ -1421,7 +1421,7 @@ impl JsonRpcRequestProcessor {
         mut filters: Vec<RpcFilterType>,
     ) -> Vec<(Pubkey, Account)> {
         // The by-owner accounts index checks for Token Account state and Owner address on
-        // inclusion. However, due to the current AccountsDB implementation, an account may remain
+        // inclusion. However, due to the current AccountsDb implementation, an account may remain
         // in storage as a zero-lamport Account::Default() after being wiped and reinitialized in
         // later updates. We include the redundant filters here to avoid returning these accounts.
         //
@@ -1461,7 +1461,7 @@ impl JsonRpcRequestProcessor {
         mut filters: Vec<RpcFilterType>,
     ) -> Vec<(Pubkey, Account)> {
         // The by-mint accounts index checks for Token Account state and Mint address on inclusion.
-        // However, due to the current AccountsDB implementation, an account may remain in storage
+        // However, due to the current AccountsDb implementation, an account may remain in storage
         // as be zero-lamport Account::Default() after being wiped and reinitialized in later
         // updates. We include the redundant filters here to avoid returning these accounts.
         //
@@ -3035,7 +3035,7 @@ pub mod tests {
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
     };
     use solana_runtime::{
-        accounts_background_service::ABSRequestSender, commitment::BlockCommitment,
+        accounts_background_service::AbsRequestSender, commitment::BlockCommitment,
     };
     use solana_sdk::{
         clock::MAX_RECENT_BLOCKHASHES,
@@ -3152,7 +3152,7 @@ pub mod tests {
                 bank_forks
                     .write()
                     .unwrap()
-                    .set_root(*root, &ABSRequestSender::default(), Some(0));
+                    .set_root(*root, &AbsRequestSender::default(), Some(0));
                 let mut stakes = HashMap::new();
                 stakes.insert(leader_vote_keypair.pubkey(), (1, Account::default()));
                 let block_time = bank_forks

@@ -19,7 +19,7 @@ pub type PacketSender = Sender<Packets>;
 #[derive(Error, Debug)]
 pub enum StreamerError {
     #[error("I/O error")]
-    IO(#[from] std::io::Error),
+    Io(#[from] std::io::Error),
 
     #[error("receive timeout error")]
     RecvTimeoutError(#[from] RecvTimeoutError),

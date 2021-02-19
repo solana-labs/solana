@@ -1,7 +1,7 @@
 use log::*;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
-use solana_runtime::{accounts_db::AccountsDB, accounts_index::Ancestors};
+use solana_runtime::{accounts_db::AccountsDb, accounts_index::Ancestors};
 use solana_sdk::genesis_config::ClusterType;
 use solana_sdk::{account::Account, clock::Slot, pubkey::Pubkey};
 use std::collections::HashSet;
@@ -15,7 +15,7 @@ fn test_shrink_and_clean() {
 
     // repeat the whole test scenario
     for _ in 0..5 {
-        let accounts = Arc::new(AccountsDB::new_single());
+        let accounts = Arc::new(AccountsDb::new_single());
         let accounts_for_shrink = accounts.clone();
 
         // spawn the slot shrinking background thread
@@ -31,7 +31,7 @@ fn test_shrink_and_clean() {
         let mut alive_accounts = vec![];
         let owner = Pubkey::default();
 
-        // populate the AccountsDB with plenty of food for slot shrinking
+        // populate the AccountsDb with plenty of food for slot shrinking
         // also this simulates realistic some heavy spike account updates in the wild
         for current_slot in 0..100 {
             while alive_accounts.len() <= 10 {
@@ -66,7 +66,7 @@ fn test_shrink_and_clean() {
 fn test_bad_bank_hash() {
     solana_logger::setup();
     use solana_sdk::signature::{Keypair, Signer};
-    let db = AccountsDB::new(Vec::new(), &ClusterType::Development);
+    let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
 
     let some_slot: Slot = 0;
     let ancestors: Ancestors = [(some_slot, 0)].iter().copied().collect();
@@ -113,7 +113,7 @@ fn test_bad_bank_hash() {
         for (key, account) in &account_refs {
             assert_eq!(
                 db.load_account_hash(&ancestors, &key),
-                AccountsDB::hash_account(some_slot, &account, &key, &ClusterType::Development)
+                AccountsDb::hash_account(some_slot, &account, &key, &ClusterType::Development)
             );
         }
         existing.clear();

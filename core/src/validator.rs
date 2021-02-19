@@ -1048,7 +1048,7 @@ fn new_banks_from_ledger(
         ));
         bank_forks.set_root(
             warp_slot,
-            &solana_runtime::accounts_background_service::ABSRequestSender::default(),
+            &solana_runtime::accounts_background_service::AbsRequestSender::default(),
             Some(warp_slot),
         );
         leader_schedule_cache.set_root(&bank_forks.root_bank());

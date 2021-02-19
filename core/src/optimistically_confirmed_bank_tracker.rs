@@ -168,7 +168,7 @@ mod tests {
     use super::*;
     use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use solana_runtime::{
-        accounts_background_service::ABSRequestSender, commitment::BlockCommitmentCache,
+        accounts_background_service::AbsRequestSender, commitment::BlockCommitmentCache,
     };
     use solana_sdk::pubkey::Pubkey;
 
@@ -284,7 +284,7 @@ mod tests {
         bank_forks
             .write()
             .unwrap()
-            .set_root(7, &ABSRequestSender::default(), None);
+            .set_root(7, &AbsRequestSender::default(), None);
         OptimisticallyConfirmedBankTracker::process_notification(
             BankNotification::OptimisticallyConfirmed(6),
             &bank_forks,

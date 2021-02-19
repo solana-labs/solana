@@ -1507,7 +1507,7 @@ impl ClusterInfo {
                         1
                     );
                     error!("retransmit result {:?}", e);
-                    return Err(Error::IO(e));
+                    return Err(Error::Io(e));
                 }
             }
         }

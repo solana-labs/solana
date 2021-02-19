@@ -592,7 +592,7 @@ impl BankingStage {
                         processed_transactions_indexes,
                     );
                 }
-                Err(e) => panic!(format!("Poh recorder returned unexpected error: {:?}", e)),
+                Err(e) => panic!("Poh recorder returned unexpected error: {:?}", e),
             }
             poh_record.stop();
         }

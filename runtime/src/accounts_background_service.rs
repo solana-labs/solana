@@ -205,13 +205,13 @@ impl SnapshotRequestHandler {
 }
 
 #[derive(Default)]
-pub struct ABSRequestSender {
+pub struct AbsRequestSender {
     snapshot_request_sender: Option<SnapshotRequestSender>,
 }
 
-impl ABSRequestSender {
+impl AbsRequestSender {
     pub fn new(snapshot_request_sender: Option<SnapshotRequestSender>) -> Self {
-        ABSRequestSender {
+        AbsRequestSender {
             snapshot_request_sender,
         }
     }
@@ -232,12 +232,12 @@ impl ABSRequestSender {
     }
 }
 
-pub struct ABSRequestHandler {
+pub struct AbsRequestHandler {
     pub snapshot_request_handler: Option<SnapshotRequestHandler>,
     pub pruned_banks_receiver: DroppedSlotsReceiver,
 }
 
-impl ABSRequestHandler {
+impl AbsRequestHandler {
     // Returns the latest requested snapshot block height, if one exists
     pub fn handle_snapshot_requests(
         &self,
@@ -275,7 +275,7 @@ impl AccountsBackgroundService {
     pub fn new(
         bank_forks: Arc<RwLock<BankForks>>,
         exit: &Arc<AtomicBool>,
-        request_handler: ABSRequestHandler,
+        request_handler: AbsRequestHandler,
         accounts_db_caching_enabled: bool,
         test_hash_calculation: bool,
         use_index_hash_calculation: bool,
@@ -378,7 +378,7 @@ impl AccountsBackgroundService {
 
     fn remove_dead_slots(
         bank: &Bank,
-        request_handler: &ABSRequestHandler,
+        request_handler: &AbsRequestHandler,
         removed_slots_count: &mut usize,
         total_remove_slots_time: &mut u64,
     ) {
@@ -411,7 +411,7 @@ mod test {
         let genesis = create_genesis_config(10);
         let bank0 = Arc::new(Bank::new(&genesis.genesis_config));
         let (pruned_banks_sender, pruned_banks_receiver) = unbounded();
-        let request_handler = ABSRequestHandler {
+        let request_handler = AbsRequestHandler {
             snapshot_request_handler: None,
             pruned_banks_receiver,
         };

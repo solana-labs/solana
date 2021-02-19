@@ -845,10 +845,9 @@ impl Tower {
         assert!(
             self.last_vote == Vote::default() && self.lockouts.votes.is_empty()
                 || self.last_vote != Vote::default() && !self.lockouts.votes.is_empty(),
-            format!(
-                "last vote: {:?} lockouts.votes: {:?}",
-                self.last_vote, self.lockouts.votes
-            )
+            "last vote: {:?} lockouts.votes: {:?}",
+            self.last_vote,
+            self.lockouts.votes
         );
 
         if let Some(last_voted_slot) = self.last_voted_slot() {
@@ -1131,7 +1130,7 @@ impl Tower {
 #[derive(Error, Debug)]
 pub enum TowerError {
     #[error("IO Error: {0}")]
-    IOError(#[from] std::io::Error),
+    IoError(#[from] std::io::Error),
 
     #[error("Serialization Error: {0}")]
     SerializeError(#[from] bincode::Error),
@@ -1157,7 +1156,7 @@ pub enum TowerError {
 
 impl TowerError {
     pub fn is_file_missing(&self) -> bool {
-        if let TowerError::IOError(io_err) = &self {
+        if let TowerError::IoError(io_err) = &self {
             io_err.kind() == std::io::ErrorKind::NotFound
         } else {
             false
@@ -1246,7 +1245,7 @@ pub mod test {
     };
     use solana_ledger::{blockstore::make_slot_entries, get_tmp_ledger_path};
     use solana_runtime::{
-        accounts_background_service::ABSRequestSender,
+        accounts_background_service::AbsRequestSender,
         bank::Bank,
         bank_forks::BankForks,
         genesis_utils::{
@@ -1417,7 +1416,7 @@ pub mod test {
                 new_root,
                 &self.bank_forks,
                 &mut self.progress,
-                &ABSRequestSender::default(),
+                &AbsRequestSender::default(),
                 None,
                 &mut self.heaviest_subtree_fork_choice,
             )
@@ -2704,7 +2703,7 @@ pub mod test {
                 remove_file(path).unwrap();
             },
         );
-        assert_matches!(loaded, Err(TowerError::IOError(_)))
+        assert_matches!(loaded, Err(TowerError::IoError(_)))
     }
 
     #[test]
