@@ -19,7 +19,7 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum UnpackError {
     #[error("IO error: {0}")]
-    IO(#[from] std::io::Error),
+    Io(#[from] std::io::Error),
     #[error("Archive error: {0}")]
     Archive(String),
 }

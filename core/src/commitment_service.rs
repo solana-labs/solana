@@ -249,7 +249,7 @@ mod tests {
     use super::*;
     use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use solana_runtime::{
-        accounts_background_service::ABSRequestSender,
+        accounts_background_service::AbsRequestSender,
         bank_forks::BankForks,
         genesis_utils::{create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs},
     };
@@ -534,7 +534,7 @@ mod tests {
             &working_bank,
         );
         for x in 0..root {
-            bank_forks.set_root(x, &ABSRequestSender::default(), None);
+            bank_forks.set_root(x, &AbsRequestSender::default(), None);
         }
 
         // Add an additional bank/vote that will root slot 2
@@ -573,7 +573,7 @@ mod tests {
             .highest_confirmed_root();
         bank_forks.set_root(
             root,
-            &ABSRequestSender::default(),
+            &AbsRequestSender::default(),
             Some(highest_confirmed_root),
         );
         let highest_confirmed_root_bank = bank_forks.get(highest_confirmed_root);
@@ -642,7 +642,7 @@ mod tests {
             .highest_confirmed_root();
         bank_forks.set_root(
             root,
-            &ABSRequestSender::default(),
+            &AbsRequestSender::default(),
             Some(highest_confirmed_root),
         );
         let highest_confirmed_root_bank = bank_forks.get(highest_confirmed_root);

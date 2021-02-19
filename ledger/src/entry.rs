@@ -214,8 +214,8 @@ pub struct GpuVerificationData {
 }
 
 pub enum DeviceVerificationData {
-    CPU(),
-    GPU(GpuVerificationData),
+    Cpu(),
+    Gpu(GpuVerificationData),
 }
 
 pub struct EntryVerificationState {
@@ -257,7 +257,7 @@ impl EntryVerificationState {
 
     pub fn finish_verify(&mut self, entries: &[Entry]) -> bool {
         match &mut self.device_verification_data {
-            DeviceVerificationData::GPU(verification_state) => {
+            DeviceVerificationData::Gpu(verification_state) => {
                 let gpu_time_us = verification_state.thread_h.take().unwrap().join().unwrap();
 
                 let mut verify_check_time = Measure::start("verify_check");
@@ -297,7 +297,7 @@ impl EntryVerificationState {
                 };
                 res
             }
-            DeviceVerificationData::CPU() => {
+            DeviceVerificationData::Cpu() => {
                 self.verification_status == EntryVerificationStatus::Success
             }
         }
@@ -380,7 +380,7 @@ impl EntrySlice for [Entry] {
             },
             poh_duration_us,
             transaction_duration_us: 0,
-            device_verification_data: DeviceVerificationData::CPU(),
+            device_verification_data: DeviceVerificationData::Cpu(),
         }
     }
 
@@ -464,7 +464,7 @@ impl EntrySlice for [Entry] {
             },
             poh_duration_us,
             transaction_duration_us: 0,
-            device_verification_data: DeviceVerificationData::CPU(),
+            device_verification_data: DeviceVerificationData::Cpu(),
         }
     }
 
@@ -527,7 +527,7 @@ impl EntrySlice for [Entry] {
                 verification_status: EntryVerificationStatus::Failure,
                 transaction_duration_us,
                 poh_duration_us: 0,
-                device_verification_data: DeviceVerificationData::CPU(),
+                device_verification_data: DeviceVerificationData::Cpu(),
             };
         }
 
@@ -607,7 +607,7 @@ impl EntrySlice for [Entry] {
             })
         });
 
-        let device_verification_data = DeviceVerificationData::GPU(GpuVerificationData {
+        let device_verification_data = DeviceVerificationData::Gpu(GpuVerificationData {
             thread_h: Some(gpu_verify_thread),
             tx_hashes,
             hashes: Some(hashes),

@@ -1,5 +1,5 @@
 use crate::{
-    accounts_db::AccountsDB,
+    accounts_db::AccountsDb,
     accounts_index::AccountIndex,
     bank::{Bank, BankSlotDelta, Builtins},
     bank_forks::ArchiveFormat,
@@ -25,7 +25,7 @@ use std::{
     cmp::Ordering,
     fmt,
     fs::{self, File},
-    io::{self, BufReader, BufWriter, Error as IOError, ErrorKind, Read, Seek, SeekFrom, Write},
+    io::{self, BufReader, BufWriter, Error as IoError, ErrorKind, Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
     process::{self, ExitStatus},
     str::FromStr,
@@ -108,7 +108,7 @@ pub struct SlotSnapshotPaths {
 #[derive(Error, Debug)]
 pub enum SnapshotError {
     #[error("I/O error: {0}")]
-    IO(#[from] std::io::Error),
+    Io(#[from] std::io::Error),
 
     #[error("serialization error: {0}")]
     Serialize(#[from] bincode::Error),
@@ -319,7 +319,7 @@ pub fn archive_snapshot_package(snapshot_package: &AccountsPackage) -> Result<()
 
     match &mut tar.stdout {
         None => {
-            return Err(SnapshotError::IO(IOError::new(
+            return Err(SnapshotError::Io(IoError::new(
                 ErrorKind::Other,
                 "tar stdout unavailable".to_string(),
             )));
@@ -521,7 +521,7 @@ pub fn add_snapshot<P: AsRef<Path>>(
     let mut bank_serialize = Measure::start("bank-serialize-ms");
     let bank_snapshot_serializer = move |stream: &mut BufWriter<File>| -> Result<()> {
         let serde_style = match snapshot_version {
-            SnapshotVersion::V1_2_0 => SerdeStyle::NEWER,
+            SnapshotVersion::V1_2_0 => SerdeStyle::Newer,
         };
         bank_to_stream(serde_style, stream.by_ref(), bank, snapshot_storages)?;
         Ok(())
@@ -797,7 +797,7 @@ where
     let bank = deserialize_snapshot_data_file(&root_paths.snapshot_file_path, |mut stream| {
         Ok(match snapshot_version_enum {
             SnapshotVersion::V1_2_0 => bank_from_stream(
-                SerdeStyle::NEWER,
+                SerdeStyle::Newer,
                 &mut stream,
                 &append_vecs_path,
                 account_paths,
@@ -841,7 +841,7 @@ fn get_bank_snapshot_dir<P: AsRef<Path>>(path: P, slot: Slot) -> PathBuf {
 
 fn get_io_error(error: &str) -> SnapshotError {
     warn!("Snapshot Error: {:?}", error);
-    SnapshotError::IO(IOError::new(ErrorKind::Other, error))
+    SnapshotError::Io(IoError::new(ErrorKind::Other, error))
 }
 
 pub fn verify_snapshot_archive<P, Q, R>(
@@ -968,7 +968,7 @@ pub fn process_accounts_package_pre(
 
     let hash = accounts_package.hash; // temporarily remaining here
     if let Some(expected_hash) = accounts_package.hash_for_testing {
-        let (hash, lamports) = AccountsDB::calculate_accounts_hash_without_index(
+        let (hash, lamports) = AccountsDb::calculate_accounts_hash_without_index(
             &accounts_package.storages,
             accounts_package.simple_capitalization_testing,
             thread_pool,
@@ -1039,7 +1039,7 @@ mod tests {
                 Ok(())
             },
         );
-        assert_matches!(result, Err(SnapshotError::IO(ref message)) if message.to_string().starts_with("too large snapshot data file to serialize"));
+        assert_matches!(result, Err(SnapshotError::Io(ref message)) if message.to_string().starts_with("too large snapshot data file to serialize"));
     }
 
     #[test]
@@ -1088,7 +1088,7 @@ mod tests {
             expected_consumed_size - 1,
             |stream| Ok(deserialize_from::<_, u32>(stream)?),
         );
-        assert_matches!(result, Err(SnapshotError::IO(ref message)) if message.to_string().starts_with("too large snapshot data file to deserialize"));
+        assert_matches!(result, Err(SnapshotError::Io(ref message)) if message.to_string().starts_with("too large snapshot data file to deserialize"));
     }
 
     #[test]
@@ -1113,7 +1113,7 @@ mod tests {
             expected_consumed_size * 2,
             |stream| Ok(deserialize_from::<_, u32>(stream)?),
         );
-        assert_matches!(result, Err(SnapshotError::IO(ref message)) if message.to_string().starts_with("invalid snapshot data file"));
+        assert_matches!(result, Err(SnapshotError::Io(ref message)) if message.to_string().starts_with("invalid snapshot data file"));
     }
 
     #[test]

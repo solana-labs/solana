@@ -21,7 +21,7 @@ use {
 
 #[cfg(test)]
 fn copy_append_vecs<P: AsRef<Path>>(
-    accounts_db: &AccountsDB,
+    accounts_db: &AccountsDb,
     output_dir: P,
 ) -> std::io::Result<()> {
     let storage_entries = accounts_db.get_snapshot_storages(Slot::max_value());
@@ -57,7 +57,7 @@ fn context_accountsdb_from_stream<'a, C, R, P>(
     stream: &mut BufReader<R>,
     account_paths: &[PathBuf],
     stream_append_vecs_path: P,
-) -> Result<AccountsDB, Error>
+) -> Result<AccountsDb, Error>
 where
     C: TypeContext<'a>,
     R: Read,
@@ -80,13 +80,13 @@ fn accountsdb_from_stream<R, P>(
     stream: &mut BufReader<R>,
     account_paths: &[PathBuf],
     stream_append_vecs_path: P,
-) -> Result<AccountsDB, Error>
+) -> Result<AccountsDb, Error>
 where
     R: Read,
     P: AsRef<Path>,
 {
     match serde_style {
-        SerdeStyle::NEWER => context_accountsdb_from_stream::<TypeContextFuture, R, P>(
+        SerdeStyle::Newer => context_accountsdb_from_stream::<TypeContextFuture, R, P>(
             stream,
             account_paths,
             stream_append_vecs_path,
@@ -98,7 +98,7 @@ where
 fn accountsdb_to_stream<W>(
     serde_style: SerdeStyle,
     stream: &mut W,
-    accounts_db: &AccountsDB,
+    accounts_db: &AccountsDb,
     slot: Slot,
     account_storage_entries: &[SnapshotStorage],
 ) -> Result<(), Error>
@@ -106,9 +106,9 @@ where
     W: Write,
 {
     match serde_style {
-        SerdeStyle::NEWER => serialize_into(
+        SerdeStyle::Newer => serialize_into(
             stream,
-            &SerializableAccountsDB::<TypeContextFuture> {
+            &SerializableAccountsDb::<TypeContextFuture> {
                 accounts_db,
                 slot,
                 account_storage_entries,
@@ -230,13 +230,13 @@ fn test_bank_serialize_style(serde_style: SerdeStyle) {
 
 #[cfg(test)]
 pub(crate) fn reconstruct_accounts_db_via_serialization(
-    accounts: &AccountsDB,
+    accounts: &AccountsDb,
     slot: Slot,
-) -> AccountsDB {
+) -> AccountsDb {
     let mut writer = Cursor::new(vec![]);
     let snapshot_storages = accounts.get_snapshot_storages(slot);
     accountsdb_to_stream(
-        SerdeStyle::NEWER,
+        SerdeStyle::Newer,
         &mut writer,
         &accounts,
         slot,
@@ -249,17 +249,17 @@ pub(crate) fn reconstruct_accounts_db_via_serialization(
     let copied_accounts = TempDir::new().unwrap();
     // Simulate obtaining a copy of the AppendVecs from a tarball
     copy_append_vecs(&accounts, copied_accounts.path()).unwrap();
-    accountsdb_from_stream(SerdeStyle::NEWER, &mut reader, &[], copied_accounts.path()).unwrap()
+    accountsdb_from_stream(SerdeStyle::Newer, &mut reader, &[], copied_accounts.path()).unwrap()
 }
 
 #[test]
 fn test_accounts_serialize_newer() {
-    test_accounts_serialize_style(SerdeStyle::NEWER)
+    test_accounts_serialize_style(SerdeStyle::Newer)
 }
 
 #[test]
 fn test_bank_serialize_newer() {
-    test_bank_serialize_style(SerdeStyle::NEWER)
+    test_bank_serialize_style(SerdeStyle::Newer)
 }
 
 #[cfg(all(test, RUSTC_WITH_SPECIALIZATION))]
@@ -268,7 +268,7 @@ mod test_bank_serialize {
 
     // These some what long test harness is required to freeze the ABI of
     // Bank's serialization due to versioned nature
-    #[frozen_abi(digest = "9CqwEeiVycBp9wVDLz19XUJXRMZ68itGfYVEe29S8JmA")]
+    #[frozen_abi(digest = "DuRGntVwLGNAv5KooafUSpxk67BPAx2yC7Z8A9c8wr2G")]
     #[derive(Serialize, AbiExample)]
     pub struct BankAbiTestWrapperFuture {
         #[serde(serialize_with = "wrapper_future")]

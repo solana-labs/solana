@@ -1067,7 +1067,7 @@ impl Bank {
             new.ancestors.insert(p.slot(), i + 1);
         });
 
-        // Following code may touch AccountsDB, requiring proper ancestors
+        // Following code may touch AccountsDb, requiring proper ancestors
         let parent_epoch = parent.epoch();
         if parent_epoch < new.epoch() {
             new.apply_feature_activations(false);
@@ -2169,7 +2169,7 @@ impl Bank {
 
                 self.capitalization.fetch_sub(account.lamports, Relaxed);
 
-                // Resetting account balance to 0 is needed to really purge from AccountsDB and
+                // Resetting account balance to 0 is needed to really purge from AccountsDb and
                 // flush the Stakes cache
                 account.lamports = 0;
                 self.store_account(&program_id, &account);
@@ -2189,7 +2189,7 @@ impl Bank {
                 ),
                 Some(account) => {
                     if *name == String::from_utf8_lossy(&account.data) {
-                        // nop; it seems that already AccountsDB is updated.
+                        // nop; it seems that already AccountsDb is updated.
                         return;
                     }
                     // continue to replace account

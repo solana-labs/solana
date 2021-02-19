@@ -1,15 +1,11 @@
 use crate::abi_example::{normalize_type_name, AbiEnumVisitor};
 use crate::hash::{Hash, Hasher};
-
 use log::*;
-
 use serde::ser::Error as SerdeError;
 use serde::ser::*;
 use serde::{Serialize, Serializer};
-
 use std::any::type_name;
 use std::io::Write;
-
 use thiserror::Error;
 
 #[derive(Debug)]
@@ -561,21 +557,21 @@ mod tests {
     #[frozen_abi(digest = "GttWH8FAY3teUjTaSds9mL3YbiDQ7qWw7WAvDXKd4ZzX")]
     type TestUnitStruct = std::marker::PhantomData<i8>;
 
-    #[frozen_abi(digest = "2zvXde11f8sNnFbc9E6ZZeFxV7D2BTVLKEZmNTsCDBpS")]
+    #[frozen_abi(digest = "6kj3mPXbzWTwZho48kZWxZjuseLU2oiqhbpqca4DmcRq")]
     #[derive(Serialize, AbiExample, AbiEnumVisitor)]
     enum TestEnum {
-        VARIANT1,
-        VARIANT2,
+        Variant1,
+        Variant2,
     }
 
-    #[frozen_abi(digest = "6keb3v7GXLahhL6zoinzCWwSvB3KhmvZMB3tN2mamAm3")]
+    #[frozen_abi(digest = "3WqYwnbQEdu6iPZi5LJa2b5kw55hxBtZdqFqiViFCKPo")]
     #[derive(Serialize, AbiExample, AbiEnumVisitor)]
     enum TestTupleVariant {
-        VARIANT1(u8, u16),
-        VARIANT2(u8, u16),
+        Variant1(u8, u16),
+        Variant2(u8, u16),
     }
 
-    #[frozen_abi(digest = "DywMfwKq8HZCbUfTwnemHWMN8LvMZCvipQuLddQ2ywwG")]
+    #[frozen_abi(digest = "4E9gJjvKiETBeZ8dybZPAQ7maaHTHFucmLqgX2m6yrBh")]
     #[derive(Serialize, AbiExample)]
     struct TestVecEnum {
         enums: Vec<TestTupleVariant>,
@@ -642,21 +638,21 @@ mod tests {
             _skipped_test_field: i8,
         }
 
-        #[frozen_abi(digest = "2zvXde11f8sNnFbc9E6ZZeFxV7D2BTVLKEZmNTsCDBpS")]
+        #[frozen_abi(digest = "6kj3mPXbzWTwZho48kZWxZjuseLU2oiqhbpqca4DmcRq")]
         #[derive(Serialize, AbiExample, AbiEnumVisitor)]
         enum TestEnum {
-            VARIANT1,
-            VARIANT2,
+            Variant1,
+            Variant2,
             #[serde(skip)]
             #[allow(dead_code)]
-            VARIANT3,
+            Variant3,
         }
 
-        #[frozen_abi(digest = "6keb3v7GXLahhL6zoinzCWwSvB3KhmvZMB3tN2mamAm3")]
+        #[frozen_abi(digest = "3WqYwnbQEdu6iPZi5LJa2b5kw55hxBtZdqFqiViFCKPo")]
         #[derive(Serialize, AbiExample, AbiEnumVisitor)]
         enum TestTupleVariant {
-            VARIANT1(u8, u16),
-            VARIANT2(u8, u16, #[serde(skip)] u32),
+            Variant1(u8, u16),
+            Variant2(u8, u16, #[serde(skip)] u32),
         }
     }
 }

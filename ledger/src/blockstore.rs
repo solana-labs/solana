@@ -45,7 +45,7 @@ use std::{
     cmp,
     collections::{HashMap, HashSet},
     fs,
-    io::{Error as IOError, ErrorKind},
+    io::{Error as IoError, ErrorKind},
     path::{Path, PathBuf},
     rc::Rc,
     sync::{
@@ -2082,7 +2082,7 @@ impl Blockstore {
                     Some((slot, _)) => {
                         let confirmed_block =
                             self.get_confirmed_block(slot, false).map_err(|err| {
-                                BlockstoreError::IO(IOError::new(
+                                BlockstoreError::Io(IoError::new(
                                     ErrorKind::Other,
                                     format!("Unable to get confirmed block: {}", err),
                                 ))
@@ -2133,7 +2133,7 @@ impl Blockstore {
                     Some((slot, _)) => {
                         let confirmed_block =
                             self.get_confirmed_block(slot, false).map_err(|err| {
-                                BlockstoreError::IO(IOError::new(
+                                BlockstoreError::Io(IoError::new(
                                     ErrorKind::Other,
                                     format!("Unable to get confirmed block: {}", err),
                                 ))
@@ -3256,7 +3256,7 @@ pub fn create_new_ledger(
         error!("tar stdout: {}", from_utf8(&output.stdout).unwrap_or("?"));
         error!("tar stderr: {}", from_utf8(&output.stderr).unwrap_or("?"));
 
-        return Err(BlockstoreError::IO(IOError::new(
+        return Err(BlockstoreError::Io(IoError::new(
             ErrorKind::Other,
             format!(
                 "Error trying to generate snapshot archive: {}",
@@ -3303,7 +3303,7 @@ pub fn create_new_ledger(
                 error_messages += &format!("/failed to stash problematic rocksdb: {}", e)
             });
 
-            return Err(BlockstoreError::IO(IOError::new(
+            return Err(BlockstoreError::Io(IoError::new(
                 ErrorKind::Other,
                 format!(
                     "Error checking to unpack genesis archive: {}{}",

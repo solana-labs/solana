@@ -11,7 +11,7 @@ use bip39::{Language, Mnemonic, MnemonicType, Seed};
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 use log::*;
 use serde_json::{self, json, Value};
-use solana_bpf_loader_program::{bpf_verifier, BPFError, ThisInstructionMeter};
+use solana_bpf_loader_program::{bpf_verifier, BpfError, ThisInstructionMeter};
 use solana_clap_utils::{self, input_parsers::*, input_validators::*, keypair::*};
 use solana_cli_output::{
     display::new_spinner_progress_bar, CliUpgradeableBuffer, CliUpgradeableProgram,
@@ -1363,7 +1363,7 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
         .map_err(|err| format!("Unable to read program file: {}", err))?;
 
     // Verify the program
-    Executable::<BPFError, ThisInstructionMeter>::from_elf(
+    Executable::<BpfError, ThisInstructionMeter>::from_elf(
         &program_data,
         Some(|x| bpf_verifier::check(x, false)),
         Config::default(),

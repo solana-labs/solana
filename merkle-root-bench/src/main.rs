@@ -1,7 +1,7 @@
 extern crate log;
 use clap::{crate_description, crate_name, value_t, App, Arg};
 use solana_measure::measure::Measure;
-use solana_runtime::accounts_db::AccountsDB;
+use solana_runtime::accounts_db::AccountsDb;
 use solana_sdk::{hash::Hash, pubkey::Pubkey};
 
 fn main() {
@@ -36,7 +36,7 @@ fn main() {
             let hashes = hashes.clone(); // done outside timing
             let mut time = Measure::start("compute_merkle_root_and_capitalization");
             let fanout = 16;
-            AccountsDB::compute_merkle_root_and_capitalization(hashes, fanout);
+            AccountsDb::compute_merkle_root_and_capitalization(hashes, fanout);
             time.stop();
             time.as_us()
         })
