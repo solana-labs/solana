@@ -30,7 +30,7 @@ use solana_ledger::{
 };
 use solana_runtime::{
     accounts_background_service::{
-        ABSRequestHandler, ABSRequestSender, AccountsBackgroundService, SendDroppedBankCallback,
+        AbsRequestHandler, AbsRequestSender, AccountsBackgroundService, SendDroppedBankCallback,
         SnapshotRequestHandler,
     },
     bank_forks::{BankForks, SnapshotConfig},
@@ -228,9 +228,9 @@ impl Tvu {
             ))));
         }
 
-        let accounts_background_request_sender = ABSRequestSender::new(snapshot_request_sender);
+        let accounts_background_request_sender = AbsRequestSender::new(snapshot_request_sender);
 
-        let accounts_background_request_handler = ABSRequestHandler {
+        let accounts_background_request_handler = AbsRequestHandler {
             snapshot_request_handler,
             pruned_banks_receiver,
         };

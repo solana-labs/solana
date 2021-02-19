@@ -10,8 +10,8 @@ use std::any::Any;
 
 #[derive(Debug)]
 pub enum Error {
-    IO(std::io::Error),
-    JSON(serde_json::Error),
+    Io(std::io::Error),
+    Json(serde_json::Error),
     AddrParse(std::net::AddrParseError),
     JoinError(Box<dyn Any + Send + 'static>),
     RecvError(std::sync::mpsc::RecvError),
@@ -108,7 +108,7 @@ impl std::convert::From<Box<dyn Any + Send + 'static>> for Error {
 }
 impl std::convert::From<std::io::Error> for Error {
     fn from(e: std::io::Error) -> Error {
-        Error::IO(e)
+        Error::Io(e)
     }
 }
 impl std::convert::From<fs_extra::error::Error> for Error {
@@ -118,7 +118,7 @@ impl std::convert::From<fs_extra::error::Error> for Error {
 }
 impl std::convert::From<serde_json::Error> for Error {
     fn from(e: serde_json::Error) -> Error {
-        Error::JSON(e)
+        Error::Json(e)
     }
 }
 impl std::convert::From<std::net::AddrParseError> for Error {
@@ -199,7 +199,7 @@ mod tests {
         assert_matches!(send_error(), Err(Error::SendError));
         assert_matches!(join_error(), Err(Error::JoinError(_)));
         let ioe = io::Error::new(io::ErrorKind::NotFound, "hi");
-        assert_matches!(Error::from(ioe), Error::IO(_));
+        assert_matches!(Error::from(ioe), Error::Io(_));
     }
     #[test]
     fn fmt_test() {

@@ -1,7 +1,7 @@
 use {
     crate::{
         accounts::Accounts,
-        accounts_db::{AccountStorageEntry, AccountsDB, AppendVecId, BankHashInfo},
+        accounts_db::{AccountStorageEntry, AccountsDb, AppendVecId, BankHashInfo},
         accounts_index::{AccountIndex, Ancestors},
         append_vec::AppendVec,
         bank::{Bank, BankFieldsToDeserialize, BankRc, Builtins},
@@ -59,7 +59,7 @@ pub(crate) use crate::accounts_db::{SnapshotStorage, SnapshotStorages};
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub(crate) enum SerdeStyle {
-    NEWER,
+    Newer,
 }
 
 const MAX_STREAM_SIZE: u64 = 32 * 1024 * 1024 * 1024;
@@ -82,7 +82,7 @@ trait TypeContext<'a> {
 
     fn serialize_accounts_db_fields<S: serde::ser::Serializer>(
         serializer: S,
-        serializable_db: &SerializableAccountsDB<'a, Self>,
+        serializable_db: &SerializableAccountsDb<'a, Self>,
     ) -> std::result::Result<S::Ok, S::Error>
     where
         Self: std::marker::Sized;
@@ -155,7 +155,7 @@ where
         }};
     }
     match serde_style {
-        SerdeStyle::NEWER => INTO!(TypeContextFuture),
+        SerdeStyle::Newer => INTO!(TypeContextFuture),
     }
     .map_err(|err| {
         warn!("bankrc_from_stream error: {:?}", err);
@@ -185,7 +185,7 @@ where
         };
     }
     match serde_style {
-        SerdeStyle::NEWER => INTO!(TypeContextFuture),
+        SerdeStyle::Newer => INTO!(TypeContextFuture),
     }
     .map_err(|err| {
         warn!("bankrc_to_stream error: {:?}", err);
@@ -208,14 +208,14 @@ impl<'a, C: TypeContext<'a>> Serialize for SerializableBankAndStorage<'a, C> {
     }
 }
 
-struct SerializableAccountsDB<'a, C> {
-    accounts_db: &'a AccountsDB,
+struct SerializableAccountsDb<'a, C> {
+    accounts_db: &'a AccountsDb,
     slot: Slot,
     account_storage_entries: &'a [SnapshotStorage],
     phantom: std::marker::PhantomData<C>,
 }
 
-impl<'a, C: TypeContext<'a>> Serialize for SerializableAccountsDB<'a, C> {
+impl<'a, C: TypeContext<'a>> Serialize for SerializableAccountsDb<'a, C> {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: serde::ser::Serializer,
@@ -225,7 +225,7 @@ impl<'a, C: TypeContext<'a>> Serialize for SerializableAccountsDB<'a, C> {
 }
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
-impl<'a, C> IgnoreAsHelper for SerializableAccountsDB<'a, C> {}
+impl<'a, C> IgnoreAsHelper for SerializableAccountsDb<'a, C> {}
 
 #[allow(clippy::too_many_arguments)]
 fn reconstruct_bank_from_fields<E, P>(
@@ -273,12 +273,12 @@ fn reconstruct_accountsdb_from_fields<E, P>(
     cluster_type: &ClusterType,
     account_indexes: HashSet<AccountIndex>,
     caching_enabled: bool,
-) -> Result<AccountsDB, Error>
+) -> Result<AccountsDb, Error>
 where
     E: SerializableStorage,
     P: AsRef<Path>,
 {
-    let mut accounts_db = AccountsDB::new_with_config(
+    let mut accounts_db = AccountsDb::new_with_config(
         account_paths.to_vec(),
         cluster_type,
         account_indexes,

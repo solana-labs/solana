@@ -402,7 +402,7 @@ pub fn broadcast_shreds(
         match send_mmsg(s, &packets[sent..]) {
             Ok(n) => sent += n,
             Err(e) => {
-                return Err(Error::IO(e));
+                return Err(Error::Io(e));
             }
         }
     }

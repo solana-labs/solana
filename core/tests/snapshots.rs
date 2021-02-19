@@ -45,7 +45,7 @@ mod tests {
         snapshot_packager_service::{PendingSnapshotPackage, SnapshotPackagerService},
     };
     use solana_runtime::{
-        accounts_background_service::{ABSRequestSender, SnapshotRequestHandler},
+        accounts_background_service::{AbsRequestSender, SnapshotRequestHandler},
         accounts_db,
         bank::{Bank, BankSlotDelta},
         bank_forks::{ArchiveFormat, BankForks, SnapshotConfig},
@@ -203,7 +203,7 @@ mod tests {
 
         let (s, snapshot_request_receiver) = unbounded();
         let (accounts_package_sender, _r) = channel();
-        let request_sender = ABSRequestSender::new(Some(s));
+        let request_sender = AbsRequestSender::new(Some(s));
         let snapshot_request_handler = SnapshotRequestHandler {
             snapshot_config: snapshot_test_config.snapshot_config.clone(),
             snapshot_request_receiver,
@@ -518,7 +518,7 @@ mod tests {
                 (*add_root_interval * num_set_roots * 2) as u64,
             );
             let mut current_bank = snapshot_test_config.bank_forks[0].clone();
-            let request_sender = ABSRequestSender::new(Some(snapshot_sender));
+            let request_sender = AbsRequestSender::new(Some(snapshot_sender));
             for _ in 0..num_set_roots {
                 for _ in 0..*add_root_interval {
                     let new_slot = current_bank.slot() + 1;
