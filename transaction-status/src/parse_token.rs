@@ -64,6 +64,18 @@ pub fn parse_token(
                 }),
             })
         }
+        TokenInstruction::InitializeAccount2 { owner } => {
+            check_num_token_accounts(&instruction.accounts, 3)?;
+            Ok(ParsedInstructionEnum {
+                instruction_type: "initializeAccount2".to_string(),
+                info: json!({
+                    "account": account_keys[instruction.accounts[0] as usize].to_string(),
+                    "mint": account_keys[instruction.accounts[1] as usize].to_string(),
+                    "owner": owner.to_string(),
+                    "rentSysvar": account_keys[instruction.accounts[2] as usize].to_string(),
+                }),
+            })
+        }
         TokenInstruction::InitializeMultisig { m } => {
             check_num_token_accounts(&instruction.accounts, 3)?;
             let mut signers: Vec<String> = vec![];
