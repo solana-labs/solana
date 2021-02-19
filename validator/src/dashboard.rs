@@ -1,7 +1,10 @@
 use {
-    crate::{get_validator_rpc_addr, get_validator_start_time},
+    crate::{
+        get_validator_rpc_addr, get_validator_start_time, new_spinner_progress_bar,
+        println_name_value,
+    },
     console::style,
-    indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle},
+    indicatif::ProgressBar,
     solana_client::{
         client_error, rpc_client::RpcClient, rpc_request, rpc_response::RpcContactInfo,
     },
@@ -18,21 +21,6 @@ use {
         time::Duration,
     },
 };
-
-/// Creates a new process bar for processing that will take an unknown amount of time
-fn new_spinner_progress_bar() -> ProgressBar {
-    let progress_bar = ProgressBar::new(42);
-    progress_bar.set_draw_target(ProgressDrawTarget::stdout());
-    progress_bar
-        .set_style(ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}"));
-    progress_bar.enable_steady_tick(100);
-    progress_bar
-}
-
-/// Pretty print a "name value"
-fn println_name_value(name: &str, value: &str) {
-    println!("{} {}", style(name).bold(), value);
-}
 
 pub struct Dashboard {
     progress_bar: ProgressBar,
@@ -56,7 +44,6 @@ impl Dashboard {
 
         Ok(Self {
             progress_bar,
-            //ledger_path: ledger_path.clone().to_path_buf(),
             ledger_path: ledger_path.to_path_buf(),
         })
     }
