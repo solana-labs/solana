@@ -107,10 +107,15 @@ args+=(
   --vote-account "$vote_account"
   --rpc-faucet-address 127.0.0.1:9900
   --no-poh-speed-test
+  --no-accounts-db-index-hashing
 )
 default_arg --gossip-port 8001
 default_arg --log -
 
+# default_arg --accounts-db-test-hash-calculation
+
+# hard coded for now
+no_restart=1
 
 pid=
 kill_node() {
