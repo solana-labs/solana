@@ -270,6 +270,13 @@ function StatusCard({
         </tr>
 
         <tr>
+          <td>Confirmation Status</td>
+          <td className="text-lg-right text-uppercase">
+            {info.confirmationStatus || "Unknown"}
+          </td>
+        </tr>
+
+        <tr>
           <td>Confirmations</td>
           <td className="text-lg-right text-uppercase">{info.confirmations}</td>
         </tr>
