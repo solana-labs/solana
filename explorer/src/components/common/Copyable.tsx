@@ -1,56 +1,98 @@
-import React, { useState, ReactNode } from "react";
+import React, { ReactNode, useState } from "react";
 
-type CopyableProps = {
+type CopyState = "copy" | "copied" | "errored";
+
+export function Copyable({
+  text,
+  children,
+  replaceText,
+}: {
   text: string;
   children: ReactNode;
-  bottom?: boolean;
-  right?: boolean;
-};
-
-type State = "hide" | "copy" | "copied";
-
-function Popover({
-  state,
-  bottom,
-  right,
-}: {
-  state: State;
-  bottom?: boolean;
-  right?: boolean;
+  replaceText?: boolean;
 }) {
-  if (state === "hide") return null;
-  const text = state === "copy" ? "Copy" : "Copied!";
-  return (
-    <div
-      className={`popover bs-popover-${bottom ? "bottom" : "top"}${
-        right ? " right" : ""
-      } show`}
-    >
-      <div className={`arrow${right ? " right" : ""}`} />
-      <div className="popover-body">{text}</div>
-    </div>
-  );
-}
+  const [state, setState] = useState<CopyState>("copy");
 
-export function Copyable({ bottom, right, text, children }: CopyableProps) {
-  const [state, setState] = useState<State>("hide");
-
-  const copyToClipboard = () => navigator.clipboard.writeText(text);
-  const handleClick = () =>
-    copyToClipboard().then(() => {
+  const handleClick = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
       setState("copied");
-      setTimeout(() => setState("hide"), 1000);
-    });
+    } catch (err) {
+      setState("errored");
+    }
+    setTimeout(() => setState("copy"), 1000);
+  };
+
+  function CopyIcon() {
+    if (state === "copy") {
+      return (
+        <span className="fe fe-copy c-pointer" onClick={handleClick}></span>
+      );
+    } else if (state === "copied") {
+      return <span className="fe fe-check-circle"></span>;
+    } else if (state === "errored") {
+      return (
+        <span
+          className="fe fe-x-circle"
+          title="Please check your browser's copy permissions."
+        ></span>
+      );
+    }
+    return null;
+  }
+
+  let message = "";
+  let textColor = "";
+  if (state === "copied") {
+    message = "Copied";
+    textColor = "text-info";
+  } else if (state === "errored") {
+    message = "Copy Failed";
+    textColor = "text-danger";
+  }
+
+  function PrependCopyIcon() {
+    return (
+      <>
+        <span className="font-size-tiny mr-2">
+          <span className={textColor}>
+            <span className="mr-2">{message}</span>
+            <CopyIcon />
+          </span>
+        </span>
+        {children}
+      </>
+    );
+  }
+
+  function ReplaceWithMessage() {
+    return (
+      <span className="d-flex flex-column flex-nowrap">
+        <span className="font-size-tiny">
+          <span className={textColor}>
+            <CopyIcon />
+            <span className="ml-2">{message}</span>
+          </span>
+        </span>
+        <span className="v-hidden">{children}</span>
+      </span>
+    );
+  }
+
+  if (state === "copy") {
+    return <PrependCopyIcon />;
+  } else if (replaceText) {
+    return <ReplaceWithMessage />;
+  }
 
   return (
-    <div
-      className="popover-container c-pointer"
-      onClick={handleClick}
-      onMouseOver={() => setState("copy")}
-      onMouseOut={() => state === "copy" && setState("hide")}
-    >
-      {children}
-      <Popover bottom={bottom} right={right} state={state} />
-    </div>
+    <>
+      <span className="d-none d-lg-inline">
+        <PrependCopyIcon />
+      </span>
+      <span className="d-inline d-lg-none">
+        <ReplaceWithMessage />
+      </span>
+    </>
   );
 }
