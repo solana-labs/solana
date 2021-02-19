@@ -118,7 +118,9 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
         .cloned()
         .unwrap_or_else(|| target_directory.join("deploy"));
 
-    let target_build_directory = target_directory.join("bpfel-unknown-unknown/release");
+    let target_build_directory = target_directory
+        .join("bpfel-unknown-unknown")
+        .join("release");
 
     env::set_current_dir(&root_package_dir).unwrap_or_else(|err| {
         eprintln!(
@@ -140,7 +142,7 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
         println!("Legacy program feature detected");
     }
 
-    let xargo_build = config.bpf_sdk.join("rust/xargo-build.sh");
+    let xargo_build = config.bpf_sdk.join("rust").join("xargo-build.sh");
     let mut xargo_build_args = vec![];
 
     if config.no_default_features {
@@ -199,14 +201,14 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
 
         if file_older_or_missing(&program_unstripped_so, &program_so) {
             spawn(
-                &config.bpf_sdk.join("scripts/strip.sh"),
+                &config.bpf_sdk.join("scripts").join("strip.sh"),
                 &[&program_unstripped_so, &program_so],
             );
         }
 
         if config.dump && file_older_or_missing(&program_unstripped_so, &program_dump) {
             spawn(
-                &config.bpf_sdk.join("scripts/dump.sh"),
+                &config.bpf_sdk.join("scripts").join("dump.sh"),
                 &[&program_unstripped_so, &program_dump],
             );
         }
