@@ -330,6 +330,10 @@ impl<T: Default + Reset + Sized> Recycler<T> {
             AllocationDecision::AllocationLimitReached => None,
         }
     }
+
+    pub fn recycle_for_test(&self, x: T) {
+        self.recycler.recycle(x);
+    }
 }
 
 impl<T: Default + Reset> RecyclerX<T> {
