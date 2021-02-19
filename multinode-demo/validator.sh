@@ -230,7 +230,9 @@ default_arg --enable-rpc-exit
 default_arg --enable-rpc-set-log-filter
 default_arg --require-tower
 default_arg --no-poh-speed-test
-default_arg --accounts-db-test-hash-calculation
+# default_arg --accounts-db-test-hash-calculation
+default_arg --no-restart
+default_arg --no-accounts-db-index-hashing
 
 if [[ -n $SOLANA_CUDA ]]; then
   program=$solana_validator_cuda
