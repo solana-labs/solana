@@ -34,6 +34,7 @@ jsonrpc-derive = "17.0.0"
 jsonrpc-http-server = "17.0.0"
 jsonrpc-pubsub = "17.0.0"
 jsonrpc-ws-server = "17.0.0"
+libc = "0.2.81"
 log = "0.4.11"
 lru = "0.6.1"
 miow = "0.2.2"
@@ -89,6 +90,7 @@ matches = "0.1.6"
 num_cpus = "1.13.0"
 reqwest = { version = "0.10.8", default-features = false, features = ["blocking", "rustls-tls", "json"] }
 serial_test = "0.4.0"
+symlink = "0.1.0"
 systemstat = "0.1.5"
 
 [build-dependencies]
