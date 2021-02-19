@@ -10,6 +10,12 @@ pub const DEFAULT_SHRINK_RATIO: f64 = 0.80;
 pub const DEFAULT_MAX_ABOVE_SHRINK_RATIO_COUNT: u32 = 10;
 pub const DEFAULT_CHECK_SHRINK_INTERVAL_MS: u32 = 10000;
 
+enum AllocationDecision<T> {
+    Reuse(T),
+    Allocate(u32, usize),
+    AllocationLimitReached,
+}
+
 #[derive(Debug, Default)]
 struct RecyclerStats {
     total: AtomicUsize,
@@ -47,7 +53,7 @@ pub struct Recycler<T: Reset> {
 }
 
 impl<T: Default + Reset> Recycler<T> {
-    pub fn new(shrink_metric_name: &'static str) -> Self {
+    pub fn new_without_limit(shrink_metric_name: &'static str) -> Self {
         Self {
             recycler: Arc::new(RecyclerX::default()),
             shrink_metric_name,
@@ -64,7 +70,7 @@ impl<T: Default + Reset> Recycler<T> {
 
 #[derive(Debug)]
 pub struct ObjectPool<T: Reset> {
-    object_pool: Vec<T>,
+    objects: Vec<T>,
     shrink_ratio: f64,
     minimum_object_count: u32,
     above_shrink_ratio_count: u32,
@@ -77,7 +83,7 @@ pub struct ObjectPool<T: Reset> {
 impl<T: Default + Reset> Default for ObjectPool<T> {
     fn default() -> Self {
         ObjectPool {
-            object_pool: vec![],
+            objects: vec![],
             shrink_ratio: DEFAULT_SHRINK_RATIO,
             minimum_object_count: DEFAULT_MINIMUM_OBJECT_COUNT,
             above_shrink_ratio_count: 0,
@@ -99,7 +105,98 @@ impl<T: Default + Reset> ObjectPool<T> {
     }
 
     fn len(&self) -> usize {
-        self.object_pool.len()
+        self.objects.len()
+    }
+
+    fn get_shrink_target(shrink_ratio: f64, current_size: u32) -> u32 {
+        (shrink_ratio * current_size as f64).ceil() as u32
+    }
+
+    fn shrink_if_necessary(
+        &mut self,
+        shrink_removed_objects: &mut Vec<T>,
+        recycler_name: &'static str,
+    ) -> Option<RecyclerShrinkStats> {
+        let is_consistent = self.total_allocated_count as usize >= self.len();
+        if !is_consistent {
+            warn!(
+                "Object pool inconsistent: {} {} {}",
+                self.total_allocated_count,
+                self.len(),
+                recycler_name
+            );
+        }
+        assert!(is_consistent);
+        let now = timestamp();
+        if now.saturating_sub(self.last_shrink_check_ts) > self.check_shrink_interval_ms as u64 {
+            self.last_shrink_check_ts = now;
+            let shrink_threshold_count =
+                Self::get_shrink_target(self.shrink_ratio, self.total_allocated_count);
+
+            // If more than the shrink threshold of all allocated objects are sitting doing nothing,
+            // increment the `above_shrink_ratio_count`.
+            if self.len() > self.minimum_object_count as usize
+                && self.len() > shrink_threshold_count as usize
+            {
+                self.above_shrink_ratio_count += 1;
+            } else {
+                self.above_shrink_ratio_count = 0;
+            }
+
+            if self.above_shrink_ratio_count as usize >= self.max_above_shrink_ratio_count as usize
+            {
+                let mut recycler_shrink_elapsed = Measure::start("recycler_shrink");
+                // Do the shrink
+                let target_size = std::cmp::max(self.minimum_object_count, shrink_threshold_count);
+                let ideal_num_to_remove = self.total_allocated_count - target_size;
+                for _ in 0..ideal_num_to_remove {
+                    if let Some(mut expired_object) = self.objects.pop() {
+                        expired_object.unset_recycler();
+                        // Drop these outside of the lock because the Drop() implmentation for
+                        // certain objects like PinnedVec's can be expensive
+                        shrink_removed_objects.push(expired_object);
+                        // May not be able to shrink exactly `ideal_num_to_remove` objects since
+                        // in the case of new allocations, `total_allocated_count` is incremented
+                        // before the object is allocated (see `should_allocate_new` logic below).
+                        // This race allows a difference of up to the number of threads allocating
+                        // with this recycler.
+                        self.total_allocated_count -= 1;
+                    } else {
+                        break;
+                    }
+                }
+                recycler_shrink_elapsed.stop();
+                self.above_shrink_ratio_count = 0;
+                Some(RecyclerShrinkStats {
+                    resulting_size: self.total_allocated_count,
+                    target_size,
+                    ideal_num_to_remove,
+                    shrink_elapsed: recycler_shrink_elapsed.as_us(),
+                    // Filled in later
+                    drop_elapsed: 0,
+                })
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
+    fn make_allocation_decision(&mut self) -> AllocationDecision<T> {
+        if let Some(reused_object) = self.objects.pop() {
+            AllocationDecision::Reuse(reused_object)
+        } else if let Some(limit) = self.limit {
+            if self.total_allocated_count < limit {
+                self.total_allocated_count += 1;
+                AllocationDecision::Allocate(self.total_allocated_count, self.len())
+            } else {
+                AllocationDecision::AllocationLimitReached
+            }
+        } else {
+            self.total_allocated_count += 1;
+            AllocationDecision::Allocate(self.total_allocated_count, self.len())
+        }
     }
 }
 
@@ -183,104 +280,19 @@ impl<T: Default + Reset + Sized> Recycler<T> {
 
     pub fn allocate(&self) -> Option<T> {
         let mut shrink_removed_objects = vec![];
-        let (mut allocated_object, did_reuse, should_allocate_new, mut shrink_stats) = {
+        let (allocation_decision, mut shrink_stats) = {
             let mut object_pool = self
                 .recycler
                 .gc
                 .lock()
                 .expect("recycler lock in pb fn allocate");
 
-            let now = timestamp();
-            let mut shrink_stats = None;
+            let shrink_stats = object_pool
+                .shrink_if_necessary(&mut shrink_removed_objects, self.shrink_metric_name);
 
-            let is_consistent = object_pool.total_allocated_count as usize >= object_pool.len();
-            if !is_consistent {
-                warn!(
-                    "Object pool inconsistent: {} {} {}",
-                    object_pool.total_allocated_count,
-                    object_pool.len(),
-                    self.shrink_metric_name,
-                );
-            }
-            assert!(is_consistent);
-            if now.saturating_sub(object_pool.last_shrink_check_ts)
-                > object_pool.check_shrink_interval_ms as u64
-            {
-                object_pool.last_shrink_check_ts = now;
-                let shrink_threshold_count = Self::get_shrink_target(
-                    object_pool.shrink_ratio,
-                    object_pool.total_allocated_count,
-                );
-
-                // If more than the shrink threshold of all allocated objects are sitting doing nothing,
-                // increment the `above_shrink_ratio_count`.
-                if object_pool.len() > object_pool.minimum_object_count as usize
-                    && object_pool.len() > shrink_threshold_count as usize
-                {
-                    object_pool.above_shrink_ratio_count += 1;
-                } else {
-                    object_pool.above_shrink_ratio_count = 0;
-                }
-
-                if object_pool.above_shrink_ratio_count as usize
-                    >= object_pool.max_above_shrink_ratio_count as usize
-                {
-                    let mut recycler_shrink_elapsed = Measure::start("recycler_shrink");
-                    // Do the shrink
-                    let target_size =
-                        std::cmp::max(object_pool.minimum_object_count, shrink_threshold_count);
-                    let ideal_num_to_remove = object_pool.total_allocated_count - target_size;
-                    for _ in 0..ideal_num_to_remove {
-                        if let Some(mut expired_object) = object_pool.object_pool.pop() {
-                            expired_object.unset_recycler();
-                            // Drop these outside of the lock because the Drop() implmentation for
-                            // certain objects like PinnedVec's can be expensive
-                            shrink_removed_objects.push(expired_object);
-                            // May not be able to shrink exactly `ideal_num_to_remove` objects sinc
-                            // in the case of new allocations, `total_allocated_count` is incremented
-                            // before the object is allocated (see `should_allocate_new` logic below).
-                            // This race allows a difference of up to the number of threads allocating
-                            // with this recycler.
-                            object_pool.total_allocated_count -= 1;
-                        } else {
-                            break;
-                        }
-                    }
-                    recycler_shrink_elapsed.stop();
-                    object_pool.above_shrink_ratio_count = 0;
-                    shrink_stats = Some(RecyclerShrinkStats {
-                        resulting_size: object_pool.total_allocated_count,
-                        target_size,
-                        ideal_num_to_remove,
-                        shrink_elapsed: recycler_shrink_elapsed.as_us(),
-                        // Filled in later
-                        drop_elapsed: 0,
-                    })
-                }
-            }
-
-            let reused_object = object_pool.object_pool.pop();
-            if reused_object.is_some() {
-                (reused_object, true, false, shrink_stats)
-            } else {
-                let should_allocate_new = object_pool
-                    .limit
-                    .map(|limit| object_pool.total_allocated_count < limit)
-                    .unwrap_or(true);
-
-                if should_allocate_new {
-                    if object_pool.total_allocated_count % 1000 == 0 {
-                        datapoint_info!(
-                            "total_allocated_count",
-                            ("name", self.shrink_metric_name, String),
-                            ("count", object_pool.total_allocated_count as i64, i64),
-                            ("len", object_pool.len() as i64, i64),
-                        )
-                    }
-                    object_pool.total_allocated_count += 1;
-                }
-                (None, false, should_allocate_new, shrink_stats)
-            }
+            // Grab the allocation decision and shrinking stats, do the expensive
+            // allocations/deallocations outside of the lock.
+            (object_pool.make_allocation_decision(), shrink_stats)
         };
 
         let mut shrink_removed_object_elapsed = Measure::start("shrink_removed_object_elapsed");
@@ -292,25 +304,28 @@ impl<T: Default + Reset + Sized> Recycler<T> {
             shrink_stats.report(self.shrink_metric_name);
         }
 
-        if did_reuse {
-            if let Some(reused) = allocated_object.as_mut() {
+        match allocation_decision {
+            AllocationDecision::Reuse(mut reused_object) => {
                 self.recycler.stats.reuse.fetch_add(1, Ordering::Relaxed);
-                reused.reset();
-                return allocated_object;
+                reused_object.reset();
+                Some(reused_object)
             }
-        }
+            AllocationDecision::Allocate(total_allocated_count, recycled_len) => {
+                let mut t = T::default();
+                t.set_recycler(Arc::downgrade(&self.recycler));
+                if total_allocated_count % 1000 == 0 {
+                    datapoint_info!(
+                        "recycler_total_allocated_count",
+                        ("name", self.shrink_metric_name, String),
+                        ("count", total_allocated_count as i64, i64),
+                        ("recycled_len", recycled_len as i64, i64),
+                    )
+                }
+                Some(t)
+            }
 
-        if should_allocate_new {
-            let mut t = T::default();
-            t.set_recycler(Arc::downgrade(&self.recycler));
-            Some(t)
-        } else {
-            None
+            AllocationDecision::AllocationLimitReached => None,
         }
-    }
-
-    fn get_shrink_target(shrink_ratio: f64, current_size: u32) -> u32 {
-        (shrink_ratio * current_size as f64).ceil() as u32
     }
 }
 
@@ -318,7 +333,7 @@ impl<T: Default + Reset> RecyclerX<T> {
     pub fn recycle(&self, x: T) {
         let len = {
             let mut gc = self.gc.lock().expect("recycler lock in pub fn recycle");
-            gc.object_pool.push(x);
+            gc.objects.push(x);
             gc.len()
         };
 
@@ -362,7 +377,7 @@ mod tests {
 
     #[test]
     fn test_recycler() {
-        let recycler = Recycler::new("");
+        let recycler = Recycler::new_without_limit("");
         let mut y: u64 = recycler.allocate().unwrap();
         assert_eq!(y, 0);
         y = 20;
@@ -384,10 +399,10 @@ mod tests {
         let mut allocated_items = vec![];
         for i in 0..limit * 2 {
             let x = recycler.allocate();
-            if i >= limit {
-                assert!(x.is_none());
-            } else {
+            if i < limit {
                 allocated_items.push(x.unwrap());
+            } else {
+                assert!(x.is_none());
             }
         }
         assert_eq!(
@@ -457,7 +472,10 @@ mod tests {
             if expected_above_shrink_ratio_count == 0 {
                 // Shrink happened, update the expected `current_total_allocated_count`;
                 current_total_allocated_count = std::cmp::max(
-                    Recycler::<u64>::get_shrink_target(shrink_ratio, current_total_allocated_count),
+                    ObjectPool::<u64>::get_shrink_target(
+                        shrink_ratio,
+                        current_total_allocated_count,
+                    ),
                     DEFAULT_MINIMUM_OBJECT_COUNT,
                 );
                 assert_eq!(

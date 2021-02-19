@@ -678,8 +678,8 @@ mod tests {
 
         let batches = generate_packet_vec(&packet, n, 2);
 
-        let recycler = Recycler::new("");
-        let recycler_out = Recycler::new("");
+        let recycler = Recycler::new_without_limit("");
+        let recycler_out = Recycler::new_without_limit("");
         // verify packets
         let ans = sigverify::ed25519_verify(&batches, &recycler, &recycler_out);
 
@@ -697,8 +697,8 @@ mod tests {
 
         let batches = generate_packet_vec(&packet, 1, 1);
 
-        let recycler = Recycler::new("");
-        let recycler_out = Recycler::new("");
+        let recycler = Recycler::new_without_limit("");
+        let recycler_out = Recycler::new_without_limit("");
         // verify packets
         let ans = sigverify::ed25519_verify(&batches, &recycler, &recycler_out);
 
@@ -735,8 +735,8 @@ mod tests {
 
         batches[0].packets.push(packet);
 
-        let recycler = Recycler::new("");
-        let recycler_out = Recycler::new("");
+        let recycler = Recycler::new_without_limit("");
+        let recycler_out = Recycler::new_without_limit("");
         // verify packets
         let ans = sigverify::ed25519_verify(&batches, &recycler, &recycler_out);
 
@@ -755,8 +755,8 @@ mod tests {
         let tx = test_multisig_tx();
         let packet = sigverify::make_packet_from_transaction(tx);
 
-        let recycler = Recycler::new("");
-        let recycler_out = Recycler::new("");
+        let recycler = Recycler::new_without_limit("");
+        let recycler_out = Recycler::new_without_limit("");
         for _ in 0..50 {
             let n = thread_rng().gen_range(1, 30);
             let num_batches = thread_rng().gen_range(2, 30);

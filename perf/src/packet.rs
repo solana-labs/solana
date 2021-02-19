@@ -137,7 +137,7 @@ mod tests {
 
     #[test]
     fn test_to_packets_pinning() {
-        let recycler = PacketsRecycler::new("");
+        let recycler = PacketsRecycler::new_without_limit("");
         for i in 0..2 {
             let _first_packets = Packets::new_with_recycler(recycler.clone(), i + 1);
         }

@@ -1853,7 +1853,7 @@ impl ClusterInfo {
                 let mut last_contact_info_trace = timestamp();
                 let mut last_contact_info_save = timestamp();
                 let mut entrypoints_processed = false;
-                let recycler = PacketsRecycler::new("gossip-recycler-shrink-stats");
+                let recycler = PacketsRecycler::new_without_limit("gossip-recycler-shrink-stats");
                 let crds_data = vec![
                     CrdsData::Version(Version::new(self.id())),
                     CrdsData::NodeInstance(self.instance.with_wallclock(timestamp())),
@@ -3018,7 +3018,8 @@ impl ClusterInfo {
         exit: &Arc<AtomicBool>,
     ) -> JoinHandle<()> {
         let exit = exit.clone();
-        let recycler = PacketsRecycler::new("cluster-info-listen-recycler-shrink-stats");
+        let recycler =
+            PacketsRecycler::new_without_limit("cluster-info-listen-recycler-shrink-stats");
         Builder::new()
             .name("solana-listen".to_string())
             .spawn(move || {
@@ -3463,7 +3464,7 @@ mod tests {
             .iter()
             .map(|ping| Pong::new(ping, &this_node).unwrap())
             .collect();
-        let recycler = PacketsRecycler::new("");
+        let recycler = PacketsRecycler::new_without_limit("");
         let packets = cluster_info
             .handle_ping_messages(
                 remote_nodes

@@ -11,8 +11,8 @@ pub struct RecyclerCache {
 impl RecyclerCache {
     pub fn new(offsets_shrink_name: &'static str, buffer_shrink_name: &'static str) -> Self {
         Self {
-            recycler_offsets: Recycler::new(offsets_shrink_name),
-            recycler_buffer: Recycler::new(buffer_shrink_name),
+            recycler_offsets: Recycler::new_without_limit(offsets_shrink_name),
+            recycler_buffer: Recycler::new_without_limit(buffer_shrink_name),
         }
     }
 

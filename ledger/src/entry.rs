@@ -234,8 +234,8 @@ pub struct VerifyRecyclers {
 impl Default for VerifyRecyclers {
     fn default() -> Self {
         Self {
-            hash_recycler: Recycler::new("hash_recycler_shrink_stats"),
-            tick_count_recycler: Recycler::new("tick_count_recycler_shrink_stats"),
+            hash_recycler: Recycler::new_without_limit("hash_recycler_shrink_stats"),
+            tick_count_recycler: Recycler::new_without_limit("tick_count_recycler_shrink_stats"),
         }
     }
 }
