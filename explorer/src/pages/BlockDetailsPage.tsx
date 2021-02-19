@@ -3,13 +3,17 @@ import React from "react";
 import { ErrorCard } from "components/common/ErrorCard";
 import { BlockOverviewCard } from "components/block/BlockOverviewCard";
 
+// IE11 doesn't support Number.MAX_SAFE_INTEGER
+const MAX_SAFE_INTEGER = 9007199254740991;
+
 type Props = { slot: string };
 
 export function BlockDetailsPage({ slot }: Props) {
+  const slotNumber = Number(slot);
   let output = <ErrorCard text={`Block ${slot} is not valid`} />;
 
-  if (!isNaN(Number(slot))) {
-    output = <BlockOverviewCard slot={Number(slot)} />;
+  if (!isNaN(slotNumber) && slotNumber < MAX_SAFE_INTEGER) {
+    output = <BlockOverviewCard slot={slotNumber} />;
   }
 
   return (
