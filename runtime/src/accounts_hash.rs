@@ -368,7 +368,7 @@ impl AccountsHash {
         hashes.par_sort_unstable_by(|a, b| a.0.cmp(&b.0));
     }
 
-    fn flatten_hash_intermediate<T>(
+    pub fn flatten_hash_intermediate<T>(
         data_sections_by_pubkey: Vec<Vec<Vec<T>>>,
         stats: &mut HashStats,
     ) -> Vec<Vec<T>>
@@ -423,7 +423,7 @@ impl AccountsHash {
         }
     }
 
-    fn sort_hash_intermediate(
+    pub fn sort_hash_intermediate(
         data_by_pubkey: Vec<Vec<CalculateHashIntermediate>>,
         stats: &mut HashStats,
     ) -> Vec<Vec<CalculateHashIntermediate>> {

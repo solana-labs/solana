@@ -3555,14 +3555,21 @@ impl AccountsDB {
         ancestors: &Ancestors,
         simple_capitalization_enabled: bool,
     ) -> (Hash, u64) {
-        self.update_accounts_hash_with_index_option(
+        let result = self.update_accounts_hash_with_index_option(
             true,
             true,
             slot,
             ancestors,
             simple_capitalization_enabled,
             None,
-        )
+        );
+
+        assert!(!self.debug_compare_hash_calculation_details(
+            slot,
+            ancestors,
+            simple_capitalization_enabled
+        ));
+        result
     }
 
     /// Scan through all the account storage in parallel
@@ -3627,7 +3634,7 @@ impl AccountsDB {
     pub fn update_accounts_hash_with_index_option(
         &self,
         use_index: bool,
-        debug_verify: bool,
+        mut debug_verify: bool,
         slot: Slot,
         ancestors: &Ancestors,
         simple_capitalization_enabled: bool,
@@ -3639,6 +3646,11 @@ impl AccountsDB {
             ancestors,
             simple_capitalization_enabled,
         );
+        if let Some(expected_capitalization) = expected_capitalization {
+            // if we calculated the wrong capitalization, then turn on debugging because we're about to assert anyway
+            debug_verify = debug_verify || expected_capitalization != total_lamports;
+        }
+
         if debug_verify {
             // calculate the other way (store or non-store) and verify results match.
             let (hash_other, total_lamports_other) = self.calculate_accounts_hash_helper(
@@ -3651,12 +3663,217 @@ impl AccountsDB {
             let success = hash == hash_other
                 && total_lamports == total_lamports_other
                 && total_lamports == expected_capitalization.unwrap_or(total_lamports);
-            assert!(success, "update_accounts_hash_with_index_option mismatch. hashes: {}, {}; lamports: {}, {}; expected lamports: {:?}, using index: {}, slot: {}", hash, hash_other, total_lamports, total_lamports_other, expected_capitalization, use_index, slot);
+            let msg = format!("update_accounts_hash_with_index_option mismatch. hashes: {}, {}; lamports: {}, {}; expected lamports: {:?}, using index: {}, slot: {}", hash, hash_other, total_lamports, total_lamports_other, expected_capitalization, use_index, slot);
+
+            if !success {
+                error!("prior to panic, trying to identify differences: {}", msg);
+                self.debug_compare_hash_calculation_details(
+                    slot,
+                    ancestors,
+                    simple_capitalization_enabled,
+                );
+            }
+
+            assert!(success, msg);
         }
+
         let mut bank_hashes = self.bank_hashes.write().unwrap();
         let mut bank_hash_info = bank_hashes.get_mut(&slot).unwrap();
         bank_hash_info.snapshot_hash = hash;
         (hash, total_lamports)
+    }
+
+    // only called prior to a panic.
+    // The goal is to dump out account information to help diagnose the source of differences.
+    fn debug_compare_hash_calculation_details(
+        &self,
+        slot: Slot,
+        ancestors: &Ancestors,
+        simple_capitalization_enabled: bool,
+    ) -> bool {
+        // this code path will only execute when debug_verify is true
+        // this code is cobbled together from the normal execution path
+        let storages = self.get_snapshot_storages(slot);
+        let scan_and_hash = || {
+            let mut at_least_one_mismatch = false;
+            let mut stats = HashStats::default();
+            // clipped and modified from calculate_accounts_hash_without_index
+            let data_sections_by_pubkey =
+                Self::scan_snapshot_stores(&storages, simple_capitalization_enabled, &mut stats, 1);
+
+            // clipped and modified from rest_of_hash_calculation
+            let outer =
+                AccountsHash::flatten_hash_intermediate(data_sections_by_pubkey, &mut stats);
+
+            let sorted_data_by_pubkey = AccountsHash::sort_hash_intermediate(outer, &mut stats);
+            let sorted_data_by_pubkey = sorted_data_by_pubkey
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>();
+            // note that sorted_data_by_pubkey can contain multiple entries per pubkey, sorted by -slot, -version
+
+            /* useful for injecting failures for testing this code
+            // temporary:
+            //sorted_data_by_pubkey.clear();
+            if !sorted_data_by_pubkey.is_empty(){
+                let old = sorted_data_by_pubkey[0].clone();
+                sorted_data_by_pubkey[0].lamports += 1;
+                sorted_data_by_pubkey.insert(1, old);
+            }
+
+            sorted_data_by_pubkey.insert(0, CalculateHashIntermediate::new(32, Hash::default(), 0, 2, Pubkey::default()));
+            sorted_data_by_pubkey.push(CalculateHashIntermediate::new(32, Hash::default(), 999, 2, Pubkey::new(&[0xf3; 32])));
+            sorted_data_by_pubkey.push(CalculateHashIntermediate::new(32, Hash::default(), 999, 2, Pubkey::new(&[0xff; 32])));
+            */
+
+            // clipped and modified from calculate_accounts_hash
+            {
+                let mut compare_index = 0;
+                let compare_len = sorted_data_by_pubkey.len();
+                let mut error_count = 0;
+                let error_count_limit = 10_000;
+                let keys: Vec<_> = self
+                    .accounts_index
+                    .account_maps
+                    .read()
+                    .unwrap()
+                    .keys()
+                    .cloned()
+                    .collect();
+                keys.iter().for_each(|pubkey| {
+                    if let Some((lock, index)) =
+                        self.accounts_index.get(pubkey, Some(ancestors), Some(slot))
+                    {
+                        let (slot, account_info) = &lock.slot_list()[index];
+                        if compare_index < compare_len {
+                            let mut compare_item = &sorted_data_by_pubkey[compare_index];
+                            while compare_item.pubkey < *pubkey {
+                                error_count += 1;
+                                if error_count < error_count_limit {
+                                    error!("pubkey is only in NON-index scan: {:?}", compare_item);
+                                }
+                                at_least_one_mismatch = true;
+                                compare_index += 1;
+                                if compare_index < compare_len {
+                                    compare_item = &sorted_data_by_pubkey[compare_index];
+                                } else {
+                                    break;
+                                }
+                            }
+
+                            if compare_item.pubkey > *pubkey {
+                                error_count += 1;
+                                if error_count < error_count_limit {
+                                    error!(
+                                        "pubkey is only in index scan: {:?}",
+                                        (pubkey, account_info.lamports)
+                                    );
+                                }
+                                at_least_one_mismatch = true;
+                                return;
+                            } else {
+                                // pubkeys equal
+                                // note there can be multiple entries here in compare_item
+                                let _temp = self
+                                    .get_account_accessor_from_cache_or_storage(
+                                        *slot,
+                                        pubkey,
+                                        account_info.store_id,
+                                        account_info.offset,
+                                    )
+                                    .get_loaded_account()
+                                    .map(|loaded_account| {
+                                        let loaded_hash = loaded_account.loaded_hash();
+                                        let balance = Self::account_balance_for_capitalization(
+                                            account_info.lamports,
+                                            loaded_account.owner(),
+                                            loaded_account.executable(),
+                                            simple_capitalization_enabled,
+                                        );
+
+                                        // loop through possibly duplicate entries with same pubkey from store scan
+                                        let mut first = true;
+                                        let mut mismatch = false;
+                                        while compare_index < compare_len {
+                                            let compare_item =
+                                                &sorted_data_by_pubkey[compare_index];
+                                            if compare_item.pubkey != *pubkey {
+                                                break;
+                                            }
+                                            compare_index += 1; // we will be skipping to the next item no matter what, so do it now
+                                            if first {
+                                                first = false;
+                                                let lamports = if account_info.lamports > 0 {
+                                                    balance
+                                                } else {
+                                                    crate::accounts_hash::ZERO_RAW_LAMPORTS_SENTINEL
+                                                };
+                                                if lamports != compare_item.lamports
+                                                    || *loaded_hash != compare_item.hash
+                                                {
+                                                    mismatch = true;
+                                                    error_count += 1;
+                                                    if error_count < error_count_limit {
+                                                        error!(
+                                                            "mismatch at first {:?}, {:?}",
+                                                            (
+                                                                loaded_hash,
+                                                                account_info.lamports,
+                                                                balance,
+                                                                slot
+                                                            ),
+                                                            compare_item
+                                                        );
+                                                    }
+                                                    at_least_one_mismatch = true;
+                                                }
+                                            } else if mismatch {
+                                                error_count += 1;
+                                                if error_count < error_count_limit {
+                                                    error!(
+                                                "duplicate entry after mismatch: {:?}, {:?}",
+                                                (loaded_hash, account_info.lamports, balance, slot),
+                                                compare_item
+                                            );
+                                                }
+                                            }
+                                        }
+                                        0u32
+                                    });
+                            }
+                        } else {
+                            error_count += 1;
+                            if error_count < error_count_limit {
+                                error!(
+                                    "pubkey is only in index scan: {:?}",
+                                    (pubkey, account_info.lamports)
+                                );
+                            }
+                            at_least_one_mismatch = true;
+                        }
+                    }
+                });
+
+                while compare_index < compare_len {
+                    let compare_item = &sorted_data_by_pubkey[compare_index];
+                    compare_index += 1; // we will be skipping to the next item no matter what, so do it now
+                    error_count += 1;
+                    if error_count < error_count_limit {
+                        error!("pubkey is only in store scan: {:?}", compare_item);
+                    }
+                    at_least_one_mismatch = true;
+                }
+                if at_least_one_mismatch {
+                    error!(
+                        "error count: {}, len non-index: {}",
+                        error_count, compare_len
+                    );
+                }
+            };
+
+            at_least_one_mismatch
+        };
+        self.thread_pool_clean.install(scan_and_hash)
     }
 
     fn scan_snapshot_stores(
@@ -6909,7 +7126,7 @@ pub mod tests {
                 &solana_sdk::native_loader::create_loadable_account("foo", 1),
             )],
         );
-        db.update_accounts_hash_test(some_slot, &ancestors, true);
+        db.update_accounts_hash(some_slot, &ancestors, true);
         assert_matches!(
             db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1, false),
             Ok(_)
