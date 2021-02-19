@@ -1,6 +1,8 @@
 #![allow(clippy::integer_arithmetic)]
 pub use solana_core::test_validator;
 use {
+    console::style,
+    indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle},
     log::*,
     serde_derive::{Deserialize, Serialize},
     std::{
@@ -133,4 +135,19 @@ pub fn get_validator_rpc_addr(ledger_path: &Path) -> Result<Option<SocketAddr>, 
 
 pub fn get_validator_start_time(ledger_path: &Path) -> Result<SystemTime, io::Error> {
     get_validator_process_info(ledger_path).map(|process_info| process_info.1)
+}
+
+/// Creates a new process bar for processing that will take an unknown amount of time
+pub fn new_spinner_progress_bar() -> ProgressBar {
+    let progress_bar = ProgressBar::new(42);
+    progress_bar.set_draw_target(ProgressDrawTarget::stdout());
+    progress_bar
+        .set_style(ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}"));
+    progress_bar.enable_steady_tick(100);
+    progress_bar
+}
+
+/// Pretty print a "name value"
+pub fn println_name_value(name: &str, value: &str) {
+    println!("{} {}", style(name).bold(), value);
 }
