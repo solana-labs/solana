@@ -60,6 +60,8 @@ if [[ $CI_OS_NAME = windows ]]; then
   # Limit windows to end-user command-line tools.  Full validator support is not
   # yet available on windows
   BINS=(
+    cargo-build-bpf
+    cargo-test-bpf
     solana
     solana-install
     solana-install-init
