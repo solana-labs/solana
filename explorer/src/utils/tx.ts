@@ -21,6 +21,7 @@ import { SerumMarketRegistry } from "serumMarketRegistry";
 
 export type ProgramName = typeof PROGRAM_IDS[keyof typeof PROGRAM_IDS];
 
+<<<<<<< HEAD
 export const PROGRAM_IDS = {
   BrEAK7zGZ6dM71zUDACDqJnekihmwF15noTddWTsknjC: "Break Solana Program",
   Budget1111111111111111111111111111111111111: "Budget Program",
@@ -35,6 +36,60 @@ export const PROGRAM_IDS = {
   ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL:
     "SPL Associated Token Account Program",
   Memo1UhkJRfHyvLMcVucJwxXeuD728EqVDDwQDxFMNo: "Memo Program",
+=======
+export enum PROGRAM_NAMES {
+  BREAK_SOLANA = "Break Solana Program",
+  BUDGET = "Budget Program",
+  CONFIG = "Config Program",
+  EXCHANGE = "Exchange Program",
+  STAKE = "Stake Program",
+  STORAGE = "Storage Program",
+  SYSTEM = "System Program",
+  VEST = "Vest Program",
+  VOTE = "Vote Program",
+  SPL_TOKEN = "SPL Token Program",
+  ASSOCIATED_TOKEN = "SPL Associated Token Program",
+  MEMO = "Memo Program",
+  MEMO_2 = "Memo Program 2",
+  SWAP = "Swap Program",
+  LENDING = "Lending Program",
+}
+
+export const SEARCHABLE_PROGRAMS: ProgramName[] = [
+  PROGRAM_NAMES.BREAK_SOLANA,
+  PROGRAM_NAMES.BUDGET,
+  PROGRAM_NAMES.CONFIG,
+  PROGRAM_NAMES.EXCHANGE,
+  PROGRAM_NAMES.STAKE,
+  PROGRAM_NAMES.STORAGE,
+  PROGRAM_NAMES.SYSTEM,
+  PROGRAM_NAMES.VEST,
+  PROGRAM_NAMES.VOTE,
+  PROGRAM_NAMES.SPL_TOKEN,
+  PROGRAM_NAMES.ASSOCIATED_TOKEN,
+  PROGRAM_NAMES.MEMO,
+  PROGRAM_NAMES.MEMO_2,
+  PROGRAM_NAMES.SWAP,
+  PROGRAM_NAMES.LENDING,
+];
+
+export const PROGRAM_NAME_BY_ID = {
+  BrEAK7zGZ6dM71zUDACDqJnekihmwF15noTddWTsknjC: PROGRAM_NAMES.BREAK_SOLANA,
+  Budget1111111111111111111111111111111111111: PROGRAM_NAMES.BUDGET,
+  Config1111111111111111111111111111111111111: PROGRAM_NAMES.CONFIG,
+  Exchange11111111111111111111111111111111111: PROGRAM_NAMES.EXCHANGE,
+  [StakeProgram.programId.toBase58()]: PROGRAM_NAMES.STAKE,
+  Storage111111111111111111111111111111111111: PROGRAM_NAMES.STORAGE,
+  [SystemProgram.programId.toBase58()]: PROGRAM_NAMES.SYSTEM,
+  Vest111111111111111111111111111111111111111: PROGRAM_NAMES.VEST,
+  [VOTE_PROGRAM_ID.toBase58()]: PROGRAM_NAMES.VOTE,
+  TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA: PROGRAM_NAMES.SPL_TOKEN,
+  ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL: PROGRAM_NAMES.ASSOCIATED_TOKEN,
+  Memo1UhkJRfHyvLMcVucJwxXeuD728EqVDDwQDxFMNo: PROGRAM_NAMES.MEMO,
+  MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr: PROGRAM_NAMES.MEMO_2,
+  SwaPpA9LAaLfeLi3a68M4DjnLqgtticKg6CnyNwgAC8: PROGRAM_NAMES.SWAP,
+  LendZqTs7gn5CTSJU1jWKhKuVpjJGom45nnwPb2AMTi: PROGRAM_NAMES.LENDING,
+>>>>>>> 7b67a6d20... Load memo v2 into genesis for test validator (#15425)
 } as const;
 
 export type LoaderName = typeof LOADER_IDS[keyof typeof LOADER_IDS];
