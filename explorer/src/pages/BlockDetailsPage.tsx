@@ -6,10 +6,11 @@ import { BlockOverviewCard } from "components/block/BlockOverviewCard";
 type Props = { slot: string };
 
 export function BlockDetailsPage({ slot }: Props) {
+  const slotNumber = Number(slot);
   let output = <ErrorCard text={`Block ${slot} is not valid`} />;
 
-  if (!isNaN(Number(slot))) {
-    output = <BlockOverviewCard slot={Number(slot)} />;
+  if (!isNaN(slotNumber) && slotNumber < Number.MAX_SAFE_INTEGER) {
+    output = <BlockOverviewCard slot={slotNumber} />;
   }
 
   return (
