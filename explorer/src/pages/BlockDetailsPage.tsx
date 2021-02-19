@@ -12,7 +12,11 @@ export function BlockDetailsPage({ slot }: Props) {
   const slotNumber = Number(slot);
   let output = <ErrorCard text={`Block ${slot} is not valid`} />;
 
-  if (!isNaN(slotNumber) && slotNumber < MAX_SAFE_INTEGER) {
+  if (
+    !isNaN(slotNumber) &&
+    slotNumber < MAX_SAFE_INTEGER &&
+    slotNumber % 1 === 0
+  ) {
     output = <BlockOverviewCard slot={slotNumber} />;
   }
 
