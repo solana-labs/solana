@@ -257,6 +257,17 @@ struct GossipStats {
     handle_batch_pull_requests_time: Counter,
     handle_batch_pull_responses_time: Counter,
     handle_batch_push_messages_time: Counter,
+    packets_received_count: Counter,
+    packets_received_prune_messages_count: Counter,
+    packets_received_pull_requests_count: Counter,
+    packets_received_pull_responses_count: Counter,
+    packets_received_push_messages_count: Counter,
+    packets_received_verified_count: Counter,
+    packets_sent_gossip_requests_count: Counter,
+    packets_sent_prune_messages_count: Counter,
+    packets_sent_pull_requests_count: Counter,
+    packets_sent_pull_responses_count: Counter,
+    packets_sent_push_messages_count: Counter,
     process_gossip_packets_time: Counter,
     process_pull_response: Counter,
     process_pull_response_count: Counter,
@@ -1714,7 +1725,12 @@ impl ClusterInfo {
             vec![]
         };
         let mut pushes: Vec<_> = self.new_push_requests();
-
+        self.stats
+            .packets_sent_pull_requests_count
+            .add_relaxed(pulls.len() as u64);
+        self.stats
+            .packets_sent_push_messages_count
+            .add_relaxed(pushes.len() as u64);
         pulls.append(&mut pushes);
         pulls
     }
@@ -1737,6 +1753,9 @@ impl ClusterInfo {
         );
         if !reqs.is_empty() {
             let packets = to_packets_with_destination(recycler.clone(), &reqs);
+            self.stats
+                .packets_sent_gossip_requests_count
+                .add_relaxed(packets.packets.len() as u64);
             sender.send(packets)?;
         }
         Ok(())
@@ -2003,6 +2022,9 @@ impl ClusterInfo {
                 .add_relaxed(requests.len() as u64);
             let response = self.handle_pull_requests(recycler, requests, stakes, feature_set);
             if !response.is_empty() {
+                self.stats
+                    .packets_sent_pull_responses_count
+                    .add_relaxed(response.packets.len() as u64);
                 let _ = response_sender.send(response);
             }
         }
@@ -2499,6 +2521,7 @@ impl ClusterInfo {
             return;
         }
         let mut packets = to_packets_with_destination(recycler.clone(), &prune_messages);
+        let num_prune_packets = packets.packets.len();
         self.stats
             .push_response_count
             .add_relaxed(packets.packets.len() as u64);
@@ -2514,6 +2537,12 @@ impl ClusterInfo {
                 trace!("Dropping Gossip push response, as destination is unknown");
             }
         }
+        self.stats
+            .packets_sent_prune_messages_count
+            .add_relaxed(num_prune_packets as u64);
+        self.stats
+            .packets_sent_push_messages_count
+            .add_relaxed((packets.packets.len() - num_prune_packets) as u64);
         let _ = response_sender.send(packets);
     }
 
@@ -2551,6 +2580,9 @@ impl ClusterInfo {
         should_check_duplicate_instance: bool,
     ) -> Result<()> {
         let _st = ScopedTimer::from(&self.stats.process_gossip_packets_time);
+        self.stats
+            .packets_received_count
+            .add_relaxed(packets.len() as u64);
         let packets: Vec<_> = thread_pool.install(|| {
             packets
                 .into_par_iter()
@@ -2563,6 +2595,9 @@ impl ClusterInfo {
                 })
                 .collect()
         });
+        self.stats
+            .packets_received_verified_count
+            .add_relaxed(packets.len() as u64);
         // Check if there is a duplicate instance of
         // this node with more recent timestamp.
         let check_duplicate_instance = |values: &[CrdsValue]| {
@@ -2600,6 +2635,18 @@ impl ClusterInfo {
                 Protocol::PongMessage(pong) => pong_messages.push((from_addr, pong)),
             }
         }
+        self.stats
+            .packets_received_pull_requests_count
+            .add_relaxed(pull_requests.len() as u64);
+        self.stats
+            .packets_received_pull_responses_count
+            .add_relaxed(pull_responses.len() as u64);
+        self.stats
+            .packets_received_push_messages_count
+            .add_relaxed(push_messages.len() as u64);
+        self.stats
+            .packets_received_prune_messages_count
+            .add_relaxed(prune_messages.len() as u64);
         self.handle_batch_ping_messages(ping_messages, recycler, response_sender);
         self.handle_batch_prune_messages(prune_messages);
         self.handle_batch_push_messages(
@@ -2900,6 +2947,61 @@ impl ClusterInfo {
                 (
                     "pull_requests_count",
                     self.stats.pull_requests_count.clear(),
+                    i64
+                ),
+                (
+                    "packets_received_count",
+                    self.stats.packets_received_count.clear(),
+                    i64
+                ),
+                (
+                    "packets_received_prune_messages_count",
+                    self.stats.packets_received_prune_messages_count.clear(),
+                    i64
+                ),
+                (
+                    "packets_received_pull_requests_count",
+                    self.stats.packets_received_pull_requests_count.clear(),
+                    i64
+                ),
+                (
+                    "packets_received_pull_responses_count",
+                    self.stats.packets_received_pull_responses_count.clear(),
+                    i64
+                ),
+                (
+                    "packets_received_push_messages_count",
+                    self.stats.packets_received_push_messages_count.clear(),
+                    i64
+                ),
+                (
+                    "packets_received_verified_count",
+                    self.stats.packets_received_verified_count.clear(),
+                    i64
+                ),
+                (
+                    "packets_sent_gossip_requests_count",
+                    self.stats.packets_sent_gossip_requests_count.clear(),
+                    i64
+                ),
+                (
+                    "packets_sent_prune_messages_count",
+                    self.stats.packets_sent_prune_messages_count.clear(),
+                    i64
+                ),
+                (
+                    "packets_sent_pull_requests_count",
+                    self.stats.packets_sent_pull_requests_count.clear(),
+                    i64
+                ),
+                (
+                    "packets_sent_pull_responses_count",
+                    self.stats.packets_sent_pull_responses_count.clear(),
+                    i64
+                ),
+                (
+                    "packets_sent_push_messages_count",
+                    self.stats.packets_sent_push_messages_count.clear(),
                     i64
                 ),
             );
