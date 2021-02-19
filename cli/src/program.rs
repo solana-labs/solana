@@ -122,7 +122,6 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .value_name("BUFFER_SIGNER")
                                 .takes_value(true)
                                 .validator(is_valid_signer)
-                                .conflicts_with("program_location")
                                 .help("Intermediate buffer account to write data to, which can be used to resume a failed deploy \
                                       [default: random address]")
                         )
@@ -695,7 +694,11 @@ fn process_program_deploy(
         true
     };
 
-    let (program_data, program_len) = if buffer_provided {
+    let (program_data, program_len) = if let Some(program_location) = program_location {
+        let program_data = read_and_verify_elf(&program_location)?;
+        let program_len = program_data.len();
+        (program_data, program_len)
+    } else if buffer_provided {
         // Check supplied buffer account
         if let Some(account) = rpc_client
             .get_account_with_commitment(&buffer_pubkey, config.commitment)?
@@ -712,10 +715,6 @@ fn process_program_deploy(
         } else {
             return Err("Buffer account not found, was it already consumed?".into());
         }
-    } else if let Some(program_location) = program_location {
-        let program_data = read_and_verify_elf(&program_location)?;
-        let program_len = program_data.len();
-        (program_data, program_len)
     } else {
         return Err("Program location required if buffer not supplied".into());
     };
