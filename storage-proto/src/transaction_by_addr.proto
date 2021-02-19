@@ -93,6 +93,8 @@ enum InstructionErrorType {
     PROGRAM_FAILED_TO_COMPILE = 41;
     IMMUTABLE = 42;
     INCORRECT_AUTHORITY = 43;
+    I_O_ERROR = 44;
+    ACCOUNT_NOT_RENT_EXEMPT = 45;
 }
 
 message UnixTimestamp {
