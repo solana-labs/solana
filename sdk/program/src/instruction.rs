@@ -189,7 +189,7 @@ pub enum InstructionError {
     IncorrectAuthority,
 
     #[error("Failed to serialize or deserialize account data: {0}")]
-    IOError(String),
+    BorshIoError(String),
 
     #[error("An account does not have enough lamports to be rent-exempt")]
     AccountNotRentExempt,
