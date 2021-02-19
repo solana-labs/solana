@@ -1,12 +1,11 @@
-import React, { useState } from "react";
+import React from "react";
 import { Link } from "react-router-dom";
 import { PublicKey } from "@solana/web3.js";
 import { clusterPath } from "utils/url";
 import { displayAddress } from "utils/tx";
 import { useCluster } from "providers/cluster";
-import { CopyButton } from "./CopyButton";
+import { Copyable } from "./Copyable";
 
-type CopyState = "copy" | "copied";
 type Props = {
   pubkey: PublicKey;
   alignRight?: boolean;
@@ -32,8 +31,7 @@ export function Address({
   }
 
   const content = (
-    <>
-      <CopyButton text={address} />
+    <Copyable text={address} replaceText={!alignRight}>
       <span className="text-monospace">
         {link ? (
           <Link
@@ -48,7 +46,7 @@ export function Address({
           </span>
         )}
       </span>
-    </>
+    </Copyable>
   );
 
   return (

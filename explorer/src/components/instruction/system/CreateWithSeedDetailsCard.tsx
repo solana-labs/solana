@@ -60,7 +60,7 @@ export function CreateWithSeedDetailsCard(props: {
       <tr>
         <td>Seed</td>
         <td className="text-lg-right">
-          <Copyable right text={info.seed}>
+          <Copyable text={info.seed}>
             <code>{info.seed}</code>
           </Copyable>
         </td>

@@ -71,6 +71,15 @@ ul.log-messages {
   cursor: pointer;
 }
 
+.v-hidden {
+  visibility: hidden;
+  max-height: 0;
+}
+
+.flex-nowrap {
+  flex-wrap: nowrap;
+}
+
 .dropdown-exit {
   position: absolute;
   z-index: 100;
