@@ -117,9 +117,8 @@ impl<T: Default + Reset> ObjectPool<T> {
 
     fn shrink_if_necessary(
         &mut self,
-        shrink_removed_objects: &mut Vec<T>,
         recycler_name: &'static str,
-    ) -> Option<RecyclerShrinkStats> {
+    ) -> Option<(RecyclerShrinkStats, Vec<T>)> {
         let is_consistent = self.total_allocated_count as usize >= self.len();
         if !is_consistent {
             warn!(
@@ -152,6 +151,7 @@ impl<T: Default + Reset> ObjectPool<T> {
                 // Do the shrink
                 let target_size = std::cmp::max(self.minimum_object_count, shrink_threshold_count);
                 let ideal_num_to_remove = self.total_allocated_count - target_size;
+                let mut shrink_removed_objects = Vec::with_capacity(ideal_num_to_remove as usize);
                 for _ in 0..ideal_num_to_remove {
                     if let Some(mut expired_object) = self.objects.pop() {
                         expired_object.unset_recycler();
@@ -170,14 +170,17 @@ impl<T: Default + Reset> ObjectPool<T> {
                 }
                 recycler_shrink_elapsed.stop();
                 self.above_shrink_ratio_count = 0;
-                Some(RecyclerShrinkStats {
-                    resulting_size: self.total_allocated_count,
-                    target_size,
-                    ideal_num_to_remove,
-                    shrink_elapsed: recycler_shrink_elapsed.as_us(),
-                    // Filled in later
-                    drop_elapsed: 0,
-                })
+                Some((
+                    RecyclerShrinkStats {
+                        resulting_size: self.total_allocated_count,
+                        target_size,
+                        ideal_num_to_remove,
+                        shrink_elapsed: recycler_shrink_elapsed.as_us(),
+                        // Filled in later
+                        drop_elapsed: 0,
+                    },
+                    shrink_removed_objects,
+                ))
             } else {
                 None
             }
@@ -282,27 +285,24 @@ impl<T: Default + Reset + Sized> Recycler<T> {
     }
 
     pub fn allocate(&self) -> Option<T> {
-        let mut shrink_removed_objects = vec![];
-        let (allocation_decision, mut shrink_stats) = {
+        let (allocation_decision, shrink_output) = {
             let mut object_pool = self
                 .recycler
                 .gc
                 .lock()
                 .expect("recycler lock in pb fn allocate");
 
-            let shrink_stats = object_pool
-                .shrink_if_necessary(&mut shrink_removed_objects, self.shrink_metric_name);
+            let shrink_output = object_pool.shrink_if_necessary(self.shrink_metric_name);
 
             // Grab the allocation decision and shrinking stats, do the expensive
             // allocations/deallocations outside of the lock.
-            (object_pool.make_allocation_decision(), shrink_stats)
+            (object_pool.make_allocation_decision(), shrink_output)
         };
 
-        let mut shrink_removed_object_elapsed = Measure::start("shrink_removed_object_elapsed");
-        drop(shrink_removed_objects);
-        shrink_removed_object_elapsed.stop();
-
-        if let Some(shrink_stats) = shrink_stats.as_mut() {
+        if let Some((mut shrink_stats, shrink_removed_objects)) = shrink_output {
+            let mut shrink_removed_object_elapsed = Measure::start("shrink_removed_object_elapsed");
+            drop(shrink_removed_objects);
+            shrink_removed_object_elapsed.stop();
             shrink_stats.drop_elapsed = shrink_removed_object_elapsed.as_us();
             shrink_stats.report(self.shrink_metric_name);
         }
