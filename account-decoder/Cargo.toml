@@ -18,19 +18,11 @@ lazy_static = "1.4.0"
 serde = "1.0.118"
 serde_derive = "1.0.103"
 serde_json = "1.0.56"
-<<<<<<< HEAD
 solana-config-program = { path = "../programs/config", version = "1.5.9" }
 solana-sdk = { path = "../sdk", version = "1.5.9" }
 solana-stake-program = { path = "../programs/stake", version = "1.5.9" }
 solana-vote-program = { path = "../programs/vote", version = "1.5.9" }
-spl-token-v2-0 = { package = "spl-token", version = "=3.0.1", features = ["no-entrypoint"] }
-=======
-solana-config-program = { path = "../programs/config", version = "1.6.0" }
-solana-sdk = { path = "../sdk", version = "1.6.0" }
-solana-stake-program = { path = "../programs/stake", version = "1.6.0" }
-solana-vote-program = { path = "../programs/vote", version = "1.6.0" }
 spl-token-v2-0 = { package = "spl-token", version = "=3.1.0", features = ["no-entrypoint"] }
->>>>>>> 15bbe6436... Bump SPL token version to v3.1.0 (#15429)
 thiserror = "1.0"
 zstd = "0.5.1"
 
