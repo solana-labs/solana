@@ -3941,7 +3941,7 @@ impl AccountsDB {
     pub fn update_accounts_hash_with_index_option(
         &self,
         use_index: bool,
-        debug_verify: bool,
+        mut debug_verify: bool,
         slot: Slot,
         ancestors: &Ancestors,
         simple_capitalization_enabled: bool,
@@ -3953,6 +3953,11 @@ impl AccountsDB {
             ancestors,
             simple_capitalization_enabled,
         );
+        if let Some(expected_capitalization) = expected_capitalization {
+            // if we calculated the wrong capitalization, then turn on debugging because we're about to assert anyway
+            debug_verify = debug_verify || expected_capitalization != total_lamports;
+        }
+
         if debug_verify {
             // calculate the other way (store or non-store) and verify results match.
             let (hash_other, total_lamports_other) = self.calculate_accounts_hash_helper(
@@ -3984,6 +3989,8 @@ impl AccountsDB {
         (hash, total_lamports)
     }
 
+    // only called prior to a panic.
+    // The goal is to dump out account information to help diagnose the source of differences.
     fn debug_compare_hash_calculation_details(
         &self,
         slot: Slot,
@@ -4077,10 +4084,10 @@ impl AccountsDB {
                                         while compare_index < compare_len {
                                             let compare_item =
                                                 &sorted_data_by_pubkey[compare_index];
-                                            compare_index += 1; // we will be skipping to the next item no matter what, so do it now
                                             if compare_item.pubkey != *pubkey {
                                                 break;
                                             }
+                                            compare_index += 1; // we will be skipping to the next item no matter what, so do it now
                                             if first {
                                                 first = false;
                                                 let lamports = if account_info.lamports > 0 {
