@@ -1,9 +1,12 @@
 use rand::{thread_rng, Rng};
 use solana_measure::measure::Measure;
-use solana_sdk::timing::timestamp;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, Weak};
+use std::{
+    sync::{
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+        Arc, Mutex, Weak,
+    },
+    time::Instant,
+};
 
 pub const DEFAULT_MINIMUM_OBJECT_COUNT: u32 = 1000;
 pub const DEFAULT_SHRINK_RATIO: f64 = 0.80;
@@ -76,7 +79,7 @@ pub struct ObjectPool<T: Reset> {
     above_shrink_ratio_count: u32,
     max_above_shrink_ratio_count: u32,
     check_shrink_interval_ms: u32,
-    last_shrink_check_ts: u64,
+    last_shrink_check_time: Instant,
     pub total_allocated_count: u32,
     limit: Option<u32>,
 }
@@ -89,7 +92,7 @@ impl<T: Default + Reset> Default for ObjectPool<T> {
             above_shrink_ratio_count: 0,
             max_above_shrink_ratio_count: DEFAULT_MAX_ABOVE_SHRINK_RATIO_COUNT,
             check_shrink_interval_ms: DEFAULT_CHECK_SHRINK_INTERVAL_MS,
-            last_shrink_check_ts: timestamp(),
+            last_shrink_check_time: Instant::now(),
             total_allocated_count: 0,
             limit: None,
         }
@@ -127,9 +130,9 @@ impl<T: Default + Reset> ObjectPool<T> {
             );
         }
         assert!(is_consistent);
-        let now = timestamp();
-        if now.saturating_sub(self.last_shrink_check_ts) > self.check_shrink_interval_ms as u64 {
-            self.last_shrink_check_ts = now;
+        if self.last_shrink_check_time.elapsed().as_millis() > self.check_shrink_interval_ms as u128
+        {
+            self.last_shrink_check_time = Instant::now();
             let shrink_threshold_count =
                 Self::get_shrink_target(self.shrink_ratio, self.total_allocated_count);
 
