@@ -1,5 +1,5 @@
 use crate::{
-    accounts_db::{AccountsDB, BankHashInfo, ErrorCounters, LoadedAccount, ScanStorageResult},
+    accounts_db::{AccountsDb, BankHashInfo, ErrorCounters, LoadedAccount, ScanStorageResult},
     accounts_index::{AccountIndex, Ancestors, IndexKey},
     bank::{
         NonceRollbackFull, NonceRollbackInfo, TransactionCheckResult, TransactionExecutionResult,
@@ -51,8 +51,8 @@ pub struct Accounts {
     /// my epoch
     pub epoch: Epoch,
 
-    /// Single global AccountsDB
-    pub accounts_db: Arc<AccountsDB>,
+    /// Single global AccountsDb
+    pub accounts_db: Arc<AccountsDb>,
 
     /// set of writable accounts which are currently in the pipeline
     pub(crate) account_locks: Mutex<HashSet<Pubkey>>,
@@ -93,7 +93,7 @@ impl Accounts {
         caching_enabled: bool,
     ) -> Self {
         Self {
-            accounts_db: Arc::new(AccountsDB::new_with_config(
+            accounts_db: Arc::new(AccountsDb::new_with_config(
                 paths,
                 cluster_type,
                 account_indexes,
@@ -117,7 +117,7 @@ impl Accounts {
         }
     }
 
-    pub(crate) fn new_empty(accounts_db: AccountsDB) -> Self {
+    pub(crate) fn new_empty(accounts_db: AccountsDb) -> Self {
         Self {
             accounts_db: Arc::new(accounts_db),
             account_locks: Mutex::new(HashSet::new()),
@@ -553,14 +553,14 @@ impl Accounts {
             |total_capitalization: &mut u64, (_pubkey, loaded_account, _slot)| {
                 let lamports = loaded_account.lamports();
                 if Self::is_loadable(lamports) {
-                    let account_cap = AccountsDB::account_balance_for_capitalization(
+                    let account_cap = AccountsDb::account_balance_for_capitalization(
                         lamports,
                         &loaded_account.owner(),
                         loaded_account.executable(),
                         simple_capitalization_enabled,
                     );
 
-                    *total_capitalization = AccountsDB::checked_iterative_sum_for_capitalization(
+                    *total_capitalization = AccountsDb::checked_iterative_sum_for_capitalization(
                         *total_capitalization,
                         account_cap,
                     );
@@ -1624,7 +1624,7 @@ mod tests {
         let accounts =
             Accounts::new_with_config(Vec::new(), &ClusterType::Development, HashSet::new(), false);
 
-        // Load accounts owned by various programs into AccountsDB
+        // Load accounts owned by various programs into AccountsDb
         let pubkey0 = solana_sdk::pubkey::new_rand();
         let account0 = Account::new(1, 0, &Pubkey::new(&[2; 32]));
         accounts.store_slow_uncached(0, &pubkey0, &account0);

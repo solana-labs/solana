@@ -1,4 +1,6 @@
-use crate::BPFError;
+#![allow(clippy::upper_case_acronyms)]
+
+use crate::BpfError;
 use solana_rbpf::ebpf;
 use thiserror::Error;
 
@@ -58,7 +60,7 @@ fn adj_insn_ptr(insn_ptr: usize) -> usize {
     insn_ptr + ebpf::ELF_INSN_DUMP_OFFSET
 }
 
-fn check_prog_len(prog: &[u8]) -> Result<(), BPFError> {
+fn check_prog_len(prog: &[u8]) -> Result<(), BpfError> {
     if prog.len() % ebpf::INSN_SIZE != 0 {
         return Err(VerifierError::ProgramLengthNotMultiple.into());
     }
@@ -72,21 +74,21 @@ fn check_prog_len(prog: &[u8]) -> Result<(), BPFError> {
     Ok(())
 }
 
-fn check_imm_nonzero(insn: &ebpf::Insn, insn_ptr: usize) -> Result<(), BPFError> {
+fn check_imm_nonzero(insn: &ebpf::Insn, insn_ptr: usize) -> Result<(), BpfError> {
     if insn.imm == 0 {
         return Err(VerifierError::DivisionByZero(adj_insn_ptr(insn_ptr)).into());
     }
     Ok(())
 }
 
-fn check_imm_endian(insn: &ebpf::Insn, insn_ptr: usize) -> Result<(), BPFError> {
+fn check_imm_endian(insn: &ebpf::Insn, insn_ptr: usize) -> Result<(), BpfError> {
     match insn.imm {
         16 | 32 | 64 => Ok(()),
         _ => Err(VerifierError::UnsupportedLEBEArgument(adj_insn_ptr(insn_ptr)).into()),
     }
 }
 
-fn check_load_dw(prog: &[u8], insn_ptr: usize) -> Result<(), BPFError> {
+fn check_load_dw(prog: &[u8], insn_ptr: usize) -> Result<(), BpfError> {
     if insn_ptr + 1 >= (prog.len() / ebpf::INSN_SIZE) {
         // Last instruction cannot be LD_DW because there would be no 2nd DW
         return Err(VerifierError::LDDWCannotBeLast.into());
@@ -98,7 +100,7 @@ fn check_load_dw(prog: &[u8], insn_ptr: usize) -> Result<(), BPFError> {
     Ok(())
 }
 
-fn check_jmp_offset(prog: &[u8], insn_ptr: usize) -> Result<(), BPFError> {
+fn check_jmp_offset(prog: &[u8], insn_ptr: usize) -> Result<(), BpfError> {
     let insn = ebpf::get_insn(prog, insn_ptr);
     // if insn.off == -1 {
     //     return Err(VerifierError::InfiniteLoop(adj_insn_ptr(insn_ptr)).into());
@@ -121,7 +123,7 @@ fn check_jmp_offset(prog: &[u8], insn_ptr: usize) -> Result<(), BPFError> {
     Ok(())
 }
 
-fn check_registers(insn: &ebpf::Insn, store: bool, insn_ptr: usize) -> Result<(), BPFError> {
+fn check_registers(insn: &ebpf::Insn, store: bool, insn_ptr: usize) -> Result<(), BpfError> {
     if insn.src > 10 {
         return Err(VerifierError::InvalidSourceRegister(adj_insn_ptr(insn_ptr)).into());
     }
@@ -149,7 +151,7 @@ fn check_imm_register(insn: &ebpf::Insn, insn_ptr: usize) -> Result<(), Verifier
 }
 
 #[rustfmt::skip]
-pub fn check(prog: &[u8]) -> Result<(), BPFError> {
+pub fn check(prog: &[u8]) -> Result<(), BpfError> {
     check_prog_len(prog)?;
 
     let mut insn_ptr: usize = 0;

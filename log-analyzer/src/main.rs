@@ -11,7 +11,7 @@ use std::ops::Sub;
 use std::path::PathBuf;
 
 #[derive(Deserialize, Serialize, Debug)]
-struct IPAddrMapping {
+struct IpAddrMapping {
     private: String,
     public: String,
 }
@@ -90,7 +90,7 @@ impl Sub for &LogLine {
     }
 }
 
-fn map_ip_address(mappings: &[IPAddrMapping], target: String) -> String {
+fn map_ip_address(mappings: &[IpAddrMapping], target: String) -> String {
     for mapping in mappings {
         if target.contains(&mapping.private) {
             return target.replace(&mapping.private, mapping.public.as_str());
@@ -100,7 +100,7 @@ fn map_ip_address(mappings: &[IPAddrMapping], target: String) -> String {
 }
 
 fn process_iftop_logs(matches: &ArgMatches) {
-    let mut map_list: Vec<IPAddrMapping> = vec![];
+    let mut map_list: Vec<IpAddrMapping> = vec![];
     if let ("map-IP", Some(args_matches)) = matches.subcommand() {
         let mut list = args_matches
             .value_of("list")

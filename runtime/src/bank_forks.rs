@@ -1,7 +1,7 @@
 //! The `bank_forks` module implements BankForks a DAG of checkpointed Banks
 
 use crate::{
-    accounts_background_service::{ABSRequestSender, SnapshotRequest},
+    accounts_background_service::{AbsRequestSender, SnapshotRequest},
     bank::Bank,
 };
 use log::*;
@@ -187,7 +187,7 @@ impl BankForks {
     pub fn set_root(
         &mut self,
         root: Slot,
-        accounts_background_request_sender: &ABSRequestSender,
+        accounts_background_request_sender: &AbsRequestSender,
         highest_confirmed_root: Option<Slot>,
     ) {
         let old_epoch = self.root_bank().epoch();
@@ -428,7 +428,7 @@ mod tests {
 
         let bank0 = Bank::new(&genesis_config);
         let mut bank_forks0 = BankForks::new(bank0);
-        bank_forks0.set_root(0, &ABSRequestSender::default(), None);
+        bank_forks0.set_root(0, &AbsRequestSender::default(), None);
 
         let bank1 = Bank::new(&genesis_config);
         let mut bank_forks1 = BankForks::new(bank1);
@@ -460,7 +460,7 @@ mod tests {
 
             // Set root in bank_forks0 to truncate the ancestor history
             bank_forks0.insert(child1);
-            bank_forks0.set_root(slot, &ABSRequestSender::default(), None);
+            bank_forks0.set_root(slot, &AbsRequestSender::default(), None);
 
             // Don't set root in bank_forks1 to keep the ancestor history
             bank_forks1.insert(child2);
@@ -514,7 +514,7 @@ mod tests {
         );
         bank_forks.set_root(
             2,
-            &ABSRequestSender::default(),
+            &AbsRequestSender::default(),
             None, // highest confirmed root
         );
         banks[2].squash();
@@ -573,7 +573,7 @@ mod tests {
         );
         bank_forks.set_root(
             2,
-            &ABSRequestSender::default(),
+            &AbsRequestSender::default(),
             Some(1), // highest confirmed root
         );
         banks[2].squash();
