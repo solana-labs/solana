@@ -42,7 +42,7 @@ pub(crate) struct ReadonlyLock {
     lock_count: Mutex<u64>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, AbiExample)]
 pub struct AccountLocks {
     write_locks: HashSet<Pubkey>,
     readonly_locks: HashMap<Pubkey, u64>,
