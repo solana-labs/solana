@@ -158,7 +158,7 @@ impl From<AccountState> for UiAccountState {
     }
 }
 
-fn real_number_string(amount: u64, decimals: u8) -> StringDecimals {
+pub fn real_number_string(amount: u64, decimals: u8) -> StringDecimals {
     let decimals = decimals as usize;
     if decimals > 0 {
         // Left-pad zeros to decimals + 1, so we at least have an integer zero
