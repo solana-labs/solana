@@ -97,7 +97,8 @@ pub struct Accounts {
     /// Single global AccountsDB
     pub accounts_db: Arc<AccountsDB>,
 
-    /// set of writable accounts which are currently in the pipeline
+    /// set of read-only and writable accounts which are currently
+    /// being processed by banking/replay threads
     pub(crate) account_locks: Mutex<AccountLocks>,
 }
 
@@ -739,13 +740,13 @@ impl Accounts {
     ) -> Result<()> {
         for k in writable_keys.iter() {
             if account_locks.is_locked_write(k) || account_locks.is_locked_readonly(k) {
-                debug!("CD Account in use: {:?}", k);
+                debug!("Writable account in use: {:?}", k);
                 return Err(TransactionError::AccountInUse);
             }
         }
         for k in readonly_keys.iter() {
             if account_locks.is_locked_write(k) {
-                debug!("CO Account in use: {:?}", k);
+                debug!("Read-only account in use: {:?}", k);
                 return Err(TransactionError::AccountInUse);
             }
         }
@@ -754,13 +755,10 @@ impl Accounts {
             account_locks.write_locks.insert(*k);
         }
 
-        let readonly_writes: Vec<&&Pubkey> = readonly_keys
-            .iter()
-            .filter(|k| !account_locks.lock_readonly(k))
-            .collect();
-
-        for k in readonly_writes.iter() {
-            account_locks.insert_new_readonly(*k);
+        for k in readonly_keys {
+            if !account_locks.lock_readonly(k) {
+                account_locks.insert_new_readonly(k);
+            }
         }
 
         Ok(())
@@ -1752,17 +1750,14 @@ mod tests {
 
         assert!(results2[0].is_ok()); // Now keypair1 account can be locked as writable
 
-        // Check that read-only locks are still cached in accounts struct
-        assert_eq!(
-            *accounts
-                .account_locks
-                .lock()
-                .unwrap()
-                .readonly_locks
-                .get(&keypair1.pubkey())
-                .unwrap(),
-            0
-        );
+        // Check that read-only lock with zero references is deleted
+        assert!(accounts
+            .account_locks
+            .lock()
+            .unwrap()
+            .readonly_locks
+            .get(&keypair1.pubkey())
+            .is_none());
     }
 
     #[test]
