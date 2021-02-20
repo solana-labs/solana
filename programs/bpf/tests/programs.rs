@@ -227,7 +227,13 @@ fn run_program(
             vm.execute_program_jit(&mut instruction_meter)
         };
         assert_eq!(SUCCESS, result.unwrap());
-        deserialize_parameters(&bpf_loader::id(), parameter_accounts, &parameter_bytes).unwrap();
+        deserialize_parameters(
+            &bpf_loader::id(),
+            parameter_accounts,
+            &parameter_bytes,
+            &mut invoke_context,
+        )
+        .unwrap();
         if i == 1 {
             assert_eq!(instruction_count, vm.get_total_instruction_count());
         }

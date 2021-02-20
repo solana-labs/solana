@@ -58,14 +58,28 @@ impl Executors {
 pub struct PreAccount {
     key: Pubkey,
     is_writable: bool,
-    account: RefCell<Account>,
+    account_no_data: Account,
+    real_account: Rc<RefCell<Account>>,
+    data_changed: RefCell<bool>,
+    data_len_changed: RefCell<bool>,
 }
 impl PreAccount {
-    pub fn new(key: &Pubkey, account: &Account, is_writable: bool) -> Self {
+    pub fn new(key: &Pubkey, account: &Rc<RefCell<Account>>, is_writable: bool) -> Self {
+        let borrow = account.borrow();
+        let account_no_data = Account {
+            lamports: borrow.lamports,
+            data: Vec::default(), // do not copy data
+            owner: borrow.owner,
+            executable: borrow.executable,
+            rent_epoch: borrow.rent_epoch,
+        };
         Self {
             key: *key,
             is_writable,
-            account: RefCell::new(account.clone()),
+            account_no_data,
+            real_account: account.clone(),
+            data_changed: RefCell::new(false),
+            data_len_changed: RefCell::new(false),
         }
     }
 
@@ -76,7 +90,7 @@ impl PreAccount {
         rent: &Rent,
         post: &Account,
     ) -> Result<(), InstructionError> {
-        let pre = self.account.borrow();
+        let pre = &self.account_no_data;
 
         let is_writable = if let Some(is_writable) = is_writable {
             is_writable
@@ -116,7 +130,7 @@ impl PreAccount {
 
         // Only the system program can change the size of the data
         //  and only if the system program owns the account
-        if pre.data.len() != post.data.len()
+        if *self.data_len_changed.borrow()
             && (!system_program::check_id(program_id) // line coverage used to get branch coverage
                 || !system_program::check_id(&pre.owner))
         {
@@ -129,7 +143,7 @@ impl PreAccount {
         if !(*program_id == pre.owner
             && is_writable  // line coverage used to get branch coverage
             && !pre.executable)
-            && pre.data != post.data
+            && *self.data_changed.borrow()
         {
             if pre.executable {
                 return Err(InstructionError::ExecutableDataModified);
@@ -162,18 +176,13 @@ impl PreAccount {
     }
 
     pub fn update(&mut self, account: &Account) {
-        let mut pre = self.account.borrow_mut();
+        let mut pre = &mut self.account_no_data;
 
         pre.lamports = account.lamports;
         pre.owner = account.owner;
         pre.executable = account.executable;
-        if pre.data.len() != account.data.len() {
-            // Only system account can change data size, copy with alloc
-            pre.data = account.data.clone();
-        } else {
-            // Copy without allocate
-            pre.data.clone_from_slice(&account.data);
-        }
+        *self.data_changed.borrow_mut() = false;
+        *self.data_len_changed.borrow_mut() = false;
     }
 
     pub fn key(&self) -> Pubkey {
@@ -181,7 +190,7 @@ impl PreAccount {
     }
 
     pub fn lamports(&self) -> u64 {
-        self.account.borrow().lamports
+        self.account_no_data.lamports
     }
 
     pub fn is_zeroed(buf: &[u8]) -> bool {
@@ -331,7 +340,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     fn get_account(&self, pubkey: &Pubkey) -> Option<RefCell<Account>> {
         if let Some(account) = self.pre_accounts.iter().find_map(|pre| {
             if pre.key == *pubkey {
-                Some(pre.account.clone())
+                Some((*pre.real_account).clone())
             } else {
                 None
             }
@@ -345,6 +354,22 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
                 None
             }
         })
+    }
+    fn account_data_modified(&self, pubkey: &Pubkey) {
+        for pre in &self.pre_accounts {
+            if pre.key == *pubkey {
+                *pre.data_changed.borrow_mut() = true;
+                return;
+            }
+        }
+    }
+    fn account_data_len_modified(&self, pubkey: &Pubkey) {
+        for pre in &self.pre_accounts {
+            if pre.key == *pubkey {
+                *pre.data_len_changed.borrow_mut() = true;
+                return;
+            }
+        }
     }
 }
 pub struct ThisLogger {
@@ -807,7 +832,7 @@ impl MessageProcessor {
             let mut work = |_unique_index: usize, account_index: usize| {
                 let key = &message.account_keys[account_index];
                 let is_writable = message.is_writable(account_index);
-                let account = accounts[account_index].borrow();
+                let account = &accounts[account_index];
                 pre_accounts.push(PreAccount::new(key, &account, is_writable));
                 Ok(())
             };
@@ -1058,11 +1083,15 @@ mod tests {
                 1,
                 &program_ids[i],
             ))));
-            pre_accounts.push(PreAccount::new(&keys[i], &accounts[i].borrow(), false))
+            pre_accounts.push(PreAccount::new(&keys[i], &accounts[i], false))
         }
         let account = Account::new(1, 1, &solana_sdk::pubkey::Pubkey::default());
         for program_id in program_ids.iter() {
-            pre_accounts.push(PreAccount::new(program_id, &account.clone(), false));
+            pre_accounts.push(PreAccount::new(
+                program_id,
+                &Rc::new(RefCell::new(account.clone())),
+                false,
+            ));
         }
 
         let mut invoke_context = ThisInvokeContext::new(
@@ -1114,14 +1143,15 @@ mod tests {
                 .unwrap();
             assert_eq!(
                 invoke_context.pre_accounts[owned_index]
-                    .account
+                    .real_account
                     .borrow()
                     .data[0],
                 (MAX_DEPTH + owned_index) as u8
             );
 
             // modify account not owned by the program
-            let data = accounts[not_owned_index].borrow_mut().data[0];
+            let _data = accounts[not_owned_index].borrow_mut().data[0];
+            invoke_context.account_data_modified(&keys[not_owned_index]);
             accounts[not_owned_index].borrow_mut().data[0] = (MAX_DEPTH + not_owned_index) as u8;
             assert_eq!(
                 invoke_context.verify_and_update(
@@ -1132,6 +1162,8 @@ mod tests {
                 ),
                 Err(InstructionError::ExternalAccountDataModified)
             );
+            /*
+            can't do this anymore
             assert_eq!(
                 invoke_context.pre_accounts[not_owned_index]
                     .account
@@ -1140,6 +1172,7 @@ mod tests {
                 data
             );
             accounts[not_owned_index].borrow_mut().data[0] = data;
+            */
 
             invoke_context.pop();
         }
@@ -1198,12 +1231,12 @@ mod tests {
                 is_writable: true,
                 pre: PreAccount::new(
                     &solana_sdk::pubkey::new_rand(),
-                    &Account {
+                    &Rc::new(RefCell::new(Account {
                         owner: *owner,
                         lamports: std::u64::MAX,
                         data: vec![],
                         ..Account::default()
-                    },
+                    })),
                     false,
                 ),
                 post: Account {
@@ -1218,12 +1251,12 @@ mod tests {
             self
         }
         pub fn executable(mut self, pre: bool, post: bool) -> Self {
-            self.pre.account.borrow_mut().executable = pre;
+            self.pre.account_no_data.executable = pre;
             self.post.executable = post;
             self
         }
         pub fn lamports(mut self, pre: u64, post: u64) -> Self {
-            self.pre.account.borrow_mut().lamports = pre;
+            self.pre.account_no_data.lamports = pre;
             self.post.lamports = post;
             self
         }
@@ -1232,12 +1265,18 @@ mod tests {
             self
         }
         pub fn data(mut self, pre: Vec<u8>, post: Vec<u8>) -> Self {
-            self.pre.account.borrow_mut().data = pre;
+            if pre.len() != post.len() {
+                *self.pre.data_len_changed.borrow_mut() = true;
+            }
+            if pre != post {
+                *self.pre.data_changed.borrow_mut() = true;
+            }
+            self.pre.account_no_data.data = pre;
             self.post.data = post;
             self
         }
         pub fn rent_epoch(mut self, pre: u64, post: u64) -> Self {
-            self.pre.account.borrow_mut().rent_epoch = pre;
+            self.pre.account_no_data.rent_epoch = pre;
             self.post.rent_epoch = post;
             self
         }
@@ -1582,7 +1621,7 @@ mod tests {
             _program_id: &Pubkey,
             keyed_accounts: &[KeyedAccount],
             data: &[u8],
-            _invoke_context: &mut dyn InvokeContext,
+            invoke_context: &mut dyn InvokeContext,
         ) -> Result<(), InstructionError> {
             if let Ok(instruction) = bincode::deserialize(data) {
                 match instruction {
@@ -1594,6 +1633,7 @@ mod tests {
                     }
                     // Change data in a read-only account
                     MockSystemInstruction::AttemptDataChange { data } => {
+                        invoke_context.account_data_modified(&keyed_accounts[1].unsigned_key());
                         keyed_accounts[1].account.borrow_mut().data = vec![data];
                         Ok(())
                     }
@@ -1875,6 +1915,17 @@ mod tests {
         assert_eq!(accounts[0].borrow().data, vec![42]);
     }
 
+    impl<'a> ThisInvokeContext<'a> {
+        fn clear_account_data_modified(&self, pubkey: &Pubkey) {
+            for pre in &self.pre_accounts {
+                if pre.key == *pubkey {
+                    *pre.data_changed.borrow_mut() = false;
+                    return;
+                }
+            }
+        }
+    }
+
     #[test]
     fn test_process_cross_program() {
         #[derive(Debug, Serialize, Deserialize)]
@@ -1889,7 +1940,7 @@ mod tests {
             program_id: &Pubkey,
             keyed_accounts: &[KeyedAccount],
             data: &[u8],
-            _invoke_context: &mut dyn InvokeContext,
+            invoke_context: &mut dyn InvokeContext,
         ) -> Result<(), InstructionError> {
             assert_eq!(*program_id, keyed_accounts[0].owner()?);
             assert_ne!(
@@ -1902,9 +1953,11 @@ mod tests {
                     MockInstruction::NoopSuccess => (),
                     MockInstruction::NoopFail => return Err(InstructionError::GenericError),
                     MockInstruction::ModifyOwned => {
+                        invoke_context.account_data_modified(&keyed_accounts[0].unsigned_key());
                         keyed_accounts[0].try_account_ref_mut()?.data[0] = 1
                     }
                     MockInstruction::ModifyNotOwned => {
+                        invoke_context.account_data_modified(&keyed_accounts[1].unsigned_key());
                         keyed_accounts[1].try_account_ref_mut()?.data[0] = 1
                     }
                 }
@@ -1917,25 +1970,28 @@ mod tests {
         let caller_program_id = solana_sdk::pubkey::new_rand();
         let callee_program_id = solana_sdk::pubkey::new_rand();
 
-        let mut program_account = Account::new(1, 0, &native_loader::id());
-        program_account.executable = true;
+        let program_account = Rc::new(RefCell::new(Account::new(1, 0, &native_loader::id())));
+        program_account.borrow_mut().executable = true;
         let executable_preaccount = PreAccount::new(&callee_program_id, &program_account, true);
-        let executable_accounts = vec![(callee_program_id, RefCell::new(program_account.clone()))];
+        let executable_accounts = vec![(
+            callee_program_id,
+            RefCell::new(program_account.borrow().clone()),
+        )];
 
         let owned_key = solana_sdk::pubkey::new_rand();
-        let owned_account = Account::new(42, 1, &callee_program_id);
+        let owned_account = Rc::new(RefCell::new(Account::new(42, 1, &callee_program_id)));
         let owned_preaccount = PreAccount::new(&owned_key, &owned_account, true);
 
         let not_owned_key = solana_sdk::pubkey::new_rand();
-        let not_owned_account = Account::new(84, 1, &solana_sdk::pubkey::new_rand());
+        let not_owned_account = Rc::new(RefCell::new(Account::new(
+            84,
+            1,
+            &solana_sdk::pubkey::new_rand(),
+        )));
         let not_owned_preaccount = PreAccount::new(&not_owned_key, &not_owned_account, true);
 
         #[allow(unused_mut)]
-        let mut accounts = vec![
-            Rc::new(RefCell::new(owned_account)),
-            Rc::new(RefCell::new(not_owned_account)),
-            Rc::new(RefCell::new(program_account)),
-        ];
+        let mut accounts = vec![owned_account, not_owned_account, program_account];
         let programs: Vec<(_, ProcessInstructionWithContext)> =
             vec![(callee_program_id, mock_process_instruction)];
         let mut invoke_context = ThisInvokeContext::new(
@@ -1961,6 +2017,7 @@ mod tests {
 
         // not owned account modified by the caller (before the invoke)
         accounts[0].borrow_mut().data[0] = 1;
+        invoke_context.account_data_modified(&owned_key);
         let instruction = Instruction::new(
             callee_program_id,
             &MockInstruction::NoopSuccess,
@@ -1984,6 +2041,7 @@ mod tests {
             Err(InstructionError::ExternalAccountDataModified)
         );
         accounts[0].borrow_mut().data[0] = 0;
+        invoke_context.clear_account_data_modified(&owned_key);
 
         let cases = vec![
             (MockInstruction::NoopSuccess, Ok(())),

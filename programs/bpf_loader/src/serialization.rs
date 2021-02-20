@@ -1,7 +1,7 @@
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use solana_sdk::{
     bpf_loader_deprecated, entrypoint::MAX_PERMITTED_DATA_INCREASE, instruction::InstructionError,
-    keyed_account::KeyedAccount, pubkey::Pubkey,
+    keyed_account::KeyedAccount, process_instruction::InvokeContext, pubkey::Pubkey,
 };
 use std::{
     io::prelude::*,
@@ -35,11 +35,12 @@ pub fn deserialize_parameters(
     loader_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
     buffer: &[u8],
+    invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     if *loader_id == bpf_loader_deprecated::id() {
         deserialize_parameters_unaligned(keyed_accounts, buffer)
     } else {
-        deserialize_parameters_aligned(keyed_accounts, buffer)
+        deserialize_parameters_aligned(keyed_accounts, buffer, invoke_context)
     }
 }
 
@@ -202,6 +203,7 @@ pub fn serialize_parameters_aligned(
 pub fn deserialize_parameters_aligned(
     keyed_accounts: &[KeyedAccount],
     buffer: &[u8],
+    context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     let mut start = size_of::<u64>(); // number of accounts
     for (i, keyed_account) in keyed_accounts.iter().enumerate() {
@@ -225,10 +227,16 @@ pub fn deserialize_parameters_aligned(
             start += size_of::<u64>(); // data length
             let mut data_end = start + pre_len;
             if post_len != pre_len
-                && (post_len.saturating_sub(pre_len)) <= MAX_PERMITTED_DATA_INCREASE
+                && post_len.saturating_sub(pre_len) <= MAX_PERMITTED_DATA_INCREASE
             {
+                context.account_data_len_modified(keyed_account.unsigned_key());
                 account.data.resize(post_len, 0);
                 data_end = start + post_len;
+            }
+            let data_changed = account.data.len() != data_end - start
+                || account.data[..] != buffer[start..data_end];
+            if data_changed {
+                context.account_data_modified(keyed_account.unsigned_key());
             }
             account.data.clone_from_slice(&buffer[start..data_end]);
             start += pre_len + MAX_PERMITTED_DATA_INCREASE; // data

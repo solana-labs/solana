@@ -64,6 +64,10 @@ pub trait InvokeContext {
     fn is_feature_active(&self, feature_id: &Pubkey) -> bool;
     /// Get an account from a pre-account
     fn get_account(&self, pubkey: &Pubkey) -> Option<RefCell<Account>>;
+    /// Notify caller when account data field was modified
+    fn account_data_modified(&self, pubkey: &Pubkey);
+    /// Notify caller when account data field was modified
+    fn account_data_len_modified(&self, pubkey: &Pubkey);
 }
 
 /// Convenience macro to log a message with an `Rc<RefCell<dyn Logger>>`
@@ -371,4 +375,6 @@ impl InvokeContext for MockInvokeContext {
     fn get_account(&self, _pubkey: &Pubkey) -> Option<RefCell<Account>> {
         None
     }
+    fn account_data_modified(&self, _pubkey: &Pubkey) {}
+    fn account_data_len_modified(&self, _pubkey: &Pubkey) {}
 }

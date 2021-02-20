@@ -834,7 +834,12 @@ impl Executor for BPFExecutor {
                 }
             }
         }
-        deserialize_parameters(loader_id, parameter_accounts, &parameter_bytes)?;
+        deserialize_parameters(
+            loader_id,
+            parameter_accounts,
+            &parameter_bytes,
+            invoke_context,
+        )?;
         stable_log::program_success(&logger, program_id);
         Ok(())
     }
