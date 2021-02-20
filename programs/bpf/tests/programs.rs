@@ -231,7 +231,7 @@ fn run_program(
             &bpf_loader::id(),
             parameter_accounts,
             &parameter_bytes,
-            &mut invoke_context,
+            &invoke_context,
         )
         .unwrap();
         if i == 1 {

@@ -35,7 +35,7 @@ pub fn deserialize_parameters(
     loader_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
     buffer: &[u8],
-    invoke_context: &mut dyn InvokeContext,
+    invoke_context: &dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     if *loader_id == bpf_loader_deprecated::id() {
         deserialize_parameters_unaligned(keyed_accounts, buffer)
@@ -203,7 +203,7 @@ pub fn serialize_parameters_aligned(
 pub fn deserialize_parameters_aligned(
     keyed_accounts: &[KeyedAccount],
     buffer: &[u8],
-    context: &mut dyn InvokeContext,
+    context: &dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     let mut start = size_of::<u64>(); // number of accounts
     for (i, keyed_account) in keyed_accounts.iter().enumerate() {
