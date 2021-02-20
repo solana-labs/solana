@@ -854,21 +854,23 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
     where
         C: Contains<'a, Slot>,
     {
-        let res = {
+        let is_empty = {
             let mut write_account_map_entry = self.get_account_write_entry(pubkey).unwrap();
             write_account_map_entry.slot_list_mut(|slot_list| {
                 slot_list.retain(|(slot, item)| {
                     let should_purge = slots_to_purge.contains(&slot);
                     if should_purge {
                         reclaims.push((*slot, item.clone()));
+                        false
+                    } else {
+                        true
                     }
-                    !should_purge
                 });
                 slot_list.is_empty()
             })
         };
         self.purge_secondary_indexes_by_inner_key(pubkey, Some(slots_to_purge), account_indexes);
-        res
+        is_empty
     }
 
     pub fn min_ongoing_scan_root(&self) -> Option<Slot> {
@@ -1129,14 +1131,15 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
             if should_purge {
                 reclaims.push((*slot, value.clone()));
                 purged_slots.insert(*slot);
+                false
+            } else {
+                true
             }
-            !should_purge
         });
 
         self.purge_secondary_indexes_by_inner_key(pubkey, Some(&purged_slots), account_indexes);
     }
 
-    // `is_cached` closure is needed to work around the generic (`T`) indexed type.
     pub fn clean_rooted_entries(
         &self,
         pubkey: &Pubkey,

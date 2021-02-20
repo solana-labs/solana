@@ -112,7 +112,7 @@ fn test_bad_bank_hash() {
 
         for (key, account) in &account_refs {
             assert_eq!(
-                db.load_account_hash(&ancestors, &key),
+                db.load_account_hash(&ancestors, &key, None, false).unwrap(),
                 AccountsDb::hash_account(some_slot, &account, &key)
             );
         }
