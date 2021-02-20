@@ -9,8 +9,8 @@ use std::{
 };
 
 pub const DEFAULT_MINIMUM_OBJECT_COUNT: u32 = 1000;
-pub const DEFAULT_SHRINK_RATIO: f64 = 0.80;
-pub const DEFAULT_MAX_ABOVE_SHRINK_RATIO_COUNT: u32 = 10;
+pub const DEFAULT_SHRINK_PCT: u32 = 80;
+pub const DEFAULT_MAX_ABOVE_SHRINK_PCT_COUNT: u32 = 10;
 pub const DEFAULT_CHECK_SHRINK_INTERVAL_MS: u32 = 10000;
 
 enum AllocationDecision<T> {
@@ -74,10 +74,10 @@ impl<T: Default + Reset> Recycler<T> {
 #[derive(Debug)]
 pub struct ObjectPool<T: Reset> {
     objects: Vec<T>,
-    shrink_ratio: f64,
+    shrink_pct: u32,
     minimum_object_count: u32,
-    above_shrink_ratio_count: u32,
-    max_above_shrink_ratio_count: u32,
+    above_shrink_pct_count: u32,
+    max_above_shrink_pct_count: u32,
     check_shrink_interval_ms: u32,
     last_shrink_check_time: Instant,
     pub total_allocated_count: u32,
@@ -87,10 +87,10 @@ impl<T: Default + Reset> Default for ObjectPool<T> {
     fn default() -> Self {
         ObjectPool {
             objects: vec![],
-            shrink_ratio: DEFAULT_SHRINK_RATIO,
+            shrink_pct: DEFAULT_SHRINK_PCT,
             minimum_object_count: DEFAULT_MINIMUM_OBJECT_COUNT,
-            above_shrink_ratio_count: 0,
-            max_above_shrink_ratio_count: DEFAULT_MAX_ABOVE_SHRINK_RATIO_COUNT,
+            above_shrink_pct_count: 0,
+            max_above_shrink_pct_count: DEFAULT_MAX_ABOVE_SHRINK_PCT_COUNT,
             check_shrink_interval_ms: DEFAULT_CHECK_SHRINK_INTERVAL_MS,
             last_shrink_check_time: Instant::now(),
             total_allocated_count: 0,
@@ -111,8 +111,8 @@ impl<T: Default + Reset> ObjectPool<T> {
         self.objects.len()
     }
 
-    fn get_shrink_target(shrink_ratio: f64, current_size: u32) -> u32 {
-        (shrink_ratio * current_size as f64).ceil() as u32
+    fn get_shrink_target(shrink_pct: u32, current_size: u32) -> u32 {
+        ((shrink_pct * current_size) + 99) / 100
     }
 
     fn shrink_if_necessary(
@@ -133,20 +133,19 @@ impl<T: Default + Reset> ObjectPool<T> {
         {
             self.last_shrink_check_time = Instant::now();
             let shrink_threshold_count =
-                Self::get_shrink_target(self.shrink_ratio, self.total_allocated_count);
+                Self::get_shrink_target(self.shrink_pct, self.total_allocated_count);
 
             // If more than the shrink threshold of all allocated objects are sitting doing nothing,
-            // increment the `above_shrink_ratio_count`.
+            // increment the `above_shrink_pct_count`.
             if self.len() > self.minimum_object_count as usize
                 && self.len() > shrink_threshold_count as usize
             {
-                self.above_shrink_ratio_count += 1;
+                self.above_shrink_pct_count += 1;
             } else {
-                self.above_shrink_ratio_count = 0;
+                self.above_shrink_pct_count = 0;
             }
 
-            if self.above_shrink_ratio_count as usize >= self.max_above_shrink_ratio_count as usize
-            {
+            if self.above_shrink_pct_count as usize >= self.max_above_shrink_pct_count as usize {
                 let mut recycler_shrink_elapsed = Measure::start("recycler_shrink");
                 // Do the shrink
                 let target_size = std::cmp::max(self.minimum_object_count, shrink_threshold_count);
@@ -169,7 +168,7 @@ impl<T: Default + Reset> ObjectPool<T> {
                     }
                 }
                 recycler_shrink_elapsed.stop();
-                self.above_shrink_ratio_count = 0;
+                self.above_shrink_pct_count = 0;
                 Some((
                     RecyclerShrinkStats {
                         resulting_size: self.total_allocated_count,
@@ -428,16 +427,16 @@ mod tests {
     #[test]
     fn test_recycler_shrink() {
         let limit = DEFAULT_MINIMUM_OBJECT_COUNT * 2;
-        let max_above_shrink_ratio_count = 2;
-        let shrink_ratio = 0.80;
+        let max_above_shrink_pct_count = 2;
+        let shrink_pct = 80;
         let recycler = PacketsRecycler::new_with_limit("", limit);
         {
             let mut locked_recycler = recycler.recycler.gc.lock().unwrap();
             // Make the shrink interval a long time so shrinking doesn't happen yet
             locked_recycler.check_shrink_interval_ms = std::u32::MAX;
             // Set the count to one so that we shrink on every other allocation later.
-            locked_recycler.max_above_shrink_ratio_count = max_above_shrink_ratio_count;
-            locked_recycler.shrink_ratio = shrink_ratio;
+            locked_recycler.max_above_shrink_pct_count = max_above_shrink_pct_count;
+            locked_recycler.shrink_pct = shrink_pct;
         }
 
         let mut allocated_items = vec![];
@@ -466,23 +465,15 @@ mod tests {
         while current_total_allocated_count != DEFAULT_MINIMUM_OBJECT_COUNT {
             sleep(Duration::from_millis(shrink_interval as u64 * 2));
             recycler.allocate().unwrap();
-            let expected_above_shrink_ratio_count = (i + 1) % max_above_shrink_ratio_count;
+            let expected_above_shrink_pct_count = (i + 1) % max_above_shrink_pct_count;
             assert_eq!(
-                recycler
-                    .recycler
-                    .gc
-                    .lock()
-                    .unwrap()
-                    .above_shrink_ratio_count,
-                (i + 1) % max_above_shrink_ratio_count
+                recycler.recycler.gc.lock().unwrap().above_shrink_pct_count,
+                (i + 1) % max_above_shrink_pct_count
             );
-            if expected_above_shrink_ratio_count == 0 {
+            if expected_above_shrink_pct_count == 0 {
                 // Shrink happened, update the expected `current_total_allocated_count`;
                 current_total_allocated_count = std::cmp::max(
-                    ObjectPool::<u64>::get_shrink_target(
-                        shrink_ratio,
-                        current_total_allocated_count,
-                    ),
+                    ObjectPool::<u64>::get_shrink_target(shrink_pct, current_total_allocated_count),
                     DEFAULT_MINIMUM_OBJECT_COUNT,
                 );
                 assert_eq!(
