@@ -99,6 +99,7 @@ advisory with one of the following, depending on the severity:
 * `[Bounty Category: Critical: Loss of Funds]`
 * `[Bounty Category: Critical: Loss of Availability]`
 * `[Bounty Category: Critical: DoS]`
+* `[Bounty Category: Critical: Other]`
 * `[Bounty Category: Non-critical]`
 * `[Bounty Category: RPC]`
 
