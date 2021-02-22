@@ -41,6 +41,8 @@ pub trait InvokeContext {
     ) -> Result<(), InstructionError>;
     /// Get the program ID of the currently executing program
     fn get_caller(&self) -> Result<&Pubkey, InstructionError>;
+    /// Set the list of keyed accounts
+    fn set_keyed_accounts(&mut self, keyed_accounts: &[KeyedAccount]);
     /// Removes the first keyed account
     fn pop_first_keyed_account(&mut self);
     /// Get the list of keyed accounts
@@ -332,9 +334,9 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
         Ok(&self.key)
     }
     // TODO [KeyedAccounts to InvokeContext refactoring]
-    /*fn set_keyed_accounts(&mut self, keyed_accounts: &'a [KeyedAccount<'a>]) {
-        self.keyed_accounts = keyed_accounts;
-    }*/
+    fn set_keyed_accounts(&mut self, keyed_accounts: &[KeyedAccount]) {
+        self.keyed_accounts = unsafe { std::mem::transmute(keyed_accounts) };
+    }
     fn pop_first_keyed_account(&mut self) {
         self.keyed_accounts = &self.keyed_accounts[1..];
     }

@@ -357,9 +357,9 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             .ok_or(InstructionError::GenericError)
     }
     // TODO [KeyedAccounts to InvokeContext refactoring]
-    /*fn set_keyed_accounts(&mut self, keyed_accounts: &'a [KeyedAccount<'a>]) {
-        self.keyed_accounts = keyed_accounts;
-    }*/
+    fn set_keyed_accounts(&mut self, keyed_accounts: &[KeyedAccount]) {
+        self.keyed_accounts = unsafe { std::mem::transmute(keyed_accounts) };
+    }
     fn pop_first_keyed_account(&mut self) {
         self.keyed_accounts = &self.keyed_accounts[1..];
     }
@@ -897,8 +897,14 @@ impl MessageProcessor {
                 demote_sysvar_write_locks,
             );
             // TODO [KeyedAccounts to InvokeContext refactoring]
-            // let previous_keyed_accounts = invoke_context.get_keyed_accounts();
-            // invoke_context.set_keyed_accounts(&keyed_accounts);
+            let previous_keyed_accounts = {
+                let previous_keyed_accounts = invoke_context.get_keyed_accounts();
+                (
+                    previous_keyed_accounts.as_ptr() as u64,
+                    previous_keyed_accounts.len(),
+                )
+            };
+            invoke_context.set_keyed_accounts(&keyed_accounts);
 
             // Invoke callee
             invoke_context.push(program_id)?;
@@ -921,7 +927,12 @@ impl MessageProcessor {
             invoke_context.pop();
             // TODO [KeyedAccounts to InvokeContext refactoring]
             // invoke_context.set_keyed_accounts(previous_keyed_accounts);
-
+            invoke_context.set_keyed_accounts(unsafe {
+                std::slice::from_raw_parts(
+                    previous_keyed_accounts.0 as *const _,
+                    previous_keyed_accounts.1,
+                )
+            });
             result
         } else {
             // This function is always called with a valid instruction, if that changes return an error
