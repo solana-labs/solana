@@ -197,6 +197,7 @@ fn process_instruction_common(
     use_jit: bool,
 ) -> Result<(), InstructionError> {
     let logger = invoke_context.get_logger();
+    debug_assert_eq!(keyed_accounts, invoke_context.get_keyed_accounts());
 
     let first_account = keyed_account_at_index(keyed_accounts, 0)?;
     if first_account.executable()? {
@@ -779,6 +780,7 @@ impl Executor for BpfExecutor {
     ) -> Result<(), InstructionError> {
         let logger = invoke_context.get_logger();
         let invoke_depth = invoke_context.invoke_depth();
+        debug_assert_eq!(keyed_accounts, invoke_context.get_keyed_accounts());
 
         let mut serialize_time = Measure::start("serialize");
         // TODO [KeyedAccounts to InvokeContext refactoring]

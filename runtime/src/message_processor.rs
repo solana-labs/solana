@@ -597,6 +597,7 @@ impl MessageProcessor {
         instruction_data: &[u8],
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
+        debug_assert_eq!(keyed_accounts, invoke_context.get_keyed_accounts());
         if let Some(root_account) = keyed_accounts.iter().next() {
             let root_id = root_account.unsigned_key();
             if native_loader::check_id(&root_account.owner()?) {

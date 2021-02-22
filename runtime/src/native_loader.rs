@@ -139,6 +139,7 @@ impl NativeLoader {
         instruction_data: &[u8],
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
+        debug_assert_eq!(keyed_accounts, invoke_context.get_keyed_accounts());
         let program = keyed_account_at_index(keyed_accounts, 0)?;
         if native_loader::id() != *program_id {
             error!("Program id mismatch");
