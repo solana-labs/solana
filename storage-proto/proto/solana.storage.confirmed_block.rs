@@ -104,6 +104,8 @@ pub struct UiTokenAmount {
     pub decimals: u32,
     #[prost(string, tag = "3")]
     pub amount: std::string::String,
+    #[prost(string, tag = "4")]
+    pub ui_amount_string: std::string::String,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Reward {

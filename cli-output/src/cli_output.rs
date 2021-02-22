@@ -1439,11 +1439,7 @@ impl fmt::Display for CliTokenAccount {
         writeln!(f)?;
         writeln_name_value(f, "Address:", &self.address)?;
         let account = &self.token_account;
-        writeln_name_value(
-            f,
-            "Balance:",
-            &account.token_amount.real_number_string_trimmed(),
-        )?;
+        writeln_name_value(f, "Balance:", &account.token_amount.ui_amount)?;
         let mint = format!(
             "{}{}",
             account.mint,
@@ -1456,7 +1452,7 @@ impl fmt::Display for CliTokenAccount {
             writeln!(f, "Delegation:")?;
             writeln_name_value(f, "  Delegate:", delegate)?;
             let allowance = account.delegated_amount.as_ref().unwrap();
-            writeln_name_value(f, "  Allowance:", &allowance.real_number_string_trimmed())?;
+            writeln_name_value(f, "  Allowance:", &allowance.ui_amount)?;
         }
         writeln_name_value(
             f,

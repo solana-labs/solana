@@ -12,7 +12,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use pickledb::PickleDb;
 use serde::{Deserialize, Serialize};
 use solana_account_decoder::parse_token::{
-    pubkey_from_spl_token_v2_0, spl_token_v2_0_pubkey, token_amount_to_ui_amount,
+    pubkey_from_spl_token_v2_0, real_number_string, spl_token_v2_0_pubkey,
 };
 use solana_client::{
     client_error::{ClientError, Result as ClientResult},
@@ -103,12 +103,14 @@ pub enum Error {
     ClientError(#[from] ClientError),
     #[error("Missing lockup authority")]
     MissingLockupAuthority,
-    #[error("insufficient funds in {0:?}, requires {1} SOL")]
-    InsufficientFunds(FundingSources, f64),
+    #[error("insufficient funds in {0:?}, requires {1}")]
+    InsufficientFunds(FundingSources, String),
     #[error("Program error")]
     ProgramError(#[from] ProgramError),
     #[error("Exit signal received")]
     ExitSignal,
+    #[error("Cannot support mint decimals that would overflow")]
+    InvalidMintDecimals,
 }
 
 fn merge_allocations(allocations: &[Allocation]) -> Vec<Allocation> {
@@ -273,33 +275,34 @@ fn build_messages(
             Some(allocation.lockup_date.parse::<DateTime<Utc>>().unwrap())
         };
 
-        let (display_amount, decimals, do_create_associated_token_account) =
-            if let Some(spl_token_args) = &args.spl_token_args {
-                let wallet_address = allocation.recipient.parse().unwrap();
-                let associated_token_address = get_associated_token_address(
-                    &wallet_address,
-                    &spl_token_v2_0_pubkey(&spl_token_args.mint),
-                );
-                let do_create_associated_token_account =
-                    client.get_multiple_accounts(&[pubkey_from_spl_token_v2_0(
-                        &associated_token_address,
-                    )])?[0]
-                        .is_none();
-                if do_create_associated_token_account {
-                    *created_accounts += 1;
-                }
-                (
-                    token_amount_to_ui_amount(allocation.amount, spl_token_args.decimals).ui_amount,
-                    spl_token_args.decimals as usize,
-                    do_create_associated_token_account,
-                )
-            } else {
-                (lamports_to_sol(allocation.amount), 9, false)
-            };
-        println!(
-            "{:<44}  {:>24.2$}",
-            allocation.recipient, display_amount, decimals
-        );
+        let do_create_associated_token_account = if let Some(spl_token_args) = &args.spl_token_args
+        {
+            let wallet_address = allocation.recipient.parse().unwrap();
+            let associated_token_address = get_associated_token_address(
+                &wallet_address,
+                &spl_token_v2_0_pubkey(&spl_token_args.mint),
+            );
+            let do_create_associated_token_account = client
+                .get_multiple_accounts(&[pubkey_from_spl_token_v2_0(&associated_token_address)])?
+                [0]
+            .is_none();
+            if do_create_associated_token_account {
+                *created_accounts += 1;
+            }
+            println!(
+                "{:<44}  {:>24}",
+                allocation.recipient,
+                real_number_string(allocation.amount, spl_token_args.decimals)
+            );
+            do_create_associated_token_account
+        } else {
+            println!(
+                "{:<44}  {:>24.9}",
+                allocation.recipient,
+                lamports_to_sol(allocation.amount)
+            );
+            false
+        };
         let instructions = distribution_instructions(
             allocation,
             &new_stake_account_keypair.pubkey(),
@@ -719,7 +722,7 @@ fn check_payer_balances(
         if staker_balance < undistributed_tokens {
             return Err(Error::InsufficientFunds(
                 vec![FundingSource::StakeAccount].into(),
-                lamports_to_sol(undistributed_tokens),
+                lamports_to_sol(undistributed_tokens).to_string(),
             ));
         }
         if args.fee_payer.pubkey() == unlocked_sol_source {
@@ -727,7 +730,7 @@ fn check_payer_balances(
             if balance < fees + total_unlocked_sol {
                 return Err(Error::InsufficientFunds(
                     vec![FundingSource::SystemAccount, FundingSource::FeePayer].into(),
-                    lamports_to_sol(fees + total_unlocked_sol),
+                    lamports_to_sol(fees + total_unlocked_sol).to_string(),
                 ));
             }
         } else {
@@ -735,14 +738,14 @@ fn check_payer_balances(
             if fee_payer_balance < fees {
                 return Err(Error::InsufficientFunds(
                     vec![FundingSource::FeePayer].into(),
-                    lamports_to_sol(fees),
+                    lamports_to_sol(fees).to_string(),
                 ));
             }
             let unlocked_sol_balance = client.get_balance(&unlocked_sol_source)?;
             if unlocked_sol_balance < total_unlocked_sol {
                 return Err(Error::InsufficientFunds(
                     vec![FundingSource::SystemAccount].into(),
-                    lamports_to_sol(total_unlocked_sol),
+                    lamports_to_sol(total_unlocked_sol).to_string(),
                 ));
             }
         }
@@ -751,7 +754,7 @@ fn check_payer_balances(
         if balance < fees + undistributed_tokens {
             return Err(Error::InsufficientFunds(
                 vec![FundingSource::SystemAccount, FundingSource::FeePayer].into(),
-                lamports_to_sol(fees + undistributed_tokens),
+                lamports_to_sol(fees + undistributed_tokens).to_string(),
             ));
         }
     } else {
@@ -759,14 +762,14 @@ fn check_payer_balances(
         if fee_payer_balance < fees {
             return Err(Error::InsufficientFunds(
                 vec![FundingSource::FeePayer].into(),
-                lamports_to_sol(fees),
+                lamports_to_sol(fees).to_string(),
             ));
         }
         let sender_balance = client.get_balance(&distribution_source)?;
         if sender_balance < undistributed_tokens {
             return Err(Error::InsufficientFunds(
                 vec![FundingSource::SystemAccount].into(),
-                lamports_to_sol(undistributed_tokens),
+                lamports_to_sol(undistributed_tokens).to_string(),
             ));
         }
     }
@@ -1415,7 +1418,7 @@ mod tests {
                 sources,
                 vec![FundingSource::SystemAccount, FundingSource::FeePayer].into()
             );
-            assert!((amount - (allocation_amount + fees_in_sol)).abs() < f64::EPSILON);
+            assert_eq!(amount, (allocation_amount + fees_in_sol).to_string());
         } else {
             panic!("check_payer_balances should have errored");
         }
@@ -1452,7 +1455,7 @@ mod tests {
                 sources,
                 vec![FundingSource::SystemAccount, FundingSource::FeePayer].into()
             );
-            assert!((amount - (allocation_amount + fees_in_sol)).abs() < f64::EPSILON);
+            assert_eq!(amount, (allocation_amount + fees_in_sol).to_string());
         } else {
             panic!("check_payer_balances should have errored");
         }
@@ -1508,7 +1511,7 @@ mod tests {
         let err_result = check_payer_balances(1, &allocations, &client, &args).unwrap_err();
         if let Error::InsufficientFunds(sources, amount) = err_result {
             assert_eq!(sources, vec![FundingSource::SystemAccount].into());
-            assert!((amount - allocation_amount).abs() < f64::EPSILON);
+            assert_eq!(amount, allocation_amount.to_string());
         } else {
             panic!("check_payer_balances should have errored");
         }
@@ -1522,7 +1525,7 @@ mod tests {
         let err_result = check_payer_balances(1, &allocations, &client, &args).unwrap_err();
         if let Error::InsufficientFunds(sources, amount) = err_result {
             assert_eq!(sources, vec![FundingSource::FeePayer].into());
-            assert!((amount - fees_in_sol).abs() < f64::EPSILON);
+            assert_eq!(amount, fees_in_sol.to_string());
         } else {
             panic!("check_payer_balances should have errored");
         }
@@ -1609,7 +1612,10 @@ mod tests {
             check_payer_balances(1, &expensive_allocations, &client, &args).unwrap_err();
         if let Error::InsufficientFunds(sources, amount) = err_result {
             assert_eq!(sources, vec![FundingSource::StakeAccount].into());
-            assert!((amount - (expensive_allocation_amount - unlocked_sol)).abs() < f64::EPSILON);
+            assert_eq!(
+                amount,
+                (expensive_allocation_amount - unlocked_sol).to_string()
+            );
         } else {
             panic!("check_payer_balances should have errored");
         }
@@ -1631,7 +1637,7 @@ mod tests {
                 sources,
                 vec![FundingSource::SystemAccount, FundingSource::FeePayer].into()
             );
-            assert!((amount - (unlocked_sol + fees_in_sol)).abs() < f64::EPSILON);
+            assert_eq!(amount, (unlocked_sol + fees_in_sol).to_string());
         } else {
             panic!("check_payer_balances should have errored");
         }
@@ -1668,7 +1674,7 @@ mod tests {
                 sources,
                 vec![FundingSource::SystemAccount, FundingSource::FeePayer].into()
             );
-            assert!((amount - (unlocked_sol + fees_in_sol)).abs() < f64::EPSILON);
+            assert_eq!(amount, (unlocked_sol + fees_in_sol).to_string());
         } else {
             panic!("check_payer_balances should have errored");
         }
@@ -1731,7 +1737,7 @@ mod tests {
         let err_result = check_payer_balances(1, &allocations, &client, &args).unwrap_err();
         if let Error::InsufficientFunds(sources, amount) = err_result {
             assert_eq!(sources, vec![FundingSource::SystemAccount].into());
-            assert!((amount - unlocked_sol).abs() < f64::EPSILON);
+            assert_eq!(amount, unlocked_sol.to_string());
         } else {
             panic!("check_payer_balances should have errored");
         }
@@ -1745,7 +1751,7 @@ mod tests {
         let err_result = check_payer_balances(1, &allocations, &client, &args).unwrap_err();
         if let Error::InsufficientFunds(sources, amount) = err_result {
             assert_eq!(sources, vec![FundingSource::FeePayer].into());
-            assert!((amount - fees_in_sol).abs() < f64::EPSILON);
+            assert_eq!(amount, fees_in_sol.to_string());
         } else {
             panic!("check_payer_balances should have errored");
         }

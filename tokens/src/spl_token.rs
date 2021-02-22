@@ -4,7 +4,8 @@ use crate::{
 };
 use console::style;
 use solana_account_decoder::parse_token::{
-    pubkey_from_spl_token_v2_0, spl_token_v2_0_pubkey, token_amount_to_ui_amount,
+    pubkey_from_spl_token_v2_0, real_number_string, spl_token_v2_0_pubkey,
+    token_amount_to_ui_amount,
 };
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::{instruction::Instruction, native_token::lamports_to_sol};
@@ -109,7 +110,7 @@ pub fn check_spl_token_balances(
     if fee_payer_balance < fees + account_creation_amount {
         return Err(Error::InsufficientFunds(
             vec![FundingSource::FeePayer].into(),
-            lamports_to_sol(fees + account_creation_amount),
+            lamports_to_sol(fees + account_creation_amount).to_string(),
         ));
     }
     let source_token_account = client
@@ -142,20 +143,12 @@ pub fn print_token_balances(
     let (actual, difference) = if let Ok(recipient_token) =
         SplTokenAccount::unpack(&recipient_account.data)
     {
-        let actual_ui_amount =
-            token_amount_to_ui_amount(recipient_token.amount, spl_token_args.decimals).ui_amount;
-        let expected_ui_amount =
-            token_amount_to_ui_amount(expected, spl_token_args.decimals).ui_amount;
+        let actual_ui_amount = real_number_string(recipient_token.amount, spl_token_args.decimals);
+        let delta_string =
+            real_number_string(recipient_token.amount - expected, spl_token_args.decimals);
         (
-            style(format!(
-                "{:>24.1$}",
-                actual_ui_amount, spl_token_args.decimals as usize
-            )),
-            format!(
-                "{:>24.1$}",
-                actual_ui_amount - expected_ui_amount,
-                spl_token_args.decimals as usize
-            ),
+            style(format!("{:>24}", actual_ui_amount)),
+            format!("{:>24}", delta_string),
         )
     } else {
         (
@@ -164,12 +157,11 @@ pub fn print_token_balances(
         )
     };
     println!(
-        "{:<44}  {:>24.4$}  {:>24}  {:>24}",
+        "{:<44}  {:>24}  {:>24}  {:>24}",
         allocation.recipient,
-        token_amount_to_ui_amount(expected, spl_token_args.decimals).ui_amount,
+        real_number_string(expected, spl_token_args.decimals),
         actual,
         difference,
-        spl_token_args.decimals as usize
     );
     Ok(())
 }
