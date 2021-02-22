@@ -268,7 +268,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("split_stake_account")
                         .index(2)
-                        .value_name("ACCOUNT_KEYPAIR")
+                        .value_name("SPLIT_STAKE_ACCOUNT")
                         .takes_value(true)
                         .required(true)
                         .validator(is_valid_signer)
@@ -288,7 +288,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .long("seed")
                         .value_name("STRING")
                         .takes_value(true)
-                        .help("Seed for address generation; if specified, the resulting account will be at a derived address of the SPLIT STAKE ACCOUNT pubkey")
+                        .help("Seed for address generation; if specified, the resulting account will be at a derived address of the SPLIT_STAKE_ACCOUNT pubkey")
                 )
                 .arg(stake_authority_arg())
                 .offline_args()
