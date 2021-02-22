@@ -221,7 +221,7 @@ pub fn process_feature_subcommand(
     }
 }
 
-fn active_stake_by_feature_set(rpc_client: &RpcClient) -> Result<HashMap<u32, u64>, ClientError> {
+fn active_stake_by_feature_set(rpc_client: &RpcClient) -> Result<HashMap<u32, f64>, ClientError> {
     // Validator identity -> feature set
     let feature_set_map = rpc_client
         .get_cluster_nodes()?
@@ -239,7 +239,7 @@ fn active_stake_by_feature_set(rpc_client: &RpcClient) -> Result<HashMap<u32, u6
         .sum();
 
     // Sum all active stake by feature set
-    let mut active_stake_by_feature_set = HashMap::new();
+    let mut active_stake_by_feature_set: HashMap<u32, u64> = HashMap::new();
     for vote_account in vote_accounts.current {
         if let Some(Some(feature_set)) = feature_set_map.get(&vote_account.node_pubkey) {
             *active_stake_by_feature_set.entry(*feature_set).or_default() +=
@@ -251,11 +251,15 @@ fn active_stake_by_feature_set(rpc_client: &RpcClient) -> Result<HashMap<u32, u6
         }
     }
 
-    // Convert active stake to a percentage so the caller doesn't need `total_active_stake`
-    for (_, val) in active_stake_by_feature_set.iter_mut() {
-        *val = *val * 100 / total_active_stake;
-    }
-    Ok(active_stake_by_feature_set)
+    Ok(active_stake_by_feature_set
+        .into_iter()
+        .map(|(feature_set, active_stake)| {
+            (
+                feature_set,
+                active_stake as f64 * 100. / total_active_stake as f64,
+            )
+        })
+        .collect())
 }
 
 // Feature activation is only allowed when 95% of the active stake is on the current feature set
@@ -266,7 +270,7 @@ fn feature_activation_allowed(rpc_client: &RpcClient, quiet: bool) -> Result<boo
 
     let feature_activation_allowed = active_stake_by_feature_set
         .get(&my_feature_set)
-        .map(|percentage| *percentage >= 95)
+        .map(|percentage| *percentage >= 95.)
         .unwrap_or(false);
 
     if !feature_activation_allowed && !quiet {
@@ -288,10 +292,10 @@ fn feature_activation_allowed(rpc_client: &RpcClient, quiet: bool) -> Result<boo
         println!("{}", style("Cluster Feature Sets and Stakes:").bold());
         for (feature_set, percentage) in active_stake_by_feature_set.iter() {
             if *feature_set == 0 {
-                println!("unknown - {}%", percentage);
+                println!("  unknown    - {:.2}%", percentage);
             } else {
                 println!(
-                    "{} - {}% {}",
+                    "  {:<10} - {:.2}% {}",
                     feature_set,
                     percentage,
                     if *feature_set == my_feature_set {
