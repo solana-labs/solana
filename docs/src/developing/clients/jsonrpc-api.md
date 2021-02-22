@@ -675,7 +675,7 @@ The JSON structure of token balances is defined as a list of objects in the foll
 - `uiTokenAmount: <object>` -
   - `amount: <string>` - Raw amount of tokens as a string, ignoring decimals.
   - `decimals: <number>` - Number of decimals configured for token's mint.
-  - `uiAmount: <number>` - Token amount as a float, accounting for decimals.
+  - `uiAmount: <string>` - Token amount as a float, accounting for decimals.
 
 ### getConfirmedBlocks
 
@@ -2334,7 +2334,7 @@ Returns the token balance of an SPL Token account. **UNSTABLE**
 
 The result will be an RpcResponse JSON object with `value` equal to a JSON object containing:
 
-- `uiAmount: <f64>` - the balance, using mint-prescribed decimals
+- `uiAmount: <string>` - the balance, using mint-prescribed decimals
 - `amount: <string>` - the raw balance without decimals, a string representation of u64
 - `decimals: <u8>` - number of base 10 digits to the right of the decimal place
 
@@ -2356,7 +2356,7 @@ Result:
       "slot": 1114
     },
     "value": {
-      "uiAmount": 98.64,
+      "uiAmount": "98.64",
       "amount": "9864",
       "decimals": 2
     },
@@ -2431,7 +2431,7 @@ Result:
             "info": {
               "tokenAmount": {
                 "amount": "1",
-                "uiAmount": 0.1,
+                "uiAmount": "0.1",
                 "decimals": 1
               },
               "delegate": "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T",
@@ -2520,7 +2520,7 @@ Result:
             "info": {
               "tokenAmount": {
                 "amount": "1",
-                "uiAmount": 0.1,
+                "uiAmount": "0.1",
                 "decimals": 1
               },
               "delegate": null,
@@ -2557,7 +2557,7 @@ Returns the 20 largest accounts of a particular SPL Token type. **UNSTABLE**
 The result will be an RpcResponse JSON object with `value` equal to an array of JSON objects containing:
 
 - `address: <string>` - the address of the token account
-- `uiAmount: <f64>` - the token account balance, using mint-prescribed decimals
+- `uiAmount: <string>` - the token account balance, using mint-prescribed decimals
 - `amount: <string>` - the raw token account balance without decimals, a string representation of u64
 - `decimals: <u8>` - number of base 10 digits to the right of the decimal place
 
@@ -2582,13 +2582,13 @@ Result:
         "address": "FYjHNoFtSQ5uijKrZFyYAxvEr87hsKXkXcxkcmkBAf4r",
         "amount": "771",
         "decimals": 2,
-        "uiAmount": 7.71
+        "uiAmount": "7.71"
       },
       {
         "address": "BnsywxTcaYeNUtzrPxQUvzAWxfzZe3ZLUJ4wMMuLESnu",
         "amount": "229",
         "decimals": 2,
-        "uiAmount": 2.29
+        "uiAmount": "2.29"
       }
     ]
   },
@@ -2609,7 +2609,7 @@ Returns the total supply of an SPL Token type. **UNSTABLE**
 
 The result will be an RpcResponse JSON object with `value` equal to a JSON object containing:
 
-- `uiAmount: <f64>` - the total token supply, using mint-prescribed decimals
+- `uiAmount: <string>` - the total token supply, using mint-prescribed decimals
 - `amount: <string>` - the raw total token supply without decimals, a string representation of u64
 - `decimals: <u8>` - number of base 10 digits to the right of the decimal place
 
@@ -2630,7 +2630,7 @@ Result:
       "slot": 1114
     },
     "value": {
-      "uiAmount": 1000,
+      "uiAmount": "1000",
       "amount": "100000",
       "decimals": 2
     }
