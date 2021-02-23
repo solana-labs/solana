@@ -158,13 +158,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             Arg::with_name("bootstrap_validator")
                 .short("b")
                 .long("bootstrap-validator")
-                .value_name("IDENTITY_PUBKEY VOTE_PUBKEY STAKE_PUBKEY")
+                .value_name("IDENTITY_KEYPAIR_JSON_FILE VOTE_KEYPAIR_JSON_FILE STAKE_KEYPAIR_JSON_FILE")
                 .takes_value(true)
                 .validator(is_pubkey_or_keypair)
                 .number_of_values(3)
                 .multiple(true)
                 .required(true)
-                .help("The bootstrap validator's identity, vote and stake pubkeys"),
+                .help("The files containing the bootstrap validator's identity, vote and stake ED25519 keypairs, serialized to JSON arrays (e.g. [12, 154, 94...])"),
         )
         .arg(
             Arg::with_name("ledger_path")
@@ -192,7 +192,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .validator(is_pubkey_or_keypair)
                 .requires("faucet_lamports")
                 .default_value(&default_faucet_pubkey)
-                .help("Path to file containing the faucet's pubkey"),
+                .help("Path to file containing the faucet's ED25519 keypair, serialized to a JSON array (e.g. [12, 154, 94...])"),
         )
         .arg(
             Arg::with_name("bootstrap_stake_authorized_pubkey")
