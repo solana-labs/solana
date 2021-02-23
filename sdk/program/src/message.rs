@@ -335,7 +335,7 @@ impl Message {
         let mut writable_keys = vec![];
         let mut readonly_keys = vec![];
         for (i, key) in self.account_keys.iter().enumerate() {
-            if self.is_writable(i) {
+            if self.is_writable(i) && !crate::sysvar::is_sysvar_id(key) {
                 writable_keys.push(key);
             } else {
                 readonly_keys.push(key);
