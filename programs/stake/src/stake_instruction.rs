@@ -131,8 +131,23 @@ pub enum StakeInstruction {
     ///   1. [SIGNER] Lockup authority
     SetLockup(LockupArgs),
 
-    /// Merge two stake accounts. Both accounts must be deactivated and have identical lockup and
-    /// authority keys.
+    /// Merge two stake accounts.
+    ///
+    /// Both accounts must have identical lockup and authority keys. A merge
+    /// is possible between two stakes in the following states with no additional
+    /// conditions:
+    ///
+    /// * two fully deactivated stakes
+    /// * an inactive stake into a fully activating stake
+    ///
+    /// For the following cases, the voter pubkey and vote credits observed must match:
+    ///
+    /// * two fully activating stakes
+    /// * two fully activated stakes
+    ///
+    /// All other combinations of stake states will fail to merge, including all
+    /// "transient" states, where a stake is activating or deactivating with a
+    /// non-zero effective stake.
     ///
     /// # Account references
     ///   0. [WRITE] Destination stake account for the merge
