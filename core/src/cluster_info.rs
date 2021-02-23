@@ -114,6 +114,8 @@ pub const DEFAULT_CONTACT_DEBUG_INTERVAL_MILLIS: u64 = 10_000;
 pub const DEFAULT_CONTACT_SAVE_INTERVAL_MILLIS: u64 = 60_000;
 /// Minimum serialized size of a Protocol::PullResponse packet.
 const PULL_RESPONSE_MIN_SERIALIZED_SIZE: usize = 161;
+// Limit number of unique pubkeys in the crds table.
+const CRDS_UNIQUE_PUBKEY_CAPACITY: usize = 1024;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ClusterInfoError {
@@ -601,16 +603,6 @@ impl ClusterInfo {
 
     pub fn set_contact_debug_interval(&mut self, new: u64) {
         self.contact_debug_interval = new;
-    }
-
-    pub fn update_contact_info<F>(&self, modify: F)
-    where
-        F: FnOnce(&mut ContactInfo),
-    {
-        let my_id = self.id();
-        modify(&mut self.my_contact_info.write().unwrap());
-        assert_eq!(self.my_contact_info.read().unwrap().id, my_id);
-        self.insert_self()
     }
 
     fn push_self(
@@ -1726,6 +1718,7 @@ impl ClusterInfo {
         stakes: &HashMap<Pubkey, u64>,
         generate_pull_requests: bool,
     ) -> Vec<(SocketAddr, Protocol)> {
+        self.trim_crds_table(CRDS_UNIQUE_PUBKEY_CAPACITY, &stakes);
         let mut pulls: Vec<_> = if generate_pull_requests {
             self.new_pull_requests(&thread_pool, gossip_validators, stakes)
         } else {
@@ -1837,6 +1830,31 @@ impl ClusterInfo {
             .time_gossip_write_lock("purge", &self.stats.purge)
             .purge(thread_pool, timestamp(), &timeouts);
         inc_new_counter_info!("cluster_info-purge-count", num_purged);
+    }
+
+    // Trims the CRDS table by dropping all values associated with the pubkeys
+    // with the lowest stake, so that the number of unique pubkeys are bounded.
+    fn trim_crds_table(&self, cap: usize, stakes: &HashMap<Pubkey, u64>) {
+        if !self.gossip.read().unwrap().crds.should_trim(cap) {
+            return;
+        }
+        let keep: Vec<_> = self
+            .entrypoints
+            .read()
+            .unwrap()
+            .iter()
+            .map(|k| k.id)
+            .chain(std::iter::once(self.id))
+            .collect();
+        let mut gossip = self.gossip.write().unwrap();
+        match gossip.crds.trim(cap, &keep, stakes) {
+            Err(err) => error!("crds table trim failed: {:?}", err),
+            Ok(purged_values) => gossip.pull.purged_values.extend(
+                purged_values
+                    .into_iter()
+                    .map(|v| (v.value_hash, v.local_timestamp)),
+            ),
+        }
     }
 
     /// randomly pick a node and ask them for updates asynchronously
@@ -2663,6 +2681,7 @@ impl ClusterInfo {
             response_sender,
         );
         self.handle_batch_pull_responses(pull_responses, thread_pool, &stakes, epoch_time_ms);
+        self.trim_crds_table(CRDS_UNIQUE_PUBKEY_CAPACITY, &stakes);
         self.handle_batch_pong_messages(pong_messages, Instant::now());
         self.handle_batch_pull_requests(
             pull_requests,
@@ -3717,40 +3736,6 @@ mod tests {
             .crds
             .lookup(&label)
             .is_some());
-    }
-    #[test]
-    #[should_panic]
-    fn test_update_contact_info() {
-        let d = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
-        let cluster_info = ClusterInfo::new_with_invalid_keypair(d);
-        let entry_label = CrdsValueLabel::ContactInfo(cluster_info.id());
-        assert!(cluster_info
-            .gossip
-            .read()
-            .unwrap()
-            .crds
-            .lookup(&entry_label)
-            .is_some());
-
-        let now = timestamp();
-        cluster_info.update_contact_info(|ci| ci.wallclock = now);
-        assert_eq!(
-            cluster_info
-                .gossip
-                .read()
-                .unwrap()
-                .crds
-                .lookup(&entry_label)
-                .unwrap()
-                .contact_info()
-                .unwrap()
-                .wallclock,
-            now
-        );
-
-        // Inserting Contactinfo with different pubkey should panic,
-        // and update should fail
-        cluster_info.update_contact_info(|ci| ci.id = solana_sdk::pubkey::new_rand())
     }
 
     fn assert_in_range(x: u16, range: (u16, u16)) {
