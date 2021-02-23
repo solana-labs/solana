@@ -9,7 +9,7 @@ use {
     solana_banks_server::banks_server::start_local_server,
     solana_program::{
         account_info::AccountInfo, entrypoint::ProgramResult, fee_calculator::FeeCalculator,
-        hash::Hash, instruction::Instruction, instruction::InstructionError, message::Message,
+        hash::Hash, instruction::Instruction, instruction::InstructionError,
         native_token::sol_to_lamports, program_error::ProgramError, program_stubs, pubkey::Pubkey,
         rent::Rent,
     },
@@ -18,6 +18,7 @@ use {
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
         genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
+        message_processor::MessageProcessor,
     },
     solana_sdk::{
         account::Account,
@@ -215,7 +216,7 @@ impl program_stubs::SyscallStubs for SyscallStubs {
         let invoke_context = get_invoke_context();
         let logger = invoke_context.get_logger();
 
-        let caller = *invoke_context.get_caller().expect("get_caller");
+        let caller_program_id = *invoke_context.get_caller().expect("get_caller");
         if instruction.accounts.len() + 1 != account_infos.len() {
             panic!(
                 "Instruction accounts mismatch.  Instruction contains {} accounts, with {}
@@ -224,19 +225,13 @@ impl program_stubs::SyscallStubs for SyscallStubs {
                 account_infos.len()
             );
         }
-        let message = Message::new(&[instruction.clone()], None);
-        let program_id_index = message.instructions[0].program_id_index as usize;
-        let program_id = message.account_keys[program_id_index];
-        let program_account_info = &account_infos[program_id_index];
-        // TODO don't have the caller's keyed_accounts so can't validate writer or signer escalation or deescalation yet
-        let caller_privileges = message
-            .account_keys
+        let callee_program_id = instruction.program_id;
+        let program_account_info = account_infos
             .iter()
-            .enumerate()
-            .map(|(i, _)| message.is_writable(i))
-            .collect::<Vec<bool>>();
+            .find(|account_info| callee_program_id == *account_info.key)
+            .expect("Program AccountInfo not passed to invoke");
 
-        stable_log::program_invoke(&logger, &program_id, invoke_context.invoke_depth());
+        stable_log::program_invoke(&logger, &callee_program_id, invoke_context.invoke_depth());
 
         fn ai_to_a(ai: &AccountInfo) -> Account {
             Account {
@@ -247,13 +242,16 @@ impl program_stubs::SyscallStubs for SyscallStubs {
                 rent_epoch: ai.rent_epoch,
             }
         }
-        let executables = vec![(program_id, RefCell::new(ai_to_a(program_account_info)))];
+        let executables = vec![(
+            callee_program_id,
+            RefCell::new(ai_to_a(program_account_info)),
+        )];
 
         // Convert AccountInfos into Accounts
         let mut accounts = vec![];
-        for key in &message.account_keys {
+        for meta in &instruction.accounts {
             for account_info in account_infos {
-                if account_info.unsigned_key() == key {
+                if *account_info.unsigned_key() == meta.pubkey {
                     accounts.push(Rc::new(RefCell::new(ai_to_a(account_info))));
                     break;
                 }
@@ -261,7 +259,7 @@ impl program_stubs::SyscallStubs for SyscallStubs {
         }
         assert_eq!(
             accounts.len(),
-            message.account_keys.len(),
+            instruction.accounts.len(),
             "Missing or not enough accounts passed to invoke"
         );
 
@@ -274,7 +272,8 @@ impl program_stubs::SyscallStubs for SyscallStubs {
                 {
                     let mut program_signer = false;
                     for seeds in signers_seeds.iter() {
-                        let signer = Pubkey::create_program_address(&seeds, &caller).unwrap();
+                        let signer =
+                            Pubkey::create_program_address(&seeds, &caller_program_id).unwrap();
                         if instruction_account.pubkey == signer {
                             program_signer = true;
                             break;
@@ -287,13 +286,19 @@ impl program_stubs::SyscallStubs for SyscallStubs {
             }
         }
 
-        invoke_context.record_instruction(&instruction);
-
-        solana_runtime::message_processor::MessageProcessor::process_cross_program_instruction(
-            &message,
+        let callee_keyed_accounts = MessageProcessor::create_keyed_accounts_with_instruction(
+            &instruction,
             &executables,
             &accounts,
-            &caller_privileges,
+        );
+        let caller_keyed_accounts = callee_keyed_accounts.clone();
+
+        invoke_context.record_instruction(&instruction);
+
+        MessageProcessor::process_cross_program_instruction(
+            &instruction,
+            &caller_keyed_accounts,
+            &callee_keyed_accounts,
             invoke_context,
         )
         .map_err(|err| ProgramError::try_from(err).unwrap_or_else(|err| panic!("{}", err)))?;
@@ -333,7 +338,7 @@ impl program_stubs::SyscallStubs for SyscallStubs {
             }
         }
 
-        stable_log::program_success(&logger, &program_id);
+        stable_log::program_success(&logger, &callee_program_id);
         Ok(())
     }
 }

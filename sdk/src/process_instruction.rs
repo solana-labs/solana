@@ -1,8 +1,7 @@
 use solana_sdk::{
     account::Account,
-    instruction::{CompiledInstruction, Instruction, InstructionError},
+    instruction::{Instruction, InstructionError},
     keyed_account::KeyedAccount,
-    message::Message,
     pubkey::Pubkey,
 };
 use std::{cell::RefCell, fmt::Debug, rc::Rc, sync::Arc};
@@ -34,10 +33,8 @@ pub trait InvokeContext {
     /// Verify and update PreAccount state based on program execution
     fn verify_and_update(
         &mut self,
-        message: &Message,
-        instruction: &CompiledInstruction,
-        accounts: &[Rc<RefCell<Account>>],
-        caller_pivileges: Option<&[bool]>,
+        instruction: &Instruction,
+        keyed_accounts: &[KeyedAccount],
     ) -> Result<(), InstructionError>;
     /// Get the program ID of the currently executing program
     fn get_caller(&self) -> Result<&Pubkey, InstructionError>;
@@ -303,10 +300,8 @@ impl InvokeContext for MockInvokeContext {
     }
     fn verify_and_update(
         &mut self,
-        _message: &Message,
-        _instruction: &CompiledInstruction,
-        _accounts: &[Rc<RefCell<Account>>],
-        _caller_pivileges: Option<&[bool]>,
+        _instruction: &Instruction,
+        _keyed_accounts: &[KeyedAccount],
     ) -> Result<(), InstructionError> {
         Ok(())
     }

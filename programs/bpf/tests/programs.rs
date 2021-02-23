@@ -1021,6 +1021,8 @@ fn test_program_bpf_invoke_sanity() {
 #[cfg(feature = "bpf_rust")]
 #[test]
 fn test_program_bpf_program_id_spoofing() {
+    solana_logger::setup();
+
     let GenesisConfigInfo {
         genesis_config,
         mint_keypair,
@@ -1074,6 +1076,8 @@ fn test_program_bpf_program_id_spoofing() {
 #[cfg(feature = "bpf_rust")]
 #[test]
 fn test_program_bpf_caller_has_access_to_cpi_program() {
+    solana_logger::setup();
+
     let GenesisConfigInfo {
         genesis_config,
         mint_keypair,

@@ -438,7 +438,7 @@ fn process_loader_upgradeable_instruction(
                     programdata_len as u64,
                     program_id,
                 ),
-                &[payer, programdata, system],
+                &[payer.clone(), programdata.clone(), system.clone()],
                 &[&[program.unsigned_key().as_ref(), &[bump_seed]]],
             )?;
 
