@@ -3979,6 +3979,14 @@ impl AccountsDB {
             let (sorted_data_by_pubkey, _sort_time) = Self::sort_hash_intermediate(outer);
             // note that sorted_data_by_pubkey can contain multiple entries per pubkey, sorted by -slot, -version
 
+            {
+                error!("Dumping raw account info from store scan");
+                for compare_index in 0..sorted_data_by_pubkey.len() {
+                    let compare_item = &sorted_data_by_pubkey[compare_index];
+                    error!("raw_account_data {:?}", compare_item);
+                }
+            }
+
             // clipped and modified from calculate_accounts_hash
             {
                 let mut compare_index = 0;
