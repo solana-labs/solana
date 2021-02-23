@@ -28,7 +28,7 @@ use solana_client::{
     rpc_request::{
         TokenAccountsFilter, DELINQUENT_VALIDATOR_SLOT_DISTANCE, MAX_GET_CONFIRMED_BLOCKS_RANGE,
         MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT,
-        MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE,
+        MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE, MAX_GET_PROGRAM_ACCOUNT_FILTERS,
         MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS, MAX_MULTIPLE_ACCOUNTS, NUM_LARGEST_ACCOUNTS,
     },
     rpc_response::Response as RpcResponse,
@@ -2223,6 +2223,12 @@ impl RpcSol for RpcSolImpl {
         } else {
             (None, vec![])
         };
+        if filters.len() > MAX_GET_PROGRAM_ACCOUNT_FILTERS {
+            return Err(Error::invalid_params(format!(
+                "Too many filters provided; max {}",
+                MAX_GET_PROGRAM_ACCOUNT_FILTERS
+            )));
+        }
         for filter in &filters {
             verify_filter(filter)?;
         }
