@@ -242,9 +242,8 @@ as if it had the private key to sign the transaction.
 ```rust,ignore
 fn transfer_one_token_from_escrow(
     program_id: &Pubkey,
-    keyed_accounts: &[KeyedAccount]
-) -> Result<()> {
-
+    accounts: &[AccountInfo],
+) -> ProgramResult {
     // User supplies the destination
     let alice_pubkey = keyed_accounts[1].unsigned_key();
 
@@ -258,7 +257,7 @@ fn transfer_one_token_from_escrow(
     // executing program ID and the supplied keywords.
     // If the derived address matches a key marked as signed in the instruction
     // then that key is accepted as signed.
-    invoke_signed(&instruction,  &[&["escrow"]])?
+    invoke_signed(&instruction, accounts, &[&["escrow"]])
 }
 ```
 
