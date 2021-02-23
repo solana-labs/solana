@@ -1,7 +1,7 @@
 // @flow
 
 import {Buffer} from 'buffer';
-import {struct} from 'superstruct';
+import {create, optional, string, type as pick} from 'superstruct';
 
 import * as Layout from './layout';
 import * as shortvec from './util/shortvec-encoding';
@@ -35,11 +35,11 @@ export type Info = {|
   keybaseUsername?: string,
 |};
 
-const InfoString = struct({
-  name: 'string',
-  website: 'string?',
-  details: 'string?',
-  keybaseUsername: 'string?',
+const InfoString = pick({
+  name: string(),
+  website: optional(string()),
+  details: optional(string()),
+  keybaseUsername: optional(string()),
 });
 
 /**
@@ -94,7 +94,7 @@ export class ValidatorInfo {
     if (configKeys[0].publicKey.equals(VALIDATOR_INFO_KEY)) {
       if (configKeys[1].isSigner) {
         const rawInfo = Layout.rustString().decode(Buffer.from(byteArray));
-        const info = InfoString(JSON.parse(rawInfo));
+        const info = create(JSON.parse(rawInfo), InfoString);
         return new ValidatorInfo(configKeys[1].publicKey, info);
       }
     }
