@@ -16,7 +16,7 @@ export type InstructionType = {
 /**
  * Populate a buffer of instruction data using an InstructionType
  */
-export function encodeData(type: InstructionType, fields: Object): Buffer {
+export function encodeData(type: InstructionType, fields?: any): Buffer {
   const allocLength =
     type.layout.span >= 0 ? type.layout.span : Layout.getAlloc(type, fields);
   const data = Buffer.alloc(allocLength);
@@ -28,7 +28,7 @@ export function encodeData(type: InstructionType, fields: Object): Buffer {
 /**
  * Decode instruction data buffer using an InstructionType
  */
-export function decodeData(type: InstructionType, buffer: Buffer): Object {
+export function decodeData(type: InstructionType, buffer: Buffer): any {
   let data;
   try {
     data = type.layout.decode(buffer);

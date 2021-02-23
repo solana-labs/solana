@@ -18,8 +18,7 @@
     "outDir": "lib/types",
     "baseUrl": "src",
     "noFallthroughCasesInSwitch": true,
-    "noImplicitReturns": true,
-    "noUncheckedIndexedAccess": true
+    "noImplicitReturns": true
   },
   "include": ["src/index.ts", "src/connection.ts", "src/agent-manager.ts"]
 }

@@ -9,6 +9,7 @@ import {PublicKey} from './publickey';
 import {Account} from './account';
 import * as shortvec from './util/shortvec-encoding';
 import type {Blockhash} from './blockhash';
+import { toBuffer } from 'util/to-buffer';
 
 /**
  * @typedef {string} TransactionSignature
@@ -234,6 +235,12 @@ export class Transaction {
       throw new Error('Transaction fee payer required');
     }
 
+    for (let instruction of this.instructions) {
+      if (instruction.programId === undefined) {
+        throw new Error("Instruction does not have program id");
+      }
+    }
+
     const programIds: string[] = [];
     const accountMetas: AccountMeta[] = [];
     this.instructions.forEach(instruction => {
@@ -241,7 +248,7 @@ export class Transaction {
         accountMetas.push({...accountMeta});
       });
 
-      const programId = instruction.programId.toString();
+      const programId = (instruction.programId as PublicKey).toString();
       if (!programIds.includes(programId)) {
         programIds.push(programId);
       }
@@ -342,7 +349,7 @@ export class Transaction {
       instruction => {
         const {data, programId} = instruction;
         return {
-          programIdIndex: accountKeys.indexOf(programId.toString()),
+          programIdIndex: accountKeys.indexOf((programId as PublicKey).toString()),
           accounts: instruction.keys.map(meta =>
             accountKeys.indexOf(meta.pubkey.toString()),
           ),
@@ -508,7 +515,7 @@ export class Transaction {
     const signData = message.serialize();
     signers.forEach(signer => {
       const signature = nacl.sign.detached(signData, signer.secretKey);
-      this._addSignature(signer.publicKey, signature);
+      this._addSignature(signer.publicKey, toBuffer(signature));
     });
   }
 
@@ -590,7 +597,7 @@ export class Transaction {
    */
   _serialize(signData: Buffer): Buffer {
     const {signatures} = this;
-    const signatureCount = [];
+    const signatureCount: number[] = [];
     shortvec.encodeLength(signatureCount, signatures.length);
     const transactionLength =
       signatureCount.length + signatures.length * 64 + signData.length;
@@ -630,7 +637,7 @@ export class Transaction {
    * Deprecated method
    * @private
    */
-  get programId(): PublicKey {
+  get programId(): PublicKey | undefined {
     invariant(this.instructions.length === 1);
     return this.instructions[0].programId;
   }

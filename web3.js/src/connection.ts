@@ -31,18 +31,16 @@ import {AgentManager} from './agent-manager';
 // import {NonceAccount} from './nonce-account';
 import {PublicKey} from './publickey';
 // import {MS_PER_SLOT} from './timing';
-// import {Transaction} from './transaction';
-// import {Message} from './message';
+import {Transaction} from './transaction';
+import {Message} from './message';
 import {sleep} from './util/sleep';
 // import {promiseTimeout} from './util/promise-timeout';
 // import {toBuffer} from './util/to-buffer';
 import type {Blockhash} from './blockhash';
 import type {FeeCalculator} from './fee-calculator';
-import { Key } from 'readline';
-import { isMainThread } from 'worker_threads';
 // import type {Account} from './account';
 // import type {TransactionSignature} from './transaction';
-// import type {CompiledInstruction} from './message';
+import type {CompiledInstruction} from './message';
 
 const PublicKeyFromString = coerce(instance(PublicKey), string(),
   (value) => new PublicKey(value)
@@ -464,7 +462,7 @@ const EpochSchedule: Describe<EpochSchedule> = type({
 
 // const GetLeaderScheduleResult = struct.record([
 //   string(),
-//   'any', // validating struct.array([number()]) is extremely slow
+//   'any', // validating array(number()]) is extremely slow
 // ]);
 
 /**
@@ -508,7 +506,7 @@ const Version: Describe<Version> = type({
 // const SimulatedTransactionResponseValidator = jsonRpcResultAndContext(
 //   struct.pick({
 //     err: struct.union(['null', 'object', string()]),
-//     logs: struct.union(['null', struct.array([string()])]),
+//     logs: struct.union(['null', array(string()])]),
 //   }),
 // );
 
@@ -517,11 +515,46 @@ const Version: Describe<Version> = type({
 //   instructions: (ParsedInstruction | PartiallyDecodedInstruction)[];
 // };
 
-// type TokenBalance = {
-//   accountIndex: number;
-//   mint: string;
-//   uiTokenAmount: TokenAmount;
-// };
+/**
+ * Token amount object which returns a token amount in different formats
+ * for various client use cases.
+ * @public
+ */
+export interface TokenAmount {
+  /**
+   * Raw amount of tokens as string ignoring decimals.
+   */
+  amount: string;
+  /**
+   * Number of decimals configured for token's mint.
+   */
+  decimals: number;
+  /**
+   * Token account as float, accounts for decimals.
+   */
+  uiAmount: number;
+};
+
+const TokenAmount = type({
+  amount: string(),
+  uiAmount: number(),
+  decimals: number(),
+});
+
+/**
+ * @public
+ */
+export interface TokenBalance {
+  accountIndex: number;
+  mint: string;
+  uiTokenAmount: TokenAmount;
+};
+
+const TokenBalance = type({
+  accountIndex: number(),
+  mint: string(),
+  uiTokenAmount: TokenAmount,
+});
 
 // /**
 //  * Metadata for a parsed confirmed transaction on the ledger
@@ -547,34 +580,53 @@ const Version: Describe<Version> = type({
 //   err: TransactionError | null;
 // };
 
-// type CompiledInnerInstruction = {
-//   index: number;
-//   instructions: CompiledInstruction[];
-// };
+/**
+ * Compact form of inner instruction metadata
+ * @public
+ */
+export interface CompiledInnerInstruction {
+  index: number;
+  instructions: CompiledInstruction[];
+};
 
-// /**
-//  * Metadata for a confirmed transaction on the ledger
-//  *
-//  * @typedef {Object} ConfirmedTransactionMeta
-//  * @property {number} fee The fee charged for processing the transaction
-//  * @property {Array<CompiledInnerInstruction>} innerInstructions An array of cross program invoked instructions
-//  * @property {Array<number>} preBalances The balances of the transaction accounts before processing
-//  * @property {Array<number>} postBalances The balances of the transaction accounts after processing
-//  * @property {Array<string>} logMessages An array of program log messages emitted during a transaction
-//  * @property {Array<TokenBalance>} preTokenBalances The token balances of the transaction accounts before processing
-//  * @property {Array<TokenBalance>} postTokenBalances The token balances of the transaction accounts after processing
-//  * @property {object|null} err The error result of transaction processing
-//  */
-// type ConfirmedTransactionMeta = {
-//   fee: number;
-//   innerInstructions?: CompiledInnerInstruction[];
-//   preBalances: Array<number>;
-//   postBalances: Array<number>;
-//   logMessages?: Array<string>;
-//   preTokenBalances?: Array<TokenBalance>;
-//   postTokenBalances?: Array<TokenBalance>;
-//   err: TransactionError | null;
-// };
+/**
+ * Metadata for a confirmed transaction on the ledger
+ * @public
+ */
+export interface ConfirmedTransactionMeta {
+  /**
+   * The fee charged for processing the transaction
+   */
+  fee: number;
+  /**
+   * An array of cross program invoked instructions
+   */
+  innerInstructions?: CompiledInnerInstruction[] | null;
+  /**
+   * The balances of the transaction accounts before processing
+   */
+  preBalances: Array<number>;
+  /**
+   * The balances of the transaction accounts after processing
+   */
+  postBalances: Array<number>;
+  /**
+   * An array of program log messages emitted during a transaction
+   */
+  logMessages?: Array<string> | null;
+  /**
+   * The token balances of the transaction accounts before processing
+   */
+  preTokenBalances?: Array<TokenBalance> | null;
+  /**
+   * The token balances of the transaction accounts after processing
+   */
+  postTokenBalances?: Array<TokenBalance> | null;
+  /**
+   * The error result of transaction processing
+   */
+  err: TransactionError | null;
+};
 
 // /**
 //  * A confirmed transaction on the ledger
@@ -723,6 +775,61 @@ const KeyedParsedAccountInfo = type({
 //   blockTime?: number | null;
 // };
 
+const ConfirmedTransactionMetaResult = type({
+  err: TransactionError,
+  fee: number(),
+  innerInstructions: optional(nullable(
+    array(
+      type({
+        index: number(),
+        instructions: array(
+          type({
+            accounts: array(number()),
+            data: string(),
+            programIdIndex: number(),
+          }),
+        ),
+      }),
+    ),
+  )),
+  preBalances: array(number()),
+  postBalances: array(number()),
+  logMessages: optional(nullable(array(string()))),
+  preTokenBalances: optional(nullable(
+    array(TokenBalance)
+  )),
+  postTokenBalances: optional(nullable(
+    array(TokenBalance)
+  )),
+});
+
+const ConfirmedTransactionResult = type({
+  signatures: array(string()),
+  message: type({
+    accountKeys: array(string()),
+    header: type({
+      numRequiredSignatures: number(),
+      numReadonlySignedAccounts: number(),
+      numReadonlyUnsignedAccounts: number(),
+    }),
+    instructions: array(
+      type({
+        accounts: array(number()),
+        data: string(),
+        programIdIndex: number(),
+      }),
+    ),
+    recentBlockhash: string(),
+  }),
+});
+
+const TransactionFromConfirmed = coerce(instance(Transaction), ConfirmedTransactionResult,
+  (result) => {
+    const {message, signatures} = result;
+    return Transaction.populate(new Message(message), signatures);
+  }
+);
+
 /**
  * A ConfirmedBlock on the ledger
  */
@@ -763,8 +870,8 @@ const ConfirmedBlock = type({
   parentSlot: number(),
   transactions: array(
     type({
-      transaction: ConfirmedTransactionResult,
-      meta: ConfirmedTransactionMetaResult,
+      transaction: TransactionFromConfirmed,
+      meta: nullable(ConfirmedTransactionMetaResult),
     }),
   ),
   rewards: optional(
@@ -772,8 +879,8 @@ const ConfirmedBlock = type({
       type({
         pubkey: string(),
         lamports: number(),
-        postBalance: optional(number()),
-        rewardType: optional(string()),
+        postBalance: nullable(number()),
+        rewardType: nullable(string()),
       }),
     ),
   ),
@@ -907,35 +1014,6 @@ const Supply: Describe<Supply> = type({
   circulating: number(),
   nonCirculating: number(),
   nonCirculatingAccounts: array(PublicKeyFromString),
-});
-
-/**
- * Token amount object which returns a token amount in different formats
- * for various client use cases.
- * @public
- */
-export interface TokenAmount {
-  /**
-   * Raw amount of tokens as string ignoring decimals.
-   */
-  amount: string;
-  /**
-   * Number of decimals configured for token's mint.
-   */
-  decimals: number;
-  /**
-   * Token account as float, accounts for decimals.
-   */
-  uiAmount: number;
-};
-
-/**
- * Expected JSON RPC structure for token amounts
- */
-const TokenAmount = type({
-  amount: string(),
-  uiAmount: number(),
-  decimals: number(),
 });
 
 /**
@@ -1083,7 +1161,7 @@ const StakeActivationData = type({
 //  * Expected JSON RPC response for the "getConfirmedSignaturesForAddress" message
 //  */
 // const GetConfirmedSignaturesForAddressRpcResult = jsonRpcResult(
-//   struct.array([string()]),
+//   array(string()]),
 // );
 
 // /**
@@ -1091,7 +1169,7 @@ const StakeActivationData = type({
 //  */
 
 // const GetConfirmedSignaturesForAddress2RpcResult = jsonRpcResult(
-//   struct.array([
+//   array(
 //     struct.pick({
 //       signature: string(),
 //       slot: number(),
@@ -1155,7 +1233,7 @@ const StakeActivationData = type({
 //  * Expected JSON RPC response for the "getProgramAccounts" message
 //  */
 // const GetParsedProgramAccountsRpcResult = jsonRpcResult(
-//   struct.array([ParsedProgramAccountInfoResult]),
+//   array(ParsedProgramAccountInfoResult]),
 // );
 
 // /**
@@ -1173,7 +1251,7 @@ const StakeActivationData = type({
 //  * Expected JSON RPC response for the "getSignatureStatuses" message
 //  */
 // const GetSignatureStatusesRpcResult = jsonRpcResultAndContext(
-//   struct.array([
+//   array(
 //     struct.union([
 //       'null',
 //       struct.pick({
@@ -1196,46 +1274,24 @@ const StakeActivationData = type({
 //  */
 // const GetTotalSupplyRpcResult = jsonRpcResult(number());
 
-// /**
-//  * @private
-//  */
-// const ConfirmedTransactionResult = type({
-//   signatures: struct.array([string()]),
-//   message: type({
-//     accountKeys: struct.array([string()]),
-//     header: type({
-//       numRequiredSignatures: number(),
-//       numReadonlySignedAccounts: number(),
-//       numReadonlyUnsignedAccounts: number(),
-//     }),
-//     instructions: struct.array([
-//       type({
-//         accounts: struct.array([number()]),
-//         data: string(),
-//         programIdIndex: number(),
-//       }),
-//     ]),
-//     recentBlockhash: string(),
-//   }),
-// });
 
 // /**
 //  * @private
 //  */
 // const ParsedConfirmedTransactionResult = type({
-//   signatures: struct.array([string()]),
+//   signatures: array(string()]),
 //   message: type({
-//     accountKeys: struct.array([
+//     accountKeys: array(
 //       type({
 //         pubkey: string(),
 //         signer: boolean(),
 //         writable: boolean(),
 //       }),
 //     ]),
-//     instructions: struct.array([
+//     instructions: array(
 //       struct.union([
 //         type({
-//           accounts: struct.array([string()]),
+//           accounts: array(string()]),
 //           data: string(),
 //           programId: string(),
 //         }),
@@ -1253,78 +1309,19 @@ const StakeActivationData = type({
 // /**
 //  * @private
 //  */
-// const ConfirmedTransactionMetaResult = struct.union([
-//   'null',
-//   struct.pick({
-//     err: TransactionErrorResult,
-//     fee: number(),
-//     innerInstructions: struct.union([
-//       struct.array([
-//         type({
-//           index: number(),
-//           instructions: struct.array([
-//             type({
-//               accounts: struct.array([number()]),
-//               data: string(),
-//               programIdIndex: number(),
-//             }),
-//           ]),
-//         }),
-//       ]),
-//       'null',
-//       'undefined',
-//     ]),
-//     preBalances: struct.array([number()]),
-//     postBalances: struct.array([number()]),
-//     logMessages: struct.union([struct.array([string()]), 'null', 'undefined']),
-//     preTokenBalances: struct.union([
-//       struct.array([
-//         struct.pick({
-//           accountIndex: number(),
-//           mint: string(),
-//           uiTokenAmount: struct.pick({
-//             amount: string(),
-//             decimals: number(),
-//             uiAmount: number(),
-//           }),
-//         }),
-//       ]),
-//       'null',
-//       'undefined',
-//     ]),
-//     postTokenBalances: struct.union([
-//       struct.array([
-//         struct.pick({
-//           accountIndex: number(),
-//           mint: string(),
-//           uiTokenAmount: struct.pick({
-//             amount: string(),
-//             decimals: number(),
-//             uiAmount: number(),
-//           }),
-//         }),
-//       ]),
-//       'null',
-//       'undefined',
-//     ]),
-//   }),
-// ]);
-// /**
-//  * @private
-//  */
 // const ParsedConfirmedTransactionMetaResult = struct.union([
 //   'null',
 //   struct.pick({
 //     err: TransactionErrorResult,
 //     fee: number(),
 //     innerInstructions: struct.union([
-//       struct.array([
+//       array(
 //         type({
 //           index: number(),
-//           instructions: struct.array([
+//           instructions: array(
 //             struct.union([
 //               type({
-//                 accounts: struct.array([string()]),
+//                 accounts: array(string()]),
 //                 data: string(),
 //                 programId: string(),
 //               }),
@@ -1340,11 +1337,11 @@ const StakeActivationData = type({
 //       'null',
 //       'undefined',
 //     ]),
-//     preBalances: struct.array([number()]),
-//     postBalances: struct.array([number()]),
-//     logMessages: struct.union([struct.array([string()]), 'null', 'undefined']),
+//     preBalances: array(number()]),
+//     postBalances: array(number()]),
+//     logMessages: struct.union([array(string()]), 'null', 'undefined']),
 //     preTokenBalances: struct.union([
-//       struct.array([
+//       array(
 //         struct.pick({
 //           accountIndex: number(),
 //           mint: string(),
@@ -1359,7 +1356,7 @@ const StakeActivationData = type({
 //       'undefined',
 //     ]),
 //     postTokenBalances: struct.union([
-//       struct.array([
+//       array(
 //         struct.pick({
 //           accountIndex: number(),
 //           mint: string(),
@@ -1386,7 +1383,7 @@ const StakeActivationData = type({
 //     struct.pick({
 //       slot: number(),
 //       transaction: ConfirmedTransactionResult,
-//       meta: ConfirmedTransactionMetaResult,
+//       meta: nullable(ConfirmedTransactionMetaResult),
 //       blockTime: struct.union([number(), 'null', 'undefined']),
 //     }),
 //   ]),
@@ -2518,13 +2515,7 @@ export class Connection {
       blockhash: new PublicKey(result.blockhash).toString(),
       previousBlockhash: new PublicKey(result.previousBlockhash).toString(),
       parentSlot: result.parentSlot,
-      transactions: result.transactions.map(result => {
-        const {message, signatures} = result.transaction;
-        return {
-          transaction: Transaction.populate(new Message(message), signatures),
-          meta: result.meta,
-        };
-      }),
+      transactions: result.transactions,
       rewards: result.rewards || [],
     };
   }

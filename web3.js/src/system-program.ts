@@ -522,11 +522,8 @@ export class SystemInstruction {
 
 /**
  * An enumeration of valid SystemInstructionType's
- * @typedef {'Create' | 'Assign' | 'Transfer' | 'CreateWithSeed'
- | 'AdvanceNonceAccount' | 'WithdrawNonceAccount' | 'InitializeNonceAccount'
- | 'AuthorizeNonceAccount'} SystemInstructionType
  */
-export type SystemInstructionType = $Keys<typeof SYSTEM_INSTRUCTION_LAYOUTS>;
+export type SystemInstructionType = keyof typeof SYSTEM_INSTRUCTION_LAYOUTS;
 
 /**
  * An enumeration of valid system InstructionType's
@@ -668,7 +665,7 @@ export class SystemProgram {
   ): TransactionInstruction {
     let data;
     let keys;
-    if (params.basePubkey) {
+    if ('basePubkey' in params) {
       const type = SYSTEM_INSTRUCTION_LAYOUTS.TransferWithSeed;
       data = encodeData(type, {
         lamports: params.lamports,
@@ -704,7 +701,7 @@ export class SystemProgram {
   ): TransactionInstruction {
     let data;
     let keys;
-    if (params.basePubkey) {
+    if ('basePubkey' in params) {
       const type = SYSTEM_INSTRUCTION_LAYOUTS.AssignWithSeed;
       data = encodeData(type, {
         base: params.basePubkey.toBuffer(),
@@ -761,7 +758,7 @@ export class SystemProgram {
     params: CreateNonceAccountParams | CreateNonceAccountWithSeedParams,
   ): Transaction {
     const transaction = new Transaction();
-    if (params.basePubkey && params.seed) {
+    if ('basePubkey' in params && 'seed' in params) {
       transaction.add(
         SystemProgram.createAccountWithSeed({
           fromPubkey: params.fromPubkey,
@@ -898,7 +895,7 @@ export class SystemProgram {
   ): TransactionInstruction {
     let data;
     let keys;
-    if (params.basePubkey) {
+    if ('basePubkey' in params) {
       const type = SYSTEM_INSTRUCTION_LAYOUTS.AllocateWithSeed;
       data = encodeData(type, {
         base: params.basePubkey.toBuffer(),
