@@ -5002,10 +5002,11 @@ pub(crate) mod tests {
         stake_instruction,
         stake_state::{self, Authorized, Delegation, Lockup, Stake},
     };
-    use solana_vote_program::vote_state::VoteStateVersions;
     use solana_vote_program::{
         vote_instruction,
-        vote_state::{self, BlockTimestamp, Vote, VoteInit, VoteState, MAX_LOCKOUT_HISTORY},
+        vote_state::{
+            self, BlockTimestamp, Vote, VoteInit, VoteState, VoteStateVersions, MAX_LOCKOUT_HISTORY,
+        },
     };
     use std::{result, thread::Builder, time::Duration};
 
@@ -12142,5 +12143,73 @@ pub(crate) mod tests {
         // Accounts must be valid stake and vote accounts
         let stake_delegation_accounts = bank.stake_delegation_accounts(&mut null_tracer());
         assert_eq!(stake_delegation_accounts.len(), 0);
+    }
+
+    #[test]
+    fn test_vote_epoch_panic() {
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config_with_leader(
+            1_000_000_000_000_000,
+            &Pubkey::new_unique(),
+            bootstrap_validator_stake_lamports(),
+        );
+        let bank = Arc::new(Bank::new(&genesis_config));
+
+        let vote_keypair = keypair_from_seed(&[1u8; 32]).unwrap();
+        let stake_keypair = keypair_from_seed(&[2u8; 32]).unwrap();
+
+        let mut setup_ixs = Vec::new();
+        setup_ixs.extend(
+            vote_instruction::create_account(
+                &mint_keypair.pubkey(),
+                &vote_keypair.pubkey(),
+                &VoteInit {
+                    node_pubkey: mint_keypair.pubkey(),
+                    authorized_voter: vote_keypair.pubkey(),
+                    authorized_withdrawer: mint_keypair.pubkey(),
+                    commission: 0,
+                },
+                1_000_000_000,
+            )
+            .into_iter(),
+        );
+        setup_ixs.extend(
+            stake_instruction::create_account_and_delegate_stake(
+                &mint_keypair.pubkey(),
+                &stake_keypair.pubkey(),
+                &vote_keypair.pubkey(),
+                &Authorized::auto(&mint_keypair.pubkey()),
+                &Lockup::default(),
+                1_000_000_000_000,
+            )
+            .into_iter(),
+        );
+        setup_ixs.push(vote_instruction::withdraw(
+            &vote_keypair.pubkey(),
+            &mint_keypair.pubkey(),
+            1_000_000_000,
+            &mint_keypair.pubkey(),
+        ));
+        setup_ixs.push(system_instruction::transfer(
+            &mint_keypair.pubkey(),
+            &vote_keypair.pubkey(),
+            1_000_000_000,
+        ));
+
+        let result = bank.process_transaction(&Transaction::new(
+            &[&mint_keypair, &vote_keypair, &stake_keypair],
+            Message::new(&setup_ixs, Some(&mint_keypair.pubkey())),
+            bank.last_blockhash(),
+        ));
+        assert!(result.is_ok());
+
+        let _bank = Bank::new_from_parent(
+            &bank,
+            &mint_keypair.pubkey(),
+            genesis_config.epoch_schedule.get_first_slot_in_epoch(1),
+        );
     }
 }
