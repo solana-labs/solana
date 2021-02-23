@@ -922,6 +922,11 @@ impl RpcSubscriptions {
         subscriptions.insert(sub_id, sink);
     }
 
+    pub fn remove_slot_subscription(&self, id: &SubscriptionId) -> bool {
+        let mut subscriptions = self.subscriptions.slot_subscriptions.write().unwrap();
+        subscriptions.remove(id).is_some()
+    }
+
     pub fn add_slots_updates_subscription(
         &self,
         sub_id: SubscriptionId,
@@ -936,8 +941,12 @@ impl RpcSubscriptions {
         subscriptions.insert(sub_id, sink);
     }
 
-    pub fn remove_slot_subscription(&self, id: &SubscriptionId) -> bool {
-        let mut subscriptions = self.subscriptions.slot_subscriptions.write().unwrap();
+    pub fn remove_slots_updates_subscription(&self, id: &SubscriptionId) -> bool {
+        let mut subscriptions = self
+            .subscriptions
+            .slots_updates_subscriptions
+            .write()
+            .unwrap();
         subscriptions.remove(id).is_some()
     }
 

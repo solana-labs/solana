@@ -476,7 +476,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         id: SubscriptionId,
     ) -> Result<bool> {
         info!("slots_updates_unsubscribe");
-        if self.subscriptions.remove_slot_subscription(&id) {
+        if self.subscriptions.remove_slots_updates_subscription(&id) {
             Ok(true)
         } else {
             Err(Error {

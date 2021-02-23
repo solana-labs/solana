@@ -2507,9 +2507,9 @@ pub(crate) mod tests {
 
         assert_matches!(
             res,
-            Err(
-                BlockstoreProcessorError::FailedToLoadEntries(BlockstoreError::InvalidShredData(_)),
-            )
+            Err(BlockstoreProcessorError::FailedToLoadEntries(
+                BlockstoreError::InvalidShredData(_)
+            ),)
         );
     }
 

@@ -20,7 +20,9 @@ use std::result;
 use thiserror::Error;
 
 /// Reasons a transaction might be rejected.
-#[derive(Error, Serialize, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample, AbiEnumVisitor)]
+#[derive(
+    Error, Serialize, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample, AbiEnumVisitor,
+)]
 pub enum TransactionError {
     /// An account is already being processed in another transaction in a way
     /// that does not support parallelism
