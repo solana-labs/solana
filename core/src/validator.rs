@@ -12,6 +12,7 @@ use crate::{
     consensus::{reconcile_blockstore_roots_with_tower, Tower},
     contact_info::ContactInfo,
     gossip_service::GossipService,
+    max_slots::MaxSlots,
     optimistically_confirmed_bank_tracker::{
         OptimisticallyConfirmedBank, OptimisticallyConfirmedBankTracker,
     },
@@ -414,6 +415,7 @@ impl Validator {
             config.pubsub_config.enable_vote_subscription,
         ));
 
+        let max_slots = Arc::new(MaxSlots::default());
         let (completed_data_sets_sender, completed_data_sets_receiver) =
             bounded(MAX_COMPLETED_DATA_SETS_IN_CHANNEL);
         let completed_data_sets_service = CompletedDataSetsService::new(
@@ -421,6 +423,7 @@ impl Validator {
             blockstore.clone(),
             subscriptions.clone(),
             &exit,
+            max_slots.clone(),
         );
 
         info!(
@@ -485,6 +488,7 @@ impl Validator {
                         optimistically_confirmed_bank.clone(),
                         config.send_transaction_retry_ms,
                         config.send_transaction_leader_forward_count,
+                        max_slots.clone(),
                     ),
                     pubsub_service: PubSubService::new(
                         config.pubsub_config.clone(),
@@ -654,6 +658,7 @@ impl Validator {
                 rocksdb_compaction_interval: config.rocksdb_compaction_interval,
                 rocksdb_max_compaction_jitter: config.rocksdb_compaction_interval,
             },
+            &max_slots,
         );
 
         let tpu = Tpu::new(
