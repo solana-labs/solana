@@ -8,6 +8,7 @@ use crate::{
     cluster_slots_service::ClusterSlotsService,
     completed_data_sets_service::CompletedDataSetsSender,
     contact_info::ContactInfo,
+    max_slots::MaxSlots,
     repair_service::DuplicateSlotsResetSender,
     repair_service::RepairInfo,
     result::{Error, Result},
@@ -264,6 +265,7 @@ fn retransmit(
     epoch_stakes_cache: &RwLock<EpochStakesCache>,
     last_peer_update: &AtomicU64,
     shreds_received: &Mutex<ShredFilterAndHasher>,
+    max_slots: &MaxSlots,
 ) -> Result<()> {
     let timer = Duration::new(1, 0);
     let r_lock = r.lock().unwrap();
@@ -320,6 +322,7 @@ fn retransmit(
     let mut compute_turbine_peers_total = 0;
     let mut packets_by_slot: HashMap<Slot, usize> = HashMap::new();
     let mut packets_by_source: HashMap<String, usize> = HashMap::new();
+    let mut max_slot = 0;
     for mut packets in packet_v {
         for packet in packets.packets.iter_mut() {
             // skip discarded packets and repair packets
@@ -337,6 +340,7 @@ fn retransmit(
                 Some(slot) => slot,
                 None => continue,
             };
+            max_slot = max_slot.max(shred_slot);
             let mut compute_turbine_peers = Measure::start("turbine_start");
             let (my_index, mut shuffled_stakes_and_index) = ClusterInfo::shuffle_peers_and_index(
                 &my_id,
@@ -393,6 +397,7 @@ fn retransmit(
             retransmit_total += retransmit_time.as_us();
         }
     }
+    max_slots.retransmit.fetch_max(max_slot, Ordering::Relaxed);
     timer_start.stop();
     debug!(
         "retransmitted {} packets in {}ms retransmit_time: {}ms id: {}",
@@ -433,6 +438,7 @@ pub fn retransmitter(
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
     cluster_info: Arc<ClusterInfo>,
     r: Arc<Mutex<PacketReceiver>>,
+    max_slots: &Arc<MaxSlots>,
 ) -> Vec<JoinHandle<()>> {
     let stats = Arc::new(RetransmitStats::default());
     let shreds_received = Arc::new(Mutex::new((
@@ -450,6 +456,7 @@ pub fn retransmitter(
             let epoch_stakes_cache = Arc::new(RwLock::new(EpochStakesCache::default()));
             let last_peer_update = Arc::new(AtomicU64::new(0));
             let shreds_received = shreds_received.clone();
+            let max_slots = max_slots.clone();
 
             Builder::new()
                 .name("solana-retransmitter".to_string())
@@ -467,6 +474,7 @@ pub fn retransmitter(
                             &epoch_stakes_cache,
                             &last_peer_update,
                             &shreds_received,
+                            &max_slots,
                         ) {
                             match e {
                                 Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
@@ -511,6 +519,7 @@ impl RetransmitStage {
         verified_vote_receiver: VerifiedVoteReceiver,
         repair_validators: Option<HashSet<Pubkey>>,
         completed_data_sets_sender: CompletedDataSetsSender,
+        max_slots: &Arc<MaxSlots>,
     ) -> Self {
         let (retransmit_sender, retransmit_receiver) = channel();
 
@@ -521,6 +530,7 @@ impl RetransmitStage {
             leader_schedule_cache,
             cluster_info.clone(),
             retransmit_receiver,
+            max_slots,
         );
 
         let leader_schedule_cache_clone = leader_schedule_cache.clone();
@@ -638,6 +648,7 @@ mod tests {
             &leader_schedule_cache,
             cluster_info,
             Arc::new(Mutex::new(retransmit_receiver)),
+            &Arc::new(MaxSlots::default()),
         );
         let _thread_hdls = vec![t_retransmit];
 
