@@ -3039,6 +3039,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "rand_core"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "34cf66eb183df1c5876e2dcf6b13d57340741e8dc255b48e40a26de954d06ae7"
+
+[[package]]
 name = "rand_hc"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3894,6 +3900,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "rand 0.7.3",
+ "rand_core 0.6.2",
  "rustversion",
  "solana-runtime",
  "solana-sdk",
@@ -4067,6 +4074,7 @@ dependencies = [
  "bincode",
  "chrono",
  "log 0.4.11",
+ "rand_core 0.6.2",
  "serde",
  "serde_derive",
  "solana-logger 1.5.8",
