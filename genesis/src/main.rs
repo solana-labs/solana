@@ -187,7 +187,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             Arg::with_name("faucet_pubkey")
                 .short("m")
                 .long("faucet-pubkey")
-                .value_name("PUBKEY")
+                .value_name("KEYPAIR_JSON_FILE")
                 .takes_value(true)
                 .validator(is_pubkey_or_keypair)
                 .requires("faucet_lamports")
