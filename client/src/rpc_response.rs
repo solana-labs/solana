@@ -101,6 +101,16 @@ pub struct SlotInfo {
     pub root: Slot,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(tag = "type")]
+pub enum SlotUpdate {
+    OptimisticConfirmation { slot: Slot, timestamp: u64 },
+    FirstShredReceived { slot: Slot, timestamp: u64 },
+    BlockEnd { slot: Slot, timestamp: u64 },
+    BlockComplete { slot: Slot, timestamp: u64 },
+    Frozen { slot: Slot, timestamp: u64 },
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase", untagged)]
 pub enum RpcSignatureResult {

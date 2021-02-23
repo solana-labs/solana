@@ -16,7 +16,7 @@ use solana_client::{
     rpc_filter::RpcFilterType,
     rpc_response::{
         ProcessedSignatureResult, ReceivedSignatureResult, Response, RpcKeyedAccount,
-        RpcLogsResponse, RpcResponseContext, RpcSignatureResult, SlotInfo,
+        RpcLogsResponse, RpcResponseContext, RpcSignatureResult, SlotInfo, SlotUpdate,
     },
 };
 use solana_measure::measure::Measure;
@@ -80,18 +80,9 @@ pub struct RpcVote {
     pub timestamp: Option<UnixTimestamp>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub enum SlotsUpdates {
-    OptimisticConfirmation(Slot, u64),
-    FirstShredReceived(Slot, u64),
-    BlockEnd(Slot, u64),
-    BlockComplete(Slot, u64),
-    Frozen(Slot, u64),
-}
-
 enum NotificationEntry {
     Slot(SlotInfo),
-    SlotsUpdates(SlotsUpdates),
+    SlotUpdate(SlotUpdate),
     Vote(Vote),
     Root(Slot),
     Bank(CommitmentSlots),
@@ -105,8 +96,8 @@ impl std::fmt::Debug for NotificationEntry {
             NotificationEntry::Root(root) => write!(f, "Root({})", root),
             NotificationEntry::Vote(vote) => write!(f, "Vote({:?})", vote),
             NotificationEntry::Slot(slot_info) => write!(f, "Slot({:?})", slot_info),
-            NotificationEntry::SlotsUpdates(slot_update) => {
-                write!(f, "SlotsUpdates({:?})", slot_update)
+            NotificationEntry::SlotUpdate(slot_update) => {
+                write!(f, "SlotUpdate({:?})", slot_update)
             }
             NotificationEntry::Bank(commitment_slots) => {
                 write!(f, "Bank({{slot: {:?}}})", commitment_slots.slot)
@@ -155,7 +146,7 @@ type RpcSignatureSubscriptions = RwLock<
     >,
 >;
 type RpcSlotSubscriptions = RwLock<HashMap<SubscriptionId, Sink<SlotInfo>>>;
-type RpcSlotUpdateSubscriptions = RwLock<HashMap<SubscriptionId, Sink<Arc<SlotsUpdates>>>>;
+type RpcSlotUpdateSubscriptions = RwLock<HashMap<SubscriptionId, Sink<Arc<SlotUpdate>>>>;
 type RpcVoteSubscriptions = RwLock<HashMap<SubscriptionId, Sink<RpcVote>>>;
 type RpcRootSubscriptions = RwLock<HashMap<SubscriptionId, Sink<Slot>>>;
 
@@ -402,7 +393,7 @@ struct Subscriptions {
     gossip_signature_subscriptions: Arc<RpcSignatureSubscriptions>,
     slot_subscriptions: Arc<RpcSlotSubscriptions>,
     // TODO: Figure out when to remove a subscriber (some number of slots)
-    slot_update_subscriptions: Arc<RpcSlotUpdateSubscriptions>,
+    slots_updates_subscriptions: Arc<RpcSlotUpdateSubscriptions>,
     vote_subscriptions: Arc<RpcVoteSubscriptions>,
     root_subscriptions: Arc<RpcRootSubscriptions>,
 }
@@ -481,7 +472,7 @@ impl RpcSubscriptions {
         let gossip_program_subscriptions = Arc::new(RpcProgramSubscriptions::default());
         let gossip_signature_subscriptions = Arc::new(RpcSignatureSubscriptions::default());
         let slot_subscriptions = Arc::new(RpcSlotSubscriptions::default());
-        let slot_update_subscriptions = Arc::new(RpcSlotUpdateSubscriptions::default());
+        let slots_updates_subscriptions = Arc::new(RpcSlotUpdateSubscriptions::default());
         let vote_subscriptions = Arc::new(RpcVoteSubscriptions::default());
         let root_subscriptions = Arc::new(RpcRootSubscriptions::default());
         let notification_sender = Arc::new(Mutex::new(notification_sender));
@@ -499,7 +490,7 @@ impl RpcSubscriptions {
             gossip_program_subscriptions,
             gossip_signature_subscriptions,
             slot_subscriptions,
-            slot_update_subscriptions,
+            slots_updates_subscriptions,
             vote_subscriptions,
             root_subscriptions,
         };
@@ -921,13 +912,27 @@ impl RpcSubscriptions {
         self.enqueue_notification(NotificationEntry::Gossip(slot));
     }
 
-    pub fn notify_slot_updates(&self, slot_update: SlotsUpdates) {
-        self.enqueue_notification(NotificationEntry::SlotsUpdates(slot_update));
+    pub fn notify_slot_update(&self, slot_update: SlotUpdate) {
+        self.enqueue_notification(NotificationEntry::SlotUpdate(slot_update));
     }
 
     pub fn add_slot_subscription(&self, sub_id: SubscriptionId, subscriber: Subscriber<SlotInfo>) {
         let sink = subscriber.assign_id(sub_id.clone()).unwrap();
         let mut subscriptions = self.subscriptions.slot_subscriptions.write().unwrap();
+        subscriptions.insert(sub_id, sink);
+    }
+
+    pub fn add_slots_updates_subscription(
+        &self,
+        sub_id: SubscriptionId,
+        subscriber: Subscriber<Arc<SlotUpdate>>,
+    ) {
+        let sink = subscriber.assign_id(sub_id.clone()).unwrap();
+        let mut subscriptions = self
+            .subscriptions
+            .slots_updates_subscriptions
+            .write()
+            .unwrap();
         subscriptions.insert(sub_id, sink);
     }
 
@@ -1027,8 +1032,9 @@ impl RpcSubscriptions {
                             notifier.notify(slot_info, sink);
                         }
                     }
-                    NotificationEntry::SlotsUpdates(slot_update) => {
-                        let subscriptions = subscriptions.slot_update_subscriptions.read().unwrap();
+                    NotificationEntry::SlotUpdate(slot_update) => {
+                        let subscriptions =
+                            subscriptions.slots_updates_subscriptions.read().unwrap();
                         let slot_update = Arc::new(slot_update);
                         for (_, sink) in subscriptions.iter() {
                             inc_new_counter_info!("rpc-subscription-notify-slots-updates", 1);

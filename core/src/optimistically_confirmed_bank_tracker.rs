@@ -2,8 +2,9 @@
 //! most recent optimistically confirmed bank for use in rpc services, and triggers gossip
 //! subscription notifications
 
-use crate::rpc_subscriptions::{RpcSubscriptions, SlotsUpdates};
+use crate::rpc_subscriptions::RpcSubscriptions;
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender};
+use solana_client::rpc_response::SlotUpdate;
 use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use solana_sdk::{clock::Slot, timing::timestamp};
 use std::{
@@ -132,8 +133,10 @@ impl OptimisticallyConfirmedBankTracker {
                 }
 
                 // Send slot notification regardless of whether the bank is replayed
-                subscriptions
-                    .notify_slot_updates(SlotsUpdates::OptimisticConfirmation(slot, timestamp()));
+                subscriptions.notify_slot_update(SlotUpdate::OptimisticConfirmation {
+                    slot,
+                    timestamp: timestamp(),
+                });
             }
             BankNotification::Frozen(bank) => {
                 let frozen_slot = bank.slot();
