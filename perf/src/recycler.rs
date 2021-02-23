@@ -120,15 +120,13 @@ impl<T: Default + Reset> ObjectPool<T> {
         recycler_name: &'static str,
     ) -> Option<(RecyclerShrinkStats, Vec<T>)> {
         let is_consistent = self.total_allocated_count as usize >= self.len();
-        if !is_consistent {
-            warn!(
-                "Object pool inconsistent: {} {} {}",
-                self.total_allocated_count,
-                self.len(),
-                recycler_name
-            );
-        }
-        assert!(is_consistent);
+        assert!(
+            is_consistent,
+            "Object pool inconsistent: {} {} {}",
+            self.total_allocated_count,
+            self.len(),
+            recycler_name
+        );
         if self.last_shrink_check_time.elapsed().as_millis() > self.check_shrink_interval_ms as u128
         {
             self.last_shrink_check_time = Instant::now();
