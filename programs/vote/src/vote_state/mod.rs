@@ -684,7 +684,11 @@ pub fn initialize_account<S: std::hash::BuildHasher>(
     vote_init: &VoteInit,
     signers: &HashSet<Pubkey, S>,
     clock: &Clock,
+    check_data_size: bool,
 ) -> Result<(), InstructionError> {
+    if check_data_size && vote_account.data_len()? != VoteState::size_of() {
+        return Err(InstructionError::InvalidAccountData);
+    }
     let versioned = State::<VoteStateVersions>::state(vote_account)?;
 
     if !versioned.is_uninitialized() {
@@ -812,6 +816,7 @@ mod tests {
             },
             &signers,
             &Clock::default(),
+            true,
         );
         assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
 
@@ -829,6 +834,7 @@ mod tests {
             },
             &signers,
             &Clock::default(),
+            true,
         );
         assert_eq!(res, Ok(()));
 
@@ -843,8 +849,27 @@ mod tests {
             },
             &signers,
             &Clock::default(),
+            true,
         );
         assert_eq!(res, Err(InstructionError::AccountAlreadyInitialized));
+
+        //init should fail, account is too big
+        let large_vote_account = Account::new_ref(100, 2 * VoteState::size_of(), &id());
+        let large_vote_account =
+            KeyedAccount::new(&vote_account_pubkey, false, &large_vote_account);
+        let res = initialize_account(
+            &large_vote_account,
+            &VoteInit {
+                node_pubkey,
+                authorized_voter: vote_account_pubkey,
+                authorized_withdrawer: vote_account_pubkey,
+                commission: 0,
+            },
+            &signers,
+            &Clock::default(),
+            true,
+        );
+        assert_eq!(res, Err(InstructionError::InvalidAccountData));
     }
 
     fn create_test_account() -> (Pubkey, RefCell<Account>) {
