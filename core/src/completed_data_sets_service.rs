@@ -1,4 +1,4 @@
-use crate::rpc_subscriptions::RpcSubscriptions;
+use crate::{max_slots::MaxSlots, rpc_subscriptions::RpcSubscriptions};
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender};
 use solana_ledger::blockstore::{Blockstore, CompletedDataSetInfo};
 use solana_ledger::entry::Entry;
@@ -25,6 +25,7 @@ impl CompletedDataSetsService {
         blockstore: Arc<Blockstore>,
         rpc_subscriptions: Arc<RpcSubscriptions>,
         exit: &Arc<AtomicBool>,
+        max_slots: Arc<MaxSlots>,
     ) -> Self {
         let exit = exit.clone();
         let thread_hdl = Builder::new()
@@ -37,6 +38,7 @@ impl CompletedDataSetsService {
                     &completed_sets_receiver,
                     &blockstore,
                     &rpc_subscriptions,
+                    &max_slots,
                 ) {
                     break;
                 }
@@ -49,8 +51,10 @@ impl CompletedDataSetsService {
         completed_sets_receiver: &CompletedDataSetsReceiver,
         blockstore: &Blockstore,
         rpc_subscriptions: &RpcSubscriptions,
+        max_slots: &Arc<MaxSlots>,
     ) -> Result<(), RecvTimeoutError> {
         let completed_data_sets = completed_sets_receiver.recv_timeout(Duration::from_secs(1))?;
+        let mut max_slot = 0;
         for completed_set_info in std::iter::once(completed_data_sets)
             .chain(completed_sets_receiver.try_iter())
             .flatten()
@@ -60,6 +64,7 @@ impl CompletedDataSetsService {
                 start_index,
                 end_index,
             } = completed_set_info;
+            max_slot = max_slot.max(slot);
             match blockstore.get_entries_in_data_block(slot, start_index, end_index, None) {
                 Ok(entries) => {
                     let transactions = Self::get_transaction_signatures(entries);
@@ -70,6 +75,9 @@ impl CompletedDataSetsService {
                 Err(e) => warn!("completed-data-set-service deserialize error: {:?}", e),
             }
         }
+        max_slots
+            .shred_insert
+            .fetch_max(max_slot, Ordering::Relaxed);
 
         Ok(())
     }
