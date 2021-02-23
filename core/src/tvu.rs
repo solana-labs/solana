@@ -11,6 +11,7 @@ use crate::{
     completed_data_sets_service::CompletedDataSetsSender,
     consensus::Tower,
     ledger_cleanup_service::LedgerCleanupService,
+    max_slots::MaxSlots,
     optimistically_confirmed_bank_tracker::BankNotificationSender,
     poh_recorder::PohRecorder,
     replay_stage::{ReplayStage, ReplayStageConfig},
@@ -120,6 +121,7 @@ impl Tvu {
         completed_data_sets_sender: CompletedDataSetsSender,
         bank_notification_sender: Option<BankNotificationSender>,
         tvu_config: TvuConfig,
+        max_slots: &Arc<MaxSlots>,
     ) -> Self {
         let keypair: Arc<Keypair> = cluster_info.keypair.clone();
 
@@ -174,6 +176,7 @@ impl Tvu {
             verified_vote_receiver,
             tvu_config.repair_validators,
             completed_data_sets_sender,
+            max_slots,
         );
 
         let (ledger_cleanup_slot_sender, ledger_cleanup_slot_receiver) = channel();
@@ -407,6 +410,7 @@ pub mod tests {
             completed_data_sets_sender,
             None,
             TvuConfig::default(),
+            &Arc::new(MaxSlots::default()),
         );
         exit.store(true, Ordering::Relaxed);
         tvu.join().unwrap();

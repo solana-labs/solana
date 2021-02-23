@@ -16,6 +16,7 @@ pub mod cluster_info_vote_listener;
 pub mod commitment_service;
 pub mod completed_data_sets_service;
 mod deprecated;
+pub mod max_slots;
 pub mod sample_performance_service;
 pub mod shred_fetch_stage;
 #[macro_use]
