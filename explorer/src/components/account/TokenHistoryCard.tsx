@@ -50,6 +50,8 @@ import { useCluster, Cluster } from "providers/cluster";
 import { Link } from "react-router-dom";
 import { Location } from "history";
 import { useQuery } from "utils/url";
+import { KnownTokenMap } from "@solana/spl-token-registry";
+import { useTokenRegistry } from "providers/mints/token-registry";
 
 const TRUNCATE_TOKEN_LENGTH = 10;
 const ALL_TOKENS = "";
@@ -299,6 +301,7 @@ function TokenHistoryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
 
 const FilterDropdown = ({ filter, toggle, show, tokens }: FilterProps) => {
   const { cluster } = useCluster();
+  const { tokenRegistry } = useTokenRegistry();
 
   const buildLocation = (location: Location, filter: string) => {
     const params = new URLSearchParams(location.search);
@@ -319,7 +322,7 @@ const FilterDropdown = ({ filter, toggle, show, tokens }: FilterProps) => {
   tokens.forEach((token) => {
     const pubkey = token.info.mint.toBase58();
     filterOptions.push(pubkey);
-    nameLookup[pubkey] = formatTokenName(pubkey, cluster);
+    nameLookup[pubkey] = formatTokenName(pubkey, cluster, tokenRegistry);
   });
 
   return (
@@ -349,7 +352,7 @@ const FilterDropdown = ({ filter, toggle, show, tokens }: FilterProps) => {
             >
               {filterOption === ALL_TOKENS
                 ? "All Tokens"
-                : formatTokenName(filterOption, cluster)}
+                : formatTokenName(filterOption, cluster, tokenRegistry)}
             </Link>
           );
         })}
@@ -602,8 +605,12 @@ function InstructionDetails({
   );
 }
 
-function formatTokenName(pubkey: string, cluster: Cluster): string {
-  let display = displayAddress(pubkey, cluster);
+function formatTokenName(
+  pubkey: string,
+  cluster: Cluster,
+  tokenRegistry: KnownTokenMap
+): string {
+  let display = displayAddress(pubkey, cluster, tokenRegistry);
 
   if (display === pubkey) {
     display = display.slice(0, TRUNCATE_TOKEN_LENGTH) + "\u2026";

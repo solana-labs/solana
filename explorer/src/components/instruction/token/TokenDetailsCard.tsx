@@ -24,8 +24,7 @@ import {
 } from "providers/accounts";
 import { normalizeTokenAmount } from "utils";
 import { reportError } from "utils/sentry";
-import { useCluster } from "providers/cluster";
-import { TokenRegistry } from "tokenRegistry";
+import { useTokenRegistry } from "providers/mints/token-registry";
 
 type DetailsProps = {
   tx: ParsedTransaction;
@@ -92,7 +91,7 @@ function TokenInstruction(props: InfoProps) {
   const tokenInfo = useTokenAccountInfo(tokenAddress);
   const mintAddress = infoMintAddress || tokenInfo?.mint.toBase58();
   const mintInfo = useMintAccountInfo(mintAddress);
-  const { cluster } = useCluster();
+  const { tokenRegistry } = useTokenRegistry();
   const fetchAccountInfo = useFetchAccountInfo();
 
   React.useEffect(() => {
@@ -116,10 +115,10 @@ function TokenInstruction(props: InfoProps) {
   }
 
   if (mintAddress) {
-    const tokenDetails = TokenRegistry.get(mintAddress, cluster);
+    const tokenDetails = tokenRegistry.get(mintAddress);
 
-    if (tokenDetails && "symbol" in tokenDetails) {
-      tokenSymbol = tokenDetails.symbol;
+    if (tokenDetails) {
+      tokenSymbol = tokenDetails.tokenSymbol;
     }
 
     attributes.push(

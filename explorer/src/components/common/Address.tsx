@@ -5,6 +5,7 @@ import { clusterPath } from "utils/url";
 import { displayAddress } from "utils/tx";
 import { useCluster } from "providers/cluster";
 import { Copyable } from "./Copyable";
+import { useTokenRegistry } from "providers/mints/token-registry";
 
 type Props = {
   pubkey: PublicKey;
@@ -24,9 +25,13 @@ export function Address({
   truncateUnknown,
 }: Props) {
   const address = pubkey.toBase58();
+  const { tokenRegistry } = useTokenRegistry();
   const { cluster } = useCluster();
 
-  if (truncateUnknown && address === displayAddress(address, cluster)) {
+  if (
+    truncateUnknown &&
+    address === displayAddress(address, cluster, tokenRegistry)
+  ) {
     truncate = true;
   }
 
@@ -38,11 +43,11 @@ export function Address({
             className={truncate ? "text-truncate address-truncate" : ""}
             to={clusterPath(`/address/${address}`)}
           >
-            {raw ? address : displayAddress(address, cluster)}
+            {raw ? address : displayAddress(address, cluster, tokenRegistry)}
           </Link>
         ) : (
           <span className={truncate ? "text-truncate address-truncate" : ""}>
-            {raw ? address : displayAddress(address, cluster)}
+            {raw ? address : displayAddress(address, cluster, tokenRegistry)}
           </span>
         )}
       </span>
