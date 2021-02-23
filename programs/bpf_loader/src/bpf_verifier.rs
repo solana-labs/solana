@@ -64,10 +64,6 @@ fn check_prog_len(prog: &[u8]) -> Result<(), BpfError> {
     if prog.len() % ebpf::INSN_SIZE != 0 {
         return Err(VerifierError::ProgramLengthNotMultiple.into());
     }
-    if prog.len() > ebpf::PROG_MAX_SIZE {
-        return Err(VerifierError::ProgramTooLarge(prog.len() / ebpf::INSN_SIZE).into());
-    }
-
     if prog.is_empty() {
         return Err(VerifierError::NoProgram.into());
     }
