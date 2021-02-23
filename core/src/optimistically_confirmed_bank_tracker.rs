@@ -127,6 +127,8 @@ impl OptimisticallyConfirmedBankTracker {
                     drop(w_optimistically_confirmed_bank);
                 } else if slot > bank_forks.read().unwrap().root_bank().slot() {
                     pending_optimistically_confirmed_banks.insert(slot);
+                } else {
+                    inc_new_counter_info!("dropped-already-rooted-optimistic-bank-notification", 1);
                 }
             }
             BankNotification::Frozen(bank) => {
