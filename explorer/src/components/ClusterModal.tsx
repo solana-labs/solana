@@ -13,14 +13,16 @@ import {
   useClusterModal,
   useUpdateCustomUrl,
 } from "providers/cluster";
-import { assertUnreachable } from "../utils";
+import { assertUnreachable, localStorageIsAvailable } from "../utils";
 import { Overlay } from "./common/Overlay";
 import { useQuery } from "utils/url";
 
 export function ClusterModal() {
   const [show, setShow] = useClusterModal();
   const onClose = () => setShow(false);
-  const enableCustomUrl = localStorage.getItem("enableCustomUrl") !== null;
+  const showDeveloperSettings = localStorageIsAvailable();
+  const enableCustomUrl =
+    showDeveloperSettings && localStorage.getItem("enableCustomUrl") !== null;
   const onToggleCustomUrlFeature = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
       localStorage.setItem("enableCustomUrl", "");
@@ -45,29 +47,33 @@ export function ClusterModal() {
               <h2 className="text-center mb-4 mt-4">Choose a Cluster</h2>
               <ClusterToggle />
 
-              <hr />
+              {showDeveloperSettings && (
+                <>
+                  <hr />
 
-              <h2 className="text-center mb-4 mt-4">Developer Settings</h2>
-              <div className="d-flex justify-content-between">
-                <span className="mr-3">Enable custom url param</span>
-                <div className="custom-control custom-switch d-inline">
-                  <input
-                    type="checkbox"
-                    defaultChecked={enableCustomUrl}
-                    className="custom-control-input"
-                    id="cardToggle"
-                    onChange={onToggleCustomUrlFeature}
-                  />
-                  <label
-                    className="custom-control-label"
-                    htmlFor="cardToggle"
-                  ></label>
-                </div>
-              </div>
-              <p className="text-muted font-size-sm mt-3">
-                Enable this setting to easily connect to a custom cluster via
-                the "customUrl" url param.
-              </p>
+                  <h2 className="text-center mb-4 mt-4">Developer Settings</h2>
+                  <div className="d-flex justify-content-between">
+                    <span className="mr-3">Enable custom url param</span>
+                    <div className="custom-control custom-switch d-inline">
+                      <input
+                        type="checkbox"
+                        defaultChecked={enableCustomUrl}
+                        className="custom-control-input"
+                        id="cardToggle"
+                        onChange={onToggleCustomUrlFeature}
+                      />
+                      <label
+                        className="custom-control-label"
+                        htmlFor="cardToggle"
+                      ></label>
+                    </div>
+                  </div>
+                  <p className="text-muted font-size-sm mt-3">
+                    Enable this setting to easily connect to a custom cluster
+                    via the "customUrl" url param.
+                  </p>
+                </>
+              )}
             </div>
           </div>
         </div>
