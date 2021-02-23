@@ -164,7 +164,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .number_of_values(3)
                 .multiple(true)
                 .required(true)
-                .help("The bootstrap validator's identity, vote and stake pubkeys"),
+                .help("The bootstrap validator's identity, vote and stake pubkey as either a) a base58-encoded string (e.g. AKDAFBjxJ5hZ1YzDLcZsTsgs4XkoZQjacyWrSZmQobTV like is produced by 'solana-keygen pubkey') or b) a file containing a base58-encoded pub+priv keypair, serialized to JSON array (e.g. [8,239,....245,104])"),
         )
         .arg(
             Arg::with_name("ledger_path")
@@ -192,7 +192,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .validator(is_pubkey_or_keypair)
                 .requires("faucet_lamports")
                 .default_value(&default_faucet_pubkey)
-                .help("Path to file containing the faucet's pubkey"),
+                .help("The faucet's pubkey as either a) a base58-encoded string (e.g. AKDAFBjxJ5hZ1YzDLcZsTsgs4XkoZQjacyWrSZmQobTV like is produced by 'solana-keygen pubkey') or b) a file containing a base58-encoded pub+priv keypair, serialized to JSON array (e.g. [8,239,....245,104])"),
         )
         .arg(
             Arg::with_name("bootstrap_stake_authorized_pubkey")
