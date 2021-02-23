@@ -102,7 +102,7 @@ pub struct SlotInfo {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(tag = "type")]
+#[serde(rename_all = "camelCase", tag = "type")]
 pub enum SlotUpdate {
     OptimisticConfirmation { slot: Slot, timestamp: u64 },
     FirstShredReceived { slot: Slot, timestamp: u64 },
