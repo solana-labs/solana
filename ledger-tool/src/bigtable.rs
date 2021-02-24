@@ -4,10 +4,10 @@ use solana_clap_utils::{
     input_parsers::pubkey_of,
     input_validators::{is_slot, is_valid_pubkey},
 };
-use solana_cli_output::display::println_transaction;
+use solana_cli_output::{display::println_transaction, CliBlock, OutputFormat};
 use solana_ledger::{blockstore::Blockstore, blockstore_db::AccessType};
 use solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature};
-use solana_transaction_status::ConfirmedBlock;
+use solana_transaction_status::{ConfirmedBlock, UiTransactionEncoding};
 use std::{
     path::Path,
     process::exit,
@@ -48,32 +48,18 @@ async fn first_available_block() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-async fn block(slot: Slot) -> Result<(), Box<dyn std::error::Error>> {
+async fn block(slot: Slot, output_format: OutputFormat) -> Result<(), Box<dyn std::error::Error>> {
     let bigtable = solana_storage_bigtable::LedgerStorage::new(false, None)
         .await
         .map_err(|err| format!("Failed to connect to storage: {:?}", err))?;
 
     let block = bigtable.get_confirmed_block(slot).await?;
 
-    println!("Slot: {}", slot);
-    println!("Parent Slot: {}", block.parent_slot);
-    println!("Blockhash: {}", block.blockhash);
-    println!("Previous Blockhash: {}", block.previous_blockhash);
-    if block.block_time.is_some() {
-        println!("Block Time: {:?}", block.block_time);
-    }
-    if !block.rewards.is_empty() {
-        println!("Rewards: {:?}", block.rewards);
-    }
-    for (index, transaction_with_meta) in block.transactions.into_iter().enumerate() {
-        println!("Transaction {}:", index);
-        println_transaction(
-            &transaction_with_meta.transaction,
-            &transaction_with_meta.meta.map(|meta| meta.into()),
-            "  ",
-            None,
-        );
-    }
+    let cli_block = CliBlock {
+        encoded_confirmed_block: block.encode(UiTransactionEncoding::Base64),
+        slot,
+    };
+    println!("{}", output_format.formatted_string(&cli_block));
     Ok(())
 }
 
@@ -396,6 +382,15 @@ impl BigTableSubCommand for App<'_, '_> {
 pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
     let runtime = tokio::runtime::Runtime::new().unwrap();
 
+    let output_format = matches
+        .value_of("output_format")
+        .map(|value| match value {
+            "json" => OutputFormat::Json,
+            "json-compact" => OutputFormat::JsonCompact,
+            _ => unreachable!(),
+        })
+        .unwrap_or(OutputFormat::Display);
+
     let future = match matches.subcommand() {
         ("upload", Some(arg_matches)) => {
             let starting_slot = value_t!(arg_matches, "starting_slot", Slot).unwrap_or(0);
@@ -416,7 +411,7 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
         ("first-available-block", Some(_arg_matches)) => runtime.block_on(first_available_block()),
         ("block", Some(arg_matches)) => {
             let slot = value_t_or_exit!(arg_matches, "slot", Slot);
-            runtime.block_on(block(slot))
+            runtime.block_on(block(slot, output_format))
         }
         ("blocks", Some(arg_matches)) => {
             let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
