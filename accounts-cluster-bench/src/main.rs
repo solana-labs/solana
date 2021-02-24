@@ -379,7 +379,7 @@ fn run_accounts_bench(
                     )
                 })
                 .unzip();
-            balance -= lamports * txs.len() as u64;
+            balance = balance.saturating_sub(lamports * txs.len() as u64);
             info!("txs: {}", txs.len());
             let new_ids = executor.push_transactions(txs);
             info!("ids: {}", new_ids.len());
