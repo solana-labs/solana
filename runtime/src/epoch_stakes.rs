@@ -83,21 +83,23 @@ impl EpochStakes {
                     }
                     Ok(vote_state) => vote_state,
                 };
+
                 if *stake > 0 {
-                    // Read out the authorized voters
-                    let authorized_voter = vote_state
+                    if let Some(authorized_voter) = vote_state
                         .authorized_voters()
                         .get_authorized_voter(leader_schedule_epoch)
-                        .expect("Authorized voter for current epoch must be known");
+                    {
+                        let node_vote_accounts = node_id_to_vote_accounts
+                            .entry(vote_state.node_pubkey)
+                            .or_default();
 
-                    let node_vote_accounts = node_id_to_vote_accounts
-                        .entry(vote_state.node_pubkey)
-                        .or_default();
+                        node_vote_accounts.total_stake += stake;
+                        node_vote_accounts.vote_accounts.push(*key);
 
-                    node_vote_accounts.total_stake += stake;
-                    node_vote_accounts.vote_accounts.push(*key);
-
-                    Some((*key, authorized_voter))
+                        Some((*key, authorized_voter))
+                    } else {
+                        None
+                    }
                 } else {
                     None
                 }
