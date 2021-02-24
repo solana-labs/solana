@@ -9,11 +9,10 @@ import {
 import { ErrorCard } from "components/common/ErrorCard";
 import { LoadingCard } from "components/common/LoadingCard";
 import { Address } from "components/common/Address";
-import { TokenRegistry } from "tokenRegistry";
 import { useQuery } from "utils/url";
 import { Link } from "react-router-dom";
 import { Location } from "history";
-import { useCluster } from "providers/cluster";
+import { useTokenRegistry } from "providers/mints/token-registry";
 
 type Display = "summary" | "detail" | null;
 
@@ -90,15 +89,14 @@ export function OwnedTokensCard({ pubkey }: { pubkey: PublicKey }) {
 
 function HoldingsDetailTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
   const detailsList: React.ReactNode[] = [];
-  const { cluster } = useCluster();
+  const { tokenRegistry } = useTokenRegistry();
   const showLogos = tokens.some(
-    (t) =>
-      TokenRegistry.get(t.info.mint.toBase58(), cluster)?.icon !== undefined
+    (t) => tokenRegistry.get(t.info.mint.toBase58())?.icon !== undefined
   );
   tokens.forEach((tokenAccount) => {
     const address = tokenAccount.pubkey.toBase58();
     const mintAddress = tokenAccount.info.mint.toBase58();
-    const tokenDetails = TokenRegistry.get(mintAddress, cluster);
+    const tokenDetails = tokenRegistry.get(mintAddress);
     detailsList.push(
       <tr key={address}>
         {showLogos && (
@@ -120,7 +118,7 @@ function HoldingsDetailTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
         </td>
         <td>
           {tokenAccount.info.tokenAmount.uiAmount}{" "}
-          {tokenDetails && tokenDetails.symbol}
+          {tokenDetails && tokenDetails.tokenSymbol}
         </td>
       </tr>
     );
@@ -146,7 +144,7 @@ function HoldingsDetailTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
 }
 
 function HoldingsSummaryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
-  const { cluster } = useCluster();
+  const { tokenRegistry } = useTokenRegistry();
   const mappedTokens = new Map<string, number>();
   for (const { info: token } of tokens) {
     const mintAddress = token.mint.toBase58();
@@ -162,11 +160,10 @@ function HoldingsSummaryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
 
   const detailsList: React.ReactNode[] = [];
   const showLogos = tokens.some(
-    (t) =>
-      TokenRegistry.get(t.info.mint.toBase58(), cluster)?.icon !== undefined
+    (t) => tokenRegistry.get(t.info.mint.toBase58())?.icon !== undefined
   );
   mappedTokens.forEach((totalByMint, mintAddress) => {
-    const tokenDetails = TokenRegistry.get(mintAddress, cluster);
+    const tokenDetails = tokenRegistry.get(mintAddress);
     detailsList.push(
       <tr key={mintAddress}>
         {showLogos && (
@@ -184,7 +181,7 @@ function HoldingsSummaryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
           <Address pubkey={new PublicKey(mintAddress)} link />
         </td>
         <td>
-          {totalByMint} {tokenDetails && tokenDetails.symbol}
+          {totalByMint} {tokenDetails && tokenDetails.tokenSymbol}
         </td>
       </tr>
     );

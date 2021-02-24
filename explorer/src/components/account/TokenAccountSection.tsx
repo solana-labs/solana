@@ -10,11 +10,11 @@ import { coerce } from "superstruct";
 import { TableCardBody } from "components/common/TableCardBody";
 import { Address } from "components/common/Address";
 import { UnknownAccountCard } from "./UnknownAccountCard";
-import { TokenRegistry } from "tokenRegistry";
 import { useCluster } from "providers/cluster";
 import { normalizeTokenAmount } from "utils";
 import { addressLabel } from "utils/tx";
 import { reportError } from "utils/sentry";
+import { useTokenRegistry } from "providers/mints/token-registry";
 
 export function TokenAccountSection({
   account,
@@ -53,12 +53,12 @@ function MintAccountCard({
   account: Account;
   info: MintAccountInfo;
 }) {
-  const { cluster } = useCluster();
+  const { tokenRegistry } = useTokenRegistry();
   const mintAddress = account.pubkey.toBase58();
   const fetchInfo = useFetchAccountInfo();
   const refresh = () => fetchInfo(account.pubkey);
 
-  const tokenInfo = TokenRegistry.get(mintAddress, cluster);
+  const tokenInfo = tokenRegistry.get(mintAddress);
   return (
     <div className="card">
       <div className="card-header">
@@ -143,8 +143,8 @@ function TokenAccountCard({
 }) {
   const refresh = useFetchAccountInfo();
   const { cluster } = useCluster();
-
-  const label = addressLabel(account.pubkey.toBase58(), cluster);
+  const { tokenRegistry } = useTokenRegistry();
+  const label = addressLabel(account.pubkey.toBase58(), cluster, tokenRegistry);
 
   let unit, balance;
   if (info.isNative) {
@@ -161,7 +161,7 @@ function TokenAccountCard({
     );
   } else {
     balance = <>{info.tokenAmount.uiAmount}</>;
-    unit = TokenRegistry.get(info.mint.toBase58(), cluster)?.symbol || "tokens";
+    unit = tokenRegistry.get(info.mint.toBase58())?.tokenSymbol || "tokens";
   }
 
   return (

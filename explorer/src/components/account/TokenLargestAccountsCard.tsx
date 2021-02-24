@@ -9,10 +9,9 @@ import {
   TokenAccountBalancePairWithOwner,
 } from "providers/mints/largest";
 import { FetchStatus } from "providers/cache";
-import { TokenRegistry } from "tokenRegistry";
-import { useCluster } from "providers/cluster";
 import { useMintAccountInfo } from "providers/accounts";
 import { normalizeTokenAmount } from "utils";
+import { useTokenRegistry } from "providers/mints/token-registry";
 
 export function TokenLargestAccountsCard({ pubkey }: { pubkey: PublicKey }) {
   const mintAddress = pubkey.toBase58();
@@ -23,8 +22,8 @@ export function TokenLargestAccountsCard({ pubkey }: { pubkey: PublicKey }) {
     pubkey,
     fetchLargestAccounts,
   ]);
-  const { cluster } = useCluster();
-  const unit = TokenRegistry.get(mintAddress, cluster)?.symbol;
+  const { tokenRegistry } = useTokenRegistry();
+  const unit = tokenRegistry.get(mintAddress)?.tokenSymbol;
   const unitLabel = unit ? `(${unit})` : "";
 
   React.useEffect(() => {

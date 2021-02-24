@@ -10,14 +10,16 @@ import {
   LoaderName,
   SEARCHABLE_PROGRAMS,
 } from "utils/tx";
-import { TokenRegistry } from "tokenRegistry";
 import { Cluster, useCluster } from "providers/cluster";
+import { useTokenRegistry } from "providers/mints/token-registry";
+import { KnownTokenMap } from "@solana/spl-token-registry";
 
 export function SearchBar() {
   const [search, setSearch] = React.useState("");
   const selectRef = React.useRef<StateManager<any> | null>(null);
   const history = useHistory();
   const location = useLocation();
+  const { tokenRegistry } = useTokenRegistry();
   const { cluster } = useCluster();
 
   const onChange = (
@@ -41,7 +43,7 @@ export function SearchBar() {
         <div className="col">
           <Select
             ref={(ref) => (selectRef.current = ref)}
-            options={buildOptions(search, cluster)}
+            options={buildOptions(search, cluster, tokenRegistry)}
             noOptionsMessage={() => "No Results"}
             placeholder="Search for blocks, accounts, transactions, programs, and tokens"
             value={resetValue}
@@ -138,13 +140,17 @@ function buildSysvarOptions(search: string) {
   }
 }
 
-function buildTokenOptions(search: string, cluster: Cluster) {
-  const matchedTokens = Object.entries(TokenRegistry.all(cluster)).filter(
+function buildTokenOptions(
+  search: string,
+  cluster: Cluster,
+  tokenRegistry: KnownTokenMap
+) {
+  const matchedTokens = Array.from(tokenRegistry.entries()).filter(
     ([address, details]) => {
       const searchLower = search.toLowerCase();
       return (
-        details.name.toLowerCase().includes(searchLower) ||
-        details.symbol.toLowerCase().includes(searchLower) ||
+        details.tokenName.toLowerCase().includes(searchLower) ||
+        details.tokenSymbol.toLowerCase().includes(searchLower) ||
         address.includes(search)
       );
     }
@@ -154,15 +160,19 @@ function buildTokenOptions(search: string, cluster: Cluster) {
     return {
       label: "Tokens",
       options: matchedTokens.map(([id, details]) => ({
-        label: details.name,
-        value: [details.name, details.symbol, id],
+        label: details.tokenName,
+        value: [details.tokenName, details.tokenSymbol, id],
         pathname: "/address/" + id,
       })),
     };
   }
 }
 
-function buildOptions(rawSearch: string, cluster: Cluster) {
+function buildOptions(
+  rawSearch: string,
+  cluster: Cluster,
+  tokenRegistry: KnownTokenMap
+) {
   const search = rawSearch.trim();
   if (search.length === 0) return [];
 
@@ -183,7 +193,7 @@ function buildOptions(rawSearch: string, cluster: Cluster) {
     options.push(sysvarOptions);
   }
 
-  const tokenOptions = buildTokenOptions(search, cluster);
+  const tokenOptions = buildTokenOptions(search, cluster, tokenRegistry);
   if (tokenOptions) {
     options.push(tokenOptions);
   }
