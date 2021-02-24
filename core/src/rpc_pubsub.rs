@@ -619,6 +619,7 @@ mod tests {
         let received_slot = 1;
         rpc.subscriptions
             .notify_signatures_received((received_slot, vec![tx.signatures[0]]));
+
         // Test signature confirmation notification
         let (response, _) = robust_poll_or_panic(receiver);
         let expected_res =
@@ -632,6 +633,39 @@ mod tests {
                    "value": expected_res,
                },
                "subscription": 1,
+           }
+        });
+        assert_eq!(serde_json::to_string(&expected).unwrap(), response);
+
+        // Test "received" for gossip subscription
+        let session = create_session();
+        let (subscriber, _id_receiver, receiver) = Subscriber::new_test("signatureNotification");
+        rpc.signature_subscribe(
+            session,
+            subscriber,
+            tx.signatures[0].to_string(),
+            Some(RpcSignatureSubscribeConfig {
+                commitment: Some(CommitmentConfig::confirmed()),
+                enable_received_notification: Some(true),
+            }),
+        );
+        let received_slot = 2;
+        rpc.subscriptions
+            .notify_signatures_received((received_slot, vec![tx.signatures[0]]));
+
+        // Test signature confirmation notification
+        let (response, _) = robust_poll_or_panic(receiver);
+        let expected_res =
+            RpcSignatureResult::ReceivedSignature(ReceivedSignatureResult::ReceivedSignature);
+        let expected = json!({
+           "jsonrpc": "2.0",
+           "method": "signatureNotification",
+           "params": {
+               "result": {
+                   "context": { "slot": received_slot },
+                   "value": expected_res,
+               },
+               "subscription": 2,
            }
         });
         assert_eq!(serde_json::to_string(&expected).unwrap(), response);
