@@ -3876,10 +3876,12 @@ impl Bank {
             .store_slow_cached(self.slot(), pubkey, account);
 
         if Stakes::is_stake(account) {
-            self.stakes
-                .write()
-                .unwrap()
-                .store(pubkey, account, self.stake_program_v2_enabled());
+            self.stakes.write().unwrap().store(
+                pubkey,
+                account,
+                self.stake_program_v2_enabled(),
+                self.check_init_vote_data_enabled(),
+            );
         }
     }
 
@@ -4408,6 +4410,7 @@ impl Bank {
                         pubkey,
                         account,
                         self.stake_program_v2_enabled(),
+                        self.check_init_vote_data_enabled(),
                     ) {
                         overwritten_vote_accounts.push(OverwrittenVoteAccount {
                             account: old_vote_account,
@@ -4635,6 +4638,11 @@ impl Bank {
     pub fn stake_program_v2_enabled(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::stake_program_v2::id())
+    }
+
+    pub fn check_init_vote_data_enabled(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::check_init_vote_data::id())
     }
 
     pub fn simple_capitalization_enabled(&self) -> bool {
