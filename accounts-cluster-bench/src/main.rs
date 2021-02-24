@@ -11,6 +11,7 @@ use solana_faucet::faucet::{request_airdrop_transaction, FAUCET_PORT};
 use solana_measure::measure::Measure;
 use solana_runtime::inline_spl_token_v2_0;
 use solana_sdk::{
+    commitment_config::CommitmentConfig,
     message::Message,
     pubkey::Pubkey,
     rpc_port::DEFAULT_RPC_PORT,
@@ -113,7 +114,8 @@ impl TransactionExecutor {
         let cleared = Arc::new(RwLock::new(Vec::new()));
         let exit = Arc::new(AtomicBool::new(false));
         let sig_clear_t = Self::start_sig_clear_thread(&exit, &sigs, &cleared, entrypoint_addr);
-        let client = RpcClient::new_socket(entrypoint_addr);
+        let client =
+            RpcClient::new_socket_with_commitment(entrypoint_addr, CommitmentConfig::confirmed());
         Self {
             sigs,
             cleared,
@@ -169,7 +171,10 @@ impl TransactionExecutor {
         Builder::new()
             .name("sig_clear".to_string())
             .spawn(move || {
-                let client = RpcClient::new_socket(entrypoint_addr);
+                let client = RpcClient::new_socket_with_commitment(
+                    entrypoint_addr,
+                    CommitmentConfig::confirmed(),
+                );
                 let mut success = 0;
                 let mut error_count = 0;
                 let mut timed_out = 0;
@@ -307,7 +312,8 @@ fn run_accounts_bench(
     mint: Option<Pubkey>,
 ) {
     assert!(num_instructions > 0);
-    let client = RpcClient::new_socket(entrypoint_addr);
+    let client =
+        RpcClient::new_socket_with_commitment(entrypoint_addr, CommitmentConfig::confirmed());
 
     info!("Targetting {}", entrypoint_addr);
 
