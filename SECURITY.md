@@ -24,24 +24,24 @@ $500,000 USD in locked SOL tokens (locked for 12 months)
 * Theft of funds that requires users signature
 
 Consensus/Safety Violations:
-$250k USD in locked SOL tokens (locked for 12 months)
+$250,000 USD in locked SOL tokens (locked for 12 months)
 * Consesnus safety violation
 * Tricking a validator to accept an optimistic confirmation or rooted slot without a double vote, etc..
 
 Other Attacks:
- $100k USD in locked SOL tokens (locked for 12 months)
+ $100,000 USD in locked SOL tokens (locked for 12 months)
 * Protocol liveness attacks,
 * Eclipse attacks,
 * Remote attacks that partition the network,
  
 DoS Attacks:
- $25k USD in locked SOL tokens (locked for 12 months)
+ $25,000 USD in locked SOL tokens (locked for 12 months)
 * Non-RPC DoS,
 * Remote resource exaustion via Non-RPC protocols
- $5k
+ $5,000 USD in locked SOL tokens (locked for 12 months)
 
 RPC DoS/Crashes:
-$5k USD in locked SOL tokens (locked for 12 months)
+$5,000 USD in locked SOL tokens (locked for 12 months)
 
 
 Eligibility:
