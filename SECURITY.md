@@ -15,9 +15,41 @@ Expect a response as fast as possible, within one business day at the latest.
 
 <a name="bounty"></a>
 ## Security Bug Bounties
-We offer bounties for critical security issues. Please see [Bug Bounty
-Compensation](https://forums.solana.com/t/tour-de-sol-updates-to-tour-de-sol-and-bug-bounty-compensation-structure/1132)
-for more details.
+We offer bounties for critical security issues. Please see below for more details.
+
+Loss of Funds:
+$500,000 USD in locked SOL tokens (locked for 12 months)
+* Theft of funds without users signature from any account
+* Theft of funds without users interaction in system, token, stake, vote programs
+* Theft of funds that requires users signature
+
+Consensus/Safety Violations:
+$250,000 USD in locked SOL tokens (locked for 12 months)
+* Consesnus safety violation
+* Tricking a validator to accept an optimistic confirmation or rooted slot without a double vote, etc..
+
+Other Attacks:
+ $100,000 USD in locked SOL tokens (locked for 12 months)
+* Protocol liveness attacks,
+* Eclipse attacks,
+* Remote attacks that partition the network,
+
+DoS Attacks:
+$25,000 USD in locked SOL tokens (locked for 12 months)
+* Remote resource exaustion via Non-RPC protocols
+
+RPC DoS/Crashes:
+$5,000 USD in locked SOL tokens (locked for 12 months)
+* RPC attacks
+
+Eligibility:
+* The participant submitting the bug bounty shall follow the process outlined within this document
+* Valid exploits can be eligible even if they are not successfully executed on the cluster
+* Multiple submissions for the same class of exploit are still eligible for compensation, though may be compensated at a lower rate, however these will be assessed on a case-by-case basis
+* Participants must complete KYC and sign the participation agreement here when the registrations are open https://solana.com/validator-registration. Security exploits will still be assessed and open for submission at all times. This needs only be done prior to distribution of tokens.
+
+Notes:
+* All locked tokens can be staked during the lockup period
 
 <a name="process"></a>
 ## Incident Response Process
