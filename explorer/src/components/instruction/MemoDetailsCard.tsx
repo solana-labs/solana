@@ -2,6 +2,7 @@ import React from "react";
 import { ParsedInstruction, SignatureResult } from "@solana/web3.js";
 import { InstructionCard } from "./InstructionCard";
 import { wrap } from "utils";
+import { Address } from "components/common/Address";
 
 export function MemoDetailsCard({
   ix,
@@ -26,6 +27,13 @@ export function MemoDetailsCard({
       innerCards={innerCards}
       childIndex={childIndex}
     >
+      <tr>
+        <td>Program</td>
+        <td className="text-lg-right">
+          <Address pubkey={ix.programId} alignRight link />
+        </td>
+      </tr>
+
       <tr>
         <td>Data (UTF-8)</td>
         <td className="text-lg-right">

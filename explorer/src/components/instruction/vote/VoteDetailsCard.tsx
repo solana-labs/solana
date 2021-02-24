@@ -28,6 +28,13 @@ export function VoteDetailsCard(props: {
       childIndex={childIndex}
     >
       <tr>
+        <td>Program</td>
+        <td className="text-lg-right">
+          <Address pubkey={ix.programId} alignRight link />
+        </td>
+      </tr>
+
+      <tr>
         <td>Vote Account</td>
         <td className="text-lg-right">
           <Address pubkey={info.voteAccount} alignRight link />
