@@ -147,19 +147,12 @@ pub fn create_vm<'a>(
     loader_id: &'a Pubkey,
     program: &'a dyn Executable<BpfError, ThisInstructionMeter>,
     parameter_bytes: &mut [u8],
-    parameter_accounts: &'a [KeyedAccount<'a>],
     invoke_context: &'a mut dyn InvokeContext,
 ) -> Result<EbpfVm<'a, BpfError, ThisInstructionMeter>, EbpfError<BpfError>> {
     let heap = vec![0_u8; DEFAULT_HEAP_SIZE];
     let heap_region = MemoryRegion::new_from_slice(&heap, MM_HEAP_START, 0, true);
     let mut vm = EbpfVm::new(program, parameter_bytes, &[heap_region])?;
-    syscalls::bind_syscall_context_objects(
-        loader_id,
-        &mut vm,
-        parameter_accounts,
-        invoke_context,
-        heap,
-    )?;
+    syscalls::bind_syscall_context_objects(loader_id, &mut vm, invoke_context, heap)?;
     Ok(vm)
 }
 
@@ -797,7 +790,6 @@ impl Executor for BpfExecutor {
                 loader_id,
                 self.program.as_ref(),
                 &mut parameter_bytes,
-                &parameter_accounts,
                 invoke_context,
             ) {
                 Ok(info) => info,

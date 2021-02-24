@@ -105,7 +105,6 @@ fn bench_program_alu(bencher: &mut Bencher) {
         &loader_id,
         executable.as_ref(),
         &mut inner_iter,
-        &[],
         &mut invoke_context,
     )
     .unwrap();
@@ -232,7 +231,6 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
         &loader_id,
         executable.as_ref(),
         &mut serialized,
-        &[],
         &mut invoke_context,
     )
     .unwrap();

@@ -217,7 +217,6 @@ fn run_program(
             &loader_id,
             executable.as_ref(),
             &mut parameter_bytes,
-            parameter_accounts,
             &mut invoke_context,
         )
         .unwrap();
