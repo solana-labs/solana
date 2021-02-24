@@ -279,7 +279,7 @@ impl ServeRepair {
         exit: &Arc<AtomicBool>,
     ) -> JoinHandle<()> {
         let exit = exit.clone();
-        let recycler = PacketsRecycler::default();
+        let recycler = PacketsRecycler::new_without_limit("serve-repair-recycler-shrink-stats");
         Builder::new()
             .name("solana-repair-listen".to_string())
             .spawn(move || {
@@ -498,11 +498,7 @@ impl ServeRepair {
 
             if let Some(packet) = packet {
                 inc_new_counter_debug!("serve_repair-window-request-ledger", 1);
-                return Some(Packets::new_with_recycler_data(
-                    recycler,
-                    "run_window_request",
-                    vec![packet],
-                ));
+                return Some(Packets::new_with_recycler_data(recycler, vec![packet])).unwrap();
             }
         }
 
@@ -538,11 +534,7 @@ impl ServeRepair {
                 from_addr,
                 nonce,
             )?;
-            return Some(Packets::new_with_recycler_data(
-                recycler,
-                "run_highest_window_request",
-                vec![packet],
-            ));
+            return Packets::new_with_recycler_data(recycler, vec![packet]);
         }
         None
     }
@@ -555,7 +547,7 @@ impl ServeRepair {
         max_responses: usize,
         nonce: Nonce,
     ) -> Option<Packets> {
-        let mut res = Packets::new_with_recycler(recycler.clone(), 64, "run_orphan");
+        let mut res = Packets::new_with_recycler(recycler.clone(), 64).unwrap();
         if let Some(blockstore) = blockstore {
             // Try to find the next "n" parent slots of the input slot
             while let Ok(Some(meta)) = blockstore.meta(slot) {
@@ -609,7 +601,7 @@ mod tests {
 
     /// test run_window_request responds with the right shred, and do not overrun
     fn run_highest_window_request(slot: Slot, num_slots: u64, nonce: Nonce) {
-        let recycler = PacketsRecycler::default();
+        let recycler = PacketsRecycler::new_without_limit("");
         solana_logger::setup();
         let ledger_path = get_tmp_ledger_path!();
         {
@@ -677,7 +669,7 @@ mod tests {
 
     /// test window requests respond with the right shred, and do not overrun
     fn run_window_request(slot: Slot, nonce: Nonce) {
-        let recycler = PacketsRecycler::default();
+        let recycler = PacketsRecycler::new_without_limit("");
         solana_logger::setup();
         let ledger_path = get_tmp_ledger_path!();
         {
@@ -845,7 +837,7 @@ mod tests {
 
     fn run_orphan(slot: Slot, num_slots: u64, nonce: Nonce) {
         solana_logger::setup();
-        let recycler = PacketsRecycler::default();
+        let recycler = PacketsRecycler::new_without_limit("");
         let ledger_path = get_tmp_ledger_path!();
         {
             let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
@@ -916,7 +908,7 @@ mod tests {
     #[test]
     fn run_orphan_corrupted_shred_size() {
         solana_logger::setup();
-        let recycler = PacketsRecycler::default();
+        let recycler = PacketsRecycler::new_without_limit("");
         let ledger_path = get_tmp_ledger_path!();
         {
             let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
