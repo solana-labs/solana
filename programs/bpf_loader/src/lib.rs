@@ -69,8 +69,7 @@ fn map_ebpf_error(
     InstructionError::InvalidAccountData
 }
 
-pub fn create_and_cache_executor(
-    program_id: Option<&Pubkey>,
+pub fn create_executor(
     program_account_index: usize,
     program_data_offset: usize,
     invoke_context: &mut dyn InvokeContext,
@@ -107,18 +106,9 @@ pub fn create_and_cache_executor(
             return Err(InstructionError::ProgramFailedToCompile);
         }
     }
-    let executor = Arc::new(BpfExecutor {
+    Ok(Arc::new(BpfExecutor {
         program: executable,
-    });
-    let key = if let Some(program_id) = program_id {
-        program_id
-    } else {
-        let keyed_accounts = invoke_context.get_keyed_accounts();
-        let program = keyed_account_at_index(keyed_accounts, program_account_index)?;
-        program.unsigned_key()
-    };
-    invoke_context.add_executor(key, executor.clone());
-    Ok(executor)
+    }))
 }
 
 fn write_program_data(
@@ -261,13 +251,11 @@ fn process_instruction_common(
 
         let executor = match invoke_context.get_executor(program_id) {
             Some(executor) => executor,
-            None => create_and_cache_executor(
-                Some(program_id),
-                0,
-                program_data_offset,
-                invoke_context,
-                use_jit,
-            )?,
+            None => {
+                let executor = create_executor(0, program_data_offset, invoke_context, use_jit)?;
+                invoke_context.add_executor(program_id, executor.clone());
+                executor
+            }
         };
         executor.execute(
             loader_id,
@@ -443,13 +431,8 @@ fn process_loader_upgradeable_instruction(
             )?;
 
             // Load and verify the program bits
-            let _ = create_and_cache_executor(
-                Some(program_id),
-                3,
-                buffer_data_offset,
-                invoke_context,
-                use_jit,
-            )?;
+            let executor = create_executor(3, buffer_data_offset, invoke_context, use_jit)?;
+            invoke_context.add_executor(program_id, executor);
 
             // Update the ProgramData account and record the program bits
             programdata.set_state(&UpgradeableLoaderState::ProgramData {
@@ -570,8 +553,12 @@ fn process_loader_upgradeable_instruction(
 
             // Load and verify the program bits
 
-            let _ =
-                create_and_cache_executor(None, 2, buffer_data_offset, invoke_context, use_jit)?;
+            let executor = create_executor(2, buffer_data_offset, invoke_context, use_jit)?;
+            {
+                let keyed_accounts = invoke_context.get_keyed_accounts();
+                let program = keyed_account_at_index(keyed_accounts, 1)?;
+                invoke_context.add_executor(program.unsigned_key(), executor);
+            }
 
             // Update the ProgramData account, record the upgraded data, and zero
             // the rest
@@ -734,7 +721,12 @@ fn process_loader_instruction(
                 return Err(InstructionError::MissingRequiredSignature);
             }
 
-            let _ = create_and_cache_executor(None, 0, 0, invoke_context, use_jit)?;
+            let executor = create_executor(0, 0, invoke_context, use_jit)?;
+            {
+                let keyed_accounts = invoke_context.get_keyed_accounts();
+                let program = keyed_account_at_index(keyed_accounts, 0)?;
+                invoke_context.add_executor(program.unsigned_key(), executor);
+            }
             program.try_account_ref_mut()?.executable = true;
             ic_msg!(
                 invoke_context,
