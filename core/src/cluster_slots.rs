@@ -52,7 +52,7 @@ impl ClusterSlots {
                 })
                 .collect()
         };
-        let slot_node_stakes = epoch_slots_list
+        let slot_nodes_stakes = epoch_slots_list
             .into_iter()
             .flat_map(|(epoch_slots, stake)| {
                 epoch_slots
@@ -62,16 +62,21 @@ impl ClusterSlots {
                     .zip(std::iter::repeat((epoch_slots.from, stake)))
             })
             .into_group_map();
+        let slot_nodes_stakes: Vec<_> = {
+            let mut cluster_slots = self.cluster_slots.write().unwrap();
+            slot_nodes_stakes
+                .into_iter()
+                .map(|(slot, nodes_stakes)| {
+                    let slot_nodes = cluster_slots.entry(slot).or_default().clone();
+                    (slot_nodes, nodes_stakes)
+                })
+                .collect()
+        };
+        for (slot_nodes, nodes_stakes) in slot_nodes_stakes {
+            slot_nodes.write().unwrap().extend(nodes_stakes);
+        }
         {
             let mut cluster_slots = self.cluster_slots.write().unwrap();
-            for (slot, node_stakes) in slot_node_stakes {
-                cluster_slots
-                    .entry(slot)
-                    .or_default()
-                    .write()
-                    .unwrap()
-                    .extend(node_stakes);
-            }
             *cluster_slots = cluster_slots.split_off(&(root + 1));
             // Trimming is done at 2x size so that amortized it has a constant
             // cost. The slots furthest away from the root are discarded.
