@@ -656,7 +656,7 @@ impl RetransmitStage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{contact_info::ContactInfo, rpc_subscriptions::RpcSubscriptions};
+    use crate::contact_info::ContactInfo;
     use solana_ledger::blockstore_processor::{process_blockstore, ProcessOptions};
     use solana_ledger::create_new_tmp_ledger;
     use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
