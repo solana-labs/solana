@@ -137,13 +137,13 @@ pub enum StakeInstruction {
     /// is possible between two stakes in the following states with no additional
     /// conditions:
     ///
-    /// * two fully deactivated stakes
-    /// * an inactive stake into a fully activating stake
+    /// * two deactivated stakes
+    /// * an inactive stake into an activating stake during its activation epoch
     ///
     /// For the following cases, the voter pubkey and vote credits observed must match:
     ///
-    /// * two fully activating stakes
-    /// * two fully activated stakes
+    /// * two activated stakes
+    /// * two activating accounts that share an activation epoch, during the activation epoch
     ///
     /// All other combinations of stake states will fail to merge, including all
     /// "transient" states, where a stake is activating or deactivating with a
