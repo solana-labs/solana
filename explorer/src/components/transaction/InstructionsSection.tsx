@@ -1,7 +1,16 @@
 import React from "react";
 
 import { ErrorCard } from "components/common/ErrorCard";
-import { ParsedInnerInstruction, ParsedInstruction, ParsedTransaction, PartiallyDecodedInstruction, PublicKey, SignatureResult, Transaction, TransactionSignature } from "@solana/web3.js";
+import {
+  ParsedInnerInstruction,
+  ParsedInstruction,
+  ParsedTransaction,
+  PartiallyDecodedInstruction,
+  PublicKey,
+  SignatureResult,
+  Transaction,
+  TransactionSignature,
+} from "@solana/web3.js";
 import { BpfLoaderDetailsCard } from "components/instruction/bpf-loader/BpfLoaderDetailsCard";
 import { MemoDetailsCard } from "components/instruction/MemoDetailsCard";
 import { SerumDetailsCard } from "components/instruction/SerumDetailsCard";
@@ -11,13 +20,19 @@ import { TokenDetailsCard } from "components/instruction/token/TokenDetailsCard"
 import { TokenLendingDetailsCard } from "components/instruction/TokenLendingDetailsCard";
 import { TokenSwapDetailsCard } from "components/instruction/TokenSwapDetailsCard";
 import { UnknownDetailsCard } from "components/instruction/UnknownDetailsCard";
-import { SignatureProps, INNER_INSTRUCTIONS_START_SLOT } from "pages/TransactionDetailsPage";
+import {
+  SignatureProps,
+  INNER_INSTRUCTIONS_START_SLOT,
+} from "pages/TransactionDetailsPage";
 import { intoTransactionInstruction } from "utils/tx";
 import { isSerumInstruction } from "components/instruction/serum/types";
 import { isTokenLendingInstruction } from "components/instruction/token-lending/types";
 import { isTokenSwapInstruction } from "components/instruction/token-swap/types";
 import { useFetchTransactionDetails } from "providers/transactions/details";
-import { useTransactionDetails, useTransactionStatus } from "providers/transactions";
+import {
+  useTransactionDetails,
+  useTransactionStatus,
+} from "providers/transactions";
 import { Cluster, useCluster } from "providers/cluster";
 import { VoteDetailsCard } from "components/instruction/vote/VoteDetailsCard";
 

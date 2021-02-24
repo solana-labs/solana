@@ -12,6 +12,6 @@ export const VoteInfo = pick({
   vote: pick({
     hash: string(),
     slots: array(number()),
-    timestamp: number()
-  })
+    timestamp: number(),
+  }),
 });
