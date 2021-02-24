@@ -122,14 +122,15 @@ impl SnapshotRequestHandler {
                 flush_accounts_cache_time.stop();
 
                 let mut hash_time = Measure::start("hash_time");
-                let mut hash_for_testing = None;
                 snapshot_root_bank.update_accounts_hash_with_index_option(
-                    !use_index_hash_calculation,
+                    use_index_hash_calculation,
                     test_hash_calculation,
                 );
-                if test_hash_calculation {
-                    hash_for_testing = Some(snapshot_root_bank.get_accounts_hash());
-                }
+                let hash_for_testing = if test_hash_calculation {
+                    Some(snapshot_root_bank.get_accounts_hash())
+                } else {
+                    None
+                };
                 hash_time.stop();
 
                 let mut clean_time = Measure::start("clean_time");
