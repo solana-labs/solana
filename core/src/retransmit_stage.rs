@@ -268,6 +268,7 @@ fn notify_first_shred_received(
     };
 
     if let Some(slot) = notify_slot {
+        info!("First time receiving a shred from slot: {}", slot);
         rpc_subscriptions.notify_slot_update(SlotUpdate::FirstShredReceived {
             slot,
             timestamp: timestamp(),
