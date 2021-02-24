@@ -239,6 +239,42 @@ fn check_if_already_received(
     }
 }
 
+fn notify_first_shred_received(
+    shred_slot: Slot,
+    rpc_subscriptions: &RpcSubscriptions,
+    sent_received_slot_notification: &Mutex<BTreeSet<Slot>>,
+    root_bank: &Bank,
+) {
+    let notify_slot = {
+        let mut sent_received_slot_notification_locked =
+            sent_received_slot_notification.lock().unwrap();
+        if !sent_received_slot_notification_locked.contains(&shred_slot)
+            && shred_slot > root_bank.slot()
+        {
+            sent_received_slot_notification_locked.insert(shred_slot);
+            if sent_received_slot_notification_locked.len() > 100 {
+                let mut slots_before_root =
+                    sent_received_slot_notification_locked.split_off(&(root_bank.slot() + 1));
+                // `slots_before_root` now contains all slots <= root
+                std::mem::swap(
+                    &mut slots_before_root,
+                    &mut sent_received_slot_notification_locked,
+                );
+            }
+            Some(shred_slot)
+        } else {
+            None
+        }
+    };
+
+    if let Some(slot) = notify_slot {
+        rpc_subscriptions.notify_slot_update(SlotUpdate::FirstShredReceived {
+            slot,
+            timestamp: timestamp(),
+        });
+    }
+}
+
 // Returns true if turbine retransmit peers patch (#14565) is enabled.
 fn enable_turbine_retransmit_peers_patch(shred_slot: Slot, root_bank: &Bank) -> bool {
     let feature_slot = root_bank
@@ -269,7 +305,7 @@ fn retransmit(
     shreds_received: &Mutex<ShredFilterAndHasher>,
     max_slots: &MaxSlots,
     sent_received_slot_notification: &Mutex<BTreeSet<Slot>>,
-    subscriptions: &RpcSubscriptions,
+    rpc_subscriptions: &Option<Arc<RpcSubscriptions>>,
 ) -> Result<()> {
     let timer = Duration::new(1, 0);
     let r_lock = r.lock().unwrap();
@@ -346,33 +382,13 @@ fn retransmit(
             };
             max_slot = max_slot.max(shred_slot);
 
-            let notify_rpc_slot = {
-                let mut sent_received_slot_notification_locked =
-                    sent_received_slot_notification.lock().unwrap();
-                if !sent_received_slot_notification_locked.contains(&shred_slot)
-                    && shred_slot > root_bank.slot()
-                {
-                    sent_received_slot_notification_locked.insert(shred_slot);
-                    if sent_received_slot_notification_locked.len() > 100 {
-                        let mut slots_before_root = sent_received_slot_notification_locked
-                            .split_off(&(root_bank.slot() + 1));
-                        // `slots_before_root` now contains all slots <= root
-                        std::mem::swap(
-                            &mut slots_before_root,
-                            &mut sent_received_slot_notification_locked,
-                        );
-                    }
-                    Some(shred_slot)
-                } else {
-                    None
-                }
-            };
-
-            if let Some(slot) = notify_rpc_slot {
-                subscriptions.notify_slot_update(SlotUpdate::FirstShredReceived {
-                    slot,
-                    timestamp: timestamp(),
-                });
+            if let Some(rpc_subscriptions) = rpc_subscriptions {
+                notify_first_shred_received(
+                    shred_slot,
+                    rpc_subscriptions,
+                    sent_received_slot_notification,
+                    &root_bank,
+                );
             }
 
             let mut compute_turbine_peers = Measure::start("turbine_start");
@@ -473,7 +489,7 @@ pub fn retransmitter(
     cluster_info: Arc<ClusterInfo>,
     r: Arc<Mutex<PacketReceiver>>,
     max_slots: &Arc<MaxSlots>,
-    subscriptions: Arc<RpcSubscriptions>,
+    rpc_subscriptions: Option<Arc<RpcSubscriptions>>,
 ) -> Vec<JoinHandle<()>> {
     let stats = Arc::new(RetransmitStats::default());
     let shreds_received = Arc::new(Mutex::new((
@@ -494,7 +510,7 @@ pub fn retransmitter(
             let shreds_received = shreds_received.clone();
             let max_slots = max_slots.clone();
             let sent_received_slot_notification = sent_received_slot_notification.clone();
-            let subscriptions = subscriptions.clone();
+            let rpc_subscriptions = rpc_subscriptions.clone();
 
             Builder::new()
                 .name("solana-retransmitter".to_string())
@@ -514,7 +530,7 @@ pub fn retransmitter(
                             &shreds_received,
                             &max_slots,
                             &sent_received_slot_notification,
-                            &subscriptions,
+                            &rpc_subscriptions,
                         ) {
                             match e {
                                 Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
@@ -560,7 +576,7 @@ impl RetransmitStage {
         repair_validators: Option<HashSet<Pubkey>>,
         completed_data_sets_sender: CompletedDataSetsSender,
         max_slots: &Arc<MaxSlots>,
-        subscriptions: Arc<RpcSubscriptions>,
+        rpc_subscriptions: Option<Arc<RpcSubscriptions>>,
     ) -> Self {
         let (retransmit_sender, retransmit_receiver) = channel();
 
@@ -572,7 +588,7 @@ impl RetransmitStage {
             cluster_info.clone(),
             retransmit_receiver,
             max_slots,
-            subscriptions,
+            rpc_subscriptions,
         );
 
         let leader_schedule_cache_clone = leader_schedule_cache.clone();
@@ -640,18 +656,13 @@ impl RetransmitStage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        contact_info::ContactInfo,
-        optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
-        rpc_subscriptions::RpcSubscriptions,
-    };
+    use crate::{contact_info::ContactInfo, rpc_subscriptions::RpcSubscriptions};
     use solana_ledger::blockstore_processor::{process_blockstore, ProcessOptions};
     use solana_ledger::create_new_tmp_ledger;
     use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use solana_ledger::shred::Shred;
     use solana_net_utils::find_available_port_in_range;
     use solana_perf::packet::{Packet, Packets};
-    use solana_runtime::commitment::BlockCommitmentCache;
     use std::net::{IpAddr, Ipv4Addr};
 
     #[test]
@@ -689,15 +700,6 @@ mod tests {
         let cluster_info = Arc::new(cluster_info);
 
         let (retransmit_sender, retransmit_receiver) = channel();
-        let optimistically_confirmed_bank =
-            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
-        let exit = Arc::new(AtomicBool::new(false));
-        let rpc_subscriptions = Arc::new(RpcSubscriptions::new(
-            &exit,
-            bank_forks.clone(),
-            Arc::new(RwLock::new(BlockCommitmentCache::default())),
-            optimistically_confirmed_bank,
-        ));
         let t_retransmit = retransmitter(
             retransmit_socket,
             bank_forks,
@@ -705,7 +707,7 @@ mod tests {
             cluster_info,
             Arc::new(Mutex::new(retransmit_receiver)),
             &Arc::new(MaxSlots::default()),
-            rpc_subscriptions,
+            None,
         );
         let _thread_hdls = vec![t_retransmit];
 
