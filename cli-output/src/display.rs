@@ -294,6 +294,30 @@ pub fn println_transaction(
     }
 }
 
+pub fn writeln_transaction(
+    f: &mut dyn fmt::Write,
+    transaction: &Transaction,
+    transaction_status: &Option<UiTransactionStatusMeta>,
+    prefix: &str,
+    sigverify_status: Option<&[CliSignatureVerificationStatus]>,
+) -> fmt::Result {
+    let mut w = Vec::new();
+    if write_transaction(
+        &mut w,
+        transaction,
+        transaction_status,
+        prefix,
+        sigverify_status,
+    )
+    .is_ok()
+    {
+        if let Ok(s) = String::from_utf8(w) {
+            write!(f, "{}", s)?;
+        }
+    }
+    Ok(())
+}
+
 /// Creates a new process bar for processing that will take an unknown amount of time
 pub fn new_spinner_progress_bar() -> ProgressBar {
     let progress_bar = ProgressBar::new(42);

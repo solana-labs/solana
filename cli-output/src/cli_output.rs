@@ -2,10 +2,12 @@ use {
     crate::{
         display::{
             build_balance_message, build_balance_message_with_config, format_labeled_address,
-            unix_timestamp_to_string, writeln_name_value, BuildBalanceMessageConfig,
+            unix_timestamp_to_string, writeln_name_value, writeln_transaction,
+            BuildBalanceMessageConfig,
         },
         QuietDisplay, VerboseDisplay,
     },
+    chrono::{Local, TimeZone},
     console::{style, Emoji},
     inflector::cases::titlecase::to_title_case,
     serde::{Deserialize, Serialize},
@@ -27,6 +29,7 @@ use {
         transaction::Transaction,
     },
     solana_stake_program::stake_state::{Authorized, Lockup},
+    solana_transaction_status::EncodedConfirmedBlock,
     solana_vote_program::{
         authorized_voters::AuthorizedVoters,
         vote_state::{BlockTimestamp, Lockout, MAX_EPOCH_CREDITS_HISTORY, MAX_LOCKOUT_HISTORY},
@@ -1736,6 +1739,100 @@ impl fmt::Display for CliSignatureVerificationStatus {
             Self::Pass => write!(f, "pass"),
             Self::Fail => write!(f, "fail"),
         }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct CliBlock {
+    #[serde(flatten)]
+    pub encoded_confirmed_block: EncodedConfirmedBlock,
+    #[serde(skip_serializing)]
+    pub slot: Slot,
+}
+
+impl QuietDisplay for CliBlock {}
+impl VerboseDisplay for CliBlock {}
+
+impl fmt::Display for CliBlock {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "Slot: {}", self.slot)?;
+        writeln!(
+            f,
+            "Parent Slot: {}",
+            self.encoded_confirmed_block.parent_slot
+        )?;
+        writeln!(f, "Blockhash: {}", self.encoded_confirmed_block.blockhash)?;
+        writeln!(
+            f,
+            "Previous Blockhash: {}",
+            self.encoded_confirmed_block.previous_blockhash
+        )?;
+        if let Some(block_time) = self.encoded_confirmed_block.block_time {
+            writeln!(f, "Block Time: {:?}", Local.timestamp(block_time, 0))?;
+        }
+        if !self.encoded_confirmed_block.rewards.is_empty() {
+            let mut rewards = self.encoded_confirmed_block.rewards.clone();
+            rewards.sort_by(|a, b| a.pubkey.cmp(&b.pubkey));
+            let mut total_rewards = 0;
+            writeln!(f, "Rewards:")?;
+            writeln!(
+                f,
+                "  {:<44}  {:^15}  {:<15}  {:<20}  {:>14}",
+                "Address", "Type", "Amount", "New Balance", "Percent Change"
+            )?;
+            for reward in rewards {
+                let sign = if reward.lamports < 0 { "-" } else { "" };
+
+                total_rewards += reward.lamports;
+                writeln!(
+                    f,
+                    "  {:<44}  {:^15}  {:>15}  {}",
+                    reward.pubkey,
+                    if let Some(reward_type) = reward.reward_type {
+                        format!("{}", reward_type)
+                    } else {
+                        "-".to_string()
+                    },
+                    format!(
+                        "{}◎{:<14.9}",
+                        sign,
+                        lamports_to_sol(reward.lamports.abs() as u64)
+                    ),
+                    if reward.post_balance == 0 {
+                        "          -                 -".to_string()
+                    } else {
+                        format!(
+                            "◎{:<19.9}  {:>13.9}%",
+                            lamports_to_sol(reward.post_balance),
+                            (reward.lamports.abs() as f64
+                                / (reward.post_balance as f64 - reward.lamports as f64))
+                                * 100.0
+                        )
+                    }
+                )?;
+            }
+
+            let sign = if total_rewards < 0 { "-" } else { "" };
+            writeln!(
+                f,
+                "Total Rewards: {}◎{:<12.9}",
+                sign,
+                lamports_to_sol(total_rewards.abs() as u64)
+            )?;
+        }
+        for (index, transaction_with_meta) in
+            self.encoded_confirmed_block.transactions.iter().enumerate()
+        {
+            writeln!(f, "Transaction {}:", index)?;
+            writeln_transaction(
+                f,
+                &transaction_with_meta.transaction.decode().unwrap(),
+                &transaction_with_meta.meta,
+                "  ",
+                None,
+            )?;
+        }
+        Ok(())
     }
 }
 

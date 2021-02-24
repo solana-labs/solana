@@ -843,6 +843,15 @@ fn main() {
                 .global(true)
                 .help("Use DIR for ledger location"),
         )
+        .arg(
+            Arg::with_name("output_format")
+                .long("output")
+                .value_name("FORMAT")
+                .global(true)
+                .takes_value(true)
+                .possible_values(&["json", "json-compact"])
+                .help("Return information in specified output format, currently only available for bigtable subcommands"),
+        )
         .bigtable_subcommand()
         .subcommand(
             SubCommand::with_name("print")
