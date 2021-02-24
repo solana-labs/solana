@@ -41,7 +41,7 @@
     "react-scripts": "^4.0.3",
     "react-select": "^4.1.0",
     "superstruct": "github:solana-labs/superstruct",
-    "typescript": "^4.1.5"
+    "typescript": "^4.2.2"
   },
   "scripts": {
     "start": "react-scripts start",
