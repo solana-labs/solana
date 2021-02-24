@@ -3,7 +3,6 @@ use crate::{
     spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
     stake::is_stake_program_v2_enabled,
 };
-use chrono::{Local, TimeZone};
 use clap::{value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
 use console::{style, Emoji};
 use serde::{Deserialize, Serialize};
@@ -896,7 +895,7 @@ pub fn process_leader_schedule(
 
 pub fn process_get_block(
     rpc_client: &RpcClient,
-    _config: &CliConfig,
+    config: &CliConfig,
     slot: Option<Slot>,
 ) -> ProcessResult {
     let slot = if let Some(slot) = slot {
@@ -905,72 +904,13 @@ pub fn process_get_block(
         rpc_client.get_slot_with_commitment(CommitmentConfig::finalized())?
     };
 
-    let mut block =
+    let encoded_confirmed_block =
         rpc_client.get_confirmed_block_with_encoding(slot, UiTransactionEncoding::Base64)?;
-
-    println!("Slot: {}", slot);
-    println!("Parent Slot: {}", block.parent_slot);
-    println!("Blockhash: {}", block.blockhash);
-    println!("Previous Blockhash: {}", block.previous_blockhash);
-    if let Some(block_time) = block.block_time {
-        println!("Block Time: {:?}", Local.timestamp(block_time, 0));
-    }
-    if !block.rewards.is_empty() {
-        block.rewards.sort_by(|a, b| a.pubkey.cmp(&b.pubkey));
-        let mut total_rewards = 0;
-        println!("Rewards:",);
-        println!(
-            "  {:<44}  {:^15}  {:<15}  {:<20}  {:>14}",
-            "Address", "Type", "Amount", "New Balance", "Percent Change"
-        );
-        for reward in block.rewards {
-            let sign = if reward.lamports < 0 { "-" } else { "" };
-
-            total_rewards += reward.lamports;
-            println!(
-                "  {:<44}  {:^15}  {:>15}  {}",
-                reward.pubkey,
-                if let Some(reward_type) = reward.reward_type {
-                    format!("{}", reward_type)
-                } else {
-                    "-".to_string()
-                },
-                format!(
-                    "{}◎{:<14.9}",
-                    sign,
-                    lamports_to_sol(reward.lamports.abs() as u64)
-                ),
-                if reward.post_balance == 0 {
-                    "          -                 -".to_string()
-                } else {
-                    format!(
-                        "◎{:<19.9}  {:>13.9}%",
-                        lamports_to_sol(reward.post_balance),
-                        (reward.lamports.abs() as f64
-                            / (reward.post_balance as f64 - reward.lamports as f64))
-                            * 100.0
-                    )
-                }
-            );
-        }
-
-        let sign = if total_rewards < 0 { "-" } else { "" };
-        println!(
-            "Total Rewards: {}◎{:<12.9}",
-            sign,
-            lamports_to_sol(total_rewards.abs() as u64)
-        );
-    }
-    for (index, transaction_with_meta) in block.transactions.iter().enumerate() {
-        println!("Transaction {}:", index);
-        println_transaction(
-            &transaction_with_meta.transaction.decode().unwrap(),
-            &transaction_with_meta.meta,
-            "  ",
-            None,
-        );
-    }
-    Ok("".to_string())
+    let cli_block = CliBlock {
+        encoded_confirmed_block,
+        slot,
+    };
+    Ok(config.output_format.formatted_string(&cli_block))
 }
 
 pub fn process_get_block_time(
