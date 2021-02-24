@@ -149,6 +149,10 @@ impl OptimisticallyConfirmedBankTracker {
                     }
                     drop(w_optimistically_confirmed_bank);
                 }
+                subscriptions.notify_slot_update(SlotUpdate::Frozen {
+                    slot: frozen_slot,
+                    timestamp: timestamp(),
+                });
             }
             BankNotification::Root(bank) => {
                 let root_slot = bank.slot();
