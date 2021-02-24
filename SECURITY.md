@@ -33,7 +33,6 @@ Other Attacks:
 * Protocol liveness attacks,
 * Eclipse attacks,
 * Remote attacks that partition the network,
- 
 DoS Attacks:
  $25,000 USD in locked SOL tokens (locked for 12 months)
 * Non-RPC DoS,
@@ -50,7 +49,7 @@ Eligibility:
 * Multiple submissions for the same class of exploit are still eligible for compensation, though may be compensated at a lower rate, however these will be assessed on a case-by-case basis
 * Participants must complete KYC and sign the participation agreement here when the registrations are open https://solana.com/validator-registration. Security exploits will still be assessed and open for submission at all times. This needs only be done prior to distribution of tokens.
 
-Notes: 
+Notes:
 * All locked tokens can be staked during the lockup period
 
 <a name="process"></a>
