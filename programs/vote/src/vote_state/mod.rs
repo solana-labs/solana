@@ -33,6 +33,9 @@ pub const INITIAL_LOCKOUT: usize = 2;
 // Maximum number of credits history to keep around
 pub const MAX_EPOCH_CREDITS_HISTORY: usize = 64;
 
+// Offset of VoteState::prior_voters, for determining initialization status without deserialization
+const DEFAULT_PRIOR_VOTERS_OFFSET: usize = 82;
+
 #[frozen_abi(digest = "Ch2vVEwos2EjAVqSHCyJjnN2MNX1yrpapZTGhMSCjWUH")]
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample)]
 pub struct Vote {
@@ -569,6 +572,13 @@ impl VoteState {
         self.last_timestamp = BlockTimestamp { slot, timestamp };
         Ok(())
     }
+
+    pub fn is_uninitialized_no_deser(data: &[u8]) -> bool {
+        const VERSION_OFFSET: usize = 4;
+        data.len() != VoteState::size_of()
+            || data[VERSION_OFFSET..VERSION_OFFSET + DEFAULT_PRIOR_VOTERS_OFFSET]
+                == [0; DEFAULT_PRIOR_VOTERS_OFFSET]
+    }
 }
 
 /// Authorize the given pubkey to withdraw or sign votes. This may be called multiple times,
@@ -684,7 +694,11 @@ pub fn initialize_account<S: std::hash::BuildHasher>(
     vote_init: &VoteInit,
     signers: &HashSet<Pubkey, S>,
     clock: &Clock,
+    check_data_size: bool,
 ) -> Result<(), InstructionError> {
+    if check_data_size && vote_account.data_len()? != VoteState::size_of() {
+        return Err(InstructionError::InvalidAccountData);
+    }
     let versioned = State::<VoteStateVersions>::state(vote_account)?;
 
     if !versioned.is_uninitialized() {
@@ -812,6 +826,7 @@ mod tests {
             },
             &signers,
             &Clock::default(),
+            true,
         );
         assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
 
@@ -829,6 +844,7 @@ mod tests {
             },
             &signers,
             &Clock::default(),
+            true,
         );
         assert_eq!(res, Ok(()));
 
@@ -843,8 +859,27 @@ mod tests {
             },
             &signers,
             &Clock::default(),
+            true,
         );
         assert_eq!(res, Err(InstructionError::AccountAlreadyInitialized));
+
+        //init should fail, account is too big
+        let large_vote_account = Account::new_ref(100, 2 * VoteState::size_of(), &id());
+        let large_vote_account =
+            KeyedAccount::new(&vote_account_pubkey, false, &large_vote_account);
+        let res = initialize_account(
+            &large_vote_account,
+            &VoteInit {
+                node_pubkey,
+                authorized_voter: vote_account_pubkey,
+                authorized_withdrawer: vote_account_pubkey,
+                commission: 0,
+            },
+            &signers,
+            &Clock::default(),
+            true,
+        );
+        assert_eq!(res, Err(InstructionError::InvalidAccountData));
     }
 
     fn create_test_account() -> (Pubkey, RefCell<Account>) {
@@ -2027,5 +2062,40 @@ mod tests {
         // so must remain such that `VoteStateVersions::is_uninitialized()` returns true
         // when called on a `VoteStateVersions` that stores it
         assert!(VoteStateVersions::new_current(VoteState::default()).is_uninitialized());
+    }
+
+    #[test]
+    fn test_is_uninitialized_no_deser() {
+        // Check all zeroes
+        let mut vote_account_data = vec![0; VoteState::size_of()];
+        assert!(VoteState::is_uninitialized_no_deser(&vote_account_data));
+
+        // Check default VoteState
+        let default_account_state = VoteStateVersions::new_current(VoteState::default());
+        VoteState::serialize(&default_account_state, &mut vote_account_data).unwrap();
+        assert!(VoteState::is_uninitialized_no_deser(&vote_account_data));
+
+        // Check non-zero data shorter than offset index used
+        let short_data = vec![1; DEFAULT_PRIOR_VOTERS_OFFSET];
+        assert!(VoteState::is_uninitialized_no_deser(&short_data));
+
+        // Check non-zero large account
+        let mut large_vote_data = vec![1; 2 * VoteState::size_of()];
+        let default_account_state = VoteStateVersions::new_current(VoteState::default());
+        VoteState::serialize(&default_account_state, &mut large_vote_data).unwrap();
+        assert!(VoteState::is_uninitialized_no_deser(&vote_account_data));
+
+        // Check populated VoteState
+        let account_state = VoteStateVersions::new_current(VoteState::new(
+            &VoteInit {
+                node_pubkey: Pubkey::new_unique(),
+                authorized_voter: Pubkey::new_unique(),
+                authorized_withdrawer: Pubkey::new_unique(),
+                commission: 0,
+            },
+            &Clock::default(),
+        ));
+        VoteState::serialize(&account_state, &mut vote_account_data).unwrap();
+        assert!(!VoteState::is_uninitialized_no_deser(&vote_account_data));
     }
 }
