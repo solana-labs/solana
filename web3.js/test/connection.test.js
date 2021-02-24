@@ -1905,7 +1905,6 @@ describe('Connection', () => {
       const subscriptionId = connection.onProgramAccountChange(
         SystemProgram.programId,
         (keyedAccountInfo: KeyedAccountInfo) => {
-          // FIX: accountId should be `PublicKey` not `string`
           if (keyedAccountInfo.accountId.equals(programAccount.publicKey)) {
             expect(keyedAccountInfo.accountInfo.lamports).to.eq(balanceNeeded);
             expect(

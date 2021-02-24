@@ -15,7 +15,6 @@ import {
   literal,
   record,
   union,
-  any,
   optional,
   nullable,
   coerce,
@@ -23,9 +22,8 @@ import {
   create,
   tuple,
   unknown,
-  object,
-  type,
 } from 'superstruct';
+import type {Struct} from 'superstruct';
 import {Client as RpcWebSocketClient} from 'rpc-websockets';
 
 import {AgentManager} from './agent-manager';
@@ -49,9 +47,11 @@ const PublicKeyFromString = coerce(
   value => new PublicKey(value),
 );
 
-const BufferFromBase64 = coerce(
+const RawAccountDataResult = tuple([string(), literal('base64')]);
+
+const BufferFromRawAccountData = coerce(
   instance(Buffer),
-  tuple([string(), literal('base64')]),
+  RawAccountDataResult,
   value => Buffer.from(value[0], 'base64'),
 );
 
@@ -132,35 +132,55 @@ type RpcResponseAndContext<T> = {
 /**
  * @private
  */
-function jsonRpcResultAndContext<T, U>(value: Struct<T, U>) {
-  return jsonRpcResult(
-    object({
-      context: object({
-        slot: number(),
-      }),
-      value,
+function createRpcResult<T, U>(result: Struct<T, U>) {
+  return union([
+    pick({
+      jsonrpc: literal('2.0'),
+      id: string(),
+      result,
     }),
-  );
+    pick({
+      jsonrpc: literal('2.0'),
+      id: string(),
+      error: pick({
+        code: unknown(),
+        message: string(),
+        data: optional(unknown()),
+      }),
+    }),
+  ]);
+}
+
+const UnknownRpcResult = createRpcResult(unknown());
+
+/**
+ * @private
+ */
+function jsonRpcResult<T, U>(schema: Struct<T, U>) {
+  return coerce(createRpcResult(schema), UnknownRpcResult, value => {
+    if ('error' in value) {
+      return value;
+    } else {
+      return {
+        ...value,
+        result: create(value.result, schema),
+      };
+    }
+  });
 }
 
 /**
  * @private
  */
-function jsonRpcResult<T, U>(result: Struct<T, U>) {
-  return pick({
-    jsonrpc: literal('2.0'),
-    id: string(),
-    result: optional(result),
-    error: optional(
-      nullable(
-        pick({
-          code: any(),
-          message: string(),
-          data: optional(any()),
-        }),
-      ),
-    ),
-  });
+function jsonRpcResultAndContext<T, U>(value: Struct<T, U>) {
+  return jsonRpcResult(
+    pick({
+      context: pick({
+        slot: number(),
+      }),
+      value,
+    }),
+  );
 }
 
 /**
@@ -374,7 +394,7 @@ type LeaderSchedule = {
 };
 
 // TODO: check if validating array(number()) is still extremely slow
-const GetLeaderScheduleResult = record(string(), any());
+const GetLeaderScheduleResult = record(string(), unknown());
 
 /**
  * Transaction error or null
@@ -404,7 +424,7 @@ type SimulatedTransactionResponse = {
   logs: Array<string> | null,
 };
 
-const SimulatedTransactionResponseValidator = jsonRpcResultAndContext(
+const SimulatedTransactionResponseStruct = jsonRpcResultAndContext(
   pick({
     err: nullable(union([pick({}), string()])),
     logs: nullable(array(string())),
@@ -701,16 +721,6 @@ const GetEpochScheduleRpcResult = jsonRpcResult(GetEpochScheduleResult);
 const GetLeaderScheduleRpcResult = jsonRpcResult(GetLeaderScheduleResult);
 
 /**
- * Expected JSON RPC response for the "getBalance" message
- */
-const GetBalanceAndContextRpcResult = jsonRpcResultAndContext(number());
-
-/**
- * Expected JSON RPC response for the "getBlockTime" message
- */
-const GetBlockTimeRpcResult = jsonRpcResult(nullable(number()));
-
-/**
  * Expected JSON RPC response for the "minimumLedgerSlot" and "getFirstAvailableBlock" messages
  */
 const SlotRpcResult = jsonRpcResult(number());
@@ -798,16 +808,6 @@ const GetTokenLargestAccountsResult = jsonRpcResultAndContext(
 );
 
 /**
- * Expected JSON RPC response for the "getTokenAccountBalance" message
- */
-const GetTokenAccountBalance = jsonRpcResultAndContext(TokenAmountResult);
-
-/**
- * Expected JSON RPC response for the "getTokenSupply" message
- */
-const GetTokenSupplyRpcResult = jsonRpcResultAndContext(TokenAmountResult);
-
-/**
  * Expected JSON RPC response for the "getTokenAccountsByOwner" message
  */
 const GetTokenAccountsByOwner = jsonRpcResultAndContext(
@@ -818,12 +818,18 @@ const GetTokenAccountsByOwner = jsonRpcResultAndContext(
         executable: boolean(),
         owner: PublicKeyFromString,
         lamports: number(),
-        data: BufferFromBase64,
+        data: BufferFromRawAccountData,
         rentEpoch: number(),
       }),
     }),
   ),
 );
+
+const ParsedAccountDataResult = pick({
+  program: string(),
+  parsed: unknown(),
+  space: number(),
+});
 
 /**
  * Expected JSON RPC response for the "getTokenAccountsByOwner" message with parsed data
@@ -836,11 +842,7 @@ const GetParsedTokenAccountsByOwner = jsonRpcResultAndContext(
         executable: boolean(),
         owner: PublicKeyFromString,
         lamports: number(),
-        data: pick({
-          program: string(),
-          parsed: unknown(),
-          space: number(),
-        }),
+        data: ParsedAccountDataResult,
         rentEpoch: number(),
       }),
     }),
@@ -872,18 +874,13 @@ const GetLargestAccountsRpcResult = jsonRpcResultAndContext(
 );
 
 /**
- * Expected JSON RPC response for the "getVersion" message
- */
-const GetVersionRpcResult = jsonRpcResult(Version);
-
-/**
  * @private
  */
 const AccountInfoResult = pick({
   executable: boolean(),
   owner: PublicKeyFromString,
   lamports: number(),
-  data: BufferFromBase64,
+  data: BufferFromRawAccountData,
   rentEpoch: number(),
 });
 
@@ -895,6 +892,18 @@ const KeyedAccountInfoResult = pick({
   account: AccountInfoResult,
 });
 
+const ParsedOrRawAccountData = coerce(
+  union([instance(Buffer), ParsedAccountDataResult]),
+  union([RawAccountDataResult, ParsedAccountDataResult]),
+  value => {
+    if (Array.isArray(value)) {
+      return create(value, BufferFromRawAccountData);
+    } else {
+      return value;
+    }
+  },
+);
+
 /**
  * @private
  */
@@ -902,14 +911,7 @@ const ParsedAccountInfoResult = pick({
   executable: boolean(),
   owner: PublicKeyFromString,
   lamports: number(),
-  data: union([
-    BufferFromBase64,
-    pick({
-      program: string(),
-      parsed: unknown(),
-      space: number(),
-    }),
-  ]),
+  data: ParsedOrRawAccountData,
   rentEpoch: number(),
 });
 
@@ -931,25 +933,6 @@ const StakeActivationResult = pick({
   active: number(),
   inactive: number(),
 });
-
-/**
- * Expected JSON RPC response for the "getAccountInfo" message
- */
-const GetAccountInfoAndContextRpcResult = jsonRpcResultAndContext(
-  nullable(AccountInfoResult),
-);
-
-/**
- * Expected JSON RPC response for the "getAccountInfo" message with jsonParsed param
- */
-const GetParsedAccountInfoResult = jsonRpcResultAndContext(
-  nullable(ParsedAccountInfoResult),
-);
-
-/**
- * Expected JSON RPC response for the "getStakeActivation" message with jsonParsed param
- */
-const GetStakeActivationResult = jsonRpcResult(StakeActivationResult);
 
 /**
  * Expected JSON RPC response for the "getConfirmedSignaturesForAddress" message
@@ -986,16 +969,8 @@ const AccountNotificationResult = pick({
  * @private
  */
 const ProgramAccountInfoResult = pick({
-  pubkey: string(),
+  pubkey: PublicKeyFromString,
   account: AccountInfoResult,
-});
-
-/**
- * @private
- */
-const ParsedProgramAccountInfoResult = pick({
-  pubkey: string(),
-  account: ParsedAccountInfoResult,
 });
 
 /***
@@ -1039,30 +1014,6 @@ const RootNotificationResult = pick({
   result: number(),
 });
 
-/**
- * Expected JSON RPC response for the "getProgramAccounts" message
- */
-const GetProgramAccountsRpcResult = jsonRpcResult(
-  array(ProgramAccountInfoResult),
-);
-
-/**
- * Expected JSON RPC response for the "getProgramAccounts" message
- */
-const GetParsedProgramAccountsRpcResult = jsonRpcResult(
-  array(ParsedProgramAccountInfoResult),
-);
-
-/**
- * Expected JSON RPC response for the "getSlot" message
- */
-const GetSlot = jsonRpcResult(number());
-
-/**
- * Expected JSON RPC response for the "getSlotLeader" message
- */
-const GetSlotLeader = jsonRpcResult(string());
-
 const ContactInfoResult = pick({
   pubkey: string(),
   gossip: nullable(string()),
@@ -1070,11 +1021,6 @@ const ContactInfoResult = pick({
   rpc: nullable(string()),
   version: nullable(string()),
 });
-
-/**
- * Expected JSON RPC response for the "getClusterNodes" message
- */
-const GetClusterNodes = jsonRpcResult(array(ContactInfoResult));
 
 const VoteAccountInfoResult = pick({
   votePubkey: string(),
@@ -1110,16 +1056,6 @@ const SignatureStatusResponse = pick({
 const GetSignatureStatusesRpcResult = jsonRpcResultAndContext(
   array(nullable(SignatureStatusResponse)),
 );
-
-/**
- * Expected JSON RPC response for the "getTransactionCount" message
- */
-const GetTransactionCountRpcResult = jsonRpcResult(number());
-
-/**
- * Expected JSON RPC response for the "getTotalSupply" message
- */
-const GetTotalSupplyRpcResult = jsonRpcResult(number());
 
 /**
  * Expected JSON RPC response for the "getMinimumBalanceForRentExemption" message
@@ -1158,6 +1094,48 @@ const TransactionFromConfirmed = coerce(
   },
 );
 
+const ParsedInstructionResult = pick({
+  parsed: unknown(),
+  program: string(),
+  programId: PublicKeyFromString,
+});
+
+const RawInstructionResult = pick({
+  accounts: array(PublicKeyFromString),
+  data: string(),
+  programId: PublicKeyFromString,
+});
+
+const InstructionResult = union([
+  RawInstructionResult,
+  ParsedInstructionResult,
+]);
+
+const UnknownInstructionResult = union([
+  pick({
+    parsed: unknown(),
+    program: string(),
+    programId: string(),
+  }),
+  pick({
+    accounts: array(string()),
+    data: string(),
+    programId: string(),
+  }),
+]);
+
+const ParsedOrRawInstruction = coerce(
+  InstructionResult,
+  UnknownInstructionResult,
+  value => {
+    if ('accounts' in value) {
+      return create(value, RawInstructionResult);
+    } else {
+      return create(value, ParsedInstructionResult);
+    }
+  },
+);
+
 /**
  * @private
  */
@@ -1171,20 +1149,7 @@ const ParsedConfirmedTransactionResult = pick({
         writable: boolean(),
       }),
     ),
-    instructions: array(
-      union([
-        pick({
-          accounts: array(PublicKeyFromString),
-          data: string(),
-          programId: PublicKeyFromString,
-        }),
-        pick({
-          parsed: any(),
-          program: string(),
-          programId: PublicKeyFromString,
-        }),
-      ]),
-    ),
+    instructions: array(ParsedOrRawInstruction),
     recentBlockhash: string(),
   }),
 });
@@ -1235,20 +1200,7 @@ const ParsedConfirmedTransactionMetaResult = pick({
       array(
         pick({
           index: number(),
-          instructions: array(
-            union([
-              pick({
-                accounts: array(PublicKeyFromString),
-                data: string(),
-                programId: PublicKeyFromString,
-              }),
-              pick({
-                parsed: any(),
-                program: string(),
-                programId: PublicKeyFromString,
-              }),
-            ]),
-          ),
+          instructions: array(ParsedOrRawInstruction),
         }),
       ),
     ),
@@ -1696,7 +1648,6 @@ export class Connection {
           res.error.message,
       );
     }
-    assert(typeof res.result !== 'undefined');
     return res.result;
   }
 
@@ -1727,7 +1678,6 @@ export class Connection {
         'failed to get block time for slot ' + slot + ': ' + res.error.message,
       );
     }
-    assert(typeof res.result !== 'undefined');
     return res.result;
   }
 
@@ -1743,7 +1693,6 @@ export class Connection {
         'failed to get minimum ledger slot: ' + res.error.message,
       );
     }
-    assert(typeof res.result !== 'undefined');
     return res.result;
   }
 
@@ -1758,7 +1707,6 @@ export class Connection {
         'failed to get first available block: ' + res.error.message,
       );
     }
-    assert(typeof res.result !== 'undefined');
     return res.result;
   }
 
@@ -1774,7 +1722,6 @@ export class Connection {
     if (res.error) {
       throw new Error('failed to get supply: ' + res.error.message);
     }
-    assert(typeof res.result !== 'undefined');
     return res.result;
   }
 
@@ -1791,7 +1738,6 @@ export class Connection {
     if (res.error) {
       throw new Error('failed to get token supply: ' + res.error.message);
     }
-    assert(typeof res.result !== 'undefined');
     return res.result;
   }
 
@@ -1810,7 +1756,6 @@ export class Connection {
         'failed to get token account balance: ' + res.error.message,
       );
     }
-    assert(typeof res.result !== 'undefined');
     return res.result;
   }
 
@@ -1837,10 +1782,7 @@ export class Connection {
 
     const args = this._buildArgs(_args, commitment, 'base64');
     const unsafeRes = await this._rpcRequest('getTokenAccountsByOwner', args);
-    const res = create(
-      unsafeRes,
-      jsonRpcResultAndContext(GetTokenAccountsByOwner),
-    );
+    const res = create(unsafeRes, GetTokenAccountsByOwner);
     if (res.error) {
       throw new Error(
         'failed to get token accounts owned by account ' +
@@ -1875,10 +1817,7 @@ export class Connection {
 
     const args = this._buildArgs(_args, commitment, 'jsonParsed');
     const unsafeRes = await this._rpcRequest('getTokenAccountsByOwner', args);
-    const res = create(
-      unsafeRes,
-      jsonRpcResultAndContext(GetParsedTokenAccountsByOwner),
-    );
+    const res = create(unsafeRes, GetParsedTokenAccountsByOwner);
     if (res.error) {
       throw new Error(
         'failed to get token accounts owned by account ' +
@@ -2023,7 +1962,6 @@ export class Connection {
         }`,
       );
     }
-    assert(typeof res.result !== 'undefined');
     return res.result;
   }
 
@@ -2170,7 +2108,6 @@ export class Connection {
     if (res.error) {
       throw new Error('failed to get cluster nodes: ' + res.error.message);
     }
-    assert(typeof res.result !== 'undefined');
     return res.result;
   }
 
@@ -2184,7 +2121,6 @@ export class Connection {
     if (res.error) {
       throw new Error('failed to get vote accounts: ' + res.error.message);
     }
-    assert(typeof res.result !== 'undefined');
     return res.result;
   }
 
@@ -2198,7 +2134,6 @@ export class Connection {
     if (res.error) {
       throw new Error('failed to get slot: ' + res.error.message);
     }
-    assert(typeof res.result !== 'undefined');
     return res.result;
   }
 
@@ -2212,7 +2147,6 @@ export class Connection {
     if (res.error) {
       throw new Error('failed to get slot leader: ' + res.error.message);
     }
-    assert(typeof res.result !== 'undefined');
     return res.result;
   }
 
@@ -2248,7 +2182,6 @@ export class Connection {
     if (res.error) {
       throw new Error('failed to get signature status: ' + res.error.message);
     }
-    assert(typeof res.result !== 'undefined');
     return res.result;
   }
 
@@ -2262,7 +2195,6 @@ export class Connection {
     if (res.error) {
       throw new Error('failed to get transaction count: ' + res.error.message);
     }
-    assert(typeof res.result !== 'undefined');
     return res.result;
   }
 
@@ -2276,7 +2208,6 @@ export class Connection {
     if (res.error) {
       throw new Error('failed to get total supply: ' + res.error.message);
     }
-    assert(typeof res.result !== 'undefined');
     return res.result;
   }
 
@@ -2292,7 +2223,6 @@ export class Connection {
     if (res.error) {
       throw new Error('failed to get inflation: ' + res.error.message);
     }
-    assert(typeof res.result !== 'undefined');
     return res.result;
   }
 
@@ -2306,7 +2236,6 @@ export class Connection {
     if (res.error) {
       throw new Error('failed to get epoch info: ' + res.error.message);
     }
-    assert(typeof res.result !== 'undefined');
     return res.result;
   }
 
@@ -2319,7 +2248,6 @@ export class Connection {
     if (res.error) {
       throw new Error('failed to get epoch schedule: ' + res.error.message);
     }
-    assert(typeof res.result !== 'undefined');
     return res.result;
   }
 
@@ -2333,7 +2261,6 @@ export class Connection {
     if (res.error) {
       throw new Error('failed to get leader schedule: ' + res.error.message);
     }
-    assert(typeof res.result !== 'undefined');
     return res.result;
   }
 
@@ -2355,7 +2282,6 @@ export class Connection {
       console.warn('Unable to fetch minimum balance for rent exemption');
       return 0;
     }
-    assert(typeof res.result !== 'undefined');
     return res.result;
   }
 
@@ -2374,7 +2300,6 @@ export class Connection {
     if (res.error) {
       throw new Error('failed to get recent blockhash: ' + res.error.message);
     }
-    assert(typeof res.result !== 'undefined');
     return res.result;
   }
 
@@ -2397,7 +2322,6 @@ export class Connection {
       );
     }
 
-    assert(typeof res.result !== 'undefined');
     return res.result;
   }
 
@@ -2418,11 +2342,10 @@ export class Connection {
     if (res.error) {
       throw new Error('failed to get fee calculator: ' + res.error.message);
     }
-    assert(typeof res.result !== 'undefined');
     const {context, value} = res.result;
     return {
       context,
-      value: value && value.feeCalculator,
+      value: value.feeCalculator,
     };
   }
 
@@ -2450,7 +2373,6 @@ export class Connection {
     if (res.error) {
       throw new Error('failed to get version: ' + res.error.message);
     }
-    assert(typeof res.result !== 'undefined');
     return res.result;
   }
 
@@ -2465,7 +2387,6 @@ export class Connection {
       throw new Error('failed to get confirmed block: ' + res.error.message);
     }
     const result = res.result;
-    assert(typeof result !== 'undefined');
     if (!result) {
       throw new Error('Confirmed block ' + slot + ' not found');
     }
@@ -2487,7 +2408,6 @@ export class Connection {
         'failed to get confirmed transaction: ' + res.error.message,
       );
     }
-    assert(typeof res.result !== 'undefined');
     return res.result;
   }
 
@@ -2507,7 +2427,6 @@ export class Connection {
         'failed to get confirmed transaction: ' + res.error.message,
       );
     }
-    assert(typeof res.result !== 'undefined');
     return res.result;
   }
 
@@ -2534,7 +2453,6 @@ export class Connection {
         'failed to get confirmed signatures for address: ' + res.error.message,
       );
     }
-    assert(typeof res.result !== 'undefined');
     return res.result;
   }
 
@@ -2560,7 +2478,6 @@ export class Connection {
         'failed to get confirmed signatures for address: ' + res.error.message,
       );
     }
-    assert(typeof res.result !== 'undefined');
     return res.result;
   }
 
@@ -2623,7 +2540,6 @@ export class Connection {
         'airdrop to ' + to.toBase58() + ' failed: ' + res.error.message,
       );
     }
-    assert(typeof res.result !== 'undefined');
     return res.result;
   }
 
@@ -2724,12 +2640,10 @@ export class Connection {
     }
 
     const unsafeRes = await this._rpcRequest('simulateTransaction', args);
-    const res = SimulatedTransactionResponseValidator(unsafeRes);
+    const res = create(unsafeRes, SimulatedTransactionResponseStruct);
     if (res.error) {
       throw new Error('failed to simulate transaction: ' + res.error.message);
     }
-    assert(typeof res.result !== 'undefined');
-    assert(res.result);
     return res.result;
   }
 
@@ -2777,7 +2691,6 @@ export class Connection {
     if (res.error) {
       throw new Error('validator exit failed: ' + res.error.message);
     }
-    assert(typeof res.result !== 'undefined');
     return res.result;
   }
 
@@ -2831,8 +2744,6 @@ export class Connection {
       }
       throw new Error('failed to send transaction: ' + res.error.message);
     }
-    assert(typeof res.result !== 'undefined');
-    assert(res.result);
     return res.result;
   }
 
@@ -3020,28 +2931,15 @@ export class Connection {
    * @private
    */
   _wsOnAccountNotification(notification: Object) {
-    const res = create(notificaiton, AccountNotificationResult);
+    const res = create(notification, AccountNotificationResult);
     if (res.error) {
       throw new Error('account notification failed: ' + res.error.message);
     }
-    assert(typeof res.result !== 'undefined');
     const keys = Object.keys(this._accountChangeSubscriptions).map(Number);
     for (let id of keys) {
       const sub = this._accountChangeSubscriptions[id];
       if (sub.subscriptionId === res.subscription) {
-        const {result} = res;
-        const {value, context} = result;
-
-        assert(value.data[1] === 'base64');
-        sub.callback(
-          {
-            executable: value.executable,
-            owner: new PublicKey(value.owner),
-            lamports: value.lamports,
-            data: Buffer.from(value.data[0], 'base64'),
-          },
-          context,
-        );
+        sub.callback(res.result.value, res.result.context);
         return true;
       }
     }
@@ -3097,26 +2995,17 @@ export class Connection {
         'program account notification failed: ' + res.error.message,
       );
     }
-    assert(typeof res.result !== 'undefined');
     const keys = Object.keys(this._programAccountChangeSubscriptions).map(
       Number,
     );
     for (let id of keys) {
       const sub = this._programAccountChangeSubscriptions[id];
       if (sub.subscriptionId === res.subscription) {
-        const {result} = res;
-        const {value, context} = result;
-
-        assert(value.account.data[1] === 'base64');
+        const {value, context} = res.result;
         sub.callback(
           {
             accountId: value.pubkey,
-            accountInfo: {
-              executable: value.account.executable,
-              owner: new PublicKey(value.account.owner),
-              lamports: value.account.lamports,
-              data: Buffer.from(value.account.data[0], 'base64'),
-            },
+            accountInfo: value.account,
           },
           context,
         );
@@ -3174,17 +3063,11 @@ export class Connection {
     if (res.error) {
       throw new Error('slot notification failed: ' + res.error.message);
     }
-    assert(typeof res.result !== 'undefined');
-    const {parent, slot, root} = res.result;
     const keys = Object.keys(this._slotSubscriptions).map(Number);
     for (let id of keys) {
       const sub = this._slotSubscriptions[id];
       if (sub.subscriptionId === res.subscription) {
-        sub.callback({
-          parent,
-          slot,
-          root,
-        });
+        sub.callback(res.result);
         return true;
       }
     }
@@ -3253,7 +3136,6 @@ export class Connection {
     if (res.error) {
       throw new Error('signature notification failed: ' + res.error.message);
     }
-    assert(typeof res.result !== 'undefined');
     const keys = Object.keys(this._signatureSubscriptions).map(Number);
     for (let id of keys) {
       const sub = this._signatureSubscriptions[id];
@@ -3316,13 +3198,11 @@ export class Connection {
     if (res.error) {
       throw new Error('root notification failed: ' + res.error.message);
     }
-    assert(typeof res.result !== 'undefined');
-    const root = res.result;
     const keys = Object.keys(this._rootSubscriptions).map(Number);
     for (let id of keys) {
       const sub = this._rootSubscriptions[id];
       if (sub.subscriptionId === res.subscription) {
-        sub.callback(root);
+        sub.callback(res.result);
         return true;
       }
     }
