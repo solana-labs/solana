@@ -33,15 +33,14 @@ Other Attacks:
 * Protocol liveness attacks,
 * Eclipse attacks,
 * Remote attacks that partition the network,
+
 DoS Attacks:
- $25,000 USD in locked SOL tokens (locked for 12 months)
-* Non-RPC DoS,
+$25,000 USD in locked SOL tokens (locked for 12 months)
 * Remote resource exaustion via Non-RPC protocols
- $5,000 USD in locked SOL tokens (locked for 12 months)
 
 RPC DoS/Crashes:
 $5,000 USD in locked SOL tokens (locked for 12 months)
-
+* RPC attacks
 
 Eligibility:
 * The participant submitting the bug bounty shall follow the process outlined within this document
