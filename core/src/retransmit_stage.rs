@@ -34,7 +34,7 @@ use solana_streamer::streamer::PacketReceiver;
 use std::{
     cmp,
     collections::hash_set::HashSet,
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     net::UdpSocket,
     ops::{Deref, DerefMut},
     sync::atomic::{AtomicBool, AtomicU64, Ordering},
@@ -268,7 +268,7 @@ fn retransmit(
     last_peer_update: &AtomicU64,
     shreds_received: &Mutex<ShredFilterAndHasher>,
     max_slots: &MaxSlots,
-    sent_received_slot_notification: &Mutex<HashSet<Slot>>,
+    sent_received_slot_notification: &Mutex<BTreeSet<Slot>>,
     subscriptions: &RpcSubscriptions,
 ) -> Result<()> {
     let timer = Duration::new(1, 0);
@@ -349,8 +349,19 @@ fn retransmit(
             let notify_rpc_slot = {
                 let mut sent_received_slot_notification_locked =
                     sent_received_slot_notification.lock().unwrap();
-                if !sent_received_slot_notification_locked.contains(&shred_slot) {
+                if !sent_received_slot_notification_locked.contains(&shred_slot)
+                    && shred_slot > root_bank.slot()
+                {
                     sent_received_slot_notification_locked.insert(shred_slot);
+                    if sent_received_slot_notification_locked.len() > 100 {
+                        let mut slots_before_root = sent_received_slot_notification_locked
+                            .split_off(&(root_bank.slot() + 1));
+                        // `slots_before_root` now contains all slots <= root
+                        std::mem::swap(
+                            &mut slots_before_root,
+                            &mut sent_received_slot_notification_locked,
+                        );
+                    }
                     Some(shred_slot)
                 } else {
                     None
@@ -469,7 +480,7 @@ pub fn retransmitter(
         LruCache::new(DEFAULT_LRU_SIZE),
         PacketHasher::default(),
     )));
-    let sent_received_slot_notification = Arc::new(Mutex::new(HashSet::new()));
+    let sent_received_slot_notification = Arc::new(Mutex::new(BTreeSet::new()));
     (0..sockets.len())
         .map(|s| {
             let sockets = sockets.clone();
