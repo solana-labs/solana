@@ -47,7 +47,7 @@ impl GossipService {
             gossip_socket.clone(),
             &exit,
             request_sender,
-            Recycler::default(),
+            Recycler::new_without_limit("gossip-receiver-recycler-shrink-stats"),
             "gossip_receiver",
         );
         let (response_sender, response_receiver) = channel();

@@ -225,10 +225,19 @@ pub struct EntryVerificationState {
     device_verification_data: DeviceVerificationData,
 }
 
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct VerifyRecyclers {
     hash_recycler: Recycler<PinnedVec<Hash>>,
     tick_count_recycler: Recycler<PinnedVec<u64>>,
+}
+
+impl Default for VerifyRecyclers {
+    fn default() -> Self {
+        Self {
+            hash_recycler: Recycler::new_without_limit("hash_recycler_shrink_stats"),
+            tick_count_recycler: Recycler::new_without_limit("tick_count_recycler_shrink_stats"),
+        }
+    }
 }
 
 #[derive(PartialEq, Clone, Copy, Debug)]
@@ -554,14 +563,12 @@ impl EntrySlice for [Entry] {
             .take(self.len())
             .collect();
 
-        let mut hashes_pinned = recyclers.hash_recycler.allocate("poh_verify_hash");
+        let mut hashes_pinned = recyclers.hash_recycler.allocate().unwrap();
         hashes_pinned.set_pinnable();
         hashes_pinned.resize(hashes.len(), Hash::default());
         hashes_pinned.copy_from_slice(&hashes);
 
-        let mut num_hashes_vec = recyclers
-            .tick_count_recycler
-            .allocate("poh_verify_num_hashes");
+        let mut num_hashes_vec = recyclers.tick_count_recycler.allocate().unwrap();
         num_hashes_vec.reserve_and_pin(cmp::max(1, self.len()));
         for entry in self {
             num_hashes_vec.push(entry.num_hashes.saturating_sub(1));

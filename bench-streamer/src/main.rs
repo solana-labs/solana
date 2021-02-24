@@ -75,7 +75,7 @@ fn main() -> Result<()> {
 
     let mut read_channels = Vec::new();
     let mut read_threads = Vec::new();
-    let recycler = PacketsRecycler::default();
+    let recycler = PacketsRecycler::new_without_limit("bench-streamer-recycler-shrink-stats");
     for _ in 0..num_sockets {
         let read = solana_net_utils::bind_to(ip_addr, port, false).unwrap();
         read.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
