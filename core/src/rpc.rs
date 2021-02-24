@@ -2405,15 +2405,23 @@ impl RpcSol for RpcSolImpl {
         Ok(
             solana_ledger::leader_schedule_utils::leader_schedule(epoch, &bank).map(
                 |leader_schedule| {
-                    let mut map = HashMap::new();
+                    let mut leader_schedule_by_identity = HashMap::new();
 
-                    for (slot_index, pubkey) in
+                    for (slot_index, identity_pubkey) in
                         leader_schedule.get_slot_leaders().iter().enumerate()
                     {
-                        let pubkey = pubkey.to_string();
-                        map.entry(pubkey).or_insert_with(Vec::new).push(slot_index);
+                        leader_schedule_by_identity
+                            .entry(identity_pubkey)
+                            .or_insert_with(Vec::new)
+                            .push(slot_index);
                     }
-                    map
+
+                    leader_schedule_by_identity
+                        .into_iter()
+                        .map(|(identity_pubkey, slot_indices)| {
+                            (identity_pubkey.to_string(), slot_indices)
+                        })
+                        .collect()
                 },
             ),
         )
