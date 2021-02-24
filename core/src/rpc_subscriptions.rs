@@ -1066,9 +1066,14 @@ impl RpcSubscriptions {
                     NotificationEntry::SignaturesReceived(slot_signatures) => {
                         RpcSubscriptions::process_signatures_received(
                             &slot_signatures,
+                            &subscriptions.gossip_signature_subscriptions,
+                            &notifier,
+                        );
+                        RpcSubscriptions::process_signatures_received(
+                            &slot_signatures,
                             &subscriptions.signature_subscriptions,
                             &notifier,
-                        )
+                        );
                     }
                 },
                 Err(RecvTimeoutError::Timeout) => {
