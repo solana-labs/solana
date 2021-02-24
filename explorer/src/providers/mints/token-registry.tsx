@@ -22,7 +22,9 @@ export function TokenRegistryProvider({ children }: ProviderProps) {
       .then((tokens: KnownToken[]) => {
         setTokenRegistry(
           tokens.reduce((map: KnownTokenMap, item: KnownToken) => {
-            map.set(item.mintAddress, item);
+            if (item.tokenName && item.tokenSymbol) {
+              map.set(item.mintAddress, item);
+            }
             return map;
           }, new Map())
         );
