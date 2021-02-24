@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+mkdir -p "$(dirname "$0")"/../dependencies
 cd "$(dirname "$0")"/../dependencies
 
 if [[ "$(uname)" = Darwin ]]; then
@@ -128,57 +129,36 @@ if [[ ! -e criterion-$version.md || ! -e criterion ]]; then
   touch criterion-$version.md
 fi
 
-# Install LLVM
-version=v0.0.15
-if [[ ! -e llvm-native-$version.md || ! -e llvm-native ]]; then
-  (
-    set -e
-    rm -rf llvm-native*
-    rm -rf xargo
-    job="download \
-           https://github.com/solana-labs/llvm-builder/releases/download \
-           $version \
-           solana-llvm-$machine.tar.bz2 \
-           llvm-native"
-    get $version llvm-native "$job"
-  )
-  exitcode=$?
-  if [[ $exitcode -ne 0 ]]; then
-    exit 1
-  fi
-  touch llvm-native-$version.md
-fi
-
 # Install Rust-BPF
-version=v0.2.5
-if [[ ! -e rust-bpf-$machine-$version.md || ! -e rust-bpf-$machine ]]; then
+version=v1.0
+if [[ ! -e bpf-tools-$version.md || ! -e bpf-tools ]]; then
   (
     set -e
-    rm -rf rust-bpf-$machine*
+    rm -rf bpf-tools*
     rm -rf xargo
     job="download \
-           https://github.com/solana-labs/rust-bpf-builder/releases/download \
+           https://github.com/solana-labs/bpf-tools/releases/download \
            $version \
-           solana-rust-bpf-$machine.tar.bz2 \
-           rust-bpf-$machine"
-    get $version rust-bpf-$machine "$job"
+           solana-bpf-tools-$machine.tar.bz2 \
+           bpf-tools"
+    get $version bpf-tools "$job"
 
     set -ex
-    ./rust-bpf-$machine/bin/rustc --print sysroot
+    ./bpf-tools/rust/bin/rustc --print sysroot
     set +e
     rustup toolchain uninstall bpf
     set -e
-    rustup toolchain link bpf rust-bpf-$machine
+    rustup toolchain link bpf bpf-tools/rust
   )
   exitcode=$?
   if [[ $exitcode -ne 0 ]]; then
     exit 1
   fi
-  touch rust-bpf-$machine-$version.md
+  touch bpf-tools-$version.md
 fi
 
 # Install Rust-BPF Sysroot sources
-version=v0.14
+version=v1.0
 if [[ ! -e rust-bpf-sysroot-$version.md || ! -e rust-bpf-sysroot ]]; then
   (
     set -e

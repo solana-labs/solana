@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 use clap::{
     crate_description, crate_name, value_t, value_t_or_exit, values_t, values_t_or_exit, App,
     AppSettings, Arg, ArgMatches, SubCommand,
@@ -1236,6 +1237,20 @@ pub fn main() {
                 .help("Disable manual compaction of the ledger database. May increase storage requirements.")
         )
         .arg(
+            Arg::with_name("rocksdb_compaction_interval")
+                .long("rocksdb-compaction-interval-slots")
+                .value_name("ROCKSDB_COMPACTION_INTERVAL_SLOTS")
+                .takes_value(true)
+                .help("Number of slots between compacting ledger"),
+        )
+        .arg(
+            Arg::with_name("rocksdb_max_compaction_jitter")
+                .long("rocksdb-max-compaction-jitter-slots")
+                .value_name("ROCKSDB_MAX_COMPACTION_JITTER_SLOTS")
+                .takes_value(true)
+                .help("Introduce jitter into the compaction to offset compaction operation"),
+        )
+        .arg(
             Arg::with_name("bind_address")
                 .long("bind-address")
                 .value_name("HOST")
@@ -1427,6 +1442,11 @@ pub fn main() {
                 .help("Enables testing of hash calculation using stores in AccountsHashVerifier. This has a computational cost."),
         )
         .arg(
+            Arg::with_name("no_accounts_db_index_hashing")
+                .long("no-accounts-db-index-hashing")
+                .help("Disables the use of the index in hash calculation in AccountsHashVerifier/Accounts Background Service."),
+        )
+        .arg(
             // legacy nop argument
             Arg::with_name("accounts_db_caching_enabled")
                 .long("accounts-db-caching-enabled")
@@ -1486,6 +1506,9 @@ pub fn main() {
     let private_rpc = matches.is_present("private_rpc");
     let no_port_check = matches.is_present("no_port_check");
     let no_rocksdb_compaction = matches.is_present("no_rocksdb_compaction");
+    let rocksdb_compaction_interval = value_t!(matches, "rocksdb_compaction_interval", u64).ok();
+    let rocksdb_max_compaction_jitter =
+        value_t!(matches, "rocksdb_max_compaction_jitter", u64).ok();
     let wal_recovery_mode = matches
         .value_of("wal_recovery_mode")
         .map(BlockstoreRecoveryMode::from);
@@ -1620,6 +1643,8 @@ pub fn main() {
         gossip_validators,
         frozen_accounts: values_t!(matches, "frozen_accounts", Pubkey).unwrap_or_default(),
         no_rocksdb_compaction,
+        rocksdb_compaction_interval,
+        rocksdb_max_compaction_jitter,
         wal_recovery_mode,
         poh_verify: !matches.is_present("skip_poh_verify"),
         debug_keys,
@@ -1637,6 +1662,7 @@ pub fn main() {
         account_indexes,
         accounts_db_caching_enabled: !matches.is_present("no_accounts_db_caching"),
         accounts_db_test_hash_calculation: matches.is_present("accounts_db_test_hash_calculation"),
+        accounts_db_use_index_hash_calculation: !matches.is_present("no_accounts_db_index_hashing"),
         ..ValidatorConfig::default()
     };
 

@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 use clap::{crate_description, crate_name, value_t, App, Arg};
 use crossbeam_channel::unbounded;
 use log::*;
@@ -18,7 +19,7 @@ use solana_ledger::{
 use solana_measure::measure::Measure;
 use solana_perf::packet::to_packets_chunked;
 use solana_runtime::{
-    accounts_background_service::ABSRequestSender, bank::Bank, bank_forks::BankForks,
+    accounts_background_service::AbsRequestSender, bank::Bank, bank_forks::BankForks,
 };
 use solana_sdk::{
     hash::Hash,
@@ -325,7 +326,7 @@ fn main() {
                 poh_recorder.lock().unwrap().set_bank(&bank);
                 assert!(poh_recorder.lock().unwrap().bank().is_some());
                 if bank.slot() > 32 {
-                    bank_forks.set_root(root, &ABSRequestSender::default(), None);
+                    bank_forks.set_root(root, &AbsRequestSender::default(), None);
                     root += 1;
                 }
                 debug!(

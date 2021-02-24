@@ -1,6 +1,10 @@
 // Partial SPL Token v2.0.x declarations inlined to avoid an external dependency on the spl-token crate
 solana_sdk::declare_id!("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
+pub(crate) mod new_token_program {
+    solana_sdk::declare_id!("t31zsgDmRntje65uXV3LrnWaJtJJpMd4LyJxq2R2VrU");
+}
+
 /*
     spl_token::state::Account {
         mint: Pubkey,

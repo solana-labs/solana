@@ -248,11 +248,9 @@ mod tests {
                 if entry.is_tick() {
                     assert!(
                         entry.num_hashes <= poh_config.hashes_per_tick.unwrap(),
-                        format!(
-                            "{} <= {}",
-                            entry.num_hashes,
-                            poh_config.hashes_per_tick.unwrap()
-                        )
+                        "{} <= {}",
+                        entry.num_hashes,
+                        poh_config.hashes_per_tick.unwrap()
                     );
 
                     if entry.num_hashes == poh_config.hashes_per_tick.unwrap() {

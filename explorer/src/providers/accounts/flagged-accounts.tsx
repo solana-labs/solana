@@ -1,20 +1,21 @@
 import React from "react";
+import { fetch } from "cross-fetch";
 
-const initialState = new Map();
-const FlaggedContext = React.createContext<Map<string, boolean>>(initialState);
+const FLAGGED_REGISTRY =
+  "https://solana-labs.github.io/solana-flagged-accounts/flagged.txt";
 
+type FlaggedMap = Map<string, boolean>;
 type ProviderProps = { children: React.ReactNode };
 
+const FlaggedContext = React.createContext<FlaggedMap>(new Map());
+
 export function FlaggedAccountsProvider({ children }: ProviderProps) {
-  const [flaggedAccounts, setFlaggedAccounts] = React.useState<
-    Map<string, boolean>
-  >(initialState);
+  const [flaggedAccounts, setFlaggedAccounts] = React.useState<FlaggedMap>(
+    new Map()
+  );
 
   React.useEffect(() => {
-    window
-      .fetch(
-        "https://solana-labs.github.io/solana-flagged-accounts/flagged.txt"
-      )
+    fetch(FLAGGED_REGISTRY)
       .then((res) => {
         return res.text();
       })

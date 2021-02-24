@@ -7,7 +7,7 @@ extern crate solana_bpf_loader_program;
 
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use solana_bpf_loader_program::{
-    create_vm, serialization::serialize_parameters, syscalls::register_syscalls, BPFError,
+    create_vm, serialization::serialize_parameters, syscalls::register_syscalls, BpfError,
     ThisInstructionMeter,
 };
 use solana_measure::measure::Measure;
@@ -76,7 +76,7 @@ fn bench_program_create_executable(bencher: &mut Bencher) {
 
     bencher.iter(|| {
         let _ =
-            Executable::<BPFError, ThisInstructionMeter>::from_elf(&elf, None, Config::default())
+            Executable::<BpfError, ThisInstructionMeter>::from_elf(&elf, None, Config::default())
                 .unwrap();
     });
 }
@@ -95,7 +95,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
 
     let elf = load_elf("bench_alu").unwrap();
     let mut executable =
-        Executable::<BPFError, ThisInstructionMeter>::from_elf(&elf, None, Config::default())
+        Executable::<BpfError, ThisInstructionMeter>::from_elf(&elf, None, Config::default())
             .unwrap();
     executable.set_syscall_registry(register_syscalls(&mut invoke_context).unwrap());
     executable.jit_compile().unwrap();
@@ -221,7 +221,7 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
 
     let elf = load_elf("tuner").unwrap();
     let mut executable =
-        Executable::<BPFError, ThisInstructionMeter>::from_elf(&elf, None, Config::default())
+        Executable::<BpfError, ThisInstructionMeter>::from_elf(&elf, None, Config::default())
             .unwrap();
     executable.set_syscall_registry(register_syscalls(&mut invoke_context).unwrap());
     let compute_meter = invoke_context.get_compute_meter();

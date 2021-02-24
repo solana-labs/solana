@@ -1,10 +1,9 @@
 import React from "react";
 import { TransactionInstruction } from "@solana/web3.js";
 import { Address } from "components/common/Address";
-import { wrap } from "utils";
 
 export function RawDetails({ ix }: { ix: TransactionInstruction }) {
-  const data = wrap(ix.data.toString("hex"), 50);
+  const data = ix.data.toString("hex");
   return (
     <>
       {ix.keys.map(({ pubkey, isSigner, isWritable }, keyIndex) => (
@@ -27,7 +26,7 @@ export function RawDetails({ ix }: { ix: TransactionInstruction }) {
       <tr>
         <td>Instruction Data (Hex)</td>
         <td className="text-lg-right">
-          <pre className="d-inline-block text-left mb-0">{data}</pre>
+          <pre className="d-inline-block text-left mb-0 data-wrap">{data}</pre>
         </td>
       </tr>
     </>

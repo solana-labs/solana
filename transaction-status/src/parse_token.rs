@@ -64,6 +64,18 @@ pub fn parse_token(
                 }),
             })
         }
+        TokenInstruction::InitializeAccount2 { owner } => {
+            check_num_token_accounts(&instruction.accounts, 3)?;
+            Ok(ParsedInstructionEnum {
+                instruction_type: "initializeAccount2".to_string(),
+                info: json!({
+                    "account": account_keys[instruction.accounts[0] as usize].to_string(),
+                    "mint": account_keys[instruction.accounts[1] as usize].to_string(),
+                    "owner": owner.to_string(),
+                    "rentSysvar": account_keys[instruction.accounts[2] as usize].to_string(),
+                }),
+            })
+        }
         TokenInstruction::InitializeMultisig { m } => {
             check_num_token_accounts(&instruction.accounts, 3)?;
             let mut signers: Vec<String> = vec![];
@@ -876,7 +888,7 @@ mod test {
                    "mint": keys[3].to_string(),
                    "authority": keys[0].to_string(),
                    "tokenAmount": {
-                       "uiAmount": 0.42,
+                       "uiAmount": "0.42",
                        "decimals": 2,
                        "amount": "42"
                    }
@@ -908,7 +920,7 @@ mod test {
                    "multisigAuthority": keys[5].to_string(),
                    "signers": keys[0..2].iter().map(|key| key.to_string()).collect::<Vec<String>>(),
                    "tokenAmount": {
-                       "uiAmount": 0.42,
+                       "uiAmount": "0.42",
                        "decimals": 2,
                        "amount": "42"
                    }
@@ -940,7 +952,7 @@ mod test {
                    "delegate": keys[3].to_string(),
                    "owner": keys[0].to_string(),
                    "tokenAmount": {
-                       "uiAmount": 0.42,
+                       "uiAmount": "0.42",
                        "decimals": 2,
                        "amount": "42"
                    }
@@ -972,7 +984,7 @@ mod test {
                     "multisigOwner": keys[5].to_string(),
                     "signers": keys[0..2].iter().map(|key| key.to_string()).collect::<Vec<String>>(),
                     "tokenAmount": {
-                        "uiAmount": 0.42,
+                        "uiAmount": "0.42",
                         "decimals": 2,
                         "amount": "42"
                     }
@@ -1002,7 +1014,7 @@ mod test {
                    "account": keys[2].to_string(),
                    "mintAuthority": keys[0].to_string(),
                    "tokenAmount": {
-                       "uiAmount": 0.42,
+                       "uiAmount": "0.42",
                        "decimals": 2,
                        "amount": "42"
                    }
@@ -1032,7 +1044,7 @@ mod test {
                    "mint": keys[2].to_string(),
                    "authority": keys[0].to_string(),
                    "tokenAmount": {
-                       "uiAmount": 0.42,
+                       "uiAmount": "0.42",
                        "decimals": 2,
                        "amount": "42"
                    }

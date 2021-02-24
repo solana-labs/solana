@@ -3,7 +3,7 @@ use crate::{
     nonce_account::create_account,
 };
 use solana_program::{
-    instruction::InstructionError,
+    instruction::{checked_add, InstructionError},
     nonce::{self, state::Versions, State},
     pubkey::Pubkey,
     system_instruction::NonceError,
@@ -93,7 +93,7 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
                     self.set_state(&Versions::new_current(State::Uninitialized))?;
                 } else {
                     let min_balance = rent.minimum_balance(self.data_len()?);
-                    if lamports + min_balance > self.lamports()? {
+                    if checked_add(lamports, min_balance)? > self.lamports()? {
                         return Err(InstructionError::InsufficientFunds);
                     }
                 }
@@ -720,6 +720,36 @@ mod test {
                 let mut signers = HashSet::new();
                 signers.insert(*nonce_keyed.signer_key().unwrap());
                 let withdraw_lamports = nonce_keyed.account.borrow().lamports - min_lamports + 1;
+                let result = nonce_keyed.withdraw_nonce_account(
+                    withdraw_lamports,
+                    &to_keyed,
+                    &recent_blockhashes,
+                    &rent,
+                    &signers,
+                );
+                assert_eq!(result, Err(InstructionError::InsufficientFunds));
+            })
+        })
+    }
+
+    #[test]
+    fn withdraw_inx_overflow() {
+        let rent = Rent {
+            lamports_per_byte_year: 42,
+            ..Rent::default()
+        };
+        let min_lamports = rent.minimum_balance(State::size());
+        with_test_keyed_account(min_lamports + 42, true, |nonce_keyed| {
+            let recent_blockhashes = create_test_recent_blockhashes(95);
+            let authorized = *nonce_keyed.unsigned_key();
+            nonce_keyed
+                .initialize_nonce_account(&authorized, &recent_blockhashes, &rent)
+                .unwrap();
+            with_test_keyed_account(55, false, |to_keyed| {
+                let recent_blockhashes = create_test_recent_blockhashes(63);
+                let mut signers = HashSet::new();
+                signers.insert(*nonce_keyed.signer_key().unwrap());
+                let withdraw_lamports = u64::MAX - 54;
                 let result = nonce_keyed.withdraw_nonce_account(
                     withdraw_lamports,
                     &to_keyed,

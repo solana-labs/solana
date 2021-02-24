@@ -1,8 +1,10 @@
 #![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(specialization))]
+#![allow(clippy::integer_arithmetic)]
 pub mod accounts;
 pub mod accounts_background_service;
 pub mod accounts_cache;
 pub mod accounts_db;
+pub mod accounts_hash;
 pub mod accounts_index;
 pub mod append_vec;
 pub mod bank;

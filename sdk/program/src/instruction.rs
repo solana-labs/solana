@@ -3,11 +3,14 @@
 use crate::sanitize::Sanitize;
 use crate::{pubkey::Pubkey, short_vec};
 use bincode::serialize;
+use borsh::BorshSerialize;
 use serde::Serialize;
 use thiserror::Error;
 
 /// Reasons the runtime might have rejected an instruction.
-#[derive(Serialize, Deserialize, Debug, Error, PartialEq, Eq, Clone, AbiExample, AbiEnumVisitor)]
+#[derive(
+    Serialize, Deserialize, Debug, Error, PartialEq, Eq, Clone, AbiExample, AbiEnumVisitor,
+)]
 pub enum InstructionError {
     /// Deprecated! Use CustomError instead!
     /// The program instruction returned an error
@@ -186,6 +189,12 @@ pub enum InstructionError {
 
     #[error("Incorrect authority provided")]
     IncorrectAuthority,
+
+    #[error("Failed to serialize or deserialize account data: {0}")]
+    BorshIoError(String),
+
+    #[error("An account does not have enough lamports to be rent-exempt")]
+    AccountNotRentExempt,
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
@@ -206,6 +215,26 @@ impl Instruction {
             data,
             accounts,
         }
+    }
+
+    pub fn new_with_borsh<T: BorshSerialize>(
+        program_id: Pubkey,
+        data: &T,
+        accounts: Vec<AccountMeta>,
+    ) -> Self {
+        let data = data.try_to_vec().unwrap();
+        Self {
+            program_id,
+            data,
+            accounts,
+        }
+    }
+}
+
+pub fn checked_add(a: u64, b: u64) -> Result<u64, InstructionError> {
+    match a.checked_add(b) {
+        Some(sum) => Ok(sum),
+        None => Err(InstructionError::InsufficientFunds),
     }
 }
 

@@ -214,8 +214,8 @@ pub struct GpuVerificationData {
 }
 
 pub enum DeviceVerificationData {
-    CPU(),
-    GPU(GpuVerificationData),
+    Cpu(),
+    Gpu(GpuVerificationData),
 }
 
 pub struct EntryVerificationState {
@@ -225,10 +225,19 @@ pub struct EntryVerificationState {
     device_verification_data: DeviceVerificationData,
 }
 
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct VerifyRecyclers {
     hash_recycler: Recycler<PinnedVec<Hash>>,
     tick_count_recycler: Recycler<PinnedVec<u64>>,
+}
+
+impl Default for VerifyRecyclers {
+    fn default() -> Self {
+        Self {
+            hash_recycler: Recycler::new_without_limit("hash_recycler_shrink_stats"),
+            tick_count_recycler: Recycler::new_without_limit("tick_count_recycler_shrink_stats"),
+        }
+    }
 }
 
 #[derive(PartialEq, Clone, Copy, Debug)]
@@ -257,7 +266,7 @@ impl EntryVerificationState {
 
     pub fn finish_verify(&mut self, entries: &[Entry]) -> bool {
         match &mut self.device_verification_data {
-            DeviceVerificationData::GPU(verification_state) => {
+            DeviceVerificationData::Gpu(verification_state) => {
                 let gpu_time_us = verification_state.thread_h.take().unwrap().join().unwrap();
 
                 let mut verify_check_time = Measure::start("verify_check");
@@ -297,7 +306,7 @@ impl EntryVerificationState {
                 };
                 res
             }
-            DeviceVerificationData::CPU() => {
+            DeviceVerificationData::Cpu() => {
                 self.verification_status == EntryVerificationStatus::Success
             }
         }
@@ -380,7 +389,7 @@ impl EntrySlice for [Entry] {
             },
             poh_duration_us,
             transaction_duration_us: 0,
-            device_verification_data: DeviceVerificationData::CPU(),
+            device_verification_data: DeviceVerificationData::Cpu(),
         }
     }
 
@@ -464,7 +473,7 @@ impl EntrySlice for [Entry] {
             },
             poh_duration_us,
             transaction_duration_us: 0,
-            device_verification_data: DeviceVerificationData::CPU(),
+            device_verification_data: DeviceVerificationData::Cpu(),
         }
     }
 
@@ -527,7 +536,7 @@ impl EntrySlice for [Entry] {
                 verification_status: EntryVerificationStatus::Failure,
                 transaction_duration_us,
                 poh_duration_us: 0,
-                device_verification_data: DeviceVerificationData::CPU(),
+                device_verification_data: DeviceVerificationData::Cpu(),
             };
         }
 
@@ -554,14 +563,12 @@ impl EntrySlice for [Entry] {
             .take(self.len())
             .collect();
 
-        let mut hashes_pinned = recyclers.hash_recycler.allocate("poh_verify_hash");
+        let mut hashes_pinned = recyclers.hash_recycler.allocate().unwrap();
         hashes_pinned.set_pinnable();
         hashes_pinned.resize(hashes.len(), Hash::default());
         hashes_pinned.copy_from_slice(&hashes);
 
-        let mut num_hashes_vec = recyclers
-            .tick_count_recycler
-            .allocate("poh_verify_num_hashes");
+        let mut num_hashes_vec = recyclers.tick_count_recycler.allocate().unwrap();
         num_hashes_vec.reserve_and_pin(cmp::max(1, self.len()));
         for entry in self {
             num_hashes_vec.push(entry.num_hashes.saturating_sub(1));
@@ -607,7 +614,7 @@ impl EntrySlice for [Entry] {
             })
         });
 
-        let device_verification_data = DeviceVerificationData::GPU(GpuVerificationData {
+        let device_verification_data = DeviceVerificationData::Gpu(GpuVerificationData {
             thread_h: Some(gpu_verify_thread),
             tx_hashes,
             hashes: Some(hashes),

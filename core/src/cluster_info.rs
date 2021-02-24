@@ -257,6 +257,17 @@ struct GossipStats {
     handle_batch_pull_requests_time: Counter,
     handle_batch_pull_responses_time: Counter,
     handle_batch_push_messages_time: Counter,
+    packets_received_count: Counter,
+    packets_received_prune_messages_count: Counter,
+    packets_received_pull_requests_count: Counter,
+    packets_received_pull_responses_count: Counter,
+    packets_received_push_messages_count: Counter,
+    packets_received_verified_count: Counter,
+    packets_sent_gossip_requests_count: Counter,
+    packets_sent_prune_messages_count: Counter,
+    packets_sent_pull_requests_count: Counter,
+    packets_sent_pull_responses_count: Counter,
+    packets_sent_push_messages_count: Counter,
     process_gossip_packets_time: Counter,
     process_pull_response: Counter,
     process_pull_response_count: Counter,
@@ -313,7 +324,7 @@ impl Default for ClusterInfo {
     }
 }
 
-#[derive(Debug, Default, Deserialize, Serialize, AbiExample)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, AbiExample)]
 pub struct PruneData {
     /// Pubkey of the node that sent this prune data
     pub pubkey: Pubkey,
@@ -413,6 +424,8 @@ enum Protocol {
     PullRequest(CrdsFilter, CrdsValue),
     PullResponse(Pubkey, Vec<CrdsValue>),
     PushMessage(Pubkey, Vec<CrdsValue>),
+    // TODO: Remove the redundant outer pubkey here,
+    // and use the inner PruneData.pubkey instead.
     PruneMessage(Pubkey, PruneData),
     PingMessage(Ping),
     PongMessage(Pong),
@@ -496,7 +509,13 @@ impl Sanitize for Protocol {
             }
             Protocol::PullResponse(_, val) => val.sanitize(),
             Protocol::PushMessage(_, val) => val.sanitize(),
-            Protocol::PruneMessage(_, val) => val.sanitize(),
+            Protocol::PruneMessage(from, val) => {
+                if *from != val.pubkey {
+                    Err(SanitizeError::InvalidValue)
+                } else {
+                    val.sanitize()
+                }
+            }
             Protocol::PingMessage(ping) => ping.sanitize(),
             Protocol::PongMessage(pong) => pong.sanitize(),
         }
@@ -1488,7 +1507,7 @@ impl ClusterInfo {
                         1
                     );
                     error!("retransmit result {:?}", e);
-                    return Err(Error::IO(e));
+                    return Err(Error::Io(e));
                 }
             }
         }
@@ -1706,7 +1725,12 @@ impl ClusterInfo {
             vec![]
         };
         let mut pushes: Vec<_> = self.new_push_requests();
-
+        self.stats
+            .packets_sent_pull_requests_count
+            .add_relaxed(pulls.len() as u64);
+        self.stats
+            .packets_sent_push_messages_count
+            .add_relaxed(pushes.len() as u64);
         pulls.append(&mut pushes);
         pulls
     }
@@ -1729,6 +1753,9 @@ impl ClusterInfo {
         );
         if !reqs.is_empty() {
             let packets = to_packets_with_destination(recycler.clone(), &reqs);
+            self.stats
+                .packets_sent_gossip_requests_count
+                .add_relaxed(packets.packets.len() as u64);
             sender.send(packets)?;
         }
         Ok(())
@@ -1826,7 +1853,7 @@ impl ClusterInfo {
                 let mut last_contact_info_trace = timestamp();
                 let mut last_contact_info_save = timestamp();
                 let mut entrypoints_processed = false;
-                let recycler = PacketsRecycler::default();
+                let recycler = PacketsRecycler::new_without_limit("gossip-recycler-shrink-stats");
                 let crds_data = vec![
                     CrdsData::Version(Version::new(self.id())),
                     CrdsData::NodeInstance(self.instance.with_wallclock(timestamp())),
@@ -1995,6 +2022,9 @@ impl ClusterInfo {
                 .add_relaxed(requests.len() as u64);
             let response = self.handle_pull_requests(recycler, requests, stakes, feature_set);
             if !response.is_empty() {
+                self.stats
+                    .packets_sent_pull_responses_count
+                    .add_relaxed(response.packets.len() as u64);
                 let _ = response_sender.send(response);
             }
         }
@@ -2074,7 +2104,7 @@ impl ClusterInfo {
             .process_pull_requests(callers.cloned(), timestamp());
         let output_size_limit =
             self.update_data_budget(stakes.len()) / PULL_RESPONSE_MIN_SERIALIZED_SIZE;
-        let mut packets = Packets::new_with_recycler(recycler.clone(), 64, "handle_pull_requests");
+        let mut packets = Packets::new_with_recycler(recycler.clone(), 64).unwrap();
         let (caller_and_filters, addrs): (Vec<_>, Vec<_>) = {
             let mut rng = rand::thread_rng();
             let check_pull_request =
@@ -2359,8 +2389,7 @@ impl ClusterInfo {
         if packets.is_empty() {
             None
         } else {
-            let packets =
-                Packets::new_with_recycler_data(recycler, "handle_ping_messages", packets);
+            let packets = Packets::new_with_recycler_data(recycler, packets).unwrap();
             Some(packets)
         }
     }
@@ -2491,6 +2520,7 @@ impl ClusterInfo {
             return;
         }
         let mut packets = to_packets_with_destination(recycler.clone(), &prune_messages);
+        let num_prune_packets = packets.packets.len();
         self.stats
             .push_response_count
             .add_relaxed(packets.packets.len() as u64);
@@ -2506,6 +2536,12 @@ impl ClusterInfo {
                 trace!("Dropping Gossip push response, as destination is unknown");
             }
         }
+        self.stats
+            .packets_sent_prune_messages_count
+            .add_relaxed(num_prune_packets as u64);
+        self.stats
+            .packets_sent_push_messages_count
+            .add_relaxed((packets.packets.len() - num_prune_packets) as u64);
         let _ = response_sender.send(packets);
     }
 
@@ -2543,6 +2579,9 @@ impl ClusterInfo {
         should_check_duplicate_instance: bool,
     ) -> Result<()> {
         let _st = ScopedTimer::from(&self.stats.process_gossip_packets_time);
+        self.stats
+            .packets_received_count
+            .add_relaxed(packets.len() as u64);
         let packets: Vec<_> = thread_pool.install(|| {
             packets
                 .into_par_iter()
@@ -2555,6 +2594,9 @@ impl ClusterInfo {
                 })
                 .collect()
         });
+        self.stats
+            .packets_received_verified_count
+            .add_relaxed(packets.len() as u64);
         // Check if there is a duplicate instance of
         // this node with more recent timestamp.
         let check_duplicate_instance = |values: &[CrdsValue]| {
@@ -2592,6 +2634,18 @@ impl ClusterInfo {
                 Protocol::PongMessage(pong) => pong_messages.push((from_addr, pong)),
             }
         }
+        self.stats
+            .packets_received_pull_requests_count
+            .add_relaxed(pull_requests.len() as u64);
+        self.stats
+            .packets_received_pull_responses_count
+            .add_relaxed(pull_responses.len() as u64);
+        self.stats
+            .packets_received_push_messages_count
+            .add_relaxed(push_messages.len() as u64);
+        self.stats
+            .packets_received_prune_messages_count
+            .add_relaxed(prune_messages.len() as u64);
         self.handle_batch_ping_messages(ping_messages, recycler, response_sender);
         self.handle_batch_prune_messages(prune_messages);
         self.handle_batch_push_messages(
@@ -2894,6 +2948,61 @@ impl ClusterInfo {
                     self.stats.pull_requests_count.clear(),
                     i64
                 ),
+                (
+                    "packets_received_count",
+                    self.stats.packets_received_count.clear(),
+                    i64
+                ),
+                (
+                    "packets_received_prune_messages_count",
+                    self.stats.packets_received_prune_messages_count.clear(),
+                    i64
+                ),
+                (
+                    "packets_received_pull_requests_count",
+                    self.stats.packets_received_pull_requests_count.clear(),
+                    i64
+                ),
+                (
+                    "packets_received_pull_responses_count",
+                    self.stats.packets_received_pull_responses_count.clear(),
+                    i64
+                ),
+                (
+                    "packets_received_push_messages_count",
+                    self.stats.packets_received_push_messages_count.clear(),
+                    i64
+                ),
+                (
+                    "packets_received_verified_count",
+                    self.stats.packets_received_verified_count.clear(),
+                    i64
+                ),
+                (
+                    "packets_sent_gossip_requests_count",
+                    self.stats.packets_sent_gossip_requests_count.clear(),
+                    i64
+                ),
+                (
+                    "packets_sent_prune_messages_count",
+                    self.stats.packets_sent_prune_messages_count.clear(),
+                    i64
+                ),
+                (
+                    "packets_sent_pull_requests_count",
+                    self.stats.packets_sent_pull_requests_count.clear(),
+                    i64
+                ),
+                (
+                    "packets_sent_pull_responses_count",
+                    self.stats.packets_sent_pull_responses_count.clear(),
+                    i64
+                ),
+                (
+                    "packets_sent_push_messages_count",
+                    self.stats.packets_sent_push_messages_count.clear(),
+                    i64
+                ),
             );
 
             *last_print = Instant::now();
@@ -2909,7 +3018,8 @@ impl ClusterInfo {
         exit: &Arc<AtomicBool>,
     ) -> JoinHandle<()> {
         let exit = exit.clone();
-        let recycler = PacketsRecycler::default();
+        let recycler =
+            PacketsRecycler::new_without_limit("cluster-info-listen-recycler-shrink-stats");
         Builder::new()
             .name("solana-listen".to_string())
             .spawn(move || {
@@ -3354,7 +3464,7 @@ mod tests {
             .iter()
             .map(|ping| Pong::new(ping, &this_node).unwrap())
             .collect();
-        let recycler = PacketsRecycler::default();
+        let recycler = PacketsRecycler::new_without_limit("");
         let packets = cluster_info
             .handle_ping_messages(
                 remote_nodes
@@ -4167,6 +4277,23 @@ mod tests {
         };
         let msg = Protocol::PruneMessage(Pubkey::default(), pd);
         assert_eq!(msg.sanitize(), Err(SanitizeError::ValueOutOfBounds));
+    }
+
+    #[test]
+    fn test_protocol_prune_message_sanitize() {
+        let keypair = Keypair::new();
+        let mut prune_data = PruneData {
+            pubkey: keypair.pubkey(),
+            prunes: vec![],
+            signature: Signature::default(),
+            destination: Pubkey::new_unique(),
+            wallclock: timestamp(),
+        };
+        prune_data.sign(&keypair);
+        let prune_message = Protocol::PruneMessage(keypair.pubkey(), prune_data.clone());
+        assert_eq!(prune_message.sanitize(), Ok(()));
+        let prune_message = Protocol::PruneMessage(Pubkey::new_unique(), prune_data);
+        assert_eq!(prune_message.sanitize(), Err(SanitizeError::InvalidValue));
     }
 
     // computes the maximum size for pull request blooms

@@ -1,4 +1,4 @@
-use crate::send_tpu::{get_leader_tpu, send_transaction_tpu};
+use crate::send_tpu::{get_leader_tpus, send_transaction_tpu};
 use crate::{
     checks::*,
     cli::{
@@ -10,7 +10,7 @@ use bincode::serialize;
 use bip39::{Language, Mnemonic, MnemonicType, Seed};
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 use log::*;
-use solana_bpf_loader_program::{bpf_verifier, BPFError, ThisInstructionMeter};
+use solana_bpf_loader_program::{bpf_verifier, BpfError, ThisInstructionMeter};
 use solana_clap_utils::{self, input_parsers::*, input_validators::*, keypair::*};
 use solana_cli_output::{
     display::new_spinner_progress_bar, CliProgramAccountType, CliProgramAuthority,
@@ -55,6 +55,7 @@ use std::{
 };
 
 const DATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
+const NUM_TPU_LEADERS: u64 = 2;
 
 #[derive(Debug, PartialEq)]
 pub enum ProgramCliCommand {
@@ -121,7 +122,6 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .value_name("BUFFER_SIGNER")
                                 .takes_value(true)
                                 .validator(is_valid_signer)
-                                .conflicts_with("program_location")
                                 .help("Intermediate buffer account to write data to, which can be used to resume a failed deploy \
                                       [default: random address]")
                         )
@@ -694,7 +694,11 @@ fn process_program_deploy(
         true
     };
 
-    let (program_data, program_len) = if buffer_provided {
+    let (program_data, program_len) = if let Some(program_location) = program_location {
+        let program_data = read_and_verify_elf(&program_location)?;
+        let program_len = program_data.len();
+        (program_data, program_len)
+    } else if buffer_provided {
         // Check supplied buffer account
         if let Some(account) = rpc_client
             .get_account_with_commitment(&buffer_pubkey, config.commitment)?
@@ -711,10 +715,6 @@ fn process_program_deploy(
         } else {
             return Err("Buffer account not found, was it already consumed?".into());
         }
-    } else if let Some(program_location) = program_location {
-        let program_data = read_and_verify_elf(&program_location)?;
-        let program_len = program_data.len();
-        (program_data, program_len)
     } else {
         return Err("Program location required if buffer not supplied".into());
     };
@@ -1372,9 +1372,9 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
         .map_err(|err| format!("Unable to read program file: {}", err))?;
 
     // Verify the program
-    Executable::<BPFError, ThisInstructionMeter>::from_elf(
+    Executable::<BpfError, ThisInstructionMeter>::from_elf(
         &program_data,
-        Some(|x| bpf_verifier::check(x, false)),
+        Some(|x| bpf_verifier::check(x)),
         Config::default(),
     )
     .map_err(|err| format!("ELF error: {}", err))?;
@@ -1577,7 +1577,7 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
     let cluster_nodes = rpc_client.get_cluster_nodes().ok();
 
     loop {
-        progress_bar.set_message("Finding leader node...");
+        progress_bar.set_message("Finding leader nodes...");
         let epoch_info = rpc_client.get_epoch_info()?;
         let mut slot = epoch_info.absolute_slot;
         let mut last_epoch_fetch = Instant::now();
@@ -1586,8 +1586,9 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
             leader_schedule_epoch = epoch_info.epoch;
         }
 
-        let mut tpu_address = get_leader_tpu(
+        let mut tpu_addresses = get_leader_tpus(
             min(epoch_info.slot_index + 1, epoch_info.slots_in_epoch),
+            NUM_TPU_LEADERS,
             leader_schedule.as_ref(),
             cluster_nodes.as_ref(),
         );
@@ -1596,10 +1597,12 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
         let mut pending_transactions = HashMap::new();
         let num_transactions = transactions.len();
         for transaction in transactions {
-            if let Some(tpu_address) = tpu_address {
+            if !tpu_addresses.is_empty() {
                 let wire_transaction =
                     serialize(&transaction).expect("serialization should succeed");
-                send_transaction_tpu(&send_socket, &tpu_address, &wire_transaction);
+                for tpu_address in &tpu_addresses {
+                    send_transaction_tpu(&send_socket, &tpu_address, &wire_transaction);
+                }
             } else {
                 let _result = rpc_client
                     .send_transaction_with_config(
@@ -1625,8 +1628,9 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
             if last_epoch_fetch.elapsed() > Duration::from_millis(400) {
                 let epoch_info = rpc_client.get_epoch_info()?;
                 last_epoch_fetch = Instant::now();
-                tpu_address = get_leader_tpu(
+                tpu_addresses = get_leader_tpus(
                     min(epoch_info.slot_index + 1, epoch_info.slots_in_epoch),
+                    NUM_TPU_LEADERS,
                     leader_schedule.as_ref(),
                     cluster_nodes.as_ref(),
                 );
@@ -1639,9 +1643,7 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
             for pending_signatures_chunk in
                 pending_signatures.chunks(MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS)
             {
-                if let Ok(result) =
-                    rpc_client.get_signature_statuses_with_history(pending_signatures_chunk)
-                {
+                if let Ok(result) = rpc_client.get_signature_statuses(pending_signatures_chunk) {
                     let statuses = result.value;
                     for (signature, status) in
                         pending_signatures_chunk.iter().zip(statuses.into_iter())
@@ -1679,17 +1681,20 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
             }
 
             let epoch_info = rpc_client.get_epoch_info()?;
-            tpu_address = get_leader_tpu(
+            tpu_addresses = get_leader_tpus(
                 min(epoch_info.slot_index + 1, epoch_info.slots_in_epoch),
+                NUM_TPU_LEADERS,
                 leader_schedule.as_ref(),
                 cluster_nodes.as_ref(),
             );
 
             for transaction in pending_transactions.values() {
-                if let Some(tpu_address) = tpu_address {
+                if !tpu_addresses.is_empty() {
                     let wire_transaction =
-                        serialize(transaction).expect("serialization should succeed");
-                    send_transaction_tpu(&send_socket, &tpu_address, &wire_transaction);
+                        serialize(&transaction).expect("serialization should succeed");
+                    for tpu_address in &tpu_addresses {
+                        send_transaction_tpu(&send_socket, &tpu_address, &wire_transaction);
+                    }
                 } else {
                     let _result = rpc_client
                         .send_transaction_with_config(

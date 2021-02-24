@@ -31,7 +31,7 @@ pub fn calculate_non_circulating_supply(bank: &Arc<Bank>) -> NonCirculatingSuppl
         bank.get_filtered_indexed_accounts(
             &IndexKey::ProgramId(solana_stake_program::id()),
             // The program-id account index checks for Account owner on inclusion. However, due to
-            // the current AccountsDB implementation, an account may remain in storage as a
+            // the current AccountsDb implementation, an account may remain in storage as a
             // zero-lamport Account::Default() after being wiped and reinitialized in later
             // updates. We include the redundant filter here to avoid returning these accounts.
             |account| account.owner == solana_stake_program::id(),

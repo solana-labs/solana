@@ -1078,8 +1078,9 @@ fn test_cli_program_show() {
         max_len: Some(max_len),
     });
     config.output_format = OutputFormat::JsonCompact;
+    let min_slot = rpc_client.get_slot().unwrap();
     process_command(&config).unwrap();
-    let slot = rpc_client.get_slot().unwrap();
+    let max_slot = rpc_client.get_slot().unwrap();
 
     // Verify show
     config.signers = vec![&keypair];
@@ -1132,7 +1133,8 @@ fn test_cli_program_show() {
         .unwrap()
         .as_u64()
         .unwrap();
-    assert_eq!(slot, deployed_slot);
+    assert!(deployed_slot >= min_slot);
+    assert!(deployed_slot <= max_slot);
     let data_len = json
         .as_object()
         .unwrap()

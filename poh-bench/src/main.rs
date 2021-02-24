@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 use clap::{crate_description, crate_name, value_t, App, Arg};
 use solana_ledger::entry::{self, create_ticks, init_poh, EntrySlice, VerifyRecyclers};
 use solana_measure::measure::Measure;

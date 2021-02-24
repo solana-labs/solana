@@ -6,6 +6,7 @@ extern crate test;
 use log::*;
 use solana_core::cluster_info::{ClusterInfo, Node};
 use solana_core::contact_info::ContactInfo;
+use solana_core::max_slots::MaxSlots;
 use solana_core::retransmit_stage::retransmitter;
 use solana_ledger::entry::Entry;
 use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
@@ -92,6 +93,7 @@ fn bench_retransmitter(bencher: &mut Bencher) {
         &leader_schedule_cache,
         cluster_info,
         packet_receiver,
+        &Arc::new(MaxSlots::default()),
     );
 
     let mut index = 0;

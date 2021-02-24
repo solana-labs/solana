@@ -19,7 +19,10 @@
   "publishConfig": {
     "access": "public"
   },
-  "browser": "lib/index.browser.esm.js",
+  "browser": {
+    "./lib/index.cjs.js": "./lib/index.browser.esm.js",
+    "./lib/index.esm.js": "./lib/index.browser.esm.js"
+  },
   "main": "lib/index.cjs.js",
   "module": "lib/index.esm.js",
   "types": "lib/index.d.ts",
@@ -111,6 +114,7 @@
     "@rollup/plugin-node-resolve": "^11.1.1",
     "@rollup/plugin-replace": "^2.3.4",
     "@solana/spl-token": "^0.0.13",
+    "@types/node": "^14.14.26",
     "@typescript-eslint/eslint-plugin": "^4.14.2",
     "@typescript-eslint/parser": "^4.14.2",
     "babel-eslint": "^11.0.0-beta.2",
@@ -125,7 +129,7 @@
     "esdoc-inject-style-plugin": "^1.0.0",
     "esdoc-standard-plugin": "^1.0.0",
     "eslint": "^7.19.0",
-    "eslint-config-prettier": "^7.0.0",
+    "eslint-config-prettier": "^8.0.0",
     "eslint-plugin-flowtype": "^5.2.0",
     "eslint-plugin-import": "2.22.1",
     "eslint-plugin-mocha": "^8.0.0",
@@ -133,7 +137,7 @@
     "esm": "^3.2.25",
     "flow-bin": "0.130.0",
     "flow-remove-types": "^2.143.1",
-    "flow-typed": "3.2.1",
+    "flow-typed": "3.3.1",
     "http-server": "^0.12.3",
     "mocha": "^8.2.1",
     "mocha-headless-chrome": "^3.1.0",
@@ -142,7 +146,7 @@
     "nyc": "^15.1.0",
     "prettier": "^2.0.0",
     "rimraf": "3.0.2",
-    "rollup": "2.38.5",
+    "rollup": "2.39.0",
     "rollup-plugin-copy": "^3.3.0",
     "rollup-plugin-node-polyfills": "^0.2.1",
     "rollup-plugin-terser": "^7.0.2",

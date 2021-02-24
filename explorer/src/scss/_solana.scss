@@ -71,6 +71,15 @@ ul.log-messages {
   cursor: pointer;
 }
 
+.v-hidden {
+  visibility: hidden;
+  max-height: 0;
+}
+
+.flex-nowrap {
+  flex-wrap: nowrap;
+}
+
 .dropdown-exit {
   position: absolute;
   z-index: 100;
@@ -330,4 +339,13 @@ div.inner-cards {
 .alert-danger.alert-scam {
   background: red;
   border: 1px solid red;
+}
+
+pre.data-wrap {
+  max-width: 23rem;
+  white-space: pre-wrap;
+  white-space: -moz-pre-wrap;
+  white-space: -pre-wrap;
+  white-space: -o-pre-wrap;
+  word-wrap: break-word;
 }

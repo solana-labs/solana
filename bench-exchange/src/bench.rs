@@ -1,4 +1,5 @@
 #![allow(clippy::useless_attribute)]
+#![allow(clippy::integer_arithmetic)]
 
 use crate::order_book::*;
 use itertools::izip;

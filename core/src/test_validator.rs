@@ -49,6 +49,7 @@ pub struct TestValidatorGenesis {
     rpc_config: JsonRpcConfig,
     rpc_ports: Option<(u16, u16)>, // (JsonRpc, JsonRpcPubSub), None == random ports
     warp_slot: Option<Slot>,
+    no_bpf_jit: bool,
     accounts: HashMap<Pubkey, Account>,
     programs: Vec<ProgramInfo>,
 }
@@ -81,6 +82,11 @@ impl TestValidatorGenesis {
 
     pub fn warp_slot(&mut self, warp_slot: Slot) -> &mut Self {
         self.warp_slot = Some(warp_slot);
+        self
+    }
+
+    pub fn bpf_jit(&mut self, bpf_jit: bool) -> &mut Self {
+        self.no_bpf_jit = !bpf_jit;
         self
     }
 
@@ -394,6 +400,7 @@ impl TestValidator {
             }),
             enforce_ulimit_nofile: false,
             warp_slot: config.warp_slot,
+            bpf_jit: !config.no_bpf_jit,
             ..ValidatorConfig::default()
         };
 

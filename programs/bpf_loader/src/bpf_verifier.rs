@@ -1,4 +1,6 @@
-use crate::BPFError;
+#![allow(clippy::upper_case_acronyms)]
+
+use crate::BpfError;
 use solana_rbpf::ebpf;
 use thiserror::Error;
 
@@ -54,78 +56,84 @@ pub enum VerifierError {
     InvalidRegister(usize),
 }
 
-fn check_prog_len(prog: &[u8], is_program_size_cap: bool) -> Result<(), BPFError> {
+fn adj_insn_ptr(insn_ptr: usize) -> usize {
+    insn_ptr + ebpf::ELF_INSN_DUMP_OFFSET
+}
+
+fn check_prog_len(prog: &[u8]) -> Result<(), BpfError> {
     if prog.len() % ebpf::INSN_SIZE != 0 {
         return Err(VerifierError::ProgramLengthNotMultiple.into());
     }
-    if is_program_size_cap && prog.len() > ebpf::PROG_MAX_SIZE {
-        return Err(VerifierError::ProgramTooLarge(prog.len() / ebpf::INSN_SIZE).into());
-    }
-
     if prog.is_empty() {
         return Err(VerifierError::NoProgram.into());
     }
     Ok(())
 }
 
-fn check_imm_nonzero(insn: &ebpf::Insn, insn_ptr: usize) -> Result<(), BPFError> {
+fn check_imm_nonzero(insn: &ebpf::Insn, insn_ptr: usize) -> Result<(), BpfError> {
     if insn.imm == 0 {
-        return Err(VerifierError::DivisionByZero(insn_ptr).into());
+        return Err(VerifierError::DivisionByZero(adj_insn_ptr(insn_ptr)).into());
     }
     Ok(())
 }
 
-fn check_imm_endian(insn: &ebpf::Insn, insn_ptr: usize) -> Result<(), BPFError> {
+fn check_imm_endian(insn: &ebpf::Insn, insn_ptr: usize) -> Result<(), BpfError> {
     match insn.imm {
         16 | 32 | 64 => Ok(()),
-        _ => Err(VerifierError::UnsupportedLEBEArgument(insn_ptr).into()),
+        _ => Err(VerifierError::UnsupportedLEBEArgument(adj_insn_ptr(insn_ptr)).into()),
     }
 }
 
-fn check_load_dw(prog: &[u8], insn_ptr: usize) -> Result<(), BPFError> {
+fn check_load_dw(prog: &[u8], insn_ptr: usize) -> Result<(), BpfError> {
     if insn_ptr + 1 >= (prog.len() / ebpf::INSN_SIZE) {
         // Last instruction cannot be LD_DW because there would be no 2nd DW
         return Err(VerifierError::LDDWCannotBeLast.into());
     }
     let next_insn = ebpf::get_insn(prog, insn_ptr + 1);
     if next_insn.opc != 0 {
-        return Err(VerifierError::IncompleteLDDW(insn_ptr).into());
+        return Err(VerifierError::IncompleteLDDW(adj_insn_ptr(insn_ptr)).into());
     }
     Ok(())
 }
 
-fn check_jmp_offset(prog: &[u8], insn_ptr: usize) -> Result<(), BPFError> {
+fn check_jmp_offset(prog: &[u8], insn_ptr: usize) -> Result<(), BpfError> {
     let insn = ebpf::get_insn(prog, insn_ptr);
-    if insn.off == -1 {
-        return Err(VerifierError::InfiniteLoop(insn_ptr).into());
-    }
+    // if insn.off == -1 {
+    //     return Err(VerifierError::InfiniteLoop(adj_insn_ptr(insn_ptr)).into());
+    // }
 
     let dst_insn_ptr = insn_ptr as isize + 1 + insn.off as isize;
     if dst_insn_ptr < 0 || dst_insn_ptr as usize >= (prog.len() / ebpf::INSN_SIZE) {
-        return Err(VerifierError::JumpOutOfCode(dst_insn_ptr as usize, insn_ptr).into());
+        return Err(
+            VerifierError::JumpOutOfCode(dst_insn_ptr as usize, adj_insn_ptr(insn_ptr)).into(),
+        );
     }
     let dst_insn = ebpf::get_insn(prog, dst_insn_ptr as usize);
     if dst_insn.opc == 0 {
-        return Err(VerifierError::JumpToMiddleOfLDDW(dst_insn_ptr as usize, insn_ptr).into());
+        return Err(VerifierError::JumpToMiddleOfLDDW(
+            dst_insn_ptr as usize,
+            adj_insn_ptr(insn_ptr),
+        )
+        .into());
     }
     Ok(())
 }
 
-fn check_registers(insn: &ebpf::Insn, store: bool, insn_ptr: usize) -> Result<(), BPFError> {
+fn check_registers(insn: &ebpf::Insn, store: bool, insn_ptr: usize) -> Result<(), BpfError> {
     if insn.src > 10 {
-        return Err(VerifierError::InvalidSourceRegister(insn_ptr).into());
+        return Err(VerifierError::InvalidSourceRegister(adj_insn_ptr(insn_ptr)).into());
     }
     match (insn.dst, store) {
         (0..=9, _) | (10, true) => Ok(()),
-        (10, false) => Err(VerifierError::CannotWriteR10(insn_ptr).into()),
-        (_, _) => Err(VerifierError::InvalidDestinationRegister(insn_ptr).into()),
+        (10, false) => Err(VerifierError::CannotWriteR10(adj_insn_ptr(insn_ptr)).into()),
+        (_, _) => Err(VerifierError::InvalidDestinationRegister(adj_insn_ptr(insn_ptr)).into()),
     }
 }
 
 /// Check that the imm is a valid shift operand
 fn check_imm_shift(insn: &ebpf::Insn, insn_ptr: usize) -> Result<(), VerifierError> {
     if insn.imm < 0 || insn.imm as u64 >= 64 {
-        return Err(VerifierError::ShiftWithOverflow(insn_ptr));
+        return Err(VerifierError::ShiftWithOverflow(adj_insn_ptr(insn_ptr)));
     }
     Ok(())
 }
@@ -133,14 +141,14 @@ fn check_imm_shift(insn: &ebpf::Insn, insn_ptr: usize) -> Result<(), VerifierErr
 /// Check that the imm is a valid register number
 fn check_imm_register(insn: &ebpf::Insn, insn_ptr: usize) -> Result<(), VerifierError> {
     if insn.imm < 0 || insn.imm > 10 {
-        return Err(VerifierError::InvalidRegister(insn_ptr));
+        return Err(VerifierError::InvalidRegister(adj_insn_ptr(insn_ptr)));
     }
     Ok(())
 }
 
 #[rustfmt::skip]
-pub fn check(prog: &[u8], is_program_size_cap: bool) -> Result<(), BPFError> {
-    check_prog_len(prog, is_program_size_cap)?;
+pub fn check(prog: &[u8]) -> Result<(), BpfError> {
+    check_prog_len(prog)?;
 
     let mut insn_ptr: usize = 0;
     while insn_ptr * ebpf::INSN_SIZE < prog.len() {
@@ -268,7 +276,7 @@ pub fn check(prog: &[u8], is_program_size_cap: bool) -> Result<(), BPFError> {
             ebpf::EXIT       => {},
 
             _                => {
-                return Err(VerifierError::UnknownOpCode(insn.opc, insn_ptr).into());
+                return Err(VerifierError::UnknownOpCode(insn.opc, adj_insn_ptr(insn_ptr)).into());
             }
         }
 
@@ -279,7 +287,7 @@ pub fn check(prog: &[u8], is_program_size_cap: bool) -> Result<(), BPFError> {
 
     // insn_ptr should now be equal to number of instructions.
     if insn_ptr != prog.len() / ebpf::INSN_SIZE {
-        return Err(VerifierError::JumpOutOfCode(insn_ptr, insn_ptr).into());
+        return Err(VerifierError::JumpOutOfCode(adj_insn_ptr(insn_ptr), adj_insn_ptr(insn_ptr)).into());
     }
 
     Ok(())

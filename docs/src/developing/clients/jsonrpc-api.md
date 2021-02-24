@@ -42,6 +42,8 @@ gives a convenient interface for the RPC methods.
 - [getInflationRate](jsonrpc-api.md#getinflationrate)
 - [getLargestAccounts](jsonrpc-api.md#getlargestaccounts)
 - [getLeaderSchedule](jsonrpc-api.md#getleaderschedule)
+- [getMaxRetransmitSlot](jsonrpc-api.md#getmaxretransmitslot)
+- [getMaxShredInsertSlot](jsonrpc-api.md#getmaxshredinsertslot)
 - [getMinimumBalanceForRentExemption](jsonrpc-api.md#getminimumbalanceforrentexemption)
 - [getMultipleAccounts](jsonrpc-api.md#getmultipleaccounts)
 - [getProgramAccounts](jsonrpc-api.md#getprogramaccounts)
@@ -207,7 +209,7 @@ Returns all information associated with the account of provided Pubkey
 fields:
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
   - `encoding: <string>` - encoding for Account data, either "base58" (*slow*), "base64", "base64+zstd", or "jsonParsed".
-    "base58" is limited to Account data of less than 128 bytes.
+    "base58" is limited to Account data of less than 129 bytes.
     "base64" will return base64 encoded data for Account data of any size.
     "base64+zstd" compresses the Account data using [Zstandard](https://facebook.github.io/zstd/) and base64-encodes the result.
     "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to "base64" encoding, detectable when the `data` field is type `<string>`.
@@ -386,11 +388,6 @@ Each validator reports their UTC time to the ledger on a regular interval by
 intermittently adding a timestamp to a Vote for a particular block. A requested
 block's time is calculated from the stake-weighted mean of the Vote timestamps
 in a set of recent blocks recorded on the ledger.
-
-Nodes that are booting from snapshot or limiting ledger size (by purging old
-slots) will return null timestamps for blocks below their lowest root +
-`TIMESTAMP_SLOT_RANGE`. Users interested in having this historical data must
-query a node that is built from genesis and retains the entire ledger.
 
 #### Parameters:
 
@@ -680,7 +677,7 @@ The JSON structure of token balances is defined as a list of objects in the foll
 - `uiTokenAmount: <object>` -
   - `amount: <string>` - Raw amount of tokens as a string, ignoring decimals.
   - `decimals: <number>` - Number of decimals configured for token's mint.
-  - `uiAmount: <number>` - Token amount as a float, accounting for decimals.
+  - `uiAmount: <string>` - Token amount as a float, accounting for decimals.
 
 ### getConfirmedBlocks
 
@@ -1469,7 +1466,7 @@ Result:
 
 ### getLargestAccounts
 
-Returns the 20 largest accounts, by lamport balance
+Returns the 20 largest accounts, by lamport balance (results may be cached up to two hours)
 
 #### Parameters:
 
@@ -1617,6 +1614,50 @@ Result:
 }
 ```
 
+### getMaxRetransmitSlot
+
+Get the max slot seen from retransmit stage.
+
+#### Results:
+
+- `<u64>` - Slot
+
+#### Example:
+
+Request:
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"getMaxRetransmitSlot"}
+'
+```
+
+Result:
+```json
+{"jsonrpc":"2.0","result":1234,"id":1}
+```
+
+### getMaxShredInsertSlot
+
+Get the max slot seen from after shred insert.
+
+#### Results:
+
+- `<u64>` - Slot
+
+#### Example:
+
+Request:
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"getMaxShredInsertSlot"}
+'
+```
+
+Result:
+```json
+{"jsonrpc":"2.0","result":1234,"id":1}
+```
+
 ### getMinimumBalanceForRentExemption
 
 Returns minimum balance required to make account rent exempt.
@@ -1654,7 +1695,7 @@ Returns the account information for a list of Pubkeys
 - `<object>` - (optional) Configuration object containing the following optional fields:
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
   - `encoding: <string>` - encoding for Account data, either "base58" (*slow*), "base64", "base64+zstd", or "jsonParsed".
-    "base58" is limited to Account data of less than 128 bytes.
+    "base58" is limited to Account data of less than 129 bytes.
     "base64" will return base64 encoded data for Account data of any size.
     "base64+zstd" compresses the Account data using [Zstandard](https://facebook.github.io/zstd/) and base64-encodes the result.
     "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to "base64" encoding, detectable when the `data` field is type `<string>`.
@@ -1801,7 +1842,7 @@ Returns all accounts owned by the provided program Pubkey
 - `<object>` - (optional) Configuration object containing the following optional fields:
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
   - `encoding: <string>` - encoding for Account data, either "base58" (*slow*), "base64", "base64+zstd", or "jsonParsed".
-    "base58" is limited to Account data of less than 128 bytes.
+    "base58" is limited to Account data of less than 129 bytes.
     "base64" will return base64 encoded data for Account data of any size.
     "base64+zstd" compresses the Account data using [Zstandard](https://facebook.github.io/zstd/) and base64-encodes the result.
     "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to "base64" encoding, detectable when the `data` field is type `<string>`.
@@ -1811,7 +1852,7 @@ Returns all accounts owned by the provided program Pubkey
 ##### Filters:
 - `memcmp: <object>` - compares a provided series of bytes with program account data at a particular offset. Fields:
   - `offset: <usize>` - offset into program account data to start comparison
-  - `bytes: <string>` - data to match, as base-58 encoded string
+  - `bytes: <string>` - data to match, as base-58 encoded string and limited to less than 129 bytes
 
 - `dataSize: <u64>` - compares the program account data length with the provided data size
 
@@ -2339,7 +2380,7 @@ Returns the token balance of an SPL Token account. **UNSTABLE**
 
 The result will be an RpcResponse JSON object with `value` equal to a JSON object containing:
 
-- `uiAmount: <f64>` - the balance, using mint-prescribed decimals
+- `uiAmount: <string>` - the balance, using mint-prescribed decimals
 - `amount: <string>` - the raw balance without decimals, a string representation of u64
 - `decimals: <u8>` - number of base 10 digits to the right of the decimal place
 
@@ -2361,7 +2402,7 @@ Result:
       "slot": 1114
     },
     "value": {
-      "uiAmount": 98.64,
+      "uiAmount": "98.64",
       "amount": "9864",
       "decimals": 2
     },
@@ -2436,7 +2477,7 @@ Result:
             "info": {
               "tokenAmount": {
                 "amount": "1",
-                "uiAmount": 0.1,
+                "uiAmount": "0.1",
                 "decimals": 1
               },
               "delegate": "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T",
@@ -2525,7 +2566,7 @@ Result:
             "info": {
               "tokenAmount": {
                 "amount": "1",
-                "uiAmount": 0.1,
+                "uiAmount": "0.1",
                 "decimals": 1
               },
               "delegate": null,
@@ -2562,7 +2603,7 @@ Returns the 20 largest accounts of a particular SPL Token type. **UNSTABLE**
 The result will be an RpcResponse JSON object with `value` equal to an array of JSON objects containing:
 
 - `address: <string>` - the address of the token account
-- `uiAmount: <f64>` - the token account balance, using mint-prescribed decimals
+- `uiAmount: <string>` - the token account balance, using mint-prescribed decimals
 - `amount: <string>` - the raw token account balance without decimals, a string representation of u64
 - `decimals: <u8>` - number of base 10 digits to the right of the decimal place
 
@@ -2587,13 +2628,13 @@ Result:
         "address": "FYjHNoFtSQ5uijKrZFyYAxvEr87hsKXkXcxkcmkBAf4r",
         "amount": "771",
         "decimals": 2,
-        "uiAmount": 7.71
+        "uiAmount": "7.71"
       },
       {
         "address": "BnsywxTcaYeNUtzrPxQUvzAWxfzZe3ZLUJ4wMMuLESnu",
         "amount": "229",
         "decimals": 2,
-        "uiAmount": 2.29
+        "uiAmount": "2.29"
       }
     ]
   },
@@ -2614,7 +2655,7 @@ Returns the total supply of an SPL Token type. **UNSTABLE**
 
 The result will be an RpcResponse JSON object with `value` equal to a JSON object containing:
 
-- `uiAmount: <f64>` - the total token supply, using mint-prescribed decimals
+- `uiAmount: <string>` - the total token supply, using mint-prescribed decimals
 - `amount: <string>` - the raw total token supply without decimals, a string representation of u64
 - `decimals: <u8>` - number of base 10 digits to the right of the decimal place
 
@@ -2635,7 +2676,7 @@ Result:
       "slot": 1114
     },
     "value": {
-      "uiAmount": 1000,
+      "uiAmount": "1000",
       "amount": "100000",
       "decimals": 2
     }

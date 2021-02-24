@@ -12,7 +12,8 @@ gce)
   # shellcheck source=net/scripts/gce-provider.sh
   source "$here"/scripts/gce-provider.sh
 
-  cpuBootstrapLeaderMachineType="--custom-cpu 24 --min-cpu-platform Intel%20Skylake"
+  # use n1 instead of n2 so we don't need to spin up >= 4 local SSD's
+  cpuBootstrapLeaderMachineType="--custom-cpu 24 --min-cpu-platform Intel%20Skylake --custom-vm-type n1"
   gpuBootstrapLeaderMachineType="$cpuBootstrapLeaderMachineType --accelerator count=1,type=nvidia-tesla-p100"
   clientMachineType="--custom-cpu 16 --custom-memory 20GB"
   blockstreamerMachineType="--machine-type n1-standard-8"

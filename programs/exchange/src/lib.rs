@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 pub mod exchange_instruction;
 pub mod exchange_processor;
 pub mod exchange_state;

@@ -33,12 +33,12 @@ if (process.env.TEST_LIVE) {
         keccak_256.update(toBuffer(message)).digest(),
       );
       const {signature, recid: recoveryId} = ecdsaSign(messageHash, privateKey);
-      const connection = new Connection(url, 'singleGossip');
+      const connection = new Connection(url, 'confirmed');
 
       const from = new Account();
       await connection.confirmTransaction(
         await connection.requestAirdrop(from.publicKey, 2 * LAMPORTS_PER_SOL),
-        'singleGossip',
+        'confirmed',
       );
 
       const transaction = new Transaction().add(
@@ -51,19 +51,19 @@ if (process.env.TEST_LIVE) {
       );
 
       await sendAndConfirmTransaction(connection, transaction, [from], {
-        commitment: 'singleGossip',
-        preflightCommitment: 'singleGossip',
+        commitment: 'confirmed',
+        preflightCommitment: 'confirmed',
       });
     });
 
     it('create secp256k1 instruction with private key', async () => {
       const privateKey = randomPrivateKey();
-      const connection = new Connection(url, 'singleGossip');
+      const connection = new Connection(url, 'confirmed');
 
       const from = new Account();
       await connection.confirmTransaction(
         await connection.requestAirdrop(from.publicKey, 2 * LAMPORTS_PER_SOL),
-        'singleGossip',
+        'confirmed',
       );
 
       const transaction = new Transaction().add(
@@ -74,8 +74,8 @@ if (process.env.TEST_LIVE) {
       );
 
       await sendAndConfirmTransaction(connection, transaction, [from], {
-        commitment: 'singleGossip',
-        preflightCommitment: 'singleGossip',
+        commitment: 'confirmed',
+        preflightCommitment: 'confirmed',
       });
     });
   });

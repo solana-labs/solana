@@ -27,7 +27,7 @@ use solana_sdk::{
     client::SyncClient,
     clock::{DEFAULT_SLOTS_PER_EPOCH, MAX_PROCESSING_AGE},
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
-    feature_set::try_find_program_address_syscall_enabled,
+    feature_set::ristretto_mul_syscall_enabled,
     instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
     keyed_account::KeyedAccount,
     message::Message,
@@ -1213,10 +1213,10 @@ fn assert_instruction_count() {
         programs.extend_from_slice(&[
             ("bpf_to_bpf", 13),
             ("multiple_static", 8),
-            ("noop", 57),
+            ("noop", 45),
             ("relative_call", 10),
             ("sanity", 176),
-            ("sanity++", 176),
+            ("sanity++", 177),
             ("struct_pass", 8),
             ("struct_ret", 22),
         ]);
@@ -1224,16 +1224,16 @@ fn assert_instruction_count() {
     #[cfg(feature = "bpf_rust")]
     {
         programs.extend_from_slice(&[
-            ("solana_bpf_rust_128bit", 572),
-            ("solana_bpf_rust_alloc", 12919),
+            ("solana_bpf_rust_128bit", 570),
+            ("solana_bpf_rust_alloc", 8809),
             ("solana_bpf_rust_dep_crate", 2),
-            ("solana_bpf_rust_external_spend", 514),
+            ("solana_bpf_rust_external_spend", 526),
             ("solana_bpf_rust_iter", 724),
             ("solana_bpf_rust_many_args", 237),
-            ("solana_bpf_rust_noop", 488),
-            ("solana_bpf_rust_param_passing", 48),
-            ("solana_bpf_rust_ristretto", 19399),
-            ("solana_bpf_rust_sanity", 894),
+            ("solana_bpf_rust_noop", 500),
+            ("solana_bpf_rust_param_passing", 56),
+            ("solana_bpf_rust_ristretto", 19208),
+            ("solana_bpf_rust_sanity", 956),
         ]);
     }
 
@@ -2195,7 +2195,7 @@ fn test_program_bpf_syscall_feature_activation() {
         ..
     } = create_genesis_config(50);
     let mut bank = Bank::new(&genesis_config);
-    bank.deactivate_feature(&try_find_program_address_syscall_enabled::id());
+    bank.deactivate_feature(&ristretto_mul_syscall_enabled::id());
     let (name, id, entrypoint) = solana_bpf_loader_program!();
     bank.add_builtin(&name, id, entrypoint);
     let bank = Arc::new(bank);
@@ -2212,7 +2212,7 @@ fn test_program_bpf_syscall_feature_activation() {
     assert!(result.is_ok());
 
     let mut bank = Bank::new_from_parent(&bank, &Pubkey::default(), 1);
-    bank.activate_feature(&try_find_program_address_syscall_enabled::id());
+    bank.activate_feature(&ristretto_mul_syscall_enabled::id());
 
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);

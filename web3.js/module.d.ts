@@ -77,11 +77,14 @@ declare module '@solana/web3.js' {
   };
 
   export type Commitment =
-    | 'max'
-    | 'recent'
-    | 'root'
-    | 'single'
-    | 'singleGossip';
+    | 'processed'
+    | 'confirmed'
+    | 'finalized'
+    | 'recent' // Deprecated as of v1.5.5
+    | 'single' // Deprecated as of v1.5.5
+    | 'singleGossip' // Deprecated as of v1.5.5
+    | 'root' // Deprecated as of v1.5.5
+    | 'max'; // Deprecated as of v1.5.5
 
   export type LargestAccountsFilter = 'circulating' | 'nonCirculating';
 

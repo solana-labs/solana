@@ -112,6 +112,40 @@ Note that program accounts are required to be
 `max-len` is fixed after initial deployment, so any SOL in the program accounts
 is locked up permanently.
 
+### Resuming a failed deploy
+
+If program deployment fails, there will be a hanging intermediate buffer account
+that contains a non-zero balance.  In order to recoup that balance you may
+resume a failed deployment by providing the same intermediate buffer to a new
+call to `deploy`.
+
+Deployment failures will print an error message specifying the seed phrase
+needed to recover the generated intermediate buffer's keypair:
+
+```bash
+=======================================================================
+To resume a failed deploy, recover the ephemeral keypair file with
+`solana-keygen recover` and the following 12-word seed phrase,
+then pass it as the [BUFFER_SIGNER] argument to `solana deploy` or `solana write-buffer`
+=======================================================================
+spy axis cream equip bonus daring muffin fish noise churn broken diesel
+=======================================================================
+```
+
+To recover the keypair:
+
+```bash
+$ solana-keypair recover -o <KEYPAIR_PATH>
+```
+
+When asked, enter the 12-word seed phrase.
+
+Then issue a new `deploy` command and specify the buffer:
+
+```bash
+$ solana program deploy --buffer <KEYPAIR_PATH> <PROGRAM_FILEPATH>
+```
+
 ### Set a program's upgrade authority
 
 The program's upgrade authority must to be present to deploy a program.  If no

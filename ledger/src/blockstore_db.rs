@@ -64,7 +64,7 @@ pub enum BlockstoreError {
     RocksDb(#[from] rocksdb::Error),
     SlotNotRooted,
     DeadSlot,
-    IO(#[from] std::io::Error),
+    Io(#[from] std::io::Error),
     Serialize(#[from] Box<bincode::ErrorKind>),
     FsExtraError(#[from] fs_extra::error::Error),
     SlotCleanedUp,
@@ -75,6 +75,7 @@ pub enum BlockstoreError {
     NoVoteTimestampsInRange,
     ProtobufEncodeError(#[from] prost::EncodeError),
     ProtobufDecodeError(#[from] prost::DecodeError),
+    ParentEntriesUnavailable,
 }
 pub type Result<T> = std::result::Result<T, BlockstoreError>;
 

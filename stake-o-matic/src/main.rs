@@ -1,40 +1,74 @@
-use clap::{crate_description, crate_name, crate_version, value_t, value_t_or_exit, App, Arg};
-use log::*;
-use solana_clap_utils::{
-    input_parsers::{keypair_of, pubkey_of},
-    input_validators::{is_amount, is_keypair, is_pubkey_or_keypair, is_url, is_valid_percentage},
+#![allow(clippy::integer_arithmetic)]
+use {
+    clap::{
+        crate_description, crate_name, crate_version, value_t, value_t_or_exit, App, Arg,
+        ArgMatches,
+    },
+    log::*,
+    reqwest::StatusCode,
+    solana_clap_utils::{
+        input_parsers::{keypair_of, pubkey_of},
+        input_validators::{
+            is_amount, is_keypair, is_pubkey_or_keypair, is_url, is_valid_percentage,
+        },
+    },
+    solana_cli_output::display::format_labeled_address,
+    solana_client::{
+        client_error, rpc_client::RpcClient, rpc_config::RpcSimulateTransactionConfig,
+        rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS, rpc_response::RpcVoteAccountInfo,
+    },
+    solana_metrics::datapoint_info,
+    solana_notifier::Notifier,
+    solana_sdk::{
+        account_utils::StateMut,
+        clock::{Epoch, Slot},
+        commitment_config::CommitmentConfig,
+        message::Message,
+        native_token::*,
+        pubkey::Pubkey,
+        signature::{Keypair, Signature, Signer},
+        transaction::Transaction,
+    },
+    solana_stake_program::{stake_instruction, stake_state::StakeState},
+    std::{
+        collections::{HashMap, HashSet},
+        error,
+        fs::File,
+        path::PathBuf,
+        process,
+        str::FromStr,
+        thread::sleep,
+        time::Duration,
+    },
 };
-use solana_cli_output::display::format_labeled_address;
-use solana_client::{
-    client_error, rpc_client::RpcClient, rpc_config::RpcSimulateTransactionConfig,
-    rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS, rpc_response::RpcVoteAccountInfo,
-};
-use solana_metrics::datapoint_info;
-use solana_notifier::Notifier;
-use solana_sdk::{
-    account_utils::StateMut,
-    clock::{Epoch, Slot},
-    commitment_config::CommitmentConfig,
-    message::Message,
-    native_token::*,
-    pubkey::Pubkey,
-    signature::{Keypair, Signature, Signer},
-    transaction::Transaction,
-};
-use solana_stake_program::{stake_instruction, stake_state::StakeState};
 
-use std::{
-    collections::{HashMap, HashSet},
-    error,
-    fs::File,
-    path::PathBuf,
-    process,
-    str::FromStr,
-    thread::sleep,
-    time::Duration,
-};
-
+mod confirmed_block_cache;
 mod validator_list;
+
+use confirmed_block_cache::ConfirmedBlockCache;
+
+pub fn is_release_version(string: String) -> Result<(), String> {
+    if string.starts_with('v') && semver::Version::parse(string.split_at(1).1).is_ok() {
+        return Ok(());
+    }
+    semver::Version::parse(&string)
+        .map(|_| ())
+        .map_err(|err| format!("{:?}", err))
+}
+
+pub fn release_version_of(matches: &ArgMatches<'_>, name: &str) -> Option<semver::Version> {
+    matches
+        .value_of(name)
+        .map(ToString::to_string)
+        .map(|string| {
+            if string.starts_with('v') {
+                semver::Version::parse(string.split_at(1).1)
+            } else {
+                semver::Version::parse(&string)
+            }
+            .expect("semver::Version")
+        })
+}
 
 #[derive(Debug)]
 struct Config {
@@ -63,16 +97,37 @@ struct Config {
     /// cause a validator to go down
     delinquent_grace_slot_distance: u64,
 
-    /// Don't ever unstake more than this percentage of the cluster at one time
+    /// Don't ever unstake more than this percentage of the cluster at one time for poor block
+    /// production
     max_poor_block_producer_percentage: usize,
 
     /// Vote accounts with a larger commission than this amount will not be staked.
     max_commission: u8,
 
     address_labels: HashMap<String, String>,
+
+    /// If Some(), destake validators with a version less than this version subject to the
+    /// `max_old_release_version_percentage` limit
+    min_release_version: Option<semver::Version>,
+
+    /// Don't ever unstake more than this percentage of the cluster at one time for running an
+    /// older software version
+    max_old_release_version_percentage: usize,
+
+    /// Base path of confirmed block cache
+    confirmed_block_cache_path: PathBuf,
+}
+
+fn default_confirmed_block_cache_path() -> PathBuf {
+    let home_dir = std::env::var("HOME").unwrap();
+    PathBuf::from(home_dir).join(".cache/solana/som/confirmed-block-cache/")
 }
 
 fn get_config() -> Config {
+    let default_confirmed_block_cache_path = default_confirmed_block_cache_path()
+        .to_str()
+        .unwrap()
+        .to_string();
     let matches = App::new(crate_name!())
         .about(crate_description!())
         .version(crate_version!())
@@ -181,6 +236,34 @@ fn get_config() -> Config {
                 .validator(is_valid_percentage)
                 .help("Vote accounts with a larger commission than this amount will not be staked")
         )
+        .arg(
+            Arg::with_name("min_release_version")
+                .long("min-release-version")
+                .value_name("SEMVER")
+                .takes_value(true)
+                .validator(is_release_version)
+                .help("Remove the base and bonus stake from validators with \
+                       a release version older than this one")
+        )
+        .arg(
+            Arg::with_name("max_old_release_version_percentage")
+                .long("max-old-release-version-percentage")
+                .value_name("PERCENTAGE")
+                .takes_value(true)
+                .default_value("10")
+                .validator(is_valid_percentage)
+                .help("Do not remove stake from validators running older \
+                       software versions if more than this percentage of \
+                       all validators are running an older software version")
+        )
+        .arg(
+            Arg::with_name("confirmed_block_cache_path")
+                .long("confirmed-block-cache-path")
+                .takes_value(true)
+                .value_name("PATH")
+                .default_value(&default_confirmed_block_cache_path)
+                .help("Base path of confirmed block cache")
+        )
         .get_matches();
 
     let config = if let Some(config_file) = matches.value_of("config_file") {
@@ -198,9 +281,12 @@ fn get_config() -> Config {
     let max_commission = value_t_or_exit!(matches, "max_commission", u8);
     let max_poor_block_producer_percentage =
         value_t_or_exit!(matches, "max_poor_block_producer_percentage", usize);
+    let max_old_release_version_percentage =
+        value_t_or_exit!(matches, "max_old_release_version_percentage", usize);
     let baseline_stake_amount =
         sol_to_lamports(value_t_or_exit!(matches, "baseline_stake_amount", f64));
     let bonus_stake_amount = sol_to_lamports(value_t_or_exit!(matches, "bonus_stake_amount", f64));
+    let min_release_version = release_version_of(&matches, "min_release_version");
 
     let (json_rpc_url, validator_list) = match cluster.as_str() {
         "mainnet-beta" => (
@@ -243,6 +329,10 @@ fn get_config() -> Config {
         _ => unreachable!(),
     };
     let validator_list = validator_list.into_iter().collect::<HashSet<_>>();
+    let confirmed_block_cache_path = matches
+        .value_of("confirmed_block_cache_path")
+        .map(PathBuf::from)
+        .unwrap();
 
     let config = Config {
         json_rpc_url,
@@ -258,6 +348,9 @@ fn get_config() -> Config {
         max_commission,
         max_poor_block_producer_percentage,
         address_labels: config.address_labels,
+        min_release_version,
+        max_old_release_version_percentage,
+        confirmed_block_cache_path,
     };
 
     info!("RPC URL: {}", config.json_rpc_url);
@@ -295,7 +388,7 @@ fn get_stake_account(
         .map(|stake_state| (account.lamports, stake_state))
 }
 
-fn retry_rpc_operation<T, F>(mut retries: usize, op: F) -> client_error::Result<T>
+pub fn retry_rpc_operation<T, F>(mut retries: usize, op: F) -> client_error::Result<T>
 where
     F: Fn() -> client_error::Result<T>,
 {
@@ -307,7 +400,12 @@ where
             ..
         }) = result
         {
-            if reqwest_error.is_timeout() && retries > 0 {
+            let can_retry = reqwest_error.is_timeout()
+                || reqwest_error
+                    .status()
+                    .map(|s| s == StatusCode::BAD_GATEWAY || s == StatusCode::GATEWAY_TIMEOUT)
+                    .unwrap_or(false);
+            if can_retry && retries > 0 {
                 info!("RPC request timeout, {} retries remaining", retries);
                 retries -= 1;
                 continue;
@@ -350,34 +448,12 @@ fn classify_block_producers(
 
     let leader_schedule = rpc_client.get_leader_schedule(Some(first_slot))?.unwrap();
 
-    let mut confirmed_blocks = vec![];
-    // Fetching a large number of blocks from BigTable can cause timeouts, break up the requests
-    const LONGTERM_STORAGE_STEP: u64 = 5_000;
-    let mut next_slot = first_slot;
-    while next_slot < last_slot_in_epoch {
-        let last_slot = if next_slot >= minimum_ledger_slot {
-            last_slot_in_epoch
-        } else {
-            last_slot_in_epoch.min(next_slot + LONGTERM_STORAGE_STEP)
-        };
-        let slots_remaining = last_slot_in_epoch - last_slot;
-        info!(
-            "Fetching confirmed blocks between {} - {}{}",
-            next_slot,
-            last_slot,
-            if slots_remaining > 0 {
-                format!(" ({} remaining)", slots_remaining)
-            } else {
-                "".to_string()
-            }
-        );
-
-        confirmed_blocks.push(retry_rpc_operation(42, || {
-            rpc_client.get_confirmed_blocks(next_slot, Some(last_slot))
-        })?);
-        next_slot = last_slot + 1;
-    }
-    let confirmed_blocks: HashSet<Slot> = confirmed_blocks.into_iter().flatten().collect();
+    let cache_path = config.confirmed_block_cache_path.join(&config.cluster);
+    let cbc = ConfirmedBlockCache::open(cache_path, &config.json_rpc_url).unwrap();
+    let confirmed_blocks = cbc
+        .query(first_slot, last_slot_in_epoch)?
+        .into_iter()
+        .collect::<HashSet<_>>();
 
     let mut poor_block_producers = HashSet::new();
     let mut quality_block_producers = HashSet::new();
@@ -652,6 +728,35 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         process::exit(1);
     });
 
+    let cluster_nodes_with_old_version: HashSet<String> = match config.min_release_version {
+        Some(ref min_release_version) => rpc_client
+            .get_cluster_nodes()?
+            .into_iter()
+            .filter_map(|rpc_contact_info| {
+                if let Ok(pubkey) = Pubkey::from_str(&rpc_contact_info.pubkey) {
+                    if config.validator_list.contains(&pubkey) {
+                        if let Some(ref version) = rpc_contact_info.version {
+                            if let Ok(semver) = semver::Version::parse(version) {
+                                if semver < *min_release_version {
+                                    return Some(rpc_contact_info.pubkey);
+                                }
+                            }
+                        }
+                    }
+                }
+                None
+            })
+            .collect(),
+        None => HashSet::default(),
+    };
+
+    if let Some(ref min_release_version) = config.min_release_version {
+        info!(
+            "Validators running a release older than {}: {:?}",
+            min_release_version, cluster_nodes_with_old_version,
+        );
+    }
+
     let source_stake_balance = validate_source_stake_account(&rpc_client, &config)?;
 
     let epoch_info = rpc_client.get_epoch_info()?;
@@ -664,6 +769,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let too_many_poor_block_producers = poor_block_producers.len()
         > quality_block_producers.len() * config.max_poor_block_producer_percentage / 100;
+
+    let too_many_old_validators = cluster_nodes_with_old_version.len()
+        > (poor_block_producers.len() + quality_block_producers.len())
+            * config.max_old_release_version_percentage
+            / 100;
 
     // Fetch vote account status for all the validator_listed validators
     let vote_account_status = rpc_client.get_vote_accounts()?;
@@ -688,14 +798,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     for RpcVoteAccountInfo {
         commission,
-        node_pubkey,
+        node_pubkey: node_pubkey_str,
         root_slot,
         vote_pubkey,
         ..
     } in &vote_account_info
     {
-        let formatted_node_pubkey = format_labeled_address(&node_pubkey, &config.address_labels);
-        let node_pubkey = Pubkey::from_str(&node_pubkey).unwrap();
+        let formatted_node_pubkey =
+            format_labeled_address(&node_pubkey_str, &config.address_labels);
+        let node_pubkey = Pubkey::from_str(&node_pubkey_str).unwrap();
         let baseline_seed = &vote_pubkey.to_string()[..32];
         let bonus_seed = &format!("A{{{}", vote_pubkey)[..32];
         let vote_pubkey = Pubkey::from_str(&vote_pubkey).unwrap();
@@ -714,8 +825,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         .unwrap();
 
         debug!(
-            "\nidentity: {}\n - vote address: {}\n - baseline stake: {}\n - bonus stake: {}",
-            node_pubkey, vote_pubkey, baseline_stake_address, bonus_stake_address
+            "\nidentity: {}\n - vote address: {}\n - root slot: {}\n - baseline stake: {}\n - bonus stake: {}",
+            node_pubkey, vote_pubkey, root_slot, baseline_stake_address, bonus_stake_address
         );
 
         // Transactions to create the baseline and bonus stake accounts
@@ -830,6 +941,40 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     lamports_to_sol(config.bonus_stake_amount),
                 ),
             ));
+        } else if !too_many_old_validators
+            && cluster_nodes_with_old_version.contains(node_pubkey_str)
+        {
+            // Deactivate baseline stake
+            delegate_stake_transactions.push((
+                Transaction::new_unsigned(Message::new(
+                    &[stake_instruction::deactivate_stake(
+                        &baseline_stake_address,
+                        &config.authorized_staker.pubkey(),
+                    )],
+                    Some(&config.authorized_staker.pubkey()),
+                )),
+                format!(
+                    "🧮 `{}` is running an old software release. Removed ◎{} baseline stake",
+                    formatted_node_pubkey,
+                    lamports_to_sol(config.baseline_stake_amount),
+                ),
+            ));
+
+            // Deactivate bonus stake
+            delegate_stake_transactions.push((
+                Transaction::new_unsigned(Message::new(
+                    &[stake_instruction::deactivate_stake(
+                        &bonus_stake_address,
+                        &config.authorized_staker.pubkey(),
+                    )],
+                    Some(&config.authorized_staker.pubkey()),
+                )),
+                format!(
+                    "🧮 `{}` is running an old software release. Removed ◎{} bonus stake",
+                    formatted_node_pubkey,
+                    lamports_to_sol(config.bonus_stake_amount),
+                ),
+            ));
 
         // Validator is not considered delinquent if its root slot is less than 256 slots behind the current
         // slot.  This is very generous.
@@ -839,6 +984,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 ("cluster", config.cluster, String),
                 ("id", node_pubkey.to_string(), String),
                 ("slot", epoch_info.absolute_slot, i64),
+                ("root-slot", *root_slot, i64),
                 ("ok", true, bool)
             );
 
@@ -947,6 +1093,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     ("cluster", config.cluster, String),
                     ("id", node_pubkey.to_string(), String),
                     ("slot", epoch_info.absolute_slot, i64),
+                    ("root-slot", *root_slot, i64),
                     ("ok", false, bool)
                 );
             } else {
@@ -956,6 +1103,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     ("cluster", config.cluster, String),
                     ("id", node_pubkey.to_string(), String),
                     ("slot", epoch_info.absolute_slot, i64),
+                    ("root-slot", *root_slot, i64),
                     ("ok", true, bool)
                 );
             }
@@ -1008,6 +1156,18 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             "Note: Something is wrong, more than {}% of validators classified \
                        as poor block producers in epoch {}.  Bonus stake frozen",
             config.max_poor_block_producer_percentage, last_epoch,
+        );
+        warn!("{}", message);
+        if !config.dry_run {
+            notifier.send(&message);
+        }
+    }
+
+    if too_many_old_validators {
+        let message = format!(
+            "Note: Something is wrong, more than {}% of validators classified \
+                     as running an older release",
+            config.max_old_release_version_percentage
         );
         warn!("{}", message);
         if !config.dry_run {

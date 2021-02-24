@@ -12,6 +12,7 @@ use crate::{
     consensus::{reconcile_blockstore_roots_with_tower, Tower},
     contact_info::ContactInfo,
     gossip_service::GossipService,
+    max_slots::MaxSlots,
     optimistically_confirmed_bank_tracker::{
         OptimisticallyConfirmedBank, OptimisticallyConfirmedBankTracker,
     },
@@ -104,6 +105,8 @@ pub struct ValidatorConfig {
     pub accounts_hash_fault_injection_slots: u64, // 0 = no fault injection
     pub frozen_accounts: Vec<Pubkey>,
     pub no_rocksdb_compaction: bool,
+    pub rocksdb_compaction_interval: Option<u64>,
+    pub rocksdb_max_compaction_jitter: Option<u64>,
     pub accounts_hash_interval_slots: u64,
     pub max_genesis_archive_unpacked_size: u64,
     pub wal_recovery_mode: Option<BlockstoreRecoveryMode>,
@@ -122,6 +125,7 @@ pub struct ValidatorConfig {
     pub accounts_db_caching_enabled: bool,
     pub warp_slot: Option<Slot>,
     pub accounts_db_test_hash_calculation: bool,
+    pub accounts_db_use_index_hash_calculation: bool,
 }
 
 impl Default for ValidatorConfig {
@@ -152,6 +156,8 @@ impl Default for ValidatorConfig {
             accounts_hash_fault_injection_slots: 0,
             frozen_accounts: vec![],
             no_rocksdb_compaction: false,
+            rocksdb_compaction_interval: None,
+            rocksdb_max_compaction_jitter: None,
             accounts_hash_interval_slots: std::u64::MAX,
             max_genesis_archive_unpacked_size: MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
             wal_recovery_mode: None,
@@ -170,6 +176,7 @@ impl Default for ValidatorConfig {
             accounts_db_caching_enabled: false,
             warp_slot: None,
             accounts_db_test_hash_calculation: false,
+            accounts_db_use_index_hash_calculation: true,
         }
     }
 }
@@ -408,6 +415,7 @@ impl Validator {
             config.pubsub_config.enable_vote_subscription,
         ));
 
+        let max_slots = Arc::new(MaxSlots::default());
         let (completed_data_sets_sender, completed_data_sets_receiver) =
             bounded(MAX_COMPLETED_DATA_SETS_IN_CHANNEL);
         let completed_data_sets_service = CompletedDataSetsService::new(
@@ -415,6 +423,7 @@ impl Validator {
             blockstore.clone(),
             subscriptions.clone(),
             &exit,
+            max_slots.clone(),
         );
 
         info!(
@@ -479,6 +488,7 @@ impl Validator {
                         optimistically_confirmed_bank.clone(),
                         config.send_transaction_retry_ms,
                         config.send_transaction_leader_forward_count,
+                        max_slots.clone(),
                     ),
                     pubsub_service: PubSubService::new(
                         config.pubsub_config.clone(),
@@ -644,7 +654,11 @@ impl Validator {
                 accounts_hash_fault_injection_slots: config.accounts_hash_fault_injection_slots,
                 accounts_db_caching_enabled: config.accounts_db_caching_enabled,
                 test_hash_calculation: config.accounts_db_test_hash_calculation,
+                use_index_hash_calculation: config.accounts_db_use_index_hash_calculation,
+                rocksdb_compaction_interval: config.rocksdb_compaction_interval,
+                rocksdb_max_compaction_jitter: config.rocksdb_compaction_interval,
             },
+            &max_slots,
         );
 
         let tpu = Tpu::new(
@@ -1039,7 +1053,7 @@ fn new_banks_from_ledger(
         ));
         bank_forks.set_root(
             warp_slot,
-            &solana_runtime::accounts_background_service::ABSRequestSender::default(),
+            &solana_runtime::accounts_background_service::AbsRequestSender::default(),
             Some(warp_slot),
         );
         leader_schedule_cache.set_root(&bank_forks.root_bank());
@@ -1374,10 +1388,10 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
 
 // Cleanup anything that looks like an accounts append-vec
 fn cleanup_accounts_path(account_path: &std::path::Path) {
-    if std::fs::remove_dir_all(account_path).is_err() {
+    if let Err(e) = std::fs::remove_dir_all(account_path) {
         warn!(
-            "encountered error removing accounts path: {:?}",
-            account_path
+            "encountered error removing accounts path: {:?}: {}",
+            account_path, e
         );
     }
 }

@@ -34,6 +34,7 @@ export enum PROGRAM_NAMES {
   SPL_TOKEN = "SPL Token Program",
   ASSOCIATED_TOKEN = "SPL Associated Token Program",
   MEMO = "Memo Program",
+  MEMO_2 = "Memo Program 2",
   SWAP = "Swap Program",
   LENDING = "Lending Program",
 }
@@ -51,6 +52,7 @@ export const SEARCHABLE_PROGRAMS: ProgramName[] = [
   PROGRAM_NAMES.SPL_TOKEN,
   PROGRAM_NAMES.ASSOCIATED_TOKEN,
   PROGRAM_NAMES.MEMO,
+  PROGRAM_NAMES.MEMO_2,
   PROGRAM_NAMES.SWAP,
   PROGRAM_NAMES.LENDING,
 ];
@@ -68,6 +70,7 @@ export const PROGRAM_NAME_BY_ID = {
   TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA: PROGRAM_NAMES.SPL_TOKEN,
   ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL: PROGRAM_NAMES.ASSOCIATED_TOKEN,
   Memo1UhkJRfHyvLMcVucJwxXeuD728EqVDDwQDxFMNo: PROGRAM_NAMES.MEMO,
+  MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr: PROGRAM_NAMES.MEMO_2,
   SwaPpA9LAaLfeLi3a68M4DjnLqgtticKg6CnyNwgAC8: PROGRAM_NAMES.SWAP,
   LendZqTs7gn5CTSJU1jWKhKuVpjJGom45nnwPb2AMTi: PROGRAM_NAMES.LENDING,
 } as const;
@@ -78,6 +81,7 @@ export const LOADER_IDS = {
   NativeLoader1111111111111111111111111111111: "Native Loader",
   [BPF_LOADER_DEPRECATED_PROGRAM_ID.toBase58()]: "BPF Loader",
   [BPF_LOADER_PROGRAM_ID.toBase58()]: "BPF Loader 2",
+  BPFLoaderUpgradeab1e11111111111111111111111: "BPF Upgradeable Loader",
 } as const;
 
 const SYSVAR_ID: { [key: string]: string } = {

@@ -10,10 +10,10 @@ fi
 "$bpf_sdk"/scripts/install.sh
 
 # Use the SDK's version of llvm to build the compiler-builtins for BPF
-export CC="$bpf_sdk/dependencies/llvm-native/bin/clang"
-export AR="$bpf_sdk/dependencies/llvm-native/bin/llvm-ar"
-export OBJDUMP="$bpf_sdk/dependencies/llvm-native/bin/llvm-objdump"
-export OBJCOPY="$bpf_sdk/dependencies/llvm-native/bin/llvm-objcopy"
+export CC="$bpf_sdk/dependencies/bpf-tools/llvm/bin/clang"
+export AR="$bpf_sdk/dependencies/bpf-tools/llvm/bin/llvm-ar"
+export OBJDUMP="$bpf_sdk/dependencies/bpf-tools/llvm/bin/llvm-objdump"
+export OBJCOPY="$bpf_sdk/dependencies/bpf-tools/llvm/bin/llvm-objcopy"
 
 # Use the SDK's version of Rust to build for BPF
 export RUSTUP_TOOLCHAIN=bpf
@@ -26,7 +26,7 @@ export RUSTFLAGS="
     -C link-arg=-shared \
     -C link-arg=--entry=entrypoint \
     -C link-arg=-no-threads \
-    -C linker=$bpf_sdk/dependencies/llvm-native/bin/ld.lld"
+    -C linker=$bpf_sdk/dependencies/bpf-tools/llvm/bin/ld.lld"
 
 # CARGO may be set if run from within cargo, causing
 # incompatibilities between cargo and xargo versions

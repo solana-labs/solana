@@ -1,4 +1,5 @@
 //! The solana-program-test provides a BanksClient-based test framework BPF programs
+#![allow(clippy::integer_arithmetic)]
 
 use {
     async_trait::async_trait,
@@ -71,6 +72,8 @@ pub fn to_instruction_error(error: ProgramError) -> InstructionError {
         ProgramError::AccountBorrowFailed => InstructionError::AccountBorrowFailed,
         ProgramError::MaxSeedLengthExceeded => InstructionError::MaxSeedLengthExceeded,
         ProgramError::InvalidSeeds => InstructionError::InvalidSeeds,
+        ProgramError::BorshIoError(err) => InstructionError::BorshIoError(err),
+        ProgramError::AccountNotRentExempt => InstructionError::AccountNotRentExempt,
     }
 }
 
@@ -870,7 +873,7 @@ impl ProgramTestContext {
         ));
         bank_forks.set_root(
             pre_warp_slot,
-            &solana_runtime::accounts_background_service::ABSRequestSender::default(),
+            &solana_runtime::accounts_background_service::AbsRequestSender::default(),
             Some(warp_slot),
         );
 

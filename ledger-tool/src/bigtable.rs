@@ -20,6 +20,7 @@ async fn upload(
     starting_slot: Slot,
     ending_slot: Option<Slot>,
     allow_missing_metadata: bool,
+    force_reupload: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let bigtable = solana_storage_bigtable::LedgerStorage::new(false, None)
         .await
@@ -31,6 +32,7 @@ async fn upload(
         starting_slot,
         ending_slot,
         allow_missing_metadata,
+        force_reupload,
         Arc::new(AtomicBool::new(false)),
     )
     .await
@@ -247,6 +249,16 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .long("allow-missing-metadata")
                                 .takes_value(false)
                                 .help("Don't panic if transaction metadata is missing"),
+                        )
+                        .arg(
+                            Arg::with_name("force_reupload")
+                                .long("force")
+                                .takes_value(false)
+                                .help(
+                                    "Force reupload of any blocks already present in BigTable instance\
+                                    Note: reupload will *not* delete any data from the tx-by-addr table;\
+                                    Use with care.",
+                                ),
                         ),
                 )
                 .subcommand(
@@ -389,6 +401,7 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
             let starting_slot = value_t!(arg_matches, "starting_slot", Slot).unwrap_or(0);
             let ending_slot = value_t!(arg_matches, "ending_slot", Slot).ok();
             let allow_missing_metadata = arg_matches.is_present("allow_missing_metadata");
+            let force_reupload = arg_matches.is_present("force_reupload");
             let blockstore =
                 crate::open_blockstore(&ledger_path, AccessType::TryPrimaryThenSecondary, None);
 
@@ -397,6 +410,7 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
                 starting_slot,
                 ending_slot,
                 allow_missing_metadata,
+                force_reupload,
             ))
         }
         ("first-available-block", Some(_arg_matches)) => runtime.block_on(first_available_block()),

@@ -3,6 +3,7 @@ import {
   TransactionSignature,
   Connection,
   SignatureResult,
+  TransactionConfirmationStatus,
 } from "@solana/web3.js";
 import { useCluster, Cluster } from "../cluster";
 import { DetailsProvider } from "./details";
@@ -20,6 +21,7 @@ export interface TransactionStatusInfo {
   result: SignatureResult;
   timestamp: Timestamp;
   confirmations: Confirmations;
+  confirmationStatus: TransactionConfirmationStatus | null;
 }
 
 export interface TransactionStatus {
@@ -96,6 +98,7 @@ export async function fetchTransactionStatus(
         slot: value.slot,
         timestamp,
         confirmations,
+        confirmationStatus: value.confirmationStatus,
         result: { err: value.err },
       };
     }

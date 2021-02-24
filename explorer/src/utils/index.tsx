@@ -99,3 +99,14 @@ export function wrap(input: string, length: number): string {
   }
   return result.join("\n");
 }
+
+export function localStorageIsAvailable() {
+  const test = "test";
+  try {
+    localStorage.setItem(test, test);
+    localStorage.removeItem(test);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}

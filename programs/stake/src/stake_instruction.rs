@@ -263,7 +263,7 @@ pub fn split_with_seed(
     stake_pubkey: &Pubkey,
     authorized_pubkey: &Pubkey,
     lamports: u64,
-    split_stake_pubkey: &Pubkey, // derived using create_address_with_seed()
+    split_stake_pubkey: &Pubkey, // derived using create_with_seed()
     base: &Pubkey,               // base
     seed: &str,                  // seed
 ) -> Vec<Instruction> {

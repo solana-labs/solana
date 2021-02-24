@@ -22,7 +22,7 @@ if (process.env.TEST_LIVE) {
     it('load BPF C program', async () => {
       const data = await fs.readFile('test/fixtures/noop-c/noop.so');
 
-      const connection = new Connection(url, 'singleGossip');
+      const connection = new Connection(url, 'confirmed');
       const {feeCalculator} = await connection.getRecentBlockhash();
       const fees =
         feeCalculator.lamportsPerSignature *
@@ -59,13 +59,13 @@ if (process.env.TEST_LIVE) {
         programId: program.publicKey,
       });
       await sendAndConfirmTransaction(connection, transaction, [from], {
-        commitment: 'singleGossip',
-        preflightCommitment: 'singleGossip',
+        commitment: 'confirmed',
+        preflightCommitment: 'confirmed',
       });
     }).timeout(5000);
 
     describe('load BPF Rust program', () => {
-      const connection = new Connection(url, 'singleGossip');
+      const connection = new Connection(url, 'confirmed');
 
       let program = new Account();
       let payerAccount = new Account();
@@ -141,8 +141,8 @@ if (process.env.TEST_LIVE) {
           transaction,
           [payerAccount],
           {
-            commitment: 'max', // `getParsedConfirmedTransaction` requires max commitment
-            preflightCommitment: connection.commitment || 'max',
+            commitment: 'finalized', // `getParsedConfirmedTransaction` requires max commitment
+            preflightCommitment: connection.commitment || 'finalized',
           },
         );
 

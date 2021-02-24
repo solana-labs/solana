@@ -1,4 +1,5 @@
 //! A command-line executable for monitoring the health of a cluster
+#![allow(clippy::integer_arithmetic)]
 
 use {
     clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg},
@@ -240,9 +241,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     .sum();
 
                 let total_stake = total_current_stake + total_delinquent_stake;
-                let current_stake_percent = total_current_stake * 100 / total_stake;
+                let current_stake_percent = total_current_stake as f64 * 100. / total_stake as f64;
                 info!(
-                    "Current stake: {}% | Total stake: {}, current stake: {}, delinquent: {}",
+                    "Current stake: {:.2}% | Total stake: {}, current stake: {}, delinquent: {}",
                     current_stake_percent,
                     Sol(total_stake),
                     Sol(total_current_stake),
@@ -270,10 +271,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     ));
                 }
 
-                if config.monitor_active_stake && current_stake_percent < 80 {
+                if config.monitor_active_stake && current_stake_percent < 80. {
                     failures.push((
                         "current-stake",
-                        format!("Current stake is {}%", current_stake_percent),
+                        format!("Current stake is {:.2}%", current_stake_percent),
                     ));
                 }
 

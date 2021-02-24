@@ -3,6 +3,7 @@
 use crate::{
     bigtable_upload_service::BigTableUploadService,
     cluster_info::ClusterInfo,
+    max_slots::MaxSlots,
     optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
     poh_recorder::PohRecorder,
     rpc::*,
@@ -16,6 +17,7 @@ use jsonrpc_http_server::{
     RequestMiddlewareAction, ServerBuilder,
 };
 use regex::Regex;
+use solana_client::rpc_cache::LargestAccountsCache;
 use solana_ledger::blockstore::Blockstore;
 use solana_metrics::inc_new_counter_info;
 use solana_runtime::{
@@ -34,6 +36,8 @@ use std::{
 };
 use tokio::runtime;
 use tokio_util::codec::{BytesCodec, FramedRead};
+
+const LARGEST_ACCOUNTS_CACHE_DURATION: u64 = 60 * 60 * 2;
 
 pub struct JsonRpcService {
     thread_hdl: JoinHandle<()>,
@@ -62,7 +66,7 @@ impl RpcRequestMiddleware {
         Self {
             ledger_path,
             snapshot_archive_path_regex: Regex::new(
-                r"/snapshot-\d+-[[:alnum:]]+\.(tar|tar\.bz2|tar\.zst|tar\.gz)$",
+                r"^/snapshot-\d+-[[:alnum:]]+\.(tar|tar\.bz2|tar\.zst|tar\.gz)$",
             )
             .unwrap(),
             snapshot_config,
@@ -107,6 +111,26 @@ impl RpcRequestMiddleware {
         }
     }
 
+    #[cfg(unix)]
+    async fn open_no_follow(path: impl AsRef<Path>) -> std::io::Result<tokio_02::fs::File> {
+        // Stuck on tokio 0.2 until the jsonrpc crates upgrade
+        use tokio_02::fs::os::unix::OpenOptionsExt;
+        tokio_02::fs::OpenOptions::new()
+            .read(true)
+            .write(false)
+            .create(false)
+            .custom_flags(libc::O_NOFOLLOW)
+            .open(path)
+            .await
+    }
+
+    #[cfg(not(unix))]
+    async fn open_no_follow(path: impl AsRef<Path>) -> std::io::Result<tokio_02::fs::File> {
+        // TODO: Is there any way to achieve the same on Windows?
+        // Stuck on tokio 0.2 until the jsonrpc crates upgrade
+        tokio_02::fs::File::open(path).await
+    }
+
     fn process_file_get(&self, path: &str) -> RequestMiddlewareAction {
         let stem = path.split_at(1).1; // Drop leading '/' from path
         let filename = {
@@ -134,8 +158,7 @@ impl RpcRequestMiddleware {
         RequestMiddlewareAction::Respond {
             should_validate_hosts: true,
             response: Box::pin(async {
-                // Stuck on tokio 0.2 until the jsonrpc crates upgrade
-                match tokio_02::fs::File::open(filename).await {
+                match Self::open_no_follow(filename).await {
                     Err(_) => Ok(Self::internal_server_error()),
                     Ok(file) => {
                         let stream =
@@ -250,6 +273,7 @@ impl JsonRpcService {
         optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
         send_transaction_retry_ms: u64,
         send_transaction_leader_forward_count: u64,
+        max_slots: Arc<MaxSlots>,
     ) -> Self {
         info!("rpc bound to {:?}", rpc_addr);
         info!("rpc configuration: {:?}", config);
@@ -261,6 +285,10 @@ impl JsonRpcService {
             config.health_check_slot_distance,
             override_health_check,
         ));
+
+        let largest_accounts_cache = Arc::new(RwLock::new(LargestAccountsCache::new(
+            LARGEST_ACCOUNTS_CACHE_DURATION,
+        )));
 
         let tpu_address = cluster_info.my_contact_info().tpu;
         let runtime = Arc::new(
@@ -322,6 +350,8 @@ impl JsonRpcService {
             runtime,
             bigtable_ledger_storage,
             optimistically_confirmed_bank,
+            largest_accounts_cache,
+            max_slots,
         );
 
         let leader_info =
@@ -441,6 +471,7 @@ mod tests {
     };
     use solana_runtime::{bank::Bank, bank_forks::ArchiveFormat, snapshot_utils::SnapshotVersion};
     use solana_sdk::{genesis_config::ClusterType, signature::Signer};
+    use std::io::Write;
     use std::net::{IpAddr, Ipv4Addr};
 
     #[test]
@@ -482,6 +513,7 @@ mod tests {
             optimistically_confirmed_bank,
             1000,
             1,
+            Arc::new(MaxSlots::default()),
         );
         let thread = rpc_service.thread_hdl.thread();
         assert_eq!(thread.name().unwrap(), "solana-jsonrpc");
@@ -558,13 +590,76 @@ mod tests {
         assert!(rrm_with_snapshot_config
             .is_file_get_path("/snapshot-100-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar"));
 
-        assert!(!rrm.is_file_get_path(
+        assert!(!rrm_with_snapshot_config.is_file_get_path(
             "/snapshot-notaslotnumber-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.bz2"
         ));
+
+        assert!(!rrm_with_snapshot_config.is_file_get_path("../../../test/snapshot-123-xxx.tar"));
 
         assert!(!rrm.is_file_get_path("/"));
         assert!(!rrm.is_file_get_path(".."));
         assert!(!rrm.is_file_get_path("🎣"));
+    }
+
+    #[test]
+    fn test_process_file_get() {
+        let mut runtime = tokio_02::runtime::Runtime::new().unwrap();
+
+        let ledger_path = get_tmp_ledger_path!();
+        std::fs::create_dir(&ledger_path).unwrap();
+
+        let genesis_path = ledger_path.join("genesis.tar.bz2");
+        let rrm = RpcRequestMiddleware::new(
+            ledger_path.clone(),
+            None,
+            create_bank_forks(),
+            RpcHealth::stub(),
+        );
+
+        // File does not exist => request should fail.
+        let action = rrm.process_file_get("/genesis.tar.bz2");
+        if let RequestMiddlewareAction::Respond { response, .. } = action {
+            let response = runtime.block_on(response);
+            let response = response.unwrap();
+            assert_ne!(response.status(), 200);
+        } else {
+            panic!("Unexpected RequestMiddlewareAction variant");
+        }
+
+        {
+            let mut file = std::fs::File::create(&genesis_path).unwrap();
+            file.write_all(b"should be ok").unwrap();
+        }
+
+        // Normal file exist => request should succeed.
+        let action = rrm.process_file_get("/genesis.tar.bz2");
+        if let RequestMiddlewareAction::Respond { response, .. } = action {
+            let response = runtime.block_on(response);
+            let response = response.unwrap();
+            assert_eq!(response.status(), 200);
+        } else {
+            panic!("Unexpected RequestMiddlewareAction variant");
+        }
+
+        #[cfg(unix)]
+        {
+            std::fs::remove_file(&genesis_path).unwrap();
+            {
+                let mut file = std::fs::File::create(ledger_path.join("wrong")).unwrap();
+                file.write_all(b"wrong file").unwrap();
+            }
+            symlink::symlink_file("wrong", &genesis_path).unwrap();
+
+            // File is a symbolic link => request should fail.
+            let action = rrm.process_file_get("/genesis.tar.bz2");
+            if let RequestMiddlewareAction::Respond { response, .. } = action {
+                let response = runtime.block_on(response);
+                let response = response.unwrap();
+                assert_ne!(response.status(), 200);
+            } else {
+                panic!("Unexpected RequestMiddlewareAction variant");
+            }
+        }
     }
 
     #[test]
