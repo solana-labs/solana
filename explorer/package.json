@@ -29,6 +29,7 @@
     "chai": "^4.3.0",
     "chart.js": "^2.9.4",
     "classnames": "2.2.6",
+    "cross-fetch": "^3.0.6",
     "humanize-duration-ts": "^2.1.1",
     "node-sass": "^4.14.1",
     "prettier": "^2.2.1",
