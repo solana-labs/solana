@@ -26,11 +26,12 @@ use {
         pubkey::Pubkey,
         signature::Signature,
         stake_history::StakeHistoryEntry,
-        transaction::Transaction,
+        transaction::{Transaction, TransactionError},
     },
     solana_stake_program::stake_state::{Authorized, Lockup},
     solana_transaction_status::{
-        EncodedConfirmedBlock, EncodedTransaction, UiTransactionStatusMeta,
+        EncodedConfirmedBlock, EncodedTransaction, TransactionConfirmationStatus,
+        UiTransactionStatusMeta,
     },
     solana_vote_program::{
         authorized_voters::AuthorizedVoters,
@@ -1848,6 +1849,8 @@ pub struct CliTransaction {
     pub meta: Option<UiTransactionStatusMeta>,
     pub block_time: Option<UnixTimestamp>,
     #[serde(skip_serializing)]
+    pub slot: Option<Slot>,
+    #[serde(skip_serializing)]
     pub decoded_transaction: Transaction,
     #[serde(skip_serializing)]
     pub prefix: String,
@@ -1872,6 +1875,60 @@ impl fmt::Display for CliTransaction {
             },
             self.block_time,
         )
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliTransactionConfirmation {
+    pub confirmation_status: Option<TransactionConfirmationStatus>,
+    #[serde(flatten, skip_serializing_if = "Option::is_none")]
+    pub transaction: Option<CliTransaction>,
+    #[serde(skip_serializing)]
+    pub get_transaction_error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub err: Option<TransactionError>,
+}
+
+impl QuietDisplay for CliTransactionConfirmation {}
+impl VerboseDisplay for CliTransactionConfirmation {
+    fn write_str(&self, w: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        if let Some(transaction) = &self.transaction {
+            writeln!(
+                w,
+                "\nTransaction executed in slot {}:",
+                transaction.slot.expect("slot should exist")
+            )?;
+            write!(w, "{}", transaction)?;
+        } else if let Some(confirmation_status) = &self.confirmation_status {
+            if confirmation_status != &TransactionConfirmationStatus::Finalized {
+                writeln!(w)?;
+                writeln!(
+                    w,
+                    "Unable to get finalized transaction details: not yet finalized"
+                )?;
+            } else if let Some(err) = &self.get_transaction_error {
+                writeln!(w)?;
+                writeln!(w, "Unable to get finalized transaction details: {}", err)?;
+            }
+        }
+        writeln!(w)?;
+        write!(w, "{}", self)
+    }
+}
+
+impl fmt::Display for CliTransactionConfirmation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match &self.confirmation_status {
+            None => write!(f, "Not found"),
+            Some(confirmation_status) => {
+                if let Some(err) = &self.err {
+                    write!(f, "Transaction failed: {}", err)
+                } else {
+                    write!(f, "{:?}", confirmation_status)
+                }
+            }
+        }
     }
 }
 

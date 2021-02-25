@@ -17,9 +17,9 @@ use solana_clap_utils::{
     offline::*,
 };
 use solana_cli_output::{
-    display::{build_balance_message, println_name_value, println_transaction},
+    display::{build_balance_message, println_name_value},
     return_signers, CliAccount, CliSignature, CliSignatureVerificationStatus, CliTransaction,
-    OutputFormat,
+    CliTransactionConfirmation, OutputFormat,
 };
 use solana_client::{
     blockhash_query::BlockhashQuery,
@@ -51,9 +51,7 @@ use solana_stake_program::{
     stake_instruction::LockupArgs,
     stake_state::{Lockup, StakeAuthorize},
 };
-use solana_transaction_status::{
-    EncodedTransaction, TransactionConfirmationStatus, UiTransactionEncoding,
-};
+use solana_transaction_status::{EncodedTransaction, UiTransactionEncoding};
 use solana_vote_program::vote_state::VoteAuthorize;
 use std::{
     collections::HashMap,
@@ -1006,51 +1004,54 @@ fn process_confirm(
 ) -> ProcessResult {
     match rpc_client.get_signature_statuses_with_history(&[*signature]) {
         Ok(status) => {
-            if let Some(transaction_status) = &status.value[0] {
+            let cli_transaction = if let Some(transaction_status) = &status.value[0] {
+                let mut transaction = None;
+                let mut get_transaction_error = None;
                 if config.verbose {
                     match rpc_client
                         .get_confirmed_transaction(signature, UiTransactionEncoding::Base64)
                     {
                         Ok(confirmed_transaction) => {
-                            println!(
-                                "\nTransaction executed in slot {}:",
-                                confirmed_transaction.slot
+                            let decoded_transaction = confirmed_transaction
+                                .transaction
+                                .transaction
+                                .decode()
+                                .expect("Successful decode");
+                            let json_transaction = EncodedTransaction::encode(
+                                decoded_transaction.clone(),
+                                UiTransactionEncoding::Json,
                             );
-                            println_transaction(
-                                &confirmed_transaction
-                                    .transaction
-                                    .transaction
-                                    .decode()
-                                    .expect("Successful decode"),
-                                &confirmed_transaction.transaction.meta,
-                                "  ",
-                                None,
-                                confirmed_transaction.block_time,
-                            );
+
+                            transaction = Some(CliTransaction {
+                                transaction: json_transaction,
+                                meta: confirmed_transaction.transaction.meta,
+                                block_time: confirmed_transaction.block_time,
+                                slot: Some(confirmed_transaction.slot),
+                                decoded_transaction,
+                                prefix: "  ".to_string(),
+                                sigverify_status: vec![],
+                            });
                         }
                         Err(err) => {
-                            if transaction_status.confirmation_status()
-                                != TransactionConfirmationStatus::Finalized
-                            {
-                                println!();
-                                println!("Unable to get finalized transaction details: not yet finalized")
-                            } else {
-                                println!();
-                                println!("Unable to get finalized transaction details: {}", err)
-                            }
+                            get_transaction_error = Some(format!("{:?}", err));
                         }
                     }
-                    println!();
                 }
-
-                if let Some(err) = &transaction_status.err {
-                    Ok(format!("Transaction failed: {}", err))
-                } else {
-                    Ok(format!("{:?}", transaction_status.confirmation_status()))
+                CliTransactionConfirmation {
+                    confirmation_status: Some(transaction_status.confirmation_status()),
+                    transaction,
+                    get_transaction_error,
+                    err: transaction_status.err.clone(),
                 }
             } else {
-                Ok("Not found".to_string())
-            }
+                CliTransactionConfirmation {
+                    confirmation_status: None,
+                    transaction: None,
+                    get_transaction_error: None,
+                    err: None,
+                }
+            };
+            Ok(config.output_format.formatted_string(&cli_transaction))
         }
         Err(err) => Err(CliError::RpcRequestError(format!("Unable to confirm: {}", err)).into()),
     }
@@ -1064,6 +1065,7 @@ fn process_decode_transaction(config: &CliConfig, transaction: &Transaction) -> 
         transaction: EncodedTransaction::encode(transaction.clone(), UiTransactionEncoding::Json),
         meta: None,
         block_time: None,
+        slot: None,
         prefix: "".to_string(),
         sigverify_status,
     };
@@ -2200,6 +2202,7 @@ mod tests {
         signature::{keypair_from_seed, read_keypair_file, write_keypair_file, Keypair, Presigner},
         transaction::TransactionError,
     };
+    use solana_transaction_status::TransactionConfirmationStatus;
     use std::path::PathBuf;
 
     fn make_tmp_path(name: &str) -> String {
