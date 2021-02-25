@@ -193,6 +193,22 @@ build() {
       scripts/cargo-install-all.sh farf \"$buildVariant\"
     "
   )
+
+  (
+    set +e
+    COMMIT="$(git rev-parse HEAD)"
+    BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+    TAG="$(git describe --exact-match --tags HEAD 2>/dev/null)"
+    if [[ $TAG =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+      NOTE=$TAG
+    else
+      NOTE=$BRANCH
+    fi
+    (
+      echo "channel: devbuild $NOTE"
+      echo "commit: $COMMIT"
+    ) > "$SOLANA_ROOT"/farf/version.yml
+  )
   echo "Build took $SECONDS seconds"
 }
 
@@ -247,7 +263,7 @@ deployBootstrapValidator() {
     ;;
   local)
     rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/farf/bin/* "$ipAddress:$CARGO_BIN/"
-    ssh "${sshOptions[@]}" -n "$ipAddress" "rm -f ~/version.yml; touch ~/version.yml"
+    rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/farf/version.yml "$ipAddress:~/"
     ;;
   skip)
     ;;
