@@ -106,9 +106,8 @@ pub struct SlotInfo {
 pub enum SlotUpdate {
     OptimisticConfirmation { slot: Slot, timestamp: u64 },
     FirstShredReceived { slot: Slot, timestamp: u64 },
-    BlockEnd { slot: Slot, timestamp: u64 },
-    BlockComplete { slot: Slot, timestamp: u64 },
     Frozen { slot: Slot, timestamp: u64 },
+    Root { slot: Slot, timestamp: u64 },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
