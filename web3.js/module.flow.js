@@ -213,6 +213,7 @@ declare module '@solana/web3.js' {
       postBalance: number | null,
       rewardType: string | null,
     }>,
+    blockTime: number | null,
   };
 
   declare export type PerfSample = {

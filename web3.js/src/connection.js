@@ -604,6 +604,7 @@ type ParsedConfirmedTransaction = {
  * @property {number} parentSlot Slot index of this block's parent
  * @property {Array<object>} transactions Vector of transactions and status metas
  * @property {Array<object>} rewards Vector of block rewards
+ * @property {number|null} blockTime The unix timestamp of when the block was processed
  */
 type ConfirmedBlock = {
   blockhash: Blockhash,
@@ -619,6 +620,7 @@ type ConfirmedBlock = {
     postBalance: number | null,
     rewardType: string | null,
   }>,
+  blockTime: number | null,
 };
 
 /**
@@ -1241,8 +1243,9 @@ export const GetConfirmedBlockRpcResult = jsonRpcResult(
             postBalance: nullable(number()),
             rewardType: nullable(string()),
           }),
-        ),
-      ),
+        ]),
+      ]),
+      blockTime: struct.union(['null', 'number']),
     }),
   ),
 );
