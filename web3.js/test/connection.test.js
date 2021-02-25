@@ -517,6 +517,7 @@ describe('Connection', () => {
       method: 'getConfirmedBlock',
       params: [1],
       value: {
+        blockTime: 1614281964,
         blockhash: '57zQNBZBEiHsCZFqsaY6h176ioXy5MsSLmcvHkEyaLGy',
         previousBlockhash: 'H5nJ91eGag3B5ZSRHZ7zG5ZwXJ6ywCt2hyR8xCsV7xMo',
         parentSlot: 0,
@@ -652,6 +653,7 @@ describe('Connection', () => {
       method: 'getConfirmedBlock',
       params: [1],
       value: {
+        blockTime: 1614281964,
         blockhash: '57zQNBZBEiHsCZFqsaY6h176ioXy5MsSLmcvHkEyaLGy',
         previousBlockhash: 'H5nJ91eGag3B5ZSRHZ7zG5ZwXJ6ywCt2hyR8xCsV7xMo',
         parentSlot: 0,
@@ -905,6 +907,7 @@ describe('Connection', () => {
       method: 'getConfirmedBlock',
       params: [0],
       value: {
+        blockTime: 1614281964,
         blockhash: 'H5nJ91eGag3B5ZSRHZ7zG5ZwXJ6ywCt2hyR8xCsV7xMo',
         previousBlockhash: 'H5nJ91eGag3B5ZSRHZ7zG5ZwXJ6ywCt2hyR8xCsV7xMo',
         parentSlot: 0,
@@ -924,6 +927,7 @@ describe('Connection', () => {
       method: 'getConfirmedBlock',
       params: [1],
       value: {
+        blockTime: 1614281964,
         blockhash: '57zQNBZBEiHsCZFqsaY6h176ioXy5MsSLmcvHkEyaLGy',
         previousBlockhash: 'H5nJ91eGag3B5ZSRHZ7zG5ZwXJ6ywCt2hyR8xCsV7xMo',
         parentSlot: 0,
