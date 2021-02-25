@@ -678,7 +678,7 @@ impl Stake {
     ///   * staker_rewards to be distributed
     ///   * voter_rewards to be distributed
     ///   * new value for credits_observed in the stake
-    //  returns None if there's no payout or if any deserved payout is < 1 lamport
+    /// returns None if there's no payout or if any deserved payout is < 1 lamport
     pub fn calculate_rewards(
         &self,
         point_value: &PointValue,
