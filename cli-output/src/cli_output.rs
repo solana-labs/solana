@@ -1834,6 +1834,7 @@ impl fmt::Display for CliBlock {
                 &transaction_with_meta.meta,
                 "  ",
                 None,
+                None,
             )?;
         }
         Ok(())
@@ -1845,6 +1846,7 @@ impl fmt::Display for CliBlock {
 pub struct CliTransaction {
     pub transaction: EncodedTransaction,
     pub meta: Option<UiTransactionStatusMeta>,
+    pub block_time: Option<UnixTimestamp>,
     #[serde(skip_serializing)]
     pub decoded_transaction: Transaction,
     #[serde(skip_serializing)]
@@ -1868,6 +1870,7 @@ impl fmt::Display for CliTransaction {
             } else {
                 None
             },
+            self.block_time,
         )
     }
 }

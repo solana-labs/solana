@@ -123,6 +123,7 @@ fn output_entry(
                     &transaction_status,
                     "      ",
                     None,
+                    None,
                 );
             }
         }

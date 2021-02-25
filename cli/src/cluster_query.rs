@@ -1785,6 +1785,7 @@ pub fn process_transaction_history(
                             &confirmed_transaction.transaction.meta,
                             "  ",
                             None,
+                            None,
                         );
                     }
                     Err(err) => println!("  Unable to get confirmed transaction details: {}", err),

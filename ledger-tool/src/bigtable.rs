@@ -94,6 +94,7 @@ async fn confirm(signature: &Signature, verbose: bool) -> Result<(), Box<dyn std
                     &confirmed_transaction.transaction.meta.map(|m| m.into()),
                     "  ",
                     None,
+                    confirmed_transaction.block_time,
                 );
             }
             Ok(None) => println!("Finalized transaction details not available"),
@@ -173,6 +174,7 @@ pub async fn transaction_history(
                                         &transaction_with_meta.transaction,
                                         &transaction_with_meta.meta.clone().map(|m| m.into()),
                                         "  ",
+                                        None,
                                         None,
                                     );
                                 }

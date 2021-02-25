@@ -1,6 +1,6 @@
 use {
     crate::cli_output::CliSignatureVerificationStatus,
-    chrono::{DateTime, NaiveDateTime, SecondsFormat, Utc},
+    chrono::{DateTime, Local, NaiveDateTime, SecondsFormat, TimeZone, Utc},
     console::style,
     indicatif::{ProgressBar, ProgressStyle},
     solana_sdk::{
@@ -131,8 +131,17 @@ pub fn write_transaction<W: io::Write>(
     transaction_status: &Option<UiTransactionStatusMeta>,
     prefix: &str,
     sigverify_status: Option<&[CliSignatureVerificationStatus]>,
+    block_time: Option<UnixTimestamp>,
 ) -> io::Result<()> {
     let message = &transaction.message;
+    if let Some(block_time) = block_time {
+        writeln!(
+            w,
+            "{}Block Time: {:?}",
+            prefix,
+            Local.timestamp(block_time, 0)
+        )?;
+    }
     writeln!(
         w,
         "{}Recent Blockhash: {:?}",
@@ -277,6 +286,7 @@ pub fn println_transaction(
     transaction_status: &Option<UiTransactionStatusMeta>,
     prefix: &str,
     sigverify_status: Option<&[CliSignatureVerificationStatus]>,
+    block_time: Option<UnixTimestamp>,
 ) {
     let mut w = Vec::new();
     if write_transaction(
@@ -285,6 +295,7 @@ pub fn println_transaction(
         transaction_status,
         prefix,
         sigverify_status,
+        block_time,
     )
     .is_ok()
     {
@@ -300,6 +311,7 @@ pub fn writeln_transaction(
     transaction_status: &Option<UiTransactionStatusMeta>,
     prefix: &str,
     sigverify_status: Option<&[CliSignatureVerificationStatus]>,
+    block_time: Option<UnixTimestamp>,
 ) -> fmt::Result {
     let mut w = Vec::new();
     if write_transaction(
@@ -308,6 +320,7 @@ pub fn writeln_transaction(
         transaction_status,
         prefix,
         sigverify_status,
+        block_time,
     )
     .is_ok()
     {

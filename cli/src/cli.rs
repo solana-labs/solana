@@ -1025,6 +1025,7 @@ fn process_confirm(
                                 &confirmed_transaction.transaction.meta,
                                 "  ",
                                 None,
+                                confirmed_transaction.block_time,
                             );
                         }
                         Err(err) => {
@@ -1062,6 +1063,7 @@ fn process_decode_transaction(config: &CliConfig, transaction: &Transaction) -> 
         decoded_transaction: transaction.clone(),
         transaction: EncodedTransaction::encode(transaction.clone(), UiTransactionEncoding::Json),
         meta: None,
+        block_time: None,
         prefix: "".to_string(),
         sigverify_status,
     };
