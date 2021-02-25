@@ -26,6 +26,7 @@ impl FetchStage {
         tpu_forwards_sockets: Vec<UdpSocket>,
         exit: &Arc<AtomicBool>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
+        coalesce_ms: u64,
     ) -> (Self, PacketReceiver) {
         let (sender, receiver) = channel();
         (
@@ -36,6 +37,7 @@ impl FetchStage {
                 &sender,
                 &poh_recorder,
                 None,
+                coalesce_ms,
             ),
             receiver,
         )
@@ -47,6 +49,7 @@ impl FetchStage {
         sender: &PacketSender,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         allocated_packet_limit: Option<u32>,
+        coalesce_ms: u64,
     ) -> Self {
         let tx_sockets = sockets.into_iter().map(Arc::new).collect();
         let tpu_forwards_sockets = tpu_forwards_sockets.into_iter().map(Arc::new).collect();
@@ -57,6 +60,7 @@ impl FetchStage {
             &sender,
             &poh_recorder,
             allocated_packet_limit,
+            coalesce_ms,
         )
     }
 
@@ -102,6 +106,7 @@ impl FetchStage {
         sender: &PacketSender,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         limit: Option<u32>,
+        coalesce_ms: u64,
     ) -> Self {
         let recycler: PacketsRecycler =
             Recycler::warmed(1000, 1024, limit, "fetch_stage_recycler_shrink");
@@ -113,6 +118,7 @@ impl FetchStage {
                 sender.clone(),
                 recycler.clone(),
                 "fetch_stage",
+                coalesce_ms,
             )
         });
 
@@ -124,6 +130,7 @@ impl FetchStage {
                 forward_sender.clone(),
                 recycler.clone(),
                 "fetch_forward_stage",
+                coalesce_ms,
             )
         });
 

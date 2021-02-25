@@ -24,6 +24,7 @@ use solana_core::{
     poh_service,
     rpc::JsonRpcConfig,
     rpc_pubsub_service::PubSubConfig,
+    tpu::DEFAULT_TPU_COALESCE_MS,
     validator::{is_snapshot_config_invalid, Validator, ValidatorConfig},
 };
 use solana_download_utils::{download_genesis_if_missing, download_snapshot};
@@ -1244,6 +1245,14 @@ pub fn main() {
                 .help("Number of slots between compacting ledger"),
         )
         .arg(
+            Arg::with_name("tpu_coalesce_ms")
+                .long("tpu-coalesce-ms")
+                .value_name("MILLISECS")
+                .takes_value(true)
+                .validator(is_parsable::<u64>)
+                .help("Milliseconds to wait in the TPU receiver for packet coalescing."),
+        )
+        .arg(
             Arg::with_name("rocksdb_max_compaction_jitter")
                 .long("rocksdb-max-compaction-jitter-slots")
                 .value_name("ROCKSDB_MAX_COMPACTION_JITTER_SLOTS")
@@ -1509,6 +1518,8 @@ pub fn main() {
     let rocksdb_compaction_interval = value_t!(matches, "rocksdb_compaction_interval", u64).ok();
     let rocksdb_max_compaction_jitter =
         value_t!(matches, "rocksdb_max_compaction_jitter", u64).ok();
+    let tpu_coalesce_ms =
+        value_t!(matches, "tpu_coalesce_ms", u64).unwrap_or(DEFAULT_TPU_COALESCE_MS);
     let wal_recovery_mode = matches
         .value_of("wal_recovery_mode")
         .map(BlockstoreRecoveryMode::from);
@@ -1663,6 +1674,7 @@ pub fn main() {
         accounts_db_caching_enabled: !matches.is_present("no_accounts_db_caching"),
         accounts_db_test_hash_calculation: matches.is_present("accounts_db_test_hash_calculation"),
         accounts_db_use_index_hash_calculation: !matches.is_present("no_accounts_db_index_hashing"),
+        tpu_coalesce_ms,
         ..ValidatorConfig::default()
     };
 
