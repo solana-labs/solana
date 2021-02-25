@@ -18,7 +18,8 @@ use solana_clap_utils::{
 };
 use solana_cli_output::{
     display::{build_balance_message, println_name_value, println_transaction},
-    return_signers, CliAccount, CliSignature, CliSignatureVerificationStatus, OutputFormat,
+    return_signers, CliAccount, CliSignature, CliSignatureVerificationStatus, CliTransaction,
+    OutputFormat,
 };
 use solana_client::{
     blockhash_query::BlockhashQuery,
@@ -1055,10 +1056,16 @@ fn process_confirm(
 }
 
 #[allow(clippy::unnecessary_wraps)]
-fn process_decode_transaction(transaction: &Transaction) -> ProcessResult {
-    let sig_stats = CliSignatureVerificationStatus::verify_transaction(&transaction);
-    println_transaction(transaction, &None, "", Some(&sig_stats));
-    Ok("".to_string())
+fn process_decode_transaction(config: &CliConfig, transaction: &Transaction) -> ProcessResult {
+    let sigverify_status = CliSignatureVerificationStatus::verify_transaction(&transaction);
+    let decode_transaction = CliTransaction {
+        decoded_transaction: transaction.clone(),
+        transaction: EncodedTransaction::encode(transaction.clone(), UiTransactionEncoding::Json),
+        meta: None,
+        prefix: "".to_string(),
+        sigverify_status,
+    };
+    Ok(config.output_format.formatted_string(&decode_transaction))
 }
 
 fn process_show_account(
@@ -1745,7 +1752,9 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         } => process_balance(&rpc_client, config, &pubkey, *use_lamports_unit),
         // Confirm the last client transaction by signature
         CliCommand::Confirm(signature) => process_confirm(&rpc_client, config, signature),
-        CliCommand::DecodeTransaction(transaction) => process_decode_transaction(transaction),
+        CliCommand::DecodeTransaction(transaction) => {
+            process_decode_transaction(config, transaction)
+        }
         CliCommand::ResolveSigner(path) => {
             if let Some(path) = path {
                 Ok(path.to_string())
