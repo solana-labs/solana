@@ -26,6 +26,7 @@ solana-notifier = { path = "../notifier", version = "1.6.0" }
 solana-sdk = { path = "../sdk", version = "1.6.0" }
 solana-stake-program = { path = "../programs/stake", version = "1.6.0" }
 solana-transaction-status = { path = "../transaction-status", version = "1.6.0" }
+thiserror = "1.0.21"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

@@ -5252,6 +5252,7 @@ dependencies = [
  "solana-sdk",
  "solana-stake-program",
  "solana-transaction-status",
+ "thiserror",
 ]
 
 [[package]]
