@@ -1285,13 +1285,20 @@ fn main() {
         )
         .subcommand(
             SubCommand::with_name("list-roots")
-            .about("Output upto last <num-roots> root hashes and their heights starting at the given block height")
+            .about("Output up to last <num-roots> root hashes and their heights starting at the given block height")
             .arg(
                 Arg::with_name("max_height")
                     .long("max-height")
                     .value_name("NUM")
                     .takes_value(true)
                     .help("Maximum block height")
+            )
+            .arg(
+                Arg::with_name("start_root")
+                    .long("start-root")
+                    .value_name("NUM")
+                    .takes_value(true)
+                    .help("First root to start searching from")
             )
             .arg(
                 Arg::with_name("slot_list")
@@ -2698,6 +2705,11 @@ fn main() {
             } else {
                 usize::MAX
             };
+            let start_root = if let Some(height) = arg_matches.value_of("start_root") {
+                Slot::from_str(height).expect("Starting root must be a number")
+            } else {
+                0
+            };
             let num_roots = if let Some(roots) = arg_matches.value_of("num_roots") {
                 usize::from_str(roots).expect("Number of roots must be a number")
             } else {
@@ -2705,7 +2717,7 @@ fn main() {
             };
 
             let iter = blockstore
-                .rooted_slot_iterator(0)
+                .rooted_slot_iterator(start_root)
                 .expect("Failed to get rooted slot");
 
             let mut slot_hash = Vec::new();
