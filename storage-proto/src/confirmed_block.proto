@@ -70,7 +70,6 @@ message UiTokenAmount {
     double ui_amount = 1;
     uint32 decimals = 2;
     string amount = 3;
-    string ui_amount_string = 4;
 }
 
 enum RewardType {

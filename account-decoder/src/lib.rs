@@ -24,7 +24,6 @@ use {
 };
 
 pub type StringAmount = String;
-pub type StringDecimals = String;
 
 /// A duplicate representation of an Account for pretty JSON serialization
 #[derive(Serialize, Deserialize, Clone, Debug)]
