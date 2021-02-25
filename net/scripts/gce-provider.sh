@@ -172,10 +172,10 @@ cloud_CreateInstances() {
   #declare sshPrivateKey="${13}"  # unused
 
   if $enableGpu; then
-    # Custom Ubuntu 18.04 LTS image with CUDA 9.2 and CUDA 10.0 installed
+    # Custom Ubuntu 20.04 LTS image with CUDA 10.2 installed
     #
     # Unfortunately this image is not public.  When this becomes an issue, use
-    # the stock Ubuntu 18.04 image and programmatically install CUDA after the
+    # the stock Ubuntu 20.04 image and programmatically install CUDA after the
     # instance boots
     #
     imageName="ubuntu-2004-focal-v20201211-with-cuda-10-2 --image-project principal-lane-200702"
