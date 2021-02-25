@@ -1,6 +1,6 @@
 [package]
 name = "solana-bpf-loader-program"
-version = "1.5.9"
+version = "1.5.10"
 description = "Solana BPF loader"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -15,8 +15,8 @@ curve25519-dalek = "3"
 num-derive = "0.3"
 num-traits = "0.2"
 rand_core = "0.6.2"
-solana-runtime = { path = "../../runtime", version = "1.5.9" }
-solana-sdk = { path = "../../sdk", version = "1.5.9" }
+solana-runtime = { path = "../../runtime", version = "1.5.10" }
+solana-sdk = { path = "../../sdk", version = "1.5.10" }
 solana_rbpf = "=0.2.5"
 thiserror = "1.0"
 
