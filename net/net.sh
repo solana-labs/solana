@@ -168,7 +168,7 @@ annotateBlockexplorerUrl() {
 }
 
 build() {
-  supported=("18.04")
+  supported=("20.04")
   declare MAYBE_DOCKER=
   if [[ $(uname) != Linux || ! " ${supported[*]} " =~ $(lsb_release -sr) ]]; then
     # shellcheck source=ci/rust-version.sh
