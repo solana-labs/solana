@@ -158,13 +158,13 @@ pub fn create_vm<'a>(
 
 pub fn process_instruction(
     program_id: &Pubkey,
-    keyed_accounts: &[KeyedAccount],
+    _keyed_accounts: &[KeyedAccount],
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     process_instruction_common(
         program_id,
-        keyed_accounts,
+        _keyed_accounts,
         instruction_data,
         invoke_context,
         false,
@@ -173,13 +173,13 @@ pub fn process_instruction(
 
 pub fn process_instruction_jit(
     program_id: &Pubkey,
-    keyed_accounts: &[KeyedAccount],
+    _keyed_accounts: &[KeyedAccount],
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     process_instruction_common(
         program_id,
-        keyed_accounts,
+        _keyed_accounts,
         instruction_data,
         invoke_context,
         true,
@@ -188,14 +188,15 @@ pub fn process_instruction_jit(
 
 fn process_instruction_common(
     program_id: &Pubkey,
-    keyed_accounts: &[KeyedAccount],
+    _keyed_accounts: &[KeyedAccount],
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
     use_jit: bool,
 ) -> Result<(), InstructionError> {
     let logger = invoke_context.get_logger();
+    let keyed_accounts = invoke_context.get_keyed_accounts();
     // TODO [KeyedAccounts to InvokeContext refactoring]
-    assert_eq!(keyed_accounts, invoke_context.get_keyed_accounts());
+    assert_eq!(_keyed_accounts, keyed_accounts);
 
     let first_account = keyed_account_at_index(keyed_accounts, 0)?;
     if first_account.executable()? {
@@ -204,7 +205,7 @@ fn process_instruction_common(
             return Err(InstructionError::IncorrectProgramId);
         }
 
-        let (keyed_accounts, program_data_offset) =
+        let (_keyed_accounts, program_data_offset) =
             if bpf_loader_upgradeable::check_id(&first_account.owner()?) {
                 if let UpgradeableLoaderState::Program {
                     programdata_address,
@@ -220,7 +221,7 @@ fn process_instruction_common(
                     }
                     invoke_context.pop_first_keyed_account();
                     (
-                        &keyed_accounts[1..],
+                        &_keyed_accounts[1..],
                         UpgradeableLoaderState::programdata_data_offset()?,
                     )
                 } else {
@@ -228,14 +229,12 @@ fn process_instruction_common(
                     return Err(InstructionError::InvalidAccountData);
                 }
             } else {
-                (keyed_accounts, 0)
+                (_keyed_accounts, 0)
             };
 
-        let loader_id = {
-            let keyed_accounts = invoke_context.get_keyed_accounts();
-            let program = keyed_account_at_index(keyed_accounts, 0)?;
-            &program.owner()?
-        };
+        let keyed_accounts = invoke_context.get_keyed_accounts();
+        let program = keyed_account_at_index(keyed_accounts, 0)?;
+        let loader_id = &program.owner()?;
 
         if !check_loader_id(loader_id) {
             ic_logger_msg!(logger, "Executable account not owned by the BPF loader");
@@ -253,7 +252,7 @@ fn process_instruction_common(
         executor.execute(
             loader_id,
             program_id,
-            keyed_accounts,
+            _keyed_accounts,
             instruction_data,
             invoke_context,
             use_jit,
@@ -267,7 +266,7 @@ fn process_instruction_common(
         if bpf_loader_upgradeable::check_id(program_id) {
             process_loader_upgradeable_instruction(
                 program_id,
-                keyed_accounts,
+                _keyed_accounts,
                 instruction_data,
                 invoke_context,
                 use_jit,
@@ -275,7 +274,7 @@ fn process_instruction_common(
         } else {
             process_loader_instruction(
                 program_id,
-                keyed_accounts,
+                _keyed_accounts,
                 instruction_data,
                 invoke_context,
                 use_jit,
