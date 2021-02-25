@@ -123,6 +123,7 @@ fn output_entry(
                     &transaction_status,
                     "      ",
                     None,
+                    None,
                 );
             }
         }
@@ -852,6 +853,15 @@ fn main() {
                 .possible_values(&["json", "json-compact"])
                 .help("Return information in specified output format, currently only available for bigtable subcommands"),
         )
+        .arg(
+            Arg::with_name("verbose")
+                .short("v")
+                .long("verbose")
+                .global(true)
+                .multiple(true)
+                .takes_value(false)
+                .help("Show additional information where supported"),
+        )
         .bigtable_subcommand()
         .subcommand(
             SubCommand::with_name("print")
@@ -872,14 +882,6 @@ fn main() {
                     .long("only-rooted")
                     .takes_value(false)
                     .help("Only print root slots"),
-            )
-            .arg(
-                Arg::with_name("verbose")
-                    .long("verbose")
-                    .short("v")
-                    .multiple(true)
-                    .takes_value(false)
-                    .help("How verbose to print the ledger contents."),
             )
         )
         .subcommand(
@@ -1349,7 +1351,7 @@ fn main() {
             let num_slots = value_t!(arg_matches, "num_slots", Slot).ok();
             let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
             let only_rooted = arg_matches.is_present("only_rooted");
-            let verbose = arg_matches.occurrences_of("verbose");
+            let verbose = matches.occurrences_of("verbose");
             output_ledger(
                 open_blockstore(
                     &ledger_path,

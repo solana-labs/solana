@@ -384,10 +384,11 @@ fn execute_transactions(bank: &Bank, txs: &[Transaction]) -> Vec<ConfirmedTransa
 }
 
 fn print_confirmed_tx(name: &str, confirmed_tx: ConfirmedTransaction) {
+    let block_time = confirmed_tx.block_time;
     let tx = confirmed_tx.transaction.transaction.clone();
     let encoded = confirmed_tx.encode(UiTransactionEncoding::JsonParsed);
     println!("EXECUTE {} (slot {})", name, encoded.slot);
-    println_transaction(&tx, &encoded.transaction.meta, "  ", None);
+    println_transaction(&tx, &encoded.transaction.meta, "  ", None, block_time);
 }
 
 #[test]
