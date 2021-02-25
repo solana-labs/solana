@@ -3888,6 +3888,10 @@ impl Bank {
             .flush_accounts_cache(false, Some(self.slot()))
     }
 
+    pub fn expire_old_recycle_stores(&self) {
+        self.rc.accounts.accounts_db.expire_old_recycle_stores()
+    }
+
     fn store_account_and_update_capitalization(&self, pubkey: &Pubkey, new_account: &Account) {
         if let Some(old_account) = self.get_account(&pubkey) {
             match new_account.lamports.cmp(&old_account.lamports) {
