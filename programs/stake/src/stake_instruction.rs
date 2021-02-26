@@ -496,7 +496,11 @@ pub fn process_instruction(
     let me = &next_keyed_account(keyed_accounts)?;
 
     if me.owner()? != id() {
-        return Err(InstructionError::IncorrectProgramId);
+        if invoke_context.is_feature_active(&feature_set::check_program_owner::id()) {
+            return Err(InstructionError::InvalidAccountOwner);
+        } else {
+            return Err(InstructionError::IncorrectProgramId);
+        }
     }
 
     match limited_deserialize(data)? {
@@ -802,7 +806,7 @@ mod tests {
                 &Authorized::default(),
                 &Lockup::default()
             )),
-            Err(InstructionError::IncorrectProgramId),
+            Err(InstructionError::InvalidAccountOwner),
         );
         assert_eq!(
             process_instruction(&authorize(
@@ -812,7 +816,7 @@ mod tests {
                 StakeAuthorize::Staker,
                 None,
             )),
-            Err(InstructionError::IncorrectProgramId),
+            Err(InstructionError::InvalidAccountOwner),
         );
         assert_eq!(
             process_instruction(
@@ -823,7 +827,7 @@ mod tests {
                     &Pubkey::default(),
                 )[1]
             ),
-            Err(InstructionError::IncorrectProgramId),
+            Err(InstructionError::InvalidAccountOwner),
         );
         assert_eq!(
             process_instruction(
@@ -844,7 +848,7 @@ mod tests {
                     &Pubkey::default(),
                 )[0]
             ),
-            Err(InstructionError::IncorrectProgramId),
+            Err(InstructionError::InvalidAccountOwner),
         );
         assert_eq!(
             process_instruction(
@@ -867,7 +871,7 @@ mod tests {
                     "seed"
                 )[1]
             ),
-            Err(InstructionError::IncorrectProgramId),
+            Err(InstructionError::InvalidAccountOwner),
         );
         assert_eq!(
             process_instruction(&delegate_stake(
@@ -875,7 +879,7 @@ mod tests {
                 &Pubkey::default(),
                 &Pubkey::default(),
             )),
-            Err(InstructionError::IncorrectProgramId),
+            Err(InstructionError::InvalidAccountOwner),
         );
         assert_eq!(
             process_instruction(&withdraw(
@@ -885,14 +889,14 @@ mod tests {
                 100,
                 None,
             )),
-            Err(InstructionError::IncorrectProgramId),
+            Err(InstructionError::InvalidAccountOwner),
         );
         assert_eq!(
             process_instruction(&deactivate_stake(
                 &spoofed_stake_state_pubkey(),
                 &Pubkey::default()
             )),
-            Err(InstructionError::IncorrectProgramId),
+            Err(InstructionError::InvalidAccountOwner),
         );
         assert_eq!(
             process_instruction(&set_lockup(
@@ -900,7 +904,7 @@ mod tests {
                 &LockupArgs::default(),
                 &Pubkey::default()
             )),
-            Err(InstructionError::IncorrectProgramId),
+            Err(InstructionError::InvalidAccountOwner),
         );
     }
 
