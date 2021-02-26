@@ -311,7 +311,7 @@ function SysvarAccountClockCard({
 
         <tr>
           <td>Timestamp</td>
-          <td className="text-lg-right">
+          <td className="text-lg-right text-monospace">
             {displayTimestamp(sysvarAccount.info.unixTimestamp * 1000)}
           </td>
         </tr>
