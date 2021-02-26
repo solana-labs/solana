@@ -118,6 +118,7 @@ pub struct BlockstoreSignals {
 
 // ledger window
 pub struct Blockstore {
+    ledger_path: PathBuf,
     db: Arc<Database>,
     meta_cf: LedgerColumn<cf::SlotMeta>,
     dead_slots_cf: LedgerColumn<cf::DeadSlots>,
@@ -243,6 +244,10 @@ impl Blockstore {
         self.db
     }
 
+    pub fn ledger_path(&self) -> &Path {
+        &self.ledger_path
+    }
+
     /// Opens a Ledger in directory, provides "infinite" window of shreds
     pub fn open(ledger_path: &Path) -> Result<Blockstore> {
         Self::do_open(ledger_path, AccessType::PrimaryOnly, None, true)
@@ -330,6 +335,7 @@ impl Blockstore {
         measure.stop();
         info!("{:?} {}", blockstore_path, measure);
         let blockstore = Blockstore {
+            ledger_path: ledger_path.to_path_buf(),
             db,
             meta_cf,
             dead_slots_cf,
