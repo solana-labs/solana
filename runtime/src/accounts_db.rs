@@ -3946,12 +3946,15 @@ impl AccountsDb {
         &'a self,
         dead_slots_iter: impl Iterator<Item = &'a Slot> + Clone,
         purged_slot_pubkeys: HashSet<(Slot, Pubkey)>,
-        // If the slot being are not cached, return
-        is_cached: Option<&mut AccountSlots>,
+        // Should only be `Some` for non-cached slots
+        purged_stored_account_slots: Option<&mut AccountSlots>,
     ) {
-        if let Some(purged_account_slots) = is_cached {
+        if let Some(purged_stored_account_slots) = purged_stored_account_slots {
             for (slot, pubkey) in purged_slot_pubkeys {
-                purged_account_slots.entry(pubkey).or_default().insert(slot);
+                purged_stored_account_slots
+                    .entry(pubkey)
+                    .or_default()
+                    .insert(slot);
                 self.accounts_index.unref_from_storage(&pubkey);
             }
         }
