@@ -1457,17 +1457,17 @@ impl fmt::Display for CliSupply {
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CliFees {
+pub struct CliFeesInner {
     pub slot: Slot,
     pub blockhash: String,
     pub lamports_per_signature: u64,
-    pub last_valid_slot: Slot,
+    pub last_valid_slot: Option<Slot>,
 }
 
-impl QuietDisplay for CliFees {}
-impl VerboseDisplay for CliFees {}
+impl QuietDisplay for CliFeesInner {}
+impl VerboseDisplay for CliFeesInner {}
 
-impl fmt::Display for CliFees {
+impl fmt::Display for CliFeesInner {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln_name_value(f, "Blockhash:", &self.blockhash)?;
         writeln_name_value(
@@ -1477,6 +1477,46 @@ impl fmt::Display for CliFees {
         )?;
         writeln_name_value(f, "Last valid slot:", &self.last_valid_slot.to_string())?;
         Ok(())
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliFees {
+    #[serde(flatten, skip_serializing_if = "Option::is_none")]
+    pub inner: Option<CliFeesInner>,
+}
+
+impl QuietDisplay for CliFees {}
+impl VerboseDisplay for CliFees {}
+
+impl fmt::Display for CliFees {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.inner.as_ref() {
+            Some(inner) => write!(f, "{}", inner),
+            None => write!(f, "Fees unavailable"),
+        }
+    }
+}
+
+impl CliFees {
+    pub fn some(
+        slot: Slot,
+        blockhash: Hash,
+        lamports_per_signature: u64,
+        last_valid_slot: Option<Slot>,
+    ) -> Self {
+        Self {
+            inner: Some(CliFeesInner {
+                slot,
+                blockhash: blockhash.to_string(),
+                lamports_per_signature,
+                last_valid_slot,
+            }),
+        }
+    }
+    pub fn none() -> Self {
+        Self { inner: None }
     }
 }
 
