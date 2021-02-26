@@ -483,6 +483,9 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
                     41 => InstructionError::ProgramFailedToCompile,
                     42 => InstructionError::Immutable,
                     43 => InstructionError::IncorrectAuthority,
+                    44 => InstructionError::BorshIoError(String::new()),
+                    45 => InstructionError::AccountNotRentExempt,
+                    46 => InstructionError::InvalidAccountOwner,
                     _ => return Err("Invalid InstructionError"),
                 };
 
@@ -705,6 +708,9 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                             }
                             InstructionError::AccountNotRentExempt => {
                                 tx_by_addr::InstructionErrorType::AccountNotRentExempt
+                            }
+                            InstructionError::InvalidAccountOwner => {
+                                tx_by_addr::InstructionErrorType::InvalidAccountOwner
                             }
                         } as i32,
                         custom: match instruction_error {

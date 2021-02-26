@@ -195,6 +195,9 @@ pub enum InstructionError {
 
     #[error("An account does not have enough lamports to be rent-exempt")]
     AccountNotRentExempt,
+
+    #[error("Invalid account owner")]
+    InvalidAccountOwner,
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
