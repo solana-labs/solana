@@ -123,6 +123,13 @@ impl RpcClient {
         Self::new(get_rpc_request_str(addr, false))
     }
 
+    pub fn new_socket_with_commitment(
+        addr: SocketAddr,
+        commitment_config: CommitmentConfig,
+    ) -> Self {
+        Self::new_with_commitment(get_rpc_request_str(addr, false), commitment_config)
+    }
+
     pub fn new_socket_with_timeout(addr: SocketAddr, timeout: Duration) -> Self {
         let url = get_rpc_request_str(addr, false);
         Self::new_with_timeout(url, timeout)
