@@ -651,24 +651,23 @@ fn hardforks_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<Slot>> {
 
 fn load_bank_forks(
     arg_matches: &ArgMatches,
-    ledger_path: &Path,
     genesis_config: &GenesisConfig,
+    blockstore: &Blockstore,
     process_options: ProcessOptions,
-    access_type: AccessType,
-    wal_recovery_mode: Option<BlockstoreRecoveryMode>,
     snapshot_archive_path: Option<PathBuf>,
 ) -> bank_forks_utils::LoadResult {
-    let blockstore = open_blockstore(&ledger_path, access_type, wal_recovery_mode);
-    let snapshot_path = ledger_path.join(if blockstore.is_primary_access() {
-        "snapshot"
-    } else {
-        "snapshot.ledger-tool"
-    });
+    let snapshot_path = blockstore
+        .ledger_path()
+        .join(if blockstore.is_primary_access() {
+            "snapshot"
+        } else {
+            "snapshot.ledger-tool"
+        });
     let snapshot_config = if arg_matches.is_present("no_snapshot") {
         None
     } else {
         let snapshot_package_output_path =
-            snapshot_archive_path.unwrap_or_else(|| ledger_path.to_path_buf());
+            snapshot_archive_path.unwrap_or_else(|| blockstore.ledger_path().to_path_buf());
         Some(SnapshotConfig {
             snapshot_interval_slots: 0, // Value doesn't matter
             snapshot_package_output_path,
@@ -686,9 +685,9 @@ fn load_bank_forks(
         }
         account_paths.split(',').map(PathBuf::from).collect()
     } else if blockstore.is_primary_access() {
-        vec![ledger_path.join("accounts")]
+        vec![blockstore.ledger_path().join("accounts")]
     } else {
-        let non_primary_accounts_path = ledger_path.join("accounts.ledger-tool");
+        let non_primary_accounts_path = blockstore.ledger_path().join("accounts.ledger-tool");
         warn!(
             "Default accounts path is switched aligning with Blockstore's secondary access: {:?}",
             non_primary_accounts_path
@@ -1067,16 +1066,27 @@ fn main() {
                 Arg::with_name("snapshot_slot")
                     .index(1)
                     .value_name("SLOT")
-                    .validator(is_slot)
+                    .validator(|value| {
+                        if value.parse::<Slot>().is_ok()
+                            || value == "ROOT"
+                        {
+                            Ok(())
+                        } else {
+                            Err(format!(
+                                "Unable to parse as a number or the keyword ROOT, provided: {}",
+                                value
+                            ))
+                        }
+                    })
                     .takes_value(true)
-                    .help("Slot at which to create the snapshot"),
+                    .help("Slot at which to create the snapshot; accepts keyword ROOT for the highest root"),
             )
             .arg(
                 Arg::with_name("output_directory")
                     .index(2)
                     .value_name("DIR")
                     .takes_value(true)
-                    .help("Output directory for the snapshot"),
+                    .help("Output directory for the snapshot [default: --ledger directory]"),
             )
             .arg(
                 Arg::with_name("warp_slot")
@@ -1444,13 +1454,16 @@ fn main() {
                 ..ProcessOptions::default()
             };
             let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-            match load_bank_forks(
-                arg_matches,
+            let blockstore = open_blockstore(
                 &ledger_path,
-                &genesis_config,
-                process_options,
                 AccessType::TryPrimaryThenSecondary,
                 wal_recovery_mode,
+            );
+            match load_bank_forks(
+                arg_matches,
+                &genesis_config,
+                &blockstore,
+                process_options,
                 snapshot_archive_path,
             ) {
                 Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
@@ -1516,13 +1529,16 @@ fn main() {
                 ..ProcessOptions::default()
             };
             let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-            match load_bank_forks(
-                arg_matches,
+            let blockstore = open_blockstore(
                 &ledger_path,
-                &genesis_config,
-                process_options,
                 AccessType::TryPrimaryThenSecondary,
                 wal_recovery_mode,
+            );
+            match load_bank_forks(
+                arg_matches,
+                &genesis_config,
+                &blockstore,
+                process_options,
                 snapshot_archive_path,
             ) {
                 Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
@@ -1679,13 +1695,16 @@ fn main() {
                 open_genesis_config_by(&ledger_path, arg_matches).hash()
             );
 
-            let (bank_forks, _, _) = load_bank_forks(
-                arg_matches,
+            let blockstore = open_blockstore(
                 &ledger_path,
-                &open_genesis_config_by(&ledger_path, arg_matches),
-                process_options,
                 AccessType::TryPrimaryThenSecondary,
                 wal_recovery_mode,
+            );
+            let (bank_forks, _, _) = load_bank_forks(
+                arg_matches,
+                &open_genesis_config_by(&ledger_path, arg_matches),
+                &blockstore,
+                process_options,
                 snapshot_archive_path,
             )
             .unwrap_or_else(|err| {
@@ -1708,13 +1727,16 @@ fn main() {
                 ..ProcessOptions::default()
             };
 
-            match load_bank_forks(
-                arg_matches,
+            let blockstore = open_blockstore(
                 &ledger_path,
-                &open_genesis_config_by(&ledger_path, arg_matches),
-                process_options,
                 AccessType::TryPrimaryThenSecondary,
                 wal_recovery_mode,
+            );
+            match load_bank_forks(
+                arg_matches,
+                &open_genesis_config_by(&ledger_path, arg_matches),
+                &blockstore,
+                process_options,
                 snapshot_archive_path,
             ) {
                 Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
@@ -1742,8 +1764,8 @@ fn main() {
             }
         }
         ("create-snapshot", Some(arg_matches)) => {
-            let snapshot_slot = value_t_or_exit!(arg_matches, "snapshot_slot", Slot);
-            let output_directory = value_t_or_exit!(arg_matches, "output_directory", String);
+            let output_directory = value_t!(arg_matches, "output_directory", PathBuf)
+                .unwrap_or_else(|_| ledger_path.clone());
             let mut warp_slot = value_t!(arg_matches, "warp_slot", Slot).ok();
             let remove_stake_accounts = arg_matches.is_present("remove_stake_accounts");
             let new_hard_forks = hardforks_of(arg_matches, "hard_forks");
@@ -1762,13 +1784,16 @@ fn main() {
                 value_t_or_exit!(arg_matches, "bootstrap_validator_stake_lamports", u64);
             let minimum_stake_lamports = StakeState::get_rent_exempt_reserve(&rent);
             if bootstrap_validator_stake_lamports < minimum_stake_lamports {
-                eprintln!("Error: insufficient --bootstrap-validator-stake-lamports.  Minimum amount is {}", minimum_stake_lamports);
+                eprintln!(
+                    "Error: insufficient --bootstrap-validator-stake-lamports. \
+                           Minimum amount is {}",
+                    minimum_stake_lamports
+                );
                 exit(1);
             }
             let bootstrap_validator_pubkeys = pubkeys_of(&arg_matches, "bootstrap_validator");
             let accounts_to_remove =
                 pubkeys_of(&arg_matches, "accounts_to_remove").unwrap_or_default();
-
             let snapshot_version =
                 arg_matches
                     .value_of("snapshot_version")
@@ -1778,20 +1803,40 @@ fn main() {
                             exit(1)
                         })
                     });
-            let process_options = ProcessOptions {
-                dev_halt_at_slot: Some(snapshot_slot),
-                new_hard_forks,
-                poh_verify: false,
-                ..ProcessOptions::default()
-            };
+
             let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-            match load_bank_forks(
-                arg_matches,
+            let blockstore = open_blockstore(
                 &ledger_path,
-                &genesis_config,
-                process_options,
                 AccessType::TryPrimaryThenSecondary,
                 wal_recovery_mode,
+            );
+
+            let snapshot_slot = if Some("ROOT") == arg_matches.value_of("snapshot_slot") {
+                blockstore
+                    .rooted_slot_iterator(0)
+                    .expect("Failed to get rooted slot iterator")
+                    .last()
+                    .expect("Failed to get root")
+            } else {
+                value_t_or_exit!(arg_matches, "snapshot_slot", Slot)
+            };
+
+            info!(
+                "Creating snapshot of slot {} in {}",
+                snapshot_slot,
+                output_directory.display()
+            );
+
+            match load_bank_forks(
+                arg_matches,
+                &genesis_config,
+                &blockstore,
+                ProcessOptions {
+                    dev_halt_at_slot: Some(snapshot_slot),
+                    new_hard_forks,
+                    poh_verify: false,
+                    ..ProcessOptions::default()
+                },
                 snapshot_archive_path,
             ) {
                 Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
@@ -2010,13 +2055,16 @@ fn main() {
             let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
             let include_sysvars = arg_matches.is_present("include_sysvars");
             let exclude_account_data = arg_matches.is_present("exclude_account_data");
-            match load_bank_forks(
-                arg_matches,
+            let blockstore = open_blockstore(
                 &ledger_path,
-                &genesis_config,
-                process_options,
                 AccessType::TryPrimaryThenSecondary,
                 wal_recovery_mode,
+            );
+            match load_bank_forks(
+                arg_matches,
+                &genesis_config,
+                &blockstore,
+                process_options,
                 snapshot_archive_path,
             ) {
                 Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
@@ -2065,13 +2113,16 @@ fn main() {
                 ..ProcessOptions::default()
             };
             let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-            match load_bank_forks(
-                arg_matches,
+            let blockstore = open_blockstore(
                 &ledger_path,
-                &genesis_config,
-                process_options,
                 AccessType::TryPrimaryThenSecondary,
                 wal_recovery_mode,
+            );
+            match load_bank_forks(
+                arg_matches,
+                &genesis_config,
+                &blockstore,
+                process_options,
                 snapshot_archive_path,
             ) {
                 Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
