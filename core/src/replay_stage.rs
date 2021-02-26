@@ -1009,6 +1009,7 @@ impl ReplayStage {
             Some(replay_vote_sender),
             None,
             verify_recyclers,
+            false,
         );
         let tx_count_after = bank_progress.replay_progress.num_txs;
         let tx_count = tx_count_after - tx_count_before;
