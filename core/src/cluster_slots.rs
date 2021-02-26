@@ -2,11 +2,15 @@ use crate::{
     cluster_info::ClusterInfo, contact_info::ContactInfo, epoch_slots::EpochSlots,
     serve_repair::RepairType,
 };
+use itertools::Itertools;
 use solana_runtime::{bank_forks::BankForks, epoch_stakes::NodeIdToVoteAccounts};
 use solana_sdk::{clock::Slot, pubkey::Pubkey};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
-    sync::{Arc, RwLock},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc, RwLock,
+    },
 };
 
 // Limit the size of cluster-slots map in case
@@ -18,10 +22,9 @@ pub type SlotPubkeys = HashMap<Pubkey, u64>;
 #[derive(Default)]
 pub struct ClusterSlots {
     cluster_slots: RwLock<BTreeMap<Slot, Arc<RwLock<SlotPubkeys>>>>,
-    since: RwLock<Option<u64>>,
+    since: AtomicU64,
     validator_stakes: RwLock<Arc<NodeIdToVoteAccounts>>,
     epoch: RwLock<Option<u64>>,
-    self_id: RwLock<Pubkey>,
 }
 
 impl ClusterSlots {
@@ -29,20 +32,48 @@ impl ClusterSlots {
         self.cluster_slots.read().unwrap().get(&slot).cloned()
     }
     pub fn update(&self, root: Slot, cluster_info: &ClusterInfo, bank_forks: &RwLock<BankForks>) {
-        self.update_peers(cluster_info, bank_forks);
-        let since = *self.since.read().unwrap();
+        self.update_peers(bank_forks);
+        let since = self.since.load(Ordering::Relaxed);
         let (epoch_slots, since) = cluster_info.get_epoch_slots_since(since);
         self.update_internal(root, epoch_slots, since);
     }
     fn update_internal(&self, root: Slot, epoch_slots_list: Vec<EpochSlots>, since: Option<u64>) {
-        for epoch_slots in epoch_slots_list {
-            let slots = epoch_slots.to_slots(root);
-            for slot in &slots {
-                if *slot <= root {
-                    continue;
-                }
-                self.insert_node_id(*slot, epoch_slots.from);
-            }
+        // Attach validator's total stake.
+        let epoch_slots_list: Vec<_> = {
+            let validator_stakes = self.validator_stakes.read().unwrap();
+            epoch_slots_list
+                .into_iter()
+                .map(|epoch_slots| {
+                    let stake = match validator_stakes.get(&epoch_slots.from) {
+                        Some(v) => v.total_stake,
+                        None => 0,
+                    };
+                    (epoch_slots, stake)
+                })
+                .collect()
+        };
+        let slot_nodes_stakes = epoch_slots_list
+            .into_iter()
+            .flat_map(|(epoch_slots, stake)| {
+                epoch_slots
+                    .to_slots(root)
+                    .into_iter()
+                    .filter(|slot| *slot > root)
+                    .zip(std::iter::repeat((epoch_slots.from, stake)))
+            })
+            .into_group_map();
+        let slot_nodes_stakes: Vec<_> = {
+            let mut cluster_slots = self.cluster_slots.write().unwrap();
+            slot_nodes_stakes
+                .into_iter()
+                .map(|(slot, nodes_stakes)| {
+                    let slot_nodes = cluster_slots.entry(slot).or_default().clone();
+                    (slot_nodes, nodes_stakes)
+                })
+                .collect()
+        };
+        for (slot_nodes, nodes_stakes) in slot_nodes_stakes {
+            slot_nodes.write().unwrap().extend(nodes_stakes);
         }
         {
             let mut cluster_slots = self.cluster_slots.write().unwrap();
@@ -54,7 +85,9 @@ impl ClusterSlots {
                 cluster_slots.split_off(&key);
             }
         }
-        *self.since.write().unwrap() = since;
+        if let Some(since) = since {
+            self.since.store(since + 1, Ordering::Relaxed);
+        }
     }
 
     pub fn collect(&self, id: &Pubkey) -> HashSet<Slot> {
@@ -67,7 +100,8 @@ impl ClusterSlots {
             .collect()
     }
 
-    pub fn insert_node_id(&self, slot: Slot, node_id: Pubkey) {
+    #[cfg(test)]
+    pub(crate) fn insert_node_id(&self, slot: Slot, node_id: Pubkey) {
         let balance = self
             .validator_stakes
             .read()
@@ -85,7 +119,7 @@ impl ClusterSlots {
         slot_pubkeys.write().unwrap().insert(node_id, balance);
     }
 
-    fn update_peers(&self, cluster_info: &ClusterInfo, bank_forks: &RwLock<BankForks>) {
+    fn update_peers(&self, bank_forks: &RwLock<BankForks>) {
         let root_bank = bank_forks.read().unwrap().root_bank();
         let root_epoch = root_bank.epoch();
         let my_epoch = *self.epoch.read().unwrap();
@@ -93,16 +127,11 @@ impl ClusterSlots {
         if Some(root_epoch) != my_epoch {
             let validator_stakes = root_bank
                 .epoch_stakes(root_epoch)
-                .expect(
-                    "Bank must have epoch stakes
-                for its own epoch",
-                )
+                .expect("Bank must have epoch stakes for its own epoch")
                 .node_id_to_vote_accounts()
                 .clone();
 
             *self.validator_stakes.write().unwrap() = validator_stakes;
-            let id = cluster_info.id();
-            *self.self_id.write().unwrap() = id;
             *self.epoch.write().unwrap() = Some(root_epoch);
         }
     }
@@ -177,7 +206,7 @@ mod tests {
     fn test_default() {
         let cs = ClusterSlots::default();
         assert!(cs.cluster_slots.read().unwrap().is_empty());
-        assert!(cs.since.read().unwrap().is_none());
+        assert_eq!(cs.since.load(Ordering::Relaxed), 0);
     }
 
     #[test]
@@ -185,7 +214,7 @@ mod tests {
         let cs = ClusterSlots::default();
         cs.update_internal(0, vec![], None);
         assert!(cs.cluster_slots.read().unwrap().is_empty());
-        assert!(cs.since.read().unwrap().is_none());
+        assert_eq!(cs.since.load(Ordering::Relaxed), 0);
     }
 
     #[test]
@@ -193,7 +222,7 @@ mod tests {
         let cs = ClusterSlots::default();
         let epoch_slot = EpochSlots::default();
         cs.update_internal(0, vec![epoch_slot], Some(0));
-        assert_eq!(*cs.since.read().unwrap(), Some(0));
+        assert_eq!(cs.since.load(Ordering::Relaxed), 1);
         assert!(cs.lookup(0).is_none());
     }
 
@@ -204,7 +233,7 @@ mod tests {
         let mut epoch_slot = EpochSlots::default();
         epoch_slot.fill(&[0], 0);
         cs.update_internal(0, vec![epoch_slot], Some(0));
-        assert_eq!(*cs.since.read().unwrap(), Some(0));
+        assert_eq!(cs.since.load(Ordering::Relaxed), 1);
         assert!(cs.lookup(0).is_none());
     }
 
@@ -214,7 +243,7 @@ mod tests {
         let mut epoch_slot = EpochSlots::default();
         epoch_slot.fill(&[1], 0);
         cs.update_internal(0, vec![epoch_slot], Some(0));
-        assert_eq!(*cs.since.read().unwrap(), Some(0));
+        assert_eq!(cs.since.load(Ordering::Relaxed), 1);
         assert!(cs.lookup(0).is_none());
         assert!(cs.lookup(1).is_some());
         assert_eq!(
