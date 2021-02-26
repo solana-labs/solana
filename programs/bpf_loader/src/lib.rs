@@ -162,13 +162,7 @@ pub fn process_instruction(
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
-    process_instruction_common(
-        program_id,
-        _keyed_accounts,
-        instruction_data,
-        invoke_context,
-        false,
-    )
+    process_instruction_common(program_id, instruction_data, invoke_context, false)
 }
 
 pub fn process_instruction_jit(
@@ -177,26 +171,17 @@ pub fn process_instruction_jit(
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
-    process_instruction_common(
-        program_id,
-        _keyed_accounts,
-        instruction_data,
-        invoke_context,
-        true,
-    )
+    process_instruction_common(program_id, instruction_data, invoke_context, true)
 }
 
 fn process_instruction_common(
     program_id: &Pubkey,
-    _keyed_accounts: &[KeyedAccount],
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
     use_jit: bool,
 ) -> Result<(), InstructionError> {
     let logger = invoke_context.get_logger();
     let keyed_accounts = invoke_context.get_keyed_accounts();
-    // TODO [KeyedAccounts to InvokeContext refactoring]
-    assert_eq!(_keyed_accounts, keyed_accounts);
 
     let first_account = keyed_account_at_index(keyed_accounts, 0)?;
     if first_account.executable()? {
@@ -205,32 +190,25 @@ fn process_instruction_common(
             return Err(InstructionError::IncorrectProgramId);
         }
 
-        let (_keyed_accounts, program_data_offset) =
-            if bpf_loader_upgradeable::check_id(&first_account.owner()?) {
-                if let UpgradeableLoaderState::Program {
-                    programdata_address,
-                } = first_account.state()?
-                {
-                    let programdata = keyed_account_at_index(keyed_accounts, 1)?;
-                    if programdata_address != *programdata.unsigned_key() {
-                        ic_logger_msg!(
-                            logger,
-                            "Wrong ProgramData account for this Program account"
-                        );
-                        return Err(InstructionError::InvalidArgument);
-                    }
-                    invoke_context.pop_first_keyed_account();
-                    (
-                        &_keyed_accounts[1..],
-                        UpgradeableLoaderState::programdata_data_offset()?,
-                    )
-                } else {
-                    ic_logger_msg!(logger, "Invalid Program account");
-                    return Err(InstructionError::InvalidAccountData);
+        let program_data_offset = if bpf_loader_upgradeable::check_id(&first_account.owner()?) {
+            if let UpgradeableLoaderState::Program {
+                programdata_address,
+            } = first_account.state()?
+            {
+                let programdata = keyed_account_at_index(keyed_accounts, 1)?;
+                if programdata_address != *programdata.unsigned_key() {
+                    ic_logger_msg!(logger, "Wrong ProgramData account for this Program account");
+                    return Err(InstructionError::InvalidArgument);
                 }
+                invoke_context.pop_first_keyed_account();
+                UpgradeableLoaderState::programdata_data_offset()?
             } else {
-                (_keyed_accounts, 0)
-            };
+                ic_logger_msg!(logger, "Invalid Program account");
+                return Err(InstructionError::InvalidAccountData);
+            }
+        } else {
+            0
+        };
 
         let keyed_accounts = invoke_context.get_keyed_accounts();
         let program = keyed_account_at_index(keyed_accounts, 0)?;
@@ -252,7 +230,6 @@ fn process_instruction_common(
         executor.execute(
             loader_id,
             program_id,
-            _keyed_accounts,
             instruction_data,
             invoke_context,
             use_jit,
@@ -266,19 +243,12 @@ fn process_instruction_common(
         if bpf_loader_upgradeable::check_id(program_id) {
             process_loader_upgradeable_instruction(
                 program_id,
-                _keyed_accounts,
                 instruction_data,
                 invoke_context,
                 use_jit,
             )?;
         } else {
-            process_loader_instruction(
-                program_id,
-                _keyed_accounts,
-                instruction_data,
-                invoke_context,
-                use_jit,
-            )?;
+            process_loader_instruction(program_id, instruction_data, invoke_context, use_jit)?;
         }
     }
     Ok(())
@@ -286,15 +256,12 @@ fn process_instruction_common(
 
 fn process_loader_upgradeable_instruction(
     program_id: &Pubkey,
-    _keyed_accounts: &[KeyedAccount],
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
     use_jit: bool,
 ) -> Result<(), InstructionError> {
     let logger = invoke_context.get_logger();
     let keyed_accounts = invoke_context.get_keyed_accounts();
-    // TODO [KeyedAccounts to InvokeContext refactoring]
-    assert_eq!(_keyed_accounts, keyed_accounts);
 
     match limited_deserialize(instruction_data)? {
         UpgradeableLoaderInstruction::InitializeBuffer => {
@@ -695,14 +662,11 @@ fn process_loader_upgradeable_instruction(
 
 fn process_loader_instruction(
     program_id: &Pubkey,
-    _keyed_accounts: &[KeyedAccount],
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
     use_jit: bool,
 ) -> Result<(), InstructionError> {
     let keyed_accounts = invoke_context.get_keyed_accounts();
-    // TODO [KeyedAccounts to InvokeContext refactoring]
-    assert_eq!(_keyed_accounts, keyed_accounts);
     let program = keyed_account_at_index(keyed_accounts, 0)?;
     if program.owner()? != *program_id {
         ic_msg!(
@@ -778,15 +742,10 @@ impl Executor for BpfExecutor {
         &self,
         loader_id: &Pubkey,
         program_id: &Pubkey,
-        _keyed_accounts: &[KeyedAccount],
         instruction_data: &[u8],
         invoke_context: &mut dyn InvokeContext,
         use_jit: bool,
     ) -> Result<(), InstructionError> {
-        // TODO [KeyedAccounts to InvokeContext refactoring]
-        let keyed_accounts = invoke_context.get_keyed_accounts();
-        assert_eq!(_keyed_accounts, keyed_accounts);
-
         let logger = invoke_context.get_logger();
         let invoke_depth = invoke_context.invoke_depth();
 

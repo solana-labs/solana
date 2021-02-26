@@ -244,7 +244,6 @@ pub trait Executor: Debug + Send + Sync {
         &self,
         loader_id: &Pubkey,
         program_id: &Pubkey,
-        keyed_accounts: &[KeyedAccount],
         instruction_data: &[u8],
         invoke_context: &mut dyn InvokeContext,
         use_jit: bool,
