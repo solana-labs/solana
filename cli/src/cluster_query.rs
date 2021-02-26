@@ -134,7 +134,17 @@ impl ClusterQuerySubCommands for App<'_, '_> {
             SubCommand::with_name("cluster-version")
                 .about("Get the version of the cluster entrypoint"),
         )
-        .subcommand(SubCommand::with_name("fees").about("Display current cluster fees"),
+        .subcommand(
+            SubCommand::with_name("fees")
+            .about("Display current cluster fees")
+            .arg(
+                Arg::with_name("blockhash")
+                    .long("blockhash")
+                    .takes_value(true)
+                    .value_name("BLOCKHASH")
+                    .validator(is_hash)
+                    .help("Query fees for BLOCKHASH instead of the the most recent blockhash")
+            ),
         )
         .subcommand(
             SubCommand::with_name("first-available-block")
@@ -820,15 +830,36 @@ pub fn process_cluster_version(rpc_client: &RpcClient, config: &CliConfig) -> Pr
     }
 }
 
-pub fn process_fees(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
-    let result = rpc_client.get_recent_blockhash_with_commitment(config.commitment)?;
-    let (recent_blockhash, fee_calculator, last_valid_slot) = result.value;
-    let fees = CliFees::some(
-        result.context.slot,
-        recent_blockhash,
-        fee_calculator.lamports_per_signature,
-        last_valid_slot,
-    );
+pub fn process_fees(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    blockhash: Option<&Hash>,
+) -> ProcessResult {
+    let fees = if let Some(recent_blockhash) = blockhash {
+        let result = rpc_client.get_fee_calculator_for_blockhash_with_commitment(
+            recent_blockhash,
+            config.commitment,
+        )?;
+        if let Some(fee_calculator) = result.value {
+            CliFees::some(
+                result.context.slot,
+                *recent_blockhash,
+                fee_calculator.lamports_per_signature,
+                None,
+            )
+        } else {
+            CliFees::none()
+        }
+    } else {
+        let result = rpc_client.get_recent_blockhash_with_commitment(config.commitment)?;
+        let (recent_blockhash, fee_calculator, last_valid_slot) = result.value;
+        CliFees::some(
+            result.context.slot,
+            recent_blockhash,
+            fee_calculator.lamports_per_signature,
+            Some(last_valid_slot),
+        )
+    };
     Ok(config.output_format.formatted_string(&fees))
 }
 
@@ -1903,7 +1934,24 @@ mod tests {
         assert_eq!(
             parse_command(&test_fees, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
-                command: CliCommand::Fees,
+                command: CliCommand::Fees { blockhash: None },
+                signers: vec![],
+            }
+        );
+
+        let blockhash = Hash::new_unique();
+        let test_fees = test_commands.clone().get_matches_from(vec![
+            "test",
+            "fees",
+            "--blockhash",
+            &blockhash.to_string(),
+        ]);
+        assert_eq!(
+            parse_command(&test_fees, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Fees {
+                    blockhash: Some(blockhash)
+                },
                 signers: vec![],
             }
         );
