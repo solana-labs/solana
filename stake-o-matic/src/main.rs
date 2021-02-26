@@ -1029,7 +1029,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         ),
                     ));
                     }
-                } else {
+                } else if poor_block_producers.contains(&node_pubkey) {
                     // Deactivate bonus stake
                     delegate_stake_transactions.push((
                     Transaction::new_unsigned(
