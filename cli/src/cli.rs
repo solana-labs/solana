@@ -90,7 +90,9 @@ pub enum CliCommand {
     },
     Feature(FeatureCliCommand),
     Inflation(InflationCliCommand),
-    Fees,
+    Fees {
+        blockhash: Option<Hash>,
+    },
     FirstAvailableBlock,
     GetBlock {
         slot: Option<Slot>,
@@ -593,10 +595,13 @@ pub fn parse_command(
         ("feature", Some(matches)) => {
             parse_feature_subcommand(matches, default_signer, wallet_manager)
         }
-        ("fees", Some(_matches)) => Ok(CliCommandInfo {
-            command: CliCommand::Fees,
-            signers: vec![],
-        }),
+        ("fees", Some(matches)) => {
+            let blockhash = value_of::<Hash>(matches, "blockhash");
+            Ok(CliCommandInfo {
+                command: CliCommand::Fees { blockhash },
+                signers: vec![],
+            })
+        }
         ("first-available-block", Some(_matches)) => Ok(CliCommandInfo {
             command: CliCommand::FirstAvailableBlock,
             signers: vec![],
@@ -1263,7 +1268,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             seed,
             program_id,
         } => process_create_address_with_seed(config, from_pubkey.as_ref(), &seed, &program_id),
-        CliCommand::Fees => process_fees(&rpc_client, config),
+        CliCommand::Fees { ref blockhash } => process_fees(&rpc_client, config, blockhash.as_ref()),
         CliCommand::Feature(feature_subcommand) => {
             process_feature_subcommand(&rpc_client, config, feature_subcommand)
         }
