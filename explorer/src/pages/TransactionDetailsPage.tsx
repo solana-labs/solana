@@ -237,7 +237,9 @@ function StatusCard({
           <td>Timestamp</td>
           <td className="text-lg-right">
             {info.timestamp !== "unavailable" ? (
-              displayTimestamp(info.timestamp * 1000)
+              <span className="text-monospace">
+                {displayTimestamp(info.timestamp * 1000)}
+              </span>
             ) : (
               <InfoTooltip
                 bottom

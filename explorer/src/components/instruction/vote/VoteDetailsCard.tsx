@@ -5,7 +5,7 @@ import { ParsedInfo } from "validators";
 import { VoteInfo } from "./types";
 import { InstructionCard } from "../InstructionCard";
 import { Address } from "components/common/Address";
-import { displayTimestampUtc } from "utils/date";
+import { displayTimestamp } from "utils/date";
 
 export function VoteDetailsCard(props: {
   ix: ParsedInstruction;
@@ -72,7 +72,7 @@ export function VoteDetailsCard(props: {
       <tr>
         <td>Timestamp</td>
         <td className="text-lg-right text-monospace">
-          {displayTimestampUtc(info.vote.timestamp * 1000)}
+          {displayTimestamp(info.vote.timestamp * 1000)}
         </td>
       </tr>
 
