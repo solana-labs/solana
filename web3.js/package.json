@@ -94,7 +94,7 @@
     "node-fetch": "^2.6.1",
     "rpc-websockets": "^7.4.2",
     "secp256k1": "^4.0.2",
-    "superstruct": "^0.8.3",
+    "superstruct": "^0.14.2",
     "tweetnacl": "^1.0.0"
   },
   "devDependencies": {

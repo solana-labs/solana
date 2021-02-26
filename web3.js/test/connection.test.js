@@ -1542,6 +1542,7 @@ describe('Connection', () => {
         lamports: LAMPORTS_PER_SOL,
         data: ['', 'base64'],
         executable: false,
+        rentEpoch: 20,
       },
       withContext: true,
     });
@@ -1569,6 +1570,7 @@ describe('Connection', () => {
         lamports: LAMPORTS_PER_SOL,
         data: ['', 'base64'],
         executable: false,
+        rentEpoch: 20,
       },
       withContext: true,
     });
@@ -1903,10 +1905,7 @@ describe('Connection', () => {
       const subscriptionId = connection.onProgramAccountChange(
         SystemProgram.programId,
         (keyedAccountInfo: KeyedAccountInfo) => {
-          // FIX: accountId should be `PublicKey` not `string`
-          if (
-            keyedAccountInfo.accountId === programAccount.publicKey.toBase58()
-          ) {
+          if (keyedAccountInfo.accountId.equals(programAccount.publicKey)) {
             expect(keyedAccountInfo.accountInfo.lamports).to.eq(balanceNeeded);
             expect(
               keyedAccountInfo.accountInfo.owner.equals(
