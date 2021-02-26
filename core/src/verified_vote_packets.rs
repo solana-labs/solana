@@ -33,22 +33,18 @@ impl VerifiedVotePackets {
         self.0.get(key)
     }
 
-    pub fn get_latest_votes(&self, last_update_version: u64) -> (u64, Vec<Packets>) {
+    pub fn get_latest_votes(&self, last_update_version: u64) -> (u64, Packets) {
         let mut new_update_version = last_update_version;
-        let msgs: Vec<_> = self
+        let packets = self
             .0
-            .iter()
-            .filter_map(|(_, (msg_update_version, msg))| {
-                if *msg_update_version > last_update_version {
-                    new_update_version = std::cmp::max(*msg_update_version, new_update_version);
-                    Some(msg)
-                } else {
-                    None
-                }
+            .values()
+            .filter(|(v, _)| *v > last_update_version)
+            .flat_map(|(v, packets)| {
+                new_update_version = std::cmp::max(*v, new_update_version);
+                packets.packets.clone()
             })
-            .cloned()
             .collect();
-        (new_update_version, msgs)
+        (new_update_version, Packets::new(packets))
     }
 }
 
@@ -86,13 +82,12 @@ mod tests {
         // Both updates have timestamps greater than 0, so both should be returned
         let (new_update_version, updates) = verified_vote_packets.get_latest_votes(0);
         assert_eq!(new_update_version, 2);
-        assert_eq!(updates.len(), 2);
+        assert_eq!(updates.packets.len(), 2);
 
         // Only the nonempty packet had a timestamp greater than 1
         let (new_update_version, updates) = verified_vote_packets.get_latest_votes(1);
         assert_eq!(new_update_version, 2);
-        assert_eq!(updates.len(), 1);
-        assert_eq!(updates[0].packets.is_empty(), false);
+        assert_eq!(updates.packets.is_empty(), false);
 
         // If the given timestamp is greater than all timestamps in any update,
         // returned timestamp should be the same as the given timestamp, and
