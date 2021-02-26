@@ -72,7 +72,7 @@ export function VoteDetailsCard(props: {
       <tr>
         <td>Timestamp</td>
         <td className="text-lg-right text-monospace">
-          {displayTimestampUtc(info.vote.timestamp)}
+          {displayTimestampUtc(info.vote.timestamp * 1000)}
         </td>
       </tr>
 
