@@ -15,7 +15,7 @@ export function RawParsedDetails({
       <tr>
         <td>Instruction Data (JSON)</td>
         <td className="text-lg-right">
-          <pre className="d-inline-block text-left">
+          <pre className="d-inline-block text-left json-wrap">
             {JSON.stringify(ix.parsed, null, 2)}
           </pre>
         </td>
