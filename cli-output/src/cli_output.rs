@@ -1424,8 +1424,11 @@ impl fmt::Display for CliFeesInner {
             "Lamports per signature:",
             &self.lamports_per_signature.to_string(),
         )?;
-        writeln_name_value(f, "Last valid slot:", &self.last_valid_slot.to_string())?;
-        Ok(())
+        let last_valid_slot = self
+            .last_valid_slot
+            .map(|s| s.to_string())
+            .unwrap_or_default();
+        writeln_name_value(f, "Last valid slot:", &last_valid_slot)
     }
 }
 
