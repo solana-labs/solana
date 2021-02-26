@@ -28,7 +28,7 @@ use crate::{
     serve_repair_service::ServeRepairService,
     sigverify,
     snapshot_packager_service::{PendingSnapshotPackage, SnapshotPackagerService},
-    tpu::Tpu,
+    tpu::{Tpu, DEFAULT_TPU_COALESCE_MS},
     transaction_status_service::TransactionStatusService,
     tvu::{Sockets, Tvu, TvuConfig},
 };
@@ -126,6 +126,7 @@ pub struct ValidatorConfig {
     pub warp_slot: Option<Slot>,
     pub accounts_db_test_hash_calculation: bool,
     pub accounts_db_use_index_hash_calculation: bool,
+    pub tpu_coalesce_ms: u64,
 }
 
 impl Default for ValidatorConfig {
@@ -177,6 +178,7 @@ impl Default for ValidatorConfig {
             warp_slot: None,
             accounts_db_test_hash_calculation: false,
             accounts_db_use_index_hash_calculation: true,
+            tpu_coalesce_ms: DEFAULT_TPU_COALESCE_MS,
         }
     }
 }
@@ -681,6 +683,7 @@ impl Validator {
             replay_vote_receiver,
             replay_vote_sender,
             bank_notification_sender,
+            config.tpu_coalesce_ms,
         );
 
         datapoint_info!("validator-new", ("id", id.to_string(), String));
