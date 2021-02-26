@@ -24,7 +24,9 @@ export function RawDetails({ ix }: { ix: TransactionInstruction }) {
       ))}
 
       <tr>
-        <td>Instruction Data (Hex)</td>
+        <td>
+          Instruction Data <span className="text-muted">(Hex)</span>
+        </td>
         <td className="text-lg-right">
           <pre className="d-inline-block text-left mb-0 data-wrap">{data}</pre>
         </td>

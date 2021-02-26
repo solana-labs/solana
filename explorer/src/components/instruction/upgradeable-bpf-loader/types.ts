@@ -1,13 +1,6 @@
 /* eslint-disable @typescript-eslint/no-redeclare */
 
-import {
-  enums,
-  nullable,
-  number,
-  pick,
-  string,
-  StructType,
-} from "superstruct";
+import { enums, nullable, number, pick, string, StructType } from "superstruct";
 import { Pubkey } from "validators/pubkey";
 
 export type WriteInfo = StructType<typeof WriteInfo>;

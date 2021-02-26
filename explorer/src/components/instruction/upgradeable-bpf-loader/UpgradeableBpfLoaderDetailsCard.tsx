@@ -12,7 +12,13 @@ import { reportError } from "utils/sentry";
 import { ParsedInfo } from "validators";
 import { InstructionCard } from "../InstructionCard";
 import { UnknownDetailsCard } from "../UnknownDetailsCard";
-import { DeployWithMaxDataLenInfo, InitializeBufferInfo, SetAuthorityInfo, UpgradeInfo, WriteInfo } from "./types";
+import {
+  DeployWithMaxDataLenInfo,
+  InitializeBufferInfo,
+  SetAuthorityInfo,
+  UpgradeInfo,
+  WriteInfo,
+} from "./types";
 
 type DetailsProps = {
   tx: ParsedTransaction;
@@ -37,10 +43,18 @@ export function UpgradeableBpfLoaderDetailsCard(props: DetailsProps) {
         return renderDetails<SetAuthorityInfo>(props, parsed, SetAuthorityInfo);
       }
       case "deployWithMaxDataLen": {
-        return renderDetails<DeployWithMaxDataLenInfo>(props, parsed, DeployWithMaxDataLenInfo);
+        return renderDetails<DeployWithMaxDataLenInfo>(
+          props,
+          parsed,
+          DeployWithMaxDataLenInfo
+        );
       }
       case "initializeBuffer": {
-        return renderDetails<InitializeBufferInfo>(props, parsed, InitializeBufferInfo);
+        return renderDetails<InitializeBufferInfo>(
+          props,
+          parsed,
+          InitializeBufferInfo
+        );
       }
       default:
         return <UnknownDetailsCard {...props} />;
@@ -53,7 +67,11 @@ export function UpgradeableBpfLoaderDetailsCard(props: DetailsProps) {
   }
 }
 
-function renderDetails<T>(props: DetailsProps, parsed: ParsedInfo, struct: Struct<T>) {
+function renderDetails<T>(
+  props: DetailsProps,
+  parsed: ParsedInfo,
+  struct: Struct<T>
+) {
   const info = coerce(parsed.info, struct);
 
   const attributes: JSX.Element[] = [];
@@ -70,7 +88,7 @@ function renderDetails<T>(props: DetailsProps, parsed: ParsedInfo, struct: Struc
       <tr key={key}>
         <td>
           {camelToTitleCase(key)}{" "}
-          {key === "bytes" && <span className="text-muted">(base 64)</span>}
+          {key === "bytes" && <span className="text-muted">(Base 64)</span>}
         </td>
         <td className="text-lg-right">{value}</td>
       </tr>
