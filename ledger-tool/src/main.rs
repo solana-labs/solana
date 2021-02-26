@@ -750,7 +750,7 @@ fn main() {
     let bpf_jit_arg = Arg::with_name("bpf_jit")
         .long("bpf-jit")
         .takes_value(false)
-        .help("Process with JIT instead of interpreter.");
+        .help("Process with JIT instead of interpreter");
     let no_accounts_db_caching_arg = Arg::with_name("no_accounts_db_caching")
         .long("no-accounts-db-caching")
         .takes_value(false)
@@ -833,7 +833,7 @@ fn main() {
                     "point_in_time",
                     "skip_any_corrupted_record"])
                 .help(
-                    "Mode to recovery the ledger db write ahead log."
+                    "Mode to recovery the ledger db write ahead log"
                 ),
         )
         .arg(
@@ -851,7 +851,8 @@ fn main() {
                 .global(true)
                 .takes_value(true)
                 .possible_values(&["json", "json-compact"])
-                .help("Return information in specified output format, currently only available for bigtable subcommands"),
+                .help("Return information in specified output format, \
+                       currently only available for bigtable subcommands"),
         )
         .arg(
             Arg::with_name("verbose")
@@ -915,7 +916,7 @@ fn main() {
         .subcommand(
             SubCommand::with_name("dead-slots")
             .arg(&starting_slot_arg)
-            .about("Print all of dead slots")
+            .about("Print all the dead slots in the ledger")
         )
         .subcommand(
             SubCommand::with_name("set-dead-slot")
@@ -938,7 +939,8 @@ fn main() {
         )
         .subcommand(
             SubCommand::with_name("parse_full_frozen")
-            .about("Parses log for information about critical events about ancestors of the given `ending_slot`")
+            .about("Parses log for information about critical events about \
+                    ancestors of the given `ending_slot`")
             .arg(&starting_slot_arg)
             .arg(&ending_slot_arg)
             .arg(
@@ -995,7 +997,8 @@ fn main() {
         )
         .subcommand(
             SubCommand::with_name("bounds")
-            .about("Print lowest and highest non-empty slots. Note that there may be empty slots within the bounds")
+            .about("Print lowest and highest non-empty slots. \
+                    Note that there may be empty slots within the bounds")
             .arg(
                 Arg::with_name("all")
                     .long("all")
@@ -1030,7 +1033,7 @@ fn main() {
                 Arg::with_name("print_accounts_stats")
                     .long("print-accounts-stats")
                     .takes_value(false)
-                    .help("After verifying the ledger, print some information about the account stores."),
+                    .help("After verifying the ledger, print some information about the account stores"),
             )
         ).subcommand(
             SubCommand::with_name("graph")
@@ -1166,7 +1169,7 @@ fn main() {
                     .required(false)
                     .long("remove-stake-accounts")
                     .takes_value(false)
-                    .help("Remove all existing stake accounts from the new snapshot.")
+                    .help("Remove all existing stake accounts from the new snapshot")
             )
         ).subcommand(
             SubCommand::with_name("accounts")
@@ -1190,7 +1193,7 @@ fn main() {
             .arg(&max_genesis_archive_unpacked_size_arg)
         ).subcommand(
             SubCommand::with_name("capitalization")
-            .about("Print capitalization (aka, total suppy) while checksumming it")
+            .about("Print capitalization (aka, total supply) while checksumming it")
             .arg(&no_snapshot_arg)
             .arg(&account_paths_arg)
             .arg(&halt_at_slot_arg)
@@ -1245,7 +1248,7 @@ fn main() {
             )
         ).subcommand(
             SubCommand::with_name("purge")
-            .about("Delete a range of slots from the ledger.")
+            .about("Delete a range of slots from the ledger")
             .arg(
                 Arg::with_name("start_slot")
                     .index(1)
@@ -1258,7 +1261,8 @@ fn main() {
                 Arg::with_name("end_slot")
                     .index(2)
                     .value_name("SLOT")
-                    .help("Ending slot to stop purging (inclusive) [default: the highest slot in the ledger]"),
+                    .help("Ending slot to stop purging (inclusive) \
+                           [default: the highest slot in the ledger]"),
             )
             .arg(
                 Arg::with_name("batch_size")
@@ -1285,7 +1289,8 @@ fn main() {
         )
         .subcommand(
             SubCommand::with_name("list-roots")
-            .about("Output up to last <num-roots> root hashes and their heights starting at the given block height")
+            .about("Output up to last <num-roots> root hashes and their \
+                    heights starting at the given block height")
             .arg(
                 Arg::with_name("max_height")
                     .long("max-height")
@@ -1306,7 +1311,8 @@ fn main() {
                     .value_name("FILENAME")
                     .required(false)
                     .takes_value(true)
-                    .help("The location of the output YAML file. A list of rollback slot heights and hashes will be written to the file.")
+                    .help("The location of the output YAML file. A list of \
+                           rollback slot heights and hashes will be written to the file")
             )
             .arg(
                 Arg::with_name("num_roots")
@@ -1320,7 +1326,8 @@ fn main() {
         )
         .subcommand(
             SubCommand::with_name("analyze-storage")
-                .about("Output statistics in JSON format about all column families in the ledger rocksDB")
+                .about("Output statistics in JSON format about \
+                        all column families in the ledger rocksdb")
         )
         .get_matches();
 
