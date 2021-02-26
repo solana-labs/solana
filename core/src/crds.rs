@@ -429,6 +429,8 @@ impl Crds {
 
     /// Returns true if the number of unique pubkeys in the table exceeds the
     /// given capacity (plus some margin).
+    /// Allows skipping unnecessary calls to trim without obtaining a write
+    /// lock on gossip.
     pub(crate) fn should_trim(&self, cap: usize) -> bool {
         // Allow 10% overshoot so that the computation cost is amortized down.
         10 * self.records.len() > 11 * cap

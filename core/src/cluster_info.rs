@@ -287,6 +287,8 @@ struct GossipStats {
     prune_message_len: Counter,
     pull_request_ping_pong_check_failed_count: Counter,
     purge: Counter,
+    trim_crds_table_failed: Counter,
+    trim_crds_table_purged_values_count: Counter,
     epoch_slots_lookup: Counter,
     new_pull_requests: Counter,
     new_pull_requests_count: Counter,
@@ -1848,12 +1850,20 @@ impl ClusterInfo {
             .collect();
         let mut gossip = self.gossip.write().unwrap();
         match gossip.crds.trim(cap, &keep, stakes) {
-            Err(err) => error!("crds table trim failed: {:?}", err),
-            Ok(purged_values) => gossip.pull.purged_values.extend(
-                purged_values
-                    .into_iter()
-                    .map(|v| (v.value_hash, v.local_timestamp)),
-            ),
+            Err(err) => {
+                self.stats.trim_crds_table_failed.add_relaxed(1);
+                error!("crds table trim failed: {:?}", err);
+            }
+            Ok(purged_values) => {
+                self.stats
+                    .trim_crds_table_purged_values_count
+                    .add_relaxed(purged_values.len() as u64);
+                gossip.pull.purged_values.extend(
+                    purged_values
+                        .into_iter()
+                        .map(|v| (v.value_hash, v.local_timestamp)),
+                );
+            }
         }
     }
 
@@ -3027,6 +3037,16 @@ impl ClusterInfo {
                 (
                     "packets_sent_push_messages_count",
                     self.stats.packets_sent_push_messages_count.clear(),
+                    i64
+                ),
+                (
+                    "trim_crds_table_failed",
+                    self.stats.trim_crds_table_failed.clear(),
+                    i64
+                ),
+                (
+                    "trim_crds_table_purged_values_count",
+                    self.stats.trim_crds_table_purged_values_count.clear(),
                     i64
                 ),
             );
