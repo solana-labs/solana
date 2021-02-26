@@ -289,6 +289,12 @@ pub fn process_instruction(
     let keyed_accounts = &mut keyed_accounts.iter();
     let me = &mut next_keyed_account(keyed_accounts)?;
 
+    if invoke_context.is_feature_active(&feature_set::check_program_owner::id())
+        && me.owner()? != id()
+    {
+        return Err(InstructionError::InvalidAccountOwner);
+    }
+
     match limited_deserialize(data)? {
         VoteInstruction::InitializeAccount(vote_init) => {
             verify_rent_exemption(me, next_keyed_account(keyed_accounts)?)?;
@@ -341,6 +347,7 @@ mod tests {
         rent::Rent,
     };
     use std::cell::RefCell;
+    use std::str::FromStr;
 
     // these are for 100% coverage in this file
     #[test]
@@ -368,8 +375,16 @@ mod tests {
                     account::create_account(&SlotHashes::default(), 1)
                 } else if sysvar::rent::check_id(&meta.pubkey) {
                     account::create_account(&Rent::free(), 1)
+                } else if meta.pubkey == invalid_vote_state_pubkey() {
+                    Account {
+                        owner: invalid_vote_state_pubkey(),
+                        ..Account::default()
+                    }
                 } else {
-                    Account::default()
+                    Account {
+                        owner: id(),
+                        ..Account::default()
+                    }
                 })
             })
             .collect();
@@ -393,8 +408,25 @@ mod tests {
         }
     }
 
+    fn invalid_vote_state_pubkey() -> Pubkey {
+        Pubkey::from_str("BadVote111111111111111111111111111111111111").unwrap()
+    }
+
+    #[test]
+    fn test_spoofed_vote() {
+        assert_eq!(
+            process_instruction(&vote(
+                &invalid_vote_state_pubkey(),
+                &Pubkey::default(),
+                Vote::default(),
+            )),
+            Err(InstructionError::InvalidAccountOwner),
+        );
+    }
+
     #[test]
     fn test_vote_process_instruction() {
+        solana_logger::setup();
         let instructions = create_account(
             &Pubkey::default(),
             &Pubkey::default(),

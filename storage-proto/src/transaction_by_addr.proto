@@ -95,6 +95,7 @@ enum InstructionErrorType {
     INCORRECT_AUTHORITY = 43;
     BORSH_IO_ERROR = 44;
     ACCOUNT_NOT_RENT_EXEMPT = 45;
+    INVALID_ACCOUNT_OWNER = 46;
 }
 
 message UnixTimestamp {

@@ -116,4 +116,5 @@ pub enum InstructionErrorType {
     IncorrectAuthority = 43,
     BorshIoError = 44,
     AccountNotRentExempt = 45,
+    InvalidAccountOwner = 46,
 }
