@@ -77,6 +77,9 @@ fn wait_for_restart_window(
     ledger_path: &Path,
     min_idle_time_in_minutes: usize,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let sleep_interval = Duration::from_secs(5);
+    let min_delinquency_percentage = 0.05;
+
     let min_idle_slots = (min_idle_time_in_minutes as f64 * 60. / DEFAULT_S_PER_SLOT) as Slot;
 
     let rpc_addr = get_validator_rpc_addr(&ledger_path).map_err(|err| {
@@ -112,6 +115,21 @@ fn wait_for_restart_window(
         let snapshot_slot = rpc_client.get_snapshot_slot().ok();
         let epoch_info = rpc_client.get_epoch_info_with_commitment(CommitmentConfig::processed())?;
         let healthy = rpc_client.get_health().ok().is_some();
+        let delinquent_stake_percentage = {
+            let vote_accounts = rpc_client.get_vote_accounts()?;
+            let current_stake: u64 = vote_accounts
+                .current
+                .iter()
+                .map(|va| va.activated_stake)
+                .sum();
+            let delinquent_stake: u64 = vote_accounts
+                .delinquent
+                .iter()
+                .map(|va| va.activated_stake)
+                .sum();
+            let total_stake = current_stake + delinquent_stake;
+            delinquent_stake as f64 / total_stake as f64
+        };
 
         if match current_epoch {
             None => true,
@@ -182,6 +200,8 @@ fn wait_for_restart_window(
 
                         if restart_snapshot == snapshot_slot {
                             "Waiting for a new snapshot".to_string()
+                        } else if delinquent_stake_percentage >= min_delinquency_percentage {
+                            style("Delinquency too high").red().to_string()
                         } else {
                             break; // Restart!
                         }
@@ -192,7 +212,7 @@ fn wait_for_restart_window(
         };
 
         progress_bar.set_message(&format!(
-            "{} | Processed Slot: {} | {}",
+            "{} | Processed Slot: {} | Snapshot Slot: {} | {:.2}% delinquent stake | {}",
             {
                 let elapsed =
                     chrono::Duration::from_std(monitor_start_time.elapsed().unwrap()).unwrap();
@@ -205,9 +225,13 @@ fn wait_for_restart_window(
                 )
             },
             epoch_info.absolute_slot,
+            snapshot_slot
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| "-".to_string()),
+            delinquent_stake_percentage,
             status
         ));
-        std::thread::sleep(Duration::from_secs(1))
+        std::thread::sleep(sleep_interval);
     }
     drop(progress_bar);
     println!("{}", style("Ready to restart").green());
