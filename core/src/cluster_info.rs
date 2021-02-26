@@ -113,7 +113,7 @@ const GOSSIP_PING_CACHE_TTL: Duration = Duration::from_secs(640);
 pub const DEFAULT_CONTACT_DEBUG_INTERVAL_MILLIS: u64 = 10_000;
 pub const DEFAULT_CONTACT_SAVE_INTERVAL_MILLIS: u64 = 60_000;
 /// Minimum serialized size of a Protocol::PullResponse packet.
-const PULL_RESPONSE_MIN_SERIALIZED_SIZE: usize = 167;
+const PULL_RESPONSE_MIN_SERIALIZED_SIZE: usize = 161;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ClusterInfoError {
@@ -1242,23 +1242,30 @@ impl ClusterInfo {
             .map(|x| map(x.value.lowest_slot().unwrap(), x.insert_timestamp))
     }
 
-    pub fn get_epoch_slots_since(&self, since: Option<u64>) -> (Vec<EpochSlots>, Option<u64>) {
+    pub fn get_epoch_slots_since(
+        &self,
+        timestamp: u64,
+    ) -> (
+        Vec<EpochSlots>,
+        Option<u64>, // Most recent insert timestmap.
+    ) {
+        let mut max_ts = 0;
         let vals: Vec<_> = self
             .gossip
             .read()
             .unwrap()
             .crds
-            .values()
-            .filter(|x| {
-                since
-                    .map(|since| x.insert_timestamp > since)
-                    .unwrap_or(true)
+            .get_epoch_slots_since(timestamp)
+            .map(|value| {
+                max_ts = std::cmp::max(max_ts, value.insert_timestamp);
+                match &value.value.data {
+                    CrdsData::EpochSlots(_, slots) => slots.clone(),
+                    _ => panic!("this should not happen!"),
+                }
             })
-            .filter_map(|x| Some((x.value.epoch_slots()?.clone(), x.insert_timestamp)))
             .collect();
-        let max = vals.iter().map(|x| x.1).max().or(since);
-        let vec = vals.into_iter().map(|x| x.0).collect();
-        (vec, max)
+        let max_ts = if vals.is_empty() { None } else { Some(max_ts) };
+        (vals, max_ts)
     }
 
     pub fn get_node_version(&self, pubkey: &Pubkey) -> Option<solana_version::Version> {
@@ -3658,7 +3665,11 @@ mod tests {
             let crds_values = vec![CrdsValue::new_rand(&mut rng, None)];
             let pull_response = Protocol::PullResponse(Pubkey::new_unique(), crds_values);
             let size = serialized_size(&pull_response).unwrap();
-            assert!(PULL_RESPONSE_MIN_SERIALIZED_SIZE as u64 <= size);
+            assert!(
+                PULL_RESPONSE_MIN_SERIALIZED_SIZE as u64 <= size,
+                "pull-response serialized size: {}",
+                size
+            );
         }
     }
 
@@ -3978,23 +3989,23 @@ mod tests {
         let keys = Keypair::new();
         let contact_info = ContactInfo::new_localhost(&keys.pubkey(), 0);
         let cluster_info = ClusterInfo::new_with_invalid_keypair(contact_info);
-        let (slots, since) = cluster_info.get_epoch_slots_since(None);
+        let (slots, since) = cluster_info.get_epoch_slots_since(0);
         assert!(slots.is_empty());
         assert!(since.is_none());
         cluster_info.push_epoch_slots(&[0]);
         cluster_info.flush_push_queue();
 
-        let (slots, since) = cluster_info.get_epoch_slots_since(Some(std::u64::MAX));
+        let (slots, since) = cluster_info.get_epoch_slots_since(std::u64::MAX);
         assert!(slots.is_empty());
-        assert_eq!(since, Some(std::u64::MAX));
+        assert_eq!(since, None);
 
-        let (slots, since) = cluster_info.get_epoch_slots_since(None);
+        let (slots, since) = cluster_info.get_epoch_slots_since(0);
         assert_eq!(slots.len(), 1);
         assert!(since.is_some());
 
-        let (slots, since2) = cluster_info.get_epoch_slots_since(since);
+        let (slots, since2) = cluster_info.get_epoch_slots_since(since.unwrap() + 1);
         assert!(slots.is_empty());
-        assert_eq!(since2, since);
+        assert_eq!(since2, None);
     }
 
     #[test]
@@ -4327,7 +4338,7 @@ mod tests {
         cluster_info.flush_push_queue();
         cluster_info.push_epoch_slots(&range[16000..]);
         cluster_info.flush_push_queue();
-        let (slots, since) = cluster_info.get_epoch_slots_since(None);
+        let (slots, since) = cluster_info.get_epoch_slots_since(0);
         let slots: Vec<_> = slots.iter().flat_map(|x| x.to_slots(0)).collect();
         assert_eq!(slots, range);
         assert!(since.is_some());
