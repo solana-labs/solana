@@ -35,6 +35,7 @@ import {
 } from "providers/transactions";
 import { Cluster, useCluster } from "providers/cluster";
 import { VoteDetailsCard } from "components/instruction/vote/VoteDetailsCard";
+import { UpgradeableBpfLoaderDetailsCard } from "components/instruction/upgradeable-bpf-loader/UpgradeableBpfLoaderDetailsCard";
 
 export function InstructionsSection({ signature }: SignatureProps) {
   const status = useTransactionStatus(signature);
@@ -162,6 +163,8 @@ function renderInstructionCard({
         return <TokenDetailsCard {...props} />;
       case "bpf-loader":
         return <BpfLoaderDetailsCard {...props} />;
+      case "bpf-upgradeable-loader":
+        return <UpgradeableBpfLoaderDetailsCard {...props} />;
       case "system":
         return <SystemDetailsCard {...props} />;
       case "stake":
