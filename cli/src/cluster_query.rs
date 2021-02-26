@@ -823,12 +823,12 @@ pub fn process_cluster_version(rpc_client: &RpcClient, config: &CliConfig) -> Pr
 pub fn process_fees(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
     let result = rpc_client.get_recent_blockhash_with_commitment(config.commitment)?;
     let (recent_blockhash, fee_calculator, last_valid_slot) = result.value;
-    let fees = CliFees {
-        slot: result.context.slot,
-        blockhash: recent_blockhash.to_string(),
-        lamports_per_signature: fee_calculator.lamports_per_signature,
+    let fees = CliFees::some(
+        result.context.slot,
+        recent_blockhash,
+        fee_calculator.lamports_per_signature,
         last_valid_slot,
-    };
+    );
     Ok(config.output_format.formatted_string(&fees))
 }
 
