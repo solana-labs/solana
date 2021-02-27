@@ -61,8 +61,6 @@ gives a convenient interface for the RPC methods.
 - [requestAirdrop](jsonrpc-api.md#requestairdrop)
 - [sendTransaction](jsonrpc-api.md#sendtransaction)
 - [simulateTransaction](jsonrpc-api.md#simulatetransaction)
-- [setLogFilter](jsonrpc-api.md#setlogfilter)
-- [validatorExit](jsonrpc-api.md#validatorexit)
 - [Subscription Websocket](jsonrpc-api.md#subscription-websocket)
   - [accountSubscribe](jsonrpc-api.md#accountsubscribe)
   - [accountUnsubscribe](jsonrpc-api.md#accountunsubscribe)
@@ -2984,57 +2982,6 @@ Result:
   },
   "id": 1
 }
-```
-
-### setLogFilter
-
-Sets the log filter on the validator
-
-#### Parameters:
-
-- `<string>` - the new log filter to use
-
-#### Results:
-
-- `<null>`
-
-#### Example:
-
-```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
-  {"jsonrpc":"2.0","id":1, "method":"setLogFilter", "params":["solana_core=debug"]}
-'
-```
-
-Result:
-```json
-{"jsonrpc":"2.0","result":null,"id":1}
-```
-
-### validatorExit
-
-If a validator boots with RPC exit enabled (`--enable-rpc-exit` parameter), this request causes the validator to exit.
-
-#### Parameters:
-
-None
-
-#### Results:
-
-- `<bool>` - Whether the validator exit operation was successful
-
-#### Example:
-
-```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
-  {"jsonrpc":"2.0","id":1, "method":"validatorExit"}
-'
-
-```
-
-Result:
-```json
-{"jsonrpc":"2.0","result":true,"id":1}
 ```
 
 ## Subscription Websocket

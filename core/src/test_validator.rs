@@ -3,7 +3,7 @@ use {
         cluster_info::Node,
         gossip_service::discover_cluster,
         rpc::JsonRpcConfig,
-        validator::{Validator, ValidatorConfig},
+        validator::{Validator, ValidatorConfig, ValidatorExit},
     },
     solana_client::rpc_client::RpcClient,
     solana_ledger::{blockstore::create_new_ledger, create_new_tmp_ledger},
@@ -28,7 +28,7 @@ use {
         fs::remove_dir_all,
         net::{IpAddr, Ipv4Addr, SocketAddr},
         path::PathBuf,
-        sync::Arc,
+        sync::{Arc, RwLock},
         thread::sleep,
         time::Duration,
     },
@@ -52,6 +52,7 @@ pub struct TestValidatorGenesis {
     no_bpf_jit: bool,
     accounts: HashMap<Pubkey, Account>,
     programs: Vec<ProgramInfo>,
+    pub validator_exit: Arc<RwLock<ValidatorExit>>,
 }
 
 impl TestValidatorGenesis {
@@ -401,6 +402,7 @@ impl TestValidator {
             enforce_ulimit_nofile: false,
             warp_slot: config.warp_slot,
             bpf_jit: !config.no_bpf_jit,
+            validator_exit: config.validator_exit.clone(),
             ..ValidatorConfig::default()
         };
 
@@ -417,7 +419,8 @@ impl TestValidator {
 
         // Needed to avoid panics in `solana-responder-gossip` in tests that create a number of
         // test validators concurrently...
-        discover_cluster(&gossip, 1).expect("TestValidator startup failed");
+        discover_cluster(&gossip, 1)
+            .map_err(|err| format!("TestValidator startup failed: {:?}", err))?;
 
         // This is a hack to delay until the fees are non-zero for test consistency
         // (fees from genesis are zero until the first block with a transaction in it is completed
@@ -425,19 +428,24 @@ impl TestValidator {
         {
             let rpc_client =
                 RpcClient::new_with_commitment(rpc_url.clone(), CommitmentConfig::processed());
-            let fee_rate_governor = rpc_client
-                .get_fee_rate_governor()
-                .expect("get_fee_rate_governor")
-                .value;
-            if fee_rate_governor.target_lamports_per_signature > 0 {
-                while rpc_client
-                    .get_recent_blockhash()
-                    .expect("get_recent_blockhash")
-                    .1
-                    .lamports_per_signature
-                    == 0
-                {
-                    sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
+
+            if let Ok(result) = rpc_client.get_fee_rate_governor() {
+                let fee_rate_governor = result.value;
+                if fee_rate_governor.target_lamports_per_signature > 0 {
+                    loop {
+                        match rpc_client.get_recent_blockhash() {
+                            Ok((_blockhash, fee_calculator)) => {
+                                if fee_calculator.lamports_per_signature != 0 {
+                                    break;
+                                }
+                            }
+                            Err(err) => {
+                                warn!("get_recent_blockhash() failed: {:?}", err);
+                                break;
+                            }
+                        }
+                        sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
+                    }
                 }
             }
         }
@@ -489,6 +497,12 @@ impl TestValidator {
             .expect("get_recent_blockhash");
 
         (rpc_client, recent_blockhash, fee_calculator)
+    }
+
+    pub fn join(mut self) {
+        if let Some(validator) = self.validator.take() {
+            validator.join();
+        }
     }
 }
 

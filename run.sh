@@ -100,7 +100,6 @@ args=(
   --rpc-port 8899
   --rpc-faucet-address 127.0.0.1:9900
   --log -
-  --enable-rpc-exit
   --enable-rpc-transaction-history
   --enable-cpi-and-log-storage
   --init-complete-file "$dataDir"/init-completed

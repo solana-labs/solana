@@ -78,7 +78,6 @@ nodes=(
     --init-complete-file init-complete-node0.log \
     --dynamic-port-range 8000-8050"
   "multinode-demo/validator.sh \
-    --enable-rpc-exit \
     --no-restart \
     --dynamic-port-range 8050-8100
     --init-complete-file init-complete-node1.log \
@@ -201,17 +200,10 @@ killNodes() {
   [[ ${#pids[@]} -gt 0 ]] || return
 
   # Try to use the RPC exit API to cleanly exit the first two nodes
-  # (dynamic nodes, -x, are just killed since their RPC port is not known)
+  # (dynamic nodes, -x, are just killed)
   echo "--- RPC exit"
-  for port in 8899 18899; do
-    (
-      set -x
-      curl --retry 5 --retry-delay 2 --retry-connrefused \
-        -X POST -H 'Content-Type: application/json' \
-        -d '{"jsonrpc":"2.0","id":1, "method":"validatorExit"}' \
-        http://localhost:$port
-    )
-  done
+  $solana_validator --ledger "$SOLANA_CONFIG_DIR"/bootstrap-validator exit || true
+  $solana_validator --ledger "$SOLANA_CONFIG_DIR"/validator exit || true
 
   # Give the nodes a splash of time to cleanly exit before killing them
   sleep 2

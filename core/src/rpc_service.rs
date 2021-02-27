@@ -6,7 +6,7 @@ use crate::{
     max_slots::MaxSlots,
     optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
     poh_recorder::PohRecorder,
-    rpc::*,
+    rpc::{rpc_full::*, rpc_minimal::*, *},
     rpc_health::*,
     send_transaction_service::{LeaderInfo, SendTransactionService},
     validator::ValidatorExit,
@@ -337,6 +337,7 @@ impl JsonRpcService {
                 (None, None)
             };
 
+        let minimal_api = config.minimal_api;
         let (request_processor, receiver) = JsonRpcRequestProcessor::new(
             config,
             snapshot_config.clone(),
@@ -392,8 +393,11 @@ impl JsonRpcService {
             .name("solana-jsonrpc".to_string())
             .spawn(move || {
                 let mut io = MetaIoHandler::default();
-                let rpc = RpcSolImpl;
-                io.extend_with(rpc.to_delegate());
+
+                io.extend_with(rpc_minimal::MinimalImpl.to_delegate());
+                if !minimal_api {
+                    io.extend_with(rpc_full::FullImpl.to_delegate());
+                }
 
                 let request_middleware = RpcRequestMiddleware::new(
                     ledger_path,

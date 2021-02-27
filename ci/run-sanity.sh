@@ -25,7 +25,8 @@ snapshot_slot=1
 while [[ $($solana_cli --url http://localhost:8899 slot --commitment recent) -le $((snapshot_slot + 1)) ]]; do
   sleep 1
 done
-curl -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1, "method":"validatorExit"}' http://localhost:8899
+
+$solana_validator --ledger config/ledger exit || true
 
 wait $pid
 

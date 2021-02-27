@@ -2000,7 +2000,9 @@ dependencies = [
  "futures 0.3.8",
  "jsonrpc-core",
  "jsonrpc-pubsub",
+ "jsonrpc-server-utils",
  "log 0.4.11",
+ "parity-tokio-ipc",
  "serde",
  "serde_json",
  "tokio 0.2.22",
@@ -2057,6 +2059,21 @@ dependencies = [
  "net2",
  "parking_lot 0.11.0",
  "unicase 2.6.0",
+]
+
+[[package]]
+name = "jsonrpc-ipc-server"
+version = "17.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "14c4cd89e5ea7e7f0884e828fc35bb83591a371b92439675eae28efa66c24a97"
+dependencies = [
+ "futures 0.3.8",
+ "jsonrpc-core",
+ "jsonrpc-server-utils",
+ "log 0.4.11",
+ "parity-tokio-ipc",
+ "parking_lot 0.11.0",
+ "tower-service",
 ]
 
 [[package]]
@@ -2665,6 +2682,22 @@ dependencies = [
  "proc-macro2 1.0.24",
  "quote 1.0.6",
  "syn 1.0.60",
+]
+
+[[package]]
+name = "parity-tokio-ipc"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd7f6c69d7687501b2205fe51ade1d7b8797bb3aa141fe5bf13dd78c0483bc89"
+dependencies = [
+ "futures 0.3.8",
+ "libc",
+ "log 0.4.11",
+ "mio-named-pipes",
+ "miow 0.3.6",
+ "rand 0.7.3",
+ "tokio 0.2.22",
+ "winapi 0.3.8",
 ]
 
 [[package]]
@@ -4590,7 +4623,6 @@ version = "1.6.0"
 dependencies = [
  "clap",
  "solana-clap-utils",
- "solana-client",
  "solana-core",
  "solana-logger 1.6.0",
  "solana-net-utils",
@@ -5465,13 +5497,16 @@ dependencies = [
  "core_affinity",
  "fd-lock",
  "indicatif",
+ "jsonrpc-core",
+ "jsonrpc-core-client",
+ "jsonrpc-derive",
+ "jsonrpc-ipc-server",
+ "jsonrpc-server-utils",
  "libc",
  "log 0.4.11",
  "num_cpus",
  "rand 0.7.3",
  "serde",
- "serde_derive",
- "serde_yaml",
  "signal-hook",
  "solana-clap-utils",
  "solana-cli-config",

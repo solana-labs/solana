@@ -188,15 +188,21 @@ impl Default for ValidatorConfig {
 
 #[derive(Default)]
 pub struct ValidatorExit {
+    exited: bool,
     exits: Vec<Box<dyn FnOnce() + Send + Sync>>,
 }
 
 impl ValidatorExit {
     pub fn register_exit(&mut self, exit: Box<dyn FnOnce() + Send + Sync>) {
-        self.exits.push(exit);
+        if self.exited {
+            exit();
+        } else {
+            self.exits.push(exit);
+        }
     }
 
     pub fn exit(&mut self) {
+        self.exited = true;
         for exit in self.exits.drain(..) {
             exit();
         }
@@ -219,16 +225,12 @@ struct TransactionHistoryServices {
     cache_block_time_service: Option<CacheBlockTimeService>,
 }
 
-struct RpcServices {
-    json_rpc_service: JsonRpcService,
-    pubsub_service: PubSubService,
-    optimistically_confirmed_bank_tracker: OptimisticallyConfirmedBankTracker,
-}
-
 pub struct Validator {
     pub id: Pubkey,
     validator_exit: Arc<RwLock<ValidatorExit>>,
-    rpc_service: Option<RpcServices>,
+    json_rpc_service: Option<JsonRpcService>,
+    pubsub_service: Option<PubSubService>,
+    optimistically_confirmed_bank_tracker: Option<OptimisticallyConfirmedBankTracker>,
     transaction_status_service: Option<TransactionStatusService>,
     rewards_recorder_service: Option<RewardsRecorderService>,
     cache_block_time_service: Option<CacheBlockTimeService>,
@@ -475,9 +477,12 @@ impl Validator {
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
         let rpc_override_health_check = Arc::new(AtomicBool::new(false));
-        let (rpc_service, bank_notification_sender) = if let Some((rpc_addr, rpc_pubsub_addr)) =
-            config.rpc_addrs
-        {
+        let (
+            json_rpc_service,
+            pubsub_service,
+            optimistically_confirmed_bank_tracker,
+            bank_notification_sender,
+        ) = if let Some((rpc_addr, rpc_pubsub_addr)) = config.rpc_addrs {
             if ContactInfo::is_valid_address(&node.info.rpc) {
                 assert!(ContactInfo::is_valid_address(&node.info.rpc_pubsub));
             } else {
@@ -485,44 +490,46 @@ impl Validator {
             }
             let (bank_notification_sender, bank_notification_receiver) = unbounded();
             (
-                Some(RpcServices {
-                    json_rpc_service: JsonRpcService::new(
-                        rpc_addr,
-                        config.rpc_config.clone(),
-                        config.snapshot_config.clone(),
-                        bank_forks.clone(),
-                        block_commitment_cache.clone(),
-                        blockstore.clone(),
-                        cluster_info.clone(),
-                        Some(poh_recorder.clone()),
-                        genesis_config.hash(),
-                        ledger_path,
-                        config.validator_exit.clone(),
-                        config.trusted_validators.clone(),
-                        rpc_override_health_check.clone(),
-                        optimistically_confirmed_bank.clone(),
-                        config.send_transaction_retry_ms,
-                        config.send_transaction_leader_forward_count,
-                        max_slots.clone(),
-                    ),
-                    pubsub_service: PubSubService::new(
+                Some(JsonRpcService::new(
+                    rpc_addr,
+                    config.rpc_config.clone(),
+                    config.snapshot_config.clone(),
+                    bank_forks.clone(),
+                    block_commitment_cache.clone(),
+                    blockstore.clone(),
+                    cluster_info.clone(),
+                    Some(poh_recorder.clone()),
+                    genesis_config.hash(),
+                    ledger_path,
+                    config.validator_exit.clone(),
+                    config.trusted_validators.clone(),
+                    rpc_override_health_check.clone(),
+                    optimistically_confirmed_bank.clone(),
+                    config.send_transaction_retry_ms,
+                    config.send_transaction_leader_forward_count,
+                    max_slots.clone(),
+                )),
+                if config.rpc_config.minimal_api {
+                    None
+                } else {
+                    Some(PubSubService::new(
                         config.pubsub_config.clone(),
                         &subscriptions,
                         rpc_pubsub_addr,
                         &exit,
-                    ),
-                    optimistically_confirmed_bank_tracker: OptimisticallyConfirmedBankTracker::new(
-                        bank_notification_receiver,
-                        &exit,
-                        bank_forks.clone(),
-                        optimistically_confirmed_bank,
-                        subscriptions.clone(),
-                    ),
-                }),
+                    ))
+                },
+                Some(OptimisticallyConfirmedBankTracker::new(
+                    bank_notification_receiver,
+                    &exit,
+                    bank_forks.clone(),
+                    optimistically_confirmed_bank,
+                    subscriptions.clone(),
+                )),
                 Some(bank_notification_sender),
             )
         } else {
-            (None, None)
+            (None, None, None, None)
         };
 
         if config.dev_halt_at_slot.is_some() {
@@ -704,7 +711,9 @@ impl Validator {
             id,
             gossip_service,
             serve_repair_service,
-            rpc_service,
+            json_rpc_service,
+            pubsub_service,
+            optimistically_confirmed_bank_tracker,
             transaction_status_service,
             rewards_recorder_service,
             cache_block_time_service,
@@ -758,18 +767,23 @@ impl Validator {
     pub fn join(self) {
         self.poh_service.join().expect("poh_service");
         drop(self.poh_recorder);
-        if let Some(RpcServices {
-            json_rpc_service,
-            pubsub_service,
-            optimistically_confirmed_bank_tracker,
-        }) = self.rpc_service
-        {
+
+        if let Some(json_rpc_service) = self.json_rpc_service {
             json_rpc_service.join().expect("rpc_service");
+        }
+
+        if let Some(pubsub_service) = self.pubsub_service {
             pubsub_service.join().expect("pubsub_service");
+        }
+
+        if let Some(optimistically_confirmed_bank_tracker) =
+            self.optimistically_confirmed_bank_tracker
+        {
             optimistically_confirmed_bank_tracker
                 .join()
                 .expect("optimistically_confirmed_bank_tracker");
         }
+
         if let Some(transaction_status_service) = self.transaction_status_service {
             transaction_status_service
                 .join()

@@ -1505,10 +1505,6 @@ impl RpcClient {
         }
     }
 
-    pub fn validator_exit(&self) -> ClientResult<bool> {
-        self.send(RpcRequest::ValidatorExit, Value::Null)
-    }
-
     pub fn send<T>(&self, request: RpcRequest, params: Value) -> ClientResult<T>
     where
         T: serde::de::DeserializeOwned,
