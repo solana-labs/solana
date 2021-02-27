@@ -3999,17 +3999,22 @@ impl AccountsDb {
         &'a self,
         dead_slots_iter: impl Iterator<Item = &'a Slot> + Clone,
         purged_slot_pubkeys: HashSet<(Slot, Pubkey)>,
-        mut purged_account_slots: Option<&mut AccountSlots>,
+        // Should only be `Some` for non-cached slots
+        purged_stored_account_slots: Option<&mut AccountSlots>,
     ) {
-        for (slot, pubkey) in purged_slot_pubkeys {
-            if let Some(ref mut purged_account_slots) = purged_account_slots {
-                purged_account_slots.entry(pubkey).or_default().insert(slot);
+        if let Some(purged_stored_account_slots) = purged_stored_account_slots {
+            for (slot, pubkey) in purged_slot_pubkeys {
+                purged_stored_account_slots
+                    .entry(pubkey)
+                    .or_default()
+                    .insert(slot);
+                self.accounts_index.unref_from_storage(&pubkey);
             }
-            self.accounts_index.unref_from_storage(&pubkey);
         }
 
         let mut accounts_index_root_stats = AccountsIndexRootsStats::default();
         for slot in dead_slots_iter.clone() {
+            info!("finalize_dead_slot_removal slot {}", slot);
             if let Some(latest) = self.accounts_index.clean_dead_slot(*slot) {
                 accounts_index_root_stats = latest;
             }
@@ -8270,6 +8275,74 @@ pub mod tests {
         assert!(db
             .do_load(&Ancestors::default(), &account_key, Some(0))
             .is_none());
+    }
+
+    #[test]
+    fn test_flush_cache_dont_clean_zero_lamport_account() {
+        let caching_enabled = true;
+        let db = Arc::new(AccountsDb::new_with_config(
+            Vec::new(),
+            &ClusterType::Development,
+            HashSet::new(),
+            caching_enabled,
+        ));
+
+        let zero_lamport_account_key = Pubkey::new_unique();
+        let other_account_key = Pubkey::new_unique();
+
+        let original_lamports = 1;
+        let slot0_account = Account::new(original_lamports, 1, &Account::default().owner);
+        let zero_lamport_account = Account::new(0, 0, &Account::default().owner);
+
+        // Store into slot 0, and then flush the slot to storage
+        db.store_cached(0, &[(&zero_lamport_account_key, &slot0_account)]);
+        // Second key keeps other lamport account entry for slot 0 alive,
+        // preventing clean of the zero_lamport_account in slot 1.
+        db.store_cached(0, &[(&other_account_key, &slot0_account)]);
+        db.add_root(0);
+        db.flush_accounts_cache(true, None);
+        assert!(!db.storage.get_slot_storage_entries(0).unwrap().is_empty());
+
+        // Store into slot 1, a dummy slot that will be dead and purged before flush
+        db.store_cached(1, &[(&zero_lamport_account_key, &zero_lamport_account)]);
+
+        // Store into slot 2, which makes all updates from slot 1 outdated.
+        // This means slot 1 is a dead slot. Later, slot 1 will be cleaned/purged
+        // before it even reaches storage, but this purge of slot 1should not affect
+        // the refcount of `zero_lamport_account_key` because cached keys do not bump
+        // the refcount in the index. This means clean should *not* remove
+        // `zero_lamport_account_key` from slot 2
+        db.store_cached(2, &[(&zero_lamport_account_key, &zero_lamport_account)]);
+        db.add_root(1);
+        db.add_root(2);
+
+        // Flush, then clean. Should not need another root to initiate the cleaning
+        // because `accounts_index.uncleaned_roots` should be correct
+        db.flush_accounts_cache(true, None);
+        db.clean_accounts(None);
+
+        // The `zero_lamport_account_key` is still alive in slot 1, so refcount for the
+        // pubkey should be 2
+        assert_eq!(
+            db.accounts_index
+                .ref_count_from_storage(&zero_lamport_account_key),
+            2
+        );
+        assert_eq!(
+            db.accounts_index.ref_count_from_storage(&other_account_key),
+            1
+        );
+
+        // The zero-lamport account in slot 2 should not be purged yet, because the
+        // entry in slot 1 is blocking cleanup of the zero-lamport account.
+        let max_root = None;
+        assert_eq!(
+            db.do_load(&Ancestors::default(), &zero_lamport_account_key, max_root,)
+                .unwrap()
+                .0
+                .lamports,
+            0
+        );
     }
 
     struct ScanTracker {
