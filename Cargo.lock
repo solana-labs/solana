@@ -4740,6 +4740,7 @@ dependencies = [
  "serde",
  "solana-budget-program",
  "solana-logger 1.5.11",
+ "solana-measure",
  "solana-metrics",
  "solana-rayon-threadlimit",
  "solana-sdk",

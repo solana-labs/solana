@@ -145,6 +145,7 @@ impl Tvu {
             &fetch_sender,
             Some(bank_forks.clone()),
             &exit,
+            None,
         );
 
         let (verified_sender, verified_receiver) = unbounded();

@@ -30,7 +30,7 @@ impl ServeRepairService {
             serve_repair_socket.clone(),
             &exit,
             request_sender,
-            Recycler::default(),
+            Recycler::new_without_limit("serve-repair-receiver-recycler-shrink-stats"),
             "serve_repair_receiver",
         );
         let (response_sender, response_receiver) = channel();

@@ -29,7 +29,14 @@ impl FetchStage {
     ) -> (Self, PacketReceiver) {
         let (sender, receiver) = channel();
         (
-            Self::new_with_sender(sockets, tpu_forwards_sockets, exit, &sender, &poh_recorder),
+            Self::new_with_sender(
+                sockets,
+                tpu_forwards_sockets,
+                exit,
+                &sender,
+                &poh_recorder,
+                None,
+            ),
             receiver,
         )
     }
@@ -39,6 +46,7 @@ impl FetchStage {
         exit: &Arc<AtomicBool>,
         sender: &PacketSender,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
+        allocated_packet_limit: Option<u32>,
     ) -> Self {
         let tx_sockets = sockets.into_iter().map(Arc::new).collect();
         let tpu_forwards_sockets = tpu_forwards_sockets.into_iter().map(Arc::new).collect();
@@ -48,6 +56,7 @@ impl FetchStage {
             exit,
             &sender,
             &poh_recorder,
+            allocated_packet_limit,
         )
     }
 
@@ -92,8 +101,10 @@ impl FetchStage {
         exit: &Arc<AtomicBool>,
         sender: &PacketSender,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
+        limit: Option<u32>,
     ) -> Self {
-        let recycler: PacketsRecycler = Recycler::warmed(1000, 1024);
+        let recycler: PacketsRecycler =
+            Recycler::warmed(1000, 1024, limit, "fetch_stage_recycler_shrink");
 
         let tpu_threads = sockets.into_iter().map(|socket| {
             streamer::receiver(

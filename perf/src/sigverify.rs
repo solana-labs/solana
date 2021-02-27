@@ -194,13 +194,13 @@ fn get_packet_offsets(packet: &Packet, current_offset: u32) -> PacketOffsets {
 
 pub fn generate_offsets(batches: &[Packets], recycler: &Recycler<TxOffset>) -> TxOffsets {
     debug!("allocating..");
-    let mut signature_offsets: PinnedVec<_> = recycler.allocate("sig_offsets");
+    let mut signature_offsets: PinnedVec<_> = recycler.allocate().unwrap();
     signature_offsets.set_pinnable();
-    let mut pubkey_offsets: PinnedVec<_> = recycler.allocate("pubkey_offsets");
+    let mut pubkey_offsets: PinnedVec<_> = recycler.allocate().unwrap();
     pubkey_offsets.set_pinnable();
-    let mut msg_start_offsets: PinnedVec<_> = recycler.allocate("msg_start_offsets");
+    let mut msg_start_offsets: PinnedVec<_> = recycler.allocate().unwrap();
     msg_start_offsets.set_pinnable();
-    let mut msg_sizes: PinnedVec<_> = recycler.allocate("msg_size_offsets");
+    let mut msg_sizes: PinnedVec<_> = recycler.allocate().unwrap();
     msg_sizes.set_pinnable();
     let mut current_packet = 0;
     let mut v_sig_lens = Vec::new();
@@ -347,7 +347,7 @@ pub fn ed25519_verify(
 
     debug!("CUDA ECDSA for {}", batch_size(batches));
     debug!("allocating out..");
-    let mut out = recycler_out.allocate("out_buffer");
+    let mut out = recycler_out.allocate().unwrap();
     out.set_pinnable();
     let mut elems = Vec::new();
     let mut rvs = Vec::new();
@@ -678,8 +678,8 @@ mod tests {
 
         let batches = generate_packet_vec(&packet, n, 2);
 
-        let recycler = Recycler::default();
-        let recycler_out = Recycler::default();
+        let recycler = Recycler::new_without_limit("");
+        let recycler_out = Recycler::new_without_limit("");
         // verify packets
         let ans = sigverify::ed25519_verify(&batches, &recycler, &recycler_out);
 
@@ -697,8 +697,8 @@ mod tests {
 
         let batches = generate_packet_vec(&packet, 1, 1);
 
-        let recycler = Recycler::default();
-        let recycler_out = Recycler::default();
+        let recycler = Recycler::new_without_limit("");
+        let recycler_out = Recycler::new_without_limit("");
         // verify packets
         let ans = sigverify::ed25519_verify(&batches, &recycler, &recycler_out);
 
@@ -735,8 +735,8 @@ mod tests {
 
         batches[0].packets.push(packet);
 
-        let recycler = Recycler::default();
-        let recycler_out = Recycler::default();
+        let recycler = Recycler::new_without_limit("");
+        let recycler_out = Recycler::new_without_limit("");
         // verify packets
         let ans = sigverify::ed25519_verify(&batches, &recycler, &recycler_out);
 
@@ -755,8 +755,8 @@ mod tests {
         let tx = test_multisig_tx();
         let packet = sigverify::make_packet_from_transaction(tx);
 
-        let recycler = Recycler::default();
-        let recycler_out = Recycler::default();
+        let recycler = Recycler::new_without_limit("");
+        let recycler_out = Recycler::new_without_limit("");
         for _ in 0..50 {
             let n = thread_rng().gen_range(1, 30);
             let num_batches = thread_rng().gen_range(2, 30);
