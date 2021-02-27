@@ -46,8 +46,8 @@ use solana_sdk::{
     signature::{Keypair, Signer},
 };
 use solana_validator::{
-    dashboard::Dashboard, get_validator_rpc_addr, new_spinner_progress_bar, println_name_value,
-    record_start, redirect_stderr_to_file,
+    admin_rpc_service, dashboard::Dashboard, new_spinner_progress_bar, println_name_value,
+    redirect_stderr_to_file,
 };
 use std::{
     collections::{HashSet, VecDeque},
@@ -67,9 +67,11 @@ use std::{
 
 #[derive(Debug, PartialEq)]
 enum Operation {
+    Exit,
     Initialize,
     Monitor,
     Run,
+    SetLogFilter { filter: String },
     WaitForRestartWindow { min_idle_time_in_minutes: usize },
 }
 
@@ -82,13 +84,10 @@ fn wait_for_restart_window(
 
     let min_idle_slots = (min_idle_time_in_minutes as f64 * 60. / DEFAULT_S_PER_SLOT) as Slot;
 
-    let rpc_addr = get_validator_rpc_addr(&ledger_path).map_err(|err| {
-        format!(
-            "Unable to read validator RPC address from {}: {}",
-            ledger_path.display(),
-            err
-        )
-    })?;
+    let admin_client = admin_rpc_service::connect(&ledger_path);
+    let rpc_addr = admin_rpc_service::runtime()
+        .block_on(async move { admin_client.await?.rpc_addr().await })
+        .map_err(|err| format!("Unable to get validator RPC address: {}", err))?;
 
     let rpc_client = match rpc_addr {
         None => return Err("RPC not available".into()),
@@ -1085,7 +1084,13 @@ pub fn main() {
                 .value_name("PORT")
                 .takes_value(true)
                 .validator(solana_validator::port_validator)
-                .help("Use this port for JSON RPC and the next port for the RPC websocket"),
+                .help("Enable JSON RPC on this port, and the next port for the RPC websocket"),
+        )
+        .arg(
+            Arg::with_name("minimal_rpc_api")
+                .long("--minimal-rpc-api")
+                .takes_value(false)
+                .help("Only expose the RPC methods required to serve snapshots to other nodes"),
         )
         .arg(
             Arg::with_name("private_rpc")
@@ -1098,20 +1103,6 @@ pub fn main() {
                 .long("--no-port-check")
                 .takes_value(false)
                 .help("Do not perform TCP/UDP reachable port checks at start-up")
-        )
-        .arg(
-            Arg::with_name("enable_rpc_exit")
-                .long("enable-rpc-exit")
-                .takes_value(false)
-                .help("Enable the JSON RPC 'validatorExit' API. \
-                       Only enable in a debug environment"),
-        )
-        .arg(
-            Arg::with_name("enable_rpc_set_log_filter")
-                .long("enable-rpc-set-log-filter")
-                .takes_value(false)
-                .help("Enable the JSON RPC 'setLogFilter' API. \
-                       Only enable in a debug environment"),
         )
         .arg(
             Arg::with_name("enable_rpc_transaction_history")
@@ -1646,16 +1637,31 @@ pub fn main() {
         )
         .after_help("The default subcommand is run")
         .subcommand(
+             SubCommand::with_name("exit")
+             .about("Send an exit request to the validator")
+         )
+        .subcommand(
              SubCommand::with_name("init")
              .about("Initialize the ledger directory then exit")
+         )
+        .subcommand(
+             SubCommand::with_name("monitor")
+             .about("Monitor the validator")
          )
         .subcommand(
              SubCommand::with_name("run")
              .about("Run the validator")
          )
         .subcommand(
-             SubCommand::with_name("monitor")
-             .about("Monitor the validator")
+             SubCommand::with_name("set-log-filter")
+             .about("Adjust the validator log filter")
+             .arg(
+                 Arg::with_name("filter")
+                     .takes_value(true)
+                     .index(1)
+                     .help("New filter using the same format as the RUST_LOG environment variable")
+             )
+             .after_help("Note: the new filter only applies to the currently running validator instance")
          )
         .subcommand(
              SubCommand::with_name("wait-for-restart-window")
@@ -1675,8 +1681,12 @@ pub fn main() {
 
     let operation = match matches.subcommand() {
         ("", _) | ("run", _) => Operation::Run,
+        ("exit", _) => Operation::Exit,
         ("init", _) => Operation::Initialize,
         ("monitor", _) => Operation::Monitor,
+        ("set-log-filter", Some(subcommand_matches)) => Operation::SetLogFilter {
+            filter: value_t_or_exit!(subcommand_matches, "filter", String),
+        },
         ("wait-for-restart-window", Some(subcommand_matches)) => Operation::WaitForRestartWindow {
             min_idle_time_in_minutes: value_t_or_exit!(
                 subcommand_matches,
@@ -1792,8 +1802,6 @@ pub fn main() {
         expected_shred_version: value_t!(matches, "expected_shred_version", u16).ok(),
         new_hard_forks: hardforks_of(&matches, "hard_forks"),
         rpc_config: JsonRpcConfig {
-            enable_validator_exit: matches.is_present("enable_rpc_exit"),
-            enable_set_log_filter: matches.is_present("enable_rpc_set_log_filter"),
             enable_rpc_transaction_history: matches.is_present("enable_rpc_transaction_history"),
             enable_cpi_and_log_storage: matches.is_present("enable_cpi_and_log_storage"),
             enable_bigtable_ledger_storage: matches
@@ -1803,6 +1811,7 @@ pub fn main() {
             faucet_addr: matches.value_of("rpc_faucet_addr").map(|address| {
                 solana_net_utils::parse_host_port(address).expect("failed to parse faucet address")
             }),
+            minimal_api: matches.is_present("minimal_rpc_api"),
             max_multiple_accounts: Some(value_t_or_exit!(
                 matches,
                 "rpc_max_multiple_accounts",
@@ -2038,8 +2047,28 @@ pub fn main() {
     });
 
     match operation {
+        Operation::Exit => {
+            let admin_client = admin_rpc_service::connect(&ledger_path);
+            admin_rpc_service::runtime()
+                .block_on(async move { admin_client.await?.exit().await })
+                .unwrap_or_else(|err| {
+                    println!("exit request failed: {}", err);
+                    exit(1);
+                });
+            exit(0);
+        }
+        Operation::SetLogFilter { filter } => {
+            let admin_client = admin_rpc_service::connect(&ledger_path);
+            admin_rpc_service::runtime()
+                .block_on(async move { admin_client.await?.set_log_filter(filter).await })
+                .unwrap_or_else(|err| {
+                    println!("set log filter failed: {}", err);
+                    exit(1);
+                });
+            exit(0);
+        }
         Operation::Monitor => {
-            let dashboard = Dashboard::new(&ledger_path, None).unwrap_or_else(|err| {
+            let dashboard = Dashboard::new(&ledger_path, None, None).unwrap_or_else(|err| {
                 println!(
                     "Error: Unable to connect to validator at {}: {:?}",
                     ledger_path.display(),
@@ -2070,15 +2099,6 @@ pub fn main() {
         exit(1);
     });
 
-    record_start(
-        &ledger_path,
-        validator_config
-            .rpc_addrs
-            .as_ref()
-            .map(|(rpc_addr, _)| rpc_addr),
-    )
-    .unwrap_or_else(|err| println!("Error: failed to record validator start: {}", err));
-
     let logfile = {
         let logfile = matches
             .value_of("logfile")
@@ -2097,6 +2117,15 @@ pub fn main() {
 
     info!("{} {}", crate_name!(), solana_version::version!());
     info!("Starting validator with: {:#?}", std::env::args_os());
+
+    admin_rpc_service::run(
+        &ledger_path,
+        admin_rpc_service::AdminRpcRequestMetadata {
+            rpc_addr: validator_config.rpc_addrs.map(|(rpc_addr, _)| rpc_addr),
+            start_time: std::time::SystemTime::now(),
+            validator_exit: validator_config.validator_exit.clone(),
+        },
+    );
 
     let gossip_host: IpAddr = matches
         .value_of("gossip_host")

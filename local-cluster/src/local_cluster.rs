@@ -667,7 +667,7 @@ impl Cluster for LocalCluster {
             entry_point_info
                 .map(|entry_point_info| vec![entry_point_info])
                 .unwrap_or_default(),
-            &cluster_validator_info.config,
+            &safe_clone_config(&cluster_validator_info.config),
             true, // should_check_duplicate_instance
         );
         cluster_validator_info.validator = Some(restarted_node);
@@ -707,8 +707,6 @@ mod test {
     #[test]
     fn test_local_cluster_start_and_exit_with_config() {
         solana_logger::setup();
-        let mut validator_config = ValidatorConfig::default();
-        validator_config.rpc_config.enable_validator_exit = true;
         const NUM_NODES: usize = 1;
         let mut config = ClusterConfig {
             validator_configs: make_identical_validator_configs(

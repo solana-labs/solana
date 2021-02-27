@@ -241,37 +241,6 @@ fn test_spend_and_verify_all_nodes_env_num_nodes() {
     );
 }
 
-#[allow(unused_attributes)]
-#[test]
-#[should_panic]
-fn test_validator_exit_default_config_should_panic() {
-    solana_logger::setup();
-    error!("test_validator_exit_default_config_should_panic");
-    let num_nodes = 2;
-    let local = LocalCluster::new_with_equal_stakes(num_nodes, 10_000, 100);
-    cluster_tests::validator_exit(&local.entry_point_info, num_nodes);
-}
-
-#[test]
-#[serial]
-fn test_validator_exit_2() {
-    solana_logger::setup();
-    error!("test_validator_exit_2");
-    let num_nodes = 2;
-    let mut validator_config = ValidatorConfig::default();
-    validator_config.rpc_config.enable_validator_exit = true;
-    validator_config.wait_for_supermajority = Some(0);
-
-    let mut config = ClusterConfig {
-        cluster_lamports: 10_000,
-        node_stakes: vec![100; num_nodes],
-        validator_configs: make_identical_validator_configs(&validator_config, num_nodes),
-        ..ClusterConfig::default()
-    };
-    let local = LocalCluster::new(&mut config);
-    cluster_tests::validator_exit(&local.entry_point_info, num_nodes);
-}
-
 // Cluster needs a supermajority to remain, so the minimum size for this test is 4
 #[test]
 #[serial]
@@ -279,8 +248,7 @@ fn test_leader_failure_4() {
     solana_logger::setup();
     error!("test_leader_failure_4");
     let num_nodes = 4;
-    let mut validator_config = ValidatorConfig::default();
-    validator_config.rpc_config.enable_validator_exit = true;
+    let validator_config = ValidatorConfig::default();
     let mut config = ClusterConfig {
         cluster_lamports: 10_000,
         node_stakes: vec![100; 4],
@@ -288,8 +256,15 @@ fn test_leader_failure_4() {
         ..ClusterConfig::default()
     };
     let local = LocalCluster::new(&mut config);
+
     cluster_tests::kill_entry_and_spend_and_verify_rest(
         &local.entry_point_info,
+        &local
+            .validators
+            .get(&local.entry_point_info.id)
+            .unwrap()
+            .config
+            .validator_exit,
         &local.funding_keypair,
         num_nodes,
         config.ticks_per_slot * config.poh_config.target_tick_duration.as_millis() as u64,
@@ -647,12 +622,11 @@ fn test_kill_partition_switch_threshold_progress() {
 fn test_two_unbalanced_stakes() {
     solana_logger::setup();
     error!("test_two_unbalanced_stakes");
-    let mut validator_config = ValidatorConfig::default();
+    let validator_config = ValidatorConfig::default();
     let num_ticks_per_second = 100;
     let num_ticks_per_slot = 10;
     let num_slots_per_epoch = MINIMUM_SLOTS_PER_EPOCH as u64;
 
-    validator_config.rpc_config.enable_validator_exit = true;
     let mut cluster = LocalCluster::new(&mut ClusterConfig {
         node_stakes: vec![999_990, 3],
         cluster_lamports: 1_000_000,
@@ -1388,8 +1362,7 @@ fn test_faulty_node(faulty_node_type: BroadcastStageType) {
 #[test]
 fn test_wait_for_max_stake() {
     solana_logger::setup();
-    let mut validator_config = ValidatorConfig::default();
-    validator_config.rpc_config.enable_validator_exit = true;
+    let validator_config = ValidatorConfig::default();
     let mut config = ClusterConfig {
         cluster_lamports: 10_000,
         node_stakes: vec![100; 4],
@@ -1410,9 +1383,10 @@ fn test_wait_for_max_stake() {
 // votable, then B_{i+1} still chains to B_i
 fn test_no_voting() {
     solana_logger::setup();
-    let mut validator_config = ValidatorConfig::default();
-    validator_config.rpc_config.enable_validator_exit = true;
-    validator_config.voting_disabled = true;
+    let validator_config = ValidatorConfig {
+        voting_disabled: true,
+        ..ValidatorConfig::default()
+    };
     let mut config = ClusterConfig {
         cluster_lamports: 10_000,
         node_stakes: vec![100],
@@ -2498,11 +2472,12 @@ fn setup_snapshot_validator_config(
     let (account_storage_dirs, account_storage_paths) = generate_account_paths(num_account_paths);
 
     // Create the validator config
-    let mut validator_config = ValidatorConfig::default();
-    validator_config.rpc_config.enable_validator_exit = true;
-    validator_config.snapshot_config = Some(snapshot_config);
-    validator_config.account_paths = account_storage_paths;
-    validator_config.accounts_hash_interval_slots = snapshot_interval_slots;
+    let validator_config = ValidatorConfig {
+        snapshot_config: Some(snapshot_config),
+        account_paths: account_storage_paths,
+        accounts_hash_interval_slots: snapshot_interval_slots,
+        ..ValidatorConfig::default()
+    };
 
     SnapshotValidatorConfig {
         _snapshot_dir: snapshot_dir,
