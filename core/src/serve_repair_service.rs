@@ -32,6 +32,7 @@ impl ServeRepairService {
             request_sender,
             Recycler::new_without_limit("serve-repair-receiver-recycler-shrink-stats"),
             "serve_repair_receiver",
+            1,
         );
         let (response_sender, response_receiver) = channel();
         let t_responder =
