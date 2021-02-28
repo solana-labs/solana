@@ -7,7 +7,6 @@ use crate::{
     result::{Error, Result},
     rpc_subscriptions::RpcSubscriptions,
     sigverify,
-    verified_vote_packets::VerifiedVotePackets,
     vote_stake_tracker::VoteStakeTracker,
 };
 use crossbeam_channel::{
@@ -369,45 +368,29 @@ impl ClusterInfoVoteListener {
         poh_recorder: Arc<Mutex<PohRecorder>>,
         verified_packets_sender: &CrossbeamSender<Vec<Packets>>,
     ) -> Result<()> {
-        let mut verified_vote_packets = VerifiedVotePackets::default();
+        const WINDOW_DURATION: Duration = Duration::from_millis(GOSSIP_SLEEP_MILLIS);
+        const RECV_TIMEOUT: Duration = Duration::from_millis(200);
         let mut time_since_lock = Instant::now();
-        let mut update_version = 0;
-        loop {
-            if exit.load(Ordering::Relaxed) {
-                return Ok(());
+        let mut vote_packets = HashMap::new();
+        while !exit.load(Ordering::Relaxed) {
+            match verified_vote_label_packets_receiver.recv_timeout(RECV_TIMEOUT) {
+                Ok(votes) => vote_packets.extend(votes),
+                Err(RecvTimeoutError::Disconnected) => break,
+                Err(RecvTimeoutError::Timeout) => (),
             }
-
-            if let Err(e) = verified_vote_packets.receive_and_process_vote_packets(
-                &verified_vote_label_packets_receiver,
-                &mut update_version,
-            ) {
-                match e {
-                    Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Disconnected) => {
-                        return Ok(());
-                    }
-                    Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                    _ => {
-                        error!("thread {:?} error {:?}", thread::current().name(), e);
-                    }
-                }
-            }
-
-            if time_since_lock.elapsed().as_millis() > GOSSIP_SLEEP_MILLIS as u128 {
-                let bank = poh_recorder.lock().unwrap().bank();
-                if let Some(bank) = bank {
-                    let last_version = bank.last_vote_sync.load(Ordering::Relaxed);
-                    let (new_version, msgs) = verified_vote_packets.get_latest_votes(last_version);
-                    verified_packets_sender.send(vec![msgs])?;
-                    #[allow(deprecated)]
-                    bank.last_vote_sync.compare_and_swap(
-                        last_version,
-                        new_version,
-                        Ordering::Relaxed,
-                    );
+            vote_packets.extend(verified_vote_label_packets_receiver.try_iter().flatten());
+            if time_since_lock.elapsed() > WINDOW_DURATION {
+                // If the bank is none, then we are not the leader
+                // and no reason to send the votes.
+                if let Some(_bank) = poh_recorder.lock().unwrap().bank() {
+                    let vote_packets = vote_packets.drain().flat_map(|(_, v)| v.packets).collect();
+                    let vote_packets = Packets::new(vote_packets);
+                    verified_packets_sender.send(vec![vote_packets])?;
                     time_since_lock = Instant::now();
                 }
             }
         }
+        Ok(())
     }
 
     fn process_votes_loop(

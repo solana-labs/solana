@@ -833,6 +833,7 @@ pub struct Bank {
     feature_builtins: Arc<Vec<(Builtin, Pubkey, ActivationType)>>,
 
     /// Last time when the cluster info vote listener has synced with this bank
+    /// Deprecated/Unused.
     pub last_vote_sync: AtomicU64,
 
     /// Protocol-level rewards that were distributed by this bank

@@ -76,7 +76,6 @@ pub mod transaction_status_service;
 pub mod tree_diff;
 pub mod tvu;
 pub mod validator;
-pub mod verified_vote_packets;
 pub mod vote_stake_tracker;
 pub mod weighted_shuffle;
 pub mod window_service;
