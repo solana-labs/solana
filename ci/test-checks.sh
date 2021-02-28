@@ -12,6 +12,16 @@ cargo="$(readlink -f "./cargo")"
 
 scripts/increment-cargo-version.sh check
 
+# Disallow uncommitted Cargo.lock changes
+(
+  _ scripts/cargo-for-all-lock-files.sh tree
+  set +e
+  if ! _ git diff --exit-code; then
+    echo -e "\nError: Uncommitted Cargo.lock changes" 1>&2
+    exit 1
+  fi
+)
+
 echo --- build environment
 (
   set -x
