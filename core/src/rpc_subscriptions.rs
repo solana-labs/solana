@@ -393,7 +393,6 @@ struct Subscriptions {
     gossip_program_subscriptions: Arc<RpcProgramSubscriptions>,
     gossip_signature_subscriptions: Arc<RpcSignatureSubscriptions>,
     slot_subscriptions: Arc<RpcSlotSubscriptions>,
-    // TODO: Figure out when to remove a subscriber (some number of slots)
     slots_updates_subscriptions: Arc<RpcSlotUpdateSubscriptions>,
     vote_subscriptions: Arc<RpcVoteSubscriptions>,
     root_subscriptions: Arc<RpcRootSubscriptions>,
