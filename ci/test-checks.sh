@@ -52,11 +52,12 @@ else
 fi
 
 _ ci/order-crates-for-publishing.py
-_ "$cargo" stable fmt --all -- --check
 
 # -Z... is needed because of clippy bug: https://github.com/rust-lang/rust-clippy/issues/4612
 # run nightly clippy for `sdk/` as there's a moderate amount of nightly-only code there
 _ "$cargo" nightly clippy -Zunstable-options --workspace --all-targets -- --deny=warnings --deny=clippy::integer_arithmetic
+
+_ "$cargo" stable fmt --all -- --check
 
 cargo_audit_ignores=(
   # failure is officially deprecated/unmaintained
@@ -100,9 +101,9 @@ _ scripts/cargo-for-all-lock-files.sh +"$rust_stable" audit "${cargo_audit_ignor
     echo "+++ do_bpf_checks $project"
     (
       cd "$project"
+      _ "$cargo" nightly clippy -- --deny=warnings --allow=clippy::missing_safety_doc
       _ "$cargo" stable fmt -- --check
       _ "$cargo" nightly test
-      _ "$cargo" nightly clippy -- --deny=warnings --allow=clippy::missing_safety_doc
     )
   done
 }
