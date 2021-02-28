@@ -477,7 +477,7 @@ fn do_process_blockstore_from_root(
             if opts.full_leader_cache {
                 leader_schedule_cache.set_max_schedules(std::usize::MAX);
             }
-            let initial_forks = load_frozen_forks(
+            let mut initial_forks = load_frozen_forks(
                 &bank,
                 &meta,
                 blockstore,
@@ -487,6 +487,8 @@ fn do_process_blockstore_from_root(
                 recyclers,
                 transaction_status_sender,
             )?;
+            initial_forks.sort_by_key(|bank| bank.slot());
+
             (initial_forks, leader_schedule_cache)
         } else {
             // If there's no meta for the input `start_slot`, then we started from a snapshot
