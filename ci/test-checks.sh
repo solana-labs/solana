@@ -84,6 +84,12 @@ cargo_audit_ignores=(
   # Blocked on predicates v1.0.6 removing its dependency on `difference`
   --ignore RUSTSEC-2020-0095
 
+  # generic-array: arr! macro erases lifetimes
+  #
+  # Blocked on libsecp256k1 releasing with upgraded dependencies
+  # https://github.com/paritytech/libsecp256k1/issues/66
+  --ignore RUSTSEC-2020-0146
+
 )
 _ scripts/cargo-for-all-lock-files.sh +"$rust_stable" audit "${cargo_audit_ignores[@]}"
 
