@@ -178,6 +178,7 @@ impl Tvu {
             tvu_config.repair_validators,
             completed_data_sets_sender,
             max_slots,
+            Some(subscriptions.clone()),
         );
 
         let (ledger_cleanup_slot_sender, ledger_cleanup_slot_receiver) = channel();

@@ -12,6 +12,7 @@ use solana_client::{
     },
     rpc_response::{
         Response as RpcResponse, RpcKeyedAccount, RpcLogsResponse, RpcSignatureResult, SlotInfo,
+        SlotUpdate,
     },
 };
 #[cfg(test)]
@@ -138,6 +139,30 @@ pub trait RpcSolPubSub {
         name = "slotUnsubscribe"
     )]
     fn slot_unsubscribe(&self, meta: Option<Self::Metadata>, id: SubscriptionId) -> Result<bool>;
+
+    // Get series of updates for all slots
+    #[pubsub(
+        subscription = "slotsUpdatesNotification",
+        subscribe,
+        name = "slotsUpdatesSubscribe"
+    )]
+    fn slots_updates_subscribe(
+        &self,
+        meta: Self::Metadata,
+        subscriber: Subscriber<Arc<SlotUpdate>>,
+    );
+
+    // Unsubscribe from slots updates notification subscription.
+    #[pubsub(
+        subscription = "slotsUpdatesNotification",
+        unsubscribe,
+        name = "slotsUpdatesUnsubscribe"
+    )]
+    fn slots_updates_unsubscribe(
+        &self,
+        meta: Option<Self::Metadata>,
+        id: SubscriptionId,
+    ) -> Result<bool>;
 
     // Get notification when vote is encountered
     #[pubsub(subscription = "voteNotification", subscribe, name = "voteSubscribe")]
@@ -418,6 +443,40 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
     fn slot_unsubscribe(&self, _meta: Option<Self::Metadata>, id: SubscriptionId) -> Result<bool> {
         info!("slot_unsubscribe");
         if self.subscriptions.remove_slot_subscription(&id) {
+            Ok(true)
+        } else {
+            Err(Error {
+                code: ErrorCode::InvalidParams,
+                message: "Invalid Request: Subscription id does not exist".into(),
+                data: None,
+            })
+        }
+    }
+
+    fn slots_updates_subscribe(
+        &self,
+        _meta: Self::Metadata,
+        subscriber: Subscriber<Arc<SlotUpdate>>,
+    ) {
+        info!("slots_updates_subscribe");
+        if let Err(err) = self.check_subscription_count() {
+            subscriber.reject(err).unwrap_or_default();
+            return;
+        }
+        let id = self.uid.fetch_add(1, atomic::Ordering::Relaxed);
+        let sub_id = SubscriptionId::Number(id as u64);
+        info!("slots_updates_subscribe: id={:?}", sub_id);
+        self.subscriptions
+            .add_slots_updates_subscription(sub_id, subscriber);
+    }
+
+    fn slots_updates_unsubscribe(
+        &self,
+        _meta: Option<Self::Metadata>,
+        id: SubscriptionId,
+    ) -> Result<bool> {
+        info!("slots_updates_unsubscribe");
+        if self.subscriptions.remove_slots_updates_subscription(&id) {
             Ok(true)
         } else {
             Err(Error {
