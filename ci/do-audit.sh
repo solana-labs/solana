@@ -43,6 +43,3 @@ cargo_audit_ignores=(
 
 )
 scripts/cargo-for-all-lock-files.sh +"$rust_stable" audit "${cargo_audit_ignores[@]}"
-
-cd "${src_root}/programs/bpf"
-"$cargo" stable audit
