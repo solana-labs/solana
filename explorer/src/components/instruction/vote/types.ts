@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-redeclare */
 
-import { array, number, pick, string, StructType } from "superstruct";
+import { array, number, optional, pick, string, StructType } from "superstruct";
 import { Pubkey } from "validators/pubkey";
 
 export type VoteInfo = StructType<typeof VoteInfo>;
@@ -12,6 +12,6 @@ export const VoteInfo = pick({
   vote: pick({
     hash: string(),
     slots: array(number()),
-    timestamp: number(),
+    timestamp: optional(number()),
   }),
 });

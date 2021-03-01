@@ -69,12 +69,14 @@ export function VoteDetailsCard(props: {
         </td>
       </tr>
 
-      <tr>
-        <td>Timestamp</td>
-        <td className="text-lg-right text-monospace">
-          {displayTimestamp(info.vote.timestamp * 1000)}
-        </td>
-      </tr>
+      {info.vote.timestamp && (
+        <tr>
+          <td>Timestamp</td>
+          <td className="text-lg-right text-monospace">
+            {displayTimestamp(info.vote.timestamp * 1000)}
+          </td>
+        </tr>
+      )}
 
       <tr>
         <td>Slots</td>
