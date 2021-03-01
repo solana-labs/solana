@@ -95,7 +95,7 @@ _ scripts/cargo-for-all-lock-files.sh +"$rust_stable" audit "${cargo_audit_ignor
 
 {
   cd programs/bpf
-  _ "$cargo" stable audit
+  _ "$cargo" stable audit "${cargo_audit_ignores[@]}"
   for project in rust/*/ ; do
     echo "+++ do_bpf_checks $project"
     (
