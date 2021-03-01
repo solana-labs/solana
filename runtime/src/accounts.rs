@@ -19,7 +19,7 @@ use solana_sdk::{
     account::Account,
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-    clock::{Epoch, Slot},
+    clock::Slot,
     feature_set::{self, FeatureSet},
     fee_calculator::{FeeCalculator, FeeConfig},
     genesis_config::ClusterType,
@@ -91,9 +91,6 @@ pub struct Accounts {
     /// my slot
     pub slot: Slot,
 
-    /// my epoch
-    pub epoch: Epoch,
-
     /// Single global AccountsDb
     pub accounts_db: Arc<AccountsDb>,
 
@@ -145,12 +142,11 @@ impl Accounts {
         }
     }
 
-    pub fn new_from_parent(parent: &Accounts, slot: Slot, parent_slot: Slot, epoch: Epoch) -> Self {
+    pub fn new_from_parent(parent: &Accounts, slot: Slot, parent_slot: Slot) -> Self {
         let accounts_db = parent.accounts_db.clone();
         accounts_db.set_hash(slot, parent_slot);
         Self {
             slot,
-            epoch,
             accounts_db,
             account_locks: Mutex::new(AccountLocks::default()),
         }
