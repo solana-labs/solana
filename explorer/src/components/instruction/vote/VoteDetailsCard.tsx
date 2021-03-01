@@ -1,91 +1,127 @@
 import React from "react";
-import { ParsedInstruction, SignatureResult } from "@solana/web3.js";
-import { coerce } from "superstruct";
+import { PublicKey } from "@solana/web3.js";
+import { coerce, Struct } from "superstruct";
 import { ParsedInfo } from "validators";
-import { VoteInfo } from "./types";
+import {
+  UpdateCommissionInfo,
+  UpdateValidatorInfo,
+  VoteInfo,
+  VoteSwitchInfo,
+  WithdrawInfo,
+  AuthorizeInfo,
+} from "./types";
 import { InstructionCard } from "../InstructionCard";
 import { Address } from "components/common/Address";
 import { displayTimestamp } from "utils/date";
+import { UnknownDetailsCard } from "../UnknownDetailsCard";
+import { InstructionDetailsProps } from "components/transaction/InstructionsSection";
+import { camelToTitleCase } from "utils";
+import { useCluster } from "providers/cluster";
+import { reportError } from "utils/sentry";
 
-export function VoteDetailsCard(props: {
-  ix: ParsedInstruction;
-  index: number;
-  result: SignatureResult;
-  innerCards?: JSX.Element[];
-  childIndex?: number;
-}) {
-  const { ix, index, result, innerCards, childIndex } = props;
-  const parsed = coerce(props.ix.parsed, ParsedInfo);
-  const info = coerce(parsed.info, VoteInfo);
+export function VoteDetailsCard(props: InstructionDetailsProps) {
+  const { url } = useCluster();
+
+  try {
+    const parsed = coerce(props.ix.parsed, ParsedInfo);
+
+    switch (parsed.type) {
+      case "vote":
+        return renderDetails<VoteInfo>(props, parsed, VoteInfo);
+      case "authorize":
+        return renderDetails<AuthorizeInfo>(props, parsed, AuthorizeInfo);
+      case "withdraw":
+        return renderDetails<WithdrawInfo>(props, parsed, WithdrawInfo);
+      case "updateValidator":
+        return renderDetails<UpdateValidatorInfo>(
+          props,
+          parsed,
+          UpdateValidatorInfo
+        );
+      case "updateCommission":
+        return renderDetails<UpdateCommissionInfo>(
+          props,
+          parsed,
+          UpdateCommissionInfo
+        );
+      case "voteSwitch":
+        return renderDetails<VoteSwitchInfo>(props, parsed, VoteSwitchInfo);
+    }
+  } catch (error) {
+    reportError(error, {
+      url,
+    });
+  }
+
+  return <UnknownDetailsCard {...props} />;
+}
+
+function renderDetails<T>(
+  props: InstructionDetailsProps,
+  parsed: ParsedInfo,
+  struct: Struct<T>
+) {
+  const info = coerce(parsed.info, struct);
+  const attributes: JSX.Element[] = [];
+
+  for (let [key, value] of Object.entries(info)) {
+    if (value instanceof PublicKey) {
+      value = <Address pubkey={value} alignRight link />;
+    }
+
+    if (key === "vote") {
+      attributes.push(
+        <tr key="vote-hash">
+          <td>Vote Hash</td>
+          <td className="text-lg-right">
+            <pre className="d-inline-block text-left mb-0">{value.hash}</pre>
+          </td>
+        </tr>
+      );
+
+      if (value.timestamp) {
+        attributes.push(
+          <tr>
+            <td>Timestamp</td>
+            <td className="text-lg-right text-monospace">
+              {displayTimestamp(value.timestamp * 1000)}
+            </td>
+          </tr>
+        );
+      }
+
+      attributes.push(
+        <tr key="vote-slots">
+          <td>Slots</td>
+          <td className="text-lg-right text-monospace">
+            <pre className="d-inline-block text-left mb-0">
+              {value.slots.join("\n")}
+            </pre>
+          </td>
+        </tr>
+      );
+    } else {
+      attributes.push(
+        <tr key={key}>
+          <td>{camelToTitleCase(key)} </td>
+          <td className="text-lg-right">{value}</td>
+        </tr>
+      );
+    }
+  }
 
   return (
     <InstructionCard
-      ix={ix}
-      index={index}
-      result={result}
-      title="Vote"
-      innerCards={innerCards}
-      childIndex={childIndex}
+      {...props}
+      title={`Vote: ${camelToTitleCase(parsed.type)}`}
     >
       <tr>
         <td>Program</td>
         <td className="text-lg-right">
-          <Address pubkey={ix.programId} alignRight link />
+          <Address pubkey={props.ix.programId} alignRight link />
         </td>
       </tr>
-
-      <tr>
-        <td>Vote Account</td>
-        <td className="text-lg-right">
-          <Address pubkey={info.voteAccount} alignRight link />
-        </td>
-      </tr>
-
-      <tr>
-        <td>Vote Authority</td>
-        <td className="text-lg-right">
-          <Address pubkey={info.voteAuthority} alignRight link />
-        </td>
-      </tr>
-
-      <tr>
-        <td>Clock Sysvar</td>
-        <td className="text-lg-right">
-          <Address pubkey={info.clockSysvar} alignRight link />
-        </td>
-      </tr>
-
-      <tr>
-        <td>Slot Hashes Sysvar</td>
-        <td className="text-lg-right">
-          <Address pubkey={info.slotHashesSysvar} alignRight link />
-        </td>
-      </tr>
-
-      <tr>
-        <td>Vote Hash</td>
-        <td className="text-lg-right">
-          <pre className="d-inline-block text-left mb-0">{info.vote.hash}</pre>
-        </td>
-      </tr>
-
-      {info.vote.timestamp && (
-        <tr>
-          <td>Timestamp</td>
-          <td className="text-lg-right text-monospace">
-            {displayTimestamp(info.vote.timestamp * 1000)}
-          </td>
-        </tr>
-      )}
-
-      <tr>
-        <td>Slots</td>
-        <td className="text-lg-right text-monospace">
-          <pre className="d-inline-block text-left mb-0">
-            {info.vote.slots.join("\n")}
-          </pre>
-        </td>
-      </tr>
+      {attributes}
     </InstructionCard>
   );
 }

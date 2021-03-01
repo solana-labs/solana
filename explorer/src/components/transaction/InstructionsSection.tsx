@@ -34,8 +34,17 @@ import {
   useTransactionStatus,
 } from "providers/transactions";
 import { Cluster, useCluster } from "providers/cluster";
-// import { VoteDetailsCard } from "components/instruction/vote/VoteDetailsCard";
 import { UpgradeableBpfLoaderDetailsCard } from "components/instruction/upgradeable-bpf-loader/UpgradeableBpfLoaderDetailsCard";
+import { VoteDetailsCard } from "components/instruction/vote/VoteDetailsCard";
+
+export type InstructionDetailsProps = {
+  tx: ParsedTransaction;
+  ix: ParsedInstruction;
+  index: number;
+  result: SignatureResult;
+  innerCards?: JSX.Element[];
+  childIndex?: number;
+};
 
 export function InstructionsSection({ signature }: SignatureProps) {
   const status = useTransactionStatus(signature);
@@ -171,8 +180,8 @@ function renderInstructionCard({
         return <StakeDetailsCard {...props} />;
       case "spl-memo":
         return <MemoDetailsCard {...props} />;
-      /*case "vote":
-        return <VoteDetailsCard {...props} />;*/
+      case "vote":
+        return <VoteDetailsCard {...props} />;
       default:
         return <UnknownDetailsCard {...props} />;
     }
