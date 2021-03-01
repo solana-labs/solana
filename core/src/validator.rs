@@ -66,6 +66,7 @@ use solana_vote_program::vote_state::VoteState;
 use std::time::Instant;
 use std::{
     collections::HashSet,
+    fmt,
     net::SocketAddr,
     ops::Deref,
     path::{Path, PathBuf},
@@ -127,6 +128,7 @@ pub struct ValidatorConfig {
     pub accounts_db_test_hash_calculation: bool,
     pub accounts_db_use_index_hash_calculation: bool,
     pub tpu_coalesce_ms: u64,
+    pub validator_exit: Arc<RwLock<ValidatorExit>>,
 }
 
 impl Default for ValidatorConfig {
@@ -179,6 +181,7 @@ impl Default for ValidatorConfig {
             accounts_db_test_hash_calculation: false,
             accounts_db_use_index_hash_calculation: true,
             tpu_coalesce_ms: DEFAULT_TPU_COALESCE_MS,
+            validator_exit: Arc::new(RwLock::new(ValidatorExit::default())),
         }
     }
 }
@@ -193,10 +196,16 @@ impl ValidatorExit {
         self.exits.push(exit);
     }
 
-    pub fn exit(self) {
-        for exit in self.exits {
+    pub fn exit(&mut self) {
+        for exit in self.exits.drain(..) {
             exit();
         }
+    }
+}
+
+impl fmt::Debug for ValidatorExit {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} exits", self.exits.len())
     }
 }
 
@@ -218,7 +227,7 @@ struct RpcServices {
 
 pub struct Validator {
     pub id: Pubkey,
-    validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
+    validator_exit: Arc<RwLock<ValidatorExit>>,
     rpc_service: Option<RpcServices>,
     transaction_status_service: Option<TransactionStatusService>,
     rewards_recorder_service: Option<RewardsRecorderService>,
@@ -319,11 +328,15 @@ impl Validator {
         start.stop();
         info!("done. {}", start);
 
-        let mut validator_exit = ValidatorExit::default();
         let exit = Arc::new(AtomicBool::new(false));
-        let exit_ = exit.clone();
-        validator_exit.register_exit(Box::new(move || exit_.store(true, Ordering::Relaxed)));
-        let validator_exit = Arc::new(RwLock::new(Some(validator_exit)));
+        {
+            let exit = exit.clone();
+            config
+                .validator_exit
+                .write()
+                .unwrap()
+                .register_exit(Box::new(move || exit.store(true, Ordering::Relaxed)));
+        }
 
         let (replay_vote_sender, replay_vote_receiver) = unbounded();
         let (
@@ -484,7 +497,7 @@ impl Validator {
                         Some(poh_recorder.clone()),
                         genesis_config.hash(),
                         ledger_path,
-                        validator_exit.clone(),
+                        config.validator_exit.clone(),
                         config.trusted_validators.clone(),
                         rpc_override_health_check.clone(),
                         optimistically_confirmed_bank.clone(),
@@ -703,15 +716,13 @@ impl Validator {
             poh_service,
             poh_recorder,
             ip_echo_server,
-            validator_exit,
+            validator_exit: config.validator_exit.clone(),
         }
     }
 
     // Used for notifying many nodes in parallel to exit
     pub fn exit(&mut self) {
-        if let Some(x) = self.validator_exit.write().unwrap().take() {
-            x.exit()
-        }
+        self.validator_exit.write().unwrap().exit();
     }
 
     pub fn close(mut self) {
