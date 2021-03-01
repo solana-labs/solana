@@ -130,7 +130,7 @@ pub struct JsonRpcRequestProcessor {
     blockstore: Arc<Blockstore>,
     config: JsonRpcConfig,
     snapshot_config: Option<SnapshotConfig>,
-    validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
+    validator_exit: Arc<RwLock<ValidatorExit>>,
     health: Arc<RpcHealth>,
     cluster_info: Arc<ClusterInfo>,
     genesis_hash: Hash,
@@ -215,7 +215,7 @@ impl JsonRpcRequestProcessor {
         bank_forks: Arc<RwLock<BankForks>>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         blockstore: Arc<Blockstore>,
-        validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
+        validator_exit: Arc<RwLock<ValidatorExit>>,
         health: Arc<RpcHealth>,
         cluster_info: Arc<ClusterInfo>,
         genesis_hash: Hash,
@@ -661,9 +661,7 @@ impl JsonRpcRequestProcessor {
     pub fn validator_exit(&self) -> bool {
         if self.config.enable_validator_exit {
             warn!("validator_exit request...");
-            if let Some(x) = self.validator_exit.write().unwrap().take() {
-                x.exit()
-            }
+            self.validator_exit.write().unwrap().exit();
             true
         } else {
             debug!("validator_exit ignored");
@@ -3049,11 +3047,11 @@ fn deserialize_transaction(
         .map(|transaction| (wire_transaction, transaction))
 }
 
-pub(crate) fn create_validator_exit(exit: &Arc<AtomicBool>) -> Arc<RwLock<Option<ValidatorExit>>> {
+pub(crate) fn create_validator_exit(exit: &Arc<AtomicBool>) -> Arc<RwLock<ValidatorExit>> {
     let mut validator_exit = ValidatorExit::default();
     let exit_ = exit.clone();
     validator_exit.register_exit(Box::new(move || exit_.store(true, Ordering::Relaxed)));
-    Arc::new(RwLock::new(Some(validator_exit)))
+    Arc::new(RwLock::new(validator_exit))
 }
 
 #[cfg(test)]
