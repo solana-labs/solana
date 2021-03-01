@@ -58,8 +58,8 @@ impl SlotCacheInner {
         self.cache
             .get(pubkey)
             // 1) Maybe can eventually use a Cow to avoid a clone on every read
-            // 2) Popping is only safe if its guaranteed only replay/banking threads
-            // are reading from the AccountsDb
+            // 2) Popping is only safe if it's guaranteed that only
+            //    replay/banking threads are reading from the AccountsDb
             .map(|account_ref| account_ref.value().clone())
     }
 

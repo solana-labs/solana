@@ -306,7 +306,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
 
         // First we show that for any bank `B` that is a descendant of
         // the current `max_root`, it must be true that and `B.ancestors.contains(max_root)`,
-        // regardless of the pattern of `squash()` behavior, `where` `ancestors` is the set
+        // regardless of the pattern of `squash()` behavior, where `ancestors` is the set
         // of ancestors that is tracked in each bank.
         //
         // Proof: At startup, if starting from a snapshot, generate_index() adds all banks
@@ -338,7 +338,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         // BankForks before the `set_root`.
         //
         // This means by the guarantees of `R_descendants` described above, because
-        // `R_new` is an ancestor of `B`, and `R < R_new < B`, then B.ancestors.contains(R_new)`.
+        // `R_new` is an ancestor of `B`, and `R < R_new < B`, then `B.ancestors.contains(R_new)`.
         //
         // Now until the next `set_root`, any new banks constructed from `new_from_parent` will
         // also have `max_root == R_new` in their ancestor set, so the claim holds for those descendants
