@@ -41,6 +41,7 @@ use solana_sdk::{
     genesis_config::ClusterType,
     hash::Hash,
     pubkey::Pubkey,
+    signature::Signature,
     signature::{Keypair, Signer},
     timing::timestamp,
     transaction::Transaction,
@@ -63,6 +64,7 @@ pub const SUPERMINORITY_THRESHOLD: f64 = 1f64 / 3f64;
 pub const MAX_UNCONFIRMED_SLOTS: usize = 5;
 pub const DUPLICATE_LIVENESS_THRESHOLD: f64 = 0.1;
 pub const DUPLICATE_THRESHOLD: f64 = 1.0 - SWITCH_FORK_THRESHOLD - DUPLICATE_LIVENESS_THRESHOLD;
+const MAX_VOTE_SIGNATURES: usize = 200;
 
 #[derive(PartialEq, Debug)]
 pub(crate) enum HeaviestForkFailures {
@@ -111,6 +113,7 @@ pub struct ReplayStageConfig {
     pub rewards_recorder_sender: Option<RewardsRecorderSender>,
     pub cache_block_time_sender: Option<CacheBlockTimeSender>,
     pub bank_notification_sender: Option<BankNotificationSender>,
+    pub wait_for_vote_to_start_leader: bool,
 }
 
 #[derive(Default)]
@@ -282,6 +285,7 @@ impl ReplayStage {
             rewards_recorder_sender,
             cache_block_time_sender,
             bank_notification_sender,
+            wait_for_vote_to_start_leader,
         } = config;
 
         trace!("replay stage");
@@ -312,6 +316,8 @@ impl ReplayStage {
                 let mut skipped_slots_info = SkippedSlotsInfo::default();
                 let mut replay_timing = ReplayTiming::default();
                 let mut gossip_duplicate_confirmed_slots: GossipDuplicateConfirmedSlots = BTreeMap::new();
+                let mut voted_signatures = Vec::new();
+                let mut has_new_vote_been_rooted = !wait_for_vote_to_start_leader;
                 loop {
                     let allocated = thread_mem_usage::Allocatedp::default();
 
@@ -523,6 +529,8 @@ impl ReplayStage {
                             &cache_block_time_sender,
                             &bank_notification_sender,
                             &mut gossip_duplicate_confirmed_slots,
+                            &mut voted_signatures,
+                            &mut has_new_vote_been_rooted,
                         );
                     };
                     voting_time.stop();
@@ -614,6 +622,7 @@ impl ReplayStage {
                             &progress,
                             &retransmit_slots_sender,
                             &mut skipped_slots_info,
+                            has_new_vote_been_rooted,
                         );
 
                         let poh_bank = poh_recorder.lock().unwrap().bank();
@@ -1020,7 +1029,12 @@ impl ReplayStage {
         progress_map: &ProgressMap,
         retransmit_slots_sender: &RetransmitSlotsSender,
         skipped_slots_info: &mut SkippedSlotsInfo,
+        has_new_vote_been_rooted: bool,
     ) {
+        if !has_new_vote_been_rooted {
+            info!("Haven't landed a vote, so skipping my leader slot");
+            return;
+        }
         // all the individual calls to poh_recorder.lock() are designed to
         // increase granularity, decrease contention
 
@@ -1238,6 +1252,8 @@ impl ReplayStage {
         cache_block_time_sender: &Option<CacheBlockTimeSender>,
         bank_notification_sender: &Option<BankNotificationSender>,
         gossip_duplicate_confirmed_slots: &mut GossipDuplicateConfirmedSlots,
+        vote_signatures: &mut Vec<Signature>,
+        has_new_vote_been_rooted: &mut bool,
     ) {
         if bank.is_empty() {
             inc_new_counter_info!("replay_stage-voted_empty_bank", 1);
@@ -1290,6 +1306,8 @@ impl ReplayStage {
                 highest_confirmed_root,
                 heaviest_subtree_fork_choice,
                 gossip_duplicate_confirmed_slots,
+                has_new_vote_been_rooted,
+                vote_signatures,
             );
             subscriptions.notify_roots(rooted_slots);
             if let Some(sender) = bank_notification_sender {
@@ -1319,6 +1337,8 @@ impl ReplayStage {
             last_vote,
             &tower_slots,
             switch_fork_decision,
+            vote_signatures,
+            *has_new_vote_been_rooted,
         );
     }
 
@@ -1330,6 +1350,8 @@ impl ReplayStage {
         vote: Vote,
         tower: &[Slot],
         switch_fork_decision: &SwitchForkDecision,
+        vote_signatures: &mut Vec<Signature>,
+        has_new_vote_been_rooted: bool,
     ) {
         if authorized_voter_keypairs.is_empty() {
             return;
@@ -1399,6 +1421,14 @@ impl ReplayStage {
 
         let mut vote_tx = Transaction::new_with_payer(&[vote_ix], Some(&node_keypair.pubkey()));
 
+        if !has_new_vote_been_rooted {
+            vote_signatures.push(vote_tx.signatures[0]);
+            if vote_signatures.len() > MAX_VOTE_SIGNATURES {
+                vote_signatures.remove(0);
+            }
+        } else {
+            vote_signatures.clear();
+        }
         let blockhash = bank.last_blockhash();
         vote_tx.partial_sign(&[node_keypair.as_ref()], blockhash);
         vote_tx.partial_sign(&[authorized_voter_keypair.as_ref()], blockhash);
@@ -2125,6 +2155,8 @@ impl ReplayStage {
         highest_confirmed_root: Option<Slot>,
         heaviest_subtree_fork_choice: &mut HeaviestSubtreeForkChoice,
         gossip_duplicate_confirmed_slots: &mut GossipDuplicateConfirmedSlots,
+        has_new_vote_been_rooted: &mut bool,
+        voted_signatures: &mut Vec<Signature>,
     ) {
         bank_forks.write().unwrap().set_root(
             new_root,
@@ -2132,6 +2164,18 @@ impl ReplayStage {
             highest_confirmed_root,
         );
         let r_bank_forks = bank_forks.read().unwrap();
+        let new_root_bank = &r_bank_forks[new_root];
+        if !*has_new_vote_been_rooted {
+            for signature in voted_signatures.iter() {
+                if new_root_bank.get_signature_status(signature).is_some() {
+                    *has_new_vote_been_rooted = true;
+                    break;
+                }
+            }
+            if *has_new_vote_been_rooted {
+                std::mem::take(voted_signatures);
+            }
+        }
         progress.handle_new_root(&r_bank_forks);
         heaviest_subtree_fork_choice.set_root(new_root);
         let mut slots_ge_root = gossip_duplicate_confirmed_slots.split_off(&new_root);
@@ -2553,6 +2597,8 @@ pub(crate) mod tests {
             None,
             &mut heaviest_subtree_fork_choice,
             &mut gossip_duplicate_confirmed_slots,
+            &mut true,
+            &mut Vec::new(),
         );
         assert_eq!(bank_forks.read().unwrap().root(), root);
         assert_eq!(progress.len(), 1);
@@ -2609,6 +2655,8 @@ pub(crate) mod tests {
             Some(confirmed_root),
             &mut heaviest_subtree_fork_choice,
             &mut BTreeMap::new(),
+            &mut true,
+            &mut Vec::new(),
         );
         assert_eq!(bank_forks.read().unwrap().root(), root);
         assert!(bank_forks.read().unwrap().get(confirmed_root).is_some());
