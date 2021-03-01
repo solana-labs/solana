@@ -742,6 +742,8 @@ pub fn process_catchup(
         }
     };
 
+    let first_node_slot = get_slot_while_retrying(&node_client)?;
+    let mut interval_count = 1;
     loop {
         // humbly retry; the reference node (rpc_client) could be spotty,
         // especially if pointing to api.meinnet-beta.solana.com at times
@@ -768,6 +770,18 @@ pub fn process_catchup(
             )
         };
 
+        let slot_distance_avg = node_slot as i64 - first_node_slot as i64;
+        let slots_per_second_avg = slot_distance_avg as f64 / f64::from(interval_count * sleep_interval);
+        let time_remaining_avg = (slot_distance as f64 / slots_per_second_avg).round();
+        let time_remaining_avg = if !time_remaining_avg.is_normal() || time_remaining_avg <= 0.0 {
+            "".to_string()
+        } else {
+            format!(
+                "{}",
+                humantime::format_duration(Duration::from_secs_f64(time_remaining_avg))
+            )
+        };
+
         progress_bar.set_message(&format!(
             "{} slot(s) {} (us:{} them:{}){}",
             slot_distance.abs(),
@@ -782,7 +796,7 @@ pub fn process_catchup(
                 "".to_string()
             } else {
                 format!(
-                    ", {} node is {} at {:.1} slots/second{}",
+                    ", {} node is {} at {:.1} slots/second{} (Avg: {:.1} slots/second, remaining: {})",
                     if slot_distance >= 0 { "our" } else { "their" },
                     if slots_per_second < 0.0 {
                         "falling behind"
@@ -790,7 +804,9 @@ pub fn process_catchup(
                         "gaining"
                     },
                     slots_per_second,
-                    time_remaining
+                    time_remaining,
+                    slots_per_second_avg,
+                    time_remaining_avg
                 )
             },
         ));
@@ -801,6 +817,7 @@ pub fn process_catchup(
         sleep(Duration::from_secs(sleep_interval as u64));
         previous_rpc_slot = rpc_slot;
         previous_slot_distance = slot_distance;
+        interval_count += 1;
     }
 }
 
