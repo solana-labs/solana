@@ -1191,6 +1191,7 @@ solana_sdk::pubkeys!(
         "GLPe2gV9zG9kwJmNj9GFBrzEiqridEd5KYgeSiPrubGz",
         "GMEMvNsUerrfShmMJMqZJGBs2MkUjimjD9RxJiXzkuiy",
         "Gmw9GarCUcQNYnqePXNBREuLhcMUwXhQWZMAvxSUf6c2",
+        "GNDHwncRV2VpzXQLpGLvQUGkkfDFhA3g36Jg8ZthCNLm",
         "Gp96C7xbTVp9SU4YDK26zYjnzLHSuHkfcHpzXQXNNvNq",
         "GpowxwT8wY9x2uFLWhZtL3ELFdAMnpBxTrpqFgnEukVn",
         "GQCgtjErUk8HCgayXyjuCFR15pnssi4saPnxD2Pm9oav",
