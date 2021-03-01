@@ -571,7 +571,7 @@ fn test_cli_program_write_buffer() {
         .unwrap();
     let minimum_balance_for_buffer_default = rpc_client
         .get_minimum_balance_for_rent_exemption(
-            UpgradeableLoaderState::programdata_len(max_len * 2).unwrap(),
+            UpgradeableLoaderState::programdata_len(max_len).unwrap(),
         )
         .unwrap();
 
