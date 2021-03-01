@@ -27,7 +27,7 @@ if (process.env.TEST_LIVE) {
   describe('secp256k1', () => {
     it('create secp256k1 instruction with public key', async () => {
       const privateKey = randomPrivateKey();
-      const publicKey = publicKeyCreate(privateKey, false);
+      const publicKey = publicKeyCreate(privateKey, false).slice(1);
       const message = Buffer.from('This is a message');
       const messageHash = Buffer.from(
         keccak_256.update(toBuffer(message)).digest(),
