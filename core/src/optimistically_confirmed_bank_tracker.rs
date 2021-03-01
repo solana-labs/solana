@@ -4,8 +4,9 @@
 
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender};
+use solana_client::rpc_response::SlotUpdate;
 use solana_runtime::{bank::Bank, bank_forks::BankForks};
-use solana_sdk::clock::Slot;
+use solana_sdk::{clock::Slot, timing::timestamp};
 use std::{
     collections::HashSet,
     sync::{
@@ -130,6 +131,12 @@ impl OptimisticallyConfirmedBankTracker {
                 } else {
                     inc_new_counter_info!("dropped-already-rooted-optimistic-bank-notification", 1);
                 }
+
+                // Send slot notification regardless of whether the bank is replayed
+                subscriptions.notify_slot_update(SlotUpdate::OptimisticConfirmation {
+                    slot,
+                    timestamp: timestamp(),
+                });
             }
             BankNotification::Frozen(bank) => {
                 let frozen_slot = bank.slot();
@@ -142,6 +149,10 @@ impl OptimisticallyConfirmedBankTracker {
                     }
                     drop(w_optimistically_confirmed_bank);
                 }
+                subscriptions.notify_slot_update(SlotUpdate::Frozen {
+                    slot: frozen_slot,
+                    timestamp: timestamp(),
+                });
             }
             BankNotification::Root(bank) => {
                 let root_slot = bank.slot();
