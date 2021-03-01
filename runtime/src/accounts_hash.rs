@@ -11,6 +11,13 @@ use std::{convert::TryInto, sync::Mutex};
 pub const ZERO_RAW_LAMPORTS_SENTINEL: u64 = std::u64::MAX;
 pub const MERKLE_FANOUT: usize = 16;
 
+#[derive(Default, Debug)]
+pub struct PreviousPass {
+    pub reduced_hashes: Vec<Vec<Hash>>,
+    pub remaining_unhashed: Vec<Hash>,
+    pub lamports: u64,
+}
+
 #[derive(Debug, Default)]
 pub struct HashStats {
     pub scan_time_total_us: u64,
@@ -197,8 +204,9 @@ impl AccountsHash {
             MERKLE_FANOUT,
             None,
             |start: usize| cumulative_offsets.get_slice(&hashes, start),
+            None,
         );
-        (result, hash_total)
+        (result.0, hash_total)
     }
 
     pub fn compute_merkle_root(hashes: Vec<(Pubkey, Hash)>, fanout: usize) -> Hash {
@@ -266,12 +274,13 @@ impl AccountsHash {
         fanout: usize,
         max_levels_per_pass: Option<usize>,
         get_hashes: F,
-    ) -> Hash
+        specific_level_count: Option<usize>,
+    ) -> (Hash, Vec<Hash>)
     where
         F: Fn(usize) -> &'a [Hash] + std::marker::Sync,
     {
         if total_hashes == 0 {
-            return Hasher::default().result();
+            return (Hasher::default().result(), vec![]);
         }
 
         let mut time = Measure::start("time");
@@ -282,9 +291,18 @@ impl AccountsHash {
         // Only use the 3 level optimization if we have at least 4 levels of data.
         // Otherwise, we'll be serializing a parallel operation.
         let threshold = target * fanout;
-        let three_level = max_levels_per_pass.unwrap_or(usize::MAX) >= THREE_LEVEL_OPTIMIZATION
+        let mut three_level = max_levels_per_pass.unwrap_or(usize::MAX) >= THREE_LEVEL_OPTIMIZATION
             && total_hashes >= threshold;
-        let num_hashes_per_chunk = if three_level { target } else { fanout };
+        if three_level {
+            if let Some(specific_level_count_value) = specific_level_count {
+                three_level = specific_level_count_value >= THREE_LEVEL_OPTIMIZATION;
+            }
+        }
+        let (num_hashes_per_chunk, levels_hashed) = if three_level {
+            (target, THREE_LEVEL_OPTIMIZATION)
+        } else {
+            (fanout, 1)
+        };
 
         let chunks = Self::div_ceil(total_hashes, num_hashes_per_chunk);
 
@@ -351,11 +369,45 @@ impl AccountsHash {
         time.stop();
         debug!("hashing {} {}", total_hashes, time);
 
-        if result.len() == 1 {
-            result[0]
+        if let Some(mut specific_level_count_value) = specific_level_count {
+            specific_level_count_value -= levels_hashed;
+            if specific_level_count_value == 0 {
+                (Hash::default(), result)
+            } else {
+                assert!(specific_level_count_value > 0);
+                // We did not hash the number of levels required by 'specific_level_count', so repeat
+                Self::compute_merkle_root_from_slices_recurse(
+                    result,
+                    fanout,
+                    max_levels_per_pass,
+                    Some(specific_level_count_value),
+                )
+            }
         } else {
-            Self::compute_merkle_root_recurse(result, fanout)
+            (
+                if result.len() == 1 {
+                    result[0]
+                } else {
+                    Self::compute_merkle_root_recurse(result, fanout)
+                },
+                vec![], // no intermediate results needed by caller
+            )
         }
+    }
+
+    pub fn compute_merkle_root_from_slices_recurse(
+        hashes: Vec<Hash>,
+        fanout: usize,
+        max_levels_per_pass: Option<usize>,
+        specific_level_count: Option<usize>,
+    ) -> (Hash, Vec<Hash>) {
+        Self::compute_merkle_root_from_slices(
+            hashes.len(),
+            fanout,
+            max_levels_per_pass,
+            |start| &hashes[start..],
+            specific_level_count,
+        )
     }
 
     pub fn accumulate_account_hashes(mut hashes: Vec<(Pubkey, Hash)>) -> Hash {
@@ -569,29 +621,6 @@ impl AccountsHash {
         (result, sum)
     }
 
-    fn flatten_hashes_and_hash(
-        hashes: Vec<Vec<Vec<Hash>>>,
-        fanout: usize,
-        stats: &mut HashStats,
-    ) -> Hash {
-        let mut hash_time = Measure::start("flat2");
-
-        let offsets = CumulativeOffsets::from_raw_2d(&hashes);
-
-        let get_slice = |start: usize| -> &[Hash] { offsets.get_slice_2d(&hashes, start) };
-        let hash = AccountsHash::compute_merkle_root_from_slices(
-            offsets.total_count,
-            fanout,
-            None,
-            get_slice,
-        );
-        hash_time.stop();
-        stats.hash_time_total_us += hash_time.as_us();
-        stats.hash_total = offsets.total_count;
-
-        hash
-    }
-
     // input:
     // vec: unordered, created by parallelism
     //   vec: [0..bins] - where bins are pubkey ranges
@@ -600,19 +629,106 @@ impl AccountsHash {
     pub fn rest_of_hash_calculation(
         data_sections_by_pubkey: Vec<Vec<Vec<CalculateHashIntermediate>>>,
         mut stats: &mut HashStats,
-    ) -> (Hash, u64) {
+        last_pass: bool,
+        mut previous_state: PreviousPass,
+    ) -> (Hash, u64, PreviousPass) {
         let outer = Self::flatten_hash_intermediate(data_sections_by_pubkey, &mut stats);
 
         let sorted_data_by_pubkey = Self::sort_hash_intermediate(outer, &mut stats);
 
-        let (hashes, total_lamports) =
+        let (mut hashes, mut total_lamports) =
             Self::de_dup_and_eliminate_zeros(sorted_data_by_pubkey, &mut stats);
 
-        let hash = Self::flatten_hashes_and_hash(hashes, MERKLE_FANOUT, &mut stats);
+        total_lamports += previous_state.lamports;
 
-        stats.log();
+        if !previous_state.remaining_unhashed.is_empty() {
+            // these items were not hashes last iteration because they didn't divide evenly
+            hashes.insert(0, vec![previous_state.remaining_unhashed]);
+            previous_state.remaining_unhashed = Vec::new();
+        }
 
-        (hash, total_lamports)
+        let mut next_pass = PreviousPass::default();
+        let cumulative = CumulativeOffsets::from_raw_2d(&hashes);
+        let mut hash_total = cumulative.total_count;
+        stats.hash_total += hash_total;
+        next_pass.reduced_hashes = previous_state.reduced_hashes;
+
+        const TARGET_FANOUT_LEVEL: usize = 3;
+        let target_fanout = MERKLE_FANOUT.pow(TARGET_FANOUT_LEVEL as u32);
+
+        if !last_pass {
+            next_pass.lamports = total_lamports;
+            total_lamports = 0;
+
+            // Save hashes that don't evenly hash. They will be combined with hashes from the next pass.
+            let left_over_hashes = hash_total % target_fanout;
+
+            // move tail hashes that don't evenly hash into a 1d vector for next time
+            let mut i = hash_total - left_over_hashes;
+            while i < hash_total {
+                let data = cumulative.get_slice_2d(&hashes, i);
+                next_pass.remaining_unhashed.extend(data);
+                i += data.len();
+            }
+
+            hash_total -= left_over_hashes; // this is enough to cause the hashes at the end of the data set to be ignored
+        }
+
+        // if we have raw hashes to process and
+        //   we are not the last pass (we already modded against target_fanout) OR
+        //   we have previously surpassed target_fanout and hashed some already to the target_fanout level. In that case, we know
+        //     we need to hash whatever is left here to the target_fanout level.
+        if hash_total != 0 && (!last_pass || !next_pass.reduced_hashes.is_empty()) {
+            let partial_hashes = Self::compute_merkle_root_from_slices(
+                hash_total, // note this does not include the ones that didn't divide evenly, unless we're in the last iteration
+                MERKLE_FANOUT,
+                Some(TARGET_FANOUT_LEVEL),
+                |start| cumulative.get_slice_2d(&hashes, start),
+                Some(TARGET_FANOUT_LEVEL),
+            )
+            .1;
+            next_pass.reduced_hashes.push(partial_hashes);
+        }
+
+        let no_progress = last_pass && next_pass.reduced_hashes.is_empty() && !hashes.is_empty();
+        if no_progress {
+            // we never made partial progress, so hash everything now
+            hashes.into_iter().for_each(|v| {
+                v.into_iter().for_each(|v| {
+                    if !v.is_empty() {
+                        next_pass.reduced_hashes.push(v);
+                    }
+                });
+            });
+        }
+
+        let hash = if last_pass {
+            let cumulative = CumulativeOffsets::from_raw(&next_pass.reduced_hashes);
+
+            let hash = if cumulative.total_count == 1 && !no_progress {
+                // all the passes resulted in a single hash, that means we're done, so we had <= MERKLE_ROOT total hashes
+                cumulative.get_slice(&next_pass.reduced_hashes, 0)[0]
+            } else {
+                // hash all the rest and combine and hash until we have only 1 hash left
+                let (hash, _) = Self::compute_merkle_root_from_slices(
+                    cumulative.total_count,
+                    MERKLE_FANOUT,
+                    None,
+                    |start| cumulative.get_slice(&next_pass.reduced_hashes, start),
+                    None,
+                );
+                hash
+            };
+            next_pass.reduced_hashes = Vec::new();
+            hash
+        } else {
+            Hash::default()
+        };
+
+        if last_pass {
+            stats.log();
+        }
+        (hash, total_lamports, next_pass)
     }
 }
 
@@ -662,6 +778,8 @@ pub mod tests {
         let result = AccountsHash::rest_of_hash_calculation(
             vec![vec![account_maps.clone()]],
             &mut HashStats::default(),
+            true,
+            PreviousPass::default(),
         );
         let expected_hash = Hash::from_str("8j9ARGFv4W2GfML7d3sVJK2MePwrikqYnu6yqer28cCa").unwrap();
         assert_eq!((result.0, result.1), (expected_hash, 88));
@@ -675,6 +793,8 @@ pub mod tests {
         let result = AccountsHash::rest_of_hash_calculation(
             vec![vec![account_maps.clone()]],
             &mut HashStats::default(),
+            true,
+            PreviousPass::default(),
         );
         let expected_hash = Hash::from_str("EHv9C5vX7xQjjMpsJMzudnDTzoTSRwYkqLzY8tVMihGj").unwrap();
         assert_eq!((result.0, result.1), (expected_hash, 108));
@@ -688,9 +808,300 @@ pub mod tests {
         let result = AccountsHash::rest_of_hash_calculation(
             vec![vec![account_maps]],
             &mut HashStats::default(),
+            true,
+            PreviousPass::default(),
         );
         let expected_hash = Hash::from_str("7NNPg5A8Xsg1uv4UFm6KZNwsipyyUnmgCrznP6MBWoBZ").unwrap();
         assert_eq!((result.0, result.1), (expected_hash, 118));
+    }
+
+    #[test]
+    fn test_accountsdb_multi_pass_rest_of_hash_calculation() {
+        solana_logger::setup();
+
+        // passes:
+        // 0: empty, NON-empty, empty, empty final
+        // 1: NON-empty, empty final
+        // 2: NON-empty, empty, empty final
+        for pass in 0..3 {
+            let mut account_maps: Vec<CalculateHashIntermediate> = Vec::new();
+
+            let key = Pubkey::new(&[11u8; 32]);
+            let hash = Hash::new(&[1u8; 32]);
+            let val = CalculateHashIntermediate::new(0, hash, 88, Slot::default(), key);
+            account_maps.push(val);
+
+            // 2nd key - zero lamports, so will be removed
+            let key = Pubkey::new(&[12u8; 32]);
+            let hash = Hash::new(&[2u8; 32]);
+            let val = CalculateHashIntermediate::new(
+                0,
+                hash,
+                ZERO_RAW_LAMPORTS_SENTINEL,
+                Slot::default(),
+                key,
+            );
+            account_maps.push(val);
+
+            let mut previous_pass = PreviousPass::default();
+
+            if pass == 0 {
+                // first pass that is not last and is empty
+                let result = AccountsHash::rest_of_hash_calculation(
+                    vec![vec![vec![]]],
+                    &mut HashStats::default(),
+                    false, // not last pass
+                    previous_pass,
+                );
+                assert_eq!(result.0, Hash::default());
+                assert_eq!(result.1, 0);
+                previous_pass = result.2;
+                assert_eq!(previous_pass.remaining_unhashed.len(), 0);
+                assert_eq!(previous_pass.reduced_hashes.len(), 0);
+                assert_eq!(previous_pass.lamports, 0);
+            }
+
+            let result = AccountsHash::rest_of_hash_calculation(
+                vec![vec![account_maps.clone()]],
+                &mut HashStats::default(),
+                false, // not last pass
+                previous_pass,
+            );
+
+            assert_eq!(result.0, Hash::default());
+            assert_eq!(result.1, 0);
+            let mut previous_pass = result.2;
+            assert_eq!(previous_pass.remaining_unhashed, vec![account_maps[0].hash]);
+            assert_eq!(previous_pass.reduced_hashes.len(), 0);
+            assert_eq!(previous_pass.lamports, account_maps[0].lamports);
+
+            let expected_hash =
+                Hash::from_str("8j9ARGFv4W2GfML7d3sVJK2MePwrikqYnu6yqer28cCa").unwrap();
+            if pass == 2 {
+                let result = AccountsHash::rest_of_hash_calculation(
+                    vec![vec![vec![]]],
+                    &mut HashStats::default(),
+                    false,
+                    previous_pass,
+                );
+
+                previous_pass = result.2;
+                assert_eq!(previous_pass.remaining_unhashed, vec![account_maps[0].hash]);
+                assert_eq!(previous_pass.reduced_hashes.len(), 0);
+                assert_eq!(previous_pass.lamports, account_maps[0].lamports);
+            }
+
+            let result = AccountsHash::rest_of_hash_calculation(
+                vec![vec![vec![]]],
+                &mut HashStats::default(),
+                true, // finally, last pass
+                previous_pass,
+            );
+            let previous_pass = result.2;
+
+            assert_eq!(previous_pass.remaining_unhashed.len(), 0);
+            assert_eq!(previous_pass.reduced_hashes.len(), 0);
+            assert_eq!(previous_pass.lamports, 0);
+
+            assert_eq!((result.0, result.1), (expected_hash, 88));
+        }
+    }
+
+    #[test]
+    fn test_accountsdb_multi_pass_rest_of_hash_calculation_partial() {
+        solana_logger::setup();
+
+        let mut account_maps: Vec<CalculateHashIntermediate> = Vec::new();
+
+        let key = Pubkey::new(&[11u8; 32]);
+        let hash = Hash::new(&[1u8; 32]);
+        let val = CalculateHashIntermediate::new(0, hash, 88, Slot::default(), key);
+        account_maps.push(val);
+
+        let key = Pubkey::new(&[12u8; 32]);
+        let hash = Hash::new(&[2u8; 32]);
+        let val = CalculateHashIntermediate::new(0, hash, 20, Slot::default(), key);
+        account_maps.push(val);
+
+        let result = AccountsHash::rest_of_hash_calculation(
+            vec![vec![vec![account_maps[0].clone()]]],
+            &mut HashStats::default(),
+            false, // not last pass
+            PreviousPass::default(),
+        );
+
+        assert_eq!(result.0, Hash::default());
+        assert_eq!(result.1, 0);
+        let previous_pass = result.2;
+        assert_eq!(previous_pass.remaining_unhashed, vec![account_maps[0].hash]);
+        assert_eq!(previous_pass.reduced_hashes.len(), 0);
+        assert_eq!(previous_pass.lamports, account_maps[0].lamports);
+
+        let result = AccountsHash::rest_of_hash_calculation(
+            vec![vec![vec![account_maps[1].clone()]]],
+            &mut HashStats::default(),
+            false, // not last pass
+            previous_pass,
+        );
+
+        assert_eq!(result.0, Hash::default());
+        assert_eq!(result.1, 0);
+        let previous_pass = result.2;
+        assert_eq!(
+            previous_pass.remaining_unhashed,
+            vec![account_maps[0].hash, account_maps[1].hash]
+        );
+        assert_eq!(previous_pass.reduced_hashes.len(), 0);
+        let total_lamports_expected = account_maps[0].lamports + account_maps[1].lamports;
+        assert_eq!(previous_pass.lamports, total_lamports_expected);
+
+        let result = AccountsHash::rest_of_hash_calculation(
+            vec![vec![vec![]]],
+            &mut HashStats::default(),
+            true,
+            previous_pass,
+        );
+
+        let previous_pass = result.2;
+        assert_eq!(previous_pass.remaining_unhashed.len(), 0);
+        assert_eq!(previous_pass.reduced_hashes.len(), 0);
+        assert_eq!(previous_pass.lamports, 0);
+
+        let expected_hash = AccountsHash::compute_merkle_root(
+            account_maps
+                .iter()
+                .map(|a| (a.pubkey, a.hash))
+                .collect::<Vec<_>>(),
+            MERKLE_FANOUT,
+        );
+
+        assert_eq!(
+            (result.0, result.1),
+            (expected_hash, total_lamports_expected)
+        );
+    }
+
+    #[test]
+    fn test_accountsdb_multi_pass_rest_of_hash_calculation_partial_hashes() {
+        solana_logger::setup();
+
+        let mut account_maps: Vec<CalculateHashIntermediate> = Vec::new();
+
+        const TARGET_FANOUT_LEVEL: usize = 3;
+        let target_fanout = MERKLE_FANOUT.pow(TARGET_FANOUT_LEVEL as u32);
+        let mut total_lamports_expected = 0;
+        let plus1 = target_fanout + 1;
+        for i in 0..plus1 * 2 {
+            let lamports = (i + 1) as u64;
+            total_lamports_expected += lamports;
+            let key = Pubkey::new_unique();
+            let hash = Hash::new_unique();
+            let val = CalculateHashIntermediate::new(0, hash, lamports, Slot::default(), key);
+            account_maps.push(val);
+        }
+
+        let chunk = account_maps[0..plus1].to_vec();
+        let mut sorted = chunk.clone();
+        sorted.sort_by(AccountsHash::compare_two_hash_entries);
+
+        // first 4097 hashes (1 left over)
+        let result = AccountsHash::rest_of_hash_calculation(
+            vec![vec![chunk]],
+            &mut HashStats::default(),
+            false, // not last pass
+            PreviousPass::default(),
+        );
+
+        assert_eq!(result.0, Hash::default());
+        assert_eq!(result.1, 0);
+        let previous_pass = result.2;
+        let left_over_1 = sorted[plus1 - 1].hash;
+        assert_eq!(previous_pass.remaining_unhashed, vec![left_over_1]);
+        assert_eq!(previous_pass.reduced_hashes.len(), 1);
+        let expected_hash = AccountsHash::compute_merkle_root(
+            sorted[0..target_fanout]
+                .iter()
+                .map(|a| (a.pubkey, a.hash))
+                .collect::<Vec<_>>(),
+            MERKLE_FANOUT,
+        );
+        assert_eq!(previous_pass.reduced_hashes[0], vec![expected_hash]);
+        assert_eq!(
+            previous_pass.lamports,
+            account_maps[0..plus1]
+                .iter()
+                .map(|i| i.lamports)
+                .sum::<u64>()
+        );
+
+        let chunk = account_maps[plus1..plus1 * 2].to_vec();
+        let mut sorted2 = chunk.clone();
+        sorted2.sort_by(AccountsHash::compare_two_hash_entries);
+
+        let mut with_left_over = vec![left_over_1];
+        with_left_over.extend(sorted2[0..plus1 - 2].to_vec().into_iter().map(|i| i.hash));
+        let expected_hash2 = AccountsHash::compute_merkle_root(
+            with_left_over[0..target_fanout]
+                .iter()
+                .map(|a| (Pubkey::default(), *a))
+                .collect::<Vec<_>>(),
+            MERKLE_FANOUT,
+        );
+
+        // second 4097 hashes (2 left over)
+        let result = AccountsHash::rest_of_hash_calculation(
+            vec![vec![chunk]],
+            &mut HashStats::default(),
+            false, // not last pass
+            previous_pass,
+        );
+
+        assert_eq!(result.0, Hash::default());
+        assert_eq!(result.1, 0);
+        let previous_pass = result.2;
+        assert_eq!(
+            previous_pass.remaining_unhashed,
+            vec![sorted2[plus1 - 2].hash, sorted2[plus1 - 1].hash]
+        );
+        assert_eq!(previous_pass.reduced_hashes.len(), 2);
+        assert_eq!(
+            previous_pass.reduced_hashes,
+            vec![vec![expected_hash], vec![expected_hash2]]
+        );
+        assert_eq!(
+            previous_pass.lamports,
+            account_maps[0..plus1 * 2]
+                .iter()
+                .map(|i| i.lamports)
+                .sum::<u64>()
+        );
+
+        let result = AccountsHash::rest_of_hash_calculation(
+            vec![vec![vec![]]],
+            &mut HashStats::default(),
+            true,
+            previous_pass,
+        );
+
+        let previous_pass = result.2;
+        assert_eq!(previous_pass.remaining_unhashed.len(), 0);
+        assert_eq!(previous_pass.reduced_hashes.len(), 0);
+        assert_eq!(previous_pass.lamports, 0);
+
+        let mut combined = sorted;
+        combined.extend(sorted2);
+        let expected_hash = AccountsHash::compute_merkle_root(
+            combined
+                .iter()
+                .map(|a| (a.pubkey, a.hash))
+                .collect::<Vec<_>>(),
+            MERKLE_FANOUT,
+        );
+
+        assert_eq!(
+            (result.0, result.1),
+            (expected_hash, total_lamports_expected)
+        );
     }
 
     #[test]
@@ -920,40 +1331,6 @@ pub mod tests {
         for first_slice in 0..2 {
             let result = AccountsHash::de_dup_accounts_from_stores(first_slice == 1, &[]);
             assert_eq!((vec![Hash::default(); 0], 0), result);
-        }
-    }
-
-    #[test]
-    fn test_accountsdb_flatten_hashes_and_hash() {
-        solana_logger::setup();
-        const COUNT: usize = 4;
-        let hashes: Vec<_> = (0..COUNT)
-            .into_iter()
-            .map(|i| Hash::new(&[(i) as u8; 32]))
-            .collect();
-        let expected =
-            AccountsHash::compute_merkle_root_loop(hashes.clone(), MERKLE_FANOUT, |i| *i);
-
-        assert_eq!(
-            AccountsHash::flatten_hashes_and_hash(
-                vec![vec![hashes.clone()]],
-                MERKLE_FANOUT,
-                &mut HashStats::default()
-            ),
-            expected,
-        );
-        for in_first in 1..COUNT - 1 {
-            assert_eq!(
-                AccountsHash::flatten_hashes_and_hash(
-                    vec![vec![
-                        hashes.clone()[0..in_first].to_vec(),
-                        hashes.clone()[in_first..COUNT].to_vec()
-                    ]],
-                    MERKLE_FANOUT,
-                    &mut HashStats::default()
-                ),
-                expected
-            );
         }
     }
 
@@ -1367,25 +1744,23 @@ pub mod tests {
         let temp: Vec<_> = hashes.iter().map(|h| (Pubkey::default(), *h)).collect();
         let result = AccountsHash::compute_merkle_root(temp, fanout);
         let reduced: Vec<_> = hashes.clone();
-        let result2 =
-            AccountsHash::compute_merkle_root_from_slices(hashes.len(), fanout, None, |start| {
-                &reduced[start..]
-            });
-        assert_eq!(result, result2, "len: {}", hashes.len());
-
-        let result2 =
-            AccountsHash::compute_merkle_root_from_slices(hashes.len(), fanout, Some(1), |start| {
-                &reduced[start..]
-            });
-        assert_eq!(result, result2, "len: {}", hashes.len());
-
-        let reduced2: Vec<_> = hashes.iter().map(|x| vec![*x]).collect();
-        let result2 = AccountsHash::flatten_hashes_and_hash(
-            vec![reduced2],
+        let result2 = AccountsHash::compute_merkle_root_from_slices(
+            hashes.len(),
             fanout,
-            &mut HashStats::default(),
+            None,
+            |start| &reduced[start..],
+            None,
         );
-        assert_eq!(result, result2, "len: {}", hashes.len());
+        assert_eq!(result, result2.0, "len: {}", hashes.len());
+
+        let result2 = AccountsHash::compute_merkle_root_from_slices(
+            hashes.len(),
+            fanout,
+            Some(1),
+            |start| &reduced[start..],
+            None,
+        );
+        assert_eq!(result, result2.0, "len: {}", hashes.len());
 
         let max = std::cmp::min(reduced.len(), fanout * 2);
         for left in 0..max {
@@ -1394,9 +1769,17 @@ pub mod tests {
                     vec![reduced[0..left].to_vec(), reduced[left..right].to_vec()],
                     vec![reduced[right..].to_vec()],
                 ];
-                let result2 =
-                    AccountsHash::flatten_hashes_and_hash(src, fanout, &mut HashStats::default());
-                assert_eq!(result, result2);
+                let offsets = CumulativeOffsets::from_raw_2d(&src);
+
+                let get_slice = |start: usize| -> &[Hash] { offsets.get_slice_2d(&src, start) };
+                let result2 = AccountsHash::compute_merkle_root_from_slices(
+                    offsets.total_count,
+                    fanout,
+                    None,
+                    get_slice,
+                    None,
+                );
+                assert_eq!(result, result2.0);
             }
         }
         result
