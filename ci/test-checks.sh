@@ -87,12 +87,16 @@ cargo_audit_ignores=(
   # hyper is upgraded on master/v1.6 but not for v1.5
   --ignore RUSTSEC-2021-0020
 
+  # generic-array: arr! macro erases lifetimes
+  #
+  # ed25519-dalek and libsecp256k1 not upgraded for v1.5
+  --ignore RUSTSEC-2020-0146
 )
 _ scripts/cargo-for-all-lock-files.sh +"$rust_stable" audit "${cargo_audit_ignores[@]}"
 
 {
   cd programs/bpf
-  _ "$cargo" stable audit
+  _ "$cargo" stable audit "${cargo_audit_ignores[@]}"
   for project in rust/*/ ; do
     echo "+++ do_bpf_checks $project"
     (
