@@ -718,7 +718,8 @@ fn process_program_deploy(
     } else {
         return Err("Program location required if buffer not supplied".into());
     };
-    let buffer_data_len = if let Some(len) = max_len {
+    let buffer_data_len = program_len;
+    let programdata_len = if let Some(len) = max_len {
         if program_len > len {
             return Err("Max length specified not large enough".into());
         }
@@ -738,6 +739,7 @@ fn process_program_deploy(
             config,
             &program_data,
             buffer_data_len,
+            programdata_len,
             minimum_balance,
             &bpf_loader_upgradeable::id(),
             Some(&[program_signer.unwrap(), upgrade_authority_signer]),
@@ -825,7 +827,7 @@ fn process_write_buffer(
     let buffer_data_len = if let Some(len) = max_len {
         len
     } else {
-        program_data.len() * 2
+        program_data.len()
     };
     let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(
         UpgradeableLoaderState::programdata_len(buffer_data_len)?,
@@ -835,6 +837,7 @@ fn process_write_buffer(
         rpc_client,
         config,
         &program_data,
+        program_data.len(),
         program_data.len(),
         minimum_balance,
         &bpf_loader_upgradeable::id(),
@@ -1072,6 +1075,7 @@ pub fn process_deploy(
         config,
         &program_data,
         program_data.len(),
+        program_data.len(),
         minimum_balance,
         &loader_id,
         Some(&[buffer_signer]),
@@ -1092,6 +1096,7 @@ fn do_process_program_write_and_deploy(
     config: &CliConfig,
     program_data: &[u8],
     buffer_data_len: usize,
+    programdata_len: usize,
     minimum_balance: u64,
     loader_id: &Pubkey,
     program_signers: Option<&[&dyn Signer]>,
@@ -1207,7 +1212,7 @@ fn do_process_program_write_and_deploy(
                     rpc_client.get_minimum_balance_for_rent_exemption(
                         UpgradeableLoaderState::program_len()?,
                     )?,
-                    buffer_data_len,
+                    programdata_len,
                 )?,
                 Some(&config.signers[0].pubkey()),
             )
