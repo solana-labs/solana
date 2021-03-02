@@ -23,11 +23,11 @@ impl Serialize for ShortU16 {
         // generate an open bracket.
         let mut seq = serializer.serialize_tuple(1)?;
 
-        let mut rem_len = self.0;
+        let mut rem_val = self.0;
         loop {
-            let mut elem = (rem_len & 0x7f) as u8;
-            rem_len >>= 7;
-            if rem_len == 0 {
+            let mut elem = (rem_val & 0x7f) as u8;
+            rem_val >>= 7;
+            if rem_val == 0 {
                 seq.serialize_element(&elem)?;
                 break;
             } else {
@@ -45,54 +45,54 @@ enum VisitResult {
     Err,
 }
 
-fn visit_byte(elem: u8, len: usize, size: usize) -> VisitResult {
-    let len = len | (elem as usize & 0x7f) << (size * 7);
+fn visit_byte(elem: u8, val: usize, size: usize) -> VisitResult {
+    let val = val | (elem as usize & 0x7f) << (size * 7);
     let size = size + 1;
     let more = elem as usize & 0x80 == 0x80;
 
     if size > size_of::<u16>() + 1 {
         VisitResult::Err
     } else if more {
-        VisitResult::More(len, size)
+        VisitResult::More(val, size)
     } else {
-        VisitResult::Done(len, size)
+        VisitResult::Done(val, size)
     }
 }
 
-struct ShortLenVisitor;
+struct ShortU16Visitor;
 
-impl<'de> Visitor<'de> for ShortLenVisitor {
+impl<'de> Visitor<'de> for ShortU16Visitor {
     type Value = ShortU16;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("a multi-byte length")
+        formatter.write_str("a ShortU16")
     }
 
     fn visit_seq<A>(self, mut seq: A) -> Result<ShortU16, A::Error>
     where
         A: SeqAccess<'de>,
     {
-        let mut len: usize = 0;
+        let mut val: usize = 0;
         let mut size: usize = 0;
         loop {
             let elem: u8 = seq
                 .next_element()?
                 .ok_or_else(|| de::Error::invalid_length(size, &self))?;
 
-            match visit_byte(elem, len, size) {
+            match visit_byte(elem, val, size) {
                 VisitResult::Done(l, _) => {
-                    len = l;
+                    val = l;
                     break;
                 }
                 VisitResult::More(l, s) => {
-                    len = l;
+                    val = l;
                     size = s;
                 }
                 VisitResult::Err => return Err(de::Error::invalid_length(size + 1, &self)),
             }
         }
 
-        Ok(ShortU16(len as u16))
+        Ok(ShortU16(val as u16))
     }
 }
 
@@ -101,7 +101,7 @@ impl<'de> Deserialize<'de> for ShortU16 {
     where
         D: Deserializer<'de>,
     {
-        deserializer.deserialize_tuple(3, ShortLenVisitor)
+        deserializer.deserialize_tuple(3, ShortU16Visitor)
     }
 }
 
