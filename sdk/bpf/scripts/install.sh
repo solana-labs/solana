@@ -159,6 +159,7 @@ if [[ ! -e rust-bpf-$machine-$version.md || ! -e rust-bpf-$machine ]]; then
     job="download \
            https://github.com/solana-labs/rust-bpf-builder/releases/download \
            $version \
+<<<<<<< HEAD
            solana-rust-bpf-$machine.tar.bz2 \
            rust-bpf-$machine"
     get $version rust-bpf-$machine "$job"
@@ -169,6 +170,11 @@ if [[ ! -e rust-bpf-$machine-$version.md || ! -e rust-bpf-$machine ]]; then
     rustup toolchain uninstall bpf
     set -e
     rustup toolchain link bpf rust-bpf-$machine
+=======
+           solana-bpf-tools-$machine.tar.bz2 \
+           bpf-tools"
+    get $version bpf-tools "$job"
+>>>>>>> 4789a13a6... configure rust-bpf toolchain for each tree (#15620)
   )
   exitcode=$?
   if [[ $exitcode -ne 0 ]]; then
@@ -176,6 +182,12 @@ if [[ ! -e rust-bpf-$machine-$version.md || ! -e rust-bpf-$machine ]]; then
   fi
   touch rust-bpf-$machine-$version.md
 fi
+set -ex
+./bpf-tools/rust/bin/rustc --print sysroot
+set +e
+rustup toolchain uninstall bpf
+set -e
+rustup toolchain link bpf bpf-tools/rust
 
 # Install Rust-BPF Sysroot sources
 version=v0.14
