@@ -20,8 +20,8 @@ use std::{
     sync::Mutex,
 };
 
-//Data placement should be aligned at the next boundary. Without alignment accessing the memory may
-//crash on some architectures.
+// Data placement should be aligned at the next boundary. Without alignment accessing the memory may
+// crash on some architectures.
 const ALIGN_BOUNDARY_OFFSET: usize = mem::size_of::<u64>();
 macro_rules! u64_align {
     ($addr: expr) => {
@@ -68,8 +68,8 @@ impl<'a> From<&'a Account> for AccountMeta {
     }
 }
 
-/// References to Memory Mapped memory
-/// The Account is stored separately from its data, so getting the actual account requires a clone
+/// References to account data stored elsewhere. Getting an `Account` requires cloning
+/// (see `StoredAccountMeta::clone_account()`).
 #[derive(PartialEq, Debug)]
 pub struct StoredAccountMeta<'a> {
     pub meta: &'a StoredMeta,
@@ -82,6 +82,7 @@ pub struct StoredAccountMeta<'a> {
 }
 
 impl<'a> StoredAccountMeta<'a> {
+    /// Return a new Account by copying all the data referenced by the `StoredAccountMeta`.
     pub fn clone_account(&self) -> Account {
         Account {
             lamports: self.account_meta.lamports,
@@ -116,16 +117,30 @@ impl<'a> StoredAccountMeta<'a> {
     }
 }
 
+/// A thread-safe, file-backed block of memory used to store `Account` instances. Append operations
+/// are serialized such that only one thread updates the internal `append_offset` at a time. No
+/// restrictions are placed on reading. That is, one may read items from one thread while another
+/// is appending new items.
 #[derive(Debug, AbiExample)]
 #[allow(clippy::mutex_atomic)]
 pub struct AppendVec {
+    /// The file path where the data is stored.
     path: PathBuf,
+
+    /// A file-backed block of memory that is used to store the data for each appended item.
     map: MmapMut,
-    // This mutex forces append to be single threaded, but concurrent with reads
+
+    /// Same as `current_len`, but because of the mutex, only updated after all appends complete.
     #[allow(clippy::mutex_atomic)]
     append_offset: Mutex<usize>,
+
+    /// The number of bytes used to store items, not the number of items.
     current_len: AtomicUsize,
+
+    /// The number of bytes available for storing items.
     file_size: u64,
+
+    /// True if the file should automatically be deleted when this AppendVec is dropped.
     remove_on_drop: bool,
 }
 
@@ -333,6 +348,10 @@ impl AppendVec {
         (offset == aligned_current_len, num_accounts)
     }
 
+    /// Get a reference to the data at `offset` of `size` bytes if that slice
+    /// doesn't overrun the internal buffer. Otherwise return None.
+    /// Also return the offset of the first byte after the requested data that
+    /// falls on a 64-byte boundary.
     fn get_slice(&self, offset: usize, size: usize) -> Option<(&[u8], usize)> {
         let (next, overflow) = offset.overflowing_add(size);
         if overflow || next > self.len() {
@@ -349,6 +368,8 @@ impl AppendVec {
         ))
     }
 
+    /// Copy `len` bytes from `src` to the first 64-byte boundary after position `offset` of
+    /// the internal buffer. Then update `offset` to the first byte after the copied data.
     fn append_ptr(&self, offset: &mut usize, src: *const u8, len: usize) {
         let pos = u64_align!(*offset);
         let data = &self.map[pos..(pos + len)];
@@ -362,6 +383,10 @@ impl AppendVec {
         *offset = pos + len;
     }
 
+    /// Copy each value in `vals`, in order, to the first 64-byte boundary after position `offset`.
+    /// If there is sufficient space, then update `offset` and the internal `current_len` to the
+    /// first byte after the copied data and return the starting position of the copied data.
+    /// Otherwise return None and leave `offset` unchanged.
     fn append_ptrs_locked(&self, offset: &mut usize, vals: &[(*const u8, usize)]) -> Option<usize> {
         let mut end = *offset;
         for val in vals {
@@ -381,14 +406,20 @@ impl AppendVec {
         Some(pos)
     }
 
+    /// Return a reference to the type at `offset` if its data doesn't overrun the internal buffer.
+    /// Otherwise return None. Also return the offset of the first byte after the requested data
+    /// that falls on a 64-byte boundary.
     fn get_type<'a, T>(&self, offset: usize) -> Option<(&'a T, usize)> {
         let (data, next) = self.get_slice(offset, mem::size_of::<T>())?;
         let ptr: *const T = data.as_ptr() as *const T;
         //UNSAFE: The cast is safe because the slice is aligned and fits into the memory
-        //and the lifetime of he &T is tied to self, which holds the underlying memory map
+        //and the lifetime of the &T is tied to self, which holds the underlying memory map
         Some((unsafe { &*ptr }, next))
     }
 
+    /// Return account metadata for the account at `offset` if its data doesn't overrun
+    /// the internal buffer. Otherwise return None. Also return the offset of the first byte
+    /// after the requested data that falls on a 64-byte boundary.
     pub fn get_account<'a>(&'a self, offset: usize) -> Option<(StoredAccountMeta<'a>, usize)> {
         let (meta, next): (&'a StoredMeta, _) = self.get_type(offset)?;
         let (account_meta, next): (&'a AccountMeta, _) = self.get_type(next)?;
@@ -417,15 +448,22 @@ impl AppendVec {
         self.path.clone()
     }
 
-    pub fn accounts(&self, mut start: usize) -> Vec<StoredAccountMeta> {
+    /// Return account metadata for each account, starting from `offset`.
+    pub fn accounts(&self, mut offset: usize) -> Vec<StoredAccountMeta> {
         let mut accounts = vec![];
-        while let Some((account, next)) = self.get_account(start) {
+        while let Some((account, next)) = self.get_account(offset) {
             accounts.push(account);
-            start = next;
+            offset = next;
         }
         accounts
     }
 
+    /// Copy each account metadata, account and hash to the internal buffer.
+    /// Return the starting offset of each account metadata.
+    /// After each account is appended, the internal `current_len` is updated
+    /// and will be available to other threads.
+    /// After *all* accounts are appended, the internal `append_offset` is
+    /// unlocked and available to other threads.
     #[allow(clippy::mutex_atomic)]
     pub fn append_accounts(
         &self,
@@ -461,6 +499,9 @@ impl AppendVec {
         rv
     }
 
+    /// Copy the account metadata, account and hash to the internal buffer.
+    /// Return the starting offset of the account metadata.
+    /// After the account is appended, the internal `current_len` is updated.
     pub fn append_account(
         &self,
         storage_meta: StoredMeta,
