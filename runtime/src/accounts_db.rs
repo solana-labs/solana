@@ -3514,32 +3514,37 @@ impl AccountsDb {
                                             account_info.offset,
                                         )
                                         .get_loaded_account()
-                                        .and_then(|loaded_account| {
-                                            let loaded_hash = loaded_account.loaded_hash();
-                                            let balance = Self::account_balance_for_capitalization(
-                                                account_info.lamports,
-                                                loaded_account.owner(),
-                                                loaded_account.executable(),
-                                                simple_capitalization_enabled,
-                                            );
+                                        .and_then(
+                                            |loaded_account| {
+                                                let loaded_hash = loaded_account.loaded_hash();
+                                                let balance =
+                                                    Self::account_balance_for_capitalization(
+                                                        account_info.lamports,
+                                                        loaded_account.owner(),
+                                                        loaded_account.executable(),
+                                                        simple_capitalization_enabled,
+                                                    );
 
-                                            if check_hash {
-                                                let computed_hash = loaded_account.compute_hash(
-                                                    *slot,
-                                                    &self.cluster_type.expect(
-                                                        "Cluster type must be set at initialization",
-                                                    ),
-                                                    pubkey,
-                                                );
-                                                if computed_hash != *loaded_hash {
-                                                    mismatch_found.fetch_add(1, Ordering::Relaxed);
-                                                    return None;
+                                                if check_hash {
+                                                    let computed_hash = loaded_account
+                                                        .compute_hash(
+                                                            *slot,
+                                                            &self.cluster_type.expect(
+                                                                "Cluster type must be set at initialization",
+                                                            ),
+                                                            pubkey,
+                                                        );
+                                                    if computed_hash != *loaded_hash {
+                                                        mismatch_found
+                                                            .fetch_add(1, Ordering::Relaxed);
+                                                        return None;
+                                                    }
                                                 }
-                                            }
 
-                                            sum += balance as u128;
-                                            Some(*loaded_hash)
-                                        })
+                                                sum += balance as u128;
+                                                Some(*loaded_hash)
+                                            },
+                                        )
                                     } else {
                                         None
                                     }
