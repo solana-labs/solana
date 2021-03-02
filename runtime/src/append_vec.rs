@@ -118,11 +118,10 @@ impl<'a> StoredAccountMeta<'a> {
 }
 
 /// A thread-safe, file-backed block of memory used to store `Account` instances. Append operations
-/// are serialized such that only one thread updates the internal `append_offset` at a time. No
+/// are serialized such that only one thread updates the internal `append_lock` at a time. No
 /// restrictions are placed on reading. That is, one may read items from one thread while another
 /// is appending new items.
 #[derive(Debug, AbiExample)]
-#[allow(clippy::mutex_atomic)]
 pub struct AppendVec {
     /// The file path where the data is stored.
     path: PathBuf,
@@ -130,9 +129,8 @@ pub struct AppendVec {
     /// A file-backed block of memory that is used to store the data for each appended item.
     map: MmapMut,
 
-    /// Same as `current_len`, but because of the mutex, only updated after all appends complete.
-    #[allow(clippy::mutex_atomic)]
-    append_offset: Mutex<usize>,
+    /// A lock used to serialize append operations.
+    append_lock: Mutex<()>,
 
     /// The number of bytes used to store items, not the number of items.
     current_len: AtomicUsize,
@@ -158,7 +156,6 @@ impl Drop for AppendVec {
 }
 
 impl AppendVec {
-    #[allow(clippy::mutex_atomic)]
     pub fn new(file: &Path, create: bool, size: usize) -> Self {
         let initial_len = 0;
         AppendVec::sanitize_len_and_size(initial_len, size).unwrap();
@@ -207,7 +204,7 @@ impl AppendVec {
             map,
             // This mutex forces append to be single threaded, but concurrent with reads
             // See UNSAFE usage in `append_ptr`
-            append_offset: Mutex::new(initial_len),
+            append_lock: Mutex::new(()),
             current_len: AtomicUsize::new(initial_len),
             file_size: size as u64,
             remove_on_drop: true,
@@ -218,7 +215,6 @@ impl AppendVec {
         self.remove_on_drop = false;
     }
 
-    #[allow(clippy::mutex_atomic)]
     pub fn new_empty_map(current_len: usize) -> Self {
         let map = MmapMut::map_anon(1).unwrap_or_else(|e| {
             error!(
@@ -232,7 +228,7 @@ impl AppendVec {
         AppendVec {
             path: PathBuf::from(String::default()),
             map,
-            append_offset: Mutex::new(current_len),
+            append_lock: Mutex::new(()),
             current_len: AtomicUsize::new(current_len),
             file_size: 0, // will be filled by set_file()
             remove_on_drop: true,
@@ -264,13 +260,11 @@ impl AppendVec {
         self.map.flush()
     }
 
-    #[allow(clippy::mutex_atomic)]
     pub fn reset(&self) {
         // This mutex forces append to be single threaded, but concurrent with reads
         // See UNSAFE usage in `append_ptr`
-        let mut offset = self.append_offset.lock().unwrap();
+        let _lock = self.append_lock.lock().unwrap();
         self.current_len.store(0, Ordering::Relaxed);
-        *offset = 0;
     }
 
     pub fn len(&self) -> usize {
@@ -294,7 +288,6 @@ impl AppendVec {
         PathBuf::from(&format!("{}.{}", slot, id))
     }
 
-    #[allow(clippy::mutex_atomic)]
     pub fn new_from_file<P: AsRef<Path>>(path: P, current_len: usize) -> io::Result<(Self, usize)> {
         let data = OpenOptions::new()
             .read(true)
@@ -310,7 +303,7 @@ impl AppendVec {
         let new = AppendVec {
             path: path.as_ref().to_path_buf(),
             map,
-            append_offset: Mutex::new(current_len),
+            append_lock: Mutex::new(()),
             current_len: AtomicUsize::new(current_len),
             file_size,
             remove_on_drop: true,
@@ -374,7 +367,7 @@ impl AppendVec {
         let pos = u64_align!(*offset);
         let data = &self.map[pos..(pos + len)];
         //UNSAFE: This mut append is safe because only 1 thread can append at a time
-        //Mutex<append_offset> guarantees exclusive write access to the memory occupied in
+        //Mutex<()> guarantees exclusive write access to the memory occupied in
         //the range.
         unsafe {
             let dst = data.as_ptr() as *mut u8;
@@ -462,15 +455,13 @@ impl AppendVec {
     /// Return the starting offset of each account metadata.
     /// After each account is appended, the internal `current_len` is updated
     /// and will be available to other threads.
-    /// After *all* accounts are appended, the internal `append_offset` is
-    /// unlocked and available to other threads.
-    #[allow(clippy::mutex_atomic)]
     pub fn append_accounts(
         &self,
         accounts: &[(StoredMeta, &Account)],
         hashes: &[Hash],
     ) -> Vec<usize> {
-        let mut offset = self.append_offset.lock().unwrap();
+        let _lock = self.append_lock.lock().unwrap();
+        let mut offset = self.len();
         let mut rv = Vec::with_capacity(accounts.len());
         for ((stored_meta, account), hash) in accounts.iter().zip(hashes) {
             let meta_ptr = stored_meta as *const StoredMeta;
@@ -494,7 +485,7 @@ impl AppendVec {
 
         // The last entry in this offset needs to be the u64 aligned offset, because that's
         // where the *next* entry will begin to be stored.
-        rv.push(u64_align!(*offset));
+        rv.push(u64_align!(offset));
 
         rv
     }
