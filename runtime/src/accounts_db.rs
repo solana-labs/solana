@@ -285,6 +285,13 @@ impl<'a> LoadedAccount<'a> {
             },
         }
     }
+
+    pub fn from_cache(&self) -> bool {
+        match self {
+            LoadedAccount::Stored(_) => false,
+            LoadedAccount::Cached(_) => true,
+        }
+    }
 }
 
 #[derive(Clone, Default, Debug)]
@@ -2196,7 +2203,15 @@ impl AccountsDb {
     }
 
     pub fn load(&self, ancestors: &Ancestors, pubkey: &Pubkey) -> Option<(Account, Slot)> {
-        self.do_load(ancestors, pubkey, None)
+        self.do_load(ancestors, pubkey, None, false)
+    }
+
+    pub fn load_and_keep_in_cache(
+        &self,
+        ancestors: &Ancestors,
+        pubkey: &Pubkey,
+    ) -> Option<(Account, Slot)> {
+        self.do_load(ancestors, pubkey, None, true)
     }
 
     fn do_load(
@@ -2204,7 +2219,9 @@ impl AccountsDb {
         ancestors: &Ancestors,
         pubkey: &Pubkey,
         max_root: Option<Slot>,
+        mut keep_in_cache: bool,
     ) -> Option<(Account, Slot)> {
+        keep_in_cache = keep_in_cache && self.caching_enabled;
         let (slot, store_id, offset) = {
             let (lock, index) = self.accounts_index.get(pubkey, Some(ancestors), max_root)?;
             let slot_list = lock.slot_list();
@@ -2221,7 +2238,33 @@ impl AccountsDb {
         //TODO: thread this as a ref
         self.get_account_accessor_from_cache_or_storage(slot, pubkey, store_id, offset)
             .get_loaded_account()
-            .map(|loaded_account| (loaded_account.account(), slot))
+            .map(|loaded_account| {
+                let account = if keep_in_cache && !loaded_account.from_cache() {
+                    // note we want to keep this in cache but not 'write' it when cache is flushed as it is only for 'load' caching in this case
+                    let hash = *loaded_account.loaded_hash();
+                    let account = loaded_account.account();
+                    let mut current_version = self.bulk_assign_write_version(1);
+                    let write_version_producer: Box<dyn Iterator<Item = u64>> =
+                        Box::new(std::iter::from_fn(move || {
+                            let ret = current_version;
+                            current_version += 1;
+                            Some(ret)
+                        }));
+
+                    self.store_accounts_to(
+                        slot,
+                        &[(pubkey, &account)],
+                        &[hash],
+                        |_, _| panic!("unexpected call to storage finder"),
+                        write_version_producer,
+                        true,
+                    );
+                    account
+                } else {
+                    loaded_account.account() // awkwardly here because of borrow rules
+                };
+                (account, slot)
+            })
     }
 
     pub fn load_account_hash(&self, ancestors: &Ancestors, pubkey: &Pubkey) -> Hash {
@@ -8264,7 +8307,7 @@ pub mod tests {
         // Clean should not remove anything yet as nothing has been flushed
         db.clean_accounts(None);
         let account = db
-            .do_load(&Ancestors::default(), &account_key, Some(0))
+            .do_load(&Ancestors::default(), &account_key, Some(0), false)
             .unwrap();
         assert_eq!(account.0.lamports, 0);
 
@@ -8273,7 +8316,7 @@ pub mod tests {
         db.flush_accounts_cache(true, None);
         db.clean_accounts(None);
         assert!(db
-            .do_load(&Ancestors::default(), &account_key, Some(0))
+            .do_load(&Ancestors::default(), &account_key, Some(0), false)
             .is_none());
     }
 
@@ -8337,10 +8380,15 @@ pub mod tests {
         // entry in slot 1 is blocking cleanup of the zero-lamport account.
         let max_root = None;
         assert_eq!(
-            db.do_load(&Ancestors::default(), &zero_lamport_account_key, max_root,)
-                .unwrap()
-                .0
-                .lamports,
+            db.do_load(
+                &Ancestors::default(),
+                &zero_lamport_account_key,
+                max_root,
+                false
+            )
+            .unwrap()
+            .0
+            .lamports,
             0
         );
     }
@@ -8453,7 +8501,7 @@ pub mod tests {
         // Intra cache cleaning should not clean the entry for `account_key` from slot 0,
         // even though it was updated in slot `2` because of the ongoing scan
         let account = db
-            .do_load(&Ancestors::default(), &account_key, Some(0))
+            .do_load(&Ancestors::default(), &account_key, Some(0), false)
             .unwrap();
         assert_eq!(account.0.lamports, zero_lamport_account.lamports);
 
@@ -8461,7 +8509,7 @@ pub mod tests {
         // because we're still doing a scan on it.
         db.clean_accounts(None);
         let account = db
-            .do_load(&scan_ancestors, &account_key, Some(max_scan_root))
+            .do_load(&scan_ancestors, &account_key, Some(max_scan_root), false)
             .unwrap();
         assert_eq!(account.0.lamports, slot1_account.lamports);
 
@@ -8470,14 +8518,14 @@ pub mod tests {
         scan_tracker.exit().unwrap();
         db.clean_accounts(None);
         let account = db
-            .do_load(&scan_ancestors, &account_key, Some(max_scan_root))
+            .do_load(&scan_ancestors, &account_key, Some(max_scan_root), false)
             .unwrap();
         assert_eq!(account.0.lamports, slot1_account.lamports);
 
         // Simulate dropping the bank, which finally removes the slot from the cache
         db.purge_slot(1);
         assert!(db
-            .do_load(&scan_ancestors, &account_key, Some(max_scan_root))
+            .do_load(&scan_ancestors, &account_key, Some(max_scan_root), false)
             .is_none());
     }
 
@@ -8607,7 +8655,7 @@ pub mod tests {
         // a smaller max root
         for key in &keys {
             assert!(accounts_db
-                .do_load(&Ancestors::default(), key, Some(last_dead_slot))
+                .do_load(&Ancestors::default(), key, Some(last_dead_slot), false)
                 .is_some());
         }
 
@@ -8630,7 +8678,7 @@ pub mod tests {
         // as those have been purged from the accounts index for the dead slots.
         for key in &keys {
             assert!(accounts_db
-                .do_load(&Ancestors::default(), key, Some(last_dead_slot))
+                .do_load(&Ancestors::default(), key, Some(last_dead_slot), false)
                 .is_none());
         }
         // Each slot should only have one entry in the storage, since all other accounts were
