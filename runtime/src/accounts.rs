@@ -37,11 +37,6 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-#[derive(Default, Debug, AbiExample)]
-pub(crate) struct ReadonlyLock {
-    lock_count: Mutex<u64>,
-}
-
 #[derive(Debug, Default, AbiExample)]
 pub struct AccountLocks {
     write_locks: HashSet<Pubkey>,
@@ -1041,8 +1036,6 @@ pub fn update_accounts_bench(accounts: &Accounts, pubkeys: &[Pubkey], slot: u64)
 
 #[cfg(test)]
 mod tests {
-    // TODO: all the bank tests are bank specific, issue: 2194
-
     use super::*;
     use crate::rent_collector::RentCollector;
     use solana_sdk::{

@@ -1,3 +1,6 @@
+//! Persistent storage for accounts. For more information, see:
+//! https://docs.solana.com/implemented-proposals/persistent-account-storage
+
 use log::*;
 use memmap2::MmapMut;
 use serde::{Deserialize, Serialize};
@@ -132,7 +135,7 @@ impl Drop for AppendVec {
             if let Err(_e) = remove_file(&self.path) {
                 // promote this to panic soon.
                 // disabled due to many false positive warnings while running tests.
-                // blocked by rpc's updrade to jsonrpc v17
+                // blocked by rpc's upgrade to jsonrpc v17
                 //error!("AppendVec failed to remove {:?}: {:?}", &self.path, e);
             }
         }
@@ -165,10 +168,14 @@ impl AppendVec {
             })
             .unwrap();
 
+        // Theoretical performance optimization: write a zero to the end of
+        // the file so that we won't have to resize it later, which may be
+        // expensive.
         data.seek(SeekFrom::Start((size - 1) as u64)).unwrap();
         data.write_all(&[0]).unwrap();
         data.seek(SeekFrom::Start(0)).unwrap();
         data.flush().unwrap();
+
         //UNSAFE: Required to create a Mmap
         let map = unsafe { MmapMut::map_mut(&data) };
         let map = map.unwrap_or_else(|e| {

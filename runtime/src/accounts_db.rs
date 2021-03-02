@@ -5002,7 +5002,6 @@ impl AccountsDb {
 
 #[cfg(test)]
 pub mod tests {
-    // TODO: all the bank tests are bank specific, issue: 2194
     use super::*;
     use crate::{
         accounts_hash::MERKLE_FANOUT, accounts_index::tests::*, accounts_index::RefCount,
