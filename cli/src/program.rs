@@ -998,39 +998,51 @@ fn process_dump(
             .get_account_with_commitment(&account_pubkey, config.commitment)?
             .value
         {
-            if let Ok(UpgradeableLoaderState::Program {
-                programdata_address,
-            }) = account.state()
-            {
-                if let Some(programdata_account) = rpc_client
-                    .get_account_with_commitment(&programdata_address, config.commitment)?
-                    .value
+            if account.owner == bpf_loader::id() || account.owner == bpf_loader_deprecated::id() {
+                let mut f = File::create(output_location)?;
+                f.write_all(&account.data)?;
+                Ok(format!("Wrote program to {}", output_location))
+            } else if account.owner == bpf_loader_upgradeable::id() {
+                if let Ok(UpgradeableLoaderState::Program {
+                    programdata_address,
+                }) = account.state()
                 {
-                    if let Ok(UpgradeableLoaderState::ProgramData { .. }) =
-                        programdata_account.state()
+                    if let Some(programdata_account) = rpc_client
+                        .get_account_with_commitment(&programdata_address, config.commitment)?
+                        .value
                     {
-                        let offset = UpgradeableLoaderState::programdata_data_offset().unwrap_or(0);
-                        let program_data = &programdata_account.data[offset..];
-                        let mut f = File::create(output_location)?;
-                        f.write_all(&program_data)?;
-                        Ok(format!("Wrote program to {}", output_location))
+                        if let Ok(UpgradeableLoaderState::ProgramData { .. }) =
+                            programdata_account.state()
+                        {
+                            let offset =
+                                UpgradeableLoaderState::programdata_data_offset().unwrap_or(0);
+                            let program_data = &programdata_account.data[offset..];
+                            let mut f = File::create(output_location)?;
+                            f.write_all(&program_data)?;
+                            Ok(format!("Wrote program to {}", output_location))
+                        } else {
+                            Err(
+                                "Invalid associated ProgramData account found for the program"
+                                    .into(),
+                            )
+                        }
                     } else {
-                        Err("Invalid associated ProgramData account found for the program".into())
-                    }
-                } else {
-                    Err(
+                        Err(
                         "Failed to find associated ProgramData account for the provided program"
                             .into(),
                     )
+                    }
+                } else if let Ok(UpgradeableLoaderState::Buffer { .. }) = account.state() {
+                    let offset = UpgradeableLoaderState::buffer_data_offset().unwrap_or(0);
+                    let program_data = &account.data[offset..];
+                    let mut f = File::create(output_location)?;
+                    f.write_all(&program_data)?;
+                    Ok(format!("Wrote program to {}", output_location))
+                } else {
+                    Err("Not a buffer or program account".into())
                 }
-            } else if let Ok(UpgradeableLoaderState::Buffer { .. }) = account.state() {
-                let offset = UpgradeableLoaderState::buffer_data_offset().unwrap_or(0);
-                let program_data = &account.data[offset..];
-                let mut f = File::create(output_location)?;
-                f.write_all(&program_data)?;
-                Ok(format!("Wrote program to {}", output_location))
             } else {
-                Err("Not a buffer or program account".into())
+                Err("Accont is not a BPF program".into())
             }
         } else {
             Err("Unable to find the account".into())
