@@ -6947,7 +6947,7 @@ pub mod tests {
         db.add_root(some_slot);
 
         let bank_hashes = db.bank_hashes.read().unwrap();
-        let bank_hash = bank_hashes.get(&some_slot).unwrap();
+        let _bank_hash = bank_hashes.get(&some_slot).unwrap();
         /* TODO: temporarily disabled
         assert_eq!(bank_hash.stats.num_updated_accounts, 1);
         assert_eq!(bank_hash.stats.num_removed_accounts, 1);
