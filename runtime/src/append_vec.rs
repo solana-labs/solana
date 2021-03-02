@@ -168,8 +168,9 @@ impl AppendVec {
             })
             .unwrap();
 
-        // Performance optimization: write a zero to the end of the file to
-        // force the disk space to be allocated upfront.
+        // Theoretical performance optimization: write a zero to the end of
+        // the file so that we won't have to resize it later, which may be
+        // expensive.
         data.seek(SeekFrom::Start((size - 1) as u64)).unwrap();
         data.write_all(&[0]).unwrap();
         data.seek(SeekFrom::Start(0)).unwrap();
