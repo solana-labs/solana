@@ -415,8 +415,6 @@ impl PohRecorder {
                     timing::duration_as_us(&now.elapsed()) as usize
                 );
                 if let Some(poh_entry) = res {
-                    inc_new_counter_info!("poh_recorder-num_entries", 1);
-                    inc_new_counter_info!("poh_recorder-num_transactions", transactions.len());
                     let entry = Entry {
                         num_hashes: poh_entry.num_hashes,
                         hash: poh_entry.hash,
