@@ -4128,6 +4128,7 @@ dependencies = [
  "bincode",
  "byteorder",
  "curve25519-dalek 3.0.0",
+ "log 0.4.11",
  "num-derive",
  "num-traits",
  "rand 0.7.3",

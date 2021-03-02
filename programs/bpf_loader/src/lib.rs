@@ -14,6 +14,7 @@ use crate::{
     serialization::{deserialize_parameters, serialize_parameters},
     syscalls::SyscallError,
 };
+use log::{log_enabled, trace, Level::Trace};
 use solana_rbpf::{
     ebpf::MM_HEAP_START,
     error::{EbpfError, UserDefinedError},
@@ -80,7 +81,7 @@ pub fn create_and_cache_executor(
             max_call_depth: bpf_compute_budget.max_call_depth,
             stack_frame_size: bpf_compute_budget.stack_frame_size,
             enable_instruction_meter: true,
-            enable_instruction_tracing: false,
+            enable_instruction_tracing: log_enabled!(Trace),
         },
     )
     .map_err(|e| map_ebpf_error(invoke_context, e))?;
@@ -804,6 +805,13 @@ impl Executor for BpfExecutor {
                 before - after,
                 before
             );
+            if log_enabled!(Trace) {
+                let mut trace_buffer = String::new();
+                vm.get_tracer()
+                    .write(&mut trace_buffer, vm.get_program())
+                    .unwrap();
+                trace!("BPF Program Instruction Trace:\n{}", trace_buffer);
+            }
             match result {
                 Ok(status) => {
                     if status != SUCCESS {
