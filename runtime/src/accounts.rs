@@ -130,7 +130,6 @@ impl Accounts {
                 caching_enabled,
             )),
             account_locks: Mutex::new(AccountLocks::default()),
-            ..Self::default()
         }
     }
 
@@ -147,7 +146,6 @@ impl Accounts {
         Self {
             accounts_db: Arc::new(accounts_db),
             account_locks: Mutex::new(AccountLocks::default()),
-            ..Self::default()
         }
     }
 
