@@ -55,18 +55,6 @@ Three possible options exist:
 - Remove any pruned forks from the index. Any remaining forks lower in number than the root are can be considered root.
 - Scan the index, migrate any old roots into the new one. Any remaining forks lower than the new root can be deleted later.
 
-## Append-only Writes
-
-All the updates to Accounts occur as append-only updates. For every account update, a new version is stored in the AppendVec.
-
-It is possible to optimize updates within a single fork by returning a mutable reference to an already stored account in a fork. The Bank already tracks concurrent access of accounts and guarantees that a write to a specific account fork will not be concurrent with a read to an account at that fork. To support this operation, AppendVec should implement this function:
-
-```text
-fn get_mut(&self, index: u64) -> &mut T;
-```
-
-This API allows for concurrent mutable access to a memory region at `index`. It relies on the Bank to guarantee exclusive access to that index.
-
 ## Garbage collection
 
 As accounts get updated, they move to the end of the AppendVec. Once capacity has run out, a new AppendVec can be created and updates can be stored there. Eventually references to an older AppendVec will disappear because all the accounts have been updated, and the old AppendVec can be deleted.
