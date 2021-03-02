@@ -1,6 +1,6 @@
 use crate::{clock::Epoch, pubkey::Pubkey};
 use solana_program::{account_info::AccountInfo, sysvar::Sysvar};
-use std::{cell::RefCell, cmp, fmt, rc::Rc};
+use std::{cell::RefCell, cmp, fmt, rc::Rc, sync::Arc};
 
 /// An Account with data that is stored on chain
 #[repr(C)]
@@ -19,6 +19,36 @@ pub struct Account {
     pub executable: bool,
     /// the epoch at which this account will next owe rent
     pub rent_epoch: Epoch,
+}
+
+#[derive(Clone, Default, Debug, PartialEq, Eq, AbiExample)]
+pub struct AccountNoData {
+    /// lamports in the account
+    pub lamports: u64,
+    /// data held in this account
+    pub data: Arc<Vec<u8>>,
+    /// the program that owns this account. If executable, the program that loads this account.
+    pub owner: Pubkey,
+    /// this account's data contains a loaded program (and is now read-only)
+    pub executable: bool,
+    /// the epoch at which this account will next owe rent
+    pub rent_epoch: Epoch,
+}
+
+pub trait AnAccount: Default + Clone + Sized {
+    fn lamports(&self) -> u64;
+    fn set_lamports(&mut self, lamports: u64);
+    fn data(&self) -> &Vec<u8>;
+    fn set_data(&mut self, data: Vec<u8>);
+    fn owner(&self) -> &Pubkey;
+    fn set_owner(&mut self, owner: Pubkey);
+    fn executable(&self) -> bool;
+    fn rent_epoch(&self) -> Epoch;
+    fn set_rent_epoch(&mut self, epoch: Epoch);
+    fn clone_as_account_no_data(&self) -> AccountNoData;
+    fn clone_as_account(&self) -> Account;
+    fn from_account_no_data(item: AccountNoData) -> Self;
+    fn to_account_no_data(&mut self) -> AccountNoData;
 }
 
 impl fmt::Debug for Account {
