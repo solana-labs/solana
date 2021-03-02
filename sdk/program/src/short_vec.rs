@@ -248,10 +248,56 @@ mod tests {
         assert_len_encoding(0xffff, &[0xff, 0xff, 0x03]);
     }
 
+    fn assert_good_deserialized_value(value: u16, bytes: &[u8]) {
+        assert_eq!(value, deserialize::<ShortU16>(bytes).unwrap().0);
+    }
+
+    fn assert_bad_deserialized_value(bytes: &[u8]) {
+        assert!(deserialize::<ShortU16>(bytes).is_err());
+    }
+
     #[test]
-    #[should_panic]
-    fn test_short_vec_decode_zero_len() {
-        decode_len(&[]).unwrap();
+    fn test_deserialize() {
+        assert_good_deserialized_value(0x0000, &[0x00]);
+        assert_good_deserialized_value(0x007f, &[0x7f]);
+        assert_good_deserialized_value(0x0080, &[0x80, 0x01]);
+        assert_good_deserialized_value(0x00ff, &[0xff, 0x01]);
+        assert_good_deserialized_value(0x0100, &[0x80, 0x02]);
+        assert_good_deserialized_value(0x07ff, &[0xff, 0x0f]);
+        assert_good_deserialized_value(0x3fff, &[0xff, 0x7f]);
+        assert_good_deserialized_value(0x4000, &[0x80, 0x80, 0x01]);
+        assert_good_deserialized_value(0xffff, &[0xff, 0xff, 0x03]);
+
+        // aliases
+        // 0x0000
+        assert_bad_deserialized_value(&[0x80, 0x00]);
+        assert_bad_deserialized_value(&[0x80, 0x80, 0x00]);
+        // 0x007f
+        assert_bad_deserialized_value(&[0xff, 0x00]);
+        assert_bad_deserialized_value(&[0xff, 0x80, 0x00]);
+        // 0x0080
+        assert_bad_deserialized_value(&[0x80, 0x81, 0x00]);
+        // 0x00ff
+        assert_bad_deserialized_value(&[0xff, 0x81, 0x00]);
+        // 0x0100
+        assert_bad_deserialized_value(&[0x80, 0x82, 0x00]);
+        // 0x07ff
+        assert_bad_deserialized_value(&[0xff, 0x8f, 0x00]);
+        // 0x3fff
+        assert_bad_deserialized_value(&[0xff, 0xff, 0x00]);
+
+        // too short
+        assert_bad_deserialized_value(&[]);
+        assert_bad_deserialized_value(&[0x80]);
+
+        // too long
+        assert_bad_deserialized_value(&[0x80, 0x80, 0x80, 0x00]);
+
+        // too large
+        // 0x0001_0000
+        assert_bad_deserialized_value(&[0x80, 0x80, 0x04]);
+        // 0x0001_8000
+        assert_bad_deserialized_value(&[0x80, 0x80, 0x06]);
     }
 
     #[test]
@@ -281,15 +327,11 @@ mod tests {
     }
 
     #[test]
-    fn test_decode_len_aliased_values() {
-        let one1 = [0x01];
-        let one2 = [0x81, 0x00];
-        let one3 = [0x81, 0x80, 0x00];
-        let one4 = [0x81, 0x80, 0x80, 0x00];
-
-        assert_eq!(decode_len(&one1).unwrap(), (1, 1));
-        assert_eq!(decode_len(&one2).unwrap(), (1, 2));
-        assert_eq!(decode_len(&one3).unwrap(), (1, 3));
-        assert!(decode_len(&one4).is_err());
+    fn test_short_vec_aliased_length() {
+        let bytes = [
+            0x81, 0x80, 0x00, // 3-byte alias of 1
+            0x00,
+        ];
+        assert!(deserialize::<ShortVec<u8>>(&bytes).is_err());
     }
 }
