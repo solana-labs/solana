@@ -57,6 +57,7 @@ impl SlotCacheInner {
     pub fn get_cloned(&self, pubkey: &Pubkey) -> Option<CachedAccount> {
         self.cache
             .get(pubkey)
+            // Could return AccountNoData here
             // 1) Maybe can eventually use a Cow to avoid a clone on every read
             // 2) Popping is only safe if its guaranteed only replay/banking threads
             // are reading from the AccountsDb
@@ -86,7 +87,7 @@ impl Deref for SlotCacheInner {
 
 #[derive(Debug, Clone)]
 pub struct CachedAccount {
-    pub account: Account,
+    pub account: Account, // would become AccountNoData
     pub hash: Hash,
 }
 

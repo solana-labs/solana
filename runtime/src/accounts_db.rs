@@ -276,6 +276,7 @@ impl<'a> LoadedAccount<'a> {
         }
     }
 
+    /* would become AccountNoData */
     pub fn account(self) -> Account {
         match self {
             LoadedAccount::Stored(stored_account_meta) => stored_account_meta.clone_account(),
@@ -2195,7 +2196,7 @@ impl AccountsDb {
         bank_hashes.insert(slot, new_hash_info);
     }
 
-    pub fn load(&self, ancestors: &Ancestors, pubkey: &Pubkey) -> Option<(Account, Slot)> {
+    pub fn load(&self, ancestors: &Ancestors, pubkey: &Pubkey) -> Option<(Account /* would become AccountNoData */, Slot)> {
         self.do_load(ancestors, pubkey, None)
     }
 

@@ -58,7 +58,7 @@ impl Executors {
 pub struct PreAccount {
     key: Pubkey,
     is_writable: bool,
-    account: RefCell<Account>,
+    account: RefCell<Account>, /* would become AccountNoData */
 }
 impl PreAccount {
     pub fn new(key: &Pubkey, account: &Account, is_writable: bool) -> Self {

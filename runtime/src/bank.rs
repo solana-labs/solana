@@ -111,9 +111,9 @@ impl ExecuteTimings {
 type BankStatusCache = StatusCache<Result<()>>;
 #[frozen_abi(digest = "3ZaEt781qwhfQSE4DZPBHhng2S6MuimchRjkR9ZWzDFs")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
-type TransactionAccountRefCells = Vec<Rc<RefCell<Account>>>;
-type TransactionAccountDepRefCells = Vec<(Pubkey, RefCell<Account>)>;
-type TransactionLoaderRefCells = Vec<Vec<(Pubkey, RefCell<Account>)>>;
+type TransactionAccountRefCells = Vec<Rc<RefCell<Account>>>;  /* would become AccountNoData */
+type TransactionAccountDepRefCells = Vec<(Pubkey, RefCell<Account>)>;  /* would become AccountNoData */
+type TransactionLoaderRefCells = Vec<Vec<(Pubkey, RefCell<Account>)>>;  /* would become AccountNoData */
 
 // Eager rent collection repeats in cyclic manner.
 // Each cycle is composed of <partiion_count> number of tiny pubkey subranges
