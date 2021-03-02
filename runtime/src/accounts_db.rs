@@ -1161,6 +1161,11 @@ impl AccountsDb {
         )
     }
 
+    pub fn expected_cluster_type(&self) -> ClusterType {
+        self.cluster_type
+            .expect("Cluster type must be set at initialization")
+    }
+
     // Reclaim older states of rooted accounts for AccountsDb bloat mitigation
     fn clean_old_rooted_accounts(
         &self,
@@ -3529,9 +3534,7 @@ impl AccountsDb {
                                                     let computed_hash = loaded_account
                                                         .compute_hash(
                                                             *slot,
-                                                            &self.cluster_type.expect(
-                                                                "Cluster type must be set at initialization",
-                                                            ),
+                                                            &self.expected_cluster_type(),
                                                             pubkey,
                                                         );
                                                     if computed_hash != *loaded_hash {
@@ -4172,13 +4175,7 @@ impl AccountsDb {
         }
         self.assert_frozen_accounts(accounts);
         let mut hash_time = Measure::start("hash_accounts");
-        let hashes = self.hash_accounts(
-            slot,
-            accounts,
-            &self
-                .cluster_type
-                .expect("Cluster type must be set at initialization"),
-        );
+        let hashes = self.hash_accounts(slot, accounts, &self.expected_cluster_type());
         hash_time.stop();
         self.stats
             .store_hash_accounts
