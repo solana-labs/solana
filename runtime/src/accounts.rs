@@ -88,9 +88,6 @@ impl AccountLocks {
 /// This structure handles synchronization for db
 #[derive(Default, Debug, AbiExample)]
 pub struct Accounts {
-    /// my slot
-    pub slot: Slot,
-
     /// Single global AccountsDb
     pub accounts_db: Arc<AccountsDb>,
 
@@ -146,7 +143,6 @@ impl Accounts {
         let accounts_db = parent.accounts_db.clone();
         accounts_db.set_hash(slot, parent_slot);
         Self {
-            slot,
             accounts_db,
             account_locks: Mutex::new(AccountLocks::default()),
         }
@@ -465,10 +461,7 @@ impl Accounts {
 
     /// Slow because lock is held for 1 operation instead of many
     pub fn load_slow(&self, ancestors: &Ancestors, pubkey: &Pubkey) -> Option<(Account, Slot)> {
-        let (account, slot) = self
-            .accounts_db
-            .load_slow(ancestors, pubkey)
-            .unwrap_or((Account::default(), self.slot));
+        let (account, slot) = self.accounts_db.load_slow(ancestors, pubkey)?;
 
         if account.lamports > 0 {
             Some((account, slot))
