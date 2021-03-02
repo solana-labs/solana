@@ -980,7 +980,6 @@ impl Bank {
                 &parent.rc.accounts,
                 slot,
                 parent.slot(),
-                epoch,
             )),
             parent: RwLock::new(Some(parent.clone())),
             slot,
