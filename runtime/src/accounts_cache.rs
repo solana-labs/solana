@@ -87,7 +87,13 @@ impl Deref for SlotCacheInner {
 #[derive(Debug, Clone)]
 pub struct CachedAccount {
     pub account: Account,
-    pub hash: Hash,
+    hash: Hash,
+}
+
+impl CachedAccount {
+    pub fn hash(&self) -> &Hash {
+        &self.hash
+    }
 }
 
 #[derive(Debug, Default)]

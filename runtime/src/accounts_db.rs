@@ -230,10 +230,29 @@ impl<'a> LoadedAccount<'a> {
         }
     }
 
-    pub fn loaded_hash(&self) -> &Hash {
+    pub fn get_or_lazy_compute_hash(
+        &self,
+        slot: Slot,
+        cluster_type: &ClusterType,
+        pubkey: &Pubkey,
+    ) -> Hash {
+        match self {
+            LoadedAccount::Stored(stored_account_meta) => *stored_account_meta.hash,
+            LoadedAccount::Cached((_, cached_account)) => {
+                let mut hash = *cached_account.hash();
+                if hash == Hash::default() {
+                    // ideally, we store this away
+                    hash = self.compute_hash(slot, cluster_type, pubkey);
+                }
+                hash
+            }
+        }
+    }
+
+    pub fn lazy_loaded_hash(&self) -> &Hash {
         match self {
             LoadedAccount::Stored(stored_account_meta) => &stored_account_meta.hash,
-            LoadedAccount::Cached((_, cached_account)) => &cached_account.hash,
+            LoadedAccount::Cached((_, cached_account)) => &cached_account.hash(),
         }
     }
 
@@ -2248,7 +2267,13 @@ impl AccountsDb {
 
         self.get_account_accessor_from_cache_or_storage(slot, pubkey, store_id, offset)
             .get_loaded_account()
-            .map(|loaded_account| *loaded_account.loaded_hash())
+            .map(|loaded_account| {
+                loaded_account.get_or_lazy_compute_hash(
+                    slot,
+                    &self.expected_cluster_type(),
+                    &pubkey,
+                )
+            })
             .unwrap()
     }
 
@@ -3256,7 +3281,15 @@ impl AccountsDb {
                         .map(|should_flush_f| should_flush_f(key, account))
                         .unwrap_or(true);
                     if should_flush {
-                        let hash = iter_item.value().hash;
+                        let mut hash = *iter_item.value().hash();
+                        if hash == Hash::default() {
+                            hash = Self::hash_account(
+                                slot,
+                                &iter_item.value().account,
+                                key,
+                                &self.expected_cluster_type(),
+                            );
+                        }
                         total_size += (account.data.len() + STORE_META_OVERHEAD) as u64;
                         Some(((key, account), hash))
                     } else {
@@ -3521,7 +3554,12 @@ impl AccountsDb {
                                         .get_loaded_account()
                                         .and_then(
                                             |loaded_account| {
-                                                let loaded_hash = loaded_account.loaded_hash();
+                                                let loaded_hash = loaded_account
+                                                    .get_or_lazy_compute_hash(
+                                                        *slot,
+                                                        &self.expected_cluster_type(),
+                                                        pubkey,
+                                                    );
                                                 let balance =
                                                     Self::account_balance_for_capitalization(
                                                         account_info.lamports,
@@ -3537,7 +3575,7 @@ impl AccountsDb {
                                                             &self.expected_cluster_type(),
                                                             pubkey,
                                                         );
-                                                    if computed_hash != *loaded_hash {
+                                                    if computed_hash != loaded_hash {
                                                         mismatch_found
                                                             .fetch_add(1, Ordering::Relaxed);
                                                         return None;
@@ -3545,7 +3583,7 @@ impl AccountsDb {
                                                 }
 
                                                 sum += balance as u128;
-                                                Some(*loaded_hash)
+                                                Some(loaded_hash)
                                             },
                                         )
                                     } else {
@@ -3752,7 +3790,7 @@ impl AccountsDb {
                 let pubkey = *loaded_account.pubkey();
                 let source_item = CalculateHashIntermediate::new(
                     version,
-                    *loaded_account.loaded_hash(),
+                    *loaded_account.lazy_loaded_hash(), // this will always be from a store, so the hash is always valid
                     balance,
                     slot,
                     pubkey,
@@ -3841,11 +3879,15 @@ impl AccountsDb {
                 slot,
                 |loaded_account: LoadedAccount| {
                     // Cache only has one version per key, don't need to worry about versioning
-                    Some((*loaded_account.pubkey(), *loaded_account.loaded_hash()))
+                    let hash = loaded_account.get_or_lazy_compute_hash(
+                        slot,
+                        &self.expected_cluster_type(),
+                        loaded_account.pubkey(),
+                    );
+                    Some((*loaded_account.pubkey(), hash))
                 },
                 |accum: &DashMap<Pubkey, (u64, Hash)>, loaded_account: LoadedAccount| {
                     let loaded_write_version = loaded_account.write_version();
-                    let loaded_hash = *loaded_account.loaded_hash();
                     let should_insert =
                         if let Some(existing_entry) = accum.get(loaded_account.pubkey()) {
                             loaded_write_version > existing_entry.value().version()
@@ -3853,8 +3895,14 @@ impl AccountsDb {
                             true
                         };
                     if should_insert {
+                        let pubkey = loaded_account.pubkey();
+                        let loaded_hash = loaded_account.get_or_lazy_compute_hash(
+                            slot,
+                            &self.expected_cluster_type(),
+                            pubkey,
+                        );
                         // Detected insertion is necessary, grabs the write lock to commit the write,
-                        match accum.entry(*loaded_account.pubkey()) {
+                        match accum.entry(*pubkey) {
                             // Double check in case another thread interleaved a write between the read + write.
                             Occupied(mut occupied_entry) => {
                                 if loaded_write_version > occupied_entry.get().version() {
