@@ -397,6 +397,8 @@ impl ClusterInfoVoteListener {
                 if let Some(bank) = bank {
                     let last_version = bank.last_vote_sync.load(Ordering::Relaxed);
                     let (new_version, msgs) = verified_vote_packets.get_latest_votes(last_version);
+                    inc_new_counter_info!("bank_send_loop_batch_size", msgs.packets.len());
+                    inc_new_counter_info!("bank_send_loop_num_batches", 1);
                     verified_packets_sender.send(vec![msgs])?;
                     #[allow(deprecated)]
                     bank.last_vote_sync.compare_and_swap(
