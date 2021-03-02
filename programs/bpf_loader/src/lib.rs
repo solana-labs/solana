@@ -457,15 +457,14 @@ fn process_loader_upgradeable_instruction(
             programdata.try_account_ref_mut()?.data
                 [programdata_data_offset..programdata_data_offset + buffer_data_len]
                 .copy_from_slice(&buffer.try_account_ref()?.data[buffer_data_offset..]);
-            // Update the Program account
 
+            // Update the Program account
             program.set_state(&UpgradeableLoaderState::Program {
                 programdata_address: *programdata.unsigned_key(),
             })?;
             program.try_account_ref_mut()?.executable = true;
 
             // Drain the Buffer account back to the payer
-
             payer.try_account_ref_mut()?.lamports += buffer.lamports()?;
             buffer.try_account_ref_mut()?.lamports = 0;
 
