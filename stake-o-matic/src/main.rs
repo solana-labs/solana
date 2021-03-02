@@ -182,8 +182,8 @@ struct Config {
     /// Amount of additional lamports to stake quality block producers in the validator_list
     bonus_stake_amount: u64,
 
-    /// Quality validators produce a block at least this percentage of their leader slots over the
-    /// previous epoch
+    /// Quality validators produce within this percentage of the cluster average skip rate over
+    /// the previous epoch
     quality_block_producer_percentage: usize,
 
     /// A delinquent validator gets this number of slots of grace (from the current slot) before it
@@ -221,6 +221,8 @@ struct Config {
     /// 3) PATH_TO_YAML - Reads a list of validator identity pubkeys from the specified YAML file
     ///                   destaking those in the list and warning any others
     infrastructure_concentration_affects: InfrastructureConcentrationAffects,
+
+    bad_cluster_average_skip_rate: usize,
 }
 
 fn default_confirmed_block_cache_path() -> PathBuf {
@@ -297,15 +299,25 @@ fn get_config() -> Config {
                 .validator(is_keypair)
                 .required(true)
                 .takes_value(true)
+                .help("Keypair of the authorized staker for the source stake account.")
         )
         .arg(
             Arg::with_name("quality_block_producer_percentage")
                 .long("quality-block-producer-percentage")
                 .value_name("PERCENTAGE")
                 .takes_value(true)
-                .default_value("75")
+                .default_value("15")
                 .validator(is_valid_percentage)
-                .help("Quality validators produce a block in at least this percentage of their leader slots over the previous epoch")
+                .help("Quality validators have a skip rate within this percentage of the cluster average in the previous epoch.")
+        )
+        .arg(
+            Arg::with_name("bad_cluster_average_skip_rate")
+                .long("bad-cluster-average-skip-rate")
+                .value_name("PERCENTAGE")
+                .takes_value(true)
+                .default_value("50")
+                .validator(is_valid_percentage)
+                .help("Threshold to notify for a poor average cluster skip rate.")
         )
         .arg(
             Arg::with_name("max_poor_block_producer_percentage")
@@ -470,6 +482,8 @@ fn get_config() -> Config {
         .map(PathBuf::from)
         .unwrap();
 
+    let bad_cluster_average_skip_rate =
+        value_t!(matches, "bad_cluster_average_skip_rate", usize).unwrap_or(50);
     let max_infrastructure_concentration =
         value_t!(matches, "max_infrastructure_concentration", f64).unwrap();
     let infrastructure_concentration_affects = value_t!(
@@ -498,6 +512,7 @@ fn get_config() -> Config {
         confirmed_block_cache_path,
         max_infrastructure_concentration,
         infrastructure_concentration_affects,
+        bad_cluster_average_skip_rate,
     };
 
     info!("RPC URL: {}", config.json_rpc_url);
@@ -562,12 +577,79 @@ where
     }
 }
 
+type BoxResult<T> = Result<T, Box<dyn error::Error>>;
+
+///                    quality          poor             cluster_skip_rate
+type ClassifyResult = (HashSet<Pubkey>, HashSet<Pubkey>, usize);
+
+fn classify_producers(
+    first_slot: Slot,
+    first_slot_in_epoch: Slot,
+    confirmed_blocks: HashSet<u64>,
+    leader_schedule: HashMap<String, Vec<usize>>,
+    quality_block_producer_percentage: usize,
+) -> BoxResult<ClassifyResult> {
+    let mut poor_block_producers = HashSet::new();
+    let mut quality_block_producers = HashSet::new();
+    let mut blocks_and_slots = HashMap::new();
+
+    let mut total_blocks = 0;
+    let mut total_slots = 0;
+    for (validator_identity, relative_slots) in leader_schedule {
+        let mut validator_blocks = 0;
+        let mut validator_slots = 0;
+        for relative_slot in relative_slots {
+            let slot = first_slot_in_epoch + relative_slot as Slot;
+            if slot >= first_slot {
+                total_slots += 1;
+                validator_slots += 1;
+                if confirmed_blocks.contains(&slot) {
+                    total_blocks += 1;
+                    validator_blocks += 1;
+                }
+            }
+        }
+        trace!(
+            "Validator {} produced {} blocks in {} slots",
+            validator_identity,
+            validator_blocks,
+            validator_slots
+        );
+        if validator_slots > 0 {
+            let validator_identity = Pubkey::from_str(&validator_identity)?;
+            let e = blocks_and_slots.entry(validator_identity).or_insert((0, 0));
+            e.0 += validator_blocks;
+            e.1 += validator_slots;
+        }
+    }
+    let cluster_average_rate = 100 - total_blocks * 100 / total_slots;
+    for (validator_identity, (blocks, slots)) in blocks_and_slots {
+        let skip_rate: usize = 100 - (blocks * 100 / slots);
+        if skip_rate.saturating_sub(quality_block_producer_percentage) >= cluster_average_rate {
+            poor_block_producers.insert(validator_identity);
+        } else {
+            quality_block_producers.insert(validator_identity);
+        }
+    }
+
+    info!("quality_block_producers: {}", quality_block_producers.len());
+    trace!("quality_block_producers: {:?}", quality_block_producers);
+    info!("poor_block_producers: {}", poor_block_producers.len());
+    trace!("poor_block_producers: {:?}", poor_block_producers);
+
+    Ok((
+        quality_block_producers,
+        poor_block_producers,
+        cluster_average_rate,
+    ))
+}
+
 /// Split validators into quality/poor lists based on their block production over the given `epoch`
 fn classify_block_producers(
     rpc_client: &RpcClient,
     config: &Config,
     epoch: Epoch,
-) -> Result<(HashSet<Pubkey>, HashSet<Pubkey>), Box<dyn error::Error>> {
+) -> BoxResult<ClassifyResult> {
     let epoch_schedule = rpc_client.get_epoch_schedule()?;
     let first_slot_in_epoch = epoch_schedule.get_first_slot_in_epoch(epoch);
     let last_slot_in_epoch = epoch_schedule.get_last_slot_in_epoch(epoch);
@@ -602,43 +684,13 @@ fn classify_block_producers(
         .into_iter()
         .collect::<HashSet<_>>();
 
-    let mut poor_block_producers = HashSet::new();
-    let mut quality_block_producers = HashSet::new();
-
-    for (validator_identity, relative_slots) in leader_schedule {
-        let mut validator_blocks = 0;
-        let mut validator_slots = 0;
-        for relative_slot in relative_slots {
-            let slot = first_slot_in_epoch + relative_slot as Slot;
-            if slot >= first_slot {
-                validator_slots += 1;
-                if confirmed_blocks.contains(&slot) {
-                    validator_blocks += 1;
-                }
-            }
-        }
-        trace!(
-            "Validator {} produced {} blocks in {} slots",
-            validator_identity,
-            validator_blocks,
-            validator_slots
-        );
-        if validator_slots > 0 {
-            let validator_identity = Pubkey::from_str(&validator_identity)?;
-            if validator_blocks * 100 / validator_slots >= config.quality_block_producer_percentage
-            {
-                quality_block_producers.insert(validator_identity);
-            } else {
-                poor_block_producers.insert(validator_identity);
-            }
-        }
-    }
-
-    info!("quality_block_producers: {}", quality_block_producers.len());
-    trace!("quality_block_producers: {:?}", quality_block_producers);
-    info!("poor_block_producers: {}", poor_block_producers.len());
-    trace!("poor_block_producers: {:?}", poor_block_producers);
-    Ok((quality_block_producers, poor_block_producers))
+    classify_producers(
+        first_slot,
+        first_slot_in_epoch,
+        confirmed_blocks,
+        leader_schedule,
+        config.quality_block_producer_percentage,
+    )
 }
 
 fn validate_source_stake_account(
@@ -1036,7 +1088,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     info!("Epoch info: {:?}", epoch_info);
 
-    let (quality_block_producers, poor_block_producers) =
+    let (quality_block_producers, poor_block_producers, cluster_average_skip_rate) =
         classify_block_producers(&rpc_client, &config, last_epoch)?;
 
     let too_many_poor_block_producers = poor_block_producers.len()
@@ -1482,6 +1534,17 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         &config.authorized_staker,
     )?;
 
+    if cluster_average_skip_rate > config.bad_cluster_average_skip_rate {
+        let message = format!(
+            "Cluster average skip rate: {} is above threshold: {}",
+            cluster_average_skip_rate, config.bad_cluster_average_skip_rate
+        );
+        warn!("{}", message);
+        if !config.dry_run {
+            notifier.send(&message);
+        }
+    }
+
     if too_many_poor_block_producers {
         let message = format!(
             "Note: Something is wrong, more than {}% of validators classified \
@@ -1526,4 +1589,39 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn test_quality_producer() {
+        solana_logger::setup();
+        let percentage = 10;
+
+        let confirmed_blocks: HashSet<Slot> = [
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 14, 21, 22, 43, 44, 45, 46, 47, 48,
+        ]
+        .iter()
+        .cloned()
+        .collect();
+        let mut leader_schedule = HashMap::new();
+        let l1 = Pubkey::new_unique();
+        let l2 = Pubkey::new_unique();
+        let l3 = Pubkey::new_unique();
+        let l4 = Pubkey::new_unique();
+        let l5 = Pubkey::new_unique();
+        leader_schedule.insert(l1.to_string(), (0..10).collect());
+        leader_schedule.insert(l2.to_string(), (10..20).collect());
+        leader_schedule.insert(l3.to_string(), (20..30).collect());
+        leader_schedule.insert(l4.to_string(), (30..40).collect());
+        leader_schedule.insert(l5.to_string(), (40..50).collect());
+        let (quality, poor, _cluster_average) =
+            classify_producers(0, 0, confirmed_blocks, leader_schedule, percentage).unwrap();
+        assert!(quality.contains(&l1));
+        assert!(quality.contains(&l5));
+        assert!(quality.contains(&l2));
+        assert!(poor.contains(&l3));
+        assert!(poor.contains(&l4));
+    }
 }
