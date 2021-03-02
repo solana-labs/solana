@@ -545,12 +545,12 @@ pub fn verify_ticks(
 
     if next_bank_tick_height > max_bank_tick_height {
         warn!("Too many entry ticks found in slot: {}", bank.slot());
-        return Err(BlockError::InvalidTickCount);
+        return Err(BlockError::TooManyTicks);
     }
 
     if next_bank_tick_height < max_bank_tick_height && slot_full {
-        warn!("Too few entry ticks found in slot: {}", bank.slot());
-        return Err(BlockError::InvalidTickCount);
+        info!("Too few entry ticks found in slot: {}", bank.slot());
+        return Err(BlockError::TooFewTicks);
     }
 
     if next_bank_tick_height == max_bank_tick_height {

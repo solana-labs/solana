@@ -1019,11 +1019,19 @@ impl ReplayStage {
             // that comes after the root, so we should not see any
             // errors related to the slot being purged
             let slot = bank.slot();
-            warn!("Fatal replay error in slot: {}, err: {:?}", slot, err);
-            let is_serious = matches!(
+
+            // Block producer can abandon the block if it detects a better one
+            // while producing. Somewhat common and expected in a
+            // network with variable network/machine configuration.
+            let is_serious = !matches!(
                 err,
-                BlockstoreProcessorError::InvalidBlock(BlockError::InvalidTickCount)
+                BlockstoreProcessorError::InvalidBlock(BlockError::TooFewTicks)
             );
+            if is_serious {
+                warn!("Fatal replay error in slot: {}, err: {:?}", slot, err);
+            } else {
+                info!("Slot had too few ticks: {}", slot);
+            }
             Self::mark_dead_slot(blockstore, bank_progress, slot, &err, is_serious);
             err
         })?;
@@ -2397,6 +2405,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_dead_fork_invalid_slot_tick_count() {
+        solana_logger::setup();
         // Too many ticks per slot
         let res = check_dead_fork(|_keypair, bank| {
             let blockhash = bank.last_blockhash();
@@ -2412,7 +2421,7 @@ pub(crate) mod tests {
         });
 
         if let Err(BlockstoreProcessorError::InvalidBlock(block_error)) = res {
-            assert_eq!(block_error, BlockError::InvalidTickCount);
+            assert_eq!(block_error, BlockError::TooManyTicks);
         } else {
             panic!();
         }
@@ -2432,7 +2441,7 @@ pub(crate) mod tests {
         });
 
         if let Err(BlockstoreProcessorError::InvalidBlock(block_error)) = res {
-            assert_eq!(block_error, BlockError::InvalidTickCount);
+            assert_eq!(block_error, BlockError::TooFewTicks);
         } else {
             panic!();
         }
