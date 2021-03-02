@@ -44,10 +44,8 @@ use std::{
 };
 
 // Map from a vote account to the authorized voter for an epoch
-pub type VerifiedLabelVotePacketsSender =
-    CrossbeamSender<Vec<(CrdsValueLabel, Option<Slot>, Packets)>>;
-pub type VerifiedLabelVotePacketsReceiver =
-    CrossbeamReceiver<Vec<(CrdsValueLabel, Option<Slot>, Packets)>>;
+pub type VerifiedLabelVotePacketsSender = CrossbeamSender<Vec<(CrdsValueLabel, Slot, Packets)>>;
+pub type VerifiedLabelVotePacketsReceiver = CrossbeamReceiver<Vec<(CrdsValueLabel, Slot, Packets)>>;
 pub type VerifiedVoteTransactionsSender = CrossbeamSender<Vec<Transaction>>;
 pub type VerifiedVoteTransactionsReceiver = CrossbeamReceiver<Vec<Transaction>>;
 pub type VerifiedVoteSender = CrossbeamSender<(Pubkey, Vec<Slot>)>;
@@ -338,10 +336,7 @@ impl ClusterInfoVoteListener {
     fn verify_votes(
         votes: Vec<Transaction>,
         labels: Vec<CrdsValueLabel>,
-    ) -> (
-        Vec<Transaction>,
-        Vec<(CrdsValueLabel, Option<Slot>, Packets)>,
-    ) {
+    ) -> (Vec<Transaction>, Vec<(CrdsValueLabel, Slot, Packets)>) {
         let msgs = packet::to_packets_chunked(&votes, 1);
         let r = sigverify::ed25519_verify_cpu(&msgs);
 
@@ -360,7 +355,7 @@ impl ClusterInfoVoteListener {
         )
         .filter_map(|(label, vote, verify_result, packet)| {
             let slot = vote_transaction::parse_vote_transaction(&vote)
-                .and_then(|(_, vote, _)| vote.slots.last().copied());
+                .and_then(|(_, vote, _)| vote.slots.last().copied())?;
             if *verify_result != 0 {
                 Some((vote, (label, slot, packet)))
             } else {
@@ -1610,7 +1605,7 @@ mod tests {
         assert!(packets.is_empty());
     }
 
-    fn verify_packets_len(packets: &[(CrdsValueLabel, Option<Slot>, Packets)], ref_value: usize) {
+    fn verify_packets_len(packets: &[(CrdsValueLabel, Slot, Packets)], ref_value: usize) {
         let num_packets: usize = packets.iter().map(|(_, _, p)| p.packets.len()).sum();
         assert_eq!(num_packets, ref_value);
     }

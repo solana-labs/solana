@@ -10,7 +10,7 @@ use std::{
 };
 
 #[derive(Default)]
-pub struct VerifiedVotePackets(HashMap<CrdsValueLabel, (u64, Option<Slot>, Packets)>);
+pub struct VerifiedVotePackets(HashMap<CrdsValueLabel, (u64, Slot, Packets)>);
 
 impl VerifiedVotePackets {
     pub fn receive_and_process_vote_packets(
@@ -33,7 +33,7 @@ impl VerifiedVotePackets {
     }
 
     #[cfg(test)]
-    fn get_vote_packets(&self, key: &CrdsValueLabel) -> Option<&(u64, Option<Slot>, Packets)> {
+    fn get_vote_packets(&self, key: &CrdsValueLabel) -> Option<&(u64, Slot, Packets)> {
         self.0.get(key)
     }
 
@@ -45,10 +45,6 @@ impl VerifiedVotePackets {
             if *version <= last_update_version {
                 continue;
             }
-            let slot = match slot {
-                Some(slot) => slot,
-                None => continue,
-            };
             match votes.entry(label.pubkey()) {
                 Entry::Vacant(entry) => {
                     entry.insert((slot, packets));
@@ -95,10 +91,10 @@ mod tests {
 
         verified_vote_packets
             .0
-            .insert(label1, (2, Some(42), none_empty_packets));
+            .insert(label1, (2, 42, none_empty_packets));
         verified_vote_packets
             .0
-            .insert(label2, (1, Some(23), Packets::default()));
+            .insert(label2, (1, 23, Packets::default()));
 
         // Both updates have timestamps greater than 0, so both should be returned
         let (new_update_version, updates) = verified_vote_packets.get_latest_votes(0);
@@ -125,9 +121,9 @@ mod tests {
         let label1 = CrdsValueLabel::Vote(0, pubkey);
         let label2 = CrdsValueLabel::Vote(1, pubkey);
         let mut update_version = 0;
-        s.send(vec![(label1.clone(), Some(17), Packets::default())])
+        s.send(vec![(label1.clone(), 17, Packets::default())])
             .unwrap();
-        s.send(vec![(label2.clone(), Some(23), Packets::default())])
+        s.send(vec![(label2.clone(), 23, Packets::default())])
             .unwrap();
 
         let data = Packet {
@@ -139,8 +135,7 @@ mod tests {
         };
 
         let later_packets = Packets::new(vec![data, Packet::default()]);
-        s.send(vec![(label1.clone(), Some(42), later_packets)])
-            .unwrap();
+        s.send(vec![(label1.clone(), 42, later_packets)]).unwrap();
         let mut verified_vote_packets = VerifiedVotePackets(HashMap::new());
         verified_vote_packets
             .receive_and_process_vote_packets(&r, &mut update_version)
@@ -174,7 +169,7 @@ mod tests {
         );
 
         // Test timestamp for next batch overwrites the original
-        s.send(vec![(label2.clone(), Some(51), Packets::default())])
+        s.send(vec![(label2.clone(), 51, Packets::default())])
             .unwrap();
         verified_vote_packets
             .receive_and_process_vote_packets(&r, &mut update_version)
