@@ -130,7 +130,6 @@ impl Accounts {
                 caching_enabled,
             )),
             account_locks: Mutex::new(AccountLocks::default()),
-            ..Self::default()
         }
     }
 
