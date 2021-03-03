@@ -29,7 +29,7 @@ type DetailsProps = {
   childIndex?: number;
 };
 
-export function UpgradeableBpfLoaderDetailsCard(props: DetailsProps) {
+export function BpfUpgradeableLoaderDetailsCard(props: DetailsProps) {
   try {
     const parsed = coerce(props.ix.parsed, ParsedInfo);
     switch (parsed.type) {
@@ -98,7 +98,7 @@ function renderDetails<T>(
   return (
     <InstructionCard
       {...props}
-      title={`Upgradeable BPF Loader: ${camelToTitleCase(parsed.type)}`}
+      title={`BPF Upgradeable Loader: ${camelToTitleCase(parsed.type)}`}
     >
       <tr>
         <td>Program</td>
