@@ -79,7 +79,7 @@ use std::{
 
 const MAX_COMPLETED_DATA_SETS_IN_CHANNEL: usize = 100_000;
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct ValidatorConfig {
     pub dev_halt_at_slot: Option<Slot>,
     pub expected_genesis_hash: Option<Hash>,
