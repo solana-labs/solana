@@ -2683,18 +2683,6 @@ export class Connection {
   }
 
   /**
-   * @private
-   */
-  async validatorExit(): Promise<boolean> {
-    const unsafeRes = await this._rpcRequest('validatorExit', []);
-    const res = create(unsafeRes, jsonRpcResult(boolean()));
-    if (res.error) {
-      throw new Error('validator exit failed: ' + res.error.message);
-    }
-    return res.result;
-  }
-
-  /**
    * Send a transaction that has already been signed and serialized into the
    * wire format
    */
