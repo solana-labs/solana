@@ -214,15 +214,19 @@ pub fn process_entries(
     transaction_status_sender: Option<TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
 ) -> Result<()> {
-    process_entries_with_callback(
+    let mut timings = ExecuteTimings::default();
+    let result = process_entries_with_callback(
         bank,
         entries,
         randomize,
         None,
         transaction_status_sender,
         replay_vote_sender,
-        &mut ExecuteTimings::default(),
-    )
+        &mut timings,
+    );
+
+    debug!("process_entries: {:?}", timings);
+    result
 }
 
 fn process_entries_with_callback(
@@ -601,6 +605,8 @@ fn confirm_full_slot(
         recyclers,
         opts.allow_dead_slots,
     )?;
+
+    debug!("confirm_full_slot: {:?}", timing.execute_timings);
 
     if !bank.is_complete() {
         Err(BlockstoreProcessorError::InvalidBlock(
