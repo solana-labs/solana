@@ -21,7 +21,7 @@ impl<T> DecodeError<T> for OwnableError {
 
 fn initialize_account(account_pubkey: &Pubkey, owner_pubkey: &Pubkey) -> Instruction {
     let keys = vec![AccountMeta::new(*account_pubkey, false)];
-    Instruction::new(crate::id(), &owner_pubkey, keys)
+    Instruction::new_with_bincode(crate::id(), &owner_pubkey, keys)
 }
 
 pub fn create_account(
@@ -48,5 +48,5 @@ pub fn set_owner(account_pubkey: &Pubkey, old_pubkey: &Pubkey, new_pubkey: &Pubk
         AccountMeta::new(*account_pubkey, false),
         AccountMeta::new(*old_pubkey, true),
     ];
-    Instruction::new(crate::id(), &new_pubkey, keys)
+    Instruction::new_with_bincode(crate::id(), &new_pubkey, keys)
 }

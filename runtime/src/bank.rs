@@ -5386,8 +5386,11 @@ pub(crate) mod tests {
             AccountMeta::new(keypair2.pubkey(), true),
             AccountMeta::new_readonly(read_only_keypair.pubkey(), false),
         ];
-        let deduct_instruction =
-            Instruction::new(mock_program_id, &MockInstruction::Deduction, account_metas);
+        let deduct_instruction = Instruction::new_with_bincode(
+            mock_program_id,
+            &MockInstruction::Deduction,
+            account_metas,
+        );
         Transaction::new_signed_with_payer(
             &[deduct_instruction],
             Some(&payer.pubkey()),
@@ -9788,7 +9791,7 @@ pub(crate) mod tests {
             AccountMeta::new(to_pubkey, false),
             AccountMeta::new(dup_pubkey, false),
         ];
-        let instruction = Instruction::new(mock_program_id, &10, account_metas);
+        let instruction = Instruction::new_with_bincode(mock_program_id, &10, account_metas);
         let tx = Transaction::new_signed_with_payer(
             &[instruction],
             Some(&mint_keypair.pubkey()),
@@ -9834,7 +9837,7 @@ pub(crate) mod tests {
             AccountMeta::new(dup_pubkey, false),
             AccountMeta::new(mock_program_id, false),
         ];
-        let instruction = Instruction::new(mock_program_id, &10, account_metas);
+        let instruction = Instruction::new_with_bincode(mock_program_id, &10, account_metas);
         let tx = Transaction::new_signed_with_payer(
             &[instruction],
             Some(&mint_keypair.pubkey()),
@@ -9860,7 +9863,8 @@ pub(crate) mod tests {
             AccountMeta::new(to_pubkey, false),
         ];
 
-        let instruction = Instruction::new(solana_vote_program::id(), &10, account_metas);
+        let instruction =
+            Instruction::new_with_bincode(solana_vote_program::id(), &10, account_metas);
         let mut tx = Transaction::new_signed_with_payer(
             &[instruction],
             Some(&mint_keypair.pubkey()),
@@ -9930,7 +9934,8 @@ pub(crate) mod tests {
             mock_ok_vote_processor,
         );
 
-        let instruction = Instruction::new(solana_vote_program::id(), &10, account_metas);
+        let instruction =
+            Instruction::new_with_bincode(solana_vote_program::id(), &10, account_metas);
         let mut tx = Transaction::new_signed_with_payer(
             &[instruction],
             Some(&mint_keypair.pubkey()),
@@ -9963,7 +9968,8 @@ pub(crate) mod tests {
             mock_ok_vote_processor,
         );
 
-        let instruction = Instruction::new(solana_vote_program::id(), &10, account_metas);
+        let instruction =
+            Instruction::new_with_bincode(solana_vote_program::id(), &10, account_metas);
         let mut tx = Transaction::new_signed_with_payer(
             &[instruction],
             Some(&mint_keypair.pubkey()),
@@ -10020,7 +10026,8 @@ pub(crate) mod tests {
             mock_ok_vote_processor,
         );
 
-        let instruction = Instruction::new(solana_vote_program::id(), &10, account_metas);
+        let instruction =
+            Instruction::new_with_bincode(solana_vote_program::id(), &10, account_metas);
         let mut tx = Transaction::new_signed_with_payer(
             &[instruction],
             Some(&mint_keypair.pubkey()),
@@ -10267,7 +10274,7 @@ pub(crate) mod tests {
         program2_account.executable = true;
         bank.store_account(&program2_pubkey, &program2_account);
 
-        let instruction = Instruction::new(program2_pubkey, &10, vec![]);
+        let instruction = Instruction::new_with_bincode(program2_pubkey, &10, vec![]);
         let tx = Transaction::new_signed_with_payer(
             &[instruction.clone(), instruction],
             Some(&mint_keypair.pubkey()),
@@ -11515,7 +11522,11 @@ pub(crate) mod tests {
         let bank = Bank::new(&genesis_config);
 
         let tx = Transaction::new_signed_with_payer(
-            &[Instruction::new(native_loader::id(), &(), vec![])],
+            &[Instruction::new_with_bincode(
+                native_loader::id(),
+                &(),
+                vec![],
+            )],
             Some(&mint_keypair.pubkey()),
             &[&mint_keypair],
             bank.last_blockhash(),
@@ -11544,7 +11555,7 @@ pub(crate) mod tests {
                     0,
                     &native_loader::id(),
                 ),
-                Instruction::new(
+                Instruction::new_with_bincode(
                     native_loader::id(),
                     &(),
                     vec![AccountMeta::new(to_keypair.pubkey(), false)],
@@ -11571,7 +11582,7 @@ pub(crate) mod tests {
                     100,
                     &native_loader::id(),
                 ),
-                Instruction::new(
+                Instruction::new_with_bincode(
                     native_loader::id(),
                     &(),
                     vec![AccountMeta::new(to_keypair.pubkey(), false)],

@@ -10,7 +10,7 @@ use test::Bencher;
 
 fn make_instructions() -> Vec<Instruction> {
     let meta = AccountMeta::new(pubkey::new_rand(), false);
-    let inst = Instruction::new(pubkey::new_rand(), &[0; 10], vec![meta; 4]);
+    let inst = Instruction::new_with_bincode(pubkey::new_rand(), &[0; 10], vec![meta; 4]);
     vec![inst; 4]
 }
 

@@ -199,5 +199,5 @@ pub fn create_invoke_instruction<T: Serialize>(
     data: &T,
 ) -> Instruction {
     let account_metas = vec![AccountMeta::new(from_pubkey, true)];
-    Instruction::new(program_id, data, account_metas)
+    Instruction::new_with_bincode(program_id, data, account_metas)
 }

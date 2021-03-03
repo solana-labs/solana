@@ -184,7 +184,7 @@ pub struct AuthorizeWithSeedArgs {
 }
 
 fn initialize(stake_pubkey: &Pubkey, authorized: &Authorized, lockup: &Lockup) -> Instruction {
-    Instruction::new(
+    Instruction::new_with_bincode(
         id(),
         &StakeInstruction::Initialize(*authorized, *lockup),
         vec![
@@ -248,7 +248,7 @@ fn _split(
         AccountMeta::new_readonly(*authorized_pubkey, true),
     ];
 
-    Instruction::new(id(), &StakeInstruction::Split(lamports), account_metas)
+    Instruction::new_with_bincode(id(), &StakeInstruction::Split(lamports), account_metas)
 }
 
 pub fn split(
@@ -314,7 +314,7 @@ pub fn merge(
         AccountMeta::new_readonly(*authorized_pubkey, true),
     ];
 
-    vec![Instruction::new(
+    vec![Instruction::new_with_bincode(
         id(),
         &StakeInstruction::Merge,
         account_metas,
@@ -382,7 +382,7 @@ pub fn authorize(
         account_metas.push(AccountMeta::new_readonly(*custodian_pubkey, true));
     }
 
-    Instruction::new(
+    Instruction::new_with_bincode(
         id(),
         &StakeInstruction::Authorize(*new_authorized_pubkey, stake_authorize),
         account_metas,
@@ -415,7 +415,7 @@ pub fn authorize_with_seed(
         authority_owner: *authority_owner,
     };
 
-    Instruction::new(
+    Instruction::new_with_bincode(
         id(),
         &StakeInstruction::AuthorizeWithSeed(args),
         account_metas,
@@ -435,7 +435,7 @@ pub fn delegate_stake(
         AccountMeta::new_readonly(crate::config::id(), false),
         AccountMeta::new_readonly(*authorized_pubkey, true),
     ];
-    Instruction::new(id(), &StakeInstruction::DelegateStake, account_metas)
+    Instruction::new_with_bincode(id(), &StakeInstruction::DelegateStake, account_metas)
 }
 
 pub fn withdraw(
@@ -457,7 +457,7 @@ pub fn withdraw(
         account_metas.push(AccountMeta::new_readonly(*custodian_pubkey, true));
     }
 
-    Instruction::new(id(), &StakeInstruction::Withdraw(lamports), account_metas)
+    Instruction::new_with_bincode(id(), &StakeInstruction::Withdraw(lamports), account_metas)
 }
 
 pub fn deactivate_stake(stake_pubkey: &Pubkey, authorized_pubkey: &Pubkey) -> Instruction {
@@ -466,7 +466,7 @@ pub fn deactivate_stake(stake_pubkey: &Pubkey, authorized_pubkey: &Pubkey) -> In
         AccountMeta::new_readonly(sysvar::clock::id(), false),
         AccountMeta::new_readonly(*authorized_pubkey, true),
     ];
-    Instruction::new(id(), &StakeInstruction::Deactivate, account_metas)
+    Instruction::new_with_bincode(id(), &StakeInstruction::Deactivate, account_metas)
 }
 
 pub fn set_lockup(
@@ -478,7 +478,7 @@ pub fn set_lockup(
         AccountMeta::new(*stake_pubkey, false),
         AccountMeta::new_readonly(*custodian_pubkey, true),
     ];
-    Instruction::new(id(), &StakeInstruction::SetLockup(*lockup), account_metas)
+    Instruction::new_with_bincode(id(), &StakeInstruction::SetLockup(*lockup), account_metas)
 }
 
 pub fn process_instruction(

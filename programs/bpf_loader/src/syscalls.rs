@@ -1793,7 +1793,7 @@ mod tests {
         assert_eq!(pubkey, *translated_pubkey);
 
         // Instruction
-        let instruction = Instruction::new(
+        let instruction = Instruction::new_with_bincode(
             solana_sdk::pubkey::new_rand(),
             &"foobar",
             vec![AccountMeta::new(solana_sdk::pubkey::new_rand(), false)],

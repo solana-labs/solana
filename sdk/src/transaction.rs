@@ -519,7 +519,7 @@ mod tests {
         let key = Keypair::new();
         let id0 = Pubkey::default();
         let program_id = solana_sdk::pubkey::new_rand();
-        let ix = Instruction::new(
+        let ix = Instruction::new_with_bincode(
             program_id,
             &0,
             vec![
@@ -596,7 +596,8 @@ mod tests {
             AccountMeta::new(keypair.pubkey(), true),
             AccountMeta::new(to, false),
         ];
-        let instruction = Instruction::new(program_id, &(1u8, 2u8, 3u8), account_metas);
+        let instruction =
+            Instruction::new_with_bincode(program_id, &(1u8, 2u8, 3u8), account_metas);
         let message = Message::new(&[instruction], Some(&keypair.pubkey()));
         Transaction::new(&[&keypair], message, Hash::default())
     }
@@ -693,7 +694,7 @@ mod tests {
     fn test_partial_sign_mismatched_key() {
         let keypair = Keypair::new();
         let fee_payer = solana_sdk::pubkey::new_rand();
-        let ix = Instruction::new(
+        let ix = Instruction::new_with_bincode(
             Pubkey::default(),
             &0,
             vec![AccountMeta::new(fee_payer, true)],
@@ -707,7 +708,7 @@ mod tests {
         let keypair0 = Keypair::new();
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
-        let ix = Instruction::new(
+        let ix = Instruction::new_with_bincode(
             Pubkey::default(),
             &0,
             vec![
@@ -737,7 +738,7 @@ mod tests {
         let program_id = Pubkey::default();
         let keypair0 = Keypair::new();
         let id0 = keypair0.pubkey();
-        let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]);
+        let ix = Instruction::new_with_bincode(program_id, &0, vec![AccountMeta::new(id0, true)]);
         let message = Message::new(&[ix], Some(&id0));
         Transaction::new_unsigned(message).sign(&Vec::<&Keypair>::new(), Hash::default());
     }
@@ -748,7 +749,8 @@ mod tests {
         let program_id = Pubkey::default();
         let keypair0 = Keypair::new();
         let wrong_id = Pubkey::default();
-        let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(wrong_id, true)]);
+        let ix =
+            Instruction::new_with_bincode(program_id, &0, vec![AccountMeta::new(wrong_id, true)]);
         let message = Message::new(&[ix], Some(&wrong_id));
         Transaction::new_unsigned(message).sign(&[&keypair0], Hash::default());
     }
@@ -758,7 +760,7 @@ mod tests {
         let program_id = Pubkey::default();
         let keypair0 = Keypair::new();
         let id0 = keypair0.pubkey();
-        let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]);
+        let ix = Instruction::new_with_bincode(program_id, &0, vec![AccountMeta::new(id0, true)]);
         let message = Message::new(&[ix], Some(&id0));
         let mut tx = Transaction::new_unsigned(message);
         tx.sign(&[&keypair0], Hash::default());
@@ -775,7 +777,7 @@ mod tests {
         let keypair0 = Keypair::new();
         let id0 = keypair0.pubkey();
         let id1 = solana_sdk::pubkey::new_rand();
-        let ix = Instruction::new(
+        let ix = Instruction::new_with_bincode(
             program_id,
             &0,
             vec![
@@ -803,7 +805,7 @@ mod tests {
         let presigner_keypair = Keypair::new();
         let presigner_pubkey = presigner_keypair.pubkey();
 
-        let ix = Instruction::new(
+        let ix = Instruction::new_with_bincode(
             program_id,
             &0,
             vec![
@@ -826,7 +828,7 @@ mod tests {
 
         // Wrong key should error, not panic
         let another_pubkey = solana_sdk::pubkey::new_rand();
-        let ix = Instruction::new(
+        let ix = Instruction::new_with_bincode(
             program_id,
             &0,
             vec![

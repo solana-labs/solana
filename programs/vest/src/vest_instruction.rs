@@ -75,7 +75,7 @@ fn initialize_account(
     total_lamports: u64,
 ) -> Instruction {
     let keys = vec![AccountMeta::new(*contract_pubkey, false)];
-    Instruction::new(
+    Instruction::new_with_bincode(
         id(),
         &VestInstruction::InitializeAccount {
             terminator_pubkey: *terminator_pubkey,
@@ -116,7 +116,7 @@ pub fn set_terminator(contract: &Pubkey, old_pubkey: &Pubkey, new_pubkey: &Pubke
         AccountMeta::new(*contract, false),
         AccountMeta::new(*old_pubkey, true),
     ];
-    Instruction::new(
+    Instruction::new_with_bincode(
         id(),
         &VestInstruction::SetTerminator(*new_pubkey),
         account_metas,
@@ -128,7 +128,7 @@ pub fn set_payee(contract: &Pubkey, old_pubkey: &Pubkey, new_pubkey: &Pubkey) ->
         AccountMeta::new(*contract, false),
         AccountMeta::new(*old_pubkey, true),
     ];
-    Instruction::new(id(), &VestInstruction::SetPayee(*new_pubkey), account_metas)
+    Instruction::new_with_bincode(id(), &VestInstruction::SetPayee(*new_pubkey), account_metas)
 }
 
 pub fn redeem_tokens(contract: &Pubkey, date_pubkey: &Pubkey, to: &Pubkey) -> Instruction {
@@ -137,7 +137,7 @@ pub fn redeem_tokens(contract: &Pubkey, date_pubkey: &Pubkey, to: &Pubkey) -> In
         AccountMeta::new_readonly(*date_pubkey, false),
         AccountMeta::new(*to, false),
     ];
-    Instruction::new(id(), &VestInstruction::RedeemTokens, account_metas)
+    Instruction::new_with_bincode(id(), &VestInstruction::RedeemTokens, account_metas)
 }
 
 pub fn terminate(contract: &Pubkey, from: &Pubkey, to: &Pubkey) -> Instruction {
@@ -148,7 +148,7 @@ pub fn terminate(contract: &Pubkey, from: &Pubkey, to: &Pubkey) -> Instruction {
     if from != to {
         account_metas.push(AccountMeta::new(*to, false));
     }
-    Instruction::new(id(), &VestInstruction::Terminate, account_metas)
+    Instruction::new_with_bincode(id(), &VestInstruction::Terminate, account_metas)
 }
 
 pub fn renege(contract: &Pubkey, from: &Pubkey, to: &Pubkey, lamports: u64) -> Instruction {
@@ -159,7 +159,7 @@ pub fn renege(contract: &Pubkey, from: &Pubkey, to: &Pubkey, lamports: u64) -> I
     if from != to {
         account_metas.push(AccountMeta::new(*to, false));
     }
-    Instruction::new(id(), &VestInstruction::Renege(lamports), account_metas)
+    Instruction::new_with_bincode(id(), &VestInstruction::Renege(lamports), account_metas)
 }
 
 pub fn vest_all(contract: &Pubkey, from: &Pubkey) -> Instruction {
@@ -167,5 +167,5 @@ pub fn vest_all(contract: &Pubkey, from: &Pubkey) -> Instruction {
         AccountMeta::new(*contract, false),
         AccountMeta::new(*from, true),
     ];
-    Instruction::new(id(), &VestInstruction::VestAll, account_metas)
+    Instruction::new_with_bincode(id(), &VestInstruction::VestAll, account_metas)
 }
