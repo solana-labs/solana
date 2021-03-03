@@ -582,7 +582,7 @@ impl BankingStage {
                 Err(RecvTimeoutError::Disconnected) => break,
             }
 
-            banking_stage_stats.report(100);
+            banking_stage_stats.report(1000);
         }
     }
 
