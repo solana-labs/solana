@@ -15,7 +15,7 @@ use crate::{
     inline_spl_token_v2_0,
     instruction_recorder::InstructionRecorder,
     log_collector::LogCollector,
-    message_processor::{Executors, MessageProcessor},
+    message_processor::{ExecuteDetailsTimings, Executors, MessageProcessor},
     rent_collector::RentCollector,
     stakes::Stakes,
     status_cache::{SlotDelta, StatusCache},
@@ -93,11 +93,12 @@ pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
 
 pub const MAX_LEADER_SCHEDULE_STAKES: Epoch = 5;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct ExecuteTimings {
     pub load_us: u64,
     pub execute_us: u64,
     pub store_us: u64,
+    pub details: ExecuteDetailsTimings,
 }
 
 impl ExecuteTimings {
@@ -105,6 +106,7 @@ impl ExecuteTimings {
         self.load_us += other.load_us;
         self.execute_us += other.execute_us;
         self.store_us += other.store_us;
+        self.details.accumulate(&other.details);
     }
 }
 
@@ -2415,6 +2417,8 @@ impl Bank {
         let txs = &[transaction];
         let batch = self.prepare_simulation_batch(txs);
 
+        let mut timings = ExecuteTimings::default();
+
         let (
             _loaded_accounts,
             executed,
@@ -2431,13 +2435,15 @@ impl Bank {
             MAX_PROCESSING_AGE - MAX_TRANSACTION_FORWARDING_DELAY,
             false,
             true,
-            &mut ExecuteTimings::default(),
+            &mut timings,
         );
 
         let transaction_result = executed[0].0.clone().map(|_| ());
         let log_messages = log_messages
             .get(0)
             .map_or(vec![], |messages| messages.to_vec());
+
+        debug!("simulate_transaction: {:?}", timings);
 
         (transaction_result, log_messages)
     }
@@ -2923,6 +2929,7 @@ impl Bank {
                         instruction_recorders.as_deref(),
                         self.feature_set.clone(),
                         bpf_compute_budget,
+                        &mut timings.details,
                     );
 
                     if enable_log_recording {

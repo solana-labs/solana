@@ -2598,6 +2598,7 @@ dependencies = [
  "num-derive 0.3.0",
  "num-traits",
  "rand_core 0.6.2",
+ "solana-measure",
  "solana-runtime",
  "solana-sdk",
  "solana_rbpf",
