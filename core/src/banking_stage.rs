@@ -490,6 +490,7 @@ impl BankingStage {
         debug!("num_to_commit: {} ", num_to_commit);
         // unlock all the accounts with errors which are filtered by the above `filter_map`
         if !processed_transactions.is_empty() {
+            inc_new_counter_info!("banking_stage-record_count", 1);
             inc_new_counter_info!("banking_stage-record_transactions", num_to_commit);
 
             let mut hash_time = Measure::start("record::hash");
@@ -506,6 +507,11 @@ impl BankingStage {
             match res {
                 Ok(()) => (),
                 Err(PohRecorderError::MaxHeightReached) => {
+                    inc_new_counter_info!("banking_stage-max_height_reached", 1);
+                    inc_new_counter_info!(
+                        "banking_stage-max_height_reached_num_to_commit",
+                        num_to_commit
+                    );
                     // If record errors, add all the committable transactions (the ones
                     // we just attempted to record) as retryable
                     return (
@@ -571,6 +577,14 @@ impl BankingStage {
         let mut record_time = Measure::start("record_time");
         let (num_to_commit, retryable_record_txs) =
             Self::record_transactions(bank.slot(), txs, &results, poh);
+        inc_new_counter_info!(
+            "banking_stage-record_transactions_num_to_commit",
+            *num_to_commit.as_ref().unwrap_or(&0)
+        );
+        inc_new_counter_info!(
+            "banking_stage-record_transactions_retryable_record_txs",
+            retryable_record_txs.len()
+        );
         retryable_txs.extend(retryable_record_txs);
         if num_to_commit.is_err() {
             return (num_to_commit, retryable_txs);
