@@ -5695,9 +5695,10 @@ pub mod tests {
         let balance: UiTokenAmount =
             serde_json::from_value(result["result"]["value"].clone()).unwrap();
         let error = f64::EPSILON;
-        assert!((balance.ui_amount - 4.2).abs() < error);
+        assert!((balance.ui_amount.unwrap() - 4.2).abs() < error);
         assert_eq!(balance.amount, 420.to_string());
         assert_eq!(balance.decimals, 2);
+        assert_eq!(balance.ui_amount_string, "4.2".to_string());
 
         // Test non-existent token account
         let req = format!(
@@ -5720,9 +5721,10 @@ pub mod tests {
         let supply: UiTokenAmount =
             serde_json::from_value(result["result"]["value"].clone()).unwrap();
         let error = f64::EPSILON;
-        assert!((supply.ui_amount - 5.0).abs() < error);
+        assert!((supply.ui_amount.unwrap() - 5.0).abs() < error);
         assert_eq!(supply.amount, 500.to_string());
         assert_eq!(supply.decimals, 2);
+        assert_eq!(supply.ui_amount_string, "5".to_string());
 
         // Test non-existent mint address
         let req = format!(
@@ -6018,17 +6020,19 @@ pub mod tests {
                 RpcTokenAccountBalance {
                     address: token_with_different_mint_pubkey.to_string(),
                     amount: UiTokenAmount {
-                        ui_amount: 0.42,
+                        ui_amount: Some(0.42),
                         decimals: 2,
                         amount: "42".to_string(),
+                        ui_amount_string: "0.42".to_string(),
                     }
                 },
                 RpcTokenAccountBalance {
                     address: token_with_smaller_balance.to_string(),
                     amount: UiTokenAmount {
-                        ui_amount: 0.1,
+                        ui_amount: Some(0.1),
                         decimals: 2,
                         amount: "10".to_string(),
+                        ui_amount_string: "0.1".to_string(),
                     }
                 }
             ]
@@ -6103,6 +6107,7 @@ pub mod tests {
                             "uiAmount": 4.2,
                             "decimals": 2,
                             "amount": "420",
+                            "uiAmountString": "4.2",
                         },
                         "delegate": delegate.to_string(),
                         "state": "initialized",
@@ -6111,11 +6116,13 @@ pub mod tests {
                             "uiAmount": 0.1,
                             "decimals": 2,
                             "amount": "10",
+                            "uiAmountString": "0.1",
                         },
                         "delegatedAmount": {
                             "uiAmount": 0.3,
                             "decimals": 2,
                             "amount": "30",
+                            "uiAmountString": "0.3",
                         },
                         "closeAuthority": owner.to_string(),
                     }
