@@ -29,6 +29,7 @@ const MARKET_REGISTRY: { [key: string]: string } = {
   "3bYr6BzwMqrrH1N3BGjYeEPRrRxde25zj3Garud4qom3": "Serum: BTC / USDC - Vault Owner",
 
   "8AcVjMG2LTbpkjNoyq8RwysokqZunkjy3d5JDzxC6BJa": "Serum: BTC / USDT",
+  "5r8FfnbNYcQbS1m4CYmoHYGjBtu6bxfo6UJHNRfzPiYH": "Serum: BTC / USDT",
   "DoYVFapBvZksM6DqqsWgLrqYQL5JknhnjFcEPb2jCr6D": "Serum: BTC / USDT - Request Queue",
   "6iveBLh1CWrE1T4p7AE1tX3DPSpnbPLxCPZ2RxTfeTvT": "Serum: BTC / USDT - Event Queue",
   "5N2uRKMNDv22rgV8Cm8VtyTByvKGfdFBTtUToqga3bxR": "Serum: BTC / USDT - Order Book (Bids)",
@@ -47,6 +48,7 @@ const MARKET_REGISTRY: { [key: string]: string } = {
   "4PfXQMYgQPZe7Z6SuAFKmRiM2jNMi9XbN2vbMS2BhwSm": "Serum: ETH / USDC - Vault Owner",
 
   "HfCZdJ1wfsWKfYP2qyWdXTT5PWAGWFctzFjLH48U1Hsd": "Serum: ETH / USDT",
+  "71CtEComq2XdhGNbXBuYPmosAjMCPSedcgbNi5jDaGbR": "Serum: ETH / USDT",
   "78dUr2kcuvDnsxTb8caFaGeD8GBmreReSLevDEJjVJmf": "Serum: ETH / USDT - Request Queue",
   "2GQd5e5z5BvsPyqSVVUs5Qgk8uSPf43MWnKAMfEQRPH7": "Serum: ETH / USDT - Event Queue",
   "888UP9HWwY1vaCMpNpP4nzQXgn7hpqomaFwQcV95FkYB": "Serum: ETH / USDT - Order Book (Bids)",
