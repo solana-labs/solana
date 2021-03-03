@@ -71,7 +71,7 @@ fn allocate(
     if !address.is_signer(signers) {
         ic_msg!(
             invoke_context,
-            "Allocate: 'to' account {:?} is not a signer",
+            "Allocate: 'to' account {:?} must sign",
             address
         );
         return Err(InstructionError::MissingRequiredSignature);
@@ -116,17 +116,13 @@ fn assign(
     }
 
     if !address.is_signer(&signers) {
-        ic_msg!(
-            invoke_context,
-            "Assign: account {:?} is not a signer",
-            address
-        );
+        ic_msg!(invoke_context, "Assign: account {:?} must sign", address);
         return Err(InstructionError::MissingRequiredSignature);
     }
 
     // guard against sysvars being made
     if sysvar::check_id(&owner) {
-        ic_msg!(invoke_context, "Assign: {} is not a valid owner", owner);
+        ic_msg!(invoke_context, "Assign: cannot assign to sysvar, {}", owner);
         return Err(SystemError::InvalidProgramId.into());
     }
 
@@ -162,7 +158,7 @@ fn create_account(
         if to.lamports > 0 {
             ic_msg!(
                 invoke_context,
-                "Create Account: account {:?} already created",
+                "Create Account: account {:?} already in use",
                 to_address
             );
             return Err(SystemError::AccountAlreadyInUse.into());
@@ -211,7 +207,7 @@ fn transfer(
     if from.signer_key().is_none() {
         ic_msg!(
             invoke_context,
-            "Transfer: `from` accont {} is not a signer",
+            "Transfer: `from` accont {} must sign",
             from.unsigned_key()
         );
         return Err(InstructionError::MissingRequiredSignature);
@@ -236,7 +232,7 @@ fn transfer_with_seed(
     if from_base.signer_key().is_none() {
         ic_msg!(
             invoke_context,
-            "Transfer: 'from' account {:?} is not a signer",
+            "Transfer: 'from' account {:?} must sign",
             from_base
         );
         return Err(InstructionError::MissingRequiredSignature);

@@ -72,7 +72,7 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
                 if data.blockhash == recent_blockhash {
                     ic_msg!(
                         invoke_context,
-                        "Advance nonce account: nonce is not expired"
+                        "Advance nonce account: nonce can only advance once per slot"
                     );
                     return Err(NonceError::NotExpired.into());
                 }
@@ -122,7 +122,7 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
                     if data.blockhash == recent_blockhashes[0].blockhash {
                         ic_msg!(
                             invoke_context,
-                            "Withdraw nonce account: nonce is not expired"
+                            "Withdraw nonce account: nonce can only advance once per slot"
                         );
                         return Err(NonceError::NotExpired.into());
                     }
@@ -147,7 +147,7 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
         if !signers.contains(&signer) {
             ic_msg!(
                 invoke_context,
-                "Withdraw nonce account: Account {} is not a signer",
+                "Withdraw nonce account: Account {} must sign",
                 signer
             );
             return Err(InstructionError::MissingRequiredSignature);
@@ -215,7 +215,7 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
                 if !signers.contains(&data.authority) {
                     ic_msg!(
                         invoke_context,
-                        "Authorize nonce account: Account {} is not a signer",
+                        "Authorize nonce account: Account {} must sign",
                         data.authority
                     );
                     return Err(InstructionError::MissingRequiredSignature);
