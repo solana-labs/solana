@@ -225,6 +225,33 @@ struct Config {
     bad_cluster_average_skip_rate: usize,
 }
 
+impl Config {
+    #[cfg(test)]
+    pub fn default_for_test() -> Self {
+        Self {
+            json_rpc_url: "https://api.mainnet-beta.com".to_string(),
+            cluster: "mainnet-beta".to_string(),
+            source_stake_address: Pubkey::new_unique(),
+            authorized_staker: Keypair::new(),
+            validator_list: HashSet::default(),
+            dry_run: true,
+            baseline_stake_amount: 25_000,
+            bonus_stake_amount: 175_000,
+            quality_block_producer_percentage: 15,
+            delinquent_grace_slot_distance: 21_600,
+            max_poor_block_producer_percentage: 20,
+            max_commission: 100,
+            address_labels: HashMap::default(),
+            min_release_version: None,
+            max_old_release_version_percentage: 10,
+            confirmed_block_cache_path: default_confirmed_block_cache_path(),
+            max_infrastructure_concentration: 100.0,
+            infrastructure_concentration_affects: InfrastructureConcentrationAffects::WarnAll,
+            bad_cluster_average_skip_rate: 50,
+        }
+    }
+}
+
 fn default_confirmed_block_cache_path() -> PathBuf {
     let home_dir = std::env::var("HOME").unwrap();
     PathBuf::from(home_dir).join(".cache/solana/som/confirmed-block-cache/")
@@ -587,7 +614,7 @@ fn classify_producers(
     first_slot_in_epoch: Slot,
     confirmed_blocks: HashSet<u64>,
     leader_schedule: HashMap<String, Vec<usize>>,
-    quality_block_producer_percentage: usize,
+    config: &Config,
 ) -> BoxResult<ClassifyResult> {
     let mut poor_block_producers = HashSet::new();
     let mut quality_block_producers = HashSet::new();
@@ -625,7 +652,9 @@ fn classify_producers(
     let cluster_average_rate = 100 - total_blocks * 100 / total_slots;
     for (validator_identity, (blocks, slots)) in blocks_and_slots {
         let skip_rate: usize = 100 - (blocks * 100 / slots);
-        if skip_rate.saturating_sub(quality_block_producer_percentage) >= cluster_average_rate {
+        if skip_rate.saturating_sub(config.quality_block_producer_percentage)
+            >= cluster_average_rate
+        {
             poor_block_producers.insert(validator_identity);
         } else {
             quality_block_producers.insert(validator_identity);
@@ -689,7 +718,7 @@ fn classify_block_producers(
         first_slot_in_epoch,
         confirmed_blocks,
         leader_schedule,
-        config.quality_block_producer_percentage,
+        config,
     )
 }
 
@@ -1597,7 +1626,10 @@ mod test {
     #[test]
     fn test_quality_producer() {
         solana_logger::setup();
-        let percentage = 10;
+        let config = Config {
+            quality_block_producer_percentage: 10,
+            ..Config::default_for_test()
+        };
 
         let confirmed_blocks: HashSet<Slot> = [
             0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 14, 21, 22, 43, 44, 45, 46, 47, 48,
@@ -1617,7 +1649,7 @@ mod test {
         leader_schedule.insert(l4.to_string(), (30..40).collect());
         leader_schedule.insert(l5.to_string(), (40..50).collect());
         let (quality, poor, _cluster_average) =
-            classify_producers(0, 0, confirmed_blocks, leader_schedule, percentage).unwrap();
+            classify_producers(0, 0, confirmed_blocks, leader_schedule, &config).unwrap();
         assert!(quality.contains(&l1));
         assert!(quality.contains(&l5));
         assert!(quality.contains(&l2));
