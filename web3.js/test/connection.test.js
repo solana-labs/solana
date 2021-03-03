@@ -258,19 +258,6 @@ describe('Connection', () => {
     }
   });
 
-  if (!process.env.TEST_LIVE) {
-    it('validatorExit', async () => {
-      await mockRpcResponse({
-        method: 'validatorExit',
-        params: [],
-        value: false,
-      });
-
-      const result = await connection.validatorExit();
-      expect(result).to.eq(false);
-    });
-  }
-
   it('get balance', async () => {
     const account = new Account();
 

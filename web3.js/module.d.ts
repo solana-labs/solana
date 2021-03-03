@@ -527,7 +527,6 @@ declare module '@solana/web3.js' {
     removeSignatureListener(id: number): Promise<void>;
     onRootChange(callback: RootChangeCallback): number;
     removeRootChangeListener(id: number): Promise<void>;
-    validatorExit(): Promise<boolean>;
     getMinimumBalanceForRentExemption(
       dataLength: number,
       commitment?: Commitment,
