@@ -222,6 +222,9 @@ struct Config {
     ///                   destaking those in the list and warning any others
     infrastructure_concentration_affects: InfrastructureConcentrationAffects,
 
+    /// Use a cluster-average skip rate floor for block-production quality calculations
+    use_cluster_average_skip_rate: bool,
+
     bad_cluster_average_skip_rate: usize,
 }
 
@@ -247,6 +250,7 @@ impl Config {
             confirmed_block_cache_path: default_confirmed_block_cache_path(),
             max_infrastructure_concentration: 100.0,
             infrastructure_concentration_affects: InfrastructureConcentrationAffects::WarnAll,
+            use_cluster_average_skip_rate: false,
             bad_cluster_average_skip_rate: 50,
         }
     }
@@ -439,6 +443,11 @@ fn get_config() -> Config {
                                          destaking those in the list and warning \
                                          any others")
         )
+        .arg(
+            Arg::with_name("use_cluster_average_skip_rate")
+                .long("use-cluster-average-skip-rate")
+                .help("Use a cluster-average skip rate floor for block-production quality calculations")
+        )
         .get_matches();
 
     let config = if let Some(config_file) = matches.value_of("config_file") {
@@ -519,6 +528,7 @@ fn get_config() -> Config {
         InfrastructureConcentrationAffects
     )
     .unwrap();
+    let use_cluster_average_skip_rate = matches.is_present("use_cluster_average_skip_rate");
 
     let config = Config {
         json_rpc_url,
@@ -539,6 +549,7 @@ fn get_config() -> Config {
         confirmed_block_cache_path,
         max_infrastructure_concentration,
         infrastructure_concentration_affects,
+        use_cluster_average_skip_rate,
         bad_cluster_average_skip_rate,
     };
 
@@ -652,9 +663,12 @@ fn classify_producers(
     let cluster_average_rate = 100 - total_blocks * 100 / total_slots;
     for (validator_identity, (blocks, slots)) in blocks_and_slots {
         let skip_rate: usize = 100 - (blocks * 100 / slots);
-        if skip_rate.saturating_sub(config.quality_block_producer_percentage)
-            >= cluster_average_rate
-        {
+        let skip_rate_floor = if config.use_cluster_average_skip_rate {
+            cluster_average_rate
+        } else {
+            0
+        };
+        if skip_rate.saturating_sub(config.quality_block_producer_percentage) >= skip_rate_floor {
             poor_block_producers.insert(validator_identity);
         } else {
             quality_block_producers.insert(validator_identity);
@@ -1628,6 +1642,7 @@ mod test {
         solana_logger::setup();
         let config = Config {
             quality_block_producer_percentage: 10,
+            use_cluster_average_skip_rate: true,
             ..Config::default_for_test()
         };
 
