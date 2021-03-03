@@ -1171,9 +1171,9 @@ dependencies = [
 
 [[package]]
 name = "env_logger"
-version = "0.8.2"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f26ecb66b4bdca6c1409b40fb255eefc2bd4f6d135dab3c3124f80ffa2a9661e"
+checksum = "17392a012ea30ef05a610aa97dfb49496e71c9f676b27879922ea5bdf60d9d3f"
 dependencies = [
  "atty",
  "humantime 2.0.1",
@@ -4817,7 +4817,7 @@ version = "1.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d83a006d97da5514a4475141573383d3fcd71c729ff78494f96bb531cf734d21"
 dependencies = [
- "env_logger 0.8.2",
+ "env_logger 0.8.3",
  "lazy_static",
  "log 0.4.11",
 ]
@@ -4826,7 +4826,7 @@ dependencies = [
 name = "solana-logger"
 version = "1.6.0"
 dependencies = [
- "env_logger 0.8.2",
+ "env_logger 0.8.3",
  "lazy_static",
  "log 0.4.11",
 ]
@@ -4868,7 +4868,7 @@ dependencies = [
 name = "solana-metrics"
 version = "1.6.0"
 dependencies = [
- "env_logger 0.8.2",
+ "env_logger 0.8.3",
  "gethostname",
  "lazy_static",
  "log 0.4.11",
