@@ -26,8 +26,8 @@ IOPS, this is not recommended
   - The Samsung 970 and 980 Pro series SSDs are popular with the validator community
 - GPUs
   - Not strictly necessary at this time
-  - Motherboard and power supply speced to add one or more high-end gaming GPUs
-in the future suggested
+  - Motherboard and power supply speced to add one or more high-end GPUs in the
+future suggested
 
 ## Virtual machines on Cloud Platforms
 
@@ -58,7 +58,7 @@ We use docker only for development purpose.
 
 ## Software
 
-- We build and run on Ubuntu 20.04. Some users have had trouble when running on Ubuntu 16.04
+- We build and run on Ubuntu 20.04.
 - See [Installing Solana](../cli/install-solana-cli-tools.md) for the current Solana software release.
 
 Be sure to ensure that the machine used is not behind a residential NAT to avoid
