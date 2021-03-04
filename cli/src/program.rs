@@ -14,12 +14,7 @@ use serde_json::{self, json, Value};
 use solana_bpf_loader_program::{bpf_verifier, BpfError, ThisInstructionMeter};
 use solana_clap_utils::{self, input_parsers::*, input_validators::*, keypair::*};
 use solana_cli_output::{
-<<<<<<< HEAD
-    display::new_spinner_progress_bar, CliUpgradeableBuffer, CliUpgradeableProgram,
-=======
-    display::new_spinner_progress_bar, CliProgram, CliProgramAccountType, CliProgramAuthority,
-    CliProgramBuffer, CliProgramId, CliUpgradeableBuffer, CliUpgradeableProgram,
->>>>>>> 2177e0aff... cli: add program show for non-upgradeable programs (#15707)
+    display::new_spinner_progress_bar, CliProgram, CliUpgradeableBuffer, CliUpgradeableProgram,
 };
 use solana_client::{
     rpc_client::RpcClient, rpc_config::RpcSendTransactionConfig,
