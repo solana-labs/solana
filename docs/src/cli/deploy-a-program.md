@@ -69,6 +69,7 @@ An example output looks like:
 
 ```bash
 Program Id: 3KS2k14CmtnuVv2fvYcvdrNgC94Y11WETBpMUGgXyWZL
+Owner: BPFLoaderUpgradeab1e11111111111111111111111
 ProgramData Address: EHsACWBhgmw8iq5dmUZzTA1esRqcTognhKNHUkPi4q4g
 Authority: FwoGJNUaJN2zfVEex9BB11Dqb3NJKy3e9oY3KTh9XzCU
 Last Deployed In Slot: 63890568
@@ -77,6 +78,7 @@ Data Length: 5216 (0x1460) bytes
 
 - `Program Id` is the address that can be referenced in an instruction's
   `program_id` field when invoking a program.
+- `Owner`: The loader this program was deployed with.
 - `ProgramData Address` is the account associated with the program account that
   holds the program's data (shared object).
 - `Authority` is the program's upgrade authority.
