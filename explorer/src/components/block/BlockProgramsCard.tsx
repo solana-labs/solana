@@ -5,6 +5,7 @@ import { TableCardBody } from "components/common/TableCardBody";
 
 export function BlockProgramsCard({ block }: { block: ConfirmedBlock }) {
   const totalTransactions = block.transactions.length;
+  const txSuccesses = new Map<string, number>();
   const txFrequency = new Map<string, number>();
   const ixFrequency = new Map<string, number>();
 
@@ -31,9 +32,14 @@ export function BlockProgramsCard({ block }: { block: ConfirmedBlock }) {
       });
     });
 
+    const successful = tx.meta?.err === null;
     programUsed.forEach((programId) => {
       const frequency = txFrequency.get(programId);
       txFrequency.set(programId, frequency ? frequency + 1 : 1);
+      if (successful) {
+        const count = txSuccesses.get(programId);
+        txSuccesses.set(programId, count ? count + 1 : 1);
+      }
     });
   });
 
@@ -83,11 +89,13 @@ export function BlockProgramsCard({ block }: { block: ConfirmedBlock }) {
                 <th className="text-muted">% of Total</th>
                 <th className="text-muted">Instruction Count</th>
                 <th className="text-muted">% of Total</th>
+                <th className="text-muted">Success Rate</th>
               </tr>
             </thead>
             <tbody>
               {programEntries.map(([programId, txFreq]) => {
                 const ixFreq = ixFrequency.get(programId) as number;
+                const successes = txSuccesses.get(programId) || 0;
                 return (
                   <tr key={programId}>
                     <td>
@@ -97,6 +105,7 @@ export function BlockProgramsCard({ block }: { block: ConfirmedBlock }) {
                     <td>{((100 * txFreq) / totalTransactions).toFixed(2)}%</td>
                     <td>{ixFreq}</td>
                     <td>{((100 * ixFreq) / totalInstructions).toFixed(2)}%</td>
+                    <td>{((100 * successes) / txFreq).toFixed(0)}%</td>
                   </tr>
                 );
               })}
