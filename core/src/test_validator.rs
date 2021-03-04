@@ -3,7 +3,7 @@ use {
         cluster_info::Node,
         gossip_service::discover_cluster,
         rpc::JsonRpcConfig,
-        validator::{Validator, ValidatorConfig, ValidatorExit},
+        validator::{Validator, ValidatorConfig, ValidatorExit, ValidatorStartProgress},
     },
     solana_client::rpc_client::RpcClient,
     solana_ledger::{blockstore::create_new_ledger, create_new_tmp_ledger},
@@ -53,6 +53,7 @@ pub struct TestValidatorGenesis {
     accounts: HashMap<Pubkey, Account>,
     programs: Vec<ProgramInfo>,
     pub validator_exit: Arc<RwLock<ValidatorExit>>,
+    pub start_progress: Arc<RwLock<ValidatorStartProgress>>,
 }
 
 impl TestValidatorGenesis {
@@ -415,6 +416,7 @@ impl TestValidator {
             vec![],
             &validator_config,
             true, // should_check_duplicate_instance
+            config.start_progress.clone(),
         ));
 
         // Needed to avoid panics in `solana-responder-gossip` in tests that create a number of

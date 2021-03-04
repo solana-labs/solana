@@ -5,7 +5,7 @@ use {
     jsonrpc_ipc_server::{RequestContext, ServerBuilder},
     jsonrpc_server_utils::tokio,
     log::*,
-    solana_core::validator::ValidatorExit,
+    solana_core::validator::{ValidatorExit, ValidatorStartProgress},
     std::{
         net::SocketAddr,
         path::Path,
@@ -19,6 +19,7 @@ use {
 pub struct AdminRpcRequestMetadata {
     pub rpc_addr: Option<SocketAddr>,
     pub start_time: SystemTime,
+    pub start_progress: Arc<RwLock<ValidatorStartProgress>>,
     pub validator_exit: Arc<RwLock<ValidatorExit>>,
 }
 impl Metadata for AdminRpcRequestMetadata {}
@@ -38,6 +39,9 @@ pub trait AdminRpc {
 
     #[rpc(meta, name = "startTime")]
     fn start_time(&self, meta: Self::Metadata) -> Result<SystemTime>;
+
+    #[rpc(meta, name = "startProgress")]
+    fn start_progress(&self, meta: Self::Metadata) -> Result<ValidatorStartProgress>;
 }
 
 pub struct AdminRpcImpl;
@@ -45,9 +49,9 @@ impl AdminRpc for AdminRpcImpl {
     type Metadata = AdminRpcRequestMetadata;
 
     fn exit(&self, meta: Self::Metadata) -> Result<()> {
-        info!("exit admin rpc request received");
+        debug!("exit admin rpc request received");
         // Delay exit signal until this RPC request completes, otherwise the caller of `exit` might
-        // receive a confusing error as the validator shuts down before a response is send back.
+        // receive a confusing error as the validator shuts down before a response is sent back.
         tokio::spawn(async move {
             meta.validator_exit.write().unwrap().exit();
         });
@@ -55,19 +59,24 @@ impl AdminRpc for AdminRpcImpl {
     }
 
     fn rpc_addr(&self, meta: Self::Metadata) -> Result<Option<SocketAddr>> {
-        info!("rpc_addr admin rpc request received");
+        debug!("rpc_addr admin rpc request received");
         Ok(meta.rpc_addr)
     }
 
     fn set_log_filter(&self, filter: String) -> Result<()> {
-        info!("set_log_filter admin rpc request received");
+        debug!("set_log_filter admin rpc request received");
         solana_logger::setup_with(&filter);
         Ok(())
     }
 
     fn start_time(&self, meta: Self::Metadata) -> Result<SystemTime> {
-        info!("start_time admin rpc request received");
+        debug!("start_time admin rpc request received");
         Ok(meta.start_time)
+    }
+
+    fn start_progress(&self, meta: Self::Metadata) -> Result<ValidatorStartProgress> {
+        debug!("start_progress admin rpc request received");
+        Ok(*meta.start_progress.read().unwrap())
     }
 }
 

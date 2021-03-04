@@ -10,7 +10,7 @@ use solana_core::{
     cluster_info::{Node, VALIDATOR_PORT_RANGE},
     contact_info::ContactInfo,
     gossip_service::discover_cluster,
-    validator::{Validator, ValidatorConfig},
+    validator::{Validator, ValidatorConfig, ValidatorStartProgress},
 };
 use solana_ledger::create_new_tmp_ledger;
 use solana_runtime::genesis_utils::{
@@ -43,7 +43,7 @@ use std::{
     collections::HashMap,
     io::{Error, ErrorKind, Result},
     iter,
-    sync::Arc,
+    sync::{Arc, RwLock},
 };
 
 #[derive(Debug)]
@@ -203,6 +203,7 @@ impl LocalCluster {
         let leader_keypair = Arc::new(Keypair::from_bytes(&leader_keypair.to_bytes()).unwrap());
         let leader_vote_keypair =
             Arc::new(Keypair::from_bytes(&leader_vote_keypair.to_bytes()).unwrap());
+
         let leader_server = Validator::new(
             leader_node,
             &leader_keypair,
@@ -212,6 +213,7 @@ impl LocalCluster {
             vec![],
             &leader_config,
             true, // should_check_duplicate_instance
+            Arc::new(RwLock::new(ValidatorStartProgress::default())),
         );
 
         let mut validators = HashMap::new();
@@ -353,6 +355,7 @@ impl LocalCluster {
             vec![self.entry_point_info.clone()],
             &config,
             true, // should_check_duplicate_instance
+            Arc::new(RwLock::new(ValidatorStartProgress::default())),
         );
 
         let validator_pubkey = validator_keypair.pubkey();
@@ -669,6 +672,7 @@ impl Cluster for LocalCluster {
                 .unwrap_or_default(),
             &safe_clone_config(&cluster_validator_info.config),
             true, // should_check_duplicate_instance
+            Arc::new(RwLock::new(ValidatorStartProgress::default())),
         );
         cluster_validator_info.validator = Some(restarted_node);
         cluster_validator_info

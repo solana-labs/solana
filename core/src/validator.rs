@@ -186,6 +186,32 @@ impl Default for ValidatorConfig {
     }
 }
 
+// `ValidatorStartProgress` contains status information that is surfaced to the node operator over
+// the admin RPC channel to help them to follow the general progress of node startup without
+// having to watch log messages.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+pub enum ValidatorStartProgress {
+    Initializing, // Catch all, default state
+    SearchingForRpcService,
+    DownloadingSnapshot { slot: Slot, rpc_addr: SocketAddr },
+    CleaningBlockStore,
+    CleaningAccounts,
+    LoadingLedger,
+    StartingServices,
+    Halted, // Validator halted due to `--dev-halt-at-slot` argument
+    WaitingForSupermajority,
+
+    // `Running` is the terminal state once the validator fully starts and all services are
+    // operational
+    Running,
+}
+
+impl Default for ValidatorStartProgress {
+    fn default() -> Self {
+        Self::Initializing
+    }
+}
+
 #[derive(Default)]
 pub struct ValidatorExit {
     exited: bool,
@@ -270,6 +296,7 @@ impl Validator {
         cluster_entrypoints: Vec<ContactInfo>,
         config: &ValidatorConfig,
         should_check_duplicate_instance: bool,
+        start_progress: Arc<RwLock<ValidatorStartProgress>>,
     ) -> Self {
         let id = identity_keypair.pubkey();
         assert_eq!(id, node.info.id);
@@ -309,6 +336,7 @@ impl Validator {
 
         if let Some(shred_version) = config.expected_shred_version {
             if let Some(wait_for_supermajority_slot) = config.wait_for_supermajority {
+                *start_progress.write().unwrap() = ValidatorStartProgress::CleaningBlockStore;
                 backup_and_clear_blockstore(
                     ledger_path,
                     wait_for_supermajority_slot + 1,
@@ -318,6 +346,7 @@ impl Validator {
         }
 
         info!("Cleaning accounts paths..");
+        *start_progress.write().unwrap() = ValidatorStartProgress::CleaningAccounts;
         let mut start = Measure::start("clean_accounts_paths");
         for accounts_path in &config.account_paths {
             cleanup_accounts_path(accounts_path);
@@ -366,7 +395,10 @@ impl Validator {
             config.poh_verify,
             &exit,
             config.enforce_ulimit_nofile,
+            &start_progress,
         );
+
+        *start_progress.write().unwrap() = ValidatorStartProgress::StartingServices;
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
         let bank = bank_forks.working_bank();
@@ -542,6 +574,7 @@ impl Validator {
 
             // Park with the RPC service running, ready for inspection!
             warn!("Validator halted");
+            *start_progress.write().unwrap() = ValidatorStartProgress::Halted;
             std::thread::park();
         }
 
@@ -593,7 +626,13 @@ impl Validator {
             check_poh_speed(&genesis_config, None);
         }
 
-        if wait_for_supermajority(config, &bank, &cluster_info, rpc_override_health_check) {
+        if wait_for_supermajority(
+            config,
+            &bank,
+            &cluster_info,
+            rpc_override_health_check,
+            &start_progress,
+        ) {
             abort();
         }
 
@@ -707,6 +746,7 @@ impl Validator {
         );
 
         datapoint_info!("validator-new", ("id", id.to_string(), String));
+        *start_progress.write().unwrap() = ValidatorStartProgress::Running;
         Self {
             id,
             gossip_service,
@@ -963,6 +1003,7 @@ fn new_banks_from_ledger(
     poh_verify: bool,
     exit: &Arc<AtomicBool>,
     enforce_ulimit_nofile: bool,
+    start_progress: &Arc<RwLock<ValidatorStartProgress>>,
 ) -> (
     GenesisConfig,
     BankForks,
@@ -975,6 +1016,7 @@ fn new_banks_from_ledger(
     Tower,
 ) {
     info!("loading ledger from {:?}...", ledger_path);
+    *start_progress.write().unwrap() = ValidatorStartProgress::LoadingLedger;
     let genesis_config = open_genesis_config(ledger_path, config.max_genesis_archive_unpacked_size);
 
     // This needs to be limited otherwise the state in the VoteAccount data
@@ -1249,12 +1291,18 @@ fn wait_for_supermajority(
     bank: &Bank,
     cluster_info: &ClusterInfo,
     rpc_override_health_check: Arc<AtomicBool>,
+    start_progress: &Arc<RwLock<ValidatorStartProgress>>,
 ) -> bool {
     if let Some(wait_for_supermajority) = config.wait_for_supermajority {
         match wait_for_supermajority.cmp(&bank.slot()) {
             std::cmp::Ordering::Less => return false,
             std::cmp::Ordering::Greater => {
-                error!("Ledger does not have enough data to wait for supermajority, please enable snapshot fetch. Has {} needs {}", bank.slot(), wait_for_supermajority);
+                error!(
+                    "Ledger does not have enough data to wait for supermajority, \
+                    please enable snapshot fetch. Has {} needs {}",
+                    bank.slot(),
+                    wait_for_supermajority
+                );
                 return true;
             }
             _ => {}
@@ -1274,6 +1322,7 @@ fn wait_for_supermajority(
         }
     }
 
+    *start_progress.write().unwrap() = ValidatorStartProgress::WaitingForSupermajority;
     for i in 1.. {
         if i % 10 == 1 {
             info!(
@@ -1459,6 +1508,7 @@ mod tests {
             rpc_addrs: Some((validator_node.info.rpc, validator_node.info.rpc_pubsub)),
             ..ValidatorConfig::default()
         };
+        let start_progress = Arc::new(RwLock::new(ValidatorStartProgress::default()));
         let validator = Validator::new(
             validator_node,
             &Arc::new(validator_keypair),
@@ -1468,6 +1518,11 @@ mod tests {
             vec![leader_node.info],
             &config,
             true, // should_check_duplicate_instance
+            start_progress.clone(),
+        );
+        assert_eq!(
+            *start_progress.read().unwrap(),
+            ValidatorStartProgress::Running
         );
         validator.close();
         remove_dir_all(validator_ledger_path).unwrap();
@@ -1539,6 +1594,7 @@ mod tests {
                     vec![leader_node.info.clone()],
                     &config,
                     true, // should_check_duplicate_instance
+                    Arc::new(RwLock::new(ValidatorStartProgress::default())),
                 )
             })
             .collect();
@@ -1570,11 +1626,14 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_config));
         let mut config = ValidatorConfig::default();
         let rpc_override_health_check = Arc::new(AtomicBool::new(false));
+        let start_progress = Arc::new(RwLock::new(ValidatorStartProgress::default()));
+
         assert!(!wait_for_supermajority(
             &config,
             &bank,
             &cluster_info,
-            rpc_override_health_check.clone()
+            rpc_override_health_check.clone(),
+            &start_progress,
         ));
 
         // bank=0, wait=1, should fail
@@ -1583,7 +1642,8 @@ mod tests {
             &config,
             &bank,
             &cluster_info,
-            rpc_override_health_check.clone()
+            rpc_override_health_check.clone(),
+            &start_progress,
         ));
 
         // bank=1, wait=0, should pass, bank is past the wait slot
@@ -1593,7 +1653,8 @@ mod tests {
             &config,
             &bank,
             &cluster_info,
-            rpc_override_health_check.clone()
+            rpc_override_health_check.clone(),
+            &start_progress,
         ));
 
         // bank=1, wait=1, equal, but bad hash provided
@@ -1603,7 +1664,8 @@ mod tests {
             &config,
             &bank,
             &cluster_info,
-            rpc_override_health_check
+            rpc_override_health_check,
+            &start_progress,
         ));
     }
 

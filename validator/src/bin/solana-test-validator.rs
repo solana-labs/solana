@@ -363,6 +363,7 @@ fn main() {
                 IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
                 rpc_port,
             )),
+            start_progress: genesis.start_progress.clone(),
             start_time: std::time::SystemTime::now(),
             validator_exit: genesis.validator_exit.clone(),
         },
