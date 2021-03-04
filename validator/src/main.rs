@@ -1,68 +1,74 @@
 #![allow(clippy::integer_arithmetic)]
-use clap::{
-    crate_description, crate_name, value_t, value_t_or_exit, values_t, values_t_or_exit, App,
-    AppSettings, Arg, ArgMatches, SubCommand,
-};
-use console::style;
-use fd_lock::FdLock;
-use log::*;
-use rand::{seq::SliceRandom, thread_rng, Rng};
-use solana_clap_utils::{
-    input_parsers::{keypair_of, keypairs_of, pubkey_of, value_of},
-    input_validators::{
-        is_keypair_or_ask_keyword, is_parsable, is_pubkey, is_pubkey_or_keypair, is_slot,
+use {
+    clap::{
+        crate_description, crate_name, value_t, value_t_or_exit, values_t, values_t_or_exit, App,
+        AppSettings, Arg, ArgMatches, SubCommand,
     },
-    keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
-};
-use solana_client::{rpc_client::RpcClient, rpc_request::MAX_MULTIPLE_ACCOUNTS};
-use solana_core::ledger_cleanup_service::{
-    DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS,
-};
-use solana_core::{
-    cluster_info::{ClusterInfo, Node, MINIMUM_VALIDATOR_PORT_RANGE_WIDTH, VALIDATOR_PORT_RANGE},
-    contact_info::ContactInfo,
-    gossip_service::GossipService,
-    poh_service,
-    rpc::JsonRpcConfig,
-    rpc_pubsub_service::PubSubConfig,
-    tpu::DEFAULT_TPU_COALESCE_MS,
-    validator::{is_snapshot_config_invalid, Validator, ValidatorConfig},
-};
-use solana_download_utils::{download_genesis_if_missing, download_snapshot};
-use solana_ledger::blockstore_db::BlockstoreRecoveryMode;
-use solana_perf::recycler::enable_recycler_warming;
-use solana_runtime::{
-    accounts_index::AccountIndex,
-    bank_forks::{ArchiveFormat, SnapshotConfig, SnapshotVersion},
-    hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
-    snapshot_utils::get_highest_snapshot_archive_path,
-};
-use solana_sdk::{
-    clock::{Slot, DEFAULT_S_PER_SLOT},
-    commitment_config::CommitmentConfig,
-    genesis_config::GenesisConfig,
-    hash::Hash,
-    pubkey::Pubkey,
-    signature::{Keypair, Signer},
-};
-use solana_validator::{
-    admin_rpc_service, dashboard::Dashboard, new_spinner_progress_bar, println_name_value,
-    redirect_stderr_to_file,
-};
-use std::{
-    collections::{HashSet, VecDeque},
-    env,
-    fs::{self, File},
-    net::{IpAddr, SocketAddr, TcpListener, UdpSocket},
-    path::{Path, PathBuf},
-    process::exit,
-    str::FromStr,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
+    console::style,
+    fd_lock::FdLock,
+    log::*,
+    rand::{seq::SliceRandom, thread_rng, Rng},
+    solana_clap_utils::{
+        input_parsers::{keypair_of, keypairs_of, pubkey_of, value_of},
+        input_validators::{
+            is_keypair_or_ask_keyword, is_parsable, is_pubkey, is_pubkey_or_keypair, is_slot,
+        },
+        keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
-    thread::sleep,
-    time::{Duration, Instant, SystemTime},
+    solana_client::{rpc_client::RpcClient, rpc_request::MAX_MULTIPLE_ACCOUNTS},
+    solana_core::ledger_cleanup_service::{
+        DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS,
+    },
+    solana_core::{
+        cluster_info::{
+            ClusterInfo, Node, MINIMUM_VALIDATOR_PORT_RANGE_WIDTH, VALIDATOR_PORT_RANGE,
+        },
+        contact_info::ContactInfo,
+        gossip_service::GossipService,
+        poh_service,
+        rpc::JsonRpcConfig,
+        rpc_pubsub_service::PubSubConfig,
+        tpu::DEFAULT_TPU_COALESCE_MS,
+        validator::{
+            is_snapshot_config_invalid, Validator, ValidatorConfig, ValidatorStartProgress,
+        },
+    },
+    solana_download_utils::{download_genesis_if_missing, download_snapshot},
+    solana_ledger::blockstore_db::BlockstoreRecoveryMode,
+    solana_perf::recycler::enable_recycler_warming,
+    solana_runtime::{
+        accounts_index::AccountIndex,
+        bank_forks::{ArchiveFormat, SnapshotConfig, SnapshotVersion},
+        hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
+        snapshot_utils::get_highest_snapshot_archive_path,
+    },
+    solana_sdk::{
+        clock::{Slot, DEFAULT_S_PER_SLOT},
+        commitment_config::CommitmentConfig,
+        genesis_config::GenesisConfig,
+        hash::Hash,
+        pubkey::Pubkey,
+        signature::{Keypair, Signer},
+    },
+    solana_validator::{
+        admin_rpc_service, dashboard::Dashboard, new_spinner_progress_bar, println_name_value,
+        redirect_stderr_to_file,
+    },
+    std::{
+        collections::{HashSet, VecDeque},
+        env,
+        fs::{self, File},
+        net::{IpAddr, SocketAddr, TcpListener, UdpSocket},
+        path::{Path, PathBuf},
+        process::exit,
+        str::FromStr,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc, RwLock,
+        },
+        thread::sleep,
+        time::{Duration, Instant, SystemTime},
+    },
 };
 
 #[derive(Debug, PartialEq)]
@@ -753,6 +759,7 @@ fn rpc_bootstrap(
     use_progress_bar: bool,
     maximum_local_snapshot_age: Slot,
     should_check_duplicate_instance: bool,
+    start_progress: &Arc<RwLock<ValidatorStartProgress>>,
 ) {
     if !no_port_check {
         let mut order: Vec<_> = (0..cluster_entrypoints.len()).collect();
@@ -773,6 +780,8 @@ fn rpc_bootstrap(
     let mut gossip = None;
     loop {
         if gossip.is_none() {
+            *start_progress.write().unwrap() = ValidatorStartProgress::SearchingForRpcService;
+
             gossip = Some(start_gossip_node(
                 &identity_keypair,
                 &cluster_entrypoints,
@@ -876,6 +885,11 @@ fn rpc_bootstrap(
                         .get_slot_with_commitment(CommitmentConfig::finalized())
                         .map_err(|err| format!("Failed to get RPC node slot: {}", err))
                         .and_then(|slot| {
+                            *start_progress.write().unwrap() =
+                                ValidatorStartProgress::DownloadingSnapshot {
+                                    slot: snapshot_hash.0,
+                                    rpc_addr: rpc_contact_info.rpc,
+                                };
                             info!("RPC node root slot: {}", slot);
                             let (cluster_info, gossip_exit_flag, gossip_service) =
                                 gossip.take().unwrap();
@@ -2118,12 +2132,14 @@ pub fn main() {
     info!("{} {}", crate_name!(), solana_version::version!());
     info!("Starting validator with: {:#?}", std::env::args_os());
 
+    let start_progress = Arc::new(RwLock::new(ValidatorStartProgress::default()));
     admin_rpc_service::run(
         &ledger_path,
         admin_rpc_service::AdminRpcRequestMetadata {
             rpc_addr: validator_config.rpc_addrs.map(|(rpc_addr, _)| rpc_addr),
             start_time: std::time::SystemTime::now(),
             validator_exit: validator_config.validator_exit.clone(),
+            start_progress: start_progress.clone(),
         },
     );
 
@@ -2241,7 +2257,9 @@ pub fn main() {
             use_progress_bar,
             maximum_local_snapshot_age,
             should_check_duplicate_instance,
+            &start_progress,
         );
+        *start_progress.write().unwrap() = ValidatorStartProgress::Initializing;
     }
 
     if operation == Operation::Initialize {
@@ -2257,6 +2275,7 @@ pub fn main() {
         cluster_entrypoints,
         &validator_config,
         should_check_duplicate_instance,
+        start_progress,
     );
 
     if let Some(filename) = init_complete_file {

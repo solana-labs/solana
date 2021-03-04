@@ -65,14 +65,7 @@ pub fn redirect_stderr_to_file(logfile: Option<String>) -> Option<JoinHandle<()>
         }
     };
 
-    solana_logger::setup_with_default(
-        &[
-            "solana=info,solana_runtime::message_processor=error", /* info logging for all solana modules */
-            "rpc=trace",   /* json_rpc request/response logging */
-        ]
-        .join(","),
-    );
-
+    solana_logger::setup_with_default("solana=info");
     logger_thread
 }
 
