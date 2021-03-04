@@ -62,6 +62,46 @@ impl ReplaySlotStats {
             ("load_us", self.execute_timings.load_us, i64),
             ("execute_us", self.execute_timings.execute_us, i64),
             ("store_us", self.execute_timings.store_us, i64),
+            (
+                "serialize_us",
+                self.execute_timings.details.serialize_us,
+                i64
+            ),
+            (
+                "create_vm_us",
+                self.execute_timings.details.create_vm_us,
+                i64
+            ),
+            (
+                "execute_inner_us",
+                self.execute_timings.details.execute_us,
+                i64
+            ),
+            (
+                "deserialize_us",
+                self.execute_timings.details.deserialize_us,
+                i64
+            ),
+            (
+                "changed_account_count",
+                self.execute_timings.details.changed_account_count,
+                i64
+            ),
+            (
+                "total_account_count",
+                self.execute_timings.details.total_account_count,
+                i64
+            ),
+            (
+                "total_data_size",
+                self.execute_timings.details.total_data_size,
+                i64
+            ),
+            (
+                "data_size_changed",
+                self.execute_timings.details.data_size_changed,
+                i64
+            ),
         );
     }
 }
