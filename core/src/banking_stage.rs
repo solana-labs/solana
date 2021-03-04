@@ -1300,6 +1300,7 @@ pub fn create_test_recorder(
         &exit,
         bank.ticks_per_slot(),
         poh_service::DEFAULT_PINNED_CPU_CORE,
+        poh_service::DEFAULT_HASHES_PER_BATCH,
     );
 
     (exit, poh_recorder, poh_service, entry_receiver)
