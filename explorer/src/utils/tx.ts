@@ -37,6 +37,8 @@ export enum PROGRAM_NAMES {
   MEMO_2 = "Memo Program 2",
   SWAP = "Swap Program",
   LENDING = "Lending Program",
+  SERUM_2 = "Serum Program v2",
+  SERUM_3 = "Serum Program v3",
 }
 
 export const SEARCHABLE_PROGRAMS: ProgramName[] = [
@@ -55,6 +57,8 @@ export const SEARCHABLE_PROGRAMS: ProgramName[] = [
   PROGRAM_NAMES.MEMO_2,
   PROGRAM_NAMES.SWAP,
   PROGRAM_NAMES.LENDING,
+  PROGRAM_NAMES.SERUM_2,
+  PROGRAM_NAMES.SERUM_3,
 ];
 
 export const PROGRAM_NAME_BY_ID = {
@@ -73,6 +77,8 @@ export const PROGRAM_NAME_BY_ID = {
   MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr: PROGRAM_NAMES.MEMO_2,
   SwaPpA9LAaLfeLi3a68M4DjnLqgtticKg6CnyNwgAC8: PROGRAM_NAMES.SWAP,
   LendZqTs7gn5CTSJU1jWKhKuVpjJGom45nnwPb2AMTi: PROGRAM_NAMES.LENDING,
+  EUqojwWA2rd19FZrzeBncJsm38Jm1hEhE3zsmX3bRc2o: PROGRAM_NAMES.SERUM_2,
+  "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin": PROGRAM_NAMES.SERUM_3,
 } as const;
 
 export type LoaderName = typeof LOADER_IDS[keyof typeof LOADER_IDS];
