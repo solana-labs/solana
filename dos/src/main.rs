@@ -144,7 +144,7 @@ fn main() {
                 .long("entrypoint")
                 .takes_value(true)
                 .value_name("HOST:PORT")
-                .help("Gossip entrypoint address. Usually <ip>:8001"),
+                .help("Gossip entrypoint address. Usually <ip>:8002"),
         )
         .arg(
             Arg::with_name("mode")
@@ -199,7 +199,7 @@ fn main() {
         )
         .get_matches();
 
-    let mut entrypoint_addr = SocketAddr::from(([127, 0, 0, 1], 8001));
+    let mut entrypoint_addr = SocketAddr::from(([127, 0, 0, 1], 8002));
     if let Some(addr) = matches.value_of("entrypoint") {
         entrypoint_addr = solana_net_utils::parse_host_port(addr).unwrap_or_else(|e| {
             eprintln!("failed to parse entrypoint address: {}", e);

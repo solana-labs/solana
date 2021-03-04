@@ -8,7 +8,7 @@ Confirm the IP address and **identity pubkey** of your validator is visible in
 the gossip network by running:
 
 ```bash
-safecoin-gossip spy --entrypoint devnet.safecoin.org:8001
+safecoin-gossip spy --entrypoint devnet.safecoin.org:8002
 ```
 
 ## Check Your Balance

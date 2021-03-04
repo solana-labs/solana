@@ -26,7 +26,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            entrypoint_addr: SocketAddr::from(([127, 0, 0, 1], 8001)),
+            entrypoint_addr: SocketAddr::from(([127, 0, 0, 1], 8002)),
             faucet_addr: SocketAddr::from(([127, 0, 0, 1], FAUCET_PORT)),
             identity: Keypair::new(),
             num_nodes: 1,
@@ -55,8 +55,8 @@ pub fn build_args<'a, 'b>(version: &'b str) -> App<'a, 'b> {
                 .value_name("HOST:PORT")
                 .takes_value(true)
                 .required(false)
-                .default_value("127.0.0.1:8001")
-                .help("Cluster entry point; defaults to 127.0.0.1:8001"),
+                .default_value("127.0.0.1:8002")
+                .help("Cluster entry point; defaults to 127.0.0.1:8002"),
         )
         .arg(
             Arg::with_name("faucet")

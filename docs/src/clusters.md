@@ -23,7 +23,7 @@ Explorers:
   - Devnet includes a token faucet for airdrops for application testing
   - Devnet may be subject to ledger resets
   - Devnet typically runs a newer software version than Mainnet Beta
-- Gossip entrypoint for Devnet: `entrypoint.devnet.safecoin.org:8001`
+- Gossip entrypoint for Devnet: `entrypoint.devnet.safecoin.org:8002`
 - Metrics environment variable for Devnet:
 ```bash
 export SAFECOIN_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=devnet,u=scratch_writer,p=topsecret"
@@ -47,7 +47,7 @@ $ safecoin-validator \
     --ledger ~/validator-ledger \
     --rpc-port 8328 \
     --dynamic-port-range 8000-8010 \
-    --entrypoint entrypoint.devnet.safecoin.org:8001 \
+    --entrypoint entrypoint.devnet.safecoin.org:8002 \
     --expected-genesis-hash EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG \
     --wal-recovery-mode skip_any_corrupted_record \
     --limit-ledger-size
@@ -68,7 +68,7 @@ The `--trusted-validator`s is operated by Safecoin
 - Testnet includes a token faucet for airdrops for application testing
 - Testnet typically runs a newer software release than both Devnet and
   Mainnet Beta
-- Gossip entrypoint for Testnet: `entrypoint.testnet.safecoin.org:8001`
+- Gossip entrypoint for Testnet: `entrypoint.testnet.safecoin.org:8002`
 - Metrics environment variable for Testnet:
 ```bash
 export SAFECOIN_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=tds,u=testnet_write,p=c4fa841aa918bf8274e3e2a44d77568d9861b3ea"
@@ -95,7 +95,7 @@ $ safecoin-validator \
     --ledger ~/validator-ledger \
     --rpc-port 8328 \
     --dynamic-port-range 8000-8010 \
-    --entrypoint entrypoint.testnet.safecoin.org:8001 \
+    --entrypoint entrypoint.testnet.safecoin.org:8002 \
     --expected-genesis-hash 4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY \
     --wal-recovery-mode skip_any_corrupted_record \
     --limit-ledger-size
@@ -119,7 +119,7 @@ Currently, rewards and inflation are disabled.
   - Note: If you are using a non-command-line wallet such as
     [Safeflare](wallet-guide/solflare.md),
     the wallet will always be connecting to Mainnet Beta.
-- Gossip entrypoint for Mainnet Beta: `entrypoint.mainnet-beta.solana.com:8001`
+- Gossip entrypoint for Mainnet Beta: `entrypoint.mainnet-beta.solana.com:8002`
 - Metrics environment variable for Mainnet Beta:
 ```bash
 export SAFECOIN_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=mainnet-beta,u=mainnet-beta_write,p=password"
@@ -147,11 +147,11 @@ $ safecoin-validator \
     --rpc-port 8328 \
     --private-rpc \
     --dynamic-port-range 8000-8010 \
-    --entrypoint entrypoint.mainnet-beta.solana.com:8001 \
-    --entrypoint entrypoint2.mainnet-beta.solana.com:8001 \
-    --entrypoint entrypoint3.mainnet-beta.solana.com:8001 \
-    --entrypoint entrypoint4.mainnet-beta.solana.com:8001 \
-    --entrypoint entrypoint5.mainnet-beta.solana.com:8001 \
+    --entrypoint entrypoint.mainnet-beta.solana.com:8002 \
+    --entrypoint entrypoint2.mainnet-beta.solana.com:8002 \
+    --entrypoint entrypoint3.mainnet-beta.solana.com:8002 \
+    --entrypoint entrypoint4.mainnet-beta.solana.com:8002 \
+    --entrypoint entrypoint5.mainnet-beta.solana.com:8002 \
     --expected-genesis-hash 5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d \
     --wal-recovery-mode skip_any_corrupted_record \
     --limit-ledger-size

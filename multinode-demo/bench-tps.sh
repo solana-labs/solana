@@ -21,7 +21,7 @@ usage() {
 
 if [[ -z $1 ]]; then # default behavior
   $safecoin_bench_tps \
-    --entrypoint 127.0.0.1:8001 \
+    --entrypoint 127.0.0.1:8002 \
     --faucet 127.0.0.1:9900 \
     --duration 90 \
     --tx_count 50000 \

@@ -448,7 +448,7 @@ Result:
   "jsonrpc": "2.0",
   "result": [
     {
-      "gossip": "10.239.6.48:8001",
+      "gossip": "10.239.6.48:8002",
       "pubkey": "9QzsJf7LPLj8GkXbYT3LFDKqsj2hHG7TA3xinJHu8epQ",
       "rpc": "10.239.6.48:8328",
       "tpu": "10.239.6.48:8856",
