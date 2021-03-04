@@ -34,7 +34,7 @@ const MAX_CHUNK_SIZE: usize = 255;
 
 const APDU_SUCCESS_CODE: usize = 0x9000;
 
-const SAFE_DERIVATION_PATH_BE: [u8; 8] = [0x80, 0, 0, 44, 0x80, 0, 0x01, 0xF5]; // 44'/501', Safecoin
+const SAFE_DERIVATION_PATH_BE: [u8; 8] = [0x80, 0, 0, 44, 0x80, 0, 0x4A, 0xDD]; // 44'/19165', Safecoin
 
 /// Ledger vendor ID
 const LEDGER_VID: u16 = 0x2c97;
