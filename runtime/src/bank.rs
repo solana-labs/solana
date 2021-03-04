@@ -437,7 +437,7 @@ pub struct TransactionLogCollector {
     // active `TransactionLogCollectorFilter`
     pub logs: Vec<TransactionLogInfo>,
 
-    // For each `mentioned_addresses`, maintain a list of indicies into `logs` to easily
+    // For each `mentioned_addresses`, maintain a list of indices into `logs` to easily
     // locate the logs from transactions that included the mentioned addresses.
     pub mentioned_address_map: HashMap<Pubkey, Vec<usize>>,
 }
@@ -2988,7 +2988,11 @@ impl Bank {
         let transaction_log_collector_config =
             self.transaction_log_collector_config.read().unwrap();
 
-        for (i, ((r, _nonce_rollback), tx)) in executed.iter().zip(txs.iter()).enumerate() {
+        for (i, ((r, _nonce_rollback), (_, tx))) in executed
+            .iter()
+            .zip(OrderedIterator::new(txs, batch.iteration_order()))
+            .enumerate()
+        {
             if let Some(debug_keys) = &self.transaction_debug_keys {
                 for key in &tx.message.account_keys {
                     if debug_keys.contains(key) {
@@ -2997,7 +3001,6 @@ impl Bank {
                     }
                 }
             }
-
             if transaction_log_collector_config.filter != TransactionLogCollectorFilter::None {
                 let mut transaction_log_collector = self.transaction_log_collector.write().unwrap();
                 let transaction_log_index = transaction_log_collector.logs.len();
@@ -12240,5 +12243,80 @@ pub(crate) mod tests {
             &mint_keypair.pubkey(),
             genesis_config.epoch_schedule.get_first_slot_in_epoch(1),
         );
+    }
+
+    #[test]
+    fn test_tx_log_order() {
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config_with_leader(
+            1_000_000_000_000_000,
+            &Pubkey::new_unique(),
+            bootstrap_validator_stake_lamports(),
+        );
+        let bank = Arc::new(Bank::new(&genesis_config));
+        *bank.transaction_log_collector_config.write().unwrap() = TransactionLogCollectorConfig {
+            mentioned_addresses: HashSet::new(),
+            filter: TransactionLogCollectorFilter::All,
+        };
+        let blockhash = bank.last_blockhash();
+
+        let sender0 = Keypair::new();
+        let sender1 = Keypair::new();
+        bank.transfer(100, &mint_keypair, &sender0.pubkey())
+            .unwrap();
+        bank.transfer(100, &mint_keypair, &sender1.pubkey())
+            .unwrap();
+
+        let recipient0 = Pubkey::new_unique();
+        let recipient1 = Pubkey::new_unique();
+        let tx0 = system_transaction::transfer(&sender0, &recipient0, 10, blockhash);
+        let success_sig = tx0.signatures[0];
+        let tx1 = system_transaction::transfer(&sender1, &recipient1, 110, blockhash); // Should produce insufficient funds log
+        let failure_sig = tx1.signatures[0];
+        let txs = vec![tx0, tx1];
+
+        // Use non-sequential batch ordering
+        let batch = bank.prepare_batch(&txs, Some(vec![1, 0]));
+
+        let log_results = bank
+            .load_execute_and_commit_transactions(
+                &batch,
+                MAX_PROCESSING_AGE,
+                false,
+                false,
+                true,
+                &mut ExecuteTimings::default(),
+            )
+            .3;
+        assert_eq!(log_results.len(), 2);
+        assert!(log_results[0]
+            .clone()
+            .pop()
+            .unwrap()
+            .contains(&"failed".to_string()));
+        assert!(log_results[1]
+            .clone()
+            .pop()
+            .unwrap()
+            .contains(&"success".to_string()));
+
+        let stored_logs = &bank.transaction_log_collector.read().unwrap().logs;
+        let success_log_info = stored_logs
+            .iter()
+            .find(|transaction_log_info| transaction_log_info.signature == success_sig)
+            .unwrap();
+        assert!(success_log_info.result.is_ok());
+        let success_log = success_log_info.log_messages.clone().pop().unwrap();
+        assert!(success_log.contains(&"success".to_string()));
+        let failure_log_info = stored_logs
+            .iter()
+            .find(|transaction_log_info| transaction_log_info.signature == failure_sig)
+            .unwrap();
+        assert!(failure_log_info.result.is_err());
+        let failure_log = failure_log_info.log_messages.clone().pop().unwrap();
+        assert!(failure_log.contains(&"failed".to_string()));
     }
 }
