@@ -13,7 +13,7 @@ use log::*;
 use solana_bpf_loader_program::{bpf_verifier, BpfError, ThisInstructionMeter};
 use solana_clap_utils::{self, input_parsers::*, input_validators::*, keypair::*};
 use solana_cli_output::{
-    display::new_spinner_progress_bar, CliProgramAccountType, CliProgramAuthority,
+    display::new_spinner_progress_bar, CliProgram, CliProgramAccountType, CliProgramAuthority,
     CliProgramBuffer, CliProgramId, CliUpgradeableBuffer, CliUpgradeableProgram,
 };
 use solana_client::{
@@ -933,54 +933,69 @@ fn process_show(
             .get_account_with_commitment(&account_pubkey, config.commitment)?
             .value
         {
-            if let Ok(UpgradeableLoaderState::Program {
-                programdata_address,
-            }) = account.state()
-            {
-                if let Some(programdata_account) = rpc_client
-                    .get_account_with_commitment(&programdata_address, config.commitment)?
-                    .value
+            if account.owner == bpf_loader::id() || account.owner == bpf_loader_deprecated::id() {
+                Ok(config.output_format.formatted_string(&CliProgram {
+                    program_id: account_pubkey.to_string(),
+                    owner: account.owner.to_string(),
+                    data_len: account.data.len(),
+                }))
+            } else if account.owner == bpf_loader_upgradeable::id() {
+                if let Ok(UpgradeableLoaderState::Program {
+                    programdata_address,
+                }) = account.state()
                 {
-                    if let Ok(UpgradeableLoaderState::ProgramData {
-                        upgrade_authority_address,
-                        slot,
-                    }) = programdata_account.state()
+                    if let Some(programdata_account) = rpc_client
+                        .get_account_with_commitment(&programdata_address, config.commitment)?
+                        .value
                     {
-                        Ok(config
-                            .output_format
-                            .formatted_string(&CliUpgradeableProgram {
-                                program_id: account_pubkey.to_string(),
-                                programdata_address: programdata_address.to_string(),
-                                authority: upgrade_authority_address
-                                    .map(|pubkey| pubkey.to_string())
-                                    .unwrap_or_else(|| "none".to_string()),
-                                last_deploy_slot: slot,
-                                data_len: programdata_account.data.len()
-                                    - UpgradeableLoaderState::programdata_data_offset()?,
-                            }))
+                        if let Ok(UpgradeableLoaderState::ProgramData {
+                            upgrade_authority_address,
+                            slot,
+                        }) = programdata_account.state()
+                        {
+                            Ok(config
+                                .output_format
+                                .formatted_string(&CliUpgradeableProgram {
+                                    program_id: account_pubkey.to_string(),
+                                    owner: account.owner.to_string(),
+                                    programdata_address: programdata_address.to_string(),
+                                    authority: upgrade_authority_address
+                                        .map(|pubkey| pubkey.to_string())
+                                        .unwrap_or_else(|| "none".to_string()),
+                                    last_deploy_slot: slot,
+                                    data_len: programdata_account.data.len()
+                                        - UpgradeableLoaderState::programdata_data_offset()?,
+                                }))
+                        } else {
+                            Err(
+                                "Invalid associated ProgramData account found for the program"
+                                    .into(),
+                            )
+                        }
                     } else {
-                        Err("Invalid associated ProgramData account found for the program".into())
-                    }
-                } else {
-                    Err(
+                        Err(
                         "Failed to find associated ProgramData account for the provided program"
                             .into(),
                     )
+                    }
+                } else if let Ok(UpgradeableLoaderState::Buffer { authority_address }) =
+                    account.state()
+                {
+                    Ok(config
+                        .output_format
+                        .formatted_string(&CliUpgradeableBuffer {
+                            address: account_pubkey.to_string(),
+                            authority: authority_address
+                                .map(|pubkey| pubkey.to_string())
+                                .unwrap_or_else(|| "none".to_string()),
+                            data_len: account.data.len()
+                                - UpgradeableLoaderState::buffer_data_offset()?,
+                        }))
+                } else {
+                    Err("Not a buffer or program account".into())
                 }
-            } else if let Ok(UpgradeableLoaderState::Buffer { authority_address }) = account.state()
-            {
-                Ok(config
-                    .output_format
-                    .formatted_string(&CliUpgradeableBuffer {
-                        address: account_pubkey.to_string(),
-                        authority: authority_address
-                            .map(|pubkey| pubkey.to_string())
-                            .unwrap_or_else(|| "none".to_string()),
-                        data_len: account.data.len()
-                            - UpgradeableLoaderState::buffer_data_offset()?,
-                    }))
             } else {
-                Err("Not a buffer or program account".into())
+                Err("Accont is not a BPF program".into())
             }
         } else {
             Err("Unable to find the account".into())
