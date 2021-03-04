@@ -42,6 +42,8 @@ export function BlockOverviewCard({
   }
 
   const block = confirmedBlock.data.block;
+  const committedTxs = block.transactions.filter((tx) => tx.meta?.err === null);
+
   return (
     <>
       <div className="card">
@@ -76,9 +78,15 @@ export function BlockOverviewCard({
             </td>
           </tr>
           <tr>
-            <td className="w-100">Total Transactions</td>
+            <td className="w-100">Processed Transactions</td>
             <td className="text-lg-right text-monospace">
               <span>{block.transactions.length}</span>
+            </td>
+          </tr>
+          <tr>
+            <td className="w-100">Successful Transactions</td>
+            <td className="text-lg-right text-monospace">
+              <span>{committedTxs.length}</span>
             </td>
           </tr>
         </TableCardBody>
