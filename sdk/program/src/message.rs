@@ -9,10 +9,16 @@ use crate::{
     hash::Hash,
     instruction::{AccountMeta, CompiledInstruction, Instruction},
     pubkey::Pubkey,
-    short_vec, system_instruction,
+    short_vec, system_instruction, sysvar,
 };
 use itertools::Itertools;
+use lazy_static::lazy_static;
 use std::convert::TryFrom;
+
+lazy_static! {
+    static ref DEMOTE_SYSVAR_WRITE_LOCKS: bool =
+        std::env::var("SOLANA_DEMOTE_SYSVAR_WRITE_LOCKS") == Ok(String::from("1"));
+}
 
 fn position(keys: &[Pubkey], key: &Pubkey) -> u8 {
     keys.iter().position(|k| k == key).unwrap() as u8
@@ -339,11 +345,16 @@ impl Message {
     }
 
     pub fn get_account_keys_by_lock_type(&self) -> (Vec<&Pubkey>, Vec<&Pubkey>) {
+        let demote_sysvar_write_locks = *DEMOTE_SYSVAR_WRITE_LOCKS;
         let mut writable_keys = vec![];
         let mut readonly_keys = vec![];
         for (i, key) in self.account_keys.iter().enumerate() {
-            if self.is_writable(i) && !crate::sysvar::is_sysvar_id(key) {
-                writable_keys.push(key);
+            if self.is_writable(i) {
+                if demote_sysvar_write_locks && sysvar::is_sysvar_id(key) {
+                    readonly_keys.push(key);
+                } else {
+                    writable_keys.push(key);
+                }
             } else {
                 readonly_keys.push(key);
             }
