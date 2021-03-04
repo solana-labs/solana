@@ -50,7 +50,7 @@ export function TokenBalancesCard({ signature }: SignatureProps) {
 
   const accountRows = rows.map(({ account, delta, balance, mint }) => {
     const key = account.toBase58() + mint;
-    const units = tokenRegistry.get(mint)?.tokenSymbol || "tokens";
+    const units = tokenRegistry.get(mint)?.symbol || "tokens";
 
     return (
       <tr key={key}>

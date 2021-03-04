@@ -89,16 +89,16 @@ function MintAccountCard({
             )}
           </td>
         </tr>
-        {tokenInfo?.website && (
+        {tokenInfo?.extensions?.website && (
           <tr>
             <td>Website</td>
             <td className="text-lg-right">
               <a
                 rel="noopener noreferrer"
                 target="_blank"
-                href={tokenInfo.website}
+                href={tokenInfo.extensions.website}
               >
-                {tokenInfo.website}
+                {tokenInfo.extensions.website}
                 <span className="fe fe-external-link ml-2"></span>
               </a>
             </td>
@@ -160,7 +160,7 @@ function TokenAccountCard({
     );
   } else {
     balance = <>{info.tokenAmount.uiAmountString}</>;
-    unit = tokenRegistry.get(info.mint.toBase58())?.tokenSymbol || "tokens";
+    unit = tokenRegistry.get(info.mint.toBase58())?.symbol || "tokens";
   }
 
   return (
