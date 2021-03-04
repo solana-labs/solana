@@ -174,9 +174,16 @@ fn update_retransmit_stats(
             ),
         );
         let mut packets_by_slot = stats.packets_by_slot.lock().unwrap();
-        info!("retransmit: packets_by_slot: {:?}", packets_by_slot);
-        packets_by_slot.clear();
+        let old_packets_by_slot = std::mem::replace(&mut *packets_by_slot, BTreeMap::new());
         drop(packets_by_slot);
+
+        for (slot, num_shreds) in old_packets_by_slot {
+            datapoint_info!(
+                "retransmit-slot-num-packets",
+                ("slot", slot, i64),
+                ("num_shreds", num_shreds, i64)
+            );
+        }
         let mut packets_by_source = stats.packets_by_source.lock().unwrap();
         let mut top = BTreeMap::new();
         let mut max = 0;
