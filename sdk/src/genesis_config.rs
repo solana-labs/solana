@@ -1,5 +1,6 @@
 //! The `genesis_config` module is a library for generating the chain's genesis config.
 
+#![allow(clippy::integer_arithmetic)]
 #![cfg(feature = "full")]
 
 use crate::{

@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 use crate::{
     account_utils::State as AccountUtilsState, ic_msg, keyed_account::KeyedAccount,
     nonce_account::create_account, process_instruction::InvokeContext,

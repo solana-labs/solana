@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 /// A helper for calculating a stake-weighted timestamp estimate from a set of timestamps and epoch
 /// stake.
 use solana_sdk::{

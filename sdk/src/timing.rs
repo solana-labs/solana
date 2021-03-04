@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 //! The `timing` module provides std::time utility functions.
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 

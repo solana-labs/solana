@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 use solana_sdk::{
     account::Account,
     instruction::{CompiledInstruction, Instruction, InstructionError},
