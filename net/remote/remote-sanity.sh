@@ -97,7 +97,7 @@ echo "--- $sanityTargetIp: node count ($numSanityNodes expected)"
     nodeArg="num-nodes-exactly"
   fi
 
-  $safecoin_gossip spy --entrypoint "$sanityTargetIp:8002" \
+  $safecoin_gossip spy --entrypoint "$sanityTargetIp:10015" \
     --$nodeArg "$numSanityNodes" --timeout 60 \
 )
 

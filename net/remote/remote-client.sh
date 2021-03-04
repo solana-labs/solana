@@ -48,7 +48,7 @@ safecoin-bench-tps)
     "$entrypointIp":~/solana/config/bench-tps"$clientIndex".yml ./client-accounts.yml
   clientCommand="\
     safecoin-bench-tps \
-      --entrypoint $entrypointIp:8002 \
+      --entrypoint $entrypointIp:10015 \
       --faucet $entrypointIp:9900 \
       --duration 7500 \
       --sustained \
@@ -63,7 +63,7 @@ safecoin-bench-exchange)
     "$entrypointIp":~/solana/config/bench-exchange"$clientIndex".yml ./client-accounts.yml
   clientCommand="\
     safecoin-bench-exchange \
-      --entrypoint $entrypointIp:8002 \
+      --entrypoint $entrypointIp:10015 \
       --faucet $entrypointIp:9900 \
       --threads $threadCount \
       --batch-size 1000 \

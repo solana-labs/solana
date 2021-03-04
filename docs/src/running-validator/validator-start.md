@@ -32,7 +32,7 @@ Try running following command to join the gossip network and view all the other
 nodes in the cluster:
 
 ```bash
-safecoin-gossip spy --entrypoint devnet.safecoin.org:8002
+safecoin-gossip spy --entrypoint devnet.safecoin.org:10015
 # Press ^C to exit
 ```
 
@@ -256,7 +256,7 @@ safecoin-validator \
   --vote-account ~/vote-account-keypair.json \
   --ledger ~/validator-ledger \
   --rpc-port 8328 \
-  --entrypoint devnet.safecoin.org:8002 \
+  --entrypoint devnet.safecoin.org:10015 \
   --limit-ledger-size \
   --log ~/safecoin-validator.log
 ```
@@ -275,7 +275,7 @@ Confirm your validator connected to the network by opening a new terminal and
 running:
 
 ```bash
-safecoin-gossip spy --entrypoint devnet.safecoin.org:8002
+safecoin-gossip spy --entrypoint devnet.safecoin.org:10015
 ```
 
 If your validator is connected, its public key and IP address will appear in the list.

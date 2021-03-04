@@ -31,7 +31,7 @@ safecoin-gossip --version
 safecoin-dos --version
 
 killall safecoin-gossip || true
-safecoin-gossip spy --gossip-port 8002 > "$logDir"/gossip.log 2>&1 &
+safecoin-gossip spy --gossip-port 10015 > "$logDir"/gossip.log 2>&1 &
 solanaGossipPid=$!
 echo "safecoin-gossip pid: $solanaGossipPid"
 sleep 5

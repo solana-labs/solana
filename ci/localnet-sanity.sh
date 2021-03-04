@@ -325,7 +325,7 @@ while [[ $iteration -le $iterations ]]; do
     set -x
     client_keypair=/tmp/client-id.json-$$
     $solana_keygen new --no-passphrase -fso $client_keypair || exit $?
-    $safecoin_gossip spy -n 127.0.0.1:8002 --num-nodes-exactly $numNodes || exit $?
+    $safecoin_gossip spy -n 127.0.0.1:10015 --num-nodes-exactly $numNodes || exit $?
     rm -rf $client_keypair
   ) || flag_error
 

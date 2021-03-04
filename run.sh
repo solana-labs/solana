@@ -96,7 +96,7 @@ args=(
   --identity "$dataDir"/validator-identity.json
   --vote-account "$dataDir"/validator-vote-account.json
   --ledger "$ledgerDir"
-  --gossip-port 8002
+  --gossip-port 10015
   --rpc-port 8328
   --rpc-faucet-address 127.0.0.1:9900
   --log -

@@ -206,9 +206,9 @@ else
   #    positional argument
   entrypoint_hostname=${positional_args[0]}
   if [[ -z $entrypoint_hostname ]]; then
-    gossip_entrypoint=127.0.0.1:8002
+    gossip_entrypoint=127.0.0.1:10015
   else
-    gossip_entrypoint="$entrypoint_hostname":8002
+    gossip_entrypoint="$entrypoint_hostname":10015
   fi
 fi
 

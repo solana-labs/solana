@@ -272,7 +272,7 @@ EOF
     fi
     args=(
       --gossip-host "$entrypointIp"
-      --gossip-port 8002
+      --gossip-port 10015
       --init-complete-file "$initCompleteFile"
     )
 
@@ -331,8 +331,8 @@ EOF
     fi
 
     args=(
-      --entrypoint "$entrypointIp:8002"
-      --gossip-port 8002
+      --entrypoint "$entrypointIp:10015"
+      --gossip-port 10015
       --rpc-port 8328
       --expected-shred-version "$(cat "$SAFECOIN_CONFIG_DIR"/shred-version)"
     )
