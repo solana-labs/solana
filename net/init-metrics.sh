@@ -29,7 +29,7 @@ EOF
 useEnv=false
 delete=false
 createWithoutConfig=false
-host="https://metrics.solana.com:8086"
+host="https://metrics.safecoin.org:10016"
 while getopts "hdec:" opt; do
   case $opt in
   h|\?)

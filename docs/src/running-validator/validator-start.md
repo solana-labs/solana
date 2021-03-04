@@ -23,7 +23,7 @@ to your machine by fetching the transaction count:
 safecoin transaction-count
 ```
 
-View the [metrics dashboard](https://metrics.solana.com:3000/d/monitor/cluster-telemetry) for more
+View the [metrics dashboard](https://metrics.safecoin.org:3000/d/monitor/cluster-telemetry) for more
 detail on cluster activity.
 
 ## Confirm your Installation

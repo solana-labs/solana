@@ -15,7 +15,7 @@ if [[ -z $INFLUX_DATABASE || -z $INFLUX_USERNAME || -z $INFLUX_PASSWORD ]]; then
   exit 0
 fi
 
-host="https://localhost:8086"
+host="https://localhost:10016"
 if [[ -n $INFLUX_HOST ]]; then
   host="$INFLUX_HOST"
 fi

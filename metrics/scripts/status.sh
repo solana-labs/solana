@@ -28,7 +28,7 @@ curl_head() {
   curl --retry 5 --retry-delay 2 --retry-connrefused -v --head "$1"
 }
 
-if ! curl_head http://localhost:8086/ping; then
+if ! curl_head http://localhost:10016/ping; then
   echo Error: InfluxDB not running
   exit 1
 fi
@@ -46,6 +46,6 @@ cat <<EOF
      password: $INFLUXDB_ADMIN_PASSWORD
 
 * Enable metric collection per shell by running:
-     export SAFECOIN_METRICS_CONFIG="host=http://localhost:8086,db=testnet,u=$INFLUXDB_WRITE_USER,p=$INFLUXDB_WRITE_PASSWORD"
+     export SAFECOIN_METRICS_CONFIG="host=http://localhost:10016,db=testnet,u=$INFLUXDB_WRITE_USER,p=$INFLUXDB_WRITE_PASSWORD"
 
 EOF

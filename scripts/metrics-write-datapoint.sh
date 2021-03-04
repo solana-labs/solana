@@ -15,7 +15,7 @@ if [[ -z $INFLUX_DATABASE || -z $INFLUX_USERNAME || -z $INFLUX_PASSWORD ]]; then
   exit 0
 fi
 
-host="https://metrics.solana.com:8086"
+host="https://metrics.safecoin.org:10016"
 
 if [[ -n $INFLUX_HOST ]]; then
   host="$INFLUX_HOST"

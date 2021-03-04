@@ -126,4 +126,4 @@ In this example the client connects to our public testnet. To run validators on 
 NDEBUG=1 ./multinode-demo/bench-tps.sh --entrypoint devnet.safecoin.org:10015 --faucet devnet.safecoin.org:9900 --duration 60 --tx_count 50
 ```
 
-You can observe the effects of your client's transactions on our [metrics dashboard](https://metrics.solana.com:3000/d/monitor/cluster-telemetry?var-testnet=devnet)
+You can observe the effects of your client's transactions on our [metrics dashboard](https://metrics.safecoin.org:3000/d/monitor/cluster-telemetry?var-testnet=devnet)

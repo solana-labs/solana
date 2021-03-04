@@ -218,7 +218,7 @@ STEP=
 execution_step "Initialize Environment"
 
 [[ -n $TESTNET_TAG ]] || TESTNET_TAG=${CLOUD_PROVIDER}-testnet-automation
-[[ -n $INFLUX_HOST ]] || INFLUX_HOST=https://metrics.solana.com:8086
+[[ -n $INFLUX_HOST ]] || INFLUX_HOST=https://metrics.safecoin.org:10016
 [[ -n $BOOTSTRAP_VALIDATOR_MAX_STAKE_THRESHOLD ]] || BOOTSTRAP_VALIDATOR_MAX_STAKE_THRESHOLD=66
 [[ -n $SKIP_PERF_RESULTS ]] || SKIP_PERF_RESULTS=false
 

@@ -4,9 +4,9 @@
 
 There are three versions of the testnet dashboard, corresponding to the three
 release channels:
-* https://metrics.solana.com:3000/d/monitor-edge/cluster-telemetry-edge
-* https://metrics.solana.com:3000/d/monitor-beta/cluster-telemetry-beta
-* https://metrics.solana.com:3000/d/monitor/cluster-telemetry
+* https://metrics.safecoin.org:3000/d/monitor-edge/cluster-telemetry-edge
+* https://metrics.safecoin.org:3000/d/monitor-beta/cluster-telemetry-beta
+* https://metrics.safecoin.org:3000/d/monitor/cluster-telemetry
 
 The dashboard for each channel is defined from the
 `metrics/scripts/grafana-provisioning/dashboards/cluster-monitor.json` source
@@ -22,7 +22,7 @@ Dashboard updates are accomplished by modifying
 `metrics/scripts/grafana-provisioning/dashboards/cluster-monitor.json`,
 **manual edits made directly in Grafana will be overwritten**.
 
-* Check out metrics to add at https://metrics.solana.com:8888/ in the data explorer.
+* Check out metrics to add at https://metrics.safecoin.org:8888/ in the data explorer.
 * When editing a query for a dashboard graph, use the "Toggle Edit Mode" selection
   behind the hamburger button to use raw SQL and copy the query into the text field.
   You may have to fixup the query with the dashboard variables like $testnet or $timeFilter,
@@ -41,7 +41,7 @@ Dashboard updates are accomplished by modifying
 If you need to immediately deploy a dashboard using the contents of
 `cluster-monitor.json` in your local workspace,
 ```
-$ export GRAFANA_API_TOKEN="an API key from https://metrics.solana.com:3000/org/apikeys"
+$ export GRAFANA_API_TOKEN="an API key from https://metrics.safecoin.org:3000/org/apikeys"
 $ metrics/publish-metrics-dashboard.sh (edge|beta|stable)
 ```
 Note that automation will eventually overwrite your manual deploy.
