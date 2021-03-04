@@ -205,12 +205,12 @@ fn get_config() -> Config {
     let (json_rpc_url, validator_list) = match cluster.as_str() {
         "mainnet-beta" => (
             value_t!(matches, "json_rpc_url", String)
-                .unwrap_or_else(|_| "http://api.mainnet-beta.solana.com".into()),
+                .unwrap_or_else(|_| "http://api.mainnet-beta.safecoin.org".into()),
             validator_list::mainnet_beta_validators(),
         ),
         "testnet" => (
             value_t!(matches, "json_rpc_url", String)
-                .unwrap_or_else(|_| "http://testnet.solana.com".into()),
+                .unwrap_or_else(|_| "http://testnet.safecoin.org".into()),
             validator_list::testnet_validators(),
         ),
         "unknown" => {

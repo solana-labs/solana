@@ -11,8 +11,8 @@ mkdir -p "$SAFECOIN_CONFIG_DIR"/latest-mainnet-beta-snapshot
 (
   cd "$SAFECOIN_CONFIG_DIR"/latest-mainnet-beta-snapshot || exit 1
   set -x
-  wget http://api.mainnet-beta.solana.com/genesis.tar.bz2
-  wget --trust-server-names http://api.mainnet-beta.solana.com/snapshot.tar.bz2
+  wget http://api.mainnet-beta.safecoin.org/genesis.tar.bz2
+  wget --trust-server-names http://api.mainnet-beta.safecoin.org/snapshot.tar.bz2
 )
 
 snapshot=$(ls "$SAFECOIN_CONFIG_DIR"/latest-mainnet-beta-snapshot/snapshot-[0-9]*-*.tar.zst)

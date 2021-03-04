@@ -60,7 +60,7 @@ Start your own testnet locally, instructions are in the [online docs](https://do
 
 ### Accessing the remote development cluster
 * `devnet` - stable public cluster for development accessible via
-devnet.solana.com. Runs 24/7. Learn more about the [public clusters](https://docs.solana.com/clusters)
+devnet.safecoin.org. Runs 24/7. Learn more about the [public clusters](https://docs.solana.com/clusters)
 
 # Benchmarking
 

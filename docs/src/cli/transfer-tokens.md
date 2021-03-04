@@ -27,7 +27,7 @@ on devnet have **no** value, so don't worry if you lose them.
 First, _airdrop_ yourself some play tokens on the devnet.
 
 ```bash
-safecoin airdrop 10 <RECIPIENT_ACCOUNT_ADDRESS> --url https://devnet.solana.com
+safecoin airdrop 10 <RECIPIENT_ACCOUNT_ADDRESS> --url https://devnet.safecoin.org
 ```
 
 where you replace the text `<RECIPIENT_ACCOUNT_ADDRESS>` with your base58-encoded
@@ -39,7 +39,7 @@ Confirm the airdrop was successful by checking the account's balance.
 It should output `10 SAFE`:
 
 ```bash
-safecoin balance <ACCOUNT_ADDRESS> --url https://devnet.solana.com
+safecoin balance <ACCOUNT_ADDRESS> --url https://devnet.safecoin.org
 ```
 
 #### Create a second wallet address
@@ -71,7 +71,7 @@ with the private keypair corresponding to the sender's public key in the
 transaction.
 
 ```bash
-safecoin transfer --from <KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> 5 --url https://devnet.solana.com --fee-payer <KEYPAIR>
+safecoin transfer --from <KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> 5 --url https://devnet.safecoin.org --fee-payer <KEYPAIR>
 ```
 
 where you replace `<KEYPAIR>` with the path to a keypair in your first wallet,
@@ -81,7 +81,7 @@ wallet.
 Confirm the updated balances with `safecoin balance`:
 
 ```bash
-safecoin balance <ACCOUNT_ADDRESS> --url http://devnet.solana.com
+safecoin balance <ACCOUNT_ADDRESS> --url http://devnet.safecoin.org
 ```
 
 where `<ACCOUNT_ADDRESS>` is either the public key from your keypair or the
@@ -101,11 +101,11 @@ Save this seed phrase to recover your new keypair:
 width enhance concert vacant ketchup eternal spy craft spy guard tag punch    # If this was a real wallet, never share these words on the internet like this!
 ==========================================================================
 
-$ safecoin airdrop 10 DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com  # Airdropping 10 SAFE to my wallet's address/pubkey
+$ safecoin airdrop 10 DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.safecoin.org  # Airdropping 10 SAFE to my wallet's address/pubkey
 Requesting airdrop of 10 SAFE from 35.233.193.70:9900
 10 SAFE
 
-$ safecoin balance DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com # Check the address's balance
+$ safecoin balance DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.safecoin.org # Check the address's balance
 10 SAFE
 
 $ safecoin-keygen new --no-outfile  # Creating a second wallet, a paper wallet
@@ -118,13 +118,13 @@ Save this seed phrase to recover your new keypair:
 clump panic cousin hurt coast charge engage fall eager urge win love   # If this was a real wallet, never share these words on the internet like this!
 ====================================================================
 
-$ safecoin transfer --from my_solana_wallet.json 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv 5 --url https://devnet.solana.com --fee-payer my_solana_wallet.json  # Transferring tokens to the public address of the paper wallet
+$ safecoin transfer --from my_solana_wallet.json 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv 5 --url https://devnet.safecoin.org --fee-payer my_solana_wallet.json  # Transferring tokens to the public address of the paper wallet
 3gmXvykAd1nCQQ7MjosaHLf69Xyaqyq1qw2eu1mgPyYXd5G4v1rihhg1CiRw35b9fHzcftGKKEu4mbUeXY2pEX2z  # This is the transaction signature
 
-$ safecoin balance DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com
+$ safecoin balance DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.safecoin.org
 4.999995 SAFE  # The sending account has slightly less than 5 SAFE remaining due to the 0.000005 SAFE transaction fee payment
 
-$ safecoin balance 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv --url https://devnet.solana.com
+$ safecoin balance 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv --url https://devnet.safecoin.org
 5 SAFE  # The second wallet has now received the 5 SAFE transfer from the first wallet
 
 ```

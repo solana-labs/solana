@@ -2719,7 +2719,7 @@ test('https request', async () => {
     return;
   }
 
-  const connection = new Connection('https://devnet.solana.com');
+  const connection = new Connection('https://devnet.safecoin.org');
   const version = await connection.getVersion();
   expect(version['solana-core']).toBeTruthy();
 });

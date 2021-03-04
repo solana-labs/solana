@@ -8,7 +8,7 @@ The safecoin cli includes `get` and `set` configuration commands to automaticall
 set the `--url` argument for cli commands. For example:
 
 ```bash
-safecoin config set --url http://devnet.solana.com
+safecoin config set --url http://devnet.safecoin.org
 ```
 
 While this section demonstrates how to connect to the Devnet cluster, the steps
@@ -32,7 +32,7 @@ Try running following command to join the gossip network and view all the other
 nodes in the cluster:
 
 ```bash
-safecoin-gossip spy --entrypoint devnet.solana.com:8001
+safecoin-gossip spy --entrypoint devnet.safecoin.org:8001
 # Press ^C to exit
 ```
 
@@ -184,7 +184,7 @@ You should see the following output:
 
 ```text
 Wallet Config Updated: /home/solana/.config/solana/wallet/config.yml
-* url: http://devnet.solana.com
+* url: http://devnet.safecoin.org
 * keypair: /home/solana/validator-keypair.json
 ```
 
@@ -256,7 +256,7 @@ safecoin-validator \
   --vote-account ~/vote-account-keypair.json \
   --ledger ~/validator-ledger \
   --rpc-port 8328 \
-  --entrypoint devnet.solana.com:8001 \
+  --entrypoint devnet.safecoin.org:8001 \
   --limit-ledger-size \
   --log ~/safecoin-validator.log
 ```
@@ -275,7 +275,7 @@ Confirm your validator connected to the network by opening a new terminal and
 running:
 
 ```bash
-safecoin-gossip spy --entrypoint devnet.solana.com:8001
+safecoin-gossip spy --entrypoint devnet.safecoin.org:8001
 ```
 
 If your validator is connected, its public key and IP address will appear in the list.

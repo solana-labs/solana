@@ -8,13 +8,13 @@ public RPC endpoints currently available and recommended for each public cluster
 
 ## Devnet
 
-- `https://devnet.solana.com` - single Safecoin-hosted api node; rate-limited
+- `https://devnet.safecoin.org` - single Safecoin-hosted api node; rate-limited
 
 ## Testnet
 
-- `https://testnet.solana.com` - single Safecoin-hosted api node; rate-limited
+- `https://testnet.safecoin.org` - single Safecoin-hosted api node; rate-limited
 
 ## Mainnet Beta
 
-- `https://api.mainnet-beta.solana.com` - Safecoin-hosted api node cluster, backed by a load balancer; rate-limited
+- `https://api.mainnet-beta.safecoin.org` - Safecoin-hosted api node cluster, backed by a load balancer; rate-limited
 - `https://solana-api.projectserum.com` - Project Serum-hosted api node

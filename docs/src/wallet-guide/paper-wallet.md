@@ -147,7 +147,7 @@ Next, configure the `solana` CLI tool to
 [connect to a particular cluster](../cli/choose-a-cluster.md):
 
 ```bash
-safecoin config set --url <CLUSTER URL> # (i.e. https://api.mainnet-beta.solana.com)
+safecoin config set --url <CLUSTER URL> # (i.e. https://api.mainnet-beta.safecoin.org)
 ```
 
 Finally, to check the balance, run the following command:

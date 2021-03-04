@@ -9,7 +9,7 @@ const solanaWeb3 = require('..');
 const account = new solanaWeb3.Account();
 
 let url;
-url = 'http://devnet.solana.com';
+url = 'http://devnet.safecoin.org';
 //url = 'http://localhost:8328';
 const connection = new solanaWeb3.Connection(url);
 
