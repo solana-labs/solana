@@ -311,7 +311,7 @@ fn main() {
     };
     let _logger_thread = redirect_stderr_to_file(logfile);
 
-    let faucet_lamports = sol_to_lamports(1_000_000.);
+    let faucet_lamports = sol_to_lamports(1_000.);
     let faucet_keypair_file = ledger_path.join("faucet-keypair.json");
     if !faucet_keypair_file.exists() {
         write_keypair_file(&Keypair::new(), faucet_keypair_file.to_str().unwrap()).unwrap_or_else(
