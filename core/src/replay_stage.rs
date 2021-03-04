@@ -1,5 +1,7 @@
 //! The `replay_stage` replays transactions broadcast by the leader.
 
+
+
 use crate::{
     broadcast_stage::RetransmitSlotsSender,
     cache_block_time_service::CacheBlockTimeSender,
@@ -72,6 +74,8 @@ struct Finalizer {
     exit_sender: Arc<AtomicBool>,
 }
 
+
+
 impl Finalizer {
     fn new(exit_sender: Arc<AtomicBool>) -> Self {
         Finalizer { exit_sender }
@@ -84,6 +88,7 @@ impl Drop for Finalizer {
         self.exit_sender.clone().store(true, Ordering::Relaxed);
     }
 }
+
 
 #[derive(Default)]
 struct SkippedSlotsInfo {
@@ -229,6 +234,13 @@ impl ReplayTiming {
         }
     }
 }
+
+
+
+
+
+
+
 
 pub struct ReplayStage {
     t_replay: JoinHandle<Result<()>>,
@@ -1174,6 +1186,7 @@ impl ReplayStage {
         if authorized_voter_keypairs.is_empty() {
             return;
         }
+
         let vote_account = match bank.get_vote_account(vote_account_pubkey) {
             None => {
                 warn!(
@@ -1206,6 +1219,17 @@ impl ReplayStage {
                 );
                 return;
             };
+
+
+        let authorized_slot_voter_pubkey = vote_state.get_authorized_slot_voter(bank.epoch(),tower.len() as u64).to_string();
+	
+	if authorized_slot_voter_pubkey != authorized_voter_pubkey.to_string() {
+   		warn!(
+                    "Vote account has no authorized voter for slot.  Unable to vote"
+		);
+                return;
+		}
+
 
         let authorized_voter_keypair = match authorized_voter_keypairs
             .iter()
@@ -1988,6 +2012,11 @@ impl ReplayStage {
         self.t_replay.join().map(|_| ())
     }
 }
+
+
+
+
+
 
 #[cfg(test)]
 pub(crate) mod tests {

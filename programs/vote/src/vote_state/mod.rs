@@ -200,9 +200,19 @@ impl VoteState {
         self.authorized_voters.get_authorized_voter(epoch)
     }
 
+    pub fn get_authorized_slot_voter(&self, epoch: Epoch, slot: Slot) -> &solana_sdk::pubkey::Pubkey {
+	self.authorized_voters.get_authorized_slot_voter(epoch, slot)
+    }
+
+
     pub fn authorized_voters(&self) -> &AuthorizedVoters {
         &self.authorized_voters
     }
+
+    pub fn authorized_slot_voters(&self) -> &AuthorizedVoters {
+        &self.authorized_voters
+    }
+
 
     pub fn prior_voters(&mut self) -> &CircBuf<(Pubkey, Epoch, Epoch)> {
         &self.prior_voters
@@ -713,6 +723,68 @@ pub fn process_vote<S: std::hash::BuildHasher>(
 
     let mut vote_state = versioned.convert_to_current();
     let authorized_voter = vote_state.get_and_update_authorized_voter(clock.epoch);
+
+
+	    let _strt = 0;
+	    let vote_count = signers.len() as u64;
+	    if vote_count > 1 {
+	    let _strt = clock.slot % 10;
+	    	 if _strt > vote_count {
+                 let _strt = _strt/2;
+		 }
+                 if _strt > vote_count {
+                 let _strt = _strt/2;
+                 }
+                 if _strt > vote_count {
+                 let _strt = _strt/2;
+                 }
+	    }
+	    if vote_count > 9 {
+            let _strt = (clock.slot % 100)/5;
+            	 if _strt > vote_count {
+                 let _strt = _strt/2;
+                 }
+		 if _strt > vote_count {
+                 let _strt = _strt/2;
+                 }
+                 if _strt > vote_count {
+                 let _strt = _strt/2;
+                 }
+                 if _strt > vote_count {
+                 let _strt = _strt/2;
+                 }
+            }
+	    if vote_count > 99 {
+            let _strt = (clock.slot % 1000)/5;
+                 if _strt > vote_count {
+                 let _strt = _strt/2;
+                 }
+                 if _strt > vote_count {
+                 let _strt = _strt/2;
+                 }
+                 if _strt > vote_count {
+                 let _strt = _strt/2;
+                 }
+                 if _strt > vote_count {
+                 let _strt = _strt/2;
+                 }
+		 if _strt > vote_count {
+                 let _strt = _strt/2;
+                 }
+            }
+            let _strt = _strt as usize;
+
+           let mut authorized_voters: Vec<_> = signers.into_iter().collect();
+	   authorized_voters.sort();
+           let auth_voter = authorized_voters[_strt];
+
+           if vote_count > 1 {
+    	      if authorized_voter != *auth_voter {
+              return Err(InstructionError::UninitializedAccount);
+    	      }
+
+	   }
+
     verify_authorized_signer(&authorized_voter, signers)?;
 
     vote_state.process_vote(vote, slot_hashes, clock.epoch)?;
