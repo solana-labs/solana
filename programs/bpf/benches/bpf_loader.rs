@@ -175,7 +175,7 @@ fn bench_program_execute_noop(bencher: &mut Bencher) {
     let mint_pubkey = mint_keypair.pubkey();
     let account_metas = vec![AccountMeta::new(mint_pubkey, true)];
 
-    let instruction = Instruction::new(invoke_program_id, &[u8::MAX, 0, 0, 0], account_metas);
+    let instruction = Instruction::new_with_bincode(invoke_program_id, &[u8::MAX, 0, 0, 0], account_metas);
     let message = Message::new(&[instruction], Some(&mint_pubkey));
 
     bank_client

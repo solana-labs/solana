@@ -230,7 +230,7 @@ pub fn create_account(
         AccountMeta::new(*from_pubkey, true),
         AccountMeta::new(*to_pubkey, true),
     ];
-    Instruction::new(
+    Instruction::new_with_bincode(
         system_program::id(),
         &SystemInstruction::CreateAccount {
             lamports,
@@ -258,7 +258,7 @@ pub fn create_account_with_seed(
         AccountMeta::new_readonly(*base, true),
     ];
 
-    Instruction::new(
+    Instruction::new_with_bincode(
         system_program::id(),
         &SystemInstruction::CreateAccountWithSeed {
             base: *base,
@@ -273,7 +273,7 @@ pub fn create_account_with_seed(
 
 pub fn assign(pubkey: &Pubkey, owner: &Pubkey) -> Instruction {
     let account_metas = vec![AccountMeta::new(*pubkey, true)];
-    Instruction::new(
+    Instruction::new_with_bincode(
         system_program::id(),
         &SystemInstruction::Assign { owner: *owner },
         account_metas,
@@ -290,7 +290,7 @@ pub fn assign_with_seed(
         AccountMeta::new(*address, false),
         AccountMeta::new_readonly(*base, true),
     ];
-    Instruction::new(
+    Instruction::new_with_bincode(
         system_program::id(),
         &SystemInstruction::AssignWithSeed {
             base: *base,
@@ -306,7 +306,7 @@ pub fn transfer(from_pubkey: &Pubkey, to_pubkey: &Pubkey, lamports: u64) -> Inst
         AccountMeta::new(*from_pubkey, true),
         AccountMeta::new(*to_pubkey, false),
     ];
-    Instruction::new(
+    Instruction::new_with_bincode(
         system_program::id(),
         &SystemInstruction::Transfer { lamports },
         account_metas,
@@ -326,7 +326,7 @@ pub fn transfer_with_seed(
         AccountMeta::new_readonly(*from_base, true),
         AccountMeta::new(*to_pubkey, false),
     ];
-    Instruction::new(
+    Instruction::new_with_bincode(
         system_program::id(),
         &SystemInstruction::TransferWithSeed {
             lamports,
@@ -339,7 +339,7 @@ pub fn transfer_with_seed(
 
 pub fn allocate(pubkey: &Pubkey, space: u64) -> Instruction {
     let account_metas = vec![AccountMeta::new(*pubkey, true)];
-    Instruction::new(
+    Instruction::new_with_bincode(
         system_program::id(),
         &SystemInstruction::Allocate { space },
         account_metas,
@@ -357,7 +357,7 @@ pub fn allocate_with_seed(
         AccountMeta::new(*address, false),
         AccountMeta::new_readonly(*base, true),
     ];
-    Instruction::new(
+    Instruction::new_with_bincode(
         system_program::id(),
         &SystemInstruction::AllocateWithSeed {
             base: *base,
@@ -395,7 +395,7 @@ pub fn create_nonce_account_with_seed(
             nonce::State::size() as u64,
             &system_program::id(),
         ),
-        Instruction::new(
+        Instruction::new_with_bincode(
             system_program::id(),
             &SystemInstruction::InitializeNonceAccount(*authority),
             vec![
@@ -421,7 +421,7 @@ pub fn create_nonce_account(
             nonce::State::size() as u64,
             &system_program::id(),
         ),
-        Instruction::new(
+        Instruction::new_with_bincode(
             system_program::id(),
             &SystemInstruction::InitializeNonceAccount(*authority),
             vec![
@@ -439,7 +439,7 @@ pub fn advance_nonce_account(nonce_pubkey: &Pubkey, authorized_pubkey: &Pubkey) 
         AccountMeta::new_readonly(recent_blockhashes::id(), false),
         AccountMeta::new_readonly(*authorized_pubkey, true),
     ];
-    Instruction::new(
+    Instruction::new_with_bincode(
         system_program::id(),
         &SystemInstruction::AdvanceNonceAccount,
         account_metas,
@@ -459,7 +459,7 @@ pub fn withdraw_nonce_account(
         AccountMeta::new_readonly(rent::id(), false),
         AccountMeta::new_readonly(*authorized_pubkey, true),
     ];
-    Instruction::new(
+    Instruction::new_with_bincode(
         system_program::id(),
         &SystemInstruction::WithdrawNonceAccount(lamports),
         account_metas,
@@ -475,7 +475,7 @@ pub fn authorize_nonce_account(
         AccountMeta::new(*nonce_pubkey, false),
         AccountMeta::new_readonly(*authorized_pubkey, true),
     ];
-    Instruction::new(
+    Instruction::new_with_bincode(
         system_program::id(),
         &SystemInstruction::AuthorizeNonceAccount(*new_authority),
         account_metas,

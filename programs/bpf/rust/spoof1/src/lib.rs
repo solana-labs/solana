@@ -36,7 +36,7 @@ fn process_instruction(
         AccountMeta::new(*target.key, false),
         AccountMeta::new(*me.key, false),
     ];
-    let ix = Instruction::new(
+    let ix = Instruction::new_with_bincode(
         system_program::id(),
         &SystemInstruction::Transfer { lamports: 1 },
         account_metas,

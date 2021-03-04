@@ -1654,7 +1654,7 @@ mod tests {
         bank.clear_signatures();
         bank.store_account(&buffer_address, &buffer_account);
         let message = Message::new(
-            &[Instruction::new(
+            &[Instruction::new_with_bincode(
                 bpf_loader_upgradeable::id(),
                 &UpgradeableLoaderInstruction::DeployWithMaxDataLen {
                     max_data_len: elf.len(),
@@ -1713,7 +1713,7 @@ mod tests {
         bank.store_account(&program_keypair.pubkey(), &program_account);
         bank.store_account(&programdata_address, &programdata_account);
         let message = Message::new(
-            &[Instruction::new(
+            &[Instruction::new_with_bincode(
                 bpf_loader_upgradeable::id(),
                 &UpgradeableLoaderInstruction::DeployWithMaxDataLen {
                     max_data_len: elf.len(),
@@ -1744,7 +1744,7 @@ mod tests {
         bank.store_account(&program_keypair.pubkey(), &program_account);
         bank.store_account(&programdata_address, &programdata_account);
         let message = Message::new(
-            &[Instruction::new(
+            &[Instruction::new_with_bincode(
                 bpf_loader_upgradeable::id(),
                 &UpgradeableLoaderInstruction::DeployWithMaxDataLen {
                     max_data_len: elf.len(),

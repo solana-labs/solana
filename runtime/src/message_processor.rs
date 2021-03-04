@@ -1170,7 +1170,11 @@ mod tests {
                 AccountMeta::new(keys[owned_index], false),
             ];
             let message = Message::new(
-                &[Instruction::new(program_ids[owned_index], &[0_u8], metas)],
+                &[Instruction::new_with_bytes(
+                    program_ids[owned_index],
+                    &[0],
+                    metas,
+                )],
                 None,
             );
 
@@ -1701,7 +1705,7 @@ mod tests {
             AccountMeta::new_readonly(to_pubkey, false),
         ];
         let message = Message::new(
-            &[Instruction::new(
+            &[Instruction::new_with_bincode(
                 mock_system_program_id,
                 &MockSystemInstruction::Correct,
                 account_metas.clone(),
@@ -1727,7 +1731,7 @@ mod tests {
         assert_eq!(accounts[1].borrow().lamports, 0);
 
         let message = Message::new(
-            &[Instruction::new(
+            &[Instruction::new_with_bincode(
                 mock_system_program_id,
                 &MockSystemInstruction::AttemptCredit { lamports: 50 },
                 account_metas.clone(),
@@ -1757,7 +1761,7 @@ mod tests {
         );
 
         let message = Message::new(
-            &[Instruction::new(
+            &[Instruction::new_with_bincode(
                 mock_system_program_id,
                 &MockSystemInstruction::AttemptDataChange { data: 50 },
                 account_metas,
@@ -1872,7 +1876,7 @@ mod tests {
 
         // Try to borrow mut the same account
         let message = Message::new(
-            &[Instruction::new(
+            &[Instruction::new_with_bincode(
                 mock_program_id,
                 &MockSystemInstruction::BorrowFail,
                 account_metas.clone(),
@@ -1902,7 +1906,7 @@ mod tests {
 
         // Try to borrow mut the same account in a safe way
         let message = Message::new(
-            &[Instruction::new(
+            &[Instruction::new_with_bincode(
                 mock_program_id,
                 &MockSystemInstruction::MultiBorrowMut,
                 account_metas.clone(),
@@ -1926,7 +1930,7 @@ mod tests {
 
         // Do work on the same account but at different location in keyed_accounts[]
         let message = Message::new(
-            &[Instruction::new(
+            &[Instruction::new_with_bincode(
                 mock_program_id,
                 &MockSystemInstruction::DoWork {
                     lamports: 10,
@@ -2041,7 +2045,7 @@ mod tests {
 
         // not owned account modified by the caller (before the invoke)
         accounts[0].borrow_mut().data[0] = 1;
-        let instruction = Instruction::new(
+        let instruction = Instruction::new_with_bincode(
             callee_program_id,
             &MockInstruction::NoopSuccess,
             metas.clone(),
@@ -2079,7 +2083,8 @@ mod tests {
         ];
 
         for case in cases {
-            let instruction = Instruction::new(callee_program_id, &case.0, metas.clone());
+            let instruction =
+                Instruction::new_with_bincode(callee_program_id, &case.0, metas.clone());
             let message = Message::new(&[instruction], None);
             let caller_privileges = message
                 .account_keys

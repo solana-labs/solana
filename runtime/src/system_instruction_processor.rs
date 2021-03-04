@@ -1353,7 +1353,7 @@ mod tests {
             AccountMeta::new(alice_pubkey, false),
             AccountMeta::new(mallory_pubkey, true),
         ];
-        let malicious_instruction = Instruction::new(
+        let malicious_instruction = Instruction::new_with_bincode(
             system_program::id(),
             &SystemInstruction::Transfer { lamports: 10 },
             account_metas,
