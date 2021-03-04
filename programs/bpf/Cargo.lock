@@ -2709,6 +2709,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-bpf-rust-finalize"
+version = "1.6.0"
+dependencies = [
+ "solana-program 1.6.0",
+]
+
+[[package]]
 name = "solana-bpf-rust-instruction-introspection"
 version = "1.6.0"
 dependencies = [
