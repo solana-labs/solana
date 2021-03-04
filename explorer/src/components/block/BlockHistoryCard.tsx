@@ -4,7 +4,11 @@ import { ErrorCard } from "components/common/ErrorCard";
 import { Signature } from "components/common/Signature";
 import bs58 from "bs58";
 
+const PAGE_SIZE = 25;
+
 export function BlockHistoryCard({ block }: { block: ConfirmedBlock }) {
+  const [numDisplayed, setNumDisplayed] = React.useState(PAGE_SIZE);
+
   if (block.transactions.length === 0) {
     return <ErrorCard text="This block has no transactions" />;
   }
@@ -24,7 +28,7 @@ export function BlockHistoryCard({ block }: { block: ConfirmedBlock }) {
             </tr>
           </thead>
           <tbody className="list">
-            {block.transactions.map((tx, i) => {
+            {block.transactions.slice(0, numDisplayed).map((tx, i) => {
               let statusText;
               let statusClass;
               let signature: React.ReactNode;
@@ -60,6 +64,19 @@ export function BlockHistoryCard({ block }: { block: ConfirmedBlock }) {
           </tbody>
         </table>
       </div>
+
+      {block.transactions.length > numDisplayed && (
+        <div className="card-footer">
+          <button
+            className="btn btn-primary w-100"
+            onClick={() =>
+              setNumDisplayed((displayed) => displayed + PAGE_SIZE)
+            }
+          >
+            Load More
+          </button>
+        </div>
+      )}
     </div>
   );
 }
