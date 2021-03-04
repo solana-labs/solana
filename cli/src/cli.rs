@@ -369,25 +369,25 @@ pub struct CliCommandInfo {
 
 #[derive(Debug, Error)]
 pub enum CliError {
-    #[error("bad parameter: {0}")]
+    #[error("Bad parameter: {0}")]
     BadParameter(String),
     #[error(transparent)]
     ClientError(#[from] ClientError),
-    #[error("command not recognized: {0}")]
+    #[error("Command not recognized: {0}")]
     CommandNotRecognized(String),
-    #[error("insufficient funds for fee ({0} SOL)")]
-    InsufficientFundsForFee(f64),
-    #[error("insufficient funds for spend ({0} SOL)")]
-    InsufficientFundsForSpend(f64),
-    #[error("insufficient funds for spend ({0} SOL) and fee ({1} SOL)")]
-    InsufficientFundsForSpendAndFee(f64, f64),
+    #[error("Account {1} has insufficient funds for fee ({0} SOL)")]
+    InsufficientFundsForFee(f64, Pubkey),
+    #[error("Account {1} has insufficient funds for spend ({0} SOL)")]
+    InsufficientFundsForSpend(f64, Pubkey),
+    #[error("Account {2} has insufficient funds for spend ({0} SOL) + fee ({1} SOL)")]
+    InsufficientFundsForSpendAndFee(f64, f64, Pubkey),
     #[error(transparent)]
     InvalidNonce(nonce_utils::Error),
-    #[error("dynamic program error: {0}")]
+    #[error("Dynamic program error: {0}")]
     DynamicProgramError(String),
-    #[error("rpc request error: {0}")]
+    #[error("RPC request error: {0}")]
     RpcRequestError(String),
-    #[error("keypair file not found: {0}")]
+    #[error("Keypair file not found: {0}")]
     KeypairFileNotFound(String),
 }
 

@@ -1161,6 +1161,11 @@ impl AccountsDb {
         )
     }
 
+    pub fn expected_cluster_type(&self) -> ClusterType {
+        self.cluster_type
+            .expect("Cluster type must be set at initialization")
+    }
+
     // Reclaim older states of rooted accounts for AccountsDb bloat mitigation
     fn clean_old_rooted_accounts(
         &self,
@@ -3499,56 +3504,58 @@ impl AccountsDb {
                 keys.par_chunks(chunks)
                     .map(|pubkeys| {
                         let mut sum = 0u128;
-                        let result: Vec<Hash> =
-                            pubkeys
-                                .iter()
-                                .filter_map(|pubkey| {
-                                    if let Some((lock, index)) =
-                                        self.accounts_index.get(pubkey, Some(ancestors), Some(slot))
-                                    {
-                                        let (slot, account_info) = &lock.slot_list()[index];
-                                        if account_info.lamports != 0 {
-                                            self.get_account_accessor_from_cache_or_storage(
-                                    *slot,
-                                    pubkey,
-                                    account_info.store_id,
-                                    account_info.offset,
-                                )
-                                .get_loaded_account()
-                                .and_then(|loaded_account| {
-                                    let loaded_hash = loaded_account.loaded_hash();
-                                    let balance = Self::account_balance_for_capitalization(
-                                        account_info.lamports,
-                                        loaded_account.owner(),
-                                        loaded_account.executable(),
-                                        simple_capitalization_enabled,
-                                    );
-
-                                    if check_hash {
-                                        let computed_hash = loaded_account.compute_hash(
+                        let result: Vec<Hash> = pubkeys
+                            .iter()
+                            .filter_map(|pubkey| {
+                                if let Some((lock, index)) =
+                                    self.accounts_index.get(pubkey, Some(ancestors), Some(slot))
+                                {
+                                    let (slot, account_info) = &lock.slot_list()[index];
+                                    if account_info.lamports != 0 {
+                                        self.get_account_accessor_from_cache_or_storage(
                                             *slot,
-                                            &self.cluster_type.expect(
-                                                "Cluster type must be set at initialization",
-                                            ),
                                             pubkey,
-                                        );
-                                        if computed_hash != *loaded_hash {
-                                            mismatch_found.fetch_add(1, Ordering::Relaxed);
-                                            return None;
-                                        }
-                                    }
+                                            account_info.store_id,
+                                            account_info.offset,
+                                        )
+                                        .get_loaded_account()
+                                        .and_then(
+                                            |loaded_account| {
+                                                let loaded_hash = loaded_account.loaded_hash();
+                                                let balance =
+                                                    Self::account_balance_for_capitalization(
+                                                        account_info.lamports,
+                                                        loaded_account.owner(),
+                                                        loaded_account.executable(),
+                                                        simple_capitalization_enabled,
+                                                    );
 
-                                    sum += balance as u128;
-                                    Some(*loaded_hash)
-                                })
-                                        } else {
-                                            None
-                                        }
+                                                if check_hash {
+                                                    let computed_hash = loaded_account
+                                                        .compute_hash(
+                                                            *slot,
+                                                            &self.expected_cluster_type(),
+                                                            pubkey,
+                                                        );
+                                                    if computed_hash != *loaded_hash {
+                                                        mismatch_found
+                                                            .fetch_add(1, Ordering::Relaxed);
+                                                        return None;
+                                                    }
+                                                }
+
+                                                sum += balance as u128;
+                                                Some(*loaded_hash)
+                                            },
+                                        )
                                     } else {
                                         None
                                     }
-                                })
-                                .collect();
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect();
                         let mut total = total_lamports.lock().unwrap();
                         *total =
                             AccountsHash::checked_cast_for_capitalization(*total as u128 + sum);
@@ -4168,13 +4175,7 @@ impl AccountsDb {
         }
         self.assert_frozen_accounts(accounts);
         let mut hash_time = Measure::start("hash_accounts");
-        let hashes = self.hash_accounts(
-            slot,
-            accounts,
-            &self
-                .cluster_type
-                .expect("Cluster type must be set at initialization"),
-        );
+        let hashes = self.hash_accounts(slot, accounts, &self.expected_cluster_type());
         hash_time.stop();
         self.stats
             .store_hash_accounts
@@ -5002,7 +5003,6 @@ impl AccountsDb {
 
 #[cfg(test)]
 pub mod tests {
-    // TODO: all the bank tests are bank specific, issue: 2194
     use super::*;
     use crate::{
         accounts_hash::MERKLE_FANOUT, accounts_index::tests::*, accounts_index::RefCount,

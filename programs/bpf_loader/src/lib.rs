@@ -14,6 +14,8 @@ use crate::{
     serialization::{deserialize_parameters, serialize_parameters},
     syscalls::SyscallError,
 };
+use log::{log_enabled, trace, Level::Trace};
+use solana_measure::measure::Measure;
 use solana_rbpf::{
     ebpf::MM_HEAP_START,
     error::{EbpfError, UserDefinedError},
@@ -80,7 +82,7 @@ pub fn create_and_cache_executor(
             max_call_depth: bpf_compute_budget.max_call_depth,
             stack_frame_size: bpf_compute_budget.stack_frame_size,
             enable_instruction_meter: true,
-            enable_instruction_tracing: false,
+            enable_instruction_tracing: log_enabled!(Trace),
         },
     )
     .map_err(|e| map_ebpf_error(invoke_context, e))?;
@@ -456,15 +458,14 @@ fn process_loader_upgradeable_instruction(
             programdata.try_account_ref_mut()?.data
                 [programdata_data_offset..programdata_data_offset + buffer_data_len]
                 .copy_from_slice(&buffer.try_account_ref()?.data[buffer_data_offset..]);
-            // Update the Program account
 
+            // Update the Program account
             program.set_state(&UpgradeableLoaderState::Program {
                 programdata_address: *programdata.unsigned_key(),
             })?;
             program.try_account_ref_mut()?.executable = true;
 
             // Drain the Buffer account back to the payer
-
             payer.try_account_ref_mut()?.lamports += buffer.lamports()?;
             buffer.try_account_ref_mut()?.lamports = 0;
 
@@ -770,8 +771,12 @@ impl Executor for BpfExecutor {
         let mut keyed_accounts_iter = keyed_accounts.iter();
         let _ = next_keyed_account(&mut keyed_accounts_iter)?;
         let parameter_accounts = keyed_accounts_iter.as_slice();
+        let mut serialize_time = Measure::start("serialize");
         let mut parameter_bytes =
             serialize_parameters(loader_id, program_id, parameter_accounts, &instruction_data)?;
+        serialize_time.stop();
+        let mut create_vm_time = Measure::start("create_vm");
+        let mut execute_time;
         {
             let compute_meter = invoke_context.get_compute_meter();
             let mut vm = match create_vm(
@@ -787,7 +792,9 @@ impl Executor for BpfExecutor {
                     return Err(InstructionError::ProgramEnvironmentSetupFailure);
                 }
             };
+            create_vm_time.stop();
 
+            execute_time = Measure::start("execute");
             stable_log::program_invoke(&logger, program_id, invoke_depth);
             let mut instruction_meter = ThisInstructionMeter::new(compute_meter.clone());
             let before = compute_meter.borrow().get_remaining();
@@ -804,6 +811,13 @@ impl Executor for BpfExecutor {
                 before - after,
                 before
             );
+            if log_enabled!(Trace) {
+                let mut trace_buffer = String::new();
+                vm.get_tracer()
+                    .write(&mut trace_buffer, vm.get_program())
+                    .unwrap();
+                trace!("BPF Program Instruction Trace:\n{}", trace_buffer);
+            }
             match result {
                 Ok(status) => {
                     if status != SUCCESS {
@@ -826,8 +840,17 @@ impl Executor for BpfExecutor {
                     return Err(error);
                 }
             }
+            execute_time.stop();
         }
+        let mut deserialize_time = Measure::start("deserialize");
         deserialize_parameters(loader_id, parameter_accounts, &parameter_bytes)?;
+        deserialize_time.stop();
+        invoke_context.update_timing(
+            serialize_time.as_us(),
+            create_vm_time.as_us(),
+            execute_time.as_us(),
+            deserialize_time.as_us(),
+        );
         stable_log::program_success(&logger, program_id);
         Ok(())
     }

@@ -718,7 +718,8 @@ fn process_program_deploy(
     } else {
         return Err("Program location required if buffer not supplied".into());
     };
-    let buffer_data_len = if let Some(len) = max_len {
+    let buffer_data_len = program_len;
+    let programdata_len = if let Some(len) = max_len {
         if program_len > len {
             return Err("Max length specified not large enough".into());
         }
@@ -738,6 +739,7 @@ fn process_program_deploy(
             config,
             &program_data,
             buffer_data_len,
+            programdata_len,
             minimum_balance,
             &bpf_loader_upgradeable::id(),
             Some(&[program_signer.unwrap(), upgrade_authority_signer]),
@@ -825,7 +827,7 @@ fn process_write_buffer(
     let buffer_data_len = if let Some(len) = max_len {
         len
     } else {
-        program_data.len() * 2
+        program_data.len()
     };
     let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(
         UpgradeableLoaderState::programdata_len(buffer_data_len)?,
@@ -835,6 +837,7 @@ fn process_write_buffer(
         rpc_client,
         config,
         &program_data,
+        program_data.len(),
         program_data.len(),
         minimum_balance,
         &bpf_loader_upgradeable::id(),
@@ -998,39 +1001,51 @@ fn process_dump(
             .get_account_with_commitment(&account_pubkey, config.commitment)?
             .value
         {
-            if let Ok(UpgradeableLoaderState::Program {
-                programdata_address,
-            }) = account.state()
-            {
-                if let Some(programdata_account) = rpc_client
-                    .get_account_with_commitment(&programdata_address, config.commitment)?
-                    .value
+            if account.owner == bpf_loader::id() || account.owner == bpf_loader_deprecated::id() {
+                let mut f = File::create(output_location)?;
+                f.write_all(&account.data)?;
+                Ok(format!("Wrote program to {}", output_location))
+            } else if account.owner == bpf_loader_upgradeable::id() {
+                if let Ok(UpgradeableLoaderState::Program {
+                    programdata_address,
+                }) = account.state()
                 {
-                    if let Ok(UpgradeableLoaderState::ProgramData { .. }) =
-                        programdata_account.state()
+                    if let Some(programdata_account) = rpc_client
+                        .get_account_with_commitment(&programdata_address, config.commitment)?
+                        .value
                     {
-                        let offset = UpgradeableLoaderState::programdata_data_offset().unwrap_or(0);
-                        let program_data = &programdata_account.data[offset..];
-                        let mut f = File::create(output_location)?;
-                        f.write_all(&program_data)?;
-                        Ok(format!("Wrote program to {}", output_location))
+                        if let Ok(UpgradeableLoaderState::ProgramData { .. }) =
+                            programdata_account.state()
+                        {
+                            let offset =
+                                UpgradeableLoaderState::programdata_data_offset().unwrap_or(0);
+                            let program_data = &programdata_account.data[offset..];
+                            let mut f = File::create(output_location)?;
+                            f.write_all(&program_data)?;
+                            Ok(format!("Wrote program to {}", output_location))
+                        } else {
+                            Err(
+                                "Invalid associated ProgramData account found for the program"
+                                    .into(),
+                            )
+                        }
                     } else {
-                        Err("Invalid associated ProgramData account found for the program".into())
-                    }
-                } else {
-                    Err(
+                        Err(
                         "Failed to find associated ProgramData account for the provided program"
                             .into(),
                     )
+                    }
+                } else if let Ok(UpgradeableLoaderState::Buffer { .. }) = account.state() {
+                    let offset = UpgradeableLoaderState::buffer_data_offset().unwrap_or(0);
+                    let program_data = &account.data[offset..];
+                    let mut f = File::create(output_location)?;
+                    f.write_all(&program_data)?;
+                    Ok(format!("Wrote program to {}", output_location))
+                } else {
+                    Err("Not a buffer or program account".into())
                 }
-            } else if let Ok(UpgradeableLoaderState::Buffer { .. }) = account.state() {
-                let offset = UpgradeableLoaderState::buffer_data_offset().unwrap_or(0);
-                let program_data = &account.data[offset..];
-                let mut f = File::create(output_location)?;
-                f.write_all(&program_data)?;
-                Ok(format!("Wrote program to {}", output_location))
             } else {
-                Err("Not a buffer or program account".into())
+                Err("Accont is not a BPF program".into())
             }
         } else {
             Err("Unable to find the account".into())
@@ -1070,6 +1085,7 @@ pub fn process_deploy(
         config,
         &program_data,
         program_data.len(),
+        program_data.len(),
         minimum_balance,
         &loader_id,
         Some(&[buffer_signer]),
@@ -1090,6 +1106,7 @@ fn do_process_program_write_and_deploy(
     config: &CliConfig,
     program_data: &[u8],
     buffer_data_len: usize,
+    programdata_len: usize,
     minimum_balance: u64,
     loader_id: &Pubkey,
     program_signers: Option<&[&dyn Signer]>,
@@ -1205,7 +1222,7 @@ fn do_process_program_write_and_deploy(
                     rpc_client.get_minimum_balance_for_rent_exemption(
                         UpgradeableLoaderState::program_len()?,
                     )?,
-                    buffer_data_len,
+                    programdata_len,
                 )?,
                 Some(&config.signers[0].pubkey()),
             )

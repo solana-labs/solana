@@ -1,5 +1,4 @@
 import React from "react";
-
 import { ErrorCard } from "components/common/ErrorCard";
 import {
   ParsedInnerInstruction,
@@ -34,7 +33,7 @@ import {
   useTransactionStatus,
 } from "providers/transactions";
 import { Cluster, useCluster } from "providers/cluster";
-import { UpgradeableBpfLoaderDetailsCard } from "components/instruction/upgradeable-bpf-loader/UpgradeableBpfLoaderDetailsCard";
+import { BpfUpgradeableLoaderDetailsCard } from "components/instruction/bpf-upgradeable-loader/BpfUpgradeableLoaderDetailsCard";
 import { VoteDetailsCard } from "components/instruction/vote/VoteDetailsCard";
 
 export type InstructionDetailsProps = {
@@ -173,7 +172,7 @@ function renderInstructionCard({
       case "bpf-loader":
         return <BpfLoaderDetailsCard {...props} />;
       case "bpf-upgradeable-loader":
-        return <UpgradeableBpfLoaderDetailsCard {...props} />;
+        return <BpfUpgradeableLoaderDetailsCard {...props} />;
       case "system":
         return <SystemDetailsCard {...props} />;
       case "stake":

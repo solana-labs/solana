@@ -267,7 +267,7 @@ impl JsonRpcService {
         poh_recorder: Option<Arc<Mutex<PohRecorder>>>,
         genesis_hash: Hash,
         ledger_path: &Path,
-        validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
+        validator_exit: Arc<RwLock<ValidatorExit>>,
         trusted_validators: Option<HashSet<Pubkey>>,
         override_health_check: Arc<AtomicBool>,
         optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
@@ -434,9 +434,8 @@ impl JsonRpcService {
 
         let close_handle = close_handle_receiver.recv().unwrap();
         let close_handle_ = close_handle.clone();
-        let mut validator_exit_write = validator_exit.write().unwrap();
-        validator_exit_write
-            .as_mut()
+        validator_exit
+            .write()
             .unwrap()
             .register_exit(Box::new(move || close_handle_.close()));
         Self {

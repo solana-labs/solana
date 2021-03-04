@@ -73,7 +73,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
         let mut packets = VecDeque::new();
         for batch in batches {
             let batch_len = batch.packets.len();
-            packets.push_back((batch, vec![0usize; batch_len]));
+            packets.push_back((batch, vec![0usize; batch_len], false));
         }
         let (s, _r) = unbounded();
         // This tests the performance of buffering packets.

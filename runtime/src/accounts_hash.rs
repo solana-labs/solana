@@ -91,7 +91,7 @@ impl CumulativeOffset {
     }
 }
 
-// Allow retreiving &[start..end] from a logical src: Vec<T>, where src is really Vec<Vec<T>> (or later Vec<Vec<Vec<T>>>)
+// Allow retrieving &[start..end] from a logical src: Vec<T>, where src is really Vec<Vec<T>> (or later Vec<Vec<Vec<T>>>)
 // This model prevents callers from having to flatten which saves both working memory and time.
 #[derive(Default, Debug)]
 pub struct CumulativeOffsets {
@@ -618,7 +618,6 @@ impl AccountsHash {
 
 #[cfg(test)]
 pub mod tests {
-    // TODO: all the bank tests are bank specific, issue: 2194
     use super::*;
     use std::str::FromStr;
 

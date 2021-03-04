@@ -212,6 +212,14 @@ pub struct Instruction {
 
 impl Instruction {
     pub fn new<T: Serialize>(program_id: Pubkey, data: &T, accounts: Vec<AccountMeta>) -> Self {
+        Self::new_with_bincode(program_id, data, accounts)
+    }
+
+    pub fn new_with_bincode<T: Serialize>(
+        program_id: Pubkey,
+        data: &T,
+        accounts: Vec<AccountMeta>,
+    ) -> Self {
         let data = serialize(data).unwrap();
         Self {
             program_id,
@@ -229,6 +237,14 @@ impl Instruction {
         Self {
             program_id,
             data,
+            accounts,
+        }
+    }
+
+    pub fn new_with_bytes(program_id: Pubkey, data: &[u8], accounts: Vec<AccountMeta>) -> Self {
+        Self {
+            program_id,
+            data: data.to_vec(),
             accounts,
         }
     }

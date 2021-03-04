@@ -1621,9 +1621,14 @@ pub fn main() {
                 .help("Enables testing of hash calculation using stores in AccountsHashVerifier. This has a computational cost."),
         )
         .arg(
+            Arg::with_name("accounts_db_index_hashing")
+                .long("accounts-db-index-hashing")
+                .help("Enables the use of the index in hash calculation in AccountsHashVerifier/Accounts Background Service."),
+        )
+        .arg(
             Arg::with_name("no_accounts_db_index_hashing")
                 .long("no-accounts-db-index-hashing")
-                .help("Disables the use of the index in hash calculation in AccountsHashVerifier/Accounts Background Service."),
+                .help("This is obsolete. See --accounts-db-index-hashing. Disables the use of the index in hash calculation in AccountsHashVerifier/Accounts Background Service."),
         )
         .arg(
             // legacy nop argument
@@ -1864,7 +1869,7 @@ pub fn main() {
         account_indexes,
         accounts_db_caching_enabled: !matches.is_present("no_accounts_db_caching"),
         accounts_db_test_hash_calculation: matches.is_present("accounts_db_test_hash_calculation"),
-        accounts_db_use_index_hash_calculation: !matches.is_present("no_accounts_db_index_hashing"),
+        accounts_db_use_index_hash_calculation: matches.is_present("accounts_db_index_hashing"),
         tpu_coalesce_ms,
         ..ValidatorConfig::default()
     };

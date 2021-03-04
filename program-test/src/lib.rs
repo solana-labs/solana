@@ -430,8 +430,7 @@ impl Default for ProgramTest {
     ///
     fn default() -> Self {
         solana_logger::setup_with_default(
-            "solana_bpf_loader=debug,\
-             solana_rbpf::vm=debug,\
+            "solana_rbpf::vm=debug,\
              solana_runtime::message_processor=debug,\
              solana_runtime::system_instruction_processor=trace,\
              solana_program_test=info",
@@ -523,7 +522,7 @@ impl ProgramTest {
     /// directory.
     ///
     /// If `process_instruction` is provided, the natively built-program may be used instead of the
-    /// BPF shared object depending on the `bpf` environment variable.
+    /// BPF shared object depending on the `BPF_OUT_DIR` environment variable.
     pub fn add_program(
         &mut self,
         program_name: &str,

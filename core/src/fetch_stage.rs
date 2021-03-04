@@ -1,6 +1,6 @@
 //! The `fetch_stage` batches input from a UDP socket and sends it to a channel.
 
-use crate::banking_stage::FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET;
+use crate::banking_stage::HOLD_TRANSACTIONS_SLOT_OFFSET;
 use crate::poh_recorder::PohRecorder;
 use crate::result::{Error, Result};
 use solana_measure::thread_mem_usage;
@@ -81,11 +81,11 @@ impl FetchStage {
             }
         }
 
-        if poh_recorder.lock().unwrap().would_be_leader(
-            FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET
-                .saturating_add(1)
-                .saturating_mul(DEFAULT_TICKS_PER_SLOT),
-        ) {
+        if poh_recorder
+            .lock()
+            .unwrap()
+            .would_be_leader(HOLD_TRANSACTIONS_SLOT_OFFSET.saturating_mul(DEFAULT_TICKS_PER_SLOT))
+        {
             inc_new_counter_debug!("fetch_stage-honor_forwards", len);
             for packets in batch {
                 if sendr.send(packets).is_err() {

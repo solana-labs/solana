@@ -890,7 +890,8 @@ mod test {
                    "tokenAmount": {
                        "uiAmount": 0.42,
                        "decimals": 2,
-                       "amount": "42"
+                       "amount": "42",
+                       "uiAmountString": "0.42",
                    }
                 })
             }
@@ -922,7 +923,8 @@ mod test {
                    "tokenAmount": {
                        "uiAmount": 0.42,
                        "decimals": 2,
-                       "amount": "42"
+                       "amount": "42",
+                       "uiAmountString": "0.42",
                    }
                 })
             }
@@ -954,7 +956,8 @@ mod test {
                    "tokenAmount": {
                        "uiAmount": 0.42,
                        "decimals": 2,
-                       "amount": "42"
+                       "amount": "42",
+                       "uiAmountString": "0.42",
                    }
                 })
             }
@@ -986,7 +989,8 @@ mod test {
                     "tokenAmount": {
                         "uiAmount": 0.42,
                         "decimals": 2,
-                        "amount": "42"
+                        "amount": "42",
+                        "uiAmountString": "0.42",
                     }
                 })
             }
@@ -1016,7 +1020,8 @@ mod test {
                    "tokenAmount": {
                        "uiAmount": 0.42,
                        "decimals": 2,
-                       "amount": "42"
+                       "amount": "42",
+                       "uiAmountString": "0.42",
                    }
                 })
             }
@@ -1046,7 +1051,8 @@ mod test {
                    "tokenAmount": {
                        "uiAmount": 0.42,
                        "decimals": 2,
-                       "amount": "42"
+                       "amount": "42",
+                       "uiAmountString": "0.42",
                    }
                 })
             }

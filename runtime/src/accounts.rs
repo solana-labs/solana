@@ -19,7 +19,7 @@ use solana_sdk::{
     account::Account,
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-    clock::{Epoch, Slot},
+    clock::Slot,
     feature_set::{self, FeatureSet},
     fee_calculator::{FeeCalculator, FeeConfig},
     genesis_config::ClusterType,
@@ -36,11 +36,6 @@ use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
 };
-
-#[derive(Default, Debug, AbiExample)]
-pub(crate) struct ReadonlyLock {
-    lock_count: Mutex<u64>,
-}
 
 #[derive(Debug, Default, AbiExample)]
 pub struct AccountLocks {
@@ -88,12 +83,6 @@ impl AccountLocks {
 /// This structure handles synchronization for db
 #[derive(Default, Debug, AbiExample)]
 pub struct Accounts {
-    /// my slot
-    pub slot: Slot,
-
-    /// my epoch
-    pub epoch: Epoch,
-
     /// Single global AccountsDb
     pub accounts_db: Arc<AccountsDb>,
 
@@ -141,16 +130,13 @@ impl Accounts {
                 caching_enabled,
             )),
             account_locks: Mutex::new(AccountLocks::default()),
-            ..Self::default()
         }
     }
 
-    pub fn new_from_parent(parent: &Accounts, slot: Slot, parent_slot: Slot, epoch: Epoch) -> Self {
+    pub fn new_from_parent(parent: &Accounts, slot: Slot, parent_slot: Slot) -> Self {
         let accounts_db = parent.accounts_db.clone();
         accounts_db.set_hash(slot, parent_slot);
         Self {
-            slot,
-            epoch,
             accounts_db,
             account_locks: Mutex::new(AccountLocks::default()),
         }
@@ -160,7 +146,6 @@ impl Accounts {
         Self {
             accounts_db: Arc::new(accounts_db),
             account_locks: Mutex::new(AccountLocks::default()),
-            ..Self::default()
         }
     }
 
@@ -469,10 +454,7 @@ impl Accounts {
 
     /// Slow because lock is held for 1 operation instead of many
     pub fn load_slow(&self, ancestors: &Ancestors, pubkey: &Pubkey) -> Option<(Account, Slot)> {
-        let (account, slot) = self
-            .accounts_db
-            .load_slow(ancestors, pubkey)
-            .unwrap_or((Account::default(), self.slot));
+        let (account, slot) = self.accounts_db.load_slow(ancestors, pubkey)?;
 
         if account.lamports > 0 {
             Some((account, slot))
@@ -1041,8 +1023,6 @@ pub fn update_accounts_bench(accounts: &Accounts, pubkeys: &[Pubkey], slot: u64)
 
 #[cfg(test)]
 mod tests {
-    // TODO: all the bank tests are bank specific, issue: 2194
-
     use super::*;
     use crate::rent_collector::RentCollector;
     use solana_sdk::{

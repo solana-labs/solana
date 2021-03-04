@@ -561,7 +561,10 @@ fn main() {
 pub mod test {
     use super::*;
     use solana_core::validator::ValidatorConfig;
-    use solana_local_cluster::local_cluster::{ClusterConfig, LocalCluster};
+    use solana_local_cluster::{
+        local_cluster::{ClusterConfig, LocalCluster},
+        validator_configs::make_identical_validator_configs,
+    };
     use solana_sdk::poh_config::PohConfig;
 
     #[test]
@@ -573,7 +576,7 @@ pub mod test {
             cluster_lamports: 10_000_000,
             poh_config: PohConfig::new_sleep(Duration::from_millis(50)),
             node_stakes: vec![100; num_nodes],
-            validator_configs: vec![validator_config; num_nodes],
+            validator_configs: make_identical_validator_configs(&validator_config, num_nodes),
             ..ClusterConfig::default()
         };
 

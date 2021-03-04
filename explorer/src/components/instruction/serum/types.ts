@@ -7,7 +7,10 @@ import { coerce, enums, number, optional, pick, StructType } from "superstruct";
 import { BigNumValue } from "validators/bignum";
 import { Pubkey } from "validators/pubkey";
 
-const SERUM_PROGRAM_ID = "4ckmDgGdxQoPDLUkDT3vHgSAkzA3QRdNq5ywwY4sUSJn";
+const SERUM_PROGRAM_IDS = [
+  "4ckmDgGdxQoPDLUkDT3vHgSAkzA3QRdNq5ywwY4sUSJn",
+  "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin",
+];
 
 export const SERUM_DECODED_MAX = 6;
 
@@ -295,7 +298,7 @@ export function decodeSettleFunds(ix: TransactionInstruction): SettleFunds {
 
 export function isSerumInstruction(instruction: TransactionInstruction) {
   return (
-    instruction.programId.toBase58() === SERUM_PROGRAM_ID ||
+    SERUM_PROGRAM_IDS.includes(instruction.programId.toBase58()) ||
     MARKETS.some(
       (market) =>
         market.programId && market.programId.equals(instruction.programId)
@@ -327,6 +330,10 @@ const SERUM_CODE_LOOKUP: { [key: number]: string } = {
   7: "Disable Market",
   8: "Sweep Fees",
   9: "New Order",
+  10: "New Order",
+  11: "Cancel Order",
+  12: "Cancel Order By Client Id",
+  13: "Send Take",
 };
 
 export function parseSerumInstructionCode(instruction: TransactionInstruction) {

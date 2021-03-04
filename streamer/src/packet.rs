@@ -2,7 +2,7 @@
 use crate::recvmmsg::{recv_mmsg, NUM_RCVMMSGS};
 pub use solana_perf::packet::{
     limited_deserialize, to_packets_chunked, Packets, PacketsRecycler, NUM_PACKETS,
-    PACKETS_BATCH_SIZE, PACKETS_PER_BATCH,
+    PACKETS_PER_BATCH,
 };
 
 use solana_metrics::inc_new_counter_debug;

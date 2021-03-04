@@ -7,7 +7,7 @@
 extern uint64_t entrypoint(const uint8_t *input) {
   {
     // Confirm large allocation fails
-    void *ptr = sol_calloc(1, UINT64_MAX); // TODO use max
+    void *ptr = sol_calloc(1, UINT64_MAX);
     if (ptr != NULL) {
       sol_log("Error: Alloc of very larger buffer should fail");
       sol_panic();
@@ -16,7 +16,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
 
   {
     // Confirm large allocation fails
-    void *ptr = sol_calloc(18446744073709551615U, 1); // TODO use max
+    void *ptr = sol_calloc(UINT64_MAX, 1);
     if (ptr != NULL) {
       sol_log("Error: Alloc of very larger buffer should fail");
       sol_panic();
