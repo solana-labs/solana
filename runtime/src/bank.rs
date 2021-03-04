@@ -437,7 +437,7 @@ pub struct TransactionLogCollector {
     // active `TransactionLogCollectorFilter`
     pub logs: Vec<TransactionLogInfo>,
 
-    // For each `mentioned_addresses`, maintain a list of indicies into `logs` to easily
+    // For each `mentioned_addresses`, maintain a list of indices into `logs` to easily
     // locate the logs from transactions that included the mentioned addresses.
     pub mentioned_address_map: HashMap<Pubkey, Vec<usize>>,
 }
@@ -2988,7 +2988,11 @@ impl Bank {
         let transaction_log_collector_config =
             self.transaction_log_collector_config.read().unwrap();
 
-        for (i, ((r, _nonce_rollback), tx)) in executed.iter().zip(txs.iter()).enumerate() {
+        for (i, ((r, _nonce_rollback), (_, tx))) in executed
+            .iter()
+            .zip(OrderedIterator::new(txs, batch.iteration_order()))
+            .enumerate()
+        {
             if let Some(debug_keys) = &self.transaction_debug_keys {
                 for key in &tx.message.account_keys {
                     if debug_keys.contains(key) {
@@ -2997,7 +3001,6 @@ impl Bank {
                     }
                 }
             }
-
             if transaction_log_collector_config.filter != TransactionLogCollectorFilter::None {
                 let mut transaction_log_collector = self.transaction_log_collector.write().unwrap();
                 let transaction_log_index = transaction_log_collector.logs.len();
