@@ -229,7 +229,7 @@ like multi-entity governed programs where the governing members fist verify the
 intermediary buffer contents and then vote to allow an upgrade using it.
 
 ```bash
-solana progrma write-buffer <PROGRAM_FILEPATH>
+solana program write-buffer <PROGRAM_FILEPATH>
 ```
 
 Buffer accounts support authorities like program accounts:
