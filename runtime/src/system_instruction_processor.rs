@@ -207,7 +207,7 @@ fn transfer(
     if from.signer_key().is_none() {
         ic_msg!(
             invoke_context,
-            "Transfer: `from` accont {} must sign",
+            "Transfer: `from` account {} must sign",
             from.unsigned_key()
         );
         return Err(InstructionError::MissingRequiredSignature);
@@ -656,7 +656,7 @@ mod tests {
 
     #[test]
     fn test_create_with_zero_lamports() {
-        // create account with zero lamports tranferred
+        // create account with zero lamports transferred
         let new_owner = Pubkey::new(&[9; 32]);
         let from = solana_sdk::pubkey::new_rand();
         let from_account = Account::new_ref(100, 1, &solana_sdk::pubkey::new_rand()); // not from system account

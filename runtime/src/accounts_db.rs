@@ -1861,7 +1861,7 @@ impl AccountsDb {
             // `store_accounts_frozen()` above may have purged accounts from some
             // other storage entries (the ones that were just overwritten by this
             // new storage entry). This means some of those stores might have caused
-            // this slot to be readded to `self.shrink_candidate_slots`, so delete
+            // this slot to be read to `self.shrink_candidate_slots`, so delete
             // those here
             self.shrink_candidate_slots.lock().unwrap().remove(&slot);
 
@@ -3231,7 +3231,7 @@ impl AccountsDb {
         (num_new_roots, num_roots_flushed)
     }
 
-    // `should_flush_f` is an optional closure that determines wehther a given
+    // `should_flush_f` is an optional closure that determines whether a given
     // account should be flushed. Passing `None` will by default flush all
     // accounts
     fn flush_slot_cache(

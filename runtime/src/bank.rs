@@ -118,7 +118,7 @@ type TransactionAccountDepRefCells = Vec<(Pubkey, RefCell<Account>)>;
 type TransactionLoaderRefCells = Vec<Vec<(Pubkey, RefCell<Account>)>>;
 
 // Eager rent collection repeats in cyclic manner.
-// Each cycle is composed of <partiion_count> number of tiny pubkey subranges
+// Each cycle is composed of <partition_count> number of tiny pubkey subranges
 // to scan, which is always multiple of the number of slots in epoch.
 type PartitionIndex = u64;
 type PartitionsPerCycle = u64;
@@ -3612,8 +3612,8 @@ impl Bank {
         let cycle_params = self.determine_collection_cycle_params(epoch);
         let (_, _, in_multi_epoch_cycle, _, _, partition_count) = cycle_params;
 
-        // use common code-path for both very-likely and very-unlikely for the sake of minimized
-        // risk of any mis-calculation instead of neligilbe faster computation per slot for the
+        // use common codepath for both very likely and very unlikely for the sake of minimized
+        // risk of any miscalculation instead of negligibly faster computation per slot for the
         // likely case.
         let mut start_partition_index =
             Self::partition_index_from_slot_index(start_slot_index, cycle_params);
@@ -3625,7 +3625,7 @@ impl Bank {
         let in_middle_of_cycle = start_partition_index > 0;
         if in_multi_epoch_cycle && is_special_new_epoch && in_middle_of_cycle {
             // Adjust slot indexes so that the final partition ranges are continuous!
-            // This is neeed because the caller gives us off-by-one indexes when
+            // This is need because the caller gives us off-by-one indexes when
             // an epoch boundary is crossed.
             // Usually there is no need for this adjustment because cycles are aligned
             // with epochs. But for multi-epoch cycles, adjust the indexes if it
@@ -3950,7 +3950,7 @@ impl Bank {
         let rent_fix_enabled = self.cumulative_rent_related_fixes_enabled();
 
         // don't collect rents if we're in the new behavior;
-        // in genral, it's not worthwhile to account for rents outside the runtime (transactions)
+        // in general, it's not worthwhile to account for rents outside the runtime (transactions)
         // there are too many and subtly nuanced modification codepaths
         if !rent_fix_enabled {
             // previously we're too much collecting rents as if it existed since epoch 0...
@@ -6359,7 +6359,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn test_rent_eager_under_fixed_cycle_for_developemnt() {
+    fn test_rent_eager_under_fixed_cycle_for_development() {
         solana_logger::setup();
         let leader_pubkey = solana_sdk::pubkey::new_rand();
         let leader_lamports = 3;
@@ -6505,11 +6505,11 @@ pub(crate) mod tests {
         let max_exact = 64;
         // Make sure `max_exact` divides evenly when calculating `calculate_partition_width`
         assert!(should_cause_overflow(max_exact));
-        // Make sure `max_unexact` doesn't divide evenly when calculating `calculate_partition_width`
-        let max_unexact = 10;
-        assert!(!should_cause_overflow(max_unexact));
+        // Make sure `max_inexact` doesn't divide evenly when calculating `calculate_partition_width`
+        let max_inexact = 10;
+        assert!(!should_cause_overflow(max_inexact));
 
-        for max in &[max_exact, max_unexact] {
+        for max in &[max_exact, max_inexact] {
             let range = Bank::pubkey_range_from_partition((max - 1, max - 1, *max));
             assert_eq!(
                 range,
