@@ -775,22 +775,22 @@ pub fn process_catchup(
         let average_time_remaining = if total_sleep_interval == 0 {
             "".to_string()
         } else {
-            let distance_slot_variation = start_slot_distance as i64 - slot_distance as i64;
-            let average_catchup_slots_per_second = distance_slot_variation as f64 / f64::from(total_sleep_interval);
+            let distance_delta = start_slot_distance as i64 - slot_distance as i64;
+            let average_catchup_slots_per_second = distance_delta as f64 / f64::from(total_sleep_interval);
             let average_time_remaining = (slot_distance as f64 / average_catchup_slots_per_second).round();
             if !average_time_remaining.is_normal() {
                 "".to_string()
             } else if average_time_remaining <= 0.0 {
                 format!(
-                    ". Average falling speed {:.1} slots/second",
-                    average_catchup_slots_per_second
+                    " (AVG: {:.1} slots/second (falling))",
+                    average_catchup_slots_per_second.abs()
                 )
             } else {
-                let node_slot_variation = node_slot as i64 - start_node_slot as i64;
-                let average_node_slot_per_second = node_slot_variation as f64 / f64::from(total_sleep_interval);
-                let expected_finish_slot = (node_slot as f64 + average_time_remaining as f64 * average_node_slot_per_second as f64).round();
+                let total_node_slot_delta = node_slot as i64 - start_node_slot as i64;
+                let average_node_slots_per_second = total_node_slot_delta as f64 / f64::from(total_sleep_interval);
+                let expected_finish_slot = (node_slot as f64 + average_time_remaining as f64 * average_node_slots_per_second as f64).round();
                 format!(
-                    ". Average catchup speed: {:.1} slots/second. Expected finish slot {} in {}",
+                    " (AVG: {:.1} slots/second, ETA: slot {} in {})",
                     average_catchup_slots_per_second,
                     expected_finish_slot,
                     humantime::format_duration(Duration::from_secs_f64(average_time_remaining))
