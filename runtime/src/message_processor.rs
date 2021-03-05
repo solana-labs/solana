@@ -80,6 +80,7 @@ impl ExecuteDetailsTimingsInner {
         self.total_account_count += other.total_account_count;
         self.total_data_size += other.total_data_size;
         self.data_size_changed += other.data_size_changed;
+        self.count += other.count;
     }
 }
 
