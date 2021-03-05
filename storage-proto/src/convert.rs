@@ -1,4 +1,4 @@
-use crate::StoredExtendedRewards;
+use crate::{StoredExtendedRewards, StoredTransactionStatusMeta};
 use solana_account_decoder::parse_token::{real_number_string_trimmed, UiTokenAmount};
 use solana_sdk::{
     hash::Hash,
@@ -309,6 +309,13 @@ impl From<TransactionStatusMeta> for generated::TransactionStatusMeta {
             pre_token_balances,
             post_token_balances,
         }
+    }
+}
+
+impl From<StoredTransactionStatusMeta> for generated::TransactionStatusMeta {
+    fn from(meta: StoredTransactionStatusMeta) -> Self {
+        let meta: TransactionStatusMeta = meta.into();
+        meta.into()
     }
 }
 
