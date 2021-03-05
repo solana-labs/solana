@@ -484,7 +484,7 @@ pub mod tests {
                         Signature::new(&random_bytes),
                         vec![&Pubkey::new(&random_bytes[0..32])],
                         vec![&Pubkey::new(&random_bytes[32..])],
-                        &TransactionStatusMeta::default(),
+                        TransactionStatusMeta::default(),
                     )
                     .unwrap();
             }
@@ -499,7 +499,7 @@ pub mod tests {
                         Signature::new(&random_bytes),
                         vec![&Pubkey::new(&random_bytes[0..32])],
                         vec![&Pubkey::new(&random_bytes[32..])],
-                        &TransactionStatusMeta::default(),
+                        TransactionStatusMeta::default(),
                     )
                     .unwrap();
             }
@@ -536,7 +536,7 @@ pub mod tests {
                         Signature::new(&random_bytes),
                         vec![&Pubkey::new(&random_bytes[0..32])],
                         vec![&Pubkey::new(&random_bytes[32..])],
-                        &TransactionStatusMeta::default(),
+                        TransactionStatusMeta::default(),
                     )
                     .unwrap();
             }
@@ -725,7 +725,7 @@ pub mod tests {
                     signature,
                     vec![&Pubkey::new(&random_bytes[0..32])],
                     vec![&Pubkey::new(&random_bytes[32..])],
-                    &TransactionStatusMeta::default(),
+                    TransactionStatusMeta::default(),
                 )
                 .unwrap();
         }
@@ -761,7 +761,7 @@ pub mod tests {
                     signature,
                     vec![&Pubkey::new(&random_bytes[0..32])],
                     vec![&Pubkey::new(&random_bytes[32..])],
-                    &TransactionStatusMeta::default(),
+                    TransactionStatusMeta::default(),
                 )
                 .unwrap();
         }
