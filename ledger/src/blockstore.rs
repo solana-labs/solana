@@ -3542,6 +3542,7 @@ pub mod tests {
     use bincode::serialize;
     use itertools::Itertools;
     use rand::{seq::SliceRandom, thread_rng};
+    use solana_account_decoder::parse_token::UiTokenAmount;
     use solana_runtime::bank::{Bank, RewardType};
     use solana_sdk::{
         hash::{self, hash, Hash},
@@ -3552,7 +3553,7 @@ pub mod tests {
         transaction::TransactionError,
     };
     use solana_storage_proto::convert::generated;
-    use solana_transaction_status::{InnerInstructions, Reward, Rewards};
+    use solana_transaction_status::{InnerInstructions, Reward, Rewards, TransactionTokenBalance};
     use std::time::Duration;
 
     // used for tests only
@@ -7280,6 +7281,73 @@ pub mod tests {
                         .unwrap()
                         .unwrap(),
                     protobuf_rewards
+                );
+            }
+        }
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_transaction_status_protobuf_backward_compatability() {
+        let blockstore_path = get_tmp_ledger_path!();
+        {
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+            let status = TransactionStatusMeta {
+                status: Ok(()),
+                fee: 42,
+                pre_balances: vec![1, 2, 3],
+                post_balances: vec![1, 2, 3],
+                inner_instructions: Some(vec![]),
+                log_messages: Some(vec![]),
+                pre_token_balances: Some(vec![TransactionTokenBalance {
+                    account_index: 0,
+                    mint: Pubkey::new_unique().to_string(),
+                    ui_token_amount: UiTokenAmount {
+                        ui_amount: Some(1.1),
+                        decimals: 1,
+                        amount: "11".to_string(),
+                        ui_amount_string: "1.1".to_string(),
+                    },
+                }]),
+                post_token_balances: Some(vec![TransactionTokenBalance {
+                    account_index: 0,
+                    mint: Pubkey::new_unique().to_string(),
+                    ui_token_amount: UiTokenAmount {
+                        ui_amount: None,
+                        decimals: 1,
+                        amount: "11".to_string(),
+                        ui_amount_string: "1.1".to_string(),
+                    },
+                }]),
+            };
+            let deprecated_status: StoredTransactionStatusMeta = status.clone().into();
+            let protobuf_status: generated::TransactionStatusMeta = status.into();
+
+            for slot in 0..2 {
+                let data = serialize(&deprecated_status).unwrap();
+                blockstore
+                    .transaction_status_cf
+                    .put_bytes((0, Signature::default(), slot), &data)
+                    .unwrap();
+            }
+            for slot in 2..4 {
+                blockstore
+                    .transaction_status_cf
+                    .put_protobuf((0, Signature::default(), slot), &protobuf_status)
+                    .unwrap();
+            }
+            for slot in 0..4 {
+                assert_eq!(
+                    blockstore
+                        .transaction_status_cf
+                        .get_protobuf_or_bincode::<StoredTransactionStatusMeta>((
+                            0,
+                            Signature::default(),
+                            slot
+                        ))
+                        .unwrap()
+                        .unwrap(),
+                    protobuf_status
                 );
             }
         }
