@@ -89,8 +89,7 @@ use std::{
         atomic::{AtomicBool, AtomicU64, Ordering::Relaxed},
         LockResult, RwLockWriteGuard, {Arc, RwLock, RwLockReadGuard},
     },
-    time::{Duration, Instant},
-    sync::Mutex,
+    time::Duration,
 };
 
 pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
@@ -881,8 +880,6 @@ pub struct Bank {
     pub drop_callback: RwLock<OptionalDropCallback>,
 
     pub freeze_started: AtomicBool,
-
-    pub process_transactions_start: Mutex<Option<Instant>>,
 }
 
 impl Default for BlockhashQueue {
@@ -1073,7 +1070,6 @@ impl Bank {
                     .map(|drop_callback| drop_callback.clone_box()),
             )),
             freeze_started: AtomicBool::new(false),
-            process_transactions_start: Mutex::new(None),
         };
 
         datapoint_info!(
@@ -1221,7 +1217,6 @@ impl Bank {
             feature_set: new(),
             drop_callback: RwLock::new(OptionalDropCallback(None)),
             freeze_started: AtomicBool::new(fields.hash != Hash::default()),
-            process_transactions_start: Mutex::new(None),
         };
         bank.finish_init(genesis_config, additional_builtins);
 
@@ -1327,18 +1322,6 @@ impl Bank {
 
     pub fn freeze_started(&self) -> bool {
         self.freeze_started.load(Relaxed)
-    }
-
-    pub fn process_transactions_elapsed(&self, should_start_if_first: bool) -> u64 {
-        let mut start = self.process_transactions_start.lock().unwrap();
-        if let Some(start) = *start {
-            start.elapsed().as_ms()
-        } else {
-            if should_start_if_first {
-                *start = Some(Instant::now());
-            }
-            0
-        }
     }
 
     pub fn status_cache_ancestors(&self) -> Vec<u64> {

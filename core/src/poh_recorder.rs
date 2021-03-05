@@ -16,7 +16,7 @@ use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
 use solana_ledger::poh::Poh;
 use solana_runtime::bank::Bank;
 pub use solana_sdk::clock::Slot;
-use solana_sdk::clock::NUM_CONSECUTIVE_LEADER_SLOTS;
+use solana_sdk::clock::{NUM_CONSECUTIVE_LEADER_SLOTS, SLOT_MS};
 use solana_sdk::hash::Hash;
 use solana_sdk::poh_config::PohConfig;
 use solana_sdk::pubkey::Pubkey;
@@ -53,6 +53,7 @@ pub type WorkingBankEntry = (Arc<Bank>, (Entry, u64));
 #[derive(Clone)]
 pub struct WorkingBank {
     pub bank: Arc<Bank>,
+    pub start: Arc<Instant>,
     pub min_tick_height: u64,
     pub max_tick_height: u64,
 }
@@ -126,7 +127,13 @@ impl PohRecorder {
     }
 
     pub fn bank(&self) -> Option<Arc<Bank>> {
-        self.working_bank.clone().map(|w| w.bank)
+        self.working_bank.as_ref().map(|w| w.bank.clone())
+    }
+
+    pub fn bank_start(&self) -> Option<(Arc<Bank>, Arc<Instant>)> {
+        self.working_bank
+            .as_ref()
+            .map(|w| (w.bank.clone(), w.start.clone()))
     }
 
     pub fn has_bank(&self) -> bool {
@@ -273,11 +280,15 @@ impl PohRecorder {
         trace!("new working bank");
         assert_eq!(working_bank.bank.ticks_per_slot(), self.ticks_per_slot());
         self.working_bank = Some(working_bank);
+        // TODO: adjust the working_bank.start time based on number of ticks
+        // that have already elapsed based on current tick height.
         let _ = self.flush_cache(false);
     }
+
     pub fn set_bank(&mut self, bank: &Arc<Bank>) {
         let working_bank = WorkingBank {
             bank: bank.clone(),
+            start: Arc::new(Instant::now()),
             min_tick_height: bank.tick_height(),
             max_tick_height: bank.max_tick_height(),
         };
@@ -515,6 +526,21 @@ impl PohRecorder {
             leader_schedule_cache,
             poh_config,
         )
+    }
+
+    // Get the current processing bank if the processing time hasn't expired
+    pub fn is_bank_still_processing_txs(bank_creation_time: &Instant) -> bool {
+        // Do this check outside of the poh lock, hence not a method on PohRecorder
+        bank_creation_time.elapsed().as_millis() <= SLOT_MS as u128
+    }
+
+    pub fn is_bank_start_still_processing_txs(
+        bank_start: &Option<(Arc<Bank>, Arc<Instant>)>,
+    ) -> bool {
+        bank_start
+            .as_ref()
+            .map(|(_, bank_creation_time)| Self::is_bank_still_processing_txs(bank_creation_time))
+            .unwrap_or(false)
     }
 
     #[cfg(test)]

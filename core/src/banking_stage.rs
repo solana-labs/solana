@@ -37,7 +37,7 @@ use solana_runtime::{
 use solana_sdk::{
     clock::{
         Slot, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE, MAX_TRANSACTION_FORWARDING_DELAY,
-        MAX_TRANSACTION_FORWARDING_DELAY_GPU, SLOT_MS,
+        MAX_TRANSACTION_FORWARDING_DELAY_GPU,
     },
     poh_config::PohConfig,
     pubkey::Pubkey,
@@ -48,7 +48,6 @@ use solana_transaction_status::token_balances::{
     collect_token_balances, TransactionTokenBalancesSet,
 };
 use std::{
-    borrow::Borrow,
     cmp,
     collections::{HashMap, VecDeque},
     env,
@@ -317,18 +316,21 @@ impl BankingStage {
                     new_unprocessed_indexes,
                 )
             } else {
-                let bank = poh_recorder.lock().unwrap().bank();
-                if let Some(bank) = bank {
+                let bank_start = poh_recorder.lock().unwrap().bank_start();
+                if let Some((bank, bank_creation_time)) = bank_start {
                     let (processed, verified_txs_len, new_unprocessed_indexes) =
                         Self::process_packets_transactions(
                             &bank,
+                            &bank_creation_time,
                             &poh_recorder,
                             &msgs,
                             original_unprocessed_indexes.to_owned(),
                             transaction_status_sender.clone(),
                             gossip_vote_sender,
                         );
-                    if processed < verified_txs_len || !Self::is_bank_still_processing_txs(&Some(&bank)) {
+                    if processed < verified_txs_len
+                        || !PohRecorder::is_bank_still_processing_txs(&bank_creation_time)
+                    {
                         reached_end_of_slot =
                             Some((poh_recorder.lock().unwrap().next_slot_leader(), bank));
                     }
@@ -432,7 +434,7 @@ impl BankingStage {
             let poh = poh_recorder.lock().unwrap();
             (
                 poh.leader_after_n_slots(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET),
-                Self::is_bank_still_processing_txs(&poh.bank()),
+                PohRecorder::is_bank_start_still_processing_txs(&poh.bank_start()),
                 poh.would_be_leader(HOLD_TRANSACTIONS_SLOT_OFFSET * DEFAULT_TICKS_PER_SLOT),
                 poh.would_be_leader(
                     (FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET - 1) * DEFAULT_TICKS_PER_SLOT,
@@ -835,6 +837,7 @@ impl BankingStage {
     /// than the total number if max PoH height was reached and the bank halted
     fn process_transactions(
         bank: &Arc<Bank>,
+        bank_creation_time: &Instant,
         transactions: &[Transaction],
         poh: &Arc<Mutex<PohRecorder>>,
         transaction_status_sender: Option<TransactionStatusSender>,
@@ -861,7 +864,10 @@ impl BankingStage {
             // Add the retryable txs (transactions that errored in a way that warrants a retry)
             // to the list of unprocessed txs.
             unprocessed_txs.extend_from_slice(&retryable_txs_in_chunk);
-            match (result, Self::is_bank_still_processing_txs(&Some(bank))) {
+            match (
+                result,
+                PohRecorder::is_bank_still_processing_txs(&bank_creation_time),
+            ) {
                 (Err(PohRecorderError::MaxHeightReached), _) | (_, false) => {
                     info!(
                         "process transactions: max height reached slot: {} height: {}",
@@ -874,7 +880,7 @@ impl BankingStage {
                     unprocessed_txs.extend(chunk_end..transactions.len());
                     break;
                 }
-                _ => ()
+                _ => (),
             }
             // Don't exit early on any other type of error, continue processing...
             chunk_start = chunk_end;
@@ -1001,6 +1007,7 @@ impl BankingStage {
 
     fn process_packets_transactions(
         bank: &Arc<Bank>,
+        bank_creation_time: &Instant,
         poh: &Arc<Mutex<PohRecorder>>,
         msgs: &Packets,
         packet_indexes: Vec<usize>,
@@ -1022,6 +1029,7 @@ impl BankingStage {
 
         let (processed, unprocessed_tx_indexes) = Self::process_transactions(
             bank,
+            bank_creation_time,
             &transactions,
             poh,
             transaction_status_sender,
@@ -1099,15 +1107,6 @@ impl BankingStage {
             .collect()
     }
 
-    // Get the current processing bank if the processing time hasn't expired
-    fn is_bank_still_processing_txs(bank: &Option<impl Borrow<Arc<Bank>>>) -> bool {
-        // Do this check outside of the poh lock, hence not a method on PohRecorder
-        bank
-            .as_ref()
-            .map(|bank| bank.borrow().process_transactions_elapsed(true) <= SLOT_MS)
-            .unwrap_or(false)
-    }
-
     #[allow(clippy::too_many_arguments)]
     /// Process the incoming packets
     pub fn process_packets(
@@ -1146,8 +1145,8 @@ impl BankingStage {
         let mut newly_buffered_packets_count = 0;
         while let Some(msgs) = mms_iter.next() {
             let packet_indexes = Self::generate_packet_indexes(&msgs.packets);
-            let bank = poh.lock().unwrap().bank();
-            if !Self::is_bank_still_processing_txs(&bank) {
+            let bank_start = poh.lock().unwrap().bank_start();
+            if !PohRecorder::is_bank_start_still_processing_txs(&bank_start) {
                 Self::push_unprocessed(
                     buffered_packets,
                     msgs,
@@ -1159,11 +1158,12 @@ impl BankingStage {
                 );
                 continue;
             }
-            let bank = bank.unwrap();
+            let (bank, bank_creation_time) = bank_start.unwrap();
 
             let (processed, verified_txs_len, unprocessed_indexes) =
                 Self::process_packets_transactions(
                     &bank,
+                    &bank_creation_time,
                     &poh,
                     &msgs,
                     packet_indexes,
