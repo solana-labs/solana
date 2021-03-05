@@ -470,6 +470,7 @@ fn do_process_blockstore_from_root(
         }
     }
 
+    let mut timing = ExecuteTimings::default();
     // Iterate and replay slots from blockstore starting from `start_slot`
     let (initial_forks, leader_schedule_cache) = {
         if let Some(meta) = blockstore
@@ -490,6 +491,7 @@ fn do_process_blockstore_from_root(
                 opts,
                 recyclers,
                 transaction_status_sender,
+                &mut timing,
             )?;
             initial_forks.sort_by_key(|bank| bank.slot());
 
@@ -507,6 +509,7 @@ fn do_process_blockstore_from_root(
     }
     let bank_forks = BankForks::new_from_banks(&initial_forks, root);
 
+    info!("ledger processing timing: {:?}", timing);
     info!(
         "ledger processed in {}. {} MB allocated. root slot is {}, {} fork{} at {}, with {} frozen bank{}",
         HumanTime::from(chrono::Duration::from_std(now.elapsed()).unwrap()).to_text_en(Accuracy::Precise, Tense::Present),
@@ -590,13 +593,14 @@ fn confirm_full_slot(
     progress: &mut ConfirmationProgress,
     transaction_status_sender: Option<TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
+    timing: &mut ExecuteTimings,
 ) -> result::Result<(), BlockstoreProcessorError> {
-    let mut timing = ConfirmationTiming::default();
+    let mut confirmation_timing = ConfirmationTiming::default();
     let skip_verification = !opts.poh_verify;
     confirm_slot(
         blockstore,
         bank,
-        &mut timing,
+        &mut confirmation_timing,
         progress,
         skip_verification,
         transaction_status_sender,
@@ -606,7 +610,7 @@ fn confirm_full_slot(
         opts.allow_dead_slots,
     )?;
 
-    debug!("confirm_full_slot: {:?}", timing.execute_timings);
+    timing.accumulate(&confirmation_timing.execute_timings);
 
     if !bank.is_complete() {
         Err(BlockstoreProcessorError::InvalidBlock(
@@ -789,6 +793,7 @@ fn process_bank_0(
         &mut progress,
         None,
         None,
+        &mut ExecuteTimings::default(),
     )
     .expect("processing for bank 0 must succeed");
     bank0.freeze();
@@ -862,6 +867,7 @@ fn load_frozen_forks(
     opts: &ProcessOptions,
     recyclers: &VerifyRecyclers,
     transaction_status_sender: Option<TransactionStatusSender>,
+    timing: &mut ExecuteTimings,
 ) -> result::Result<Vec<Arc<Bank>>, BlockstoreProcessorError> {
     let mut initial_forks = HashMap::new();
     let mut all_banks = HashMap::new();
@@ -919,6 +925,7 @@ fn load_frozen_forks(
                 &mut progress,
                 transaction_status_sender.clone(),
                 None,
+                timing,
             )
             .is_err()
             {
@@ -1077,10 +1084,11 @@ fn process_single_slot(
     progress: &mut ConfirmationProgress,
     transaction_status_sender: Option<TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
+    timing: &mut ExecuteTimings,
 ) -> result::Result<(), BlockstoreProcessorError> {
     // Mark corrupt slots as dead so validators don't replay this slot and
     // see DuplicateSignature errors later in ReplayStage
-    confirm_full_slot(blockstore, bank, opts, recyclers, progress, transaction_status_sender, replay_vote_sender).map_err(|err| {
+    confirm_full_slot(blockstore, bank, opts, recyclers, progress, transaction_status_sender, replay_vote_sender, timing).map_err(|err| {
         let slot = bank.slot();
         warn!("slot {} failed to verify: {}", slot, err);
         if blockstore.is_primary_access() {
@@ -2780,6 +2788,7 @@ pub mod tests {
             &mut ConfirmationProgress::new(bank0.last_blockhash()),
             None,
             None,
+            &mut ExecuteTimings::default(),
         )
         .unwrap();
         bank1.squash();
