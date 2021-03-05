@@ -859,6 +859,15 @@ impl PurgeStats {
     }
 }
 
+#[derive(Debug)]
+struct FlushStats {
+    slot: Slot,
+    num_flushed: usize,
+    num_purged: usize,
+    total_size: u64,
+    did_flush: bool,
+}
+
 #[derive(Debug, Default)]
 struct LatestAccountsIndexRootsStats {
     roots_len: AtomicUsize,
@@ -3103,14 +3112,22 @@ impl AccountsDb {
         let excess_slot_count = old_slots.len();
         let mut unflushable_unrooted_slot_count = 0;
         let max_flushed_root = self.accounts_cache.fetch_max_flush_root();
-        for old_slot in old_slots {
-            // Don't flush slots that are known to be unrooted
-            if old_slot > max_flushed_root {
-                self.flush_slot_cache(old_slot, None::<&mut fn(&_, &_) -> bool>);
-            } else {
-                unflushable_unrooted_slot_count += 1;
-            }
-        }
+        let old_slot_flush_stats: Vec<_> = old_slots
+            .into_iter()
+            .filter_map(|old_slot| {
+                // Don't flush slots that are known to be unrooted
+                if old_slot > max_flushed_root {
+                    Some(self.flush_slot_cache(old_slot, None::<&mut fn(&_, &_) -> bool>))
+                } else {
+                    unflushable_unrooted_slot_count += 1;
+                    None
+                }
+            })
+            .collect();
+        info!(
+            "req_flush_root: {:?} old_slot_flushes: {:?}",
+            requested_flush_root, old_slot_flush_stats
+        );
 
         datapoint_info!(
             "accounts_db-flush_accounts_cache",
@@ -3144,11 +3161,12 @@ impl AccountsDb {
             // Remove a random index 0 <= i < `frozen_slots.len()`
             let rand_slot = frozen_slots.choose(&mut thread_rng());
             if let Some(rand_slot) = rand_slot {
+                let random_flush_stats =
+                    self.flush_slot_cache(*rand_slot, None::<&mut fn(&_, &_) -> bool>);
                 info!(
-                    "Flushing random slot: {}, num_remaining: {}",
-                    *rand_slot, num_slots_remaining
+                    "Flushed random slot: num_remaining: {} {:?}",
+                    num_slots_remaining, random_flush_stats,
                 );
-                self.flush_slot_cache(*rand_slot, None::<&mut fn(&_, &_) -> bool>);
             }
         }
     }
@@ -3209,7 +3227,7 @@ impl AccountsDb {
                 should_flush_f.as_mut()
             };
 
-            if self.flush_slot_cache(root, should_flush_f) {
+            if self.flush_slot_cache(root, should_flush_f).did_flush {
                 num_roots_flushed += 1;
             }
 
@@ -3238,12 +3256,12 @@ impl AccountsDb {
         &self,
         slot: Slot,
         mut should_flush_f: Option<&mut impl FnMut(&Pubkey, &Account) -> bool>,
-    ) -> bool {
-        info!("flush_slot_cache slot: {}", slot);
-        let slot_cache = self.accounts_cache.slot_cache(slot);
-        if let Some(slot_cache) = slot_cache {
+    ) -> FlushStats {
+        let mut num_purged = 0;
+        let mut total_size = 0;
+        let mut num_flushed = 0;
+        let did_flush = if let Some(slot_cache) = self.accounts_cache.slot_cache(slot) {
             let iter_items: Vec<_> = slot_cache.iter().collect();
-            let mut total_size = 0;
             let mut purged_slot_pubkeys: HashSet<(Slot, Pubkey)> = HashSet::new();
             let mut pubkey_to_slot_set: Vec<(Pubkey, Slot)> = vec![];
             let (accounts, hashes): (Vec<(&Pubkey, &Account)>, Vec<Hash>) = iter_items
@@ -3258,12 +3276,14 @@ impl AccountsDb {
                     if should_flush {
                         let hash = iter_item.value().hash;
                         total_size += (account.data.len() + STORE_META_OVERHEAD) as u64;
+                        num_flushed += 1;
                         Some(((key, account), hash))
                     } else {
                         // If we don't flush, we have to remove the entry from the
                         // index, since it's equivalent to purging
                         purged_slot_pubkeys.insert((slot, *key));
                         pubkey_to_slot_set.push((*key, slot));
+                        num_purged += 1;
                         None
                     }
                 })
@@ -3312,6 +3332,13 @@ impl AccountsDb {
             true
         } else {
             false
+        };
+        FlushStats {
+            slot,
+            num_flushed,
+            num_purged,
+            total_size,
+            did_flush,
         }
     }
 
@@ -4020,12 +4047,16 @@ impl AccountsDb {
         }
 
         let mut accounts_index_root_stats = AccountsIndexRootsStats::default();
-        for slot in dead_slots_iter.clone() {
-            info!("finalize_dead_slot_removal slot {}", slot);
-            if let Some(latest) = self.accounts_index.clean_dead_slot(*slot) {
-                accounts_index_root_stats = latest;
-            }
-        }
+        let dead_slots: Vec<_> = dead_slots_iter
+            .clone()
+            .map(|slot| {
+                if let Some(latest) = self.accounts_index.clean_dead_slot(*slot) {
+                    accounts_index_root_stats = latest;
+                }
+                *slot
+            })
+            .collect();
+        info!("finalize_dead_slot_removal: slots {:?}", dead_slots);
 
         self.clean_accounts_stats
             .latest_accounts_index_roots_stats

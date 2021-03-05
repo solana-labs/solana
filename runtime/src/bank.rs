@@ -2043,10 +2043,7 @@ impl Bank {
         shrink.stop();
 
         info!(
-            "exhaustively_free_unused_resource()
-            flush: {},
-            clean: {},
-            shrink: {}",
+            "exhaustively_free_unused_resource() {} {} {}",
             flush, clean, shrink,
         );
     }
