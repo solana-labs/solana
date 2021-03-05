@@ -17,7 +17,6 @@ use solana_sdk::{
     signature::Signature,
 };
 use solana_storage_proto::convert::generated;
-use solana_transaction_status::TransactionStatusMeta;
 use std::{collections::HashMap, fs, marker::PhantomData, path::Path, sync::Arc};
 use thiserror::Error;
 
@@ -418,10 +417,6 @@ pub trait TypedColumn: Column {
     type Type: Serialize + DeserializeOwned;
 }
 
-impl TypedColumn for columns::TransactionStatus {
-    type Type = TransactionStatusMeta;
-}
-
 impl TypedColumn for columns::AddressSignatures {
     type Type = blockstore_meta::AddressSignatureMeta;
 }
@@ -491,6 +486,9 @@ impl Column for columns::TransactionStatus {
 
 impl ColumnName for columns::TransactionStatus {
     const NAME: &'static str = TRANSACTION_STATUS_CF;
+}
+impl ProtobufColumn for columns::TransactionStatus {
+    type Type = generated::TransactionStatusMeta;
 }
 
 impl Column for columns::AddressSignatures {
