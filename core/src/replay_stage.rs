@@ -18,6 +18,7 @@ use crate::{
     rewards_recorder_service::RewardsRecorderSender,
     rpc_subscriptions::RpcSubscriptions,
 };
+use solana_client::rpc_response::SlotUpdate;
 use solana_ledger::{
     block_error::BlockError,
     blockstore::Blockstore,
@@ -331,6 +332,7 @@ impl ReplayStage {
                         &replay_vote_sender,
                         &bank_notification_sender,
                         &rewards_recorder_sender,
+                        &subscriptions,
                     );
                     replay_active_banks_time.stop();
                     Self::report_memory(&allocated, "replay_active_banks", start);
@@ -997,7 +999,17 @@ impl ReplayStage {
         transaction_status_sender: Option<TransactionStatusSender>,
         replay_vote_sender: &ReplayVoteSender,
         verify_recyclers: &VerifyRecyclers,
+        subscriptions: Option<Arc<RpcSubscriptions>>,
     ) -> result::Result<usize, BlockstoreProcessorError> {
+        if bank_progress.replay_progress.num_entries == 0 {
+            if let Some(subscriptions) = &subscriptions {
+                subscriptions.notify_slot_update(SlotUpdate::StartReplay {
+                    slot: bank.slot(),
+                    timestamp: timestamp(),
+                });
+            }
+        }
+
         let tx_count_before = bank_progress.replay_progress.num_txs;
         let confirm_result = blockstore_processor::confirm_slot(
             blockstore,
@@ -1033,6 +1045,14 @@ impl ReplayStage {
                 info!("Slot had too few ticks: {}", slot);
             }
             Self::mark_dead_slot(blockstore, bank_progress, slot, &err, is_serious);
+            if let Some(subscriptions) = subscriptions {
+                subscriptions.notify_slot_update(SlotUpdate::Dead {
+                    slot,
+                    err: format!("error: {:?}", err),
+                    timestamp: timestamp(),
+                });
+            }
+
             err
         })?;
 
@@ -1313,6 +1333,7 @@ impl ReplayStage {
         replay_vote_sender: &ReplayVoteSender,
         bank_notification_sender: &Option<BankNotificationSender>,
         rewards_recorder_sender: &Option<RewardsRecorderSender>,
+        subscriptions: &Arc<RpcSubscriptions>,
     ) -> bool {
         let mut did_complete_bank = false;
         let mut tx_count = 0;
@@ -1360,6 +1381,7 @@ impl ReplayStage {
                     transaction_status_sender.clone(),
                     replay_vote_sender,
                     verify_recyclers,
+                    Some(subscriptions.clone()),
                 );
                 match replay_result {
                     Ok(replay_tx_count) => tx_count += replay_tx_count,
@@ -2556,6 +2578,7 @@ pub(crate) mod tests {
                 None,
                 &replay_vote_sender,
                 &&VerifyRecyclers::default(),
+                None,
             );
 
             // Check that the erroring bank was marked as dead in the progress map

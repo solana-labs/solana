@@ -65,6 +65,7 @@ pub const SIZE_OF_CODING_SHRED_HEADER: usize = 6;
 pub const SIZE_OF_SIGNATURE: usize = 64;
 pub const SIZE_OF_SHRED_TYPE: usize = 1;
 pub const SIZE_OF_SHRED_SLOT: usize = 8;
+pub const SIZE_OF_SHRED_PARENT_OFFSET: usize = 2;
 pub const SIZE_OF_SHRED_INDEX: usize = 4;
 pub const SIZE_OF_NONCE: usize = 4;
 pub const SIZE_OF_DATA_SHRED_IGNORED_TAIL: usize =
@@ -78,6 +79,8 @@ pub const SIZE_OF_DATA_SHRED_PAYLOAD: usize = PACKET_DATA_SIZE
 pub const OFFSET_OF_SHRED_TYPE: usize = SIZE_OF_SIGNATURE;
 pub const OFFSET_OF_SHRED_SLOT: usize = SIZE_OF_SIGNATURE + SIZE_OF_SHRED_TYPE;
 pub const OFFSET_OF_SHRED_INDEX: usize = OFFSET_OF_SHRED_SLOT + SIZE_OF_SHRED_SLOT;
+pub const OFFSET_OF_SHRED_PARENT_OFFSET: usize = SIZE_OF_COMMON_SHRED_HEADER;
+pub const OFFSET_OF_SHRED_FLAG: usize = OFFSET_OF_SHRED_PARENT_OFFSET + SIZE_OF_SHRED_PARENT_OFFSET;
 pub const SHRED_PAYLOAD_SIZE: usize = PACKET_DATA_SIZE - SIZE_OF_NONCE;
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
@@ -487,6 +490,30 @@ impl Shred {
         } else {
             SHRED_TICK_REFERENCE_MASK
         }
+    }
+
+    // Get parent offset from a data shred packet with partial deserialize
+    pub fn get_parent_offset_from_packet(p: &Packet) -> Option<u16> {
+        let parent_offset_start = OFFSET_OF_SHRED_PARENT_OFFSET;
+        let parent_offset_end = parent_offset_start + SIZE_OF_SHRED_PARENT_OFFSET;
+
+        if parent_offset_end > p.meta.size {
+            return None;
+        }
+
+        limited_deserialize::<u16>(&p.data[parent_offset_start..parent_offset_end]).ok()
+    }
+
+    // Get slot from a shred packet with partial deserialize
+    pub fn get_slot_from_packet(p: &Packet) -> Option<Slot> {
+        let slot_start = OFFSET_OF_SHRED_SLOT;
+        let slot_end = slot_start + SIZE_OF_SHRED_SLOT;
+
+        if slot_end > p.meta.size {
+            return None;
+        }
+
+        limited_deserialize::<Slot>(&p.data[slot_start..slot_end]).ok()
     }
 
     pub fn reference_tick_from_data(data: &[u8]) -> u8 {

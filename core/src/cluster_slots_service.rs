@@ -1,8 +1,11 @@
-use crate::{cluster_info::ClusterInfo, cluster_slots::ClusterSlots};
+use crate::{
+    cluster_info::ClusterInfo, cluster_slots::ClusterSlots, rpc_subscriptions::RpcSubscriptions,
+};
+use solana_client::rpc_response::SlotUpdate;
 use solana_ledger::blockstore::{Blockstore, CompletedSlotsReceiver};
 use solana_measure::measure::Measure;
 use solana_runtime::bank_forks::BankForks;
-use solana_sdk::{clock::Slot, pubkey::Pubkey};
+use solana_sdk::{clock::Slot, pubkey::Pubkey, timing::timestamp};
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -37,6 +40,7 @@ impl ClusterSlotsService {
         bank_forks: Arc<RwLock<BankForks>>,
         cluster_info: Arc<ClusterInfo>,
         completed_slots_receiver: CompletedSlotsReceiver,
+        rpc_subscriptions: Option<Arc<RpcSubscriptions>>,
         exit: Arc<AtomicBool>,
     ) -> Self {
         let id = cluster_info.id();
@@ -51,6 +55,7 @@ impl ClusterSlotsService {
                     bank_forks,
                     cluster_info,
                     completed_slots_receiver,
+                    rpc_subscriptions,
                     exit,
                 )
             })
@@ -71,6 +76,7 @@ impl ClusterSlotsService {
         bank_forks: Arc<RwLock<BankForks>>,
         cluster_info: Arc<ClusterInfo>,
         completed_slots_receiver: CompletedSlotsReceiver,
+        rpc_subscriptions: Option<Arc<RpcSubscriptions>>,
         exit: Arc<AtomicBool>,
     ) {
         let mut cluster_slots_service_timing = ClusterSlotsServiceTiming::default();
@@ -87,7 +93,11 @@ impl ClusterSlotsService {
             lowest_slot_elapsed.stop();
             let mut update_completed_slots_elapsed =
                 Measure::start("update_completed_slots_elapsed");
-            Self::update_completed_slots(&completed_slots_receiver, &cluster_info);
+            Self::update_completed_slots(
+                &completed_slots_receiver,
+                &cluster_info,
+                &rpc_subscriptions,
+            );
             cluster_slots.update(new_root, &cluster_info, &bank_forks);
             update_completed_slots_elapsed.stop();
 
@@ -120,6 +130,7 @@ impl ClusterSlotsService {
     fn update_completed_slots(
         completed_slots_receiver: &CompletedSlotsReceiver,
         cluster_info: &ClusterInfo,
+        rpc_subscriptions: &Option<Arc<RpcSubscriptions>>,
     ) {
         let mut slots: Vec<Slot> = vec![];
         while let Ok(mut more) = completed_slots_receiver.try_recv() {
@@ -127,6 +138,15 @@ impl ClusterSlotsService {
         }
         #[allow(clippy::stable_sort_primitive)]
         slots.sort();
+        if let Some(rpc_subscriptions) = rpc_subscriptions {
+            for slot in &slots {
+                rpc_subscriptions.notify_slot_update(SlotUpdate::ShredsFull {
+                    slot: *slot,
+                    timestamp: timestamp(),
+                });
+            }
+        }
+
         if !slots.is_empty() {
             cluster_info.push_epoch_slots(&slots);
         }
