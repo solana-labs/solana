@@ -13,6 +13,7 @@ import { useQuery } from "utils/url";
 import { Link } from "react-router-dom";
 import { Location } from "history";
 import { useTokenRegistry } from "providers/mints/token-registry";
+import { BigNumber } from "bignumber.js";
 
 type Display = "summary" | "detail" | null;
 
@@ -117,7 +118,7 @@ function HoldingsDetailTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
           <Address pubkey={tokenAccount.info.mint} link truncate />
         </td>
         <td>
-          {tokenAccount.info.tokenAmount.uiAmount}{" "}
+          {tokenAccount.info.tokenAmount.uiAmountString}{" "}
           {tokenDetails && tokenDetails.tokenSymbol}
         </td>
       </tr>
@@ -145,17 +146,17 @@ function HoldingsDetailTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
 
 function HoldingsSummaryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
   const { tokenRegistry } = useTokenRegistry();
-  const mappedTokens = new Map<string, number>();
+  const mappedTokens = new Map<string, string>();
   for (const { info: token } of tokens) {
     const mintAddress = token.mint.toBase58();
     const totalByMint = mappedTokens.get(mintAddress);
 
-    let amount = token.tokenAmount.uiAmount;
+    let amount = new BigNumber(token.tokenAmount.uiAmountString);
     if (totalByMint !== undefined) {
-      amount += totalByMint;
+      amount.plus(totalByMint);
     }
 
-    mappedTokens.set(mintAddress, amount);
+    mappedTokens.set(mintAddress, amount.toString());
   }
 
   const detailsList: React.ReactNode[] = [];

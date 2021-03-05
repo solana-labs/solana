@@ -15,6 +15,7 @@ import { normalizeTokenAmount } from "utils";
 import { addressLabel } from "utils/tx";
 import { reportError } from "utils/sentry";
 import { useTokenRegistry } from "providers/mints/token-registry";
+import { BigNumber } from "bignumber.js";
 
 export function TokenAccountSection({
   account,
@@ -153,14 +154,12 @@ function TokenAccountCard({
       <>
         ◎
         <span className="text-monospace">
-          {new Intl.NumberFormat("en-US", { maximumFractionDigits: 9 }).format(
-            info.tokenAmount.uiAmount
-          )}
+          {new BigNumber(info.tokenAmount.uiAmountString).toFormat(9)}
         </span>
       </>
     );
   } else {
-    balance = <>{info.tokenAmount.uiAmount}</>;
+    balance = <>{info.tokenAmount.uiAmountString}</>;
     unit = tokenRegistry.get(info.mint.toBase58())?.tokenSymbol || "tokens";
   }
 
@@ -221,9 +220,9 @@ function TokenAccountCard({
               <>
                 ◎
                 <span className="text-monospace">
-                  {new Intl.NumberFormat("en-US", {
-                    maximumFractionDigits: 9,
-                  }).format(info.rentExemptReserve.uiAmount)}
+                  {new BigNumber(
+                    info.rentExemptReserve.uiAmountString
+                  ).toFormat(9)}
                 </span>
               </>
             </td>
