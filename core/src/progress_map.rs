@@ -61,6 +61,7 @@ impl ReplaySlotStats {
             ("total_shreds", num_shreds as i64, i64),
             ("load_us", self.execute_timings.load_us, i64),
             ("execute_us", self.execute_timings.execute_us, i64),
+            /*
             ("store_us", self.execute_timings.store_us, i64),
             (
                 "serialize_us",
@@ -102,6 +103,7 @@ impl ReplaySlotStats {
                 self.execute_timings.details.data_size_changed,
                 i64
             ),
+            */
         );
     }
 }

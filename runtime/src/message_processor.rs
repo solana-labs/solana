@@ -54,6 +54,11 @@ impl Executors {
 
 #[derive(Default, Debug)]
 pub struct ExecuteDetailsTimings {
+    pub per_program_and_instruction: HashMap<Pubkey, HashMap<Pubkey, ExecuteDetailsTimingsInner>>,
+}
+
+#[derive(Default, Debug, Clone)]
+pub struct ExecuteDetailsTimingsInner {
     pub serialize_us: u64,
     pub create_vm_us: u64,
     pub execute_us: u64,
@@ -64,8 +69,8 @@ pub struct ExecuteDetailsTimings {
     pub data_size_changed: usize,
 }
 
-impl ExecuteDetailsTimings {
-    pub fn accumulate(&mut self, other: &ExecuteDetailsTimings) {
+impl ExecuteDetailsTimingsInner {
+    pub fn accumulate(&mut self, other: &ExecuteDetailsTimingsInner) {
         self.serialize_us += other.serialize_us;
         self.create_vm_us += other.create_vm_us;
         self.execute_us += other.execute_us;
@@ -74,6 +79,23 @@ impl ExecuteDetailsTimings {
         self.total_account_count += other.total_account_count;
         self.total_data_size += other.total_data_size;
         self.data_size_changed += other.data_size_changed;
+    }
+}
+
+impl ExecuteDetailsTimings {
+    pub fn accumulate(&mut self, other: &ExecuteDetailsTimings) {
+        for (k,v) in other.per_program_and_instruction.iter() {
+            for (k2,v) in v.iter() {
+                let item = self.per_program_and_instruction.get(k).clone();
+                let mut item = item.map_or(HashMap::new(), |h| (*h).clone());
+
+                let inner_item = item.get(k2).clone();
+                let mut inner_item = inner_item.map_or(ExecuteDetailsTimingsInner::default(), |h| h.clone());
+                inner_item.accumulate(v);
+                item.insert(*k2, inner_item);
+                self.per_program_and_instruction.insert(*k, item);
+            }
+        }
     }
 }
 
@@ -102,7 +124,7 @@ impl PreAccount {
         is_writable: Option<bool>,
         rent: &Rent,
         post: &Account,
-        timings: &mut ExecuteDetailsTimings,
+        timings: &mut ExecuteDetailsTimingsInner,
     ) -> Result<(), InstructionError> {
         let pre = self.account.borrow();
 
@@ -270,7 +292,7 @@ pub struct ThisInvokeContext<'a> {
     executors: Rc<RefCell<Executors>>,
     instruction_recorder: Option<InstructionRecorder>,
     feature_set: Arc<FeatureSet>,
-    pub timings: ExecuteDetailsTimings,
+    pub timings: ExecuteDetailsTimingsInner,
 }
 impl<'a> ThisInvokeContext<'a> {
     #[allow(clippy::too_many_arguments)]
@@ -302,7 +324,7 @@ impl<'a> ThisInvokeContext<'a> {
             executors,
             instruction_recorder,
             feature_set,
-            timings: ExecuteDetailsTimings::default(),
+            timings: ExecuteDetailsTimingsInner::default(),
         }
     }
 }
@@ -899,7 +921,7 @@ impl MessageProcessor {
         executable_accounts: &[(Pubkey, RefCell<Account>)],
         accounts: &[Rc<RefCell<Account>>],
         rent: &Rent,
-        timings: &mut ExecuteDetailsTimings,
+        timings: &mut ExecuteDetailsTimingsInner,
     ) -> Result<(), InstructionError> {
         // Verify all executable accounts have zero outstanding refs
         Self::verify_account_references(executable_accounts)?;
@@ -944,7 +966,7 @@ impl MessageProcessor {
         rent: &Rent,
         track_writable_deescalation: bool,
         caller_privileges: Option<&[bool]>,
-        timings: &mut ExecuteDetailsTimings,
+        timings: &mut ExecuteDetailsTimingsInner,
     ) -> Result<(), InstructionError> {
         // Verify the per-account instruction results
         let (mut pre_sum, mut post_sum) = (0_u128, 0_u128);
@@ -1027,6 +1049,8 @@ impl MessageProcessor {
             }
         }
 
+        let mut inner_timings = ExecuteDetailsTimingsInner::default();
+
         let pre_accounts = Self::create_pre_accounts(message, instruction, accounts);
         let program_id = instruction.program_id(&message.account_keys);
         let mut invoke_context = ThisInvokeContext::new(
@@ -1056,10 +1080,16 @@ impl MessageProcessor {
             executable_accounts,
             accounts,
             &rent_collector.rent,
-            timings,
+            &mut inner_timings,
         )?;
 
-        timings.accumulate(&invoke_context.timings);
+        inner_timings.accumulate(&invoke_context.timings);
+        let mut timings_temp = ExecuteDetailsTimings::default();
+        let mut map = HashMap::new();
+        let instruction_key = program_id;
+        map.insert(*instruction_key, inner_timings);
+        timings_temp.per_program_and_instruction.insert(*program_id, map);
+        timings.accumulate(&timings_temp);
 
         Ok(())
     }
