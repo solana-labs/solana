@@ -765,7 +765,8 @@ const GetSupplyRpcResult = jsonRpcResultAndContext(
 type TokenAmount = {
   amount: string,
   decimals: number,
-  uiAmount: number,
+  uiAmount: number | null,
+  uiAmountString?: string,
 };
 
 /**
@@ -773,8 +774,9 @@ type TokenAmount = {
  */
 const TokenAmountResult = pick({
   amount: string(),
-  uiAmount: number(),
+  uiAmount: nullable(number()),
   decimals: number(),
+  uiAmountString: optional(nullable(string())),
 });
 
 /**
