@@ -252,7 +252,6 @@ struct TransactionHistoryServices {
 }
 
 pub struct Validator {
-    pub id: Pubkey,
     validator_exit: Arc<RwLock<ValidatorExit>>,
     json_rpc_service: Option<JsonRpcService>,
     pubsub_service: Option<PubSubService>,
@@ -748,7 +747,6 @@ impl Validator {
         datapoint_info!("validator-new", ("id", id.to_string(), String));
         *start_progress.write().unwrap() = ValidatorStartProgress::Running;
         Self {
-            id,
             gossip_service,
             serve_repair_service,
             json_rpc_service,
