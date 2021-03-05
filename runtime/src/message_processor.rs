@@ -54,7 +54,7 @@ impl Executors {
 
 #[derive(Default, Debug)]
 pub struct ExecuteDetailsTimings {
-    pub per_program_and_instruction: HashMap<Pubkey, HashMap<[u8;4], ExecuteDetailsTimingsInner>>,
+    pub per_program_and_instruction: HashMap<Pubkey, HashMap<[u8; 4], ExecuteDetailsTimingsInner>>,
 }
 
 #[derive(Default, Debug, Clone)]
@@ -67,6 +67,7 @@ pub struct ExecuteDetailsTimingsInner {
     pub total_account_count: u64,
     pub total_data_size: usize,
     pub data_size_changed: usize,
+    pub count: usize,
 }
 
 impl ExecuteDetailsTimingsInner {
@@ -84,13 +85,14 @@ impl ExecuteDetailsTimingsInner {
 
 impl ExecuteDetailsTimings {
     pub fn accumulate(&mut self, other: &ExecuteDetailsTimings) {
-        for (k,v) in other.per_program_and_instruction.iter() {
-            for (k2,v) in v.iter() {
+        for (k, v) in other.per_program_and_instruction.iter() {
+            for (k2, v) in v.iter() {
                 let item = self.per_program_and_instruction.get(k).clone();
                 let mut item = item.map_or(HashMap::new(), |h| (*h).clone());
 
                 let inner_item = item.get(k2).clone();
-                let mut inner_item = inner_item.map_or(ExecuteDetailsTimingsInner::default(), |h| h.clone());
+                let mut inner_item =
+                    inner_item.map_or(ExecuteDetailsTimingsInner::default(), |h| h.clone());
                 inner_item.accumulate(v);
                 item.insert(*k2, inner_item);
                 self.per_program_and_instruction.insert(*k, item);
@@ -1083,15 +1085,18 @@ impl MessageProcessor {
             &mut inner_timings,
         )?;
 
+        inner_timings.count += 1;
         inner_timings.accumulate(&invoke_context.timings);
         let mut timings_temp = ExecuteDetailsTimings::default();
         let mut map = HashMap::new();
         let mut instruction_key = [0u8; 4];
         for i in 1..std::cmp::min(instruction.data.len(), 5) {
-            instruction_key[i-1]= instruction.data[i];
+            instruction_key[i - 1] = instruction.data[i];
         }
         map.insert(instruction_key, inner_timings);
-        timings_temp.per_program_and_instruction.insert(*program_id, map);
+        timings_temp
+            .per_program_and_instruction
+            .insert(*program_id, map);
         timings.accumulate(&timings_temp);
 
         Ok(())
