@@ -37,7 +37,7 @@ use solana_runtime::{
 use solana_sdk::{
     clock::{
         Slot, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE, MAX_TRANSACTION_FORWARDING_DELAY,
-        MAX_TRANSACTION_FORWARDING_DELAY_GPU,
+        MAX_TRANSACTION_FORWARDING_DELAY_GPU, SLOT_MS,
     },
     poh_config::PohConfig,
     pubkey::Pubkey,
@@ -48,6 +48,7 @@ use solana_transaction_status::token_balances::{
     collect_token_balances, TransactionTokenBalancesSet,
 };
 use std::{
+    borrow::Borrow,
     cmp,
     collections::{HashMap, VecDeque},
     env,
@@ -319,7 +320,7 @@ impl BankingStage {
                 let bank = poh_recorder.lock().unwrap().bank();
                 if let Some(bank) = bank {
                     let (processed, verified_txs_len, new_unprocessed_indexes) =
-                        Self::process_received_packets(
+                        Self::process_packets_transactions(
                             &bank,
                             &poh_recorder,
                             &msgs,
@@ -327,7 +328,7 @@ impl BankingStage {
                             transaction_status_sender.clone(),
                             gossip_vote_sender,
                         );
-                    if processed < verified_txs_len {
+                    if processed < verified_txs_len || !Self::is_bank_still_processing_txs(&Some(&bank)) {
                         reached_end_of_slot =
                             Some((poh_recorder.lock().unwrap().next_slot_leader(), bank));
                     }
@@ -380,7 +381,7 @@ impl BankingStage {
     fn consume_or_forward_packets(
         my_pubkey: &Pubkey,
         leader_pubkey: Option<Pubkey>,
-        bank_is_available: bool,
+        is_bank_still_processing_txs: bool,
         would_be_leader: bool,
         would_be_leader_shortly: bool,
     ) -> BufferedPacketsDecision {
@@ -389,7 +390,7 @@ impl BankingStage {
             BufferedPacketsDecision::Hold,
             // else process the packets
             |x| {
-                if bank_is_available {
+                if is_bank_still_processing_txs {
                     // If the bank is available, this node is the leader
                     BufferedPacketsDecision::Consume
                 } else if would_be_leader_shortly {
@@ -422,11 +423,16 @@ impl BankingStage {
         gossip_vote_sender: &ReplayVoteSender,
         banking_stage_stats: &BankingStageStats,
     ) -> BufferedPacketsDecision {
-        let (leader_at_slot_offset, poh_has_bank, would_be_leader, would_be_leader_shortly) = {
+        let (
+            leader_at_slot_offset,
+            is_bank_still_processing_txs,
+            would_be_leader,
+            would_be_leader_shortly,
+        ) = {
             let poh = poh_recorder.lock().unwrap();
             (
                 poh.leader_after_n_slots(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET),
-                poh.has_bank(),
+                Self::is_bank_still_processing_txs(&poh.bank()),
                 poh.would_be_leader(HOLD_TRANSACTIONS_SLOT_OFFSET * DEFAULT_TICKS_PER_SLOT),
                 poh.would_be_leader(
                     (FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET - 1) * DEFAULT_TICKS_PER_SLOT,
@@ -437,7 +443,7 @@ impl BankingStage {
         let decision = Self::consume_or_forward_packets(
             my_pubkey,
             leader_at_slot_offset,
-            poh_has_bank,
+            is_bank_still_processing_txs,
             would_be_leader,
             would_be_leader_shortly,
         );
@@ -855,17 +861,20 @@ impl BankingStage {
             // Add the retryable txs (transactions that errored in a way that warrants a retry)
             // to the list of unprocessed txs.
             unprocessed_txs.extend_from_slice(&retryable_txs_in_chunk);
-            if let Err(PohRecorderError::MaxHeightReached) = result {
-                info!(
-                    "process transactions: max height reached slot: {} height: {}",
-                    bank.slot(),
-                    bank.tick_height()
-                );
-                // process_and_record_transactions has returned all retryable errors in
-                // transactions[chunk_start..chunk_end], so we just need to push the remaining
-                // transactions into the unprocessed queue.
-                unprocessed_txs.extend(chunk_end..transactions.len());
-                break;
+            match (result, Self::is_bank_still_processing_txs(&Some(bank))) {
+                (Err(PohRecorderError::MaxHeightReached), _) | (_, false) => {
+                    info!(
+                        "process transactions: max height reached slot: {} height: {}",
+                        bank.slot(),
+                        bank.tick_height()
+                    );
+                    // process_and_record_transactions has returned all retryable errors in
+                    // transactions[chunk_start..chunk_end], so we just need to push the remaining
+                    // transactions into the unprocessed queue.
+                    unprocessed_txs.extend(chunk_end..transactions.len());
+                    break;
+                }
+                _ => ()
             }
             // Don't exit early on any other type of error, continue processing...
             chunk_start = chunk_end;
@@ -990,7 +999,7 @@ impl BankingStage {
         Self::filter_valid_transaction_indexes(&result, transaction_to_packet_indexes)
     }
 
-    fn process_received_packets(
+    fn process_packets_transactions(
         bank: &Arc<Bank>,
         poh: &Arc<Mutex<PohRecorder>>,
         msgs: &Packets,
@@ -1090,6 +1099,15 @@ impl BankingStage {
             .collect()
     }
 
+    // Get the current processing bank if the processing time hasn't expired
+    fn is_bank_still_processing_txs(bank: &Option<impl Borrow<Arc<Bank>>>) -> bool {
+        // Do this check outside of the poh lock, hence not a method on PohRecorder
+        bank
+            .as_ref()
+            .map(|bank| bank.borrow().process_transactions_elapsed(true) <= SLOT_MS)
+            .unwrap_or(false)
+    }
+
     #[allow(clippy::too_many_arguments)]
     /// Process the incoming packets
     pub fn process_packets(
@@ -1120,7 +1138,7 @@ impl BankingStage {
             id,
         );
         inc_new_counter_debug!("banking_stage-transactions_received", count);
-        let mut proc_start = Measure::start("process_received_packets_process");
+        let mut proc_start = Measure::start("process_packets_transactions_process");
         let mut new_tx_count = 0;
 
         let mut mms_iter = mms.into_iter();
@@ -1129,7 +1147,7 @@ impl BankingStage {
         while let Some(msgs) = mms_iter.next() {
             let packet_indexes = Self::generate_packet_indexes(&msgs.packets);
             let bank = poh.lock().unwrap().bank();
-            if bank.is_none() {
+            if !Self::is_bank_still_processing_txs(&bank) {
                 Self::push_unprocessed(
                     buffered_packets,
                     msgs,
@@ -1143,14 +1161,15 @@ impl BankingStage {
             }
             let bank = bank.unwrap();
 
-            let (processed, verified_txs_len, unprocessed_indexes) = Self::process_received_packets(
-                &bank,
-                &poh,
-                &msgs,
-                packet_indexes,
-                transaction_status_sender.clone(),
-                gossip_vote_sender,
-            );
+            let (processed, verified_txs_len, unprocessed_indexes) =
+                Self::process_packets_transactions(
+                    &bank,
+                    &poh,
+                    &msgs,
+                    packet_indexes,
+                    transaction_status_sender.clone(),
+                    gossip_vote_sender,
+                );
 
             new_tx_count += processed;
 
@@ -1165,6 +1184,7 @@ impl BankingStage {
                 duplicates,
             );
 
+            // If there were retryable transactions, add the unexpired ones to the buffered queue
             if processed < verified_txs_len {
                 let next_leader = poh.lock().unwrap().next_slot_leader();
                 // Walk thru rest of the transactions and filter out the invalid (e.g. too old) ones
