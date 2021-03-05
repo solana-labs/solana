@@ -178,7 +178,8 @@ impl RpcRequestMiddleware {
     fn health_check(&self) -> &'static str {
         let response = match self.health.check() {
             RpcHealthStatus::Ok => "ok",
-            RpcHealthStatus::Behind { num_slots: _ } => "behind",
+            RpcHealthStatus::Behind { .. } => "behind",
+            RpcHealthStatus::Unknown => "unknown",
         };
         info!("health check: {}", response);
         response
@@ -696,18 +697,20 @@ mod tests {
 
         let rm = RpcRequestMiddleware::new(PathBuf::from("/"), None, create_bank_forks(), health);
 
-        // No account hashes for this node or any trusted validators == "behind"
-        assert_eq!(rm.health_check(), "behind");
+        // No account hashes for this node or any trusted validators
+        assert_eq!(rm.health_check(), "unknown");
 
-        // No account hashes for any trusted validators == "behind"
+        // No account hashes for any trusted validators
         cluster_info.push_accounts_hashes(vec![(1000, Hash::default()), (900, Hash::default())]);
         cluster_info.flush_push_queue();
-        assert_eq!(rm.health_check(), "behind");
+        assert_eq!(rm.health_check(), "unknown");
+
+        // Override health check
         override_health_check.store(true, Ordering::Relaxed);
         assert_eq!(rm.health_check(), "ok");
         override_health_check.store(false, Ordering::Relaxed);
 
-        // This node is ahead of the trusted validators == "ok"
+        // This node is ahead of the trusted validators
         cluster_info
             .gossip
             .write()
@@ -727,7 +730,7 @@ mod tests {
             .unwrap();
         assert_eq!(rm.health_check(), "ok");
 
-        // Node is slightly behind the trusted validators == "ok"
+        // Node is slightly behind the trusted validators
         cluster_info
             .gossip
             .write()
@@ -743,7 +746,7 @@ mod tests {
             .unwrap();
         assert_eq!(rm.health_check(), "ok");
 
-        // Node is far behind the trusted validators == "behind"
+        // Node is far behind the trusted validators
         cluster_info
             .gossip
             .write()

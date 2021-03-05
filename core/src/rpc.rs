@@ -1866,6 +1866,10 @@ pub mod rpc_minimal {
         fn get_health(&self, meta: Self::Metadata) -> Result<String> {
             match meta.health.check() {
                 RpcHealthStatus::Ok => Ok("ok".to_string()),
+                RpcHealthStatus::Unknown => Err(RpcCustomError::NodeUnhealthy {
+                    num_slots_behind: None,
+                }
+                .into()),
                 RpcHealthStatus::Behind { num_slots } => Err(RpcCustomError::NodeUnhealthy {
                     num_slots_behind: Some(num_slots),
                 }
@@ -2700,6 +2704,12 @@ pub mod rpc_full {
 
                 match meta.health.check() {
                     RpcHealthStatus::Ok => (),
+                    RpcHealthStatus::Unknown => {
+                        return Err(RpcCustomError::NodeUnhealthy {
+                            num_slots_behind: None,
+                        }
+                        .into());
+                    }
                     RpcHealthStatus::Behind { num_slots } => {
                         return Err(RpcCustomError::NodeUnhealthy {
                             num_slots_behind: Some(num_slots),
