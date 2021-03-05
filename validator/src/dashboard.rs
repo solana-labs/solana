@@ -266,7 +266,7 @@ fn get_validator_stats(
             {
                 format!("{} slots behind", num_slots_behind)
             } else {
-                "unhealthy".to_string()
+                "health unknown".to_string()
             }
         }
     };

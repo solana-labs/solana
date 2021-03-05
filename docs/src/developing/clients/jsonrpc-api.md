@@ -187,11 +187,12 @@ Many methods that take a commitment parameter return an RpcResponse JSON object 
 Although not a JSON RPC API, a `GET /health` at the RPC HTTP Endpoint provides a
 health-check mechanism for use by load balancers or other network
 infrastructure. This request will always return a HTTP 200 OK response with a body of
-"ok" or "behind" based on the following conditions:
+"ok", "behind" or "unknown" based on the following conditions:
 
 1. If one or more `--trusted-validator` arguments are provided to `solana-validator`, "ok" is returned
-   when the node has within `HEALTH_CHECK_SLOT_DISTANCE` slots of the highest trusted validator,
-   otherwise "behind" is returned.
+   when the node has within `HEALTH_CHECK_SLOT_DISTANCE` slots of the highest
+   trusted validator, otherwise "behind". "unknown" is returned when no slot
+   information from trusted validators is not yet available.
 2. "ok" is always returned if no trusted validators are provided.
 
 ## JSON RPC API Reference
