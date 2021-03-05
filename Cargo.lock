@@ -1221,11 +1221,10 @@ dependencies = [
 
 [[package]]
 name = "fd-lock"
-version = "1.1.1"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a15bec795244d49f5ee3024bdc6c3883fb035f7f6601d4a4821c3d5d60784454"
+checksum = "0010f02effd88c702318c5dde0463206be67495d0b4d906ba7c0a8f166cc7f06"
 dependencies = [
- "failure",
  "libc",
  "winapi 0.3.8",
 ]
