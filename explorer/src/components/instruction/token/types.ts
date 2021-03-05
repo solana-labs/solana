@@ -2,23 +2,22 @@
 
 import {
   enums,
-  object,
+  pick,
   StructType,
   number,
   string,
   optional,
   array,
-  pick,
   nullable,
   union,
 } from "superstruct";
 import { Pubkey } from "validators/pubkey";
 
 export type TokenAmountUi = StructType<typeof TokenAmountUi>;
-export const TokenAmountUi = object({
+export const TokenAmountUi = pick({
   amount: string(),
   decimals: number(),
-  uiAmount: number(),
+  uiAmountString: string(),
 });
 
 const InitializeMint = pick({
@@ -43,7 +42,7 @@ const InitializeMultisig = pick({
   m: number(),
 });
 
-const Transfer = object({
+const Transfer = pick({
   source: Pubkey,
   destination: Pubkey,
   amount: union([string(), number()]),
@@ -52,7 +51,7 @@ const Transfer = object({
   signers: optional(array(Pubkey)),
 });
 
-const Approve = object({
+const Approve = pick({
   source: Pubkey,
   delegate: Pubkey,
   amount: union([string(), number()]),
@@ -61,7 +60,7 @@ const Approve = object({
   signers: optional(array(Pubkey)),
 });
 
-const Revoke = object({
+const Revoke = pick({
   source: Pubkey,
   owner: optional(Pubkey),
   multisigOwner: optional(Pubkey),
@@ -75,7 +74,7 @@ const AuthorityType = enums([
   "closeAccount",
 ]);
 
-const SetAuthority = object({
+const SetAuthority = pick({
   mint: optional(Pubkey),
   account: optional(Pubkey),
   authorityType: AuthorityType,
@@ -85,7 +84,7 @@ const SetAuthority = object({
   signers: optional(array(Pubkey)),
 });
 
-const MintTo = object({
+const MintTo = pick({
   mint: Pubkey,
   account: Pubkey,
   amount: union([string(), number()]),
@@ -94,7 +93,7 @@ const MintTo = object({
   signers: optional(array(Pubkey)),
 });
 
-const Burn = object({
+const Burn = pick({
   account: Pubkey,
   mint: Pubkey,
   amount: union([string(), number()]),
@@ -103,7 +102,7 @@ const Burn = object({
   signers: optional(array(Pubkey)),
 });
 
-const CloseAccount = object({
+const CloseAccount = pick({
   account: Pubkey,
   destination: Pubkey,
   owner: optional(Pubkey),
@@ -111,7 +110,7 @@ const CloseAccount = object({
   signers: optional(array(Pubkey)),
 });
 
-const FreezeAccount = object({
+const FreezeAccount = pick({
   account: Pubkey,
   mint: Pubkey,
   freezeAuthority: optional(Pubkey),
@@ -119,7 +118,7 @@ const FreezeAccount = object({
   signers: optional(array(Pubkey)),
 });
 
-const ThawAccount = object({
+const ThawAccount = pick({
   account: Pubkey,
   mint: Pubkey,
   freezeAuthority: optional(Pubkey),
@@ -127,7 +126,7 @@ const ThawAccount = object({
   signers: optional(array(Pubkey)),
 });
 
-const TransferChecked = object({
+const TransferChecked = pick({
   source: Pubkey,
   mint: Pubkey,
   destination: Pubkey,
@@ -137,7 +136,7 @@ const TransferChecked = object({
   tokenAmount: TokenAmountUi,
 });
 
-const ApproveChecked = object({
+const ApproveChecked = pick({
   source: Pubkey,
   mint: Pubkey,
   delegate: Pubkey,
@@ -147,7 +146,7 @@ const ApproveChecked = object({
   tokenAmount: TokenAmountUi,
 });
 
-const MintToChecked = object({
+const MintToChecked = pick({
   account: Pubkey,
   mint: Pubkey,
   mintAuthority: optional(Pubkey),
@@ -156,7 +155,7 @@ const MintToChecked = object({
   tokenAmount: TokenAmountUi,
 });
 
-const BurnChecked = object({
+const BurnChecked = pick({
   account: Pubkey,
   mint: Pubkey,
   authority: optional(Pubkey),
