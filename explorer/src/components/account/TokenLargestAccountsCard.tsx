@@ -12,6 +12,7 @@ import { FetchStatus } from "providers/cache";
 import { useMintAccountInfo } from "providers/accounts";
 import { normalizeTokenAmount } from "utils";
 import { useTokenRegistry } from "providers/mints/token-registry";
+import BigNumber from "bignumber.js";
 
 export function TokenLargestAccountsCard({ pubkey }: { pubkey: PublicKey }) {
   const mintAddress = pubkey.toBase58();
@@ -59,7 +60,7 @@ export function TokenLargestAccountsCard({ pubkey }: { pubkey: PublicKey }) {
   // Find largest fixed point in accounts array
   const balanceFixedPoint = accounts.reduce(
     (prev: number, current: TokenAccountBalancePairWithOwner) => {
-      const amount = `${current.uiAmount}`;
+      const amount = `${current.uiAmountString}`;
       const length = amount.length;
       const decimalIndex = amount.indexOf(".");
       if (decimalIndex >= 0 && length - decimalIndex - 1 > prev) {
@@ -113,10 +114,17 @@ const renderAccountRow = (
   supply: number
 ) => {
   let percent = "-";
-  if (supply > 0) {
-    percent = `${((100 * account.uiAmount) / supply).toFixed(3)}%`;
+  if (supply > 0 && account.uiAmountString) {
+    let uiAmountPercent = new BigNumber(account.uiAmountString)
+      .times(100)
+      .dividedBy(supply);
 
-    if (parseFloat(percent) === 0 && account.uiAmount > 0) {
+    percent = `${uiAmountPercent.toFormat(3)}%`;
+
+    if (
+      parseFloat(percent) === 0 &&
+      new BigNumber(account.uiAmountString).gt(0)
+    ) {
       percent = `~${percent}`;
     }
   }
@@ -132,20 +140,10 @@ const renderAccountRow = (
         {account.owner && <Address pubkey={account.owner} link truncate />}
       </td>
       <td className="text-right text-monospace">
-        {fixedLocaleNumber(account.uiAmount, balanceFixedPoint)}
+        {account.uiAmountString &&
+          new BigNumber(account.uiAmountString).toFormat(balanceFixedPoint)}
       </td>
       <td className="text-right text-monospace">{percent}</td>
     </tr>
   );
 };
-
-function fixedLocaleNumber(value: number, fixedPoint: number) {
-  const fixed = value.toFixed(fixedPoint);
-  const split = fixed.split(".");
-
-  if (fixedPoint < 1) {
-    return parseInt(split[0], 10).toLocaleString("en");
-  }
-
-  return [parseInt(split[0], 10).toLocaleString("en"), split[1]].join(".");
-}
