@@ -83,7 +83,7 @@ impl RentCollector {
                     account.rent_epoch = self.epoch
                         + if rent_fix_enabled && exempt {
                             // Rent isn't collected for the next epoch
-                            // Make sure to check exempt status later in curent epoch again
+                            // Make sure to check exempt status later in current epoch again
                             0
                         } else {
                             // Rent is collected for next epoch
