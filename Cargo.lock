@@ -1171,9 +1171,9 @@ dependencies = [
 
 [[package]]
 name = "env_logger"
-version = "0.8.2"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f26ecb66b4bdca6c1409b40fb255eefc2bd4f6d135dab3c3124f80ffa2a9661e"
+checksum = "17392a012ea30ef05a610aa97dfb49496e71c9f676b27879922ea5bdf60d9d3f"
 dependencies = [
  "atty",
  "humantime 2.0.1",
@@ -1510,9 +1510,9 @@ dependencies = [
 
 [[package]]
 name = "goauth"
-version = "0.9.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d94101e84ede813c04773b0a43396c01b5a3a9376537dbce1125858ae090ae60"
+checksum = "4a1d5b4e896797c19dff490f9706817b42e9b7aa4adfe844464d3bbc9aabb035"
 dependencies = [
  "arc-swap 1.2.0",
  "futures 0.3.8",
@@ -3930,9 +3930,9 @@ checksum = "fe0f37c9e8f3c5a4a66ad655a93c74daac4ad00c441533bf5c6e7990bb42604e"
 
 [[package]]
 name = "smpl_jwt"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2fb8aea73548d19a00cbaed99a48dbdc61fed3469f39d035617eefd7a88fffd0"
+checksum = "4370044f8b20f944e05c35d77edd3518e6f21fc4de77e593919f287c6a3f428a"
 dependencies = [
  "base64 0.13.0",
  "log 0.4.11",
@@ -4817,7 +4817,7 @@ version = "1.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d83a006d97da5514a4475141573383d3fcd71c729ff78494f96bb531cf734d21"
 dependencies = [
- "env_logger 0.8.2",
+ "env_logger 0.8.3",
  "lazy_static",
  "log 0.4.11",
 ]
@@ -4826,7 +4826,7 @@ dependencies = [
 name = "solana-logger"
 version = "1.6.0"
 dependencies = [
- "env_logger 0.8.2",
+ "env_logger 0.8.3",
  "lazy_static",
  "log 0.4.11",
 ]
@@ -4868,7 +4868,7 @@ dependencies = [
 name = "solana-metrics"
 version = "1.6.0"
 dependencies = [
- "env_logger 0.8.2",
+ "env_logger 0.8.3",
  "gethostname",
  "lazy_static",
  "log 0.4.11",
