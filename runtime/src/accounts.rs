@@ -163,14 +163,13 @@ impl Accounts {
     }
 
     fn construct_instructions_account(message: &Message) -> Account {
-        let mut account = Account {
-            data: message.serialize_instructions(),
-            ..Account::default()
-        };
-
+        let mut data = message.serialize_instructions();
         // add room for current instruction index.
-        account.data.resize(account.data.len() + 2, 0);
-        account
+        data.resize(data.len() + 2, 0);
+        Account {
+            data,
+            ..Account::default()
+        }
     }
 
     fn load_transaction(
