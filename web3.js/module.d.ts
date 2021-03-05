@@ -295,7 +295,8 @@ declare module '@solana/web3.js' {
     address: PublicKey;
     amount: string;
     decimals: number;
-    uiAmount: number;
+    uiAmount: number | null;
+    uiAmountString?: string;
   };
 
   export type AccountChangeCallback = (
