@@ -285,9 +285,10 @@ declare module '@solana/web3.js' {
   };
 
   export type TokenAmount = {
-    uiAmount: number;
+    uiAmount: number | null;
     decimals: number;
     amount: string;
+    uiAmountString?: string;
   };
 
   export type TokenAccountBalancePair = {
