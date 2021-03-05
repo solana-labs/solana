@@ -115,13 +115,16 @@ const renderAccountRow = (
 ) => {
   let percent = "-";
   if (supply > 0 && account.uiAmountString) {
-    let uiAmountPercent = new BigNumber(account.uiAmountString);
-    uiAmountPercent = uiAmountPercent.times(100);
-    uiAmountPercent = uiAmountPercent.dividedBy(supply);
+    let uiAmountPercent = new BigNumber(account.uiAmountString)
+      .times(100)
+      .dividedBy(supply);
 
     percent = `${uiAmountPercent.toFormat(3)}%`;
 
-    if (parseFloat(percent) === 0 && new BigNumber(account.uiAmountString).gt(0)) {
+    if (
+      parseFloat(percent) === 0 &&
+      new BigNumber(account.uiAmountString).gt(0)
+    ) {
       percent = `~${percent}`;
     }
   }
@@ -137,7 +140,8 @@ const renderAccountRow = (
         {account.owner && <Address pubkey={account.owner} link truncate />}
       </td>
       <td className="text-right text-monospace">
-        {account.uiAmountString && (new BigNumber(account.uiAmountString).toFormat(balanceFixedPoint))}
+        {account.uiAmountString &&
+          new BigNumber(account.uiAmountString).toFormat(balanceFixedPoint)}
       </td>
       <td className="text-right text-monospace">{percent}</td>
     </tr>
