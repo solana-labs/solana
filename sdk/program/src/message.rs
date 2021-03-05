@@ -333,11 +333,12 @@ impl Message {
     }
 
     pub fn is_writable(&self, i: usize) -> bool {
-        i < (self.header.num_required_signatures - self.header.num_readonly_signed_accounts)
+        (i < (self.header.num_required_signatures - self.header.num_readonly_signed_accounts)
             as usize
             || (i >= self.header.num_required_signatures as usize
                 && i < self.account_keys.len()
-                    - self.header.num_readonly_unsigned_accounts as usize)
+                    - self.header.num_readonly_unsigned_accounts as usize))
+            && (!*DEMOTE_SYSVAR_WRITE_LOCKS || !sysvar::is_sysvar_id(&self.account_keys[i]))
     }
 
     pub fn is_signer(&self, i: usize) -> bool {
@@ -345,16 +346,11 @@ impl Message {
     }
 
     pub fn get_account_keys_by_lock_type(&self) -> (Vec<&Pubkey>, Vec<&Pubkey>) {
-        let demote_sysvar_write_locks = *DEMOTE_SYSVAR_WRITE_LOCKS;
         let mut writable_keys = vec![];
         let mut readonly_keys = vec![];
         for (i, key) in self.account_keys.iter().enumerate() {
             if self.is_writable(i) {
-                if demote_sysvar_write_locks && sysvar::is_sysvar_id(key) {
-                    readonly_keys.push(key);
-                } else {
-                    writable_keys.push(key);
-                }
+                writable_keys.push(key);
             } else {
                 readonly_keys.push(key);
             }
