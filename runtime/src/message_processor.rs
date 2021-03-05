@@ -54,7 +54,7 @@ impl Executors {
 
 #[derive(Default, Debug)]
 pub struct ExecuteDetailsTimings {
-    pub per_program_and_instruction: HashMap<Pubkey, HashMap<Pubkey, ExecuteDetailsTimingsInner>>,
+    pub per_program_and_instruction: HashMap<Pubkey, HashMap<[u8;4], ExecuteDetailsTimingsInner>>,
 }
 
 #[derive(Default, Debug, Clone)]
@@ -1086,8 +1086,11 @@ impl MessageProcessor {
         inner_timings.accumulate(&invoke_context.timings);
         let mut timings_temp = ExecuteDetailsTimings::default();
         let mut map = HashMap::new();
-        let instruction_key = program_id;
-        map.insert(*instruction_key, inner_timings);
+        let mut instruction_key = [0u8; 4];
+        for i in 1..std::cmp::min(instruction.data.len(), 5) {
+            instruction_key[i-1]= instruction.data[i];
+        }
+        map.insert(instruction_key, inner_timings);
         timings_temp.per_program_and_instruction.insert(*program_id, map);
         timings.accumulate(&timings_temp);
 
