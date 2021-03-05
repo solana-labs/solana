@@ -60,7 +60,7 @@ use std::{
     sync::atomic::{AtomicBool, Ordering},
     sync::Arc,
     thread::{sleep, Builder, JoinHandle},
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tempfile::TempDir;
 
@@ -1802,7 +1802,15 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     // Step 1:
     // Let validator A, B, (D) run for a while.
     let (mut validator_a_finished, mut validator_b_finished) = (false, false);
+    let now = Instant::now();
     while !(validator_a_finished && validator_b_finished) {
+        let elapsed = now.elapsed();
+        if elapsed > Duration::from_secs(30) {
+            panic!(
+                "LocalCluster nodes failed to log enough tower votes in {} secs",
+                elapsed.as_secs()
+            );
+        }
         sleep(Duration::from_millis(100));
 
         if let Some(last_vote) = last_vote_in_tower(&val_a_ledger_path, &validator_a_pubkey) {
