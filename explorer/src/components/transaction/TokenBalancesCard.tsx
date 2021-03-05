@@ -109,8 +109,18 @@ function generateTokenBalanceRows(
     const preBalance = preBalanceMap[accountIndex];
     const account = accounts[accountIndex].pubkey;
 
+    if (!uiTokenAmount.uiAmountString) {
+      // uiAmount deprecation
+      return;
+    }
+
     // case where mint changes
     if (preBalance && preBalance.mint !== mint) {
+      if (!preBalance.uiTokenAmount.uiAmountString) {
+        // uiAmount deprecation
+        return;
+      }
+
       rows.push({
         account: accounts[accountIndex].pubkey,
         accountIndex,
@@ -119,7 +129,7 @@ function generateTokenBalanceRows(
           amount: "0",
           uiAmount: 0,
         },
-        delta: new BigNumber(-preBalance.uiTokenAmount.uiAmount),
+        delta: new BigNumber(-preBalance.uiTokenAmount.uiAmountString),
         mint: preBalance.mint,
       });
 
@@ -127,7 +137,7 @@ function generateTokenBalanceRows(
         account: accounts[accountIndex].pubkey,
         accountIndex,
         balance: uiTokenAmount,
-        delta: new BigNumber(uiTokenAmount.uiAmount),
+        delta: new BigNumber(uiTokenAmount.uiAmountString),
         mint: mint,
       });
       return;
@@ -136,11 +146,16 @@ function generateTokenBalanceRows(
     let delta;
 
     if (preBalance) {
-      delta = new BigNumber(uiTokenAmount.uiAmount).minus(
-        preBalance.uiTokenAmount.uiAmount
+      if (!preBalance.uiTokenAmount.uiAmountString) {
+        // uiAmount deprecation
+        return;
+      }
+
+      delta = new BigNumber(uiTokenAmount.uiAmountString).minus(
+        preBalance.uiTokenAmount.uiAmountString
       );
     } else {
-      delta = new BigNumber(uiTokenAmount.uiAmount);
+      delta = new BigNumber(uiTokenAmount.uiAmountString);
     }
 
     rows.push({

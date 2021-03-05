@@ -117,7 +117,7 @@ function HoldingsDetailTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
           <Address pubkey={tokenAccount.info.mint} link truncate />
         </td>
         <td>
-          {tokenAccount.info.tokenAmount.uiAmount}{" "}
+          {tokenAccount.info.tokenAmount.uiAmountString}{" "}
           {tokenDetails && tokenDetails.tokenSymbol}
         </td>
       </tr>
