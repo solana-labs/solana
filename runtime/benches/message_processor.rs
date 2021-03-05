@@ -13,10 +13,7 @@ fn bench_verify_account_changes_data(bencher: &mut Bencher) {
 
     let owner = pubkey::new_rand();
     let non_owner = pubkey::new_rand();
-    let pre = PreAccount::new(
-        &pubkey::new_rand(),
-        &Account::new(0, BUFSIZE, &owner),
-    );
+    let pre = PreAccount::new(&pubkey::new_rand(), &Account::new(0, BUFSIZE, &owner));
     let post = Account::new(0, BUFSIZE, &owner);
     assert_eq!(
         pre.verify(
@@ -49,10 +46,7 @@ fn bench_verify_account_changes_data(bencher: &mut Bencher) {
     let summary = bencher.bench(|_bencher| {}).unwrap();
     info!("data compare {} ns/iter", summary.median);
 
-    let pre = PreAccount::new(
-        &pubkey::new_rand(),
-        &Account::new(0, BUFSIZE, &owner),
-    );
+    let pre = PreAccount::new(&pubkey::new_rand(), &Account::new(0, BUFSIZE, &owner));
     bencher.iter(|| {
         pre.verify(
             &non_owner,
