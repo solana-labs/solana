@@ -22,9 +22,8 @@ const AccountState = enums(["initialized", "uninitialized", "frozen"]);
 
 const TokenAmount = pick({
   decimals: number(),
-  uiAmount: number(),
   uiAmountString: string(),
-  amount: nullable(string()),
+  amount: string(),
 });
 
 export type TokenAccountInfo = StructType<typeof TokenAccountInfo>;
