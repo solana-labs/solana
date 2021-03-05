@@ -762,15 +762,6 @@ pub fn process_catchup(
         let slot_distance = rpc_slot as i64 - node_slot as i64;
         let slots_per_second =
             (previous_slot_distance - slot_distance) as f64 / f64::from(sleep_interval);
-        let time_remaining = (slot_distance as f64 / slots_per_second).round();
-        let time_remaining = if !time_remaining.is_normal() || time_remaining <= 0.0 {
-            "".to_string()
-        } else {
-            format!(
-                ". Time remaining: {}",
-                humantime::format_duration(Duration::from_secs_f64(time_remaining))
-            )
-        };
 
         let average_time_remaining = if total_sleep_interval == 0 {
             "".to_string()
@@ -812,7 +803,7 @@ pub fn process_catchup(
                 "".to_string()
             } else {
                 format!(
-                    ", {} node is {} at {:.1} slots/second{}{}",
+                    ", {} node is {} at {:.1} slots/second{}",
                     if slot_distance >= 0 { "our" } else { "their" },
                     if slots_per_second < 0.0 {
                         "falling behind"
@@ -820,7 +811,6 @@ pub fn process_catchup(
                         "gaining"
                     },
                     slots_per_second,
-                    time_remaining,
                     average_time_remaining
                 )
             },
