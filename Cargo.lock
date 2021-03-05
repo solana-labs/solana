@@ -1176,7 +1176,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f26ecb66b4bdca6c1409b40fb255eefc2bd4f6d135dab3c3124f80ffa2a9661e"
 dependencies = [
  "atty",
- "humantime 2.0.1",
+ "humantime 2.1.0",
  "log 0.4.11",
  "regex",
  "termcolor",
@@ -1221,11 +1221,10 @@ dependencies = [
 
 [[package]]
 name = "fd-lock"
-version = "1.1.1"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a15bec795244d49f5ee3024bdc6c3883fb035f7f6601d4a4821c3d5d60784454"
+checksum = "0010f02effd88c702318c5dde0463206be67495d0b4d906ba7c0a8f166cc7f06"
 dependencies = [
- "failure",
  "libc",
  "winapi 0.3.8",
 ]
@@ -1738,9 +1737,9 @@ dependencies = [
 
 [[package]]
 name = "humantime"
-version = "2.0.1"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c1ad908cc71012b7bea4d0c53ba96a8cba9962f048fa68d143376143d863b7a"
+checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
 
 [[package]]
 name = "hyper"
@@ -4234,7 +4233,7 @@ dependencies = [
  "criterion-stats",
  "ctrlc",
  "dirs-next",
- "humantime 2.0.1",
+ "humantime 2.1.0",
  "indicatif",
  "log 0.4.11",
  "num-traits",
@@ -4286,7 +4285,7 @@ dependencies = [
  "Inflector",
  "chrono",
  "console",
- "humantime 2.0.1",
+ "humantime 2.1.0",
  "indicatif",
  "serde",
  "serde_derive",
@@ -5580,7 +5579,7 @@ name = "solana-watchtower"
 version = "1.6.0"
 dependencies = [
  "clap",
- "humantime 2.0.1",
+ "humantime 2.1.0",
  "log 0.4.11",
  "solana-clap-utils",
  "solana-cli-config",
@@ -5836,7 +5835,7 @@ dependencies = [
  "anyhow",
  "fnv",
  "futures 0.3.8",
- "humantime 2.0.1",
+ "humantime 2.1.0",
  "log 0.4.11",
  "pin-project 1.0.1",
  "rand 0.7.3",
