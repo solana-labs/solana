@@ -1783,7 +1783,8 @@ impl Blockstore {
                     transaction,
                     meta: self
                         .read_transaction_status((signature, slot))
-                        .expect("Expect database get to succeed"),
+                        .ok()
+                        .flatten(),
                 }
             })
             .collect()
