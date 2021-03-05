@@ -1,4 +1,4 @@
-use crate::clock::Slot;
+use crate::{clock::Slot, signature::Signature};
 use bincode::Result;
 use serde::Serialize;
 use std::{
@@ -24,6 +24,7 @@ pub struct Meta {
     pub v6: bool,
     pub seed: [u8; 32],
     pub slot: Slot,
+    pub tracer_tx_signature: Option<Signature>,
 }
 
 #[derive(Clone)]

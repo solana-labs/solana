@@ -31,7 +31,7 @@ impl Default for TransactionSigVerifier {
 
 impl SigVerifier for TransactionSigVerifier {
     fn verify_batch(&self, mut batch: Vec<Packets>) -> Vec<Packets> {
-        let r = sigverify::ed25519_verify(&batch, &self.recycler, &self.recycler_out);
+        let r = sigverify::ed25519_verify(&mut batch, &self.recycler, &self.recycler_out);
         mark_disabled(&mut batch, &r);
         batch
     }
@@ -39,10 +39,9 @@ impl SigVerifier for TransactionSigVerifier {
 
 pub fn mark_disabled(batches: &mut Vec<Packets>, r: &[Vec<u8>]) {
     batches.iter_mut().zip(r).for_each(|(b, v)| {
-        b.packets
-            .iter_mut()
-            .zip(v)
-            .for_each(|(p, f)| p.meta.discard = *f == 0)
+        b.packets.iter_mut().zip(v).for_each(|(p, f)| {
+            p.meta.discard = *f == 0;
+        })
     });
 }
 
