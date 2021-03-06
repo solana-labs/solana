@@ -547,8 +547,8 @@ fn test_program_bpf_duplicate_accounts() {
         let payee_account = Account::new(10, 1, &program_id);
         let payee_pubkey = solana_sdk::pubkey::new_rand();
         bank.store_account(&payee_pubkey, &payee_account);
-
         let account = Account::new(10, 1, &program_id);
+
         let pubkey = solana_sdk::pubkey::new_rand();
         let account_metas = vec![
             AccountMeta::new(mint_keypair.pubkey(), true),
@@ -598,6 +598,21 @@ fn test_program_bpf_duplicate_accounts() {
         let lamports = bank_client.get_balance(&pubkey).unwrap();
         assert!(result.is_ok());
         assert_eq!(lamports, 13);
+
+        let keypair = Keypair::new();
+        let pubkey = keypair.pubkey();
+        let account_metas = vec![
+            AccountMeta::new(mint_keypair.pubkey(), true),
+            AccountMeta::new(payee_pubkey, false),
+            AccountMeta::new(pubkey, false),
+            AccountMeta::new_readonly(pubkey, true),
+            AccountMeta::new_readonly(program_id, false),
+        ];
+        bank.store_account(&pubkey, &account);
+        let instruction = Instruction::new_with_bytes(program_id, &[7], account_metas.clone());
+        let message = Message::new(&[instruction], Some(&mint_keypair.pubkey()));
+        let result = bank_client.send_and_confirm_message(&[&mint_keypair, &keypair], message);
+        assert!(result.is_ok());
     }
 }
 
