@@ -30,7 +30,7 @@ use {
         path::{Path, PathBuf},
         process::exit,
         sync::mpsc::channel,
-        time::{SystemTime, UNIX_EPOCH},
+        time::{Duration, SystemTime, UNIX_EPOCH},
     },
 };
 
@@ -413,7 +413,7 @@ fn main() {
     match genesis.start_with_mint_address(mint_address) {
         Ok(test_validator) => {
             if let Some(dashboard) = dashboard {
-                dashboard.run();
+                dashboard.run(Duration::from_millis(250));
             }
             test_validator.join();
         }
