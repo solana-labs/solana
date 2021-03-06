@@ -98,7 +98,14 @@ impl PohRecorder {
             self.grace_ticks = grace_ticks;
             self.leader_first_tick_height = leader_first_tick_height;
             self.leader_last_tick_height = leader_last_tick_height;
+
+            datapoint_info!(
+                "leader-slot-start-to-cleared-elapsed-ms",
+                ("slot", bank.slot(), i64),
+                ("elapsed", working_bank.start.elapsed().as_millis(), i64),
+            );
         }
+
         if let Some(ref signal) = self.clear_bank_signal {
             let _ = signal.try_send(true);
         }
