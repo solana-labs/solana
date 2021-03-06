@@ -3719,8 +3719,8 @@ impl AccountsDb {
              accum: &mut Vec<Vec<CalculateHashIntermediate>>,
              slot: Slot| {
                 let pubkey = *loaded_account.pubkey();
-                let rng_index = pubkey.as_ref()[0] as usize * bins / max_plus_1;
-                if !bin_range.contains(&rng_index) {
+                let pubkey_to_bin_index = pubkey.as_ref()[0] as usize * bins / max_plus_1;
+                if !bin_range.contains(&pubkey_to_bin_index) {
                     return;
                 }
 
@@ -3748,7 +3748,7 @@ impl AccountsDb {
                 if max == 0 {
                     accum.extend(vec![Vec::new(); bins]);
                 }
-                accum[rng_index].push(source_item);
+                accum[pubkey_to_bin_index].push(source_item);
             },
         );
         time.stop();
@@ -3772,14 +3772,14 @@ impl AccountsDb {
             // higher passes = slower total time, lower dynamic memory usage
             // lower passes = faster total time, higher dynamic memory usage
             // passes=2 cuts dynamic memory usage in approximately half.
-            let passes: usize = 2;
+            let num_scan_passes: usize = 2;
 
-            let bins_per_pass = PUBKEY_BINS_FOR_CALCULATING_HASHES / passes;
-            assert_eq!(bins_per_pass * passes, PUBKEY_BINS_FOR_CALCULATING_HASHES); // evenly divisible
+            let bins_per_pass = PUBKEY_BINS_FOR_CALCULATING_HASHES / num_scan_passes;
+            assert_eq!(bins_per_pass * num_scan_passes, PUBKEY_BINS_FOR_CALCULATING_HASHES); // evenly divisible
             let mut previous_pass = PreviousPass::default();
             let mut final_result = (Hash::default(), 0);
 
-            for pass in 0..passes {
+            for pass in 0..num_scan_passes {
                 let bounds = Range {
                     start: pass * bins_per_pass,
                     end: (pass + 1) * bins_per_pass,
@@ -3795,7 +3795,7 @@ impl AccountsDb {
                 let (hash, lamports, for_next_pass) = AccountsHash::rest_of_hash_calculation(
                     result,
                     &mut stats,
-                    pass == passes - 1,
+                    pass == num_scan_passes - 1,
                     previous_pass,
                 );
                 previous_pass = for_next_pass;
