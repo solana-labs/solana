@@ -321,7 +321,7 @@ impl BankingStage {
                     let (processed, verified_txs_len, new_unprocessed_indexes) =
                         Self::process_packets_transactions(
                             &bank,
-                            &bank_creation_time,
+                            Some(&bank_creation_time),
                             &poh_recorder,
                             &msgs,
                             original_unprocessed_indexes.to_owned(),
@@ -837,7 +837,8 @@ impl BankingStage {
     /// than the total number if max PoH height was reached and the bank halted
     fn process_transactions(
         bank: &Arc<Bank>,
-        bank_creation_time: &Instant,
+        // Should only be None for tests
+        bank_creation_time: Option<&Instant>,
         transactions: &[Transaction],
         poh: &Arc<Mutex<PohRecorder>>,
         transaction_status_sender: Option<TransactionStatusSender>,
@@ -864,10 +865,15 @@ impl BankingStage {
             // Add the retryable txs (transactions that errored in a way that warrants a retry)
             // to the list of unprocessed txs.
             unprocessed_txs.extend_from_slice(&retryable_txs_in_chunk);
-            match (
-                result,
-                PohRecorder::is_bank_still_processing_txs(&bank_creation_time),
-            ) {
+
+            // If `bank_creation_time` is None, it's a test so ignore the option so
+            // allow processing
+            let is_bank_still_processing_txs = bank_creation_time
+                .map(|bank_creation_time| {
+                    PohRecorder::is_bank_still_processing_txs(bank_creation_time)
+                })
+                .unwrap_or(true);
+            match (result, is_bank_still_processing_txs) {
                 (Err(PohRecorderError::MaxHeightReached), _) | (_, false) => {
                     info!(
                         "process transactions: max height reached slot: {} height: {}",
@@ -1007,7 +1013,7 @@ impl BankingStage {
 
     fn process_packets_transactions(
         bank: &Arc<Bank>,
-        bank_creation_time: &Instant,
+        bank_creation_time: Option<&Instant>,
         poh: &Arc<Mutex<PohRecorder>>,
         msgs: &Packets,
         packet_indexes: Vec<usize>,
@@ -1163,7 +1169,7 @@ impl BankingStage {
             let (processed, verified_txs_len, unprocessed_indexes) =
                 Self::process_packets_transactions(
                     &bank,
-                    &bank_creation_time,
+                    Some(&bank_creation_time),
                     &poh,
                     &msgs,
                     packet_indexes,
@@ -1681,8 +1687,10 @@ mod tests {
             ..
         } = create_genesis_config(10_000);
         let bank = Arc::new(Bank::new(&genesis_config));
+        let start = Arc::new(Instant::now());
         let working_bank = WorkingBank {
             bank: bank.clone(),
+            start,
             min_tick_height: bank.tick_height(),
             max_tick_height: std::u64::MAX,
         };
@@ -2030,8 +2038,10 @@ mod tests {
             genesis_config.hash(),
         )];
 
+        let start = Arc::new(Instant::now());
         let working_bank = WorkingBank {
             bank: bank.clone(),
+            start,
             min_tick_height: bank.tick_height(),
             max_tick_height: bank.tick_height() + 1,
         };
@@ -2126,8 +2136,10 @@ mod tests {
             system_transaction::transfer(&mint_keypair, &pubkey1, 1, genesis_config.hash()),
         ];
 
+        let start = Arc::new(Instant::now());
         let working_bank = WorkingBank {
             bank: bank.clone(),
+            start,
             min_tick_height: bank.tick_height(),
             max_tick_height: bank.tick_height() + 1,
         };
@@ -2251,6 +2263,7 @@ mod tests {
             let (processed_transactions_count, mut retryable_txs) =
                 BankingStage::process_transactions(
                     &bank,
+                    None,
                     &transactions,
                     &poh_recorder,
                     None,
@@ -2296,8 +2309,10 @@ mod tests {
         let transactions = vec![success_tx, ix_error_tx, fail_tx];
         bank.transfer(4, &mint_keypair, &keypair1.pubkey()).unwrap();
 
+        let start = Arc::new(Instant::now());
         let working_bank = WorkingBank {
             bank: bank.clone(),
+            start,
             min_tick_height: bank.tick_height(),
             max_tick_height: bank.tick_height() + 1,
         };
