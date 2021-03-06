@@ -968,7 +968,7 @@ impl BankingStage {
 
     /// Read the transaction message from packet data
     fn packet_message(packet: &Packet) -> Option<&[u8]> {
-        let (sig_len, sig_size) = short_vec::decode_len(&packet.data).ok()?;
+        let (sig_len, sig_size) = short_vec::decode_shortu16_len(&packet.data).ok()?;
         let msg_start = sig_len
             .checked_mul(size_of::<Signature>())
             .and_then(|v| v.checked_add(sig_size))?;
