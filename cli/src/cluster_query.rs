@@ -805,7 +805,8 @@ pub fn process_catchup(
 }
 
 pub fn process_cluster_date(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
-    let result = rpc_client.get_account_with_commitment(&sysvar::clock::id(), config.commitment)?;
+    let result = rpc_client
+        .get_account_shared_data_with_commitment(&sysvar::clock::id(), config.commitment)?;
     if let Some(clock_account) = result.value {
         let clock: Clock = from_account(&clock_account).ok_or_else(|| {
             CliError::RpcRequestError("Failed to deserialize clock sysvar".to_string())
@@ -1596,8 +1597,8 @@ pub fn process_show_stakes(
     }
     let all_stake_accounts = rpc_client
         .get_program_accounts_with_config(&solana_stake_program::id(), program_accounts_config)?;
-    let stake_history_account = rpc_client.get_account(&stake_history::id())?;
-    let clock_account = rpc_client.get_account(&sysvar::clock::id())?;
+    let stake_history_account = rpc_client.get_account_shared_data(&stake_history::id())?;
+    let clock_account = rpc_client.get_account_shared_data(&sysvar::clock::id())?;
     let clock: Clock = from_account(&clock_account).ok_or_else(|| {
         CliError::RpcRequestError("Failed to deserialize clock sysvar".to_string())
     })?;

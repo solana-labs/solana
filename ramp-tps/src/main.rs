@@ -234,7 +234,7 @@ fn main() {
 
     debug!("Fetching stake config...");
     let stake_config_account = rpc_client
-        .get_account(&stake_config_id())
+        .get_account_shared_data(&stake_config_id())
         .expect("failed to fetch stake config");
     let stake_config = StakeConfig::from(&stake_config_account).unwrap();
 

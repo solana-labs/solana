@@ -17,10 +17,11 @@ use solana_cli_output::CliNonceAccount;
 use solana_client::{nonce_utils::*, rpc_client::RpcClient};
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
-    account::Account,
+    account::AnAccount,
+    account_utils::StateMut,
     hash::Hash,
     message::Message,
-    nonce::{self, State},
+    nonce::{self, state::Versions, State},
     pubkey::Pubkey,
     system_instruction::{
         advance_nonce_account, authorize_nonce_account, create_nonce_account,
@@ -306,8 +307,8 @@ pub fn parse_withdraw_from_nonce_account(
 }
 
 /// Check if a nonce account is initialized with the given authority and hash
-pub fn check_nonce_account(
-    nonce_account: &Account,
+pub fn check_nonce_account<T: AnAccount + StateMut<Versions>>(
+    nonce_account: &T,
     nonce_authority: &Pubkey,
     nonce_hash: &Hash,
 ) -> Result<(), CliError> {
@@ -548,7 +549,7 @@ mod tests {
     use super::*;
     use crate::cli::{app, parse_command};
     use solana_sdk::{
-        account::Account,
+        account::AccountSharedData,
         account_utils::StateMut,
         fee_calculator::FeeCalculator,
         hash::hash,
@@ -813,17 +814,17 @@ mod tests {
             blockhash,
             fee_calculator: FeeCalculator::default(),
         }));
-        let valid = Account::new_data(1, &data, &system_program::ID);
+        let valid = AccountSharedData::new_data(1, &data, &system_program::ID);
         assert!(check_nonce_account(&valid.unwrap(), &nonce_pubkey, &blockhash).is_ok());
 
-        let invalid_owner = Account::new_data(1, &data, &Pubkey::new(&[1u8; 32]));
+        let invalid_owner = AccountSharedData::new_data(1, &data, &Pubkey::new(&[1u8; 32]));
         if let CliError::InvalidNonce(err) =
             check_nonce_account(&invalid_owner.unwrap(), &nonce_pubkey, &blockhash).unwrap_err()
         {
             assert_eq!(err, Error::InvalidAccountOwner,);
         }
 
-        let invalid_data = Account::new_data(1, &"invalid", &system_program::ID);
+        let invalid_data = AccountSharedData::new_data(1, &"invalid", &system_program::ID);
         if let CliError::InvalidNonce(err) =
             check_nonce_account(&invalid_data.unwrap(), &nonce_pubkey, &blockhash).unwrap_err()
         {
@@ -835,7 +836,7 @@ mod tests {
             blockhash: hash(b"invalid"),
             fee_calculator: FeeCalculator::default(),
         }));
-        let invalid_hash = Account::new_data(1, &data, &system_program::ID);
+        let invalid_hash = AccountSharedData::new_data(1, &data, &system_program::ID);
         if let CliError::InvalidNonce(err) =
             check_nonce_account(&invalid_hash.unwrap(), &nonce_pubkey, &blockhash).unwrap_err()
         {
@@ -847,7 +848,7 @@ mod tests {
             blockhash,
             fee_calculator: FeeCalculator::default(),
         }));
-        let invalid_authority = Account::new_data(1, &data, &system_program::ID);
+        let invalid_authority = AccountSharedData::new_data(1, &data, &system_program::ID);
         if let CliError::InvalidNonce(err) =
             check_nonce_account(&invalid_authority.unwrap(), &nonce_pubkey, &blockhash).unwrap_err()
         {
@@ -855,7 +856,7 @@ mod tests {
         }
 
         let data = Versions::new_current(State::Uninitialized);
-        let invalid_state = Account::new_data(1, &data, &system_program::ID);
+        let invalid_state = AccountSharedData::new_data(1, &data, &system_program::ID);
         if let CliError::InvalidNonce(err) =
             check_nonce_account(&invalid_state.unwrap(), &nonce_pubkey, &blockhash).unwrap_err()
         {
@@ -868,16 +869,16 @@ mod tests {
         let nonce_account = nonce_account::create_account(1).into_inner();
         assert_eq!(account_identity_ok(&nonce_account), Ok(()));
 
-        let system_account = Account::new(1, 0, &system_program::id());
+        let system_account = AccountSharedData::new(1, 0, &system_program::id());
         assert_eq!(
             account_identity_ok(&system_account),
             Err(Error::UnexpectedDataSize),
         );
 
         let other_program = Pubkey::new(&[1u8; 32]);
-        let other_account_no_data = Account::new(1, 0, &other_program);
+        let other_account_shared_data = AccountSharedData::new(1, 0, &other_program);
         assert_eq!(
-            account_identity_ok(&other_account_no_data),
+            account_identity_ok(&other_account_shared_data),
             Err(Error::InvalidAccountOwner),
         );
     }
@@ -900,7 +901,7 @@ mod tests {
             Ok(State::Initialized(data))
         );
 
-        let wrong_data_size_account = Account::new(1, 1, &system_program::id());
+        let wrong_data_size_account = AccountSharedData::new(1, 1, &system_program::id());
         assert_eq!(
             state_from_account(&wrong_data_size_account),
             Err(Error::InvalidAccountData),

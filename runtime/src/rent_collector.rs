@@ -1,7 +1,7 @@
 //! calculate and collect rent from Accounts
 use solana_sdk::{
-    account::Account, clock::Epoch, epoch_schedule::EpochSchedule, genesis_config::GenesisConfig,
-    incinerator, pubkey::Pubkey, rent::Rent, sysvar,
+    account::AccountSharedData, clock::Epoch, epoch_schedule::EpochSchedule,
+    genesis_config::GenesisConfig, incinerator, pubkey::Pubkey, rent::Rent, sysvar,
 };
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug, AbiExample)]
@@ -53,7 +53,7 @@ impl RentCollector {
     pub fn collect_from_existing_account(
         &self,
         address: &Pubkey,
-        account: &mut Account,
+        account: &mut AccountSharedData,
         rent_fix_enabled: bool,
     ) -> u64 {
         if account.executable
@@ -93,7 +93,7 @@ impl RentCollector {
                     rent_due
                 } else {
                     let rent_charged = account.lamports;
-                    *account = Account::default();
+                    *account = AccountSharedData::default();
                     rent_charged
                 }
             } else {
@@ -107,7 +107,7 @@ impl RentCollector {
     pub fn collect_from_created_account(
         &self,
         address: &Pubkey,
-        account: &mut Account,
+        account: &mut AccountSharedData,
         enable_new_behavior: bool,
     ) -> u64 {
         // initialize rent_epoch as created at this epoch
@@ -127,10 +127,10 @@ mod tests {
         let new_epoch = 3;
 
         let (mut created_account, mut existing_account) = {
-            let account = Account {
+            let account = AccountSharedData {
                 lamports: old_lamports,
                 rent_epoch: old_epoch,
-                ..Account::default()
+                ..AccountSharedData::default()
             };
 
             (account.clone(), account)
@@ -165,7 +165,7 @@ mod tests {
 
     #[test]
     fn test_rent_exempt_temporal_escape() {
-        let mut account = Account::default();
+        let mut account = AccountSharedData::default();
         let epoch = 3;
         let huge_lamports = 123_456_789_012;
         let tiny_lamports = 789_012;

@@ -12,7 +12,7 @@ use {
     solana_core::rpc::JsonRpcConfig,
     solana_faucet::faucet::{run_local_faucet_with_port, FAUCET_PORT},
     solana_sdk::{
-        account::Account,
+        account::AccountSharedData,
         clock::Slot,
         native_token::sol_to_lamports,
         pubkey::Pubkey,
@@ -385,7 +385,7 @@ fn main() {
         .ledger_path(&ledger_path)
         .add_account(
             faucet_pubkey,
-            Account::new(faucet_lamports, 0, &system_program::id()),
+            AccountSharedData::new(faucet_lamports, 0, &system_program::id()),
         )
         .rpc_config(JsonRpcConfig {
             enable_rpc_transaction_history: true,

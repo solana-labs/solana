@@ -124,7 +124,7 @@ mod tests {
     use clap::App;
     use serde_json::{self, json, Value};
     use solana_account_decoder::{UiAccount, UiAccountEncoding};
-    use solana_sdk::{account::Account, hash::hash, nonce, system_program};
+    use solana_sdk::{account::AccountSharedData, hash::hash, nonce, system_program};
     use std::collections::HashMap;
 
     #[test]
@@ -348,7 +348,7 @@ mod tests {
             blockhash: nonce_blockhash,
             fee_calculator: nonce_fee_calc.clone(),
         };
-        let nonce_account = Account::new_data_with_space(
+        let nonce_account = AccountSharedData::new_data_with_space(
             42,
             &nonce::state::Versions::new_current(nonce::State::Initialized(data)),
             nonce::State::size(),

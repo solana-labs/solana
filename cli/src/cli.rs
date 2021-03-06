@@ -1084,7 +1084,7 @@ fn process_show_account(
     output_file: &Option<String>,
     use_lamports_unit: bool,
 ) -> ProcessResult {
-    let account = rpc_client.get_account(account_pubkey)?;
+    let account = rpc_client.get_account_shared_data(account_pubkey)?;
     let data = account.data.clone();
     let cli_account = CliAccount {
         keyed_account: RpcKeyedAccount {
@@ -1196,7 +1196,7 @@ fn process_transfer(
         return_signers(&tx, &config.output_format)
     } else {
         if let Some(nonce_account) = &nonce_account {
-            let nonce_account = nonce_utils::get_account_with_commitment(
+            let nonce_account = nonce_utils::get_account_shared_data_with_commitment(
                 rpc_client,
                 nonce_account,
                 config.commitment,

@@ -130,7 +130,7 @@ mod tests {
     use bincode::serialized_size;
     use serde_derive::{Deserialize, Serialize};
     use solana_sdk::{
-        account::Account,
+        account::AccountSharedData,
         keyed_account::create_keyed_is_signer_accounts,
         process_instruction::MockInvokeContext,
         signature::{Keypair, Signer},
@@ -162,7 +162,7 @@ mod tests {
         }
     }
 
-    fn create_config_account(keys: Vec<(Pubkey, bool)>) -> (Keypair, RefCell<Account>) {
+    fn create_config_account(keys: Vec<(Pubkey, bool)>) -> (Keypair, RefCell<AccountSharedData>) {
         let from_pubkey = solana_sdk::pubkey::new_rand();
         let config_keypair = Keypair::new();
         let config_pubkey = config_keypair.pubkey();
@@ -179,10 +179,10 @@ mod tests {
             } => space,
             _ => panic!("Not a CreateAccount system instruction"),
         };
-        let config_account = RefCell::new(Account {
+        let config_account = RefCell::new(AccountSharedData {
             data: vec![0; space as usize],
             owner: id(),
-            ..Account::default()
+            ..AccountSharedData::default()
         });
         let accounts = vec![(&config_pubkey, true, &config_account)];
         let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
@@ -298,8 +298,8 @@ mod tests {
         let my_config = MyConfig::new(42);
 
         let instruction = config_instruction::store(&config_pubkey, true, keys.clone(), &my_config);
-        let signer0_account = RefCell::new(Account::default());
-        let signer1_account = RefCell::new(Account::default());
+        let signer0_account = RefCell::new(AccountSharedData::default());
+        let signer1_account = RefCell::new(AccountSharedData::default());
         let accounts = vec![
             (&config_pubkey, true, &config_account),
             (&signer0_pubkey, true, &signer0_account),
@@ -334,9 +334,9 @@ mod tests {
         let my_config = MyConfig::new(42);
 
         let instruction = config_instruction::store(&config_pubkey, false, keys, &my_config);
-        let signer0_account = RefCell::new(Account {
+        let signer0_account = RefCell::new(AccountSharedData {
             owner: id(),
-            ..Account::default()
+            ..AccountSharedData::default()
         });
         let accounts = vec![(&signer0_pubkey, true, &signer0_account)];
         let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
@@ -356,8 +356,8 @@ mod tests {
         solana_logger::setup();
         let signer0_pubkey = solana_sdk::pubkey::new_rand();
         let signer1_pubkey = solana_sdk::pubkey::new_rand();
-        let signer0_account = RefCell::new(Account::default());
-        let signer1_account = RefCell::new(Account::default());
+        let signer0_account = RefCell::new(AccountSharedData::default());
+        let signer1_account = RefCell::new(AccountSharedData::default());
         let keys = vec![(signer0_pubkey, true)];
         let (config_keypair, config_account) = create_config_account(keys.clone());
         let config_pubkey = config_keypair.pubkey();
@@ -405,9 +405,9 @@ mod tests {
         let signer0_pubkey = solana_sdk::pubkey::new_rand();
         let signer1_pubkey = solana_sdk::pubkey::new_rand();
         let signer2_pubkey = solana_sdk::pubkey::new_rand();
-        let signer0_account = RefCell::new(Account::default());
-        let signer1_account = RefCell::new(Account::default());
-        let signer2_account = RefCell::new(Account::default());
+        let signer0_account = RefCell::new(AccountSharedData::default());
+        let signer1_account = RefCell::new(AccountSharedData::default());
+        let signer2_account = RefCell::new(AccountSharedData::default());
         let keys = vec![
             (pubkey, false),
             (signer0_pubkey, true),
@@ -508,7 +508,7 @@ mod tests {
         solana_logger::setup();
         let pubkey = solana_sdk::pubkey::new_rand();
         let signer0_pubkey = solana_sdk::pubkey::new_rand();
-        let signer0_account = RefCell::new(Account::default());
+        let signer0_account = RefCell::new(AccountSharedData::default());
         let keys = vec![
             (pubkey, false),
             (signer0_pubkey, true),
@@ -606,8 +606,8 @@ mod tests {
         let config_pubkey = solana_sdk::pubkey::new_rand();
         let new_config = MyConfig::new(84);
         let signer0_pubkey = solana_sdk::pubkey::new_rand();
-        let signer0_account = RefCell::new(Account::default());
-        let config_account = RefCell::new(Account::default());
+        let signer0_account = RefCell::new(AccountSharedData::default());
+        let config_account = RefCell::new(AccountSharedData::default());
         let keys = vec![
             (from_pubkey, false),
             (signer0_pubkey, true),

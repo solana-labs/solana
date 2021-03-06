@@ -23,7 +23,7 @@ use solana_client::{
 use solana_rbpf::vm::{Config, Executable};
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
-    account::Account,
+    account::AnAccount,
     account_utils::StateMut,
     bpf_loader, bpf_loader_deprecated,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
@@ -1137,7 +1137,7 @@ fn do_process_program_write_and_deploy(
     let (initial_message, write_messages, balance_needed) =
         if let Some(buffer_authority_signer) = buffer_authority_signer {
             let (initial_instructions, balance_needed) = if let Some(account) = rpc_client
-                .get_account_with_commitment(buffer_pubkey, config.commitment)?
+                .get_account_shared_data_with_commitment(buffer_pubkey, config.commitment)?
                 .value
             {
                 complete_partial_program_init(
@@ -1414,48 +1414,48 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
     Ok(program_data)
 }
 
-fn complete_partial_program_init(
+fn complete_partial_program_init<T: AnAccount>(
     loader_id: &Pubkey,
     payer_pubkey: &Pubkey,
     elf_pubkey: &Pubkey,
-    account: &Account,
+    account: &T,
     account_data_len: usize,
     minimum_balance: u64,
     allow_excessive_balance: bool,
 ) -> Result<(Vec<Instruction>, u64), Box<dyn std::error::Error>> {
     let mut instructions: Vec<Instruction> = vec![];
     let mut balance_needed = 0;
-    if account.executable {
+    if account.executable() {
         return Err("Buffer account is already executable".into());
     }
-    if account.owner != *loader_id && !system_program::check_id(&account.owner) {
+    if account.owner() != loader_id && !system_program::check_id(account.owner()) {
         return Err("Buffer account is already owned by another account".into());
     }
 
-    if account.data.is_empty() && system_program::check_id(&account.owner) {
+    if account.data().is_empty() && system_program::check_id(account.owner()) {
         instructions.push(system_instruction::allocate(
             elf_pubkey,
             account_data_len as u64,
         ));
-        if account.owner != *loader_id {
+        if account.owner() != loader_id {
             instructions.push(system_instruction::assign(elf_pubkey, &loader_id));
         }
     }
-    if account.lamports < minimum_balance {
-        let balance = minimum_balance - account.lamports;
+    if account.lamports() < minimum_balance {
+        let balance = minimum_balance - account.lamports();
         instructions.push(system_instruction::transfer(
             payer_pubkey,
             elf_pubkey,
             balance,
         ));
         balance_needed = balance;
-    } else if account.lamports > minimum_balance
-        && system_program::check_id(&account.owner)
+    } else if account.lamports() > minimum_balance
+        && system_program::check_id(account.owner())
         && !allow_excessive_balance
     {
         return Err(format!(
             "Buffer account has a balance: {:?}; it may already be in use",
-            Sol(account.lamports)
+            Sol(account.lamports())
         )
         .into());
     }

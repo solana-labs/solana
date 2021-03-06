@@ -16,7 +16,10 @@ pub mod validator_info;
 
 use {
     crate::parse_account_data::{parse_account_data, AccountAdditionalData, ParsedAccount},
-    solana_sdk::{account::Account, clock::Epoch, fee_calculator::FeeCalculator, pubkey::Pubkey},
+    solana_sdk::{
+        account::AccountSharedData, account::AnAccountWritable, clock::Epoch,
+        fee_calculator::FeeCalculator, pubkey::Pubkey,
+    },
     std::{
         io::{Read, Write},
         str::FromStr,
@@ -59,7 +62,7 @@ pub enum UiAccountEncoding {
 impl UiAccount {
     pub fn encode(
         pubkey: &Pubkey,
-        account: Account,
+        account: AccountSharedData,
         encoding: UiAccountEncoding,
         additional_data: Option<AccountAdditionalData>,
         data_slice_config: Option<UiDataSliceConfig>,
@@ -108,7 +111,7 @@ impl UiAccount {
         }
     }
 
-    pub fn decode(&self) -> Option<Account> {
+    pub fn decode<T: AnAccountWritable>(&self) -> Option<T> {
         let data = match &self.data {
             UiAccountData::Json(_) => None,
             UiAccountData::LegacyBinary(blob) => bs58::decode(blob).into_vec().ok(),
@@ -128,13 +131,13 @@ impl UiAccount {
                 UiAccountEncoding::Binary | UiAccountEncoding::JsonParsed => None,
             },
         }?;
-        Some(Account {
-            lamports: self.lamports,
+        Some(T::create(
+            self.lamports,
             data,
-            owner: Pubkey::from_str(&self.owner).ok()?,
-            executable: self.executable,
-            rent_epoch: self.rent_epoch,
-        })
+            Pubkey::from_str(&self.owner).ok()?,
+            self.executable,
+            self.rent_epoch,
+        ))
     }
 }
 
@@ -184,6 +187,7 @@ fn slice_data(data: &[u8], data_slice_config: Option<UiDataSliceConfig>) -> &[u8
 #[cfg(test)]
 mod test {
     use super::*;
+    use solana_sdk::account::{Account, AccountSharedData};
 
     #[test]
     fn test_slice_data() {
@@ -217,9 +221,9 @@ mod test {
     fn test_base64_zstd() {
         let encoded_account = UiAccount::encode(
             &Pubkey::default(),
-            Account {
+            AccountSharedData {
                 data: vec![0; 1024],
-                ..Account::default()
+                ..AccountSharedData::default()
             },
             UiAccountEncoding::Base64Zstd,
             None,
@@ -230,7 +234,9 @@ mod test {
             UiAccountData::Binary(_, UiAccountEncoding::Base64Zstd)
         ));
 
-        let decoded_account = encoded_account.decode().unwrap();
+        let decoded_account = encoded_account.decode::<Account>().unwrap();
+        assert_eq!(decoded_account.data, vec![0; 1024]);
+        let decoded_account = encoded_account.decode::<AccountSharedData>().unwrap();
         assert_eq!(decoded_account.data, vec![0; 1024]);
     }
 }

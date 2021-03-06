@@ -4,7 +4,7 @@ use bincode::{deserialize, serialized_size};
 use serde_derive::{Deserialize, Serialize};
 use solana_config_program::{create_config_account, get_config_data, ConfigState};
 use solana_sdk::{
-    account::Account, genesis_config::GenesisConfig, instruction::InstructionError,
+    account::AccountSharedData, genesis_config::GenesisConfig, instruction::InstructionError,
     keyed_account::KeyedAccount,
 };
 
@@ -25,7 +25,7 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn from(account: &Account) -> Option<Self> {
+    pub fn from(account: &AccountSharedData) -> Option<Self> {
         get_config_data(&account.data)
             .ok()
             .and_then(|data| deserialize(data).ok())
@@ -58,7 +58,7 @@ pub fn add_genesis_account(genesis_config: &mut GenesisConfig) -> u64 {
     lamports
 }
 
-pub fn create_account(lamports: u64, config: &Config) -> Account {
+pub fn create_account(lamports: u64, config: &Config) -> AccountSharedData {
     create_config_account(vec![], config, lamports)
 }
 

@@ -12,6 +12,7 @@ use solana_client::{
 use solana_core::test_validator::TestValidator;
 use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
+    account::accounts_equal,
     account_utils::StateMut,
     commitment_config::CommitmentConfig,
     nonce::State as NonceState,
@@ -505,6 +506,130 @@ fn test_nonced_stake_delegation_and_deactivation() {
 }
 
 #[test]
+fn test_nonced_stake_delegation_and_deactivation_no_data() {
+    solana_logger::setup();
+
+    let mint_keypair = Keypair::new();
+    let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
+    let faucet_addr = run_local_faucet(mint_keypair, None);
+
+    let rpc_client =
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
+
+    let config_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
+    let mut config = CliConfig::recent_for_tests();
+    config.signers = vec![&config_keypair];
+    config.json_rpc_url = test_validator.rpc_url();
+
+    let minimum_nonce_balance = rpc_client
+        .get_minimum_balance_for_rent_exemption(NonceState::size())
+        .unwrap();
+
+    request_and_confirm_airdrop(
+        &rpc_client,
+        &faucet_addr,
+        &config.signers[0].pubkey(),
+        100_000,
+        &config,
+    )
+    .unwrap();
+
+    // Create stake account
+    let stake_keypair = Keypair::new();
+    config.signers.push(&stake_keypair);
+    config.command = CliCommand::CreateStakeAccount {
+        stake_account: 1,
+        seed: None,
+        staker: None,
+        withdrawer: None,
+        lockup: Lockup::default(),
+        amount: SpendAmount::Some(50_000),
+        sign_only: false,
+        blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+        nonce_account: None,
+        nonce_authority: 0,
+        fee_payer: 0,
+        from: 0,
+    };
+    process_command(&config).unwrap();
+
+    // Create nonce account
+    let nonce_account = Keypair::new();
+    config.signers[1] = &nonce_account;
+    config.command = CliCommand::CreateNonceAccount {
+        nonce_account: 1,
+        seed: None,
+        nonce_authority: Some(config.signers[0].pubkey()),
+        amount: SpendAmount::Some(minimum_nonce_balance),
+    };
+    process_command(&config).unwrap();
+
+    // Fetch nonce hash
+    let nonce_hash = nonce_utils::get_account_shared_data_with_commitment(
+        &rpc_client,
+        &nonce_account.pubkey(),
+        CommitmentConfig::processed(),
+    )
+    .and_then(|ref a| nonce_utils::data_from_account(a))
+    .unwrap()
+    .blockhash;
+
+    // Delegate stake
+    config.signers = vec![&config_keypair];
+    config.command = CliCommand::DelegateStake {
+        stake_account_pubkey: stake_keypair.pubkey(),
+        vote_account_pubkey: test_validator.vote_account_address(),
+        stake_authority: 0,
+        force: true,
+        sign_only: false,
+        blockhash_query: BlockhashQuery::FeeCalculator(
+            blockhash_query::Source::NonceAccount(nonce_account.pubkey()),
+            nonce_hash,
+        ),
+        nonce_account: Some(nonce_account.pubkey()),
+        nonce_authority: 0,
+        fee_payer: 0,
+    };
+    process_command(&config).unwrap();
+
+    // Fetch nonce hash
+    let nonce_hash = nonce_utils::get_account_shared_data_with_commitment(
+        &rpc_client,
+        &nonce_account.pubkey(),
+        CommitmentConfig::processed(),
+    )
+    .and_then(|ref a| nonce_utils::data_from_account(a))
+    .unwrap()
+    .blockhash;
+
+    // Fetch nonce hash
+    let nonce_hash_legacy = nonce_utils::get_account_with_commitment(
+        &rpc_client,
+        &nonce_account.pubkey(),
+        CommitmentConfig::processed(),
+    )
+    .and_then(|ref a| nonce_utils::data_from_account(a))
+    .unwrap()
+    .blockhash;
+    assert_eq!(nonce_hash, nonce_hash_legacy);
+
+    // Deactivate stake
+    config.command = CliCommand::DeactivateStake {
+        stake_account_pubkey: stake_keypair.pubkey(),
+        stake_authority: 0,
+        sign_only: false,
+        blockhash_query: BlockhashQuery::FeeCalculator(
+            blockhash_query::Source::NonceAccount(nonce_account.pubkey()),
+            nonce_hash,
+        ),
+        nonce_account: Some(nonce_account.pubkey()),
+        nonce_authority: 0,
+        fee_payer: 0,
+    };
+    process_command(&config).unwrap();
+}
+
+#[test]
 fn test_stake_authorize() {
     solana_logger::setup();
 
@@ -583,13 +708,52 @@ fn test_stake_authorize() {
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
+    let stake_account_compare = stake_account.clone();
     let stake_state: StakeState = stake_account.state().unwrap();
     let current_authority = match stake_state {
         StakeState::Initialized(meta) => meta.authorized.staker,
         _ => panic!("Unexpected stake state!"),
     };
     assert_eq!(current_authority, online_authority_pubkey);
+    {
+        // test out variations of new no_data functions
+        let stake_account = rpc_client
+            .get_account_shared_data(&stake_account_pubkey)
+            .unwrap();
+        let stake_state: StakeState = stake_account.state().unwrap();
+        let current_authority = match stake_state {
+            StakeState::Initialized(meta) => meta.authorized.staker,
+            _ => panic!("Unexpected stake state!"),
+        };
+        assert_eq!(current_authority, online_authority_pubkey);
+        assert!(accounts_equal(&stake_account_compare, &stake_account));
 
+        let stake_account = rpc_client
+            .get_account_with_commitment(&stake_account_pubkey, rpc_client.commitment())
+            .unwrap()
+            .value
+            .unwrap();
+        let stake_state: StakeState = stake_account.state().unwrap();
+        let current_authority = match stake_state {
+            StakeState::Initialized(meta) => meta.authorized.staker,
+            _ => panic!("Unexpected stake state!"),
+        };
+        assert_eq!(current_authority, online_authority_pubkey);
+        assert!(accounts_equal(&stake_account_compare, &stake_account));
+
+        let stake_account = rpc_client
+            .get_account_shared_data_with_commitment(&stake_account_pubkey, rpc_client.commitment())
+            .unwrap()
+            .value
+            .unwrap();
+        let stake_state: StakeState = stake_account.state().unwrap();
+        let current_authority = match stake_state {
+            StakeState::Initialized(meta) => meta.authorized.staker,
+            _ => panic!("Unexpected stake state!"),
+        };
+        assert_eq!(current_authority, online_authority_pubkey);
+        assert!(accounts_equal(&stake_account_compare, &stake_account));
+    }
     // Assign new online stake and withdraw authorities
     let online_authority2 = Keypair::new();
     let online_authority2_pubkey = online_authority2.pubkey();
@@ -695,14 +859,24 @@ fn test_stake_authorize() {
     process_command(&config).unwrap();
 
     // Fetch nonce hash
-    let nonce_hash = nonce_utils::get_account_with_commitment(
-        &rpc_client,
-        &nonce_account.pubkey(),
-        CommitmentConfig::processed(),
-    )
-    .and_then(|ref a| nonce_utils::data_from_account(a))
-    .unwrap()
-    .blockhash;
+    let key = nonce_account.pubkey();
+    let nonce_account2 =
+        nonce_utils::get_account_with_commitment(&rpc_client, &key, CommitmentConfig::processed());
+    let nonce_hash = nonce_account2
+        .and_then(|ref a| {
+            assert!(accounts_equal(
+                a,
+                &nonce_utils::get_account_shared_data_with_commitment(
+                    &rpc_client,
+                    &key,
+                    CommitmentConfig::processed(),
+                )
+                .unwrap()
+            ));
+            nonce_utils::data_from_account(a)
+        })
+        .unwrap()
+        .blockhash;
 
     // Nonced assignment of new online stake authority
     let online_authority = Keypair::new();

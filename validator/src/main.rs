@@ -510,7 +510,10 @@ fn check_vote_account(
     authorized_voter_pubkeys: &[Pubkey],
 ) -> Result<(), String> {
     let vote_account = rpc_client
-        .get_account_with_commitment(vote_account_address, CommitmentConfig::confirmed())
+        .get_account_shared_data_with_commitment(
+            vote_account_address,
+            CommitmentConfig::confirmed(),
+        )
         .map_err(|err| format!("failed to fetch vote account: {}", err.to_string()))?
         .value
         .ok_or_else(|| format!("vote account does not exist: {}", vote_account_address))?;

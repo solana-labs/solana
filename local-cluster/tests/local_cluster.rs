@@ -38,7 +38,7 @@ use solana_runtime::{
     snapshot_utils,
 };
 use solana_sdk::{
-    account::Account,
+    account::AccountSharedData,
     client::{AsyncClient, SyncClient},
     clock::{self, Slot},
     commitment_config::CommitmentConfig,
@@ -286,7 +286,7 @@ fn run_cluster_partition<E, F>(
     leader_schedule: Option<(LeaderSchedule, Vec<Arc<Keypair>>)>,
     on_partition_start: E,
     on_partition_resolved: F,
-    additional_accounts: Vec<(Pubkey, Account)>,
+    additional_accounts: Vec<(Pubkey, AccountSharedData)>,
 ) where
     E: FnOnce(&mut LocalCluster),
     F: FnOnce(&mut LocalCluster),
@@ -2240,7 +2240,11 @@ fn setup_transfer_scan_threads(
     scan_commitment: CommitmentConfig,
     update_client_receiver: Receiver<ThinClient>,
     scan_client_receiver: Receiver<ThinClient>,
-) -> (JoinHandle<()>, JoinHandle<()>, Vec<(Pubkey, Account)>) {
+) -> (
+    JoinHandle<()>,
+    JoinHandle<()>,
+    Vec<(Pubkey, AccountSharedData)>,
+) {
     let exit_ = exit.clone();
     let starting_keypairs: Arc<Vec<Keypair>> = Arc::new(
         iter::repeat_with(Keypair::new)
@@ -2252,9 +2256,14 @@ fn setup_transfer_scan_threads(
             .take(num_starting_accounts)
             .collect(),
     );
-    let starting_accounts: Vec<(Pubkey, Account)> = starting_keypairs
+    let starting_accounts: Vec<(Pubkey, AccountSharedData)> = starting_keypairs
         .iter()
-        .map(|k| (k.pubkey(), Account::new(1, 0, &system_program::id())))
+        .map(|k| {
+            (
+                k.pubkey(),
+                AccountSharedData::new(1, 0, &system_program::id()),
+            )
+        })
         .collect();
 
     let starting_keypairs_ = starting_keypairs.clone();

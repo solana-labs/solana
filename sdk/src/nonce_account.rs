@@ -1,5 +1,5 @@
 use crate::{
-    account::Account,
+    account::AccountSharedData,
     account_utils::StateMut,
     fee_calculator::FeeCalculator,
     hash::Hash,
@@ -7,9 +7,9 @@ use crate::{
 };
 use std::cell::RefCell;
 
-pub fn create_account(lamports: u64) -> RefCell<Account> {
+pub fn create_account(lamports: u64) -> RefCell<AccountSharedData> {
     RefCell::new(
-        Account::new_data_with_space(
+        AccountSharedData::new_data_with_space(
             lamports,
             &Versions::new_current(State::Uninitialized),
             State::size(),
@@ -19,7 +19,7 @@ pub fn create_account(lamports: u64) -> RefCell<Account> {
     )
 }
 
-pub fn verify_nonce_account(acc: &Account, hash: &Hash) -> bool {
+pub fn verify_nonce_account(acc: &AccountSharedData, hash: &Hash) -> bool {
     if acc.owner != crate::system_program::id() {
         return false;
     }
@@ -29,7 +29,7 @@ pub fn verify_nonce_account(acc: &Account, hash: &Hash) -> bool {
     }
 }
 
-pub fn fee_calculator_of(account: &Account) -> Option<FeeCalculator> {
+pub fn fee_calculator_of(account: &AccountSharedData) -> Option<FeeCalculator> {
     let state = StateMut::<Versions>::state(account)
         .ok()?
         .convert_to_current();
@@ -48,7 +48,7 @@ mod tests {
     fn test_verify_bad_account_owner_fails() {
         let program_id = Pubkey::new_unique();
         assert_ne!(program_id, crate::system_program::id());
-        let account = Account::new_data_with_space(
+        let account = AccountSharedData::new_data_with_space(
             42,
             &Versions::new_current(State::Uninitialized),
             State::size(),

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use solana_sdk::{
-    account::Account,
+    account::AccountSharedData,
     clock::Slot,
     commitment_config::CommitmentLevel,
     fee_calculator::FeeCalculator,
@@ -41,7 +41,7 @@ pub trait Banks {
     async fn get_account_with_commitment_and_context(
         address: Pubkey,
         commitment: CommitmentLevel,
-    ) -> Option<Account>;
+    ) -> Option<AccountSharedData>;
 }
 
 #[cfg(test)]

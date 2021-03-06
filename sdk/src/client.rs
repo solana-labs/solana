@@ -11,6 +11,7 @@
 
 use crate::{
     account::Account,
+    account::AccountSharedData,
     clock::Slot,
     commitment_config::CommitmentConfig,
     epoch_info::EpochInfo,
@@ -67,6 +68,13 @@ pub trait SyncClient {
         pubkey: &Pubkey,
         commitment_config: CommitmentConfig,
     ) -> Result<Option<Account>>;
+
+    /// Get an account or None if not found. Uses explicit commitment configuration.
+    fn get_account_shared_data_with_commitment(
+        &self,
+        pubkey: &Pubkey,
+        commitment_config: CommitmentConfig,
+    ) -> Result<Option<AccountSharedData>>;
 
     /// Get account balance or 0 if not found.
     fn get_balance(&self, pubkey: &Pubkey) -> Result<u64>;

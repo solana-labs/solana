@@ -622,7 +622,7 @@ mod tests {
     use super::*;
     use bincode::serialize;
     use solana_sdk::{
-        account::{self, Account},
+        account::{self, AccountSharedData},
         process_instruction::MockInvokeContext,
         rent::Rent,
         sysvar::stake_history::StakeHistory,
@@ -630,14 +630,14 @@ mod tests {
     use std::cell::RefCell;
     use std::str::FromStr;
 
-    fn create_default_account() -> RefCell<Account> {
-        RefCell::new(Account::default())
+    fn create_default_account() -> RefCell<AccountSharedData> {
+        RefCell::new(AccountSharedData::default())
     }
 
-    fn create_default_stake_account() -> RefCell<Account> {
-        RefCell::new(Account {
+    fn create_default_stake_account() -> RefCell<AccountSharedData> {
+        RefCell::new(AccountSharedData {
             owner: id(),
-            ..Account::default()
+            ..AccountSharedData::default()
         })
     }
 
@@ -663,34 +663,34 @@ mod tests {
             .iter()
             .map(|meta| {
                 RefCell::new(if sysvar::clock::check_id(&meta.pubkey) {
-                    account::create_account(&sysvar::clock::Clock::default(), 1)
+                    account::create_account_shared_data(&sysvar::clock::Clock::default(), 1)
                 } else if sysvar::rewards::check_id(&meta.pubkey) {
-                    account::create_account(&sysvar::rewards::Rewards::new(0.0), 1)
+                    account::create_account_shared_data(&sysvar::rewards::Rewards::new(0.0), 1)
                 } else if sysvar::stake_history::check_id(&meta.pubkey) {
-                    account::create_account(&StakeHistory::default(), 1)
+                    account::create_account_shared_data(&StakeHistory::default(), 1)
                 } else if config::check_id(&meta.pubkey) {
                     config::create_account(0, &config::Config::default())
                 } else if sysvar::rent::check_id(&meta.pubkey) {
-                    account::create_account(&Rent::default(), 1)
+                    account::create_account_shared_data(&Rent::default(), 1)
                 } else if meta.pubkey == invalid_stake_state_pubkey() {
-                    Account {
+                    AccountSharedData {
                         owner: id(),
-                        ..Account::default()
+                        ..AccountSharedData::default()
                     }
                 } else if meta.pubkey == invalid_vote_state_pubkey() {
-                    Account {
+                    AccountSharedData {
                         owner: solana_vote_program::id(),
-                        ..Account::default()
+                        ..AccountSharedData::default()
                     }
                 } else if meta.pubkey == spoofed_stake_state_pubkey() {
-                    Account {
+                    AccountSharedData {
                         owner: spoofed_stake_program_id(),
-                        ..Account::default()
+                        ..AccountSharedData::default()
                     }
                 } else {
-                    Account {
+                    AccountSharedData {
                         owner: id(),
-                        ..Account::default()
+                        ..AccountSharedData::default()
                     }
                 })
             })
@@ -973,7 +973,7 @@ mod tests {
                     KeyedAccount::new(
                         &sysvar::rent::id(),
                         false,
-                        &RefCell::new(account::create_account(&Rent::default(), 0))
+                        &RefCell::new(account::create_account_shared_data(&Rent::default(), 0))
                     )
                 ],
                 &serialize(&StakeInstruction::Initialize(
@@ -1028,12 +1028,15 @@ mod tests {
                     KeyedAccount::new(
                         &sysvar::clock::id(),
                         false,
-                        &RefCell::new(account::create_account(&sysvar::clock::Clock::default(), 1))
+                        &RefCell::new(account::create_account_shared_data(
+                            &sysvar::clock::Clock::default(),
+                            1
+                        ))
                     ),
                     KeyedAccount::new(
                         &sysvar::stake_history::id(),
                         false,
-                        &RefCell::new(account::create_account(
+                        &RefCell::new(account::create_account_shared_data(
                             &sysvar::stake_history::StakeHistory::default(),
                             1
                         ))
@@ -1060,7 +1063,7 @@ mod tests {
                     KeyedAccount::new(
                         &sysvar::rewards::id(),
                         false,
-                        &RefCell::new(account::create_account(
+                        &RefCell::new(account::create_account_shared_data(
                             &sysvar::rewards::Rewards::new(0.0),
                             1
                         ))
@@ -1068,7 +1071,10 @@ mod tests {
                     KeyedAccount::new(
                         &sysvar::stake_history::id(),
                         false,
-                        &RefCell::new(account::create_account(&StakeHistory::default(), 1,))
+                        &RefCell::new(account::create_account_shared_data(
+                            &StakeHistory::default(),
+                            1,
+                        ))
                     ),
                 ],
                 &serialize(&StakeInstruction::Withdraw(42)).unwrap(),
@@ -1101,7 +1107,7 @@ mod tests {
                     KeyedAccount::new(
                         &sysvar::rewards::id(),
                         false,
-                        &RefCell::new(account::create_account(
+                        &RefCell::new(account::create_account_shared_data(
                             &sysvar::rewards::Rewards::new(0.0),
                             1
                         ))

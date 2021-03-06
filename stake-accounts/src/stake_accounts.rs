@@ -280,7 +280,7 @@ mod tests {
     use super::*;
     use solana_runtime::{bank::Bank, bank_client::BankClient};
     use solana_sdk::{
-        account::Account,
+        account::AccountSharedData,
         client::SyncClient,
         genesis_config::create_genesis_config,
         signature::{Keypair, Signer},
@@ -306,9 +306,13 @@ mod tests {
         fee_payer_keypair
     }
 
-    fn get_account_at<C: SyncClient>(client: &C, base_pubkey: &Pubkey, i: usize) -> Account {
+    fn get_account_at<C: SyncClient>(
+        client: &C,
+        base_pubkey: &Pubkey,
+        i: usize,
+    ) -> AccountSharedData {
         let account_address = derive_stake_account_address(&base_pubkey, i);
-        client.get_account(&account_address).unwrap().unwrap()
+        AccountSharedData::from(client.get_account(&account_address).unwrap().unwrap())
     }
 
     fn get_balances<C: SyncClient>(
@@ -332,7 +336,8 @@ mod tests {
         (0..num_accounts)
             .map(|i| {
                 let address = derive_stake_account_address(&base_pubkey, i);
-                let account = client.get_account(&address).unwrap().unwrap();
+                let account =
+                    AccountSharedData::from(client.get_account(&address).unwrap().unwrap());
                 (address, StakeState::lockup_from(&account).unwrap())
             })
             .collect()

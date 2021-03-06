@@ -958,7 +958,7 @@ pub fn process_create_stake_account(
         }
 
         if let Some(nonce_account) = &nonce_account {
-            let nonce_account = nonce_utils::get_account_with_commitment(
+            let nonce_account = nonce_utils::get_account_shared_data_with_commitment(
                 rpc_client,
                 nonce_account,
                 config.commitment,
@@ -1032,7 +1032,7 @@ pub fn process_stake_authorize(
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
-            let nonce_account = nonce_utils::get_account_with_commitment(
+            let nonce_account = nonce_utils::get_account_shared_data_with_commitment(
                 rpc_client,
                 nonce_account,
                 config.commitment,
@@ -1091,7 +1091,7 @@ pub fn process_deactivate_stake_account(
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
-            let nonce_account = nonce_utils::get_account_with_commitment(
+            let nonce_account = nonce_utils::get_account_shared_data_with_commitment(
                 rpc_client,
                 nonce_account,
                 config.commitment,
@@ -1159,7 +1159,7 @@ pub fn process_withdraw_stake(
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
-            let nonce_account = nonce_utils::get_account_with_commitment(
+            let nonce_account = nonce_utils::get_account_shared_data_with_commitment(
                 rpc_client,
                 nonce_account,
                 config.commitment,
@@ -1298,7 +1298,7 @@ pub fn process_split_stake(
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
-            let nonce_account = nonce_utils::get_account_with_commitment(
+            let nonce_account = nonce_utils::get_account_shared_data_with_commitment(
                 rpc_client,
                 nonce_account,
                 config.commitment,
@@ -1396,7 +1396,7 @@ pub fn process_merge_stake(
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
-            let nonce_account = nonce_utils::get_account_with_commitment(
+            let nonce_account = nonce_utils::get_account_shared_data_with_commitment(
                 rpc_client,
                 nonce_account,
                 config.commitment,
@@ -1462,7 +1462,7 @@ pub fn process_stake_set_lockup(
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
-            let nonce_account = nonce_utils::get_account_with_commitment(
+            let nonce_account = nonce_utils::get_account_shared_data_with_commitment(
                 rpc_client,
                 nonce_account,
                 config.commitment,
@@ -1703,11 +1703,11 @@ pub fn process_show_stake_account(
     }
     match stake_account.state() {
         Ok(stake_state) => {
-            let stake_history_account = rpc_client.get_account(&stake_history::id())?;
+            let stake_history_account = rpc_client.get_account_shared_data(&stake_history::id())?;
             let stake_history = from_account(&stake_history_account).ok_or_else(|| {
                 CliError::RpcRequestError("Failed to deserialize stake history".to_string())
             })?;
-            let clock_account = rpc_client.get_account(&clock::id())?;
+            let clock_account = rpc_client.get_account_shared_data(&clock::id())?;
             let clock: Clock = from_account(&clock_account).ok_or_else(|| {
                 CliError::RpcRequestError("Failed to deserialize clock sysvar".to_string())
             })?;
@@ -1746,10 +1746,11 @@ pub fn process_show_stake_history(
     config: &CliConfig,
     use_lamports_unit: bool,
 ) -> ProcessResult {
-    let stake_history_account = rpc_client.get_account(&stake_history::id())?;
-    let stake_history = from_account::<StakeHistory>(&stake_history_account).ok_or_else(|| {
-        CliError::RpcRequestError("Failed to deserialize stake history".to_string())
-    })?;
+    let stake_history_account = rpc_client.get_account_shared_data(&stake_history::id())?;
+    let stake_history =
+        from_account::<StakeHistory, _>(&stake_history_account).ok_or_else(|| {
+            CliError::RpcRequestError("Failed to deserialize stake history".to_string())
+        })?;
 
     let mut entries: Vec<CliStakeHistoryEntry> = vec![];
     for entry in stake_history.deref() {
@@ -1859,7 +1860,7 @@ pub fn process_delegate_stake(
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
-            let nonce_account = nonce_utils::get_account_with_commitment(
+            let nonce_account = nonce_utils::get_account_shared_data_with_commitment(
                 rpc_client,
                 nonce_account,
                 config.commitment,
@@ -1881,7 +1882,8 @@ pub fn process_delegate_stake(
 pub fn is_stake_program_v2_enabled(
     rpc_client: &RpcClient,
 ) -> Result<bool, Box<dyn std::error::Error>> {
-    let feature_account = rpc_client.get_account(&feature_set::stake_program_v2::id())?;
+    let feature_account =
+        rpc_client.get_account_shared_data(&feature_set::stake_program_v2::id())?;
     Ok(feature::from_account(&feature_account)
         .and_then(|feature| feature.activated_at)
         .is_some())
