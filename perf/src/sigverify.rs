@@ -92,7 +92,10 @@ fn verify_packet(packet: &mut Packet) {
     let mut pubkey_start = packet_offsets.pubkey_start as usize;
     let msg_start = packet_offsets.msg_start as usize;
 
-    packet.meta.discard = false;
+    // If this packet was already marked as discard, drop it
+    if packet.meta.discard {
+        return;
+    }
 
     if packet_offsets.sig_len == 0 {
         packet.meta.discard = true;
@@ -275,16 +278,14 @@ pub fn ed25519_verify_cpu(batches: &mut [Packets]) {
     inc_new_counter_debug!("ed25519_verify_cpu", count);
 }
 
-pub fn ed25519_verify_disabled(batches: &[Packets]) -> Vec<Vec<u8>> {
+pub fn ed25519_verify_disabled(batches: &mut [Packets]) {
     use rayon::prelude::*;
     let count = batch_size(batches);
     debug!("disabled ECDSA for {}", batch_size(batches));
-    let rv = batches
+    batches
         .into_par_iter()
-        .map(|p| vec![1u8; p.packets.len()])
-        .collect();
+        .for_each(|p| p.packets.par_iter_mut().for_each(|p| p.meta.discard = false));
     inc_new_counter_debug!("ed25519_verify_disabled", count);
-    rv
 }
 
 pub fn copy_return_values(sig_lens: &[Vec<u32>], out: &PinnedVec<u8>, rvs: &mut Vec<Vec<u8>>) {
@@ -338,15 +339,22 @@ pub fn get_checked_scalar(scalar: &[u8; 32]) -> Result<[u8; 32], PacketError> {
     Ok(out)
 }
 
+pub fn mark_disabled(batches: &mut [Packets], r: &[Vec<u8>]) {
+    batches.iter_mut().zip(r).for_each(|(b, v)| {
+        b.packets.iter_mut().zip(v).for_each(|(p, f)| {
+            p.meta.discard = *f == 0;
+        })
+    });
+}
+
 pub fn ed25519_verify(
     batches: &mut [Packets],
     recycler: &Recycler<TxOffset>,
     recycler_out: &Recycler<PinnedVec<u8>>,
-) -> Vec<Vec<u8>> {
+) {
     let api = perf_libs::api();
     if api.is_none() {
-        ed25519_verify_cpu(batches);
-        return vec![];
+        return ed25519_verify_cpu(batches);
     }
     let api = api.unwrap();
 
@@ -359,8 +367,7 @@ pub fn ed25519_verify(
     // may be busy doing other things while being a real validator
     // TODO: dynamically adjust this crossover
     if count < 64 {
-        ed25519_verify_cpu(batches);
-        return vec![];
+        return ed25519_verify_cpu(batches);
     }
 
     let (signature_offsets, pubkey_offsets, msg_start_offsets, msg_sizes, sig_lens) =
@@ -374,7 +381,7 @@ pub fn ed25519_verify(
     let mut rvs = Vec::new();
 
     let mut num_packets = 0;
-    for p in batches {
+    for p in batches.iter() {
         elems.push(perf_libs::Elems {
             elems: p.packets.as_ptr(),
             num: p.packets.len() as u32,
@@ -410,8 +417,8 @@ pub fn ed25519_verify(
     }
     trace!("done verify");
     copy_return_values(&sig_lens, &out, &mut rvs);
+    mark_disabled(batches, &rvs);
     inc_new_counter_debug!("ed25519_verify_gpu", count);
-    rvs
 }
 
 #[cfg(test)]
@@ -449,6 +456,17 @@ mod tests {
             }
         }
         None
+    }
+
+    #[test]
+    fn test_mark_disabled() {
+        let mut batch = Packets::default();
+        batch.packets.push(Packet::default());
+        let mut batches: Vec<Packets> = vec![batch];
+        mark_disabled(&mut batches, &[vec![0]]);
+        assert_eq!(batches[0].packets[0].meta.discard, true);
+        mark_disabled(&mut batches, &[vec![1]]);
+        assert_eq!(batches[0].packets[0].meta.discard, false);
     }
 
     #[test]
