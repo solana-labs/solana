@@ -73,9 +73,9 @@ else
     --hashes-per-tick sleep \
     --faucet-lamports 500000000000000000 \
     --bootstrap-validator \
-      "$dataDir"/validator-identity.json \
-      "$dataDir"/validator-vote-account.json \
-      "$dataDir"/validator-stake-account.json \
+      "$validator_identity" \
+      "$validator_vote_account" \
+      "$validator_stake_account" \
     --ledger "$ledgerDir" \
     --cluster-type "$SOLANA_RUN_SH_CLUSTER_TYPE" \
     $SPL_GENESIS_ARGS \
@@ -93,8 +93,8 @@ solana-faucet &
 faucet=$!
 
 args=(
-  --identity "$dataDir"/validator-identity.json
-  --vote-account "$dataDir"/validator-vote-account.json
+  --identity "$validator_identity"
+  --vote-account "$validator_vote_account"
   --ledger "$ledgerDir"
   --gossip-port 8001
   --rpc-port 8899

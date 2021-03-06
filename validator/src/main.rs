@@ -73,12 +73,8 @@ use {
 
 #[derive(Debug, PartialEq)]
 enum Operation {
-    Exit,
     Initialize,
-    Monitor,
     Run,
-    SetLogFilter { filter: String },
-    WaitForRestartWindow { min_idle_time_in_minutes: usize },
 }
 
 fn wait_for_restart_window(
@@ -990,7 +986,7 @@ pub fn main() {
             Arg::with_name("identity")
                 .short("i")
                 .long("identity")
-                .value_name("PATH")
+                .value_name("KEYPAIR")
                 .takes_value(true)
                 .validator(is_keypair_or_ask_keyword)
                 .help("Validator identity keypair"),
@@ -998,7 +994,7 @@ pub fn main() {
         .arg(
             Arg::with_name("authorized_voter_keypairs")
                 .long("authorized-voter")
-                .value_name("PATH")
+                .value_name("KEYPAIR")
                 .takes_value(true)
                 .validator(is_keypair_or_ask_keyword)
                 .requires("vote_account")
@@ -1010,7 +1006,7 @@ pub fn main() {
         .arg(
             Arg::with_name("vote_account")
                 .long("vote-account")
-                .value_name("PUBKEY")
+                .value_name("ADDRESS")
                 .takes_value(true)
                 .validator(is_pubkey_or_keypair)
                 .requires("identity")
@@ -1364,7 +1360,7 @@ pub fn main() {
             Arg::with_name("trusted_validators")
                 .long("trusted-validator")
                 .validator(is_pubkey)
-                .value_name("PUBKEY")
+                .value_name("VALIDATOR IDENTITY")
                 .multiple(true)
                 .takes_value(true)
                 .help("A snapshot hash must be published in gossip by this validator to be accepted. \
@@ -1374,7 +1370,7 @@ pub fn main() {
             Arg::with_name("debug_key")
                 .long("debug-key")
                 .validator(is_pubkey)
-                .value_name("PUBKEY")
+                .value_name("ADDRESS")
                 .multiple(true)
                 .takes_value(true)
                 .help("Log when transactions are processed which reference a given key."),
@@ -1389,7 +1385,7 @@ pub fn main() {
             Arg::with_name("repair_validators")
                 .long("repair-validator")
                 .validator(is_pubkey)
-                .value_name("PUBKEY")
+                .value_name("VALIDATOR IDENTITY")
                 .multiple(true)
                 .takes_value(true)
                 .help("A list of validators to request repairs from. If specified, repair will not \
@@ -1399,7 +1395,7 @@ pub fn main() {
             Arg::with_name("gossip_validators")
                 .long("gossip-validator")
                 .validator(is_pubkey)
-                .value_name("PUBKEY")
+                .value_name("VALIDATOR IDENTITY")
                 .multiple(true)
                 .takes_value(true)
                 .help("A list of validators to gossip with.  If specified, gossip \
@@ -1701,31 +1697,68 @@ pub fn main() {
          )
         .get_matches();
 
+    let ledger_path = PathBuf::from(matches.value_of("ledger_path").unwrap());
+
     let operation = match matches.subcommand() {
         ("", _) | ("run", _) => Operation::Run,
-        ("exit", _) => Operation::Exit,
         ("init", _) => Operation::Initialize,
-        ("monitor", _) => Operation::Monitor,
-        ("set-log-filter", Some(subcommand_matches)) => Operation::SetLogFilter {
-            filter: value_t_or_exit!(subcommand_matches, "filter", String),
-        },
-        ("wait-for-restart-window", Some(subcommand_matches)) => Operation::WaitForRestartWindow {
-            min_idle_time_in_minutes: value_t_or_exit!(
-                subcommand_matches,
-                "min_idle_time_in_minutes",
-                usize
-            ),
-        },
+        ("exit", _) => {
+            let admin_client = admin_rpc_service::connect(&ledger_path);
+            admin_rpc_service::runtime()
+                .block_on(async move { admin_client.await?.exit().await })
+                .unwrap_or_else(|err| {
+                    println!("exit request failed: {}", err);
+                    exit(1);
+                });
+            return;
+        }
+        ("monitor", _) => {
+            let dashboard = Dashboard::new(&ledger_path, None, None).unwrap_or_else(|err| {
+                println!(
+                    "Error: Unable to connect to validator at {}: {:?}",
+                    ledger_path.display(),
+                    err,
+                );
+                exit(1);
+            });
+            dashboard.run(Duration::from_secs(2));
+            return;
+        }
+        ("set-log-filter", Some(subcommand_matches)) => {
+            let filter = value_t_or_exit!(subcommand_matches, "filter", String);
+            let admin_client = admin_rpc_service::connect(&ledger_path);
+            admin_rpc_service::runtime()
+                .block_on(async move { admin_client.await?.set_log_filter(filter).await })
+                .unwrap_or_else(|err| {
+                    println!("set log filter failed: {}", err);
+                    exit(1);
+                });
+            return;
+        }
+        ("wait-for-restart-window", Some(subcommand_matches)) => {
+            let min_idle_time_in_minutes =
+                value_t_or_exit!(subcommand_matches, "min_idle_time_in_minutes", usize);
+            wait_for_restart_window(&ledger_path, min_idle_time_in_minutes).unwrap_or_else(|err| {
+                println!("{}", err);
+                exit(1);
+            });
+            return;
+        }
         _ => unreachable!(),
     };
 
-    let identity_keypair = Arc::new(keypair_of(&matches, "identity").unwrap_or_else(Keypair::new));
+    let identity_keypair = Arc::new(keypair_of(&matches, "identity").unwrap_or_else(|| {
+        clap::Error::with_description(
+            "The --identity <KEYPAIR> argument is required",
+            clap::ErrorKind::ArgumentNotFound,
+        )
+        .exit();
+    }));
 
     let authorized_voter_keypairs = keypairs_of(&matches, "authorized_voter_keypairs")
         .map(|keypairs| keypairs.into_iter().map(Arc::new).collect())
         .unwrap_or_else(|| vec![identity_keypair.clone()]);
 
-    let ledger_path = PathBuf::from(matches.value_of("ledger_path").unwrap());
     let init_complete_file = matches.value_of("init_complete_file");
 
     let rpc_bootstrap_config = RpcBootstrapConfig {
@@ -2069,50 +2102,6 @@ pub fn main() {
             exit(1);
         })
     });
-
-    match operation {
-        Operation::Exit => {
-            let admin_client = admin_rpc_service::connect(&ledger_path);
-            admin_rpc_service::runtime()
-                .block_on(async move { admin_client.await?.exit().await })
-                .unwrap_or_else(|err| {
-                    println!("exit request failed: {}", err);
-                    exit(1);
-                });
-            exit(0);
-        }
-        Operation::SetLogFilter { filter } => {
-            let admin_client = admin_rpc_service::connect(&ledger_path);
-            admin_rpc_service::runtime()
-                .block_on(async move { admin_client.await?.set_log_filter(filter).await })
-                .unwrap_or_else(|err| {
-                    println!("set log filter failed: {}", err);
-                    exit(1);
-                });
-            exit(0);
-        }
-        Operation::Monitor => {
-            let dashboard = Dashboard::new(&ledger_path, None, None).unwrap_or_else(|err| {
-                println!(
-                    "Error: Unable to connect to validator at {}: {:?}",
-                    ledger_path.display(),
-                    err,
-                );
-                exit(1);
-            });
-            dashboard.run(Duration::from_secs(2));
-        }
-        Operation::WaitForRestartWindow {
-            min_idle_time_in_minutes,
-        } => {
-            wait_for_restart_window(&ledger_path, min_idle_time_in_minutes).unwrap_or_else(|err| {
-                println!("{}", err);
-                exit(1);
-            });
-            exit(0);
-        }
-        Operation::Initialize | Operation::Run => {}
-    }
 
     let mut ledger_fd_lock = FdLock::new(fs::File::open(&ledger_path).unwrap());
     let _ledger_lock = ledger_fd_lock.try_lock().unwrap_or_else(|_| {
