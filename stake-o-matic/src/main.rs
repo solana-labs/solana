@@ -617,8 +617,8 @@ where
 
 type BoxResult<T> = Result<T, Box<dyn error::Error>>;
 
-///                    quality          poor             cluster_skip_rate
-type ClassifyResult = (HashSet<Pubkey>, HashSet<Pubkey>, usize);
+///                    quality          poor             cluster_skip_rate, too_many_poor_block_producers
+type ClassifyResult = (HashSet<Pubkey>, HashSet<Pubkey>, usize, bool);
 
 fn classify_producers(
     first_slot: Slot,
@@ -676,16 +676,26 @@ fn classify_producers(
         );
     }
 
+    let poor_block_producer_percentage = poor_block_producers.len() * 100
+        / (quality_block_producers.len() + poor_block_producers.len());
+    let too_many_poor_block_producers =
+        poor_block_producer_percentage > config.max_poor_block_producer_percentage;
+
     info!("cluster_average_skip_rate: {}", cluster_average_rate);
     info!("quality_block_producers: {}", quality_block_producers.len());
     trace!("quality_block_producers: {:?}", quality_block_producers);
     info!("poor_block_producers: {}", poor_block_producers.len());
     trace!("poor_block_producers: {:?}", poor_block_producers);
+    info!(
+        "poor_block_producer_percentage: {}% (too many poor producers={})",
+        poor_block_producer_percentage, too_many_poor_block_producers,
+    );
 
     Ok((
         quality_block_producers,
         poor_block_producers,
         cluster_average_rate,
+        too_many_poor_block_producers,
     ))
 }
 
@@ -1133,11 +1143,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     info!("Epoch info: {:?}", epoch_info);
 
-    let (quality_block_producers, poor_block_producers, cluster_average_skip_rate) =
-        classify_block_producers(&rpc_client, &config, last_epoch)?;
-
-    let too_many_poor_block_producers = poor_block_producers.len()
-        > quality_block_producers.len() * config.max_poor_block_producer_percentage / 100;
+    let (
+        quality_block_producers,
+        poor_block_producers,
+        cluster_average_skip_rate,
+        too_many_poor_block_producers,
+    ) = classify_block_producers(&rpc_client, &config, last_epoch)?;
 
     let too_many_old_validators = cluster_nodes_with_old_version.len()
         > (poor_block_producers.len() + quality_block_producers.len())
@@ -1639,11 +1650,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 #[cfg(test)]
 mod test {
     use super::*;
+
     #[test]
-    fn test_quality_producer() {
+    fn test_quality_producer_with_average_skip_rate() {
         solana_logger::setup();
         let config = Config {
             quality_block_producer_percentage: 10,
+            max_poor_block_producer_percentage: 40,
             use_cluster_average_skip_rate: true,
             ..Config::default_for_test()
         };
@@ -1665,12 +1678,41 @@ mod test {
         leader_schedule.insert(l3.to_string(), (20..30).collect());
         leader_schedule.insert(l4.to_string(), (30..40).collect());
         leader_schedule.insert(l5.to_string(), (40..50).collect());
-        let (quality, poor, _cluster_average) =
+        let (quality, poor, _cluster_average, too_many_poor_block_producers) =
             classify_producers(0, 0, confirmed_blocks, leader_schedule, &config).unwrap();
         assert!(quality.contains(&l1));
         assert!(quality.contains(&l5));
         assert!(quality.contains(&l2));
         assert!(poor.contains(&l3));
         assert!(poor.contains(&l4));
+        assert!(!too_many_poor_block_producers);
+    }
+
+    #[test]
+    fn test_quality_producer_when_all_poor() {
+        solana_logger::setup();
+        let config = Config {
+            quality_block_producer_percentage: 10,
+            use_cluster_average_skip_rate: false,
+            ..Config::default_for_test()
+        };
+
+        let confirmed_blocks = HashSet::<Slot>::new();
+        let mut leader_schedule = HashMap::new();
+        let l1 = Pubkey::new_unique();
+        let l2 = Pubkey::new_unique();
+        let l3 = Pubkey::new_unique();
+        let l4 = Pubkey::new_unique();
+        let l5 = Pubkey::new_unique();
+        leader_schedule.insert(l1.to_string(), (0..10).collect());
+        leader_schedule.insert(l2.to_string(), (10..20).collect());
+        leader_schedule.insert(l3.to_string(), (20..30).collect());
+        leader_schedule.insert(l4.to_string(), (30..40).collect());
+        leader_schedule.insert(l5.to_string(), (40..50).collect());
+        let (quality, poor, _cluster_average, too_many_poor_block_producers) =
+            classify_producers(0, 0, confirmed_blocks, leader_schedule, &config).unwrap();
+        assert!(quality.is_empty());
+        assert_eq!(poor.len(), 5);
+        assert!(too_many_poor_block_producers);
     }
 }
