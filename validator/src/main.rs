@@ -1607,6 +1607,14 @@ pub fn main() {
                 .help("EXPERIMENTAL: Specify which CPU core PoH is pinned to"),
         )
         .arg(
+            Arg::with_name("poh_hashes_per_batch")
+                .hidden(true)
+                .long("poh-hashes-per-batch")
+                .takes_value(true)
+                .value_name("NUM")
+                .help("Specify hashes per batch in PoH service"),
+        )
+        .arg(
             Arg::with_name("account_indexes")
                 .long("account-index")
                 .takes_value(true)
@@ -1889,6 +1897,8 @@ pub fn main() {
         no_poh_speed_test: matches.is_present("no_poh_speed_test"),
         poh_pinned_cpu_core: value_of(&matches, "poh_pinned_cpu_core")
             .unwrap_or(poh_service::DEFAULT_PINNED_CPU_CORE),
+        poh_hashes_per_batch: value_of(&matches, "poh_hashes_per_batch")
+            .unwrap_or(poh_service::DEFAULT_HASHES_PER_BATCH),
         account_indexes,
         accounts_db_caching_enabled: !matches.is_present("no_accounts_db_caching"),
         accounts_db_test_hash_calculation: matches.is_present("accounts_db_test_hash_calculation"),

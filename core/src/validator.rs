@@ -122,6 +122,7 @@ pub struct ValidatorConfig {
     pub send_transaction_leader_forward_count: u64,
     pub no_poh_speed_test: bool,
     pub poh_pinned_cpu_core: usize,
+    pub poh_hashes_per_batch: u64,
     pub account_indexes: HashSet<AccountIndex>,
     pub accounts_db_caching_enabled: bool,
     pub warp_slot: Option<Slot>,
@@ -175,6 +176,7 @@ impl Default for ValidatorConfig {
             send_transaction_leader_forward_count: 2,
             no_poh_speed_test: true,
             poh_pinned_cpu_core: poh_service::DEFAULT_PINNED_CPU_CORE,
+            poh_hashes_per_batch: poh_service::DEFAULT_HASHES_PER_BATCH,
             account_indexes: HashSet::new(),
             accounts_db_caching_enabled: false,
             warp_slot: None,
@@ -641,6 +643,7 @@ impl Validator {
             &exit,
             bank.ticks_per_slot(),
             config.poh_pinned_cpu_core,
+            config.poh_hashes_per_batch,
         );
         assert_eq!(
             blockstore.new_shreds_signals.len(),

@@ -52,6 +52,7 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         accounts_db_use_index_hash_calculation: config.accounts_db_use_index_hash_calculation,
         tpu_coalesce_ms: config.tpu_coalesce_ms,
         validator_exit: Arc::new(RwLock::new(ValidatorExit::default())),
+        poh_hashes_per_batch: config.poh_hashes_per_batch,
     }
 }
 
