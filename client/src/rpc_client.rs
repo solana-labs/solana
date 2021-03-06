@@ -802,7 +802,7 @@ impl RpcClient {
     }
 
     pub fn get_account_data(&self, pubkey: &Pubkey) -> ClientResult<Vec<u8>> {
-        Ok(self.get_account(pubkey)?.data)
+        Ok(self.get_account(pubkey)?.data.into())
     }
 
     pub fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> ClientResult<u64> {

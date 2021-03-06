@@ -45,7 +45,7 @@ pub fn create_config_account<T: ConfigState>(
     data.extend_from_slice(&serialize(config_data).unwrap());
     Account {
         lamports,
-        data,
+        data: data.into(),
         owner: id(),
         ..Account::default()
     }

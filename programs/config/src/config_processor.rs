@@ -180,7 +180,7 @@ mod tests {
             _ => panic!("Not a CreateAccount system instruction"),
         };
         let config_account = RefCell::new(Account {
-            data: vec![0; space as usize],
+            data: vec![0; space as usize].into(),
             owner: id(),
             ..Account::default()
         });

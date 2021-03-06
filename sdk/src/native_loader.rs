@@ -7,7 +7,7 @@ pub fn create_loadable_account(name: &str, lamports: u64) -> Account {
     Account {
         lamports,
         owner: id(),
-        data: name.as_bytes().to_vec(),
+        data: name.as_bytes().to_vec().into(),
         executable: true,
         rent_epoch: 0,
     }

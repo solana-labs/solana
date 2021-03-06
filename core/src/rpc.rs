@@ -3823,7 +3823,7 @@ pub mod tests {
         let address = solana_sdk::pubkey::new_rand();
         let data = vec![1, 2, 3, 4, 5];
         let mut account = Account::new(42, 5, &Pubkey::default());
-        account.data = data.clone();
+        account.data = data.clone().into();
         bank.store_account(&address, &account);
 
         let req = format!(
@@ -3880,7 +3880,7 @@ pub mod tests {
         let address = Pubkey::new(&[9; 32]);
         let data = vec![1, 2, 3, 4, 5];
         let mut account = Account::new(42, 5, &Pubkey::default());
-        account.data = data.clone();
+        account.data = data.clone().into();
         bank.store_account(&address, &account);
 
         let non_existent_address = Pubkey::new(&[8; 32]);
@@ -5613,7 +5613,7 @@ pub mod tests {
         TokenAccount::pack(token_account, &mut account_data).unwrap();
         let token_account = Account {
             lamports: 111,
-            data: account_data.to_vec(),
+            data: account_data.to_vec().into(),
             owner: spl_token_id_v2_0(),
             ..Account::default()
         };
@@ -5632,7 +5632,7 @@ pub mod tests {
         Mint::pack(mint_state, &mut mint_data).unwrap();
         let mint_account = Account {
             lamports: 111,
-            data: mint_data.to_vec(),
+            data: mint_data.to_vec().into(),
             owner: spl_token_id_v2_0(),
             ..Account::default()
         };
@@ -5709,7 +5709,7 @@ pub mod tests {
         TokenAccount::pack(token_account, &mut account_data).unwrap();
         let token_account = Account {
             lamports: 111,
-            data: account_data.to_vec(),
+            data: account_data.to_vec().into(),
             owner: spl_token_id_v2_0(),
             ..Account::default()
         };
@@ -5928,7 +5928,7 @@ pub mod tests {
         Mint::pack(mint_state, &mut mint_data).unwrap();
         let mint_account = Account {
             lamports: 111,
-            data: mint_data.to_vec(),
+            data: mint_data.to_vec().into(),
             owner: spl_token_id_v2_0(),
             ..Account::default()
         };
@@ -5950,7 +5950,7 @@ pub mod tests {
         TokenAccount::pack(token_account, &mut account_data).unwrap();
         let token_account = Account {
             lamports: 111,
-            data: account_data.to_vec(),
+            data: account_data.to_vec().into(),
             owner: spl_token_id_v2_0(),
             ..Account::default()
         };
@@ -6014,7 +6014,7 @@ pub mod tests {
         TokenAccount::pack(token_account, &mut account_data).unwrap();
         let token_account = Account {
             lamports: 111,
-            data: account_data.to_vec(),
+            data: account_data.to_vec().into(),
             owner: spl_token_id_v2_0(),
             ..Account::default()
         };
@@ -6033,7 +6033,7 @@ pub mod tests {
         Mint::pack(mint_state, &mut mint_data).unwrap();
         let mint_account = Account {
             lamports: 111,
-            data: mint_data.to_vec(),
+            data: mint_data.to_vec().into(),
             owner: spl_token_id_v2_0(),
             ..Account::default()
         };

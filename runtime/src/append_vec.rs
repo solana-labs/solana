@@ -89,7 +89,7 @@ impl<'a> StoredAccountMeta<'a> {
             owner: self.account_meta.owner,
             executable: self.account_meta.executable,
             rent_epoch: self.account_meta.rent_epoch,
-            data: self.data.to_vec(),
+            data: self.data.to_vec().into(),
         }
     }
 
@@ -741,7 +741,7 @@ pub mod tests {
         let owner = Pubkey::default();
         let data_len = 3_u64;
         let mut account = Account::new(0, data_len as usize, &owner);
-        account.data = b"abc".to_vec();
+        account.data = b"abc".to_vec().into();
         let stored_meta = StoredMeta {
             write_version: 0,
             pubkey,

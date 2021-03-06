@@ -265,7 +265,7 @@ mod tests {
         let accounts = [
             RefCell::new(Account {
                 lamports: 1,
-                data: vec![1u8, 2, 3, 4, 5],
+                data: vec![1u8, 2, 3, 4, 5].into(),
                 owner: bpf_loader::id(),
                 executable: false,
                 rent_epoch: 100,
@@ -273,21 +273,21 @@ mod tests {
             // dup of first
             RefCell::new(Account {
                 lamports: 1,
-                data: vec![1u8, 2, 3, 4, 5],
+                data: vec![1u8, 2, 3, 4, 5].into(),
                 owner: bpf_loader::id(),
                 executable: false,
                 rent_epoch: 100,
             }),
             RefCell::new(Account {
                 lamports: 2,
-                data: vec![11u8, 12, 13, 14, 15, 16, 17, 18, 19],
+                data: vec![11u8, 12, 13, 14, 15, 16, 17, 18, 19].into(),
                 owner: bpf_loader::id(),
                 executable: true,
                 rent_epoch: 200,
             }),
             RefCell::new(Account {
                 lamports: 3,
-                data: vec![],
+                data: vec![].into(),
                 owner: bpf_loader::id(),
                 executable: false,
                 rent_epoch: 3100,

@@ -1,18 +1,20 @@
-use crate::{clock::Epoch, pubkey::Pubkey};
-use solana_program::{account_info::AccountInfo, sysvar::Sysvar};
-use std::{cell::RefCell, cmp, fmt, rc::Rc};
+use crate::{account_data::AccountData, clock::Epoch, pubkey::Pubkey};
+use solana_program::{
+    account_info::AccountInfo,
+    sysvar::{Sysvar, SysvarEnum},
+};
+use std::{cell::RefCell, cmp, convert::TryFrom, fmt, rc::Rc};
 
 /// An Account with data that is stored on chain
 #[repr(C)]
-#[frozen_abi(digest = "AXJTWWXfp49rHb34ayFzFLSEuaRbMUsVPNzBDyP3UPjc")]
+#[frozen_abi(digest = "4KogjjSHMyd2yNNzmgG8VotZJHmsXCpaYkNswHrz3mf2")]
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Default, AbiExample)]
 #[serde(rename_all = "camelCase")]
 pub struct Account {
     /// lamports in the account
     pub lamports: u64,
     /// data held in this account
-    #[serde(with = "serde_bytes")]
-    pub data: Vec<u8>,
+    pub data: AccountData,
     /// the program that owns this account. If executable, the program that loads this account.
     pub owner: Pubkey,
     /// this account's data contains a loaded program (and is now read-only)
@@ -46,7 +48,7 @@ impl Account {
     pub fn new(lamports: u64, space: usize, owner: &Pubkey) -> Self {
         Self {
             lamports,
-            data: vec![0u8; space],
+            data: vec![0u8; space].into(),
             owner: *owner,
             ..Self::default()
         }
@@ -60,7 +62,7 @@ impl Account {
         state: &T,
         owner: &Pubkey,
     ) -> Result<Self, bincode::Error> {
-        let data = bincode::serialize(state)?;
+        let data = bincode::serialize(state)?.into();
         Ok(Self {
             lamports,
             data,
@@ -112,7 +114,10 @@ impl Account {
 }
 
 /// Create an `Account` from a `Sysvar`.
-pub fn create_account<S: Sysvar>(sysvar: &S, lamports: u64) -> Account {
+pub fn create_account<S>(sysvar: &S, lamports: u64) -> Account
+where
+    S: Sysvar + Clone + Into<SysvarEnum> + 'static,
+{
     let data_len = S::size_of().max(bincode::serialized_size(sysvar).unwrap() as usize);
     let mut account = Account::new(lamports, data_len, &solana_program::sysvar::id());
     to_account::<S>(sysvar, &mut account).unwrap();
@@ -120,13 +125,19 @@ pub fn create_account<S: Sysvar>(sysvar: &S, lamports: u64) -> Account {
 }
 
 /// Create a `Sysvar` from an `Account`'s data.
-pub fn from_account<S: Sysvar>(account: &Account) -> Option<S> {
-    bincode::deserialize(&account.data).ok()
+pub fn from_account<S>(account: &Account) -> Option<S>
+where
+    S: Sysvar + Clone + Into<SysvarEnum> + TryFrom<SysvarEnum> + 'static,
+{
+    account.data.get_sysvar()
 }
 
 /// Serialize a `Sysvar` into an `Account`'s data.
-pub fn to_account<S: Sysvar>(sysvar: &S, account: &mut Account) -> Option<()> {
-    bincode::serialize_into(&mut account.data[..], sysvar).ok()
+pub fn to_account<S>(sysvar: &S, account: &mut Account) -> Option<()>
+where
+    S: Sysvar + Clone + Into<SysvarEnum> + 'static,
+{
+    account.data.put_sysvar(sysvar).ok()
 }
 
 /// Return the information required to construct an `AccountInfo`.  Used by the

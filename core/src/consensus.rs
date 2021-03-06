@@ -1572,7 +1572,7 @@ pub mod test {
         let mut stakes = vec![];
         for (lamports, votes) in stake_votes {
             let mut account = Account {
-                data: vec![0; VoteState::size_of()],
+                data: vec![0; VoteState::size_of()].into(),
                 lamports: *lamports,
                 ..Account::default()
             };

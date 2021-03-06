@@ -161,7 +161,7 @@ pub fn builtin_process_instruction(
             let key = keyed_account.unsigned_key();
             let (lamports, data, _owner) = &account_refs[key];
             account.lamports = **lamports.borrow();
-            account.data = data.borrow().to_vec();
+            account.data = data.borrow().to_vec().into();
         }
     }
 
@@ -241,7 +241,7 @@ impl program_stubs::SyscallStubs for SyscallStubs {
         fn ai_to_a(ai: &AccountInfo) -> Account {
             Account {
                 lamports: ai.lamports(),
-                data: ai.try_borrow_data().unwrap().to_vec(),
+                data: ai.try_borrow_data().unwrap().to_vec().into(),
                 owner: *ai.owner,
                 executable: ai.executable,
                 rent_epoch: ai.rent_epoch,
@@ -486,7 +486,8 @@ impl ProgramTest {
                 lamports,
                 data: read_file(find_file(filename).unwrap_or_else(|| {
                     panic!("Unable to locate {}", filename);
-                })),
+                }))
+                .into(),
                 owner,
                 executable: false,
                 rent_epoch: 0,
@@ -508,7 +509,8 @@ impl ProgramTest {
             Account {
                 lamports,
                 data: base64::decode(data_base64)
-                    .unwrap_or_else(|err| panic!("Failed to base64 decode: {}", err)),
+                    .unwrap_or_else(|err| panic!("Failed to base64 decode: {}", err))
+                    .into(),
                 owner,
                 executable: false,
                 rent_epoch: 0,
@@ -570,7 +572,7 @@ impl ProgramTest {
                 program_id,
                 Account {
                     lamports: Rent::default().minimum_balance(data.len()).min(1),
-                    data,
+                    data: data.into(),
                     owner: loader,
                     executable: true,
                     rent_epoch: 0,

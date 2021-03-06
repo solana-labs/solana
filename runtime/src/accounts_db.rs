@@ -6046,10 +6046,10 @@ pub mod tests {
 
         let mut normal_account = Account::new(1, 0, &Account::default().owner);
         normal_account.owner = inline_spl_token_v2_0::id();
-        normal_account.data = account_data_with_mint.clone();
+        normal_account.data = account_data_with_mint.clone().into();
         let mut zero_account = Account::new(0, 0, &Account::default().owner);
         zero_account.owner = inline_spl_token_v2_0::id();
-        zero_account.data = account_data_with_mint;
+        zero_account.data = account_data_with_mint.into();
 
         //store an account
         accounts.store_uncached(0, &[(&pubkey1, &normal_account)]);

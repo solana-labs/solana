@@ -139,7 +139,8 @@ impl TestValidatorGenesis {
                     solana_program_test::find_file(filename).unwrap_or_else(|| {
                         panic!("Unable to locate {}", filename);
                     }),
-                ),
+                )
+                .into(),
                 owner,
                 executable: false,
                 rent_epoch: 0,
@@ -161,7 +162,8 @@ impl TestValidatorGenesis {
             Account {
                 lamports,
                 data: base64::decode(data_base64)
-                    .unwrap_or_else(|err| panic!("Failed to base64 decode: {}", err)),
+                    .unwrap_or_else(|err| panic!("Failed to base64 decode: {}", err))
+                    .into(),
                 owner,
                 executable: false,
                 rent_epoch: 0,
@@ -287,7 +289,7 @@ impl TestValidator {
                 program.program_id,
                 Account {
                     lamports: Rent::default().minimum_balance(data.len()).min(1),
-                    data,
+                    data: data.into(),
                     owner: program.loader,
                     executable: true,
                     rent_epoch: 0,

@@ -1278,7 +1278,6 @@ mod tests {
                     &Account {
                         owner: *owner,
                         lamports: std::u64::MAX,
-                        data: vec![],
                         ..Account::default()
                     },
                     false,
@@ -1309,8 +1308,8 @@ mod tests {
             self
         }
         pub fn data(mut self, pre: Vec<u8>, post: Vec<u8>) -> Self {
-            self.pre.account.borrow_mut().data = pre;
-            self.post.data = post;
+            self.pre.account.borrow_mut().data = pre.into();
+            self.post.data = post.into();
             self
         }
         pub fn rent_epoch(mut self, pre: u64, post: u64) -> Self {
@@ -1672,7 +1671,7 @@ mod tests {
                     }
                     // Change data in a read-only account
                     MockSystemInstruction::AttemptDataChange { data } => {
-                        keyed_accounts[1].account.borrow_mut().data = vec![data];
+                        keyed_accounts[1].account.borrow_mut().data = vec![data].into();
                         Ok(())
                     }
                 }
@@ -1836,7 +1835,7 @@ mod tests {
                             let mut dup_account = keyed_accounts[2].try_account_ref_mut()?;
                             dup_account.lamports -= lamports;
                             to_account.lamports += lamports;
-                            dup_account.data = vec![data];
+                            dup_account.data = vec![data].into();
                         }
                         keyed_accounts[0].try_account_ref_mut()?.lamports -= lamports;
                         keyed_accounts[1].try_account_ref_mut()?.lamports += lamports;
@@ -1956,7 +1955,7 @@ mod tests {
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].borrow().lamports, 80);
         assert_eq!(accounts[1].borrow().lamports, 20);
-        assert_eq!(accounts[0].borrow().data, vec![42]);
+        assert_eq!(accounts[0].borrow().data, vec![42].into());
     }
 
     #[test]

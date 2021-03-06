@@ -1,6 +1,8 @@
 //! named accounts for synthesized data accounts for bank state, etc.
 //!
 use crate::{account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey};
+use derive_more::From;
+use std::convert::TryFrom;
 
 pub mod clock;
 pub mod epoch_schedule;
@@ -71,6 +73,45 @@ pub trait Sysvar:
         bincode::serialize_into(&mut account_info.data.borrow_mut()[..], self).ok()
     }
 }
+
+#[derive(Clone, Debug, AbiExample, From)]
+pub enum SysvarEnum {
+    Clock(clock::Clock),
+    EpochSchedule(epoch_schedule::EpochSchedule),
+    Fees(fees::Fees),
+    Instructions(instructions::Instructions),
+    RecentBlockhashes(recent_blockhashes::RecentBlockhashes),
+    Rent(rent::Rent),
+    Rewards(rewards::Rewards),
+    SlotHashes(slot_hashes::SlotHashes),
+    SlotHistory(slot_history::SlotHistory),
+    StakeHistory(stake_history::StakeHistory),
+}
+
+macro_rules! impl_try_from (
+    ($mod:ident, $name:ident) => (
+        impl TryFrom<SysvarEnum> for $mod::$name {
+            type Error = &'static str;
+            fn try_from(sv: SysvarEnum) -> Result<Self, Self::Error> {
+                match sv {
+                    SysvarEnum::$name(sv) => Ok(sv),
+                    _ => Err("type mismatch"),
+                }
+            }
+        }
+    );
+);
+
+impl_try_from!(clock, Clock);
+impl_try_from!(epoch_schedule, EpochSchedule);
+impl_try_from!(fees, Fees);
+impl_try_from!(instructions, Instructions);
+impl_try_from!(recent_blockhashes, RecentBlockhashes);
+impl_try_from!(rent, Rent);
+impl_try_from!(rewards, Rewards);
+impl_try_from!(slot_hashes, SlotHashes);
+impl_try_from!(slot_history, SlotHistory);
+impl_try_from!(stake_history, StakeHistory);
 
 #[cfg(test)]
 mod tests {
