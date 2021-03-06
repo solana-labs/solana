@@ -3775,7 +3775,10 @@ impl AccountsDb {
             let num_scan_passes: usize = 2;
 
             let bins_per_pass = PUBKEY_BINS_FOR_CALCULATING_HASHES / num_scan_passes;
-            assert_eq!(bins_per_pass * num_scan_passes, PUBKEY_BINS_FOR_CALCULATING_HASHES); // evenly divisible
+            assert_eq!(
+                bins_per_pass * num_scan_passes,
+                PUBKEY_BINS_FOR_CALCULATING_HASHES
+            ); // evenly divisible
             let mut previous_pass = PreviousPass::default();
             let mut final_result = (Hash::default(), 0);
 
