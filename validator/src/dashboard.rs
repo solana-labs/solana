@@ -7,10 +7,7 @@ use {
     },
     solana_core::validator::ValidatorStartProgress,
     solana_sdk::{
-        clock::{Slot, DEFAULT_TICKS_PER_SLOT, MS_PER_TICK},
-        commitment_config::CommitmentConfig,
-        native_token::Sol,
-        pubkey::Pubkey,
+        clock::Slot, commitment_config::CommitmentConfig, native_token::Sol, pubkey::Pubkey,
     },
     std::{
         io,
@@ -58,7 +55,7 @@ impl Dashboard {
         })
     }
 
-    pub fn run(self) {
+    pub fn run(self, refresh_interval: Duration) {
         let Self {
             exit,
             ledger_path,
@@ -76,6 +73,7 @@ impl Dashboard {
                 &ledger_path,
                 &exit,
                 progress_bar,
+                refresh_interval,
             )) {
                 None => continue,
                 Some(results) => results,
@@ -158,9 +156,7 @@ impl Dashboard {
                             transaction_count,
                             identity_balance
                         ));
-                        thread::sleep(Duration::from_millis(
-                            MS_PER_TICK * DEFAULT_TICKS_PER_SLOT / 2,
-                        ));
+                        thread::sleep(refresh_interval);
                     }
                     Err(err) => {
                         progress_bar
@@ -177,19 +173,20 @@ async fn wait_for_validator_startup(
     ledger_path: &Path,
     exit: &Arc<AtomicBool>,
     progress_bar: ProgressBar,
+    refresh_interval: Duration,
 ) -> Option<(SocketAddr, SystemTime)> {
     let mut admin_client = None;
     loop {
         if exit.load(Ordering::Relaxed) {
             return None;
         }
-        thread::sleep(Duration::from_secs(1));
 
         if admin_client.is_none() {
             match admin_rpc_service::connect(&ledger_path).await {
                 Ok(new_admin_client) => admin_client = Some(new_admin_client),
                 Err(err) => {
                     progress_bar.set_message(&format!("Unable to connect to validator: {}", err));
+                    thread::sleep(refresh_interval);
                     continue;
                 }
             }
@@ -225,6 +222,7 @@ async fn wait_for_validator_startup(
                     .set_message(&format!("Failed to get validator start progress: {}", err));
             }
         }
+        thread::sleep(refresh_interval);
     }
 }
 

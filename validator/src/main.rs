@@ -2100,7 +2100,7 @@ pub fn main() {
                 );
                 exit(1);
             });
-            dashboard.run();
+            dashboard.run(Duration::from_secs(2));
         }
         Operation::WaitForRestartWindow {
             min_idle_time_in_minutes,
