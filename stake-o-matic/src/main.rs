@@ -647,12 +647,6 @@ fn classify_producers(
                 }
             }
         }
-        trace!(
-            "Validator {} produced {} blocks in {} slots",
-            validator_identity,
-            validator_blocks,
-            validator_slots
-        );
         if validator_slots > 0 {
             let validator_identity = Pubkey::from_str(&validator_identity)?;
             let e = blocks_and_slots.entry(validator_identity).or_insert((0, 0));
@@ -673,8 +667,16 @@ fn classify_producers(
         } else {
             quality_block_producers.insert(validator_identity);
         }
+        trace!(
+            "Validator {} produced {} blocks in {} slots skip_rate: {}",
+            validator_identity,
+            blocks,
+            slots,
+            skip_rate,
+        );
     }
 
+    info!("cluster_average_skip_rate: {}", cluster_average_rate);
     info!("quality_block_producers: {}", quality_block_producers.len());
     trace!("quality_block_producers: {:?}", quality_block_producers);
     info!("poor_block_producers: {}", poor_block_producers.len());
