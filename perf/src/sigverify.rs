@@ -13,7 +13,7 @@ use solana_metrics::inc_new_counter_debug;
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::message::MESSAGE_HEADER_LENGTH;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::short_vec::decode_len;
+use solana_sdk::short_vec::decode_shortu16_len;
 use solana_sdk::signature::Signature;
 #[cfg(test)]
 use solana_sdk::transaction::Transaction;
@@ -163,7 +163,7 @@ fn do_get_packet_offsets(
 
     // read the length of Transaction.signatures (serialized with short_vec)
     let (sig_len_untrusted, sig_size) =
-        decode_len(&packet.data).map_err(|_| PacketError::InvalidShortVec)?;
+        decode_shortu16_len(&packet.data).map_err(|_| PacketError::InvalidShortVec)?;
 
     // Using msg_start_offset which is based on sig_len_untrusted introduces uncertainty.
     // Ultimately, the actual sigverify will determine the uncertainty.
@@ -203,8 +203,9 @@ fn do_get_packet_offsets(
     }
 
     // read the length of Message.account_keys (serialized with short_vec)
-    let (pubkey_len, pubkey_len_size) = decode_len(&packet.data[message_account_keys_len_offset..])
-        .map_err(|_| PacketError::InvalidShortVec)?;
+    let (pubkey_len, pubkey_len_size) =
+        decode_shortu16_len(&packet.data[message_account_keys_len_offset..])
+            .map_err(|_| PacketError::InvalidShortVec)?;
 
     let pubkey_start = message_account_keys_len_offset
         .checked_add(pubkey_len_size)
