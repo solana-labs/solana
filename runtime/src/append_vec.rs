@@ -17,6 +17,7 @@ use std::{
     mem,
     path::{Path, PathBuf},
     sync::atomic::{AtomicUsize, Ordering},
+    sync::Arc,
     sync::Mutex,
 };
 
@@ -89,7 +90,7 @@ impl<'a> StoredAccountMeta<'a> {
             owner: self.account_meta.owner,
             executable: self.account_meta.executable,
             rent_epoch: self.account_meta.rent_epoch,
-            data: self.data.to_vec(),
+            data: Arc::new(self.data.to_vec()),
         }
     }
 
@@ -546,7 +547,7 @@ pub mod test_utils {
     pub fn create_test_account(sample: usize) -> (StoredMeta, AccountSharedData) {
         let data_len = sample % 256;
         let mut account = AccountSharedData::new(sample as u64, 0, &Pubkey::default());
-        account.data = (0..data_len).map(|_| data_len as u8).collect();
+        account.data = std::sync::Arc::new((0..data_len).map(|_| data_len as u8).collect());
         let stored_meta = StoredMeta {
             write_version: 0,
             pubkey: Pubkey::default(),
@@ -741,7 +742,7 @@ pub mod tests {
         let owner = Pubkey::default();
         let data_len = 3_u64;
         let mut account = AccountSharedData::new(0, data_len as usize, &owner);
-        account.data = b"abc".to_vec();
+        account.data = Arc::new(b"abc".to_vec());
         let stored_meta = StoredMeta {
             write_version: 0,
             pubkey,

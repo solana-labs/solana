@@ -10,6 +10,7 @@ use solana_sdk::{
     program_utils::limited_deserialize,
     pubkey::Pubkey,
 };
+use std::sync::Arc;
 
 pub fn process_instruction(
     _program_id: &Pubkey,
@@ -119,7 +120,8 @@ pub fn process_instruction(
         return Err(InstructionError::InvalidInstructionData);
     }
 
-    config_keyed_account.try_account_ref_mut()?.data[..data.len()].copy_from_slice(&data);
+    Arc::make_mut(&mut config_keyed_account.try_account_ref_mut()?.data)[..data.len()]
+        .copy_from_slice(&data);
     Ok(())
 }
 
@@ -180,7 +182,7 @@ mod tests {
             _ => panic!("Not a CreateAccount system instruction"),
         };
         let config_account = RefCell::new(AccountSharedData {
-            data: vec![0; space as usize],
+            data: Arc::new(vec![0; space as usize]),
             owner: id(),
             ..AccountSharedData::default()
         });

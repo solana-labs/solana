@@ -1,4 +1,5 @@
 use solana_sdk::{account::AccountSharedData, pubkey::Pubkey, rent::Rent};
+use std::sync::Arc;
 
 mod spl_token {
     solana_sdk::declare_id!("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
@@ -37,7 +38,7 @@ pub fn spl_programs(rent: &Rent) -> Vec<(Pubkey, AccountSharedData)> {
                 *program_id,
                 AccountSharedData {
                     lamports: rent.minimum_balance(elf.len()).min(1),
-                    data: elf.to_vec(),
+                    data: Arc::new(elf.to_vec()),
                     owner: solana_program::bpf_loader::id(),
                     executable: true,
                     rent_epoch: 0,

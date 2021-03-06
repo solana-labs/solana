@@ -4873,7 +4873,7 @@ impl Bank {
         if reconfigure_token2_native_mint {
             let mut native_mint_account = solana_sdk::account::AccountSharedData {
                 owner: inline_spl_token_v2_0::id(),
-                data: inline_spl_token_v2_0::native_mint::ACCOUNT_DATA.to_vec(),
+                data: Arc::new(inline_spl_token_v2_0::native_mint::ACCOUNT_DATA.to_vec()),
                 lamports: sol_to_lamports(1.),
                 executable: false,
                 rent_epoch: self.epoch() + 1,
@@ -10203,7 +10203,7 @@ pub(crate) mod tests {
             for (key, name) in &program_keys {
                 let account = bank.get_account(key).unwrap();
                 assert!(account.executable);
-                assert_eq!(account.data, *name);
+                assert_eq!(account.data, Arc::new(name.clone()));
             }
             info!("result: {:?}", result);
             let result_key = format!("{:?}", result);
@@ -11146,7 +11146,7 @@ pub(crate) mod tests {
         // Setup new token account
         let new_token_account = AccountSharedData {
             lamports: 123,
-            data: vec![1, 2, 3],
+            data: Arc::new(vec![1, 2, 3]),
             executable: true,
             ..AccountSharedData::default()
         };

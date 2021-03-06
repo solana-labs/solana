@@ -21,6 +21,7 @@ use solana_sdk::{
 use std::boxed::Box;
 use std::cmp::Ordering;
 use std::collections::{HashSet, VecDeque};
+use std::sync::Arc;
 
 mod vote_state_0_23_5;
 pub mod vote_state_versions;
@@ -229,7 +230,7 @@ impl VoteState {
 
     // utility function, used by Stakes, tests
     pub fn to(versioned: &VoteStateVersions, account: &mut AccountSharedData) -> Option<()> {
-        Self::serialize(versioned, &mut account.data).ok()
+        Self::serialize(versioned, &mut Arc::make_mut(&mut account.data)[..]).ok()
     }
 
     pub fn deserialize(input: &[u8]) -> Result<Self, InstructionError> {

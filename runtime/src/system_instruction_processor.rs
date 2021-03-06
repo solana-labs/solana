@@ -15,6 +15,7 @@ use solana_sdk::{
     sysvar::{self, recent_blockhashes::RecentBlockhashes, rent::Rent},
 };
 use std::collections::HashSet;
+use std::sync::Arc;
 
 // represents an address that may or may not have been generated
 //  from a seed
@@ -98,7 +99,7 @@ fn allocate(
         return Err(SystemError::InvalidAccountDataLength.into());
     }
 
-    account.data = vec![0; space as usize];
+    account.data = Arc::new(vec![0; space as usize]);
 
     Ok(())
 }
@@ -530,7 +531,7 @@ mod tests {
         assert_eq!(from_account.borrow().lamports, 50);
         assert_eq!(to_account.borrow().lamports, 50);
         assert_eq!(to_account.borrow().owner, new_owner);
-        assert_eq!(to_account.borrow().data, [0, 0]);
+        assert_eq!(to_account.borrow().data, Arc::new(vec![0, 0]));
     }
 
     #[test]
@@ -564,7 +565,7 @@ mod tests {
         assert_eq!(from_account.borrow().lamports, 50);
         assert_eq!(to_account.borrow().lamports, 50);
         assert_eq!(to_account.borrow().owner, new_owner);
-        assert_eq!(to_account.borrow().data, [0, 0]);
+        assert_eq!(to_account.borrow().data, Arc::new(vec![0, 0]));
     }
 
     #[test]
@@ -601,7 +602,7 @@ mod tests {
         assert_eq!(from_account.borrow().lamports, 50);
         assert_eq!(to_account.borrow().lamports, 50);
         assert_eq!(to_account.borrow().owner, new_owner);
-        assert_eq!(to_account.borrow().data, [0, 0]);
+        assert_eq!(to_account.borrow().data, Arc::new(vec![0, 0]));
     }
 
     #[test]
@@ -685,7 +686,7 @@ mod tests {
         assert_eq!(from_lamports, 100);
         assert_eq!(to_lamports, 0);
         assert_eq!(to_owner, new_owner);
-        assert_eq!(*to_data, [0, 0]);
+        assert_eq!(*to_data, Arc::new(vec![0, 0]));
     }
 
     #[test]
@@ -914,7 +915,7 @@ mod tests {
 
         let populated_key = solana_sdk::pubkey::new_rand();
         let populated_account = AccountSharedData {
-            data: vec![0, 1, 2, 3],
+            data: Arc::new(vec![0, 1, 2, 3]),
             ..AccountSharedData::default()
         }
         .into();

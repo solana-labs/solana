@@ -1572,7 +1572,7 @@ pub mod test {
         let mut stakes = vec![];
         for (lamports, votes) in stake_votes {
             let mut account = AccountSharedData {
-                data: vec![0; VoteState::size_of()],
+                data: Arc::new(vec![0; VoteState::size_of()]),
                 lamports: *lamports,
                 ..AccountSharedData::default()
             };
@@ -1582,7 +1582,7 @@ pub mod test {
             }
             VoteState::serialize(
                 &VoteStateVersions::new_current(vote_state),
-                &mut account.data,
+                &mut Arc::make_mut(&mut account.data)[..],
             )
             .expect("serialize state");
             stakes.push((

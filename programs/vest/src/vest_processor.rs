@@ -16,6 +16,7 @@ use solana_sdk::{
     pubkey::Pubkey,
 };
 use std::cell::RefMut;
+use std::sync::Arc;
 
 fn verify_date_account(
     keyed_account: &KeyedAccount,
@@ -147,7 +148,7 @@ pub fn process_instruction(
         }
     }
 
-    vest_state.serialize(&mut contract_account.data)
+    vest_state.serialize(&mut Arc::make_mut(&mut contract_account.data)[..])
 }
 
 #[cfg(test)]

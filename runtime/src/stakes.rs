@@ -230,6 +230,7 @@ pub mod tests {
     use solana_sdk::{pubkey::Pubkey, rent::Rent};
     use solana_stake_program::stake_state;
     use solana_vote_program::vote_state::{self, VoteState, VoteStateVersions};
+    use std::sync::Arc;
 
     //  set up some dummies for a staked node     ((     vote      )  (     stake     ))
     pub fn create_staked_node_accounts(
@@ -410,7 +411,7 @@ pub mod tests {
 
         // Vote account too big
         let cache_data = vote_account.data.clone();
-        vote_account.data.push(0);
+        Arc::make_mut(&mut vote_account.data).push(0);
         stakes.store(&vote_pubkey, &vote_account, true, true);
 
         {

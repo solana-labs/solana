@@ -500,7 +500,7 @@ mod tests {
                 &Pubkey::default(),
                 &AccountSharedData {
                     owner: solana_config_program::id(),
-                    data,
+                    data: Arc::new(data),
                     ..AccountSharedData::default()
                 }
             )

@@ -42,6 +42,7 @@ use std::{
     path::PathBuf,
     process,
     str::FromStr,
+    sync::Arc,
     time::Duration,
 };
 
@@ -84,12 +85,14 @@ pub fn load_genesis_accounts(file: &str, genesis_config: &mut GenesisConfig) -> 
 
         let mut account = AccountSharedData::new(account_details.balance, 0, &owner_program_id);
         if account_details.data != "~" {
-            account.data = base64::decode(account_details.data.as_str()).map_err(|err| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("Invalid account data: {}: {:?}", account_details.data, err),
-                )
-            })?;
+            account.data = Arc::new(base64::decode(account_details.data.as_str()).map_err(
+                |err| {
+                    io::Error::new(
+                        io::ErrorKind::Other,
+                        format!("Invalid account data: {}: {:?}", account_details.data, err),
+                    )
+                },
+            )?);
         }
         account.executable = account_details.executable;
         lamports += account.lamports;
@@ -620,7 +623,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         address,
                         AccountSharedData {
                             lamports: genesis_config.rent.minimum_balance(program_data.len()),
-                            data: program_data,
+                            data: Arc::new(program_data),
                             executable: true,
                             owner: loader,
                             rent_epoch: 0,

@@ -14,6 +14,7 @@ use solana_sdk::{
     program_utils::limited_deserialize,
     pubkey::Pubkey,
 };
+use std::sync::Arc;
 
 /// Process a Witness Signature. Any payment plans waiting on this signature
 /// will progress one step.
@@ -136,7 +137,8 @@ pub fn process_instruction(
                 return Ok(());
             }
             let existing =
-                BudgetState::deserialize(&contract_keyed_account.try_account_ref_mut()?.data).ok();
+                BudgetState::deserialize(&contract_keyed_account.try_account_ref_mut()?.data[..])
+                    .ok();
             if Some(true) == existing.map(|x| x.initialized) {
                 trace!("contract already exists");
                 return Err(InstructionError::AccountAlreadyInitialized);
@@ -145,7 +147,9 @@ pub fn process_instruction(
                 pending_budget: Some(*expr),
                 initialized: true,
             };
-            budget_state.serialize(&mut contract_keyed_account.try_account_ref_mut()?.data)
+            budget_state.serialize(&mut Arc::make_mut(
+                &mut contract_keyed_account.try_account_ref_mut()?.data,
+            ))
         }
         BudgetInstruction::ApplyTimestamp(dt) => {
             let witness_keyed_account = next_keyed_account(keyed_accounts_iter)?;
@@ -171,7 +175,9 @@ pub fn process_instruction(
                 dt,
             )?;
             trace!("apply timestamp committed");
-            budget_state.serialize(&mut contract_keyed_account.try_account_ref_mut()?.data)
+            budget_state.serialize(&mut Arc::make_mut(
+                &mut contract_keyed_account.try_account_ref_mut()?.data,
+            ))
         }
         BudgetInstruction::ApplySignature => {
             let witness_keyed_account = next_keyed_account(keyed_accounts_iter)?;
@@ -196,7 +202,9 @@ pub fn process_instruction(
                 next_keyed_account(keyed_accounts_iter),
             )?;
             trace!("apply signature committed");
-            budget_state.serialize(&mut contract_keyed_account.try_account_ref_mut()?.data)
+            budget_state.serialize(
+                &mut Arc::make_mut(&mut contract_keyed_account.try_account_ref_mut()?.data)[..],
+            )
         }
         BudgetInstruction::ApplyAccountData => {
             let witness_keyed_account = next_keyed_account(keyed_accounts_iter)?;
@@ -217,7 +225,9 @@ pub fn process_instruction(
                 next_keyed_account(keyed_accounts_iter),
             )?;
             trace!("apply account data committed");
-            budget_state.serialize(&mut contract_keyed_account.try_account_ref_mut()?.data)
+            budget_state.serialize(
+                &mut Arc::make_mut(&mut contract_keyed_account.try_account_ref_mut()?.data)[..],
+            )
         }
     }
 }
@@ -524,11 +534,14 @@ mod tests {
         let game_pubkey = solana_sdk::pubkey::new_rand();
         let game_account = AccountSharedData {
             lamports: 1,
-            data: vec![1, 2, 3],
+            data: Arc::new(vec![1, 2, 3]),
             ..AccountSharedData::default()
         };
         bank.store_account(&game_pubkey, &game_account);
-        assert_eq!(bank.get_account(&game_pubkey).unwrap().data, vec![1, 2, 3]);
+        assert_eq!(
+            bank.get_account(&game_pubkey).unwrap().data,
+            Arc::new(vec![1, 2, 3])
+        );
 
         let bank_client = BankClient::new(bank);
 

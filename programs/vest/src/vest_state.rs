@@ -121,12 +121,13 @@ mod test {
     use crate::id;
     use solana_sdk::account::AccountSharedData;
     use solana_sdk::system_program;
+    use std::sync::Arc;
 
     #[test]
     fn test_serializer() {
         let mut a = AccountSharedData::new(0, 512, &id());
         let b = VestState::default();
-        b.serialize(&mut a.data).unwrap();
+        b.serialize(&mut Arc::make_mut(&mut a.data)[..]).unwrap();
         let c = VestState::deserialize(&a.data).unwrap();
         assert_eq!(b, c);
     }
@@ -136,7 +137,7 @@ mod test {
         let mut a = AccountSharedData::new(0, 1, &id());
         let b = VestState::default();
         assert_eq!(
-            b.serialize(&mut a.data),
+            b.serialize(&mut Arc::make_mut(&mut a.data)[..]),
             Err(InstructionError::AccountDataTooSmall)
         );
     }
@@ -151,7 +152,9 @@ mod test {
             start_date_time: Utc.ymd(2019, 1, 1).and_hms(0, 0, 0),
             ..VestState::default()
         };
-        vest_state.serialize(&mut contract_account.data).unwrap();
+        vest_state
+            .serialize(&mut Arc::make_mut(&mut contract_account.data)[..])
+            .unwrap();
         let current_date = Utc.ymd(2020, 1, 1);
         assert_eq!(vest_state.calc_vested_lamports(current_date), 1);
 
@@ -177,7 +180,9 @@ mod test {
             start_date_time: Utc.ymd(2019, 1, 1).and_hms(0, 0, 0),
             ..VestState::default()
         };
-        vest_state.serialize(&mut contract_account.data).unwrap();
+        vest_state
+            .serialize(&mut Arc::make_mut(&mut contract_account.data)[..])
+            .unwrap();
         let current_date = Utc.ymd(2020, 1, 1);
         assert_eq!(vest_state.calc_vested_lamports(current_date), 1);
 

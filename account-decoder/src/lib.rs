@@ -98,7 +98,10 @@ impl UiAccount {
                 {
                     UiAccountData::Json(parsed_data)
                 } else {
-                    UiAccountData::Binary(base64::encode(&account.data), UiAccountEncoding::Base64)
+                    UiAccountData::Binary(
+                        base64::encode(&account.data[..]),
+                        UiAccountEncoding::Base64,
+                    )
                 }
             }
         };
@@ -188,6 +191,7 @@ fn slice_data(data: &[u8], data_slice_config: Option<UiDataSliceConfig>) -> &[u8
 mod test {
     use super::*;
     use solana_sdk::account::{Account, AccountSharedData};
+    use std::sync::Arc;
 
     #[test]
     fn test_slice_data() {
@@ -222,7 +226,7 @@ mod test {
         let encoded_account = UiAccount::encode(
             &Pubkey::default(),
             AccountSharedData {
-                data: vec![0; 1024],
+                data: Arc::new(vec![0; 1024]),
                 ..AccountSharedData::default()
             },
             UiAccountEncoding::Base64Zstd,
@@ -237,6 +241,6 @@ mod test {
         let decoded_account = encoded_account.decode::<Account>().unwrap();
         assert_eq!(decoded_account.data, vec![0; 1024]);
         let decoded_account = encoded_account.decode::<AccountSharedData>().unwrap();
-        assert_eq!(decoded_account.data, vec![0; 1024]);
+        assert_eq!(&decoded_account.data[..], &vec![0; 1024][..]);
     }
 }

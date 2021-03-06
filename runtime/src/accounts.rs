@@ -167,7 +167,7 @@ impl Accounts {
         // add room for current instruction index.
         data.resize(data.len() + 2, 0);
         AccountSharedData {
-            data,
+            data: Arc::new(data),
             ..AccountSharedData::default()
         }
     }

@@ -111,20 +111,24 @@ pub fn builtin_process_instruction(
     set_invoke_context(invoke_context);
 
     // Copy all the accounts into a HashMap to ensure there are no duplicates
-    let mut accounts: HashMap<Pubkey, AccountSharedData> = keyed_accounts
+    let mut accounts: HashMap<Pubkey, (AccountSharedData, Vec<u8>)> = keyed_accounts
         .iter()
-        .map(|ka| (*ka.unsigned_key(), ka.account.borrow().clone()))
+        .map(|ka| {
+            let account = ka.account.borrow().clone();
+            let vec = account.data.to_vec();
+            (*ka.unsigned_key(), (account, vec)) // make a copy of data here
+        })
         .collect();
 
     // Create shared references to each account's lamports/data/owner
     let account_refs: HashMap<_, _> = accounts
         .iter_mut()
-        .map(|(key, account)| {
+        .map(|(key, (account, data))| {
             (
                 *key,
                 (
                     Rc::new(RefCell::new(&mut account.lamports)),
-                    Rc::new(RefCell::new(&mut account.data[..])),
+                    Rc::new(RefCell::new(&mut data[..])),
                     &account.owner,
                 ),
             )
@@ -161,7 +165,7 @@ pub fn builtin_process_instruction(
             let key = keyed_account.unsigned_key();
             let (lamports, data, _owner) = &account_refs[key];
             account.lamports = **lamports.borrow();
-            account.data = data.borrow().to_vec();
+            account.data = Arc::new(data.borrow().to_vec());
         }
     }
 
@@ -241,7 +245,7 @@ impl program_stubs::SyscallStubs for SyscallStubs {
         fn ai_to_a(ai: &AccountInfo) -> AccountSharedData {
             AccountSharedData {
                 lamports: ai.lamports(),
-                data: ai.try_borrow_data().unwrap().to_vec(),
+                data: Arc::new(ai.try_borrow_data().unwrap().to_vec()),
                 owner: *ai.owner,
                 executable: ai.executable,
                 rent_epoch: ai.rent_epoch,
@@ -484,9 +488,9 @@ impl ProgramTest {
             address,
             AccountSharedData {
                 lamports,
-                data: read_file(find_file(filename).unwrap_or_else(|| {
+                data: Arc::new(read_file(find_file(filename).unwrap_or_else(|| {
                     panic!("Unable to locate {}", filename);
-                })),
+                }))),
                 owner,
                 executable: false,
                 rent_epoch: 0,
@@ -507,8 +511,10 @@ impl ProgramTest {
             address,
             AccountSharedData {
                 lamports,
-                data: base64::decode(data_base64)
-                    .unwrap_or_else(|err| panic!("Failed to base64 decode: {}", err)),
+                data: Arc::new(
+                    base64::decode(data_base64)
+                        .unwrap_or_else(|err| panic!("Failed to base64 decode: {}", err)),
+                ),
                 owner,
                 executable: false,
                 rent_epoch: 0,
@@ -570,7 +576,7 @@ impl ProgramTest {
                 program_id,
                 AccountSharedData {
                     lamports: Rent::default().minimum_balance(data.len()).min(1),
-                    data,
+                    data: Arc::new(data),
                     owner: loader,
                     executable: true,
                     rent_epoch: 0,

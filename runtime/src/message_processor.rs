@@ -218,7 +218,7 @@ impl PreAccount {
             pre.data = account.data.clone();
         } else {
             // Copy without allocate
-            pre.data.clone_from_slice(&account.data);
+            Arc::make_mut(&mut pre.data).clone_from_slice(&account.data);
         }
 
         self.changed = true;
@@ -1019,7 +1019,7 @@ impl MessageProcessor {
                 if solana_sdk::sysvar::instructions::check_id(key) {
                     let mut mut_account_ref = accounts[i].borrow_mut();
                     solana_sdk::sysvar::instructions::store_current_index(
-                        &mut mut_account_ref.data,
+                        &mut Arc::make_mut(&mut mut_account_ref.data)[..],
                         instruction_index as u16,
                     );
                     break;
@@ -1179,7 +1179,8 @@ mod tests {
             );
 
             // modify account owned by the program
-            accounts[owned_index].borrow_mut().data[0] = (MAX_DEPTH + owned_index) as u8;
+            Arc::make_mut(&mut accounts[owned_index].borrow_mut().data)[0] =
+                (MAX_DEPTH + owned_index) as u8;
             let mut these_accounts = accounts[not_owned_index..owned_index + 1].to_vec();
             these_accounts.push(Rc::new(RefCell::new(AccountSharedData::new(
                 1,
@@ -1199,7 +1200,8 @@ mod tests {
 
             // modify account not owned by the program
             let data = accounts[not_owned_index].borrow_mut().data[0];
-            accounts[not_owned_index].borrow_mut().data[0] = (MAX_DEPTH + not_owned_index) as u8;
+            Arc::make_mut(&mut accounts[not_owned_index].borrow_mut().data)[0] =
+                (MAX_DEPTH + not_owned_index) as u8;
             assert_eq!(
                 invoke_context.verify_and_update(
                     &message,
@@ -1216,7 +1218,7 @@ mod tests {
                     .data[0],
                 data
             );
-            accounts[not_owned_index].borrow_mut().data[0] = data;
+            Arc::make_mut(&mut accounts[not_owned_index].borrow_mut().data)[0] = data;
 
             invoke_context.pop();
         }
@@ -1278,7 +1280,7 @@ mod tests {
                     &AccountSharedData {
                         owner: *owner,
                         lamports: std::u64::MAX,
-                        data: vec![],
+                        data: Arc::new(vec![]),
                         ..AccountSharedData::default()
                     },
                     false,
@@ -1309,8 +1311,8 @@ mod tests {
             self
         }
         pub fn data(mut self, pre: Vec<u8>, post: Vec<u8>) -> Self {
-            self.pre.account.borrow_mut().data = pre;
-            self.post.data = post;
+            self.pre.account.borrow_mut().data = Arc::new(pre);
+            self.post.data = Arc::new(post);
             self
         }
         pub fn rent_epoch(mut self, pre: u64, post: u64) -> Self {
@@ -1672,7 +1674,7 @@ mod tests {
                     }
                     // Change data in a read-only account
                     MockSystemInstruction::AttemptDataChange { data } => {
-                        keyed_accounts[1].account.borrow_mut().data = vec![data];
+                        keyed_accounts[1].account.borrow_mut().data = Arc::new(vec![data]);
                         Ok(())
                     }
                 }
@@ -1836,7 +1838,7 @@ mod tests {
                             let mut dup_account = keyed_accounts[2].try_account_ref_mut()?;
                             dup_account.lamports -= lamports;
                             to_account.lamports += lamports;
-                            dup_account.data = vec![data];
+                            dup_account.data = Arc::new(vec![data]);
                         }
                         keyed_accounts[0].try_account_ref_mut()?.lamports -= lamports;
                         keyed_accounts[1].try_account_ref_mut()?.lamports += lamports;
@@ -1956,7 +1958,7 @@ mod tests {
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].borrow().lamports, 80);
         assert_eq!(accounts[1].borrow().lamports, 20);
-        assert_eq!(accounts[0].borrow().data, vec![42]);
+        assert_eq!(accounts[0].borrow().data, Arc::new(vec![42]));
     }
 
     #[test]
@@ -1986,10 +1988,10 @@ mod tests {
                     MockInstruction::NoopSuccess => (),
                     MockInstruction::NoopFail => return Err(InstructionError::GenericError),
                     MockInstruction::ModifyOwned => {
-                        keyed_accounts[0].try_account_ref_mut()?.data[0] = 1
+                        Arc::make_mut(&mut keyed_accounts[0].try_account_ref_mut()?.data)[0] = 1
                     }
                     MockInstruction::ModifyNotOwned => {
-                        keyed_accounts[1].try_account_ref_mut()?.data[0] = 1
+                        Arc::make_mut(&mut keyed_accounts[1].try_account_ref_mut()?.data)[0] = 1
                     }
                 }
             } else {
@@ -2044,7 +2046,7 @@ mod tests {
         ];
 
         // not owned account modified by the caller (before the invoke)
-        accounts[0].borrow_mut().data[0] = 1;
+        Arc::make_mut(&mut accounts[0].borrow_mut().data)[0] = 1;
         let instruction = Instruction::new_with_bincode(
             callee_program_id,
             &MockInstruction::NoopSuccess,
@@ -2067,7 +2069,7 @@ mod tests {
             ),
             Err(InstructionError::ExternalAccountDataModified)
         );
-        accounts[0].borrow_mut().data[0] = 0;
+        Arc::make_mut(&mut accounts[0].borrow_mut().data)[0] = 0;
 
         let cases = vec![
             (MockInstruction::NoopSuccess, Ok(())),

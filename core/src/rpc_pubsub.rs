@@ -854,7 +854,7 @@ mod tests {
                    "value": {
                        "owner": stake_program_id.to_string(),
                        "lamports": 51,
-                       "data": bs58::encode(expected_data).into_string(),
+                       "data": bs58::encode(expected_data.to_vec()).into_string(),
                        "executable": false,
                        "rentEpoch": 0,
                    },

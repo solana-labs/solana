@@ -3353,7 +3353,11 @@ pub mod tests {
                             &solana_vote_program::id(),
                         );
                         let versioned = VoteStateVersions::new_current(vote_state);
-                        VoteState::serialize(&versioned, &mut vote_account.data).unwrap();
+                        VoteState::serialize(
+                            &versioned,
+                            &mut Arc::make_mut(&mut &mut vote_account.data)[..],
+                        )
+                        .unwrap();
                         (
                             solana_sdk::pubkey::new_rand(),
                             (stake, ArcVoteAccount::from(vote_account)),

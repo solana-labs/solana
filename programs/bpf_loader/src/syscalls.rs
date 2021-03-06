@@ -32,6 +32,7 @@ use std::{
     rc::Rc,
     slice::from_raw_parts_mut,
     str::{from_utf8, Utf8Error},
+    sync::Arc,
 };
 use thiserror::Error as ThisError;
 
@@ -1023,7 +1024,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
             Ok((
                 Rc::new(RefCell::new(AccountSharedData {
                     lamports: *lamports,
-                    data: data.to_vec(),
+                    data: Arc::new(data.to_vec()),
                     executable: account_info.executable,
                     owner: *owner,
                     rent_epoch: account_info.rent_epoch,
@@ -1306,7 +1307,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
             Ok((
                 Rc::new(RefCell::new(AccountSharedData {
                     lamports: *lamports,
-                    data: data.to_vec(),
+                    data: Arc::new(data.to_vec()),
                     executable: account_info.executable,
                     owner: *owner,
                     rent_epoch: account_info.rent_epoch,

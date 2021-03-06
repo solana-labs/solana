@@ -2093,7 +2093,10 @@ fn main() {
                         println!("  - slot: {}", slot);
                         println!("  - rent_epoch: {}", account.rent_epoch);
                         if !exclude_account_data {
-                            println!("  - data: '{}'", bs58::encode(account.data).into_string());
+                            println!(
+                                "  - data: '{}'",
+                                bs58::encode(account.data.as_ref()).into_string()
+                            );
                         }
                         println!("  - data_len: {}", data_len);
                     }

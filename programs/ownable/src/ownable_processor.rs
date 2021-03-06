@@ -9,6 +9,7 @@ use solana_sdk::{
     program_utils::limited_deserialize,
     pubkey::Pubkey,
 };
+use std::sync::Arc;
 
 fn set_owner(
     account_owner_pubkey: &mut Pubkey,
@@ -51,8 +52,11 @@ pub fn process_instruction(
     }
 
     let mut account = account_keyed_account.try_account_ref_mut()?;
-    serialize_into(&mut account.data[..], &account_owner_pubkey)
-        .map_err(|_| InstructionError::AccountDataTooSmall)
+    serialize_into(
+        &mut Arc::make_mut(&mut account.data)[..],
+        &account_owner_pubkey,
+    )
+    .map_err(|_| InstructionError::AccountDataTooSmall)
 }
 
 #[cfg(test)]

@@ -1,6 +1,7 @@
 use crate::{clock::Epoch, pubkey::Pubkey};
+use serde::{Deserialize, Deserializer, Serialize};
 use solana_program::{account_info::AccountInfo, sysvar::Sysvar};
-use std::{cell::Ref, cell::RefCell, cmp, fmt, rc::Rc};
+use std::{cell::Ref, cell::RefCell, cmp, fmt, rc::Rc, sync::Arc};
 
 /// An Account with data that is stored on chain
 #[repr(C)]
@@ -22,16 +23,14 @@ pub struct Account {
 }
 
 /// An Account with data that is stored on chain
-/// This will become a new in-memory representation of the 'Account' struct data.
+/// This is the new in-memory representation of the 'Account' struct data.
 /// The existing 'Account' structure cannot easily change due to downstream projects.
-/// This struct will shortly rely on something like the AnAccount trait for access to the fields.
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Default, AbiExample)]
+#[derive(PartialEq, Eq, Clone, Default, AbiExample)]
 pub struct AccountSharedData {
     /// lamports in the account
     pub lamports: u64,
     /// data held in this account
-    #[serde(with = "serde_bytes")]
-    pub data: Vec<u8>, // will be: Arc<Vec<u8>>,
+    pub data: Arc<Vec<u8>>,
     /// the program that owns this account. If executable, the program that loads this account.
     pub owner: Pubkey,
     /// this account's data contains a loaded program (and is now read-only)
@@ -50,9 +49,13 @@ pub fn accounts_equal<T: AnAccount, U: AnAccount>(me: &T, other: &U) -> bool {
 
 impl From<AccountSharedData> for Account {
     fn from(other: AccountSharedData) -> Self {
+        let data = match Arc::try_unwrap(other.data) {
+            Ok(data) => data,
+            Err(arc) => arc.to_vec(),
+        };
         Self {
             lamports: other.lamports,
-            data: other.data,
+            data,
             owner: other.owner,
             executable: other.executable,
             rent_epoch: other.rent_epoch,
@@ -64,11 +67,39 @@ impl From<Account> for AccountSharedData {
     fn from(other: Account) -> Self {
         Self {
             lamports: other.lamports,
-            data: other.data,
+            data: Arc::new(other.data),
             owner: other.owner,
             executable: other.executable,
             rent_epoch: other.rent_epoch,
         }
+    }
+}
+
+impl serde::Serialize for AccountSharedData {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let account = Account::from(self.clone()); // TODO: makes a copy. have to rewrite this serializer to fix it
+                                                   /*
+                                                    {
+                                                       lamports: self.lamports,
+                                                       data: self.data.as_slice(),
+                                                       owner: self.owner,
+                                                       executable: self.executable,
+                                                       rent_epoch: self.rent_epoch,
+                                                   };*/
+        account.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for AccountSharedData {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let account = Account::deserialize(deserializer)?;
+        Ok(AccountSharedData::from(account))
     }
 }
 
@@ -151,7 +182,7 @@ impl AnAccountWritable for AccountSharedData {
         self.lamports = lamports;
     }
     fn data_as_mut_slice(&mut self) -> &mut [u8] {
-        &mut self.data
+        &mut Arc::make_mut(&mut self.data)[..]
     }
     fn set_owner(&mut self, owner: Pubkey) {
         self.owner = owner;
@@ -171,7 +202,7 @@ impl AnAccountWritable for AccountSharedData {
     ) -> Self {
         AccountSharedData {
             lamports,
-            data,
+            data: Arc::new(data),
             owner,
             executable,
             rent_epoch,
@@ -464,7 +495,7 @@ impl solana_program::account_info::Account for AccountSharedData {
     fn get(&mut self) -> (&mut u64, &mut [u8], &Pubkey, bool, Epoch) {
         (
             &mut self.lamports,
-            &mut self.data,
+            &mut Arc::make_mut(&mut self.data)[..], // note this will copy the data whether the caller modifies data or not
             &self.owner,
             self.executable,
             self.rent_epoch,
@@ -658,7 +689,7 @@ pub mod tests {
                         account1.data_as_mut_slice()[0] = account1.data[0] + 1;
                     } else if pass == 3 {
                         account_expected.data[0] += 1;
-                        account2.data[0] += 1;
+                        Arc::make_mut(&mut account2.data)[0] += 1;
                     }
                 } else if field_index == 2 {
                     if pass == 0 {

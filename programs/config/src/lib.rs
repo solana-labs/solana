@@ -6,6 +6,7 @@ pub mod date_instruction;
 use bincode::{deserialize, serialize, serialized_size};
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{account::AccountSharedData, pubkey::Pubkey, short_vec};
+use std::sync::Arc;
 
 solana_sdk::declare_id!("Config1111111111111111111111111111111111111");
 
@@ -45,7 +46,7 @@ pub fn create_config_account<T: ConfigState>(
     data.extend_from_slice(&serialize(config_data).unwrap());
     AccountSharedData {
         lamports,
-        data,
+        data: Arc::new(data),
         owner: id(),
         ..AccountSharedData::default()
     }

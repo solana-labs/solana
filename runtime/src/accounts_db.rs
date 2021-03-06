@@ -6082,10 +6082,10 @@ pub mod tests {
 
         let mut normal_account = AccountSharedData::new(1, 0, &AccountSharedData::default().owner);
         normal_account.owner = inline_spl_token_v2_0::id();
-        normal_account.data = account_data_with_mint.clone();
+        normal_account.data = Arc::new(account_data_with_mint.clone());
         let mut zero_account = AccountSharedData::new(0, 0, &AccountSharedData::default().owner);
         zero_account.owner = inline_spl_token_v2_0::id();
-        zero_account.data = account_data_with_mint;
+        zero_account.data = Arc::new(account_data_with_mint);
 
         //store an account
         accounts.store_uncached(0, &[(&pubkey1, &normal_account)]);
@@ -6778,7 +6778,7 @@ pub mod tests {
 
         // Account data may not be modified
         let mut account_modified = account.clone();
-        account_modified.data[0] = 42;
+        Arc::make_mut(&mut account_modified.data)[0] = 42;
         assert_ne!(
             hash,
             AccountsDb::hash_frozen_account_data(&account_modified)
@@ -6882,7 +6882,7 @@ pub mod tests {
         let ancestors = vec![(0, 0)].into_iter().collect();
         db.freeze_accounts(&ancestors, &[frozen_pubkey]);
 
-        account.data[0] = 42;
+        Arc::make_mut(&mut account.data)[0] = 42;
         db.store_uncached(0, &[(&frozen_pubkey, &account)]);
     }
 

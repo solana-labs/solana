@@ -6,6 +6,7 @@ use solana_sdk::{
 use std::{
     io::prelude::*,
     mem::{align_of, size_of},
+    sync::Arc,
 };
 
 /// Look for a duplicate account and return its position if found
@@ -117,9 +118,7 @@ pub fn deserialize_parameters_unaligned(
             start += size_of::<u64>() // lamports
                 + size_of::<u64>(); // data length
             let end = start + keyed_account.data_len()?;
-            keyed_account
-                .try_account_ref_mut()?
-                .data
+            Arc::make_mut(&mut keyed_account.try_account_ref_mut()?.data)[..]
                 .clone_from_slice(&buffer[start..end]);
             start += keyed_account.data_len()? // data
                 + size_of::<Pubkey>() // owner
@@ -227,10 +226,10 @@ pub fn deserialize_parameters_aligned(
             if post_len != pre_len
                 && (post_len.saturating_sub(pre_len)) <= MAX_PERMITTED_DATA_INCREASE
             {
-                account.data.resize(post_len, 0);
+                Arc::make_mut(&mut account.data).resize(post_len, 0);
                 data_end = start + post_len;
             }
-            account.data.clone_from_slice(&buffer[start..data_end]);
+            Arc::make_mut(&mut account.data).clone_from_slice(&buffer[start..data_end]);
             start += pre_len + MAX_PERMITTED_DATA_INCREASE; // data
             start += (start as *const u8).align_offset(align_of::<u128>());
             start += size_of::<u64>(); // rent_epoch
@@ -250,6 +249,7 @@ mod tests {
         rc::Rc,
         // Hide Result from bindgen gets confused about generics in non-generic type declarations
         slice::{from_raw_parts, from_raw_parts_mut},
+        sync::Arc,
     };
 
     #[test]
@@ -265,7 +265,7 @@ mod tests {
         let accounts = [
             RefCell::new(AccountSharedData {
                 lamports: 1,
-                data: vec![1u8, 2, 3, 4, 5],
+                data: Arc::new(vec![1u8, 2, 3, 4, 5]),
                 owner: bpf_loader::id(),
                 executable: false,
                 rent_epoch: 100,
@@ -273,21 +273,21 @@ mod tests {
             // dup of first
             RefCell::new(AccountSharedData {
                 lamports: 1,
-                data: vec![1u8, 2, 3, 4, 5],
+                data: Arc::new(vec![1u8, 2, 3, 4, 5]),
                 owner: bpf_loader::id(),
                 executable: false,
                 rent_epoch: 100,
             }),
             RefCell::new(AccountSharedData {
                 lamports: 2,
-                data: vec![11u8, 12, 13, 14, 15, 16, 17, 18, 19],
+                data: Arc::new(vec![11u8, 12, 13, 14, 15, 16, 17, 18, 19]),
                 owner: bpf_loader::id(),
                 executable: true,
                 rent_epoch: 200,
             }),
             RefCell::new(AccountSharedData {
                 lamports: 3,
-                data: vec![],
+                data: Arc::new(vec![]),
                 owner: bpf_loader::id(),
                 executable: false,
                 rent_epoch: 3100,
