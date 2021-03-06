@@ -125,11 +125,10 @@ fn verify_packet(packet: &mut Packet) {
             return;
         }
 
-        if &packet.data[pubkey_start..pubkey_end] == TRACER_KEY.as_ref()
-            // Record the first signature in the transaction
-            && packet.meta.tracer_tx_signature.is_none()
+        if !packet.meta.is_tracer_tx
+            && &packet.data[pubkey_start..pubkey_end] == TRACER_KEY.as_ref()
         {
-            packet.meta.tracer_tx_signature = Some(signature);
+            packet.meta.is_tracer_tx = true;
         }
 
         pubkey_start += size_of::<Pubkey>();
