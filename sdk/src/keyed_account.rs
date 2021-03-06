@@ -2,9 +2,15 @@ use crate::{
     account::{from_account, Account},
     account_utils::{State, StateMut},
 };
-use solana_program::{clock::Epoch, instruction::InstructionError, pubkey::Pubkey, sysvar::Sysvar};
+use solana_program::{
+    clock::Epoch,
+    instruction::InstructionError,
+    pubkey::Pubkey,
+    sysvar::{Sysvar, SysvarEnum},
+};
 use std::{
     cell::{Ref, RefCell, RefMut},
+    convert::TryFrom,
     iter::FromIterator,
 };
 
@@ -206,9 +212,12 @@ where
     }
 }
 
-pub fn from_keyed_account<S: Sysvar>(
+pub fn from_keyed_account<S>(
     keyed_account: &crate::keyed_account::KeyedAccount,
-) -> Result<S, InstructionError> {
+) -> Result<S, InstructionError>
+where
+    S: Sysvar + Clone + Into<SysvarEnum> + TryFrom<SysvarEnum> + 'static,
+{
     if !S::check_id(keyed_account.unsigned_key()) {
         return Err(InstructionError::InvalidArgument);
     }
@@ -222,44 +231,32 @@ mod tests {
         account::{create_account, to_account},
         pubkey::Pubkey,
     };
+    use solana_program::sysvar::clock::{self, Clock};
     use std::cell::RefCell;
-
-    #[repr(C)]
-    #[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
-    struct TestSysvar {
-        something: Pubkey,
-    }
-    crate::declare_id!("TestSysvar111111111111111111111111111111111");
-    impl solana_program::sysvar::SysvarId for TestSysvar {
-        fn check_id(pubkey: &crate::pubkey::Pubkey) -> bool {
-            check_id(pubkey)
-        }
-    }
-    impl Sysvar for TestSysvar {}
 
     #[test]
     fn test_sysvar_keyed_account_to_from() {
-        let test_sysvar = TestSysvar::default();
-        let key = crate::keyed_account::tests::id();
+        let test_sysvar = Clock::default();
+        let key = clock::id();
         let wrong_key = Pubkey::new_unique();
 
         let account = create_account(&test_sysvar, 42);
-        let test_sysvar = from_account::<TestSysvar>(&account).unwrap();
-        assert_eq!(test_sysvar, TestSysvar::default());
+        let test_sysvar = from_account::<Clock>(&account).unwrap();
+        assert_eq!(test_sysvar, Clock::default());
 
-        let mut account = Account::new(42, TestSysvar::size_of(), &key);
+        let mut account = Account::new(42, Clock::size_of(), &key);
         to_account(&test_sysvar, &mut account).unwrap();
-        let test_sysvar = from_account::<TestSysvar>(&account).unwrap();
-        assert_eq!(test_sysvar, TestSysvar::default());
+        let test_sysvar = from_account::<Clock>(&account).unwrap();
+        assert_eq!(test_sysvar, Clock::default());
 
         let account = RefCell::new(account);
         let keyed_account = KeyedAccount::new(&key, false, &account);
-        let new_test_sysvar = from_keyed_account::<TestSysvar>(&keyed_account).unwrap();
+        let new_test_sysvar = from_keyed_account::<Clock>(&keyed_account).unwrap();
         assert_eq!(test_sysvar, new_test_sysvar);
 
         let keyed_account = KeyedAccount::new(&wrong_key, false, &account);
         assert_eq!(
-            from_keyed_account::<TestSysvar>(&keyed_account),
+            from_keyed_account::<Clock>(&keyed_account),
             Err(InstructionError::InvalidArgument)
         );
     }

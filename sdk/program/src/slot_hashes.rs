@@ -12,7 +12,7 @@ pub use crate::clock::Slot;
 pub type SlotHash = (Slot, Hash);
 
 #[repr(C)]
-#[derive(Serialize, Deserialize, PartialEq, Debug, Default)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Debug, Default)]
 pub struct SlotHashes(Vec<SlotHash>);
 
 impl SlotHashes {

@@ -77,7 +77,7 @@ fn test_cli_program_deploy_non_upgradeable() {
     let mut file = File::open(pathbuf.to_str().unwrap().to_string()).unwrap();
     let mut elf = Vec::new();
     file.read_to_end(&mut elf).unwrap();
-    assert_eq!(account0.data, elf);
+    assert_eq!(account0.data, elf.into());
 
     // Test custom address
     let custom_address_keypair = Keypair::new();

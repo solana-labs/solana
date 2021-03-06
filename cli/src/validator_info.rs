@@ -498,7 +498,7 @@ mod tests {
                 &Pubkey::default(),
                 &Account {
                     owner: solana_config_program::id(),
-                    data,
+                    data: data.into(),
                     ..Account::default()
                 }
             )

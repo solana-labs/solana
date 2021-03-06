@@ -130,7 +130,7 @@ impl UiAccount {
         }?;
         Some(Account {
             lamports: self.lamports,
-            data,
+            data: data.into(),
             owner: Pubkey::from_str(&self.owner).ok()?,
             executable: self.executable,
             rent_epoch: self.rent_epoch,
@@ -218,7 +218,7 @@ mod test {
         let encoded_account = UiAccount::encode(
             &Pubkey::default(),
             Account {
-                data: vec![0; 1024],
+                data: vec![0; 1024].into(),
                 ..Account::default()
             },
             UiAccountEncoding::Base64Zstd,
@@ -231,6 +231,6 @@ mod test {
         ));
 
         let decoded_account = encoded_account.decode().unwrap();
-        assert_eq!(decoded_account.data, vec![0; 1024]);
+        assert_eq!(decoded_account.data, vec![0; 1024].into());
     }
 }

@@ -524,11 +524,14 @@ mod tests {
         let game_pubkey = solana_sdk::pubkey::new_rand();
         let game_account = Account {
             lamports: 1,
-            data: vec![1, 2, 3],
+            data: vec![1, 2, 3].into(),
             ..Account::default()
         };
         bank.store_account(&game_pubkey, &game_account);
-        assert_eq!(bank.get_account(&game_pubkey).unwrap().data, vec![1, 2, 3]);
+        assert_eq!(
+            bank.get_account(&game_pubkey).unwrap().data,
+            vec![1, 2, 3].into()
+        );
 
         let bank_client = BankClient::new(bank);
 

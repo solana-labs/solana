@@ -1020,7 +1020,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
             Ok((
                 Rc::new(RefCell::new(Account {
                     lamports: *lamports,
-                    data: data.to_vec(),
+                    data: data.to_vec().into(),
                     executable: account_info.executable,
                     owner: *owner,
                     rent_epoch: account_info.rent_epoch,
@@ -1303,7 +1303,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
             Ok((
                 Rc::new(RefCell::new(Account {
                     lamports: *lamports,
-                    data: data.to_vec(),
+                    data: data.to_vec().into(),
                     executable: account_info.executable,
                     owner: *owner,
                     rent_epoch: account_info.rent_epoch,

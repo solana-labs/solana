@@ -98,7 +98,7 @@ fn allocate(
         return Err(SystemError::InvalidAccountDataLength.into());
     }
 
-    account.data = vec![0; space as usize];
+    account.data = vec![0; space as usize].into();
 
     Ok(())
 }
@@ -530,7 +530,7 @@ mod tests {
         assert_eq!(from_account.borrow().lamports, 50);
         assert_eq!(to_account.borrow().lamports, 50);
         assert_eq!(to_account.borrow().owner, new_owner);
-        assert_eq!(to_account.borrow().data, [0, 0]);
+        assert_eq!(to_account.borrow().data, vec![0, 0].into());
     }
 
     #[test]
@@ -564,7 +564,7 @@ mod tests {
         assert_eq!(from_account.borrow().lamports, 50);
         assert_eq!(to_account.borrow().lamports, 50);
         assert_eq!(to_account.borrow().owner, new_owner);
-        assert_eq!(to_account.borrow().data, [0, 0]);
+        assert_eq!(to_account.borrow().data, vec![0, 0].into());
     }
 
     #[test]
@@ -601,7 +601,7 @@ mod tests {
         assert_eq!(from_account.borrow().lamports, 50);
         assert_eq!(to_account.borrow().lamports, 50);
         assert_eq!(to_account.borrow().owner, new_owner);
-        assert_eq!(to_account.borrow().data, [0, 0]);
+        assert_eq!(to_account.borrow().data, vec![0, 0].into());
     }
 
     #[test]
@@ -685,7 +685,7 @@ mod tests {
         assert_eq!(from_lamports, 100);
         assert_eq!(to_lamports, 0);
         assert_eq!(to_owner, new_owner);
-        assert_eq!(*to_data, [0, 0]);
+        assert_eq!(*to_data, vec![0, 0].into());
     }
 
     #[test]
@@ -914,7 +914,7 @@ mod tests {
 
         let populated_key = solana_sdk::pubkey::new_rand();
         let populated_account = Account {
-            data: vec![0, 1, 2, 3],
+            data: vec![0, 1, 2, 3].into(),
             ..Account::default()
         }
         .into();

@@ -966,7 +966,7 @@ mod tests {
         // Case: Write bytes to an offset
         #[allow(unused_mut)]
         let mut keyed_accounts = vec![KeyedAccount::new(&program_key, true, &program_account)];
-        keyed_accounts[0].account.borrow_mut().data = vec![0; 6];
+        keyed_accounts[0].account.borrow_mut().data = vec![0; 6].into();
         assert_eq!(
             Ok(()),
             process_instruction(
@@ -977,14 +977,14 @@ mod tests {
             )
         );
         assert_eq!(
-            vec![0, 0, 0, 1, 2, 3],
-            keyed_accounts[0].account.borrow().data
+            keyed_accounts[0].account.borrow().data,
+            vec![0, 0, 0, 1, 2, 3].into(),
         );
 
         // Case: Overflow
         #[allow(unused_mut)]
         let mut keyed_accounts = vec![KeyedAccount::new(&program_key, true, &program_account)];
-        keyed_accounts[0].account.borrow_mut().data = vec![0; 5];
+        keyed_accounts[0].account.borrow_mut().data = vec![0; 5].into();
         assert_eq!(
             Err(InstructionError::AccountDataTooSmall),
             process_instruction(
@@ -1005,7 +1005,7 @@ mod tests {
         let rent = Rent::default();
         file.read_to_end(&mut elf).unwrap();
         let program_account = Account::new_ref(rent.minimum_balance(elf.len()), 0, &program_id);
-        program_account.borrow_mut().data = elf;
+        program_account.borrow_mut().data = elf.into();
         let keyed_accounts = vec![KeyedAccount::new(&program_key, false, &program_account)];
         let instruction_data = bincode::serialize(&LoaderInstruction::Finalize).unwrap();
 
@@ -1070,7 +1070,7 @@ mod tests {
         let mut elf = Vec::new();
         file.read_to_end(&mut elf).unwrap();
         let program_account = Account::new_ref(1, 0, &program_id);
-        program_account.borrow_mut().data = elf;
+        program_account.borrow_mut().data = elf.into();
         program_account.borrow_mut().executable = true;
 
         let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &program_account)];
@@ -1164,7 +1164,7 @@ mod tests {
         let mut elf = Vec::new();
         file.read_to_end(&mut elf).unwrap();
         let program_account = Account::new_ref(1, 0, &program_id);
-        program_account.borrow_mut().data = elf;
+        program_account.borrow_mut().data = elf.into();
         program_account.borrow_mut().executable = true;
         let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &program_account)];
 
@@ -1208,7 +1208,7 @@ mod tests {
         let mut elf = Vec::new();
         file.read_to_end(&mut elf).unwrap();
         let program_account = Account::new_ref(1, 0, &program_id);
-        program_account.borrow_mut().data = elf;
+        program_account.borrow_mut().data = elf.into();
         program_account.borrow_mut().executable = true;
         let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &program_account)];
 
@@ -3265,7 +3265,7 @@ mod tests {
             0..255,
             |bytes: &mut [u8]| {
                 let program_account = Account::new_ref(1, 0, &program_id);
-                program_account.borrow_mut().data = bytes.to_vec();
+                program_account.borrow_mut().data = bytes.to_vec().into();
                 program_account.borrow_mut().executable = true;
 
                 let parameter_account = Account::new_ref(1, 0, &program_id);

@@ -78,7 +78,7 @@ pub type UnixTimestamp = i64;
 ///  as the network progresses).
 ///
 #[repr(C)]
-#[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
+#[derive(Clone, AbiExample, Serialize, Deserialize, Debug, Default, PartialEq)]
 pub struct Clock {
     /// the current network/bank Slot
     pub slot: Slot,
