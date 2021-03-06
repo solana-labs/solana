@@ -267,24 +267,12 @@ impl AccountsHash {
         }
     }
 
-    // This function is designed to allow hashes to be located in multiple, perhaps multiply deep vecs.
-    // The caller provides a function to return a slice from the source data.
-    pub fn compute_merkle_root_from_slices<'a, F>(
+    fn calculate_three_level_chunks(
         total_hashes: usize,
         fanout: usize,
         max_levels_per_pass: Option<usize>,
-        get_hashes: F,
         specific_level_count: Option<usize>,
-    ) -> (Hash, Vec<Hash>)
-    where
-        F: Fn(usize) -> &'a [Hash] + std::marker::Sync,
-    {
-        if total_hashes == 0 {
-            return (Hasher::default().result(), vec![]);
-        }
-
-        let mut time = Measure::start("time");
-
+    ) -> (usize, usize, bool) {
         const THREE_LEVEL_OPTIMIZATION: usize = 3; // this '3' is dependent on the code structure below where we manually unroll
         let target = fanout.pow(THREE_LEVEL_OPTIMIZATION as u32);
 
@@ -303,22 +291,61 @@ impl AccountsHash {
         } else {
             (fanout, 1)
         };
+        (num_hashes_per_chunk, levels_hashed, three_level)
+    }
+
+    // This function is designed to allow hashes to be located in multiple, perhaps multiply deep vecs.
+    // The caller provides a function to return a slice from the source data.
+    pub fn compute_merkle_root_from_slices<'a, F>(
+        total_hashes: usize,
+        fanout: usize,
+        max_levels_per_pass: Option<usize>,
+        get_hash_slice_starting_at_index: F,
+        specific_level_count: Option<usize>,
+    ) -> (Hash, Vec<Hash>)
+    where
+        F: Fn(usize) -> &'a [Hash] + std::marker::Sync,
+    {
+        if total_hashes == 0 {
+            return (Hasher::default().result(), vec![]);
+        }
+
+        let mut time = Measure::start("time");
+
+        let (num_hashes_per_chunk, levels_hashed, three_level) = Self::calculate_three_level_chunks(
+            total_hashes,
+            fanout,
+            max_levels_per_pass,
+            specific_level_count,
+        );
 
         let chunks = Self::div_ceil(total_hashes, num_hashes_per_chunk);
 
         // initial fetch - could return entire slice
-        let data: &[Hash] = get_hashes(0);
+        let data: &[Hash] = get_hash_slice_starting_at_index(0);
         let data_len = data.len();
 
         let result: Vec<_> = (0..chunks)
             .into_par_iter()
             .map(|i| {
+                // summary:
+                // this closure computes 1 or 3 levels of merkle tree (all chunks will be 1 or all will be 3)
+                // for a subset (our chunk) of the input data [start_index..end_index]
+
+                // index into get_hash_slice_starting_at_index where this chunk's range begins
                 let start_index = i * num_hashes_per_chunk;
+                // index into get_hash_slice_starting_at_index where this chunk's range ends
                 let end_index = std::cmp::min(start_index + num_hashes_per_chunk, total_hashes);
 
+                // will compute the final result for this closure
                 let mut hasher = Hasher::default();
+
+                // index into 'data' where we are currently pulling data
+                // if we exhaust our data, then we will request a new slice, and data_index resets to 0, the beginning of the new slice
                 let mut data_index = start_index;
+                // source data, which we may refresh when we exhaust
                 let mut data = data;
+                // len of the source data
                 let mut data_len = data_len;
 
                 if !three_level {
@@ -326,8 +353,8 @@ impl AccountsHash {
                     // The result of this loop is a single hash value from fanout input hashes.
                     for i in start_index..end_index {
                         if data_index >= data_len {
-                            // fetch next slice
-                            data = get_hashes(i);
+                            // we exhausted our data, fetch next slice starting at i
+                            data = get_hash_slice_starting_at_index(i);
                             data_len = data.len();
                             data_index = 0;
                         }
@@ -336,7 +363,43 @@ impl AccountsHash {
                     }
                 } else {
                     // hash 3 levels of fanout simultaneously.
+                    // This codepath produces 1 hash value for between 1..=fanout^3 input hashes.
+                    // It is equivalent to running the normal merkle tree calculation 3 iterations on the input.
+                    //
+                    // big idea:
+                    //  merkle trees usually reduce the input vector by a factor of fanout with each iteration
+                    //  example with fanout 2:
+                    //   start:     [0,1,2,3,4,5,6,7]      in our case: [...16M...] or really, 1B
+                    //   iteration0 [.5, 2.5, 4.5, 6.5]                 [... 1M...]
+                    //   iteration1 [1.5, 5.5]                          [...65k...]
+                    //   iteration2 3.5                                 [...4k... ]
+                    //  So iteration 0 consumes N elements, hashes them in groups of 'fanout' and produces a vector of N/fanout elements
+                    //   and the process repeats until there is only 1 hash left.
+                    //
+                    //  With the three_level code path, we make each chunk we iterate of size fanout^3 (4096)
+                    //  So, the input could be 16M hashes and the output will be 4k hashes, or N/fanout^3
+                    //  The goal is to reduce the amount of data that has to be constructed and held in memory.
+                    //  When we know we have enough hashes, then, in 1 pass, we hash 3 levels simultaneously, storing far fewer intermediate hashes.
+                    //
+                    // Now, some details:
                     // The result of this loop is a single hash value from fanout^3 input hashes.
+                    // concepts:
+                    //  what we're conceptually hashing: "raw_hashes"[start_index..end_index]
+                    //   example: [a,b,c,d,e,f]
+                    //   but... hashes[] may really be multiple vectors that are pieced together.
+                    //   example: [[a,b],[c],[d,e,f]]
+                    //   get_hash_slice_starting_at_index(any_index) abstracts that and returns a slice starting at raw_hashes[any_index..]
+                    //   such that the end of get_hash_slice_starting_at_index may be <, >, or = end_index
+                    //   example: get_hash_slice_starting_at_index(1) returns [b]
+                    //            get_hash_slice_starting_at_index(3) returns [d,e,f]
+                    // This code is basically 3 iterations of merkle tree hashing occurring simultaneously.
+                    // The first fanout raw hashes are hashed in hasher_k. This is iteration0
+                    // Once hasher_k has hashed fanout hashes, hasher_k's result hash is hashed in hasher_j and then discarded
+                    // hasher_k then starts over fresh and hashes the next fanout raw hashes. This is iteration0 again for a new set of data.
+                    // Once hasher_j has hashed fanout hashes (from k), hasher_j's result hash is hashed in hasher and then discarded
+                    // Once hasher has hashed fanout hashes (from j), then the result of hasher is the hash for fanout^3 raw hashes.
+                    // If there are < fanout^3 hashes, then this code stops when it runs out of raw hashes and returns whatever it hashed.
+                    // This is always how the very last elements work in a merkle tree.
                     let mut i = start_index;
                     while i < end_index {
                         let mut hasher_j = Hasher::default();
@@ -345,8 +408,8 @@ impl AccountsHash {
                             let end = std::cmp::min(end_index - i, fanout);
                             for _k in 0..end {
                                 if data_index >= data_len {
-                                    // fetch next slice
-                                    data = get_hashes(i);
+                                    // we exhausted our data, fetch next slice starting at i
+                                    data = get_hash_slice_starting_at_index(i);
                                     data_len = data.len();
                                     data_index = 0;
                                 }
@@ -629,7 +692,7 @@ impl AccountsHash {
     pub fn rest_of_hash_calculation(
         data_sections_by_pubkey: Vec<Vec<Vec<CalculateHashIntermediate>>>,
         mut stats: &mut HashStats,
-        last_pass: bool,
+        is_last_pass: bool,
         mut previous_state: PreviousPass,
     ) -> (Hash, u64, PreviousPass) {
         let outer = Self::flatten_hash_intermediate(data_sections_by_pubkey, &mut stats);
@@ -642,7 +705,7 @@ impl AccountsHash {
         total_lamports += previous_state.lamports;
 
         if !previous_state.remaining_unhashed.is_empty() {
-            // these items were not hashes last iteration because they didn't divide evenly
+            // these items were not hashed last iteration because they didn't divide evenly
             hashes.insert(0, vec![previous_state.remaining_unhashed]);
             previous_state.remaining_unhashed = Vec::new();
         }
@@ -656,7 +719,7 @@ impl AccountsHash {
         const TARGET_FANOUT_LEVEL: usize = 3;
         let target_fanout = MERKLE_FANOUT.pow(TARGET_FANOUT_LEVEL as u32);
 
-        if !last_pass {
+        if !is_last_pass {
             next_pass.lamports = total_lamports;
             total_lamports = 0;
 
@@ -678,7 +741,7 @@ impl AccountsHash {
         //   we are not the last pass (we already modded against target_fanout) OR
         //   we have previously surpassed target_fanout and hashed some already to the target_fanout level. In that case, we know
         //     we need to hash whatever is left here to the target_fanout level.
-        if hash_total != 0 && (!last_pass || !next_pass.reduced_hashes.is_empty()) {
+        if hash_total != 0 && (!is_last_pass || !next_pass.reduced_hashes.is_empty()) {
             let partial_hashes = Self::compute_merkle_root_from_slices(
                 hash_total, // note this does not include the ones that didn't divide evenly, unless we're in the last iteration
                 MERKLE_FANOUT,
@@ -690,7 +753,7 @@ impl AccountsHash {
             next_pass.reduced_hashes.push(partial_hashes);
         }
 
-        let no_progress = last_pass && next_pass.reduced_hashes.is_empty() && !hashes.is_empty();
+        let no_progress = is_last_pass && next_pass.reduced_hashes.is_empty() && !hashes.is_empty();
         if no_progress {
             // we never made partial progress, so hash everything now
             hashes.into_iter().for_each(|v| {
@@ -702,7 +765,7 @@ impl AccountsHash {
             });
         }
 
-        let hash = if last_pass {
+        let hash = if is_last_pass {
             let cumulative = CumulativeOffsets::from_raw(&next_pass.reduced_hashes);
 
             let hash = if cumulative.total_count == 1 && !no_progress {
@@ -725,7 +788,7 @@ impl AccountsHash {
             Hash::default()
         };
 
-        if last_pass {
+        if is_last_pass {
             stats.log();
         }
         (hash, total_lamports, next_pass)
