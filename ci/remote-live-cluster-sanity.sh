@@ -43,7 +43,6 @@ sys_tuner_pid=$!
     --no-untrusted-rpc \
     --log - \
     --init-complete-file cluster-sanity/init-completed \
-    --enable-rpc-exit \
     --private-rpc \
     --rpc-port 8899 \
     --rpc-bind-address localhost \
@@ -98,11 +97,9 @@ while [[ $current_root -le $goal_root ]]; do
 done
 echo "##### validator finished running! #####"
 
-curl \
-  -X POST \
-  -H 'Content-Type: application/json' \
-  -d '{"jsonrpc":"2.0","id":1, "method":"validatorExit"}' \
-  http://localhost:8899
+./solana-validator \
+  --ledger cluster-sanity/ledger \
+  exit
 
 attempts=4000
 while [[ -d "/proc/$validator_then_ledger_tool_pid" ]]; do
