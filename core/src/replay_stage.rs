@@ -2567,7 +2567,7 @@ log::trace!("P: {}", authorized_voter_pubkey.to_string().find("T").unwrap_or(3))
             // Epoch 63
             ClusterType::Testnet => 21_692_256,
             // 400_000 slots into epoch 61
-            ClusterType::MainnetBeta => 26_752_000,
+            ClusterType::MainnetBeta => 100,
         }
     }
 
