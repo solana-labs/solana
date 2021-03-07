@@ -2003,7 +2003,7 @@ impl ReplayStage {
             // Epoch 63
             ClusterType::Testnet => 21_692_256,
             // 400_000 slots into epoch 61
-            ClusterType::MainnetBeta => 26_752_000,
+            ClusterType::MainnetBeta => 100,
         }
     }
 
