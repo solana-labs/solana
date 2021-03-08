@@ -137,7 +137,7 @@ pub fn to_account<S>(sysvar: &S, account: &mut Account) -> Option<()>
 where
     S: Sysvar + Clone + Into<SysvarEnum> + 'static,
 {
-    account.data.put_sysvar(sysvar).ok()
+    account.data.put_sysvar(sysvar.clone()).ok()
 }
 
 /// Return the information required to construct an `AccountInfo`.  Used by the

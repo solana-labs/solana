@@ -43,17 +43,16 @@ impl AccountData {
     }
 
     /// Serializes the sysvar into the internal bytes buffer.
-    pub(crate) fn put_sysvar<S>(&mut self, sysvar: &S) -> bincode::Result<()>
+    pub(crate) fn put_sysvar<S>(&mut self, sysvar: S) -> bincode::Result<()>
     where
-        S: Sysvar + Clone + Into<SysvarEnum> + 'static,
+        S: Sysvar + Into<SysvarEnum> + 'static,
     {
         // serialize_into will not write to the buffer if it fails. So we will
         // update the cache only if this succeeds.
-        bincode::serialize_into(&mut self.data[..], sysvar)?;
-        let key = std::any::TypeId::of::<S>();
+        bincode::serialize_into(&mut self.data[..], &sysvar)?;
         let mut cache = self.cache.write().unwrap();
         cache.clear(); // Invalidate existing cache.
-        cache.insert(key, Some(sysvar.clone().into()));
+        cache.insert(TypeId::of::<S>(), Some(sysvar.into()));
         Ok(())
     }
 }
@@ -166,5 +165,152 @@ impl<'de> Deserialize<'de> for AccountData {
 
 #[cfg(test)]
 mod tests {
-    // TODO: Add tests.
+    use super::*;
+    use crate::{
+        account::{self, Account},
+        clock::Epoch,
+        hash,
+        pubkey::Pubkey,
+    };
+    use bincode::Options;
+    use rand::Rng;
+    use solana_program::sysvar::{clock::Clock, slot_hashes::SlotHashes};
+    use std::iter::repeat_with;
+
+    fn new_rand_sysvar_clock<R: Rng>(rng: &mut R) -> Clock {
+        Clock {
+            slot: rng.gen(),
+            epoch_start_timestamp: rng.gen(),
+            epoch: rng.gen(),
+            leader_schedule_epoch: rng.gen(),
+            unix_timestamp: rng.gen(),
+        }
+    }
+
+    fn new_rand_sysvar_slot_hashes<R: Rng>(rng: &mut R, size: usize) -> SlotHashes {
+        let slot_hashes: Vec<_> = repeat_with(|| (rng.gen(), hash::new_rand(rng)))
+            .take(size)
+            .collect();
+        SlotHashes::new(&slot_hashes)
+    }
+
+    #[test]
+    fn test_get_put_sysvar() {
+        let mut rng = rand::thread_rng();
+        let clock = new_rand_sysvar_clock(&mut rng);
+        let data = bincode::serialize(&clock).unwrap();
+        let mut account_data = AccountData::from(data);
+        assert_eq!(clock, account_data.get_sysvar::<Clock>().unwrap());
+        assert_eq!(None, account_data.get_sysvar::<SlotHashes>());
+        match account_data
+            .cache
+            .read()
+            .unwrap()
+            .get(&TypeId::of::<Clock>())
+            .cloned()
+            .flatten()
+            .unwrap()
+        {
+            SysvarEnum::Clock(sv) => assert_eq!(sv, clock),
+            _ => panic!("not a clock!"),
+        };
+        assert_eq!(clock, account_data.get_sysvar::<Clock>().unwrap());
+
+        let slot_hashes = new_rand_sysvar_slot_hashes(&mut rng, 20);
+        // Should fail because of small buffer.
+        assert!(account_data.put_sysvar(slot_hashes.clone()).is_err());
+        // Nothing is written to the bytes array and cache is still valid.
+        match account_data
+            .cache
+            .read()
+            .unwrap()
+            .get(&TypeId::of::<Clock>())
+            .cloned()
+            .flatten()
+            .unwrap()
+        {
+            SysvarEnum::Clock(sv) => assert_eq!(sv, clock),
+            _ => panic!("not a clock!"),
+        };
+        assert_eq!(clock, account_data.get_sysvar::<Clock>().unwrap());
+
+        let size = bincode::serialized_size(&slot_hashes).unwrap();
+        account_data.resize(size as usize, 0u8);
+        // Cache is invalidated because of mutable access to the bytes array.
+        assert!(account_data.cache.read().unwrap().is_empty());
+        account_data
+            .put_sysvar(slot_hashes.clone())
+            .expect("put_sysvar failed!");
+        match account_data
+            .cache
+            .read()
+            .unwrap()
+            .get(&TypeId::of::<SlotHashes>())
+            .cloned()
+            .flatten()
+            .unwrap()
+        {
+            SysvarEnum::SlotHashes(sv) => assert_eq!(sv, slot_hashes),
+            _ => panic!("not slot-hashes!"),
+        };
+        assert_eq!(
+            slot_hashes,
+            account_data.get_sysvar::<SlotHashes>().unwrap()
+        );
+
+        account_data[5] = 0u8;
+        // Cache is invalidated because of mutable access to the bytes array.
+        assert!(account_data.cache.read().unwrap().is_empty());
+    }
+
+    // Asserts that the new Account struct is backward compatible.
+    #[test]
+    fn test_serialization() {
+        #[derive(Serialize, Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct OldAccount {
+            lamports: u64,
+            #[serde(with = "serde_bytes")]
+            data: Vec<u8>,
+            owner: Pubkey,
+            executable: bool,
+            rent_epoch: Epoch,
+        }
+
+        let mut rng = rand::thread_rng();
+        let clock = new_rand_sysvar_clock(&mut rng);
+        let data = bincode::serialize(&clock).unwrap();
+        let account = Account {
+            lamports: rng.gen(),
+            data: data.clone().into(),
+            owner: Pubkey::new_unique(),
+            executable: rng.gen(),
+            rent_epoch: rng.gen(),
+        };
+        let old_account = OldAccount {
+            lamports: account.lamports,
+            data,
+            owner: account.owner,
+            executable: account.executable,
+            rent_epoch: account.rent_epoch,
+        };
+
+        let bytes = bincode::serialize(&old_account).unwrap();
+        assert_eq!(bytes, bincode::serialize(&account).unwrap());
+        let other_account: Account = bincode::deserialize(&bytes).unwrap();
+        assert_eq!(account, other_account);
+        assert_eq!(
+            account::from_account::<Clock>(&other_account).unwrap(),
+            clock
+        );
+
+        let bytes = bincode::options().serialize(&old_account).unwrap();
+        assert_eq!(bytes, bincode::options().serialize(&account).unwrap());
+        let other_account: Account = bincode::options().deserialize(&bytes).unwrap();
+        assert_eq!(account, other_account);
+        assert_eq!(
+            account::from_account::<Clock>(&other_account).unwrap(),
+            clock
+        );
+    }
 }
