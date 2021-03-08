@@ -12,13 +12,7 @@ use crate::{
     short_vec, system_instruction, sysvar,
 };
 use itertools::Itertools;
-use lazy_static::lazy_static;
 use std::convert::TryFrom;
-
-lazy_static! {
-    static ref DEMOTE_SYSVAR_WRITE_LOCKS: bool =
-        std::env::var("SOLANA_DEMOTE_SYSVAR_WRITE_LOCKS") == Ok(String::from("1"));
-}
 
 fn position(keys: &[Pubkey], key: &Pubkey) -> u8 {
     keys.iter().position(|k| k == key).unwrap() as u8
@@ -333,24 +327,30 @@ impl Message {
     }
 
     pub fn is_writable(&self, i: usize) -> bool {
-        (i < (self.header.num_required_signatures - self.header.num_readonly_signed_accounts)
+        i < (self.header.num_required_signatures - self.header.num_readonly_signed_accounts)
             as usize
             || (i >= self.header.num_required_signatures as usize
                 && i < self.account_keys.len()
-                    - self.header.num_readonly_unsigned_accounts as usize))
-            && (!*DEMOTE_SYSVAR_WRITE_LOCKS || !sysvar::is_sysvar_id(&self.account_keys[i]))
+                    - self.header.num_readonly_unsigned_accounts as usize)
     }
 
     pub fn is_signer(&self, i: usize) -> bool {
         i < self.header.num_required_signatures as usize
     }
 
-    pub fn get_account_keys_by_lock_type(&self) -> (Vec<&Pubkey>, Vec<&Pubkey>) {
+    pub fn get_account_keys_by_lock_type(
+        &self,
+        demote_sysvar_write_locks: bool,
+    ) -> (Vec<&Pubkey>, Vec<&Pubkey>) {
         let mut writable_keys = vec![];
         let mut readonly_keys = vec![];
         for (i, key) in self.account_keys.iter().enumerate() {
             if self.is_writable(i) {
-                writable_keys.push(key);
+                if demote_sysvar_write_locks && sysvar::is_sysvar_id(key) {
+                    readonly_keys.push(key);
+                } else {
+                    writable_keys.push(key);
+                }
             } else {
                 readonly_keys.push(key);
             }
@@ -836,7 +836,7 @@ mod tests {
             Some(&id1),
         );
         assert_eq!(
-            message.get_account_keys_by_lock_type(),
+            message.get_account_keys_by_lock_type(false),
             (vec![&id1, &id0], vec![&id3, &id2, &program_id])
         );
     }
