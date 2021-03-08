@@ -151,11 +151,6 @@ impl GenesisConfig {
         hash(&serialized)
     }
 
-    pub fn disable_cap_altering_features_for_preciseness(&mut self) {
-        self.accounts
-            .remove(&crate::feature_set::simple_capitalization::id());
-    }
-
     fn genesis_filename(ledger_path: &Path) -> PathBuf {
         Path::new(ledger_path).join("genesis.bin")
     }
