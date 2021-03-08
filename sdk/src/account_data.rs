@@ -8,16 +8,20 @@ use std::{
     iter::FromIterator,
     ops::{Deref, DerefMut, Index, IndexMut},
     slice::SliceIndex,
-    sync::RwLock,
+    sync::{Arc, RwLock},
 };
 
 #[derive(Debug, Default, AbiExample)]
 pub struct AccountData {
-    data: Vec<u8>,
+    data: Arc<Vec<u8>>,
     cache: RwLock<HashMap<TypeId, Option<SysvarEnum>>>,
 }
 
 impl AccountData {
+    pub fn get_mut_data(&mut self) -> &mut [u8] {
+        &mut Arc::make_mut(&mut self.data)[..]
+    }
+
     /// Reads the sysvar from the serialized data and caches the result.
     /// Following reads of the same sysvar will read from the cache until the
     /// data is mutated.
@@ -49,7 +53,7 @@ impl AccountData {
     {
         // serialize_into will not write to the buffer if it fails. So we will
         // update the cache only if this succeeds.
-        bincode::serialize_into(&mut self.data[..], sysvar)?;
+        bincode::serialize_into(&mut Arc::make_mut(&mut self.data)[..], sysvar)?;
         let key = std::any::TypeId::of::<S>();
         let mut cache = self.cache.write().unwrap();
         cache.clear(); // Invalidate existing cache.
@@ -61,7 +65,7 @@ impl AccountData {
 impl From<Vec<u8>> for AccountData {
     fn from(data: Vec<u8>) -> Self {
         Self {
-            data,
+            data: Arc::new(data),
             cache: RwLock::default(),
         }
     }
@@ -69,7 +73,7 @@ impl From<Vec<u8>> for AccountData {
 
 impl From<AccountData> for Vec<u8> {
     fn from(account_data: AccountData) -> Self {
-        account_data.data
+        account_data.data.to_vec() // can this be right? the output is owned by caller?
     }
 }
 
@@ -89,12 +93,18 @@ impl Deref for AccountData {
         &self.data
     }
 }
-
 impl DerefMut for AccountData {
     fn deref_mut(&mut self) -> &mut Self::Target {
         // Invalidate the cache since the data may be mutated.
         self.cache.write().unwrap().clear();
-        &mut self.data
+        let mut swap = vec![];
+        self.data = Arc::new(if let Some(data) = Arc::get_mut(&mut self.data) {
+            std::mem::swap(&mut swap, data);
+            swap
+        } else {
+            self.data.to_vec()
+        });
+        Arc::get_mut(&mut self.data).unwrap()
     }
 }
 
@@ -124,7 +134,7 @@ where
     fn index_mut(&mut self, index: I) -> &mut Self::Output {
         // Invalidate the cache since the data may be mutated.
         self.cache.write().unwrap().clear();
-        self.data.index_mut(index)
+        Arc::make_mut(&mut self.data).index_mut(index)
     }
 }
 
@@ -150,7 +160,7 @@ impl Serialize for AccountData {
     where
         S: Serializer,
     {
-        serde_bytes::serialize(&self.data, serializer)
+        serde_bytes::serialize(&self.data[..], serializer)
     }
 }
 

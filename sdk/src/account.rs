@@ -143,6 +143,7 @@ where
 /// Return the information required to construct an `AccountInfo`.  Used by the
 /// `AccountInfo` conversion implementations.
 impl solana_program::account_info::Account for Account {
+    // note that this makes a copy of the data if there is > 0 other references
     fn get(&mut self) -> (&mut u64, &mut [u8], &Pubkey, bool, Epoch) {
         (
             &mut self.lamports,
@@ -171,7 +172,7 @@ pub fn create_is_signer_account_infos<'a>(
                 *is_signer,
                 false,
                 &mut account.lamports,
-                &mut account.data,
+                account.data.get_mut_data(),
                 &account.owner,
                 account.executable,
                 account.rent_epoch,

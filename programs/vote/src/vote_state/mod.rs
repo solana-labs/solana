@@ -229,7 +229,7 @@ impl VoteState {
 
     // utility function, used by Stakes, tests
     pub fn to(versioned: &VoteStateVersions, account: &mut Account) -> Option<()> {
-        Self::serialize(versioned, &mut account.data).ok()
+        Self::serialize(versioned, account.data.get_mut_data()).ok()
     }
 
     pub fn deserialize(input: &[u8]) -> Result<Self, InstructionError> {

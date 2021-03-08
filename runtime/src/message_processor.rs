@@ -218,7 +218,7 @@ impl PreAccount {
             pre.data = account.data.clone();
         } else {
             // Copy without allocate
-            pre.data.clone_from_slice(&account.data);
+            pre.data.get_mut_data().clone_from_slice(&account.data);
         }
 
         self.changed = true;
@@ -1019,7 +1019,7 @@ impl MessageProcessor {
                 if solana_sdk::sysvar::instructions::check_id(key) {
                     let mut mut_account_ref = accounts[i].borrow_mut();
                     solana_sdk::sysvar::instructions::store_current_index(
-                        &mut mut_account_ref.data,
+                        mut_account_ref.data.get_mut_data(),
                         instruction_index as u16,
                     );
                     break;
