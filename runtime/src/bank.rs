@@ -2379,15 +2379,21 @@ impl Bank {
             .map_or(Ok(()), |sig| self.get_signature_status(sig).unwrap())
     }
 
+    pub fn demote_sysvar_write_locks(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::demote_sysvar_write_locks::id())
+    }
+
     pub fn prepare_batch<'a, 'b>(
         &'a self,
         txs: &'b [Transaction],
         iteration_order: Option<Vec<usize>>,
     ) -> TransactionBatch<'a, 'b> {
-        let results = self
-            .rc
-            .accounts
-            .lock_accounts(txs, iteration_order.as_deref());
+        let results = self.rc.accounts.lock_accounts(
+            txs,
+            iteration_order.as_deref(),
+            self.demote_sysvar_write_locks(),
+        );
         TransactionBatch::new(results, &self, txs, iteration_order)
     }
 
@@ -2452,6 +2458,7 @@ impl Bank {
                 batch.transactions(),
                 batch.iteration_order(),
                 batch.lock_results(),
+                self.demote_sysvar_write_locks(),
             )
         }
     }
