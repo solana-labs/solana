@@ -2,7 +2,6 @@
 //!
 use crate::{account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey};
 use derive_more::From;
-use std::convert::TryFrom;
 
 pub mod clock;
 pub mod epoch_schedule;
@@ -30,12 +29,22 @@ pub fn is_sysvar_id(id: &Pubkey) -> bool {
 
 #[macro_export]
 macro_rules! declare_sysvar_id(
-    ($name:expr, $type:ty) => (
+    ($name:expr, $type:ident) => (
         $crate::declare_id!($name);
 
         impl $crate::sysvar::SysvarId for $type {
             fn check_id(pubkey: &$crate::pubkey::Pubkey) -> bool {
                 check_id(pubkey)
+            }
+        }
+
+        impl std::convert::TryFrom<$crate::sysvar::SysvarEnum> for $type {
+            type Error = &'static str;
+            fn try_from(sv: $crate::sysvar::SysvarEnum) -> Result<Self, Self::Error> {
+                match sv {
+                    $crate::sysvar::SysvarEnum::$type(sv) => Ok(sv),
+                    _ => Err("type mismatch"),
+                }
             }
         }
 
@@ -87,31 +96,6 @@ pub enum SysvarEnum {
     SlotHistory(slot_history::SlotHistory),
     StakeHistory(stake_history::StakeHistory),
 }
-
-macro_rules! impl_try_from (
-    ($mod:ident, $name:ident) => (
-        impl TryFrom<SysvarEnum> for $mod::$name {
-            type Error = &'static str;
-            fn try_from(sv: SysvarEnum) -> Result<Self, Self::Error> {
-                match sv {
-                    SysvarEnum::$name(sv) => Ok(sv),
-                    _ => Err("type mismatch"),
-                }
-            }
-        }
-    );
-);
-
-impl_try_from!(clock, Clock);
-impl_try_from!(epoch_schedule, EpochSchedule);
-impl_try_from!(fees, Fees);
-impl_try_from!(instructions, Instructions);
-impl_try_from!(recent_blockhashes, RecentBlockhashes);
-impl_try_from!(rent, Rent);
-impl_try_from!(rewards, Rewards);
-impl_try_from!(slot_hashes, SlotHashes);
-impl_try_from!(slot_history, SlotHistory);
-impl_try_from!(stake_history, StakeHistory);
 
 #[cfg(test)]
 mod tests {
