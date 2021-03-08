@@ -55,10 +55,6 @@ pub mod ristretto_mul_syscall_enabled {
     solana_sdk::declare_id!("HRe7A6aoxgjKzdjbBv6HTy7tJ4YWqE6tVmYCGho6S9Aq");
 }
 
-pub mod cumulative_rent_related_fixes {
-    solana_sdk::declare_id!("FtjnuAtJTWwX3Kx9m24LduNEhzaGuuPfDW6e14SX2Fy5");
-}
-
 pub mod pull_request_ping_pong_check {
     solana_sdk::declare_id!("5RzEHTnf6D7JPZCvwEzjM19kzBsyjSU3HoMfXaQmVgnZ");
 }
@@ -139,7 +135,6 @@ lazy_static! {
         (spl_token_v2_multisig_fix::id(), "spl-token multisig fix"),
         (no_overflow_rent_distribution::id(), "no overflow rent distribution"),
         (ristretto_mul_syscall_enabled::id(), "ristretto multiply syscall"),
-        (cumulative_rent_related_fixes::id(), "rent fixes (#10206, #10468, #11342)"),
         (pull_request_ping_pong_check::id(), "ping-pong packet check #12794"),
         (stake_program_v2::id(), "solana_stake_program v2"),
         (rewrite_stake::id(), "rewrite stake"),
@@ -218,10 +213,6 @@ impl FeatureSet {
 
     pub fn activated_slot(&self, feature_id: &Pubkey) -> Option<Slot> {
         self.active.get(feature_id).copied()
-    }
-
-    pub fn cumulative_rent_related_fixes_enabled(&self) -> bool {
-        self.is_active(&cumulative_rent_related_fixes::id())
     }
 
     /// List of enabled features that trigger full inflation

@@ -3167,7 +3167,6 @@ impl Bank {
             &self.rent_collector,
             &self.last_blockhash_with_fee_calculator(),
             self.fix_recent_blockhashes_sysvar_delay(),
-            self.cumulative_rent_related_fixes_enabled(),
         );
         self.collect_rent(executed, loaded_accounts);
 
@@ -3416,11 +3415,9 @@ impl Bank {
         // parallelize?
         let mut rent = 0;
         for (pubkey, mut account) in accounts {
-            rent += self.rent_collector.collect_from_existing_account(
-                &pubkey,
-                &mut account,
-                self.cumulative_rent_related_fixes_enabled(),
-            );
+            rent += self
+                .rent_collector
+                .collect_from_existing_account(&pubkey, &mut account);
             // Store all of them unconditionally to purge old AppendVec,
             // even if collected rent is 0 (= not updated).
             self.store_account(&pubkey, &account);
@@ -3539,30 +3536,11 @@ impl Bank {
         let (parent_epoch, mut parent_slot_index) =
             self.get_epoch_and_slot_index(self.parent_slot());
 
-        let should_enable = match self.cluster_type() {
-            ClusterType::MainnetBeta => {
-                #[cfg(not(test))]
-                let should_enable = self.cumulative_rent_related_fixes_enabled();
-
-                // needed for test_rent_eager_across_epoch_with_gap_under_multi_epoch_cycle,
-                // which depends on ClusterType::MainnetBeta
-                #[cfg(test)]
-                let should_enable = true;
-
-                should_enable
-            }
-            _ => self.cumulative_rent_related_fixes_enabled(),
-        };
-
         let mut partitions = vec![];
         if parent_epoch < current_epoch {
             // this needs to be gated because this potentially can change the behavior
             // (= bank hash) at each start of epochs
-            let slot_skipped = if should_enable {
-                (self.slot() - self.parent_slot()) > 1
-            } else {
-                current_slot_index > 0
-            };
+            let slot_skipped = (self.slot() - self.parent_slot()) > 1;
             if slot_skipped {
                 // Generate special partitions because there are skipped slots
                 // exactly at the epoch transition.
@@ -3578,7 +3556,7 @@ impl Bank {
 
                 // this needs to be gated because this potentially can change the behavior
                 // (= bank hash) at each start of epochs
-                if should_enable && current_slot_index > 0 {
+                if current_slot_index > 0 {
                     // ... for current epoch
                     partitions.push(self.partition_from_slot_indexes_with_gapped_epochs(
                         0,
@@ -3942,25 +3920,9 @@ impl Bank {
     }
 
     pub fn deposit(&self, pubkey: &Pubkey, lamports: u64) -> u64 {
+        // This doesn't collect rents intentionally.
+        // Rents should only be applied to actual TXes
         let mut account = self.get_account(pubkey).unwrap_or_default();
-
-        let rent_fix_enabled = self.cumulative_rent_related_fixes_enabled();
-
-        // don't collect rents if we're in the new behavior;
-        // in general, it's not worthwhile to account for rents outside the runtime (transactions)
-        // there are too many and subtly nuanced modification codepaths
-        if !rent_fix_enabled {
-            // previously we're too much collecting rents as if it existed since epoch 0...
-            self.collected_rent.fetch_add(
-                self.rent_collector.collect_from_existing_account(
-                    pubkey,
-                    &mut account,
-                    rent_fix_enabled,
-                ),
-                Relaxed,
-            );
-        }
-
         account.lamports += lamports;
         self.store_account(pubkey, &account);
         account.lamports
@@ -4629,10 +4591,6 @@ impl Bank {
     pub fn no_overflow_rent_distribution_enabled(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::no_overflow_rent_distribution::id())
-    }
-
-    pub fn cumulative_rent_related_fixes_enabled(&self) -> bool {
-        self.feature_set.cumulative_rent_related_fixes_enabled()
     }
 
     pub fn stake_program_v2_enabled(&self) -> bool {
@@ -10227,19 +10185,19 @@ pub(crate) mod tests {
             if bank.slot == 32 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "4syPxVrVFUpksTre5BB5w7qd3BxSU4WzUT6R2fjFgMJ2"
+                    "7AkMgAb2v4tuoiSf3NnVgaBxSvp7XidbrSwsPEn4ENTp"
                 );
             }
             if bank.slot == 64 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "4GKgnCxQs6AJxcqYQkxa8oF8gEp13bfRNCm2uzCceA26"
+                    "2JzWWRBtQgdXboaACBRXNNKsHeBtn57uYmqH1AgGUkdG"
                 );
             }
             if bank.slot == 128 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "9YwXsk2qpM7bZLnWGdtqCmDEygiu1KpEcr4zWWBTUKw6"
+                    "FQnVhDVjhCyfBxFb3bdm3CLiuCePvWuW5TGDsLBZnKAo"
                 );
                 break;
             }
