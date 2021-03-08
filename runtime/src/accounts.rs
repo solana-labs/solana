@@ -974,16 +974,7 @@ impl Accounts {
                         }
                     }
                     if account.rent_epoch == 0 {
-<<<<<<< HEAD
-                        acc.3 += rent_collector.collect_from_created_account(
-                            &key,
-                            account,
-                            rent_fix_enabled,
-                        );
-=======
-                        loaded_transaction.rent +=
-                            rent_collector.collect_from_created_account(&key, account);
->>>>>>> 8b0c6db87... Remove old feature: cumulative_rent_related_fixes (#15754)
+                        acc.3 += rent_collector.collect_from_created_account(&key, account);
                     }
                     accounts.push((key, &*account));
                 }

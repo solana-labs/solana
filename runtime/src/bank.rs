@@ -3931,27 +3931,6 @@ impl Bank {
         // This doesn't collect rents intentionally.
         // Rents should only be applied to actual TXes
         let mut account = self.get_account(pubkey).unwrap_or_default();
-<<<<<<< HEAD
-
-        let rent_fix_enabled = self.cumulative_rent_related_fixes_enabled();
-
-        // don't collect rents if we're in the new behavior;
-        // in genral, it's not worthwhile to account for rents outside the runtime (transactions)
-        // there are too many and subtly nuanced modification codepaths
-        if !rent_fix_enabled {
-            // previously we're too much collecting rents as if it existed since epoch 0...
-            self.collected_rent.fetch_add(
-                self.rent_collector.collect_from_existing_account(
-                    pubkey,
-                    &mut account,
-                    rent_fix_enabled,
-                ),
-                Relaxed,
-            );
-        }
-
-=======
->>>>>>> 8b0c6db87... Remove old feature: cumulative_rent_related_fixes (#15754)
         account.lamports += lamports;
         self.store_account(pubkey, &account);
         account.lamports
