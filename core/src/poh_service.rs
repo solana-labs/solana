@@ -1,6 +1,7 @@
 //! The `poh_service` module implements a service that records the passing of
 //! "ticks", a measure of time in the PoH stream
 use crate::poh_recorder::PohRecorder;
+use solana_measure::measure::Measure;
 use solana_sdk::poh_config::PohConfig;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -17,7 +18,7 @@ pub struct PohService {
 //   contention with the PoH hashing within `tick_producer()`.
 //
 // Can use test_poh_service to calibrate this
-pub const DEFAULT_HASHES_PER_BATCH: u64 = 64;
+pub const DEFAULT_HASHES_PER_BATCH: u64 = 1;
 
 pub const DEFAULT_PINNED_CPU_CORE: usize = 0;
 
@@ -117,11 +118,34 @@ impl PohService {
         let mut num_ticks = 0;
         let mut num_hashes = 0;
         let mut total_sleep_us = 0;
+        let mut total_lock_time_ns = 0;
+        let mut total_hash_time_ns = 0;
+        let mut total_tick_time_ns = 0;
         loop {
             num_hashes += hashes_per_batch;
-            if poh.lock().unwrap().hash(hashes_per_batch) {
+            let should_tick = {
+                let mut lock_time = Measure::start("lock");
+                let mut poh_l = poh.lock().unwrap();
+                lock_time.stop();
+                total_lock_time_ns += lock_time.as_ns();
+                let mut hash_time = Measure::start("hash");
+                let r = poh_l.hash(hashes_per_batch);
+                hash_time.stop();
+                total_hash_time_ns += hash_time.as_ns();
+                r
+            };
+            if should_tick {
                 // Lock PohRecorder only for the final hash...
-                poh_recorder.lock().unwrap().tick();
+                {
+                    let mut lock_time = Measure::start("lock");
+                    let mut poh_recorder_l = poh_recorder.lock().unwrap();
+                    lock_time.stop();
+                    total_lock_time_ns += lock_time.as_ns();
+                    let mut tick_time = Measure::start("tick");
+                    poh_recorder_l.tick();
+                    tick_time.stop();
+                    total_tick_time_ns += tick_time.as_ns();
+                }
                 num_ticks += 1;
                 let elapsed_ns = now.elapsed().as_nanos() as u64;
                 // sleep is not accurate enough to get a predictable time.
@@ -133,18 +157,24 @@ impl PohService {
                 now = Instant::now();
 
                 if last_metric.elapsed().as_millis() > 1000 {
-                    let elapsed_ms = last_metric.elapsed().as_millis() as u64;
-                    let ms_per_slot = (elapsed_ms * ticks_per_slot) / num_ticks;
+                    let elapsed_us = last_metric.elapsed().as_micros() as u64;
+                    let us_per_slot = (elapsed_us * ticks_per_slot) / num_ticks;
                     datapoint_info!(
                         "poh-service",
                         ("ticks", num_ticks as i64, i64),
                         ("hashes", num_hashes as i64, i64),
-                        ("elapsed_ms", ms_per_slot, i64),
-                        ("total_sleep_ms", total_sleep_us / 1000, i64),
+                        ("elapsed_us", us_per_slot, i64),
+                        ("total_sleep_us", total_sleep_us / 1000, i64),
+                        ("total_tick_time_us", total_lock_time_ns / 1000, i64),
+                        ("total_lock_time_us", total_tick_time_ns / 1000, i64),
+                        ("total_hash_time_us", total_hash_time_ns / 1000, i64),
                     );
                     total_sleep_us = 0;
                     num_ticks = 0;
                     num_hashes = 0;
+                    total_tick_time_ns = 0;
+                    total_lock_time_ns = 0;
+                    total_hash_time_ns = 0;
                     last_metric = Instant::now();
                 }
                 if poh_exit.load(Ordering::Relaxed) {
@@ -164,6 +194,8 @@ mod tests {
     use super::*;
     use crate::poh_recorder::WorkingBank;
     use rand::{thread_rng, Rng};
+    use rayon::iter::{IntoParallelIterator, ParallelIterator};
+    use rayon::ThreadPoolBuilder;
     use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
     use solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path};
@@ -222,6 +254,16 @@ mod tests {
                 .unwrap_or(0);
             let is_test_run = run_time == 0;
 
+            let par_batch_size = std::env::var("PAR_BATCH_SIZE")
+                .map(|x| x.parse().unwrap())
+                .unwrap_or(1);
+
+            let rayon_threads = std::env::var("RAYON_THREADS")
+                .map(|x| x.parse().unwrap())
+                .unwrap_or(1);
+
+            let use_rayon = std::env::var("USE_RAYON").is_ok();
+
             let entry_producer = {
                 let poh_recorder = poh_recorder.clone();
                 let exit = exit.clone();
@@ -229,6 +271,11 @@ mod tests {
                 Builder::new()
                     .name("solana-poh-service-entry_producer".to_string())
                     .spawn(move || {
+                        let thread_pool = ThreadPoolBuilder::new()
+                            .num_threads(rayon_threads)
+                            .start_handler(|_i| {})
+                            .build()
+                            .unwrap();
                         let now = Instant::now();
                         let mut total_us = 0;
                         let mut total_times = 0;
@@ -237,11 +284,20 @@ mod tests {
                         loop {
                             // send some data
                             let mut time = Measure::start("record");
-                            let _ = poh_recorder.lock().unwrap().record(
-                                bank.slot(),
-                                h1,
-                                vec![tx.clone()],
-                            );
+                            let record_lock = |_i: usize| {
+                                let _ = poh_recorder.lock().unwrap().record(
+                                    bank.slot(),
+                                    h1,
+                                    vec![tx.clone()],
+                                );
+                            };
+                            if use_rayon {
+                                thread_pool.install(|| {
+                                    (0..par_batch_size).into_par_iter().for_each(record_lock);
+                                });
+                            } else {
+                                (0..par_batch_size).into_iter().for_each(record_lock);
+                            }
                             time.stop();
                             total_us += time.as_us();
                             total_times += 1;
@@ -254,7 +310,7 @@ mod tests {
                                     "spent:{}ms record: {}ms entries recorded: {}",
                                     now.elapsed().as_millis(),
                                     total_us / 1000,
-                                    total_times,
+                                    total_times * par_batch_size,
                                 );
                                 break;
                             }
