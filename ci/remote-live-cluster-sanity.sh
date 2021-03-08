@@ -43,6 +43,7 @@ sys_tuner_pid=$!
     --identity ./identity.json \
     --ledger ./cluster-sanity/ledger \
     --no-untrusted-rpc \
+    --no-poh-speed-test \
     --log - \
     --init-complete-file ./cluster-sanity/init-completed \
     --private-rpc \
