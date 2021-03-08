@@ -297,7 +297,7 @@ impl TestValidator {
             validator_identity_lamports,
             config.fee_rate_governor.clone(),
             config.rent,
-            solana_sdk::genesis_config::ClusterType::Development,
+            solana_sdk::genesis_config::ClusterType::MainnetBeta,
             accounts.into_iter().collect(),
         );
         genesis_config.epoch_schedule = solana_sdk::epoch_schedule::EpochSchedule::without_warmup();
