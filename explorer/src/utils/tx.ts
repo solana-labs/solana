@@ -17,7 +17,7 @@ import {
 } from "@solana/web3.js";
 import { Cluster } from "providers/cluster";
 import { SerumMarketRegistry } from "serumMarketRegistry";
-import { KnownTokenMap } from "@solana/spl-token-registry";
+import { TokenInfoMap } from "@solana/spl-token-registry";
 
 export type ProgramName = typeof PROGRAM_NAME_BY_ID[keyof typeof PROGRAM_NAME_BY_ID];
 
@@ -109,14 +109,14 @@ export const SYSVAR_IDS = {
 export function addressLabel(
   address: string,
   cluster: Cluster,
-  tokenRegistry?: KnownTokenMap
+  tokenRegistry?: TokenInfoMap
 ): string | undefined {
   return (
     PROGRAM_NAME_BY_ID[address] ||
     LOADER_IDS[address] ||
     SYSVAR_IDS[address] ||
     SYSVAR_ID[address] ||
-    tokenRegistry?.get(address)?.tokenName ||
+    tokenRegistry?.get(address)?.name ||
     SerumMarketRegistry.get(address, cluster)
   );
 }
@@ -124,7 +124,7 @@ export function addressLabel(
 export function displayAddress(
   address: string,
   cluster: Cluster,
-  tokenRegistry: KnownTokenMap
+  tokenRegistry: TokenInfoMap
 ): string {
   return addressLabel(address, cluster, tokenRegistry) || address;
 }

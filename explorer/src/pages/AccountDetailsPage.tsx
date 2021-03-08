@@ -97,11 +97,11 @@ export function AccountHeader({ address }: { address: string }) {
   if (tokenDetails) {
     return (
       <div className="row align-items-end">
-        {tokenDetails.icon && (
+        {tokenDetails.logoURI && (
           <div className="col-auto">
             <div className="avatar avatar-lg header-avatar-top">
               <img
-                src={tokenDetails.icon}
+                src={tokenDetails.logoURI}
                 alt="token logo"
                 className="avatar-img rounded-circle border border-4 border-body"
               />
@@ -111,7 +111,7 @@ export function AccountHeader({ address }: { address: string }) {
 
         <div className="col mb-3 ml-n3 ml-md-n2">
           <h6 className="header-pretitle">Token</h6>
-          <h2 className="header-title">{tokenDetails.tokenName}</h2>
+          <h2 className="header-title">{tokenDetails.name}</h2>
         </div>
       </div>
     );

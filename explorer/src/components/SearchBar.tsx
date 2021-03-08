@@ -12,7 +12,7 @@ import {
 } from "utils/tx";
 import { Cluster, useCluster } from "providers/cluster";
 import { useTokenRegistry } from "providers/mints/token-registry";
-import { KnownTokenMap } from "@solana/spl-token-registry";
+import { TokenInfoMap } from "@solana/spl-token-registry";
 
 export function SearchBar() {
   const [search, setSearch] = React.useState("");
@@ -143,14 +143,14 @@ function buildSysvarOptions(search: string) {
 function buildTokenOptions(
   search: string,
   cluster: Cluster,
-  tokenRegistry: KnownTokenMap
+  tokenRegistry: TokenInfoMap
 ) {
   const matchedTokens = Array.from(tokenRegistry.entries()).filter(
     ([address, details]) => {
       const searchLower = search.toLowerCase();
       return (
-        details.tokenName.toLowerCase().includes(searchLower) ||
-        details.tokenSymbol.toLowerCase().includes(searchLower) ||
+        details.name.toLowerCase().includes(searchLower) ||
+        details.symbol.toLowerCase().includes(searchLower) ||
         address.includes(search)
       );
     }
@@ -160,8 +160,8 @@ function buildTokenOptions(
     return {
       label: "Tokens",
       options: matchedTokens.map(([id, details]) => ({
-        label: details.tokenName,
-        value: [details.tokenName, details.tokenSymbol, id],
+        label: details.name,
+        value: [details.name, details.symbol, id],
         pathname: "/address/" + id,
       })),
     };
@@ -171,7 +171,7 @@ function buildTokenOptions(
 function buildOptions(
   rawSearch: string,
   cluster: Cluster,
-  tokenRegistry: KnownTokenMap
+  tokenRegistry: TokenInfoMap
 ) {
   const search = rawSearch.trim();
   if (search.length === 0) return [];

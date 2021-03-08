@@ -24,7 +24,7 @@ export function TokenLargestAccountsCard({ pubkey }: { pubkey: PublicKey }) {
     fetchLargestAccounts,
   ]);
   const { tokenRegistry } = useTokenRegistry();
-  const unit = tokenRegistry.get(mintAddress)?.tokenSymbol;
+  const unit = tokenRegistry.get(mintAddress)?.symbol;
   const unitLabel = unit ? `(${unit})` : "";
 
   React.useEffect(() => {

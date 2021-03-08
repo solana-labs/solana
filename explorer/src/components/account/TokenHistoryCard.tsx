@@ -50,7 +50,7 @@ import { useCluster, Cluster } from "providers/cluster";
 import { Link } from "react-router-dom";
 import { Location } from "history";
 import { useQuery } from "utils/url";
-import { KnownTokenMap } from "@solana/spl-token-registry";
+import { TokenInfoMap } from "@solana/spl-token-registry";
 import { useTokenRegistry } from "providers/mints/token-registry";
 
 const TRUNCATE_TOKEN_LENGTH = 10;
@@ -608,7 +608,7 @@ function InstructionDetails({
 function formatTokenName(
   pubkey: string,
   cluster: Cluster,
-  tokenRegistry: KnownTokenMap
+  tokenRegistry: TokenInfoMap
 ): string {
   let display = displayAddress(pubkey, cluster, tokenRegistry);
 

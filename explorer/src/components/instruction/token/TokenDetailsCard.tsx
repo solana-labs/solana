@@ -118,7 +118,7 @@ function TokenInstruction(props: InfoProps) {
     const tokenDetails = tokenRegistry.get(mintAddress);
 
     if (tokenDetails) {
-      tokenSymbol = tokenDetails.tokenSymbol;
+      tokenSymbol = tokenDetails.symbol;
     }
 
     attributes.push(
