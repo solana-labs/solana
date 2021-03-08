@@ -1243,9 +1243,9 @@ export const GetConfirmedBlockRpcResult = jsonRpcResult(
             postBalance: nullable(number()),
             rewardType: nullable(string()),
           }),
-        ]),
-      ]),
-      blockTime: struct.union(['null', 'number']),
+        ),
+      ),
+      blockTime: union(['null', 'number']),
     }),
   ),
 );
