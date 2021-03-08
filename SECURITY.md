@@ -25,7 +25,7 @@ $500,000 USD in locked SOL tokens (locked for 12 months)
 
 Consensus/Safety Violations:
 $250,000 USD in locked SOL tokens (locked for 12 months)
-* Consesnus safety violation
+* Consensus safety violation
 * Tricking a validator to accept an optimistic confirmation or rooted slot without a double vote, etc..
 
 Other Attacks:
