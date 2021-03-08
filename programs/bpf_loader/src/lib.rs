@@ -198,7 +198,7 @@ fn process_instruction_common(
                     ic_logger_msg!(logger, "Wrong ProgramData account for this Program account");
                     return Err(InstructionError::InvalidArgument);
                 }
-                invoke_context.pop_first_keyed_account();
+                invoke_context.remove_first_keyed_account();
                 UpgradeableLoaderState::programdata_data_offset()?
             } else {
                 ic_logger_msg!(logger, "Invalid Program account");
@@ -747,7 +747,7 @@ impl Executor for BpfExecutor {
         let logger = invoke_context.get_logger();
         let invoke_depth = invoke_context.invoke_depth();
 
-        invoke_context.pop_first_keyed_account();
+        invoke_context.remove_first_keyed_account();
 
         let mut serialize_time = Measure::start("serialize");
         let keyed_accounts = invoke_context.get_keyed_accounts();

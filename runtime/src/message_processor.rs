@@ -363,7 +363,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             .last()
             .ok_or(InstructionError::GenericError)
     }
-    fn pop_first_keyed_account(&mut self) {
+    fn remove_first_keyed_account(&mut self) {
         self.keyed_accounts = &self.keyed_accounts[1..];
     }
     fn get_keyed_accounts(&self) -> &[KeyedAccount] {
@@ -603,7 +603,7 @@ impl MessageProcessor {
             if native_loader::check_id(&root_account.owner()?) {
                 for (id, process_instruction) in &self.programs {
                     if id == root_id {
-                        invoke_context.pop_first_keyed_account();
+                        invoke_context.remove_first_keyed_account();
                         // Call the builtin program
                         return process_instruction(&program_id, instruction_data, invoke_context);
                     }

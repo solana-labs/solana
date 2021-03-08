@@ -151,7 +151,7 @@ impl NativeLoader {
             }
             // TODO: Remove these two copies (* deref is also a copy)
             // Both could be avoided as we know that the first KeyedAccount
-            // still exists even after invoke_context.pop_first_keyed_account() is called
+            // still exists even after invoke_context.remove_first_keyed_account() is called
             (
                 *program.unsigned_key(),
                 &program.try_account_ref()?.data().clone(),
@@ -170,7 +170,7 @@ impl NativeLoader {
             return Err(NativeLoaderError::InvalidAccountData.into());
         }
         trace!("Call native {:?}", name);
-        invoke_context.pop_first_keyed_account();
+        invoke_context.remove_first_keyed_account();
         if name.ends_with("loader_program") {
             let entrypoint =
                 Self::get_entrypoint::<LoaderEntrypoint>(name, &self.loader_symbol_cache)?;
