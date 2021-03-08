@@ -75,10 +75,6 @@ pub mod max_program_call_depth_64 {
     solana_sdk::declare_id!("YCKSgA6XmjtkQrHBQjpyNrX6EMhJPcYcLWMVgWn36iv");
 }
 
-pub mod cumulative_rent_related_fixes {
-    solana_sdk::declare_id!("FtjnuAtJTWwX3Kx9m24LduNEhzaGuuPfDW6e14SX2Fy5");
-}
-
 pub mod sol_log_compute_units_syscall {
     solana_sdk::declare_id!("BHuZqHAj7JdZc68wVgZZcy51jZykvgrx4zptR44RyChe");
 }
@@ -196,7 +192,6 @@ lazy_static! {
         (ristretto_mul_syscall_enabled::id(), "ristretto multiply syscall"),
         (max_invoke_depth_4::id(), "max invoke call depth 4"),
         (max_program_call_depth_64::id(), "max program call depth 64"),
-        (cumulative_rent_related_fixes::id(), "rent fixes (#10206, #10468, #11342)"),
         (sol_log_compute_units_syscall::id(), "sol_log_compute_units syscall (#13243)"),
         (pubkey_log_syscall_enabled::id(), "pubkey log syscall"),
         (pull_request_ping_pong_check::id(), "ping-pong packet check #12794"),
@@ -283,10 +278,6 @@ impl FeatureSet {
 
     pub fn activated_slot(&self, feature_id: &Pubkey) -> Option<Slot> {
         self.active.get(feature_id).copied()
-    }
-
-    pub fn cumulative_rent_related_fixes_enabled(&self) -> bool {
-        self.is_active(&cumulative_rent_related_fixes::id())
     }
 
     /// List of enabled features that trigger full inflation
