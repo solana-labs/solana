@@ -195,15 +195,17 @@ mod tests {
             ..GenesisConfig::default()
         };
         let mut bank = Arc::new(Bank::new(&genesis_config));
+        let sysvar_delta = 10;
         assert_eq!(
             bank.capitalization(),
             (num_genesis_accounts + num_non_circulating_accounts + num_stake_accounts) * balance
+                + sysvar_delta,
         );
 
         let non_circulating_supply = calculate_non_circulating_supply(&bank);
         assert_eq!(
             non_circulating_supply.lamports,
-            (num_non_circulating_accounts + num_stake_accounts) * balance
+            (num_non_circulating_accounts + num_stake_accounts) * balance,
         );
         assert_eq!(
             non_circulating_supply.accounts.len(),
