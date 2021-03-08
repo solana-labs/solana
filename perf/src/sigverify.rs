@@ -282,9 +282,11 @@ pub fn ed25519_verify_disabled(batches: &mut [Packets]) {
     use rayon::prelude::*;
     let count = batch_size(batches);
     debug!("disabled ECDSA for {}", batch_size(batches));
-    batches
-        .into_par_iter()
-        .for_each(|p| p.packets.par_iter_mut().for_each(|p| p.meta.discard = false));
+    batches.into_par_iter().for_each(|p| {
+        p.packets
+            .par_iter_mut()
+            .for_each(|p| p.meta.discard = false)
+    });
     inc_new_counter_debug!("ed25519_verify_disabled", count);
 }
 
@@ -720,17 +722,14 @@ mod tests {
         let recycler = Recycler::new_without_limit("");
         let recycler_out = Recycler::new_without_limit("");
         // verify packets
-        let ans = sigverify::ed25519_verify(&mut batches, &recycler, &recycler_out);
+        sigverify::ed25519_verify(&mut batches, &recycler, &recycler_out);
 
         // check result
-        let ref_ans = if modify_data { 0u8 } else { 1u8 };
         let should_discard = modify_data;
-        let gpu_correct = ans == vec![vec![ref_ans; n], vec![ref_ans; n]];
-        let cpu_correct = batches
+        assert!(batches
             .iter()
             .flat_map(|p| &p.packets)
-            .all(|p| p.meta.discard == should_discard);
-        assert!(gpu_correct || cpu_correct);
+            .all(|p| p.meta.discard == should_discard));
     }
 
     #[test]
@@ -745,13 +744,11 @@ mod tests {
         let recycler = Recycler::new_without_limit("");
         let recycler_out = Recycler::new_without_limit("");
         // verify packets
-        let ans = sigverify::ed25519_verify(&mut batches, &recycler, &recycler_out);
-        let gpu_correct = ans == vec![vec![0u8; 1]];
-        let cpu_correct = batches
+        sigverify::ed25519_verify(&mut batches, &recycler, &recycler_out);
+        assert!(batches
             .iter()
             .flat_map(|p| &p.packets)
-            .all(|p| p.meta.discard);
-        assert!(gpu_correct || cpu_correct);
+            .all(|p| p.meta.discard));
     }
 
     #[test]
@@ -787,14 +784,13 @@ mod tests {
         let recycler = Recycler::new_without_limit("");
         let recycler_out = Recycler::new_without_limit("");
         // verify packets
-        let ans = sigverify::ed25519_verify(&mut batches, &recycler, &recycler_out);
+        sigverify::ed25519_verify(&mut batches, &recycler, &recycler_out);
 
         // check result
         let ref_ans = 1u8;
         let mut ref_vec = vec![vec![ref_ans; n]; num_batches];
         ref_vec[0].push(0u8);
-        let gpu_correct = ans == ref_vec;
-        let cpu_correct = batches
+        assert!(batches
             .iter()
             .flat_map(|p| &p.packets)
             .zip(ref_vec.into_iter().flatten())
@@ -804,8 +800,7 @@ mod tests {
                 } else {
                     !p.meta.discard
                 }
-            });
-        assert!(gpu_correct || cpu_correct);
+            }));
     }
 
     #[test]
@@ -833,23 +828,18 @@ mod tests {
                     batches[batch].packets[packet].data[offset].wrapping_add(add);
             }
 
-            // verify packets
-            let ans = sigverify::ed25519_verify(&mut batches, &recycler, &recycler_out);
-            ed25519_verify_cpu(&mut batches);
+            // verify from GPU verification pipeline (when GPU verification is enabled) are
+            // equivalent to the CPU verification pipeline.
+            let mut batches_cpu = batches.clone();
+            sigverify::ed25519_verify(&mut batches, &recycler, &recycler_out);
+            ed25519_verify_cpu(&mut batches_cpu);
 
             // check result
-            if !ans.is_empty() {
-                let cpu_ref: Vec<Vec<u8>> = batches
-                    .iter()
-                    .map(|p| {
-                        p.packets
-                            .iter()
-                            .map(|p| if p.meta.discard { 0 } else { 1 })
-                            .collect()
-                    })
-                    .collect();
-                assert_eq!(ans, cpu_ref);
-            }
+            batches
+                .iter()
+                .flat_map(|p| &p.packets)
+                .zip(batches_cpu.iter().flat_map(|p| &p.packets))
+                .for_each(|(p1, p2)| assert_eq!(p1, p2));
         }
     }
 
