@@ -38,11 +38,13 @@ sys_tuner_pid=$!
 
 (
   echo "$(date): VALIDATOR STARTED." &&
+  ./solana-keygen new --no-passphrase -so ./identity.json &&
   ./solana-validator \
-    --ledger cluster-sanity/ledger \
+    --identity ./identity.json \
+    --ledger ./cluster-sanity/ledger \
     --no-untrusted-rpc \
     --log - \
-    --init-complete-file cluster-sanity/init-completed \
+    --init-complete-file ./cluster-sanity/init-completed \
     --private-rpc \
     --rpc-port 8899 \
     --rpc-bind-address localhost \
