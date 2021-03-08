@@ -3538,8 +3538,6 @@ impl Bank {
 
         let mut partitions = vec![];
         if parent_epoch < current_epoch {
-            // this needs to be gated because this potentially can change the behavior
-            // (= bank hash) at each start of epochs
             let slot_skipped = (self.slot() - self.parent_slot()) > 1;
             if slot_skipped {
                 // Generate special partitions because there are skipped slots
@@ -3554,8 +3552,6 @@ impl Bank {
                     parent_epoch,
                 ));
 
-                // this needs to be gated because this potentially can change the behavior
-                // (= bank hash) at each start of epochs
                 if current_slot_index > 0 {
                     // ... for current epoch
                     partitions.push(self.partition_from_slot_indexes_with_gapped_epochs(
