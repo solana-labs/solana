@@ -2198,26 +2198,14 @@ fn main() {
                                         feature_account_balance,
                                     ),
                                 );
-                                if base_bank
-                                    .get_account(&feature_set::cumulative_rent_related_fixes::id())
-                                    .is_some()
-                                {
-                                    // steal some lamports from the pretty old feature not to affect
-                                    // capitalizaion, which doesn't affect inflation behavior!
-                                    base_bank.store_account(
-                                        &feature_set::cumulative_rent_related_fixes::id(),
-                                        &Account::default(),
-                                    );
-                                } else {
-                                    let old_cap = base_bank.set_capitalization();
-                                    let new_cap = base_bank.capitalization();
-                                    warn!(
-                                        "Skewing capitalization a bit to enable simple capitalization as \
-                                        requested: increasing {} from {} to {}",
-                                        feature_account_balance, old_cap, new_cap,
-                                    );
-                                    assert_eq!(old_cap + feature_account_balance, new_cap);
-                                }
+                                let old_cap = base_bank.set_capitalization();
+                                let new_cap = base_bank.capitalization();
+                                warn!(
+                                    "Skewing capitalization a bit to enable simple capitalization as \
+                                    requested: increasing {} from {} to {}",
+                                    feature_account_balance, old_cap, new_cap,
+                                );
+                                assert_eq!(old_cap + feature_account_balance, new_cap);
                             } else {
                                 warn!("Already simple_capitalization is activated (or scheduled)");
                             }
