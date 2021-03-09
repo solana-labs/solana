@@ -31,7 +31,7 @@ use solana_runtime::{
     snapshot_utils::SnapshotVersion,
 };
 use solana_sdk::{
-    account::AccountSharedData,
+    account::{AccountSharedData, ReadableAccount},
     clock::{Epoch, Slot},
     feature::{self, Feature},
     feature_set,
@@ -2085,7 +2085,7 @@ fn main() {
 
                     println!("---");
                     for (pubkey, (account, slot)) in accounts.into_iter() {
-                        let data_len = account.data.len();
+                        let data_len = account.data().len();
                         println!("{}:", pubkey);
                         println!("  - balance: {} SOL", lamports_to_sol(account.lamports));
                         println!("  - owner: '{}'", account.owner);
@@ -2093,7 +2093,7 @@ fn main() {
                         println!("  - slot: {}", slot);
                         println!("  - rent_epoch: {}", account.rent_epoch);
                         if !exclude_account_data {
-                            println!("  - data: '{}'", bs58::encode(account.data).into_string());
+                            println!("  - data: '{}'", bs58::encode(account.data()).into_string());
                         }
                         println!("  - data_len: {}", data_len);
                     }
@@ -2567,7 +2567,7 @@ fn main() {
                                             owner: format!("{}", base_account.owner),
                                             old_balance: base_account.lamports,
                                             new_balance: warped_account.lamports,
-                                            data_size: base_account.data.len(),
+                                            data_size: base_account.data().len(),
                                             delegation: format_or_na(detail.map(|d| d.voter)),
                                             delegation_owner: format_or_na(
                                                 detail.map(|d| d.voter_owner),

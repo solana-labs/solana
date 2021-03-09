@@ -119,7 +119,7 @@ impl VestState {
 mod test {
     use super::*;
     use crate::id;
-    use solana_sdk::account::AccountSharedData;
+    use solana_sdk::account::{AccountSharedData, ReadableAccount};
     use solana_sdk::system_program;
 
     #[test]
@@ -127,7 +127,7 @@ mod test {
         let mut a = AccountSharedData::new(0, 512, &id());
         let b = VestState::default();
         b.serialize(&mut a.data).unwrap();
-        let c = VestState::deserialize(&a.data).unwrap();
+        let c = VestState::deserialize(&a.data()).unwrap();
         assert_eq!(b, c);
     }
 

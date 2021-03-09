@@ -1,5 +1,5 @@
 use crate::{
-    account::{from_account, AccountSharedData},
+    account::{from_account, AccountSharedData, ReadableAccount},
     account_utils::{State, StateMut},
 };
 use solana_program::{clock::Epoch, instruction::InstructionError, pubkey::Pubkey, sysvar::Sysvar};
@@ -39,11 +39,11 @@ impl<'a> KeyedAccount<'a> {
     }
 
     pub fn data_len(&self) -> Result<usize, InstructionError> {
-        Ok(self.try_borrow()?.data.len())
+        Ok(self.try_borrow()?.data().len())
     }
 
     pub fn data_is_empty(&self) -> Result<bool, InstructionError> {
-        Ok(self.try_borrow()?.data.is_empty())
+        Ok(self.try_borrow()?.data().is_empty())
     }
 
     pub fn owner(&self) -> Result<Pubkey, InstructionError> {

@@ -238,8 +238,8 @@ mod test {
         ));
 
         let decoded_account = encoded_account.decode::<Account>().unwrap();
-        assert_eq!(decoded_account.data, vec![0; 1024]);
+        assert_eq!(decoded_account.data(), &vec![0; 1024]);
         let decoded_account = encoded_account.decode::<AccountSharedData>().unwrap();
-        assert_eq!(decoded_account.data, vec![0; 1024]);
+        assert_eq!(decoded_account.data(), &vec![0; 1024]);
     }
 }

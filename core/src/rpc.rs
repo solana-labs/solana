@@ -49,7 +49,7 @@ use solana_runtime::{
     snapshot_utils::get_highest_snapshot_archive_path,
 };
 use solana_sdk::{
-    account::AccountSharedData,
+    account::{AccountSharedData, ReadableAccount},
     account_utils::StateMut,
     clock::{Slot, UnixTimestamp, MAX_RECENT_BLOCKHASHES},
     commitment_config::{CommitmentConfig, CommitmentLevel},
@@ -1202,7 +1202,7 @@ impl JsonRpcRequestProcessor {
                 "Invalid param: not a v2.0 Token account".to_string(),
             ));
         }
-        let token_account = TokenAccount::unpack(&account.data).map_err(|_| {
+        let token_account = TokenAccount::unpack(&account.data()).map_err(|_| {
             Error::invalid_params("Invalid param: not a v2.0 Token account".to_string())
         })?;
         let mint = &Pubkey::from_str(&token_account.mint.to_string())
@@ -1226,7 +1226,7 @@ impl JsonRpcRequestProcessor {
                 "Invalid param: not a v2.0 Token mint".to_string(),
             ));
         }
-        let mint = Mint::unpack(&mint_account.data).map_err(|_| {
+        let mint = Mint::unpack(&mint_account.data()).map_err(|_| {
             Error::invalid_params("Invalid param: mint could not be unpacked".to_string())
         })?;
 
@@ -1250,7 +1250,7 @@ impl JsonRpcRequestProcessor {
             .get_filtered_spl_token_accounts_by_mint(&bank, &mint, vec![])
             .into_iter()
             .map(|(address, account)| {
-                let amount = TokenAccount::unpack(&account.data)
+                let amount = TokenAccount::unpack(&account.data())
                     .map(|account| account.amount)
                     .unwrap_or(0);
                 let amount = token_amount_to_ui_amount(amount, decimals);
@@ -1384,8 +1384,8 @@ impl JsonRpcRequestProcessor {
     ) -> Vec<(Pubkey, AccountSharedData)> {
         let filter_closure = |account: &AccountSharedData| {
             filters.iter().all(|filter_type| match filter_type {
-                RpcFilterType::DataSize(size) => account.data.len() as u64 == *size,
-                RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data),
+                RpcFilterType::DataSize(size) => account.data().len() as u64 == *size,
+                RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data()),
             })
         };
         if self
@@ -1437,8 +1437,8 @@ impl JsonRpcRequestProcessor {
             bank.get_filtered_indexed_accounts(&IndexKey::SplTokenOwner(*owner_key), |account| {
                 account.owner == spl_token_id_v2_0()
                     && filters.iter().all(|filter_type| match filter_type {
-                        RpcFilterType::DataSize(size) => account.data.len() as u64 == *size,
-                        RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data),
+                        RpcFilterType::DataSize(size) => account.data().len() as u64 == *size,
+                        RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data()),
                     })
             })
         } else {
@@ -1476,8 +1476,8 @@ impl JsonRpcRequestProcessor {
             bank.get_filtered_indexed_accounts(&IndexKey::SplTokenMint(*mint_key), |account| {
                 account.owner == spl_token_id_v2_0()
                     && filters.iter().all(|filter_type| match filter_type {
-                        RpcFilterType::DataSize(size) => account.data.len() as u64 == *size,
-                        RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data),
+                        RpcFilterType::DataSize(size) => account.data().len() as u64 == *size,
+                        RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data()),
                     })
             })
         } else {
@@ -1565,7 +1565,7 @@ fn get_encoded_account(
         if account.owner == spl_token_id_v2_0() && encoding == UiAccountEncoding::JsonParsed {
             response = Some(get_parsed_token_account(bank.clone(), pubkey, account));
         } else if (encoding == UiAccountEncoding::Binary || encoding == UiAccountEncoding::Base58)
-            && account.data.len() > 128
+            && account.data().len() > 128
         {
             let message = "Encoded binary (base 58) data should be less than 128 bytes, please use Base64 encoding.".to_string();
             return Err(error::Error {
@@ -1643,7 +1643,7 @@ pub(crate) fn get_parsed_token_account(
     pubkey: &Pubkey,
     account: AccountSharedData,
 ) -> UiAccount {
-    let additional_data = get_token_account_mint(&account.data)
+    let additional_data = get_token_account_mint(&account.data())
         .and_then(|mint_pubkey| get_mint_owner_and_decimals(&bank, &mint_pubkey).ok())
         .map(|(_, decimals)| AccountAdditionalData {
             spl_token_decimals: Some(decimals),
@@ -1667,7 +1667,7 @@ where
 {
     let mut mint_decimals: HashMap<Pubkey, u8> = HashMap::new();
     keyed_accounts.filter_map(move |(pubkey, account)| {
-        let additional_data = get_token_account_mint(&account.data).map(|mint_pubkey| {
+        let additional_data = get_token_account_mint(&account.data()).map(|mint_pubkey| {
             let spl_token_decimals = mint_decimals.get(&mint_pubkey).cloned().or_else(|| {
                 let (_, decimals) = get_mint_owner_and_decimals(&bank, &mint_pubkey).ok()?;
                 mint_decimals.insert(mint_pubkey, decimals);
@@ -1731,7 +1731,7 @@ fn get_mint_owner_and_decimals(bank: &Arc<Bank>, mint: &Pubkey) -> Result<(Pubke
         let mint_account = bank.get_account(mint).ok_or_else(|| {
             Error::invalid_params("Invalid param: could not find mint".to_string())
         })?;
-        let decimals = get_mint_decimals(&mint_account.data)?;
+        let decimals = get_mint_decimals(&mint_account.data())?;
         Ok((mint_account.owner, decimals))
     }
 }

@@ -3,6 +3,7 @@
 use crate::ConfigKeys;
 use bincode::deserialize;
 use solana_sdk::{
+    account::ReadableAccount,
     feature_set, ic_msg,
     instruction::InstructionError,
     keyed_account::{next_keyed_account, KeyedAccount},
@@ -29,7 +30,7 @@ pub fn process_instruction(
             return Err(InstructionError::InvalidAccountOwner);
         }
 
-        deserialize(&config_account.data).map_err(|err| {
+        deserialize(&config_account.data()).map_err(|err| {
             ic_msg!(
                 invoke_context,
                 "Unable to deserialize config account: {}",
@@ -206,7 +207,7 @@ mod tests {
         let (_, config_account) = create_config_account(keys);
         assert_eq!(
             Some(MyConfig::default()),
-            deserialize(get_config_data(&config_account.borrow().data).unwrap()).ok()
+            deserialize(get_config_data(&config_account.borrow().data()).unwrap()).ok()
         );
     }
 
@@ -232,7 +233,7 @@ mod tests {
         );
         assert_eq!(
             Some(my_config),
-            deserialize(get_config_data(&config_account.borrow().data).unwrap()).ok()
+            deserialize(get_config_data(&config_account.borrow().data()).unwrap()).ok()
         );
     }
 
@@ -315,11 +316,11 @@ mod tests {
             ),
             Ok(())
         );
-        let meta_data: ConfigKeys = deserialize(&config_account.borrow().data).unwrap();
+        let meta_data: ConfigKeys = deserialize(&config_account.borrow().data()).unwrap();
         assert_eq!(meta_data.keys, keys);
         assert_eq!(
             Some(my_config),
-            deserialize(get_config_data(&config_account.borrow().data).unwrap()).ok()
+            deserialize(get_config_data(&config_account.borrow().data()).unwrap()).ok()
         );
     }
 
@@ -453,11 +454,12 @@ mod tests {
             ),
             Ok(())
         );
-        let meta_data: ConfigKeys = deserialize(&config_account.borrow().data).unwrap();
+        let meta_data: ConfigKeys = deserialize(&config_account.borrow().data()).unwrap();
         assert_eq!(meta_data.keys, keys);
         assert_eq!(
             new_config,
-            MyConfig::deserialize(get_config_data(&config_account.borrow().data).unwrap()).unwrap()
+            MyConfig::deserialize(get_config_data(&config_account.borrow().data()).unwrap())
+                .unwrap()
         );
 
         // Attempt update with incomplete signatures
@@ -558,11 +560,12 @@ mod tests {
             ),
             Ok(())
         );
-        let meta_data: ConfigKeys = deserialize(&config_account.borrow().data).unwrap();
+        let meta_data: ConfigKeys = deserialize(&config_account.borrow().data()).unwrap();
         assert_eq!(meta_data.keys, keys);
         assert_eq!(
             new_config,
-            MyConfig::deserialize(get_config_data(&config_account.borrow().data).unwrap()).unwrap()
+            MyConfig::deserialize(get_config_data(&config_account.borrow().data()).unwrap())
+                .unwrap()
         );
 
         // Attempt update with incomplete signatures

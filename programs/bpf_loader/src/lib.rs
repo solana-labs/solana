@@ -24,6 +24,7 @@ use solana_rbpf::{
 };
 use solana_runtime::message_processor::MessageProcessor;
 use solana_sdk::{
+    account::ReadableAccount,
     account_utils::State,
     bpf_loader, bpf_loader_deprecated,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
@@ -243,7 +244,7 @@ fn process_instruction_common(
             Some(executor) => executor,
             None => create_and_cache_executor(
                 program_id,
-                &program.try_account_ref()?.data[offset..],
+                &program.try_account_ref()?.data()[offset..],
                 invoke_context,
                 use_jit,
             )?,
@@ -445,7 +446,7 @@ fn process_loader_upgradeable_instruction(
             // Load and verify the program bits
             let _ = create_and_cache_executor(
                 program_id,
-                &buffer.try_account_ref()?.data[buffer_data_offset..],
+                &buffer.try_account_ref()?.data()[buffer_data_offset..],
                 invoke_context,
                 use_jit,
             )?;
@@ -457,7 +458,7 @@ fn process_loader_upgradeable_instruction(
             })?;
             programdata.try_account_ref_mut()?.data
                 [programdata_data_offset..programdata_data_offset + buffer_data_len]
-                .copy_from_slice(&buffer.try_account_ref()?.data[buffer_data_offset..]);
+                .copy_from_slice(&buffer.try_account_ref()?.data()[buffer_data_offset..]);
 
             // Update the Program account
             program.set_state(&UpgradeableLoaderState::Program {
@@ -573,7 +574,7 @@ fn process_loader_upgradeable_instruction(
 
             let _ = create_and_cache_executor(
                 program.unsigned_key(),
-                &buffer.try_account_ref()?.data[buffer_data_offset..],
+                &buffer.try_account_ref()?.data()[buffer_data_offset..],
                 invoke_context,
                 use_jit,
             )?;
@@ -587,7 +588,7 @@ fn process_loader_upgradeable_instruction(
             })?;
             programdata.try_account_ref_mut()?.data
                 [programdata_data_offset..programdata_data_offset + buffer_data_len]
-                .copy_from_slice(&buffer.try_account_ref()?.data[buffer_data_offset..]);
+                .copy_from_slice(&buffer.try_account_ref()?.data()[buffer_data_offset..]);
             for i in &mut programdata.try_account_ref_mut()?.data
                 [programdata_data_offset + buffer_data_len..]
             {
@@ -707,7 +708,7 @@ fn process_loader_instruction(
 
             let _ = create_and_cache_executor(
                 program.unsigned_key(),
-                &program.try_account_ref()?.data,
+                &program.try_account_ref()?.data(),
                 invoke_context,
                 use_jit,
             )?;
@@ -977,8 +978,8 @@ mod tests {
             )
         );
         assert_eq!(
-            vec![0, 0, 0, 1, 2, 3],
-            keyed_accounts[0].account.borrow().data
+            &vec![0, 0, 0, 1, 2, 3],
+            keyed_accounts[0].account.borrow().data()
         );
 
         // Case: Overflow
@@ -1363,7 +1364,8 @@ mod tests {
             }
         );
         assert_eq!(
-            &buffer_account.borrow().data[UpgradeableLoaderState::buffer_data_offset().unwrap()..],
+            &buffer_account.borrow().data()
+                [UpgradeableLoaderState::buffer_data_offset().unwrap()..],
             &[42; 9]
         );
 
@@ -1404,7 +1406,8 @@ mod tests {
             }
         );
         assert_eq!(
-            &buffer_account.borrow().data[UpgradeableLoaderState::buffer_data_offset().unwrap()..],
+            &buffer_account.borrow().data()
+                [UpgradeableLoaderState::buffer_data_offset().unwrap()..],
             &[0, 0, 0, 42, 42, 42, 42, 42, 42]
         );
 
@@ -1622,7 +1625,7 @@ mod tests {
         assert_eq!(post_program_account.lamports, min_program_balance);
         assert_eq!(post_program_account.owner, bpf_loader_upgradeable::id());
         assert_eq!(
-            post_program_account.data.len(),
+            post_program_account.data().len(),
             UpgradeableLoaderState::program_len().unwrap()
         );
         let state: UpgradeableLoaderState = post_program_account.state().unwrap();
@@ -1643,7 +1646,7 @@ mod tests {
                 upgrade_authority_address: Some(upgrade_authority_keypair.pubkey())
             }
         );
-        for (i, byte) in post_programdata_account.data
+        for (i, byte) in post_programdata_account.data()
             [UpgradeableLoaderState::programdata_data_offset().unwrap()..]
             .iter()
             .enumerate()
@@ -2315,7 +2318,7 @@ mod tests {
                 upgrade_authority_address: Some(upgrade_authority_address)
             }
         );
-        for (i, byte) in programdata_account.borrow().data
+        for (i, byte) in programdata_account.borrow().data()
             [UpgradeableLoaderState::programdata_data_offset().unwrap()
                 ..UpgradeableLoaderState::programdata_data_offset().unwrap() + elf_new.len()]
             .iter()
