@@ -123,11 +123,11 @@ fn verify_packet(packet: &mut Packet) {
             &packet.data[pubkey_start..pubkey_end],
             &packet.data[msg_start..msg_end],
         ) {
-            // Check for tracer pubkey here
             packet.meta.discard = true;
             return;
         }
 
+        // Check for tracer pubkey
         if !packet.meta.is_tracer_tx
             && &packet.data[pubkey_start..pubkey_end] == TRACER_KEY.as_ref()
         {
