@@ -9,7 +9,7 @@ use crate::{
     hash::Hash,
     instruction::{AccountMeta, CompiledInstruction, Instruction},
     pubkey::Pubkey,
-    short_vec, system_instruction, system_program, sysvar,
+    short_vec, system_instruction, sysvar,
 };
 use itertools::Itertools;
 use lazy_static::lazy_static;
@@ -17,7 +17,7 @@ use std::convert::{TryFrom, TryInto};
 
 lazy_static! {
     // Copied keys over since direct references create cyclical dependency.
-    static ref BUILTIN_PROGRAMS_KEYS: [Pubkey; 14] = vec![
+    static ref BUILTIN_PROGRAMS_KEYS: [Pubkey; 7] = vec![
         "11111111111111111111111111111111",
         "Config1111111111111111111111111111111111111",
         "Feature111111111111111111111111111111111111",
@@ -28,9 +28,6 @@ lazy_static! {
     ]
     .into_iter()
     .map(|s| s.parse().unwrap())
-    .chain(
-        std::iter::once(system_program::id())
-    )
     .collect::<Vec<_>>()
     .try_into()
     .unwrap();
@@ -506,7 +503,7 @@ mod tests {
     #[test]
     fn test_builtin_program_keys() {
         let keys: HashSet<Pubkey> = BUILTIN_PROGRAMS_KEYS.iter().copied().collect();
-        assert_eq!(keys.len(), 14);
+        assert_eq!(keys.len(), 7);
         for k in keys {
             let k = format!("{}", k);
             assert!(k.ends_with("11111111111111111111111111111"));
@@ -520,7 +517,7 @@ mod tests {
         let builtins = format!("{:?}", *BUILTIN_PROGRAMS_KEYS);
         assert_eq!(
             format!("{}", hash::hash(builtins.as_bytes())),
-            "5Rdd7fxQPQooAzmYcb1TT1ZtnJJzJS3qrZqpDW4F66bK"
+            "2SJx58oZA3NUcW6MnKFGyG5xSwXvmEXhoyJnz2Z5mHVh"
         );
     }
 
