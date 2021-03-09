@@ -1,5 +1,10 @@
 use dashmap::DashMap;
-use solana_sdk::{account::AccountSharedData, clock::Slot, hash::Hash, pubkey::Pubkey};
+use solana_sdk::{
+    account::{AccountSharedData, ReadableAccount},
+    clock::Slot,
+    hash::Hash,
+    pubkey::Pubkey,
+};
 use std::{
     collections::BTreeSet,
     ops::Deref,
@@ -46,10 +51,10 @@ impl SlotCacheInner {
         if self.cache.contains_key(pubkey) {
             self.same_account_writes.fetch_add(1, Ordering::Relaxed);
             self.same_account_writes_size
-                .fetch_add(account.data.len() as u64, Ordering::Relaxed);
+                .fetch_add(account.data().len() as u64, Ordering::Relaxed);
         } else {
             self.unique_account_writes_size
-                .fetch_add(account.data.len() as u64, Ordering::Relaxed);
+                .fetch_add(account.data().len() as u64, Ordering::Relaxed);
         }
         self.cache.insert(*pubkey, CachedAccount { account, hash });
     }

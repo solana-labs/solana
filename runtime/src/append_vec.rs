@@ -5,7 +5,7 @@ use log::*;
 use memmap2::MmapMut;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{
-    account::AccountSharedData,
+    account::{AccountSharedData, ReadableAccount},
     clock::{Epoch, Slot},
     hash::Hash,
     pubkey::Pubkey,
@@ -468,7 +468,7 @@ impl AppendVec {
             let account_meta = AccountMeta::from(*account);
             let account_meta_ptr = &account_meta as *const AccountMeta;
             let data_len = stored_meta.data_len as usize;
-            let data_ptr = account.data.as_ptr();
+            let data_ptr = account.data().as_ptr();
             let hash_ptr = hash.as_ref().as_ptr();
             let ptrs = [
                 (meta_ptr as *const u8, mem::size_of::<StoredMeta>()),

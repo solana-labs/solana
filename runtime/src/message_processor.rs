@@ -5,7 +5,7 @@ use crate::{
 use log::*;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{
-    account::AccountSharedData,
+    account::{AccountSharedData, ReadableAccount},
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     feature_set::{instructions_sysvar_enabled, track_writable_deescalation, FeatureSet},
@@ -121,7 +121,7 @@ impl PreAccount {
             && (!is_writable // line coverage used to get branch coverage
                 || pre.executable
                 || *program_id != pre.owner
-            || !Self::is_zeroed(&post.data))
+            || !Self::is_zeroed(&post.data()))
         {
             return Err(InstructionError::ModifiedProgramId);
         }
@@ -146,7 +146,7 @@ impl PreAccount {
 
         // Only the system program can change the size of the data
         //  and only if the system program owns the account
-        let data_len_changed = pre.data.len() != post.data.len();
+        let data_len_changed = pre.data().len() != post.data().len();
         if data_len_changed
             && (!system_program::check_id(program_id) // line coverage used to get branch coverage
                 || !system_program::check_id(&pre.owner))
@@ -160,7 +160,7 @@ impl PreAccount {
         if !(*program_id == pre.owner
             && is_writable  // line coverage used to get branch coverage
             && !pre.executable)
-            && pre.data != post.data
+            && pre.data() != post.data()
         {
             if pre.executable {
                 return Err(InstructionError::ExecutableDataModified);
@@ -174,7 +174,7 @@ impl PreAccount {
         // executable is one-way (false->true) and only the account owner may set it.
         let executable_changed = pre.executable != post.executable;
         if executable_changed {
-            if !rent.is_exempt(post.lamports, post.data.len()) {
+            if !rent.is_exempt(post.lamports, post.data().len()) {
                 return Err(InstructionError::ExecutableAccountNotRentExempt);
             }
             if !is_writable // line coverage used to get branch coverage
@@ -192,7 +192,7 @@ impl PreAccount {
         }
 
         timings.total_account_count += 1;
-        timings.total_data_size += post.data.len();
+        timings.total_data_size += post.data().len();
         if owner_changed
             || lamports_changed
             || data_len_changed
@@ -201,7 +201,7 @@ impl PreAccount {
             || self.changed
         {
             timings.changed_account_count += 1;
-            timings.data_size_changed += post.data.len();
+            timings.data_size_changed += post.data().len();
         }
 
         Ok(())
@@ -213,7 +213,7 @@ impl PreAccount {
         pre.lamports = account.lamports;
         pre.owner = account.owner;
         pre.executable = account.executable;
-        if pre.data.len() != account.data.len() {
+        if pre.data().len() != account.data().len() {
             // Only system account can change data size, copy with alloc
             pre.data = account.data.clone();
         } else {
@@ -789,7 +789,8 @@ impl MessageProcessor {
                 if message.is_writable(i) && !account.executable {
                     account_ref.try_account_ref_mut()?.lamports = account.lamports;
                     account_ref.try_account_ref_mut()?.owner = account.owner;
-                    if account_ref.data_len()? != account.data.len() && account_ref.data_len()? != 0
+                    if account_ref.data_len()? != account.data().len()
+                        && account_ref.data_len()? != 0
                     {
                         // Only support for `CreateAccount` at this time.
                         // Need a way to limit total realloc size across multiple CPI calls
@@ -1193,12 +1194,12 @@ mod tests {
                 invoke_context.pre_accounts[owned_index]
                     .account
                     .borrow()
-                    .data[0],
+                    .data()[0],
                 (MAX_DEPTH + owned_index) as u8
             );
 
             // modify account not owned by the program
-            let data = accounts[not_owned_index].borrow_mut().data[0];
+            let data = accounts[not_owned_index].borrow_mut().data()[0];
             accounts[not_owned_index].borrow_mut().data[0] = (MAX_DEPTH + not_owned_index) as u8;
             assert_eq!(
                 invoke_context.verify_and_update(
@@ -1213,7 +1214,7 @@ mod tests {
                 invoke_context.pre_accounts[not_owned_index]
                     .account
                     .borrow()
-                    .data[0],
+                    .data()[0],
                 data
             );
             accounts[not_owned_index].borrow_mut().data[0] = data;
@@ -1956,7 +1957,7 @@ mod tests {
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].borrow().lamports, 80);
         assert_eq!(accounts[1].borrow().lamports, 20);
-        assert_eq!(accounts[0].borrow().data, vec![42]);
+        assert_eq!(accounts[0].borrow().data(), &vec![42]);
     }
 
     #[test]

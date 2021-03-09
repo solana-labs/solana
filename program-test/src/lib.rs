@@ -20,7 +20,7 @@ use {
         genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
     },
     solana_sdk::{
-        account::AccountSharedData,
+        account::{AccountSharedData, ReadableAccount},
         clock::Slot,
         genesis_config::GenesisConfig,
         keyed_account::KeyedAccount,
@@ -310,7 +310,8 @@ impl program_stubs::SyscallStubs for SyscallStubs {
                     **account_info.try_borrow_mut_lamports().unwrap() = account.borrow().lamports;
 
                     let mut data = account_info.try_borrow_mut_data()?;
-                    let new_data = &account.borrow().data;
+                    let account_borrow = account.borrow();
+                    let new_data = account_borrow.data();
                     if *account_info.owner != account.borrow().owner {
                         // TODO Figure out a better way to allow the System Program to set the account owner
                         #[allow(clippy::transmute_ptr_to_ptr)]

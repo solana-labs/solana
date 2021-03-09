@@ -41,7 +41,7 @@ use serde::{Deserialize, Serialize};
 use solana_measure::measure::Measure;
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::{
-    account::AccountSharedData,
+    account::{AccountSharedData, ReadableAccount},
     clock::{Epoch, Slot},
     genesis_config::ClusterType,
     hash::{Hash, Hasher},
@@ -575,7 +575,9 @@ impl BankHashStats {
         } else {
             self.num_updated_accounts += 1;
         }
-        self.total_data_len = self.total_data_len.wrapping_add(account.data.len() as u64);
+        self.total_data_len = self
+            .total_data_len
+            .wrapping_add(account.data().len() as u64);
         if account.executable {
             self.num_executable_accounts += 1;
         }
@@ -2840,7 +2842,7 @@ impl AccountsDb {
                 &account.owner,
                 account.executable,
                 account.rent_epoch,
-                &account.data,
+                &account.data(),
                 pubkey,
                 include_owner,
             )
@@ -2851,7 +2853,7 @@ impl AccountsDb {
                 &account.owner,
                 account.executable,
                 account.rent_epoch,
-                &account.data,
+                &account.data(),
                 pubkey,
                 include_owner,
             )
@@ -2861,7 +2863,7 @@ impl AccountsDb {
     fn hash_frozen_account_data(account: &AccountSharedData) -> Hash {
         let mut hasher = Hasher::default();
 
-        hasher.hash(&account.data);
+        hasher.hash(&account.data());
         hasher.hash(&account.owner.as_ref());
 
         if account.executable {
@@ -2981,7 +2983,7 @@ impl AccountsDb {
             let mut storage_find = Measure::start("storage_finder");
             let storage = storage_finder(
                 slot,
-                accounts_and_meta_to_store[infos.len()].1.data.len() + STORE_META_OVERHEAD,
+                accounts_and_meta_to_store[infos.len()].1.data().len() + STORE_META_OVERHEAD,
             );
             storage_find.stop();
             total_storage_find_us += storage_find.as_us();
@@ -2997,7 +2999,7 @@ impl AccountsDb {
                 storage.set_status(AccountStorageStatus::Full);
 
                 // See if an account overflows the append vecs in the slot.
-                let data_len = (accounts_and_meta_to_store[infos.len()].1.data.len()
+                let data_len = (accounts_and_meta_to_store[infos.len()].1.data().len()
                     + STORE_META_OVERHEAD) as u64;
                 if !self.has_space_available(slot, data_len) {
                     let special_store_size = std::cmp::max(data_len * 2, self.file_size);
@@ -3204,7 +3206,7 @@ impl AccountsDb {
                         true
                     }
                     Occupied(_occupied_entry) => {
-                        *account_bytes_saved += account.data.len();
+                        *account_bytes_saved += account.data().len();
                         *num_accounts_saved += 1;
                         // If a later root already wrote this account, no point
                         // in flushing it
@@ -3283,7 +3285,7 @@ impl AccountsDb {
                         .unwrap_or(true);
                     if should_flush {
                         let hash = iter_item.value().hash;
-                        total_size += (account.data.len() + STORE_META_OVERHEAD) as u64;
+                        total_size += (account.data().len() + STORE_META_OVERHEAD) as u64;
                         num_flushed += 1;
                         Some(((key, account), hash))
                     } else {
@@ -3394,7 +3396,7 @@ impl AccountsDb {
                 } else {
                     *account
                 };
-                let data_len = account.data.len() as u64;
+                let data_len = account.data().len() as u64;
                 let meta = StoredMeta {
                     write_version: write_version_producer.next().unwrap(),
                     pubkey: **pubkey,
@@ -3948,7 +3950,7 @@ impl AccountsDb {
                 slot,
                 pubkey,
                 &pubkey_account.1.owner,
-                &pubkey_account.1.data,
+                &pubkey_account.1.data(),
                 &self.account_indexes,
                 info,
                 &mut reclaims,
@@ -4129,7 +4131,7 @@ impl AccountsDb {
         let hashes: Vec<_> = accounts
             .iter()
             .map(|(pubkey, account)| {
-                total_data += account.data.len();
+                total_data += account.data().len();
                 stats.update(account);
                 Self::hash_account(slot, account, pubkey, cluster_type)
             })
@@ -5049,7 +5051,11 @@ pub mod tests {
     };
     use assert_matches::assert_matches;
     use rand::{thread_rng, Rng};
-    use solana_sdk::{account::AccountSharedData, hash::HASH_BYTES, pubkey::PUBKEY_BYTES};
+    use solana_sdk::{
+        account::{AccountSharedData, ReadableAccount},
+        hash::HASH_BYTES,
+        pubkey::PUBKEY_BYTES,
+    };
     use std::{
         iter::FromIterator,
         str::FromStr,
@@ -6750,7 +6756,7 @@ pub mod tests {
 
         let ancestors = vec![(0, 0)].into_iter().collect();
         let ret = db.load_slow(&ancestors, &key).unwrap();
-        assert_eq!(ret.0.data.len(), data_len);
+        assert_eq!(ret.0.data().len(), data_len);
     }
 
     #[test]

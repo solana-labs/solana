@@ -10,7 +10,7 @@ use solana_rbpf::{
 };
 use solana_runtime::message_processor::MessageProcessor;
 use solana_sdk::{
-    account::AccountSharedData,
+    account::{AccountSharedData, ReadableAccount},
     account_info::AccountInfo,
     account_utils::StateMut,
     bpf_loader, bpf_loader_deprecated,
@@ -1665,7 +1665,7 @@ fn call<'a>(
                 if message.is_writable(i) && !account.executable {
                     *account_ref.lamports = account.lamports;
                     *account_ref.owner = account.owner;
-                    if account_ref.data.len() != account.data.len() {
+                    if account_ref.data.len() != account.data().len() {
                         if !account_ref.data.is_empty() {
                             // Only support for `CreateAccount` at this time.
                             // Need a way to limit total realloc size across multiple CPI calls
@@ -1678,7 +1678,8 @@ fn call<'a>(
                             )
                             .into());
                         }
-                        if account.data.len() > account_ref.data.len() + MAX_PERMITTED_DATA_INCREASE
+                        if account.data().len()
+                            > account_ref.data.len() + MAX_PERMITTED_DATA_INCREASE
                         {
                             ic_msg!(
                                 invoke_context,
@@ -1694,14 +1695,14 @@ fn call<'a>(
                             memory_mapping,
                             AccessType::Store,
                             account_ref.vm_data_addr,
-                            account.data.len() as u64,
+                            account.data().len() as u64,
                         )?;
-                        *account_ref.ref_to_len_in_vm = account.data.len() as u64;
-                        *account_ref.serialized_len_ptr = account.data.len() as u64;
+                        *account_ref.ref_to_len_in_vm = account.data().len() as u64;
+                        *account_ref.serialized_len_ptr = account.data().len() as u64;
                     }
                     account_ref
                         .data
-                        .clone_from_slice(&account.data[0..account_ref.data.len()]);
+                        .clone_from_slice(&account.data()[0..account_ref.data.len()]);
                 }
             }
         }

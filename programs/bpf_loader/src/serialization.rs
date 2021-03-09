@@ -1,7 +1,7 @@
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use solana_sdk::{
-    bpf_loader_deprecated, entrypoint::MAX_PERMITTED_DATA_INCREASE, instruction::InstructionError,
-    keyed_account::KeyedAccount, pubkey::Pubkey,
+    account::ReadableAccount, bpf_loader_deprecated, entrypoint::MAX_PERMITTED_DATA_INCREASE,
+    instruction::InstructionError, keyed_account::KeyedAccount, pubkey::Pubkey,
 };
 use std::{
     io::prelude::*,
@@ -86,7 +86,8 @@ pub fn serialize_parameters_unaligned(
                 .unwrap();
             v.write_u64::<LittleEndian>(keyed_account.data_len()? as u64)
                 .unwrap();
-            v.write_all(&keyed_account.try_account_ref()?.data).unwrap();
+            v.write_all(&keyed_account.try_account_ref()?.data())
+                .unwrap();
             v.write_all(keyed_account.owner()?.as_ref()).unwrap();
             v.write_u8(keyed_account.executable()? as u8).unwrap();
             v.write_u64::<LittleEndian>(keyed_account.rent_epoch()? as u64)
@@ -181,7 +182,8 @@ pub fn serialize_parameters_aligned(
                 .unwrap();
             v.write_u64::<LittleEndian>(keyed_account.data_len()? as u64)
                 .unwrap();
-            v.write_all(&keyed_account.try_account_ref()?.data).unwrap();
+            v.write_all(&keyed_account.try_account_ref()?.data())
+                .unwrap();
             v.resize(
                 v.len()
                     + MAX_PERMITTED_DATA_INCREASE
@@ -323,7 +325,7 @@ mod tests {
             assert_eq!(key, *account_info.key);
             let account = account.borrow();
             assert_eq!(account.lamports, account_info.lamports());
-            assert_eq!(&account.data[..], &account_info.data.borrow()[..]);
+            assert_eq!(&account.data()[..], &account_info.data.borrow()[..]);
             assert_eq!(&account.owner, account_info.owner);
             assert_eq!(account.executable, account_info.executable);
             assert_eq!(account.rent_epoch, account_info.rent_epoch);
@@ -360,7 +362,7 @@ mod tests {
             assert_eq!(key, *account_info.key);
             let account = account.borrow();
             assert_eq!(account.lamports, account_info.lamports());
-            assert_eq!(&account.data[..], &account_info.data.borrow()[..]);
+            assert_eq!(&account.data()[..], &account_info.data.borrow()[..]);
             assert_eq!(&account.owner, account_info.owner);
             assert_eq!(account.executable, account_info.executable);
             assert_eq!(account.rent_epoch, account_info.rent_epoch);

@@ -7,7 +7,7 @@ use chrono::prelude::*;
 use solana_config_program::date_instruction::DateConfig;
 use solana_config_program::get_config_data;
 use solana_sdk::{
-    account::AccountSharedData,
+    account::{AccountSharedData, ReadableAccount},
     feature_set,
     instruction::InstructionError,
     keyed_account::{next_keyed_account, KeyedAccount},
@@ -28,7 +28,7 @@ fn verify_date_account(
     let account = verify_account(keyed_account, expected_pubkey)?;
 
     let config_data =
-        get_config_data(&account.data).map_err(|_| InstructionError::InvalidAccountData)?;
+        get_config_data(&account.data()).map_err(|_| InstructionError::InvalidAccountData)?;
     let date_config =
         DateConfig::deserialize(config_data).ok_or(InstructionError::InvalidAccountData)?;
 
@@ -90,7 +90,7 @@ pub fn process_instruction(
             ..VestState::default()
         }
     } else {
-        VestState::deserialize(&contract_account.data)?
+        VestState::deserialize(&contract_account.data())?
     };
 
     match instruction {

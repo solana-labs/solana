@@ -1,7 +1,13 @@
 //! calculate and collect rent from Accounts
 use solana_sdk::{
-    account::AccountSharedData, clock::Epoch, epoch_schedule::EpochSchedule,
-    genesis_config::GenesisConfig, incinerator, pubkey::Pubkey, rent::Rent, sysvar,
+    account::{AccountSharedData, ReadableAccount},
+    clock::Epoch,
+    epoch_schedule::EpochSchedule,
+    genesis_config::GenesisConfig,
+    incinerator,
+    pubkey::Pubkey,
+    rent::Rent,
+    sysvar,
 };
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug, AbiExample)]
@@ -75,7 +81,7 @@ impl RentCollector {
 
             let (rent_due, exempt) =
                 self.rent
-                    .due(account.lamports, account.data.len(), years_elapsed);
+                    .due(account.lamports, account.data().len(), years_elapsed);
 
             if exempt || rent_due != 0 {
                 if account.lamports > rent_due {
