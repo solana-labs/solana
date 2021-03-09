@@ -1209,7 +1209,7 @@ pub mod tests {
         self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
     };
     use solana_sdk::{
-        account::AccountSharedData,
+        account::{AccountSharedData, WritableAccount},
         epoch_schedule::EpochSchedule,
         hash::Hash,
         pubkey::Pubkey,
@@ -3353,7 +3353,7 @@ pub mod tests {
                             &solana_vote_program::id(),
                         );
                         let versioned = VoteStateVersions::new_current(vote_state);
-                        VoteState::serialize(&versioned, &mut vote_account.data).unwrap();
+                        VoteState::serialize(&versioned, vote_account.data_as_mut_slice()).unwrap();
                         (
                             solana_sdk::pubkey::new_rand(),
                             (stake, ArcVoteAccount::from(vote_account)),

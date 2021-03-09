@@ -16,10 +16,10 @@ use dashmap::{
 use log::*;
 use rand::{thread_rng, Rng};
 use solana_sdk::{
-    account::AccountSharedData,
+    account::{AccountSharedData, WritableAccount},
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-    clock::Slot,
+    clock::{Epoch, Slot},
     feature_set::{self, FeatureSet},
     fee_calculator::{FeeCalculator, FeeConfig},
     genesis_config::ClusterType,
@@ -166,10 +166,13 @@ impl Accounts {
         let mut data = message.serialize_instructions();
         // add room for current instruction index.
         data.resize(data.len() + 2, 0);
-        AccountSharedData {
+        AccountSharedData::create(
+            u64::default(),
             data,
-            ..AccountSharedData::default()
-        }
+            Pubkey::default(),
+            bool::default(),
+            Epoch::default(),
+        )
     }
 
     fn load_transaction(
@@ -1020,7 +1023,7 @@ mod tests {
     use super::*;
     use crate::rent_collector::RentCollector;
     use solana_sdk::{
-        account::AccountSharedData,
+        account::{AccountSharedData, ReadableAccount},
         epoch_schedule::EpochSchedule,
         fee_calculator::FeeCalculator,
         genesis_config::ClusterType,
@@ -2000,10 +2003,13 @@ mod tests {
             nonce::state::Data::default(),
         ));
         let account = AccountSharedData::new_data(42, &data, &system_program::id()).unwrap();
-        let pre_account = AccountSharedData {
-            lamports: 43,
-            ..account.clone()
-        };
+        let pre_account = AccountSharedData::create(
+            43,
+            account.data().clone(),
+            *account.owner(),
+            account.executable(),
+            account.rent_epoch(),
+        );
         (
             Pubkey::default(),
             pre_account,

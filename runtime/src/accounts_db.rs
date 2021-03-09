@@ -41,7 +41,7 @@ use serde::{Deserialize, Serialize};
 use solana_measure::measure::Measure;
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::{
-    account::AccountSharedData,
+    account::{AccountSharedData, ReadableAccount},
     clock::{Epoch, Slot},
     genesis_config::ClusterType,
     hash::{Hash, Hasher},
@@ -575,7 +575,9 @@ impl BankHashStats {
         } else {
             self.num_updated_accounts += 1;
         }
-        self.total_data_len = self.total_data_len.wrapping_add(account.data.len() as u64);
+        self.total_data_len = self
+            .total_data_len
+            .wrapping_add(account.data().len() as u64);
         if account.executable {
             self.num_executable_accounts += 1;
         }
@@ -2840,7 +2842,7 @@ impl AccountsDb {
                 &account.owner,
                 account.executable,
                 account.rent_epoch,
-                &account.data,
+                &account.data(),
                 pubkey,
                 include_owner,
             )
@@ -2851,7 +2853,7 @@ impl AccountsDb {
                 &account.owner,
                 account.executable,
                 account.rent_epoch,
-                &account.data,
+                &account.data(),
                 pubkey,
                 include_owner,
             )
@@ -2861,7 +2863,7 @@ impl AccountsDb {
     fn hash_frozen_account_data(account: &AccountSharedData) -> Hash {
         let mut hasher = Hasher::default();
 
-        hasher.hash(&account.data);
+        hasher.hash(&account.data());
         hasher.hash(&account.owner.as_ref());
 
         if account.executable {
@@ -2981,7 +2983,7 @@ impl AccountsDb {
             let mut storage_find = Measure::start("storage_finder");
             let storage = storage_finder(
                 slot,
-                accounts_and_meta_to_store[infos.len()].1.data.len() + STORE_META_OVERHEAD,
+                accounts_and_meta_to_store[infos.len()].1.data().len() + STORE_META_OVERHEAD,
             );
             storage_find.stop();
             total_storage_find_us += storage_find.as_us();
@@ -2997,7 +2999,7 @@ impl AccountsDb {
                 storage.set_status(AccountStorageStatus::Full);
 
                 // See if an account overflows the append vecs in the slot.
-                let data_len = (accounts_and_meta_to_store[infos.len()].1.data.len()
+                let data_len = (accounts_and_meta_to_store[infos.len()].1.data().len()
                     + STORE_META_OVERHEAD) as u64;
                 if !self.has_space_available(slot, data_len) {
                     let special_store_size = std::cmp::max(data_len * 2, self.file_size);
@@ -3204,7 +3206,7 @@ impl AccountsDb {
                         true
                     }
                     Occupied(_occupied_entry) => {
-                        *account_bytes_saved += account.data.len();
+                        *account_bytes_saved += account.data().len();
                         *num_accounts_saved += 1;
                         // If a later root already wrote this account, no point
                         // in flushing it
@@ -3283,7 +3285,7 @@ impl AccountsDb {
                         .unwrap_or(true);
                     if should_flush {
                         let hash = iter_item.value().hash;
-                        total_size += (account.data.len() + STORE_META_OVERHEAD) as u64;
+                        total_size += (account.data().len() + STORE_META_OVERHEAD) as u64;
                         num_flushed += 1;
                         Some(((key, account), hash))
                     } else {
@@ -3394,7 +3396,7 @@ impl AccountsDb {
                 } else {
                     *account
                 };
-                let data_len = account.data.len() as u64;
+                let data_len = account.data().len() as u64;
                 let meta = StoredMeta {
                     write_version: write_version_producer.next().unwrap(),
                     pubkey: **pubkey,
@@ -3948,7 +3950,7 @@ impl AccountsDb {
                 slot,
                 pubkey,
                 &pubkey_account.1.owner,
-                &pubkey_account.1.data,
+                &pubkey_account.1.data(),
                 &self.account_indexes,
                 info,
                 &mut reclaims,
@@ -4129,7 +4131,7 @@ impl AccountsDb {
         let hashes: Vec<_> = accounts
             .iter()
             .map(|(pubkey, account)| {
-                total_data += account.data.len();
+                total_data += account.data().len();
                 stats.update(account);
                 Self::hash_account(slot, account, pubkey, cluster_type)
             })
@@ -5049,7 +5051,11 @@ pub mod tests {
     };
     use assert_matches::assert_matches;
     use rand::{thread_rng, Rng};
-    use solana_sdk::{account::AccountSharedData, hash::HASH_BYTES, pubkey::PUBKEY_BYTES};
+    use solana_sdk::{
+        account::{AccountSharedData, ReadableAccount, WritableAccount},
+        hash::HASH_BYTES,
+        pubkey::PUBKEY_BYTES,
+    };
     use std::{
         iter::FromIterator,
         str::FromStr,
@@ -5404,10 +5410,7 @@ pub mod tests {
             let idx = thread_rng().gen_range(0, 99);
             let ancestors = vec![(0, 0)].into_iter().collect();
             let account = db.load_slow(&ancestors, &pubkeys[idx]).unwrap();
-            let default_account = AccountSharedData {
-                lamports: (idx + 1) as u64,
-                ..AccountSharedData::default()
-            };
+            let default_account = AccountSharedData::new_with_lamports((idx + 1) as u64);
             assert_eq!((default_account, 0), account);
         }
 
@@ -5420,10 +5423,7 @@ pub mod tests {
             let account0 = db.load_slow(&ancestors, &pubkeys[idx]).unwrap();
             let ancestors = vec![(1, 1)].into_iter().collect();
             let account1 = db.load_slow(&ancestors, &pubkeys[idx]).unwrap();
-            let default_account = AccountSharedData {
-                lamports: (idx + 1) as u64,
-                ..AccountSharedData::default()
-            };
+            let default_account = AccountSharedData::new_with_lamports((idx + 1) as u64);
             assert_eq!(&default_account, &account0.0);
             assert_eq!(&default_account, &account1.0);
         }
@@ -5618,10 +5618,7 @@ pub mod tests {
                     let ancestors = vec![(slot, 0)].into_iter().collect();
                     assert!(accounts.load_slow(&ancestors, &pubkeys[idx]).is_none());
                 } else {
-                    let default_account = AccountSharedData {
-                        lamports: account.lamports,
-                        ..AccountSharedData::default()
-                    };
+                    let default_account = AccountSharedData::new_with_lamports(account.lamports);
                     assert_eq!(default_account, account);
                 }
             }
@@ -5710,10 +5707,7 @@ pub mod tests {
         create_account(&db, &mut pubkeys, 0, 1, 0, 0);
         let ancestors = vec![(0, 0)].into_iter().collect();
         let account = db.load_slow(&ancestors, &pubkeys[0]).unwrap();
-        let default_account = AccountSharedData {
-            lamports: 1,
-            ..AccountSharedData::default()
-        };
+        let default_account = AccountSharedData::new_with_lamports(1);
         assert_eq!((default_account, 0), account);
     }
 
@@ -6082,10 +6076,10 @@ pub mod tests {
 
         let mut normal_account = AccountSharedData::new(1, 0, &AccountSharedData::default().owner);
         normal_account.owner = inline_spl_token_v2_0::id();
-        normal_account.data = account_data_with_mint.clone();
+        normal_account.set_data(account_data_with_mint.clone());
         let mut zero_account = AccountSharedData::new(0, 0, &AccountSharedData::default().owner);
         zero_account.owner = inline_spl_token_v2_0::id();
-        zero_account.data = account_data_with_mint;
+        zero_account.set_data(account_data_with_mint);
 
         //store an account
         accounts.store_uncached(0, &[(&pubkey1, &normal_account)]);
@@ -6750,7 +6744,7 @@ pub mod tests {
 
         let ancestors = vec![(0, 0)].into_iter().collect();
         let ret = db.load_slow(&ancestors, &key).unwrap();
-        assert_eq!(ret.0.data.len(), data_len);
+        assert_eq!(ret.0.data().len(), data_len);
     }
 
     #[test]
@@ -6778,7 +6772,7 @@ pub mod tests {
 
         // Account data may not be modified
         let mut account_modified = account.clone();
-        account_modified.data[0] = 42;
+        account_modified.data_as_mut_slice()[0] = 42;
         assert_ne!(
             hash,
             AccountsDb::hash_frozen_account_data(&account_modified)
@@ -6882,7 +6876,7 @@ pub mod tests {
         let ancestors = vec![(0, 0)].into_iter().collect();
         db.freeze_accounts(&ancestors, &[frozen_pubkey]);
 
-        account.data[0] = 42;
+        account.data_as_mut_slice()[0] = 42;
         db.store_uncached(0, &[(&frozen_pubkey, &account)]);
     }
 

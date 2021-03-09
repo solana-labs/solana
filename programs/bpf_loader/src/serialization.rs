@@ -1,7 +1,11 @@
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use solana_sdk::{
-    bpf_loader_deprecated, entrypoint::MAX_PERMITTED_DATA_INCREASE, instruction::InstructionError,
-    keyed_account::KeyedAccount, pubkey::Pubkey,
+    account::{ReadableAccount, WritableAccount},
+    bpf_loader_deprecated,
+    entrypoint::MAX_PERMITTED_DATA_INCREASE,
+    instruction::InstructionError,
+    keyed_account::KeyedAccount,
+    pubkey::Pubkey,
 };
 use std::{
     io::prelude::*,
@@ -86,7 +90,8 @@ pub fn serialize_parameters_unaligned(
                 .unwrap();
             v.write_u64::<LittleEndian>(keyed_account.data_len()? as u64)
                 .unwrap();
-            v.write_all(&keyed_account.try_account_ref()?.data).unwrap();
+            v.write_all(&keyed_account.try_account_ref()?.data())
+                .unwrap();
             v.write_all(keyed_account.owner()?.as_ref()).unwrap();
             v.write_u8(keyed_account.executable()? as u8).unwrap();
             v.write_u64::<LittleEndian>(keyed_account.rent_epoch()? as u64)
@@ -119,7 +124,7 @@ pub fn deserialize_parameters_unaligned(
             let end = start + keyed_account.data_len()?;
             keyed_account
                 .try_account_ref_mut()?
-                .data
+                .data_as_mut_slice()
                 .clone_from_slice(&buffer[start..end]);
             start += keyed_account.data_len()? // data
                 + size_of::<Pubkey>() // owner
@@ -181,7 +186,8 @@ pub fn serialize_parameters_aligned(
                 .unwrap();
             v.write_u64::<LittleEndian>(keyed_account.data_len()? as u64)
                 .unwrap();
-            v.write_all(&keyed_account.try_account_ref()?.data).unwrap();
+            v.write_all(&keyed_account.try_account_ref()?.data())
+                .unwrap();
             v.resize(
                 v.len()
                     + MAX_PERMITTED_DATA_INCREASE
@@ -220,17 +226,19 @@ pub fn deserialize_parameters_aligned(
             start += size_of::<Pubkey>(); // owner
             account.lamports = LittleEndian::read_u64(&buffer[start..]);
             start += size_of::<u64>(); // lamports
-            let pre_len = account.data.len();
+            let pre_len = account.data_as_mut_slice().len();
             let post_len = LittleEndian::read_u64(&buffer[start..]) as usize;
             start += size_of::<u64>(); // data length
             let mut data_end = start + pre_len;
             if post_len != pre_len
                 && (post_len.saturating_sub(pre_len)) <= MAX_PERMITTED_DATA_INCREASE
             {
-                account.data.resize(post_len, 0);
+                account.resize_data(post_len, 0);
                 data_end = start + post_len;
             }
-            account.data.clone_from_slice(&buffer[start..data_end]);
+            account
+                .data_as_mut_slice()
+                .clone_from_slice(&buffer[start..data_end]);
             start += pre_len + MAX_PERMITTED_DATA_INCREASE; // data
             start += (start as *const u8).align_offset(align_of::<u128>());
             start += size_of::<u64>(); // rent_epoch
@@ -263,35 +271,35 @@ mod tests {
             solana_sdk::pubkey::new_rand(),
         ];
         let accounts = [
-            RefCell::new(AccountSharedData {
-                lamports: 1,
-                data: vec![1u8, 2, 3, 4, 5],
-                owner: bpf_loader::id(),
-                executable: false,
-                rent_epoch: 100,
-            }),
+            RefCell::new(AccountSharedData::create(
+                1,
+                vec![1u8, 2, 3, 4, 5],
+                bpf_loader::id(),
+                false,
+                100,
+            )),
             // dup of first
-            RefCell::new(AccountSharedData {
-                lamports: 1,
-                data: vec![1u8, 2, 3, 4, 5],
-                owner: bpf_loader::id(),
-                executable: false,
-                rent_epoch: 100,
-            }),
-            RefCell::new(AccountSharedData {
-                lamports: 2,
-                data: vec![11u8, 12, 13, 14, 15, 16, 17, 18, 19],
-                owner: bpf_loader::id(),
-                executable: true,
-                rent_epoch: 200,
-            }),
-            RefCell::new(AccountSharedData {
-                lamports: 3,
-                data: vec![],
-                owner: bpf_loader::id(),
-                executable: false,
-                rent_epoch: 3100,
-            }),
+            RefCell::new(AccountSharedData::create(
+                1,
+                vec![1u8, 2, 3, 4, 5],
+                bpf_loader::id(),
+                false,
+                100,
+            )),
+            RefCell::new(AccountSharedData::create(
+                2,
+                vec![11u8, 12, 13, 14, 15, 16, 17, 18, 19],
+                bpf_loader::id(),
+                true,
+                200,
+            )),
+            RefCell::new(AccountSharedData::create(
+                3,
+                vec![],
+                bpf_loader::id(),
+                false,
+                3100,
+            )),
         ];
 
         let keyed_accounts: Vec<_> = keys
@@ -323,7 +331,7 @@ mod tests {
             assert_eq!(key, *account_info.key);
             let account = account.borrow();
             assert_eq!(account.lamports, account_info.lamports());
-            assert_eq!(&account.data[..], &account_info.data.borrow()[..]);
+            assert_eq!(&account.data()[..], &account_info.data.borrow()[..]);
             assert_eq!(&account.owner, account_info.owner);
             assert_eq!(account.executable, account_info.executable);
             assert_eq!(account.rent_epoch, account_info.rent_epoch);
@@ -360,7 +368,7 @@ mod tests {
             assert_eq!(key, *account_info.key);
             let account = account.borrow();
             assert_eq!(account.lamports, account_info.lamports());
-            assert_eq!(&account.data[..], &account_info.data.borrow()[..]);
+            assert_eq!(&account.data()[..], &account_info.data.borrow()[..]);
             assert_eq!(&account.owner, account_info.owner);
             assert_eq!(account.executable, account_info.executable);
             assert_eq!(account.rent_epoch, account_info.rent_epoch);

@@ -19,7 +19,7 @@ use solana_ledger::{
 };
 use solana_runtime::hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE;
 use solana_sdk::{
-    account::AccountSharedData,
+    account::{AccountSharedData, WritableAccount},
     clock,
     epoch_schedule::EpochSchedule,
     fee_calculator::FeeRateGovernor,
@@ -84,12 +84,14 @@ pub fn load_genesis_accounts(file: &str, genesis_config: &mut GenesisConfig) -> 
 
         let mut account = AccountSharedData::new(account_details.balance, 0, &owner_program_id);
         if account_details.data != "~" {
-            account.data = base64::decode(account_details.data.as_str()).map_err(|err| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("Invalid account data: {}: {:?}", account_details.data, err),
-                )
-            })?;
+            account.set_data(
+                base64::decode(account_details.data.as_str()).map_err(|err| {
+                    io::Error::new(
+                        io::ErrorKind::Other,
+                        format!("Invalid account data: {}: {:?}", account_details.data, err),
+                    )
+                })?,
+            );
         }
         account.executable = account_details.executable;
         lamports += account.lamports;
@@ -618,13 +620,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         });
                     genesis_config.add_account(
                         address,
-                        AccountSharedData {
-                            lamports: genesis_config.rent.minimum_balance(program_data.len()),
-                            data: program_data,
-                            executable: true,
-                            owner: loader,
-                            rent_epoch: 0,
-                        },
+                        AccountSharedData::create(
+                            genesis_config.rent.minimum_balance(program_data.len()),
+                            program_data,
+                            loader,
+                            true,
+                            0,
+                        ),
                     );
                 }
                 _ => unreachable!(),

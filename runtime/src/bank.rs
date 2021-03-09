@@ -31,7 +31,10 @@ use rayon::ThreadPool;
 use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_debug, inc_new_counter_debug, inc_new_counter_info};
 use solana_sdk::{
-    account::{create_account_shared_data as create_account, from_account, AccountSharedData},
+    account::{
+        create_account_shared_data as create_account, from_account, AccountSharedData,
+        ReadableAccount, WritableAccount,
+    },
     clock::{
         Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp, DEFAULT_TICKS_PER_SECOND,
         MAX_PROCESSING_AGE, MAX_RECENT_BLOCKHASHES, MAX_TRANSACTION_FORWARDING_DELAY,
@@ -2189,7 +2192,7 @@ impl Bank {
                     name, program_id
                 ),
                 Some(account) => {
-                    if *name == String::from_utf8_lossy(&account.data) {
+                    if *name == String::from_utf8_lossy(&account.data()) {
                         // nop; it seems that already AccountsDb is updated.
                         return;
                     }
@@ -4825,13 +4828,13 @@ impl Bank {
         };
 
         if reconfigure_token2_native_mint {
-            let mut native_mint_account = solana_sdk::account::AccountSharedData {
-                owner: inline_spl_token_v2_0::id(),
-                data: inline_spl_token_v2_0::native_mint::ACCOUNT_DATA.to_vec(),
-                lamports: sol_to_lamports(1.),
-                executable: false,
-                rent_epoch: self.epoch() + 1,
-            };
+            let mut native_mint_account = solana_sdk::account::AccountSharedData::create(
+                sol_to_lamports(1.),
+                inline_spl_token_v2_0::native_mint::ACCOUNT_DATA.to_vec(),
+                inline_spl_token_v2_0::id(),
+                false,
+                self.epoch() + 1,
+            );
 
             // As a workaround for
             // https://github.com/solana-labs/solana-program-library/issues/374, ensure that the
@@ -5276,7 +5279,7 @@ pub(crate) mod tests {
         let system_program_id = system_program::id();
         let mut system_program_account = bank.get_account(&system_program_id).unwrap();
         system_program_account.lamports =
-            bank.get_minimum_balance_for_rent_exemption(system_program_account.data.len());
+            bank.get_minimum_balance_for_rent_exemption(system_program_account.data().len());
         bank.store_account(&system_program_id, &system_program_account);
         bank_with_success_txs.store_account(&system_program_id, &system_program_account);
 
@@ -6050,7 +6053,7 @@ pub(crate) mod tests {
         // Then, at store time we deducted `magic_rent_number` rent for the current epoch, once it has balance
         assert_eq!(account10.rent_epoch, bank.epoch + 1);
         // account data is blank now
-        assert_eq!(account10.data.len(), 0);
+        assert_eq!(account10.data().len(), 0);
         // 10 - 10(Rent) + 929(Transfer) - magic_rent_number(Rent)
         assert_eq!(account10.lamports, 929 - magic_rent_number);
         rent_collected += magic_rent_number + 10;
@@ -8974,7 +8977,7 @@ pub(crate) mod tests {
         );
         let new_vote_loader_account = bank.get_account(&solana_vote_program::id()).unwrap();
         // Vote loader account should not be updated since it was included in the genesis config.
-        assert_eq!(vote_loader_account.data, new_vote_loader_account.data);
+        assert_eq!(vote_loader_account.data(), new_vote_loader_account.data());
         assert_eq!(
             bank.process_transaction(&transaction),
             Err(TransactionError::InstructionError(
@@ -9020,11 +9023,11 @@ pub(crate) mod tests {
         assert_eq!(bank.calculate_capitalization(), bank.capitalization());
         assert_eq!(
             "mock_program1",
-            String::from_utf8_lossy(&bank.get_account(&vote_id).unwrap_or_default().data)
+            String::from_utf8_lossy(&bank.get_account(&vote_id).unwrap_or_default().data())
         );
         assert_eq!(
             "mock_program2",
-            String::from_utf8_lossy(&bank.get_account(&stake_id).unwrap_or_default().data)
+            String::from_utf8_lossy(&bank.get_account(&stake_id).unwrap_or_default().data())
         );
 
         // Re-adding builtin programs should be no-op
@@ -9040,11 +9043,11 @@ pub(crate) mod tests {
         assert_eq!(bank.calculate_capitalization(), bank.capitalization());
         assert_eq!(
             "mock_program1",
-            String::from_utf8_lossy(&bank.get_account(&vote_id).unwrap_or_default().data)
+            String::from_utf8_lossy(&bank.get_account(&vote_id).unwrap_or_default().data())
         );
         assert_eq!(
             "mock_program2",
-            String::from_utf8_lossy(&bank.get_account(&stake_id).unwrap_or_default().data)
+            String::from_utf8_lossy(&bank.get_account(&stake_id).unwrap_or_default().data())
         );
     }
 
@@ -10157,7 +10160,7 @@ pub(crate) mod tests {
             for (key, name) in &program_keys {
                 let account = bank.get_account(key).unwrap();
                 assert!(account.executable);
-                assert_eq!(account.data, *name);
+                assert_eq!(account.data(), name);
             }
             info!("result: {:?}", result);
             let result_key = format!("{:?}", result);
@@ -10762,7 +10765,7 @@ pub(crate) mod tests {
         let native_mint_account = bank
             .get_account(&inline_spl_token_v2_0::native_mint::id())
             .unwrap();
-        assert_eq!(native_mint_account.data.len(), 82);
+        assert_eq!(native_mint_account.data().len(), 82);
         assert_eq!(
             bank.get_balance(&inline_spl_token_v2_0::native_mint::id()),
             4200000000
@@ -10787,7 +10790,7 @@ pub(crate) mod tests {
         let native_mint_account = bank
             .get_account(&inline_spl_token_v2_0::native_mint::id())
             .unwrap();
-        assert_eq!(native_mint_account.data.len(), 82);
+        assert_eq!(native_mint_account.data().len(), 82);
         assert_eq!(
             bank.get_balance(&inline_spl_token_v2_0::native_mint::id()),
             4200000000
@@ -11090,20 +11093,18 @@ pub(crate) mod tests {
         // Setup original token account
         bank.store_account_and_update_capitalization(
             &inline_spl_token_v2_0::id(),
-            &AccountSharedData {
-                lamports: 100,
-                ..AccountSharedData::default()
-            },
+            &AccountSharedData::new_with_lamports_data(100, Vec::default()),
         );
         assert_eq!(bank.get_balance(&inline_spl_token_v2_0::id()), 100);
 
         // Setup new token account
-        let new_token_account = AccountSharedData {
-            lamports: 123,
-            data: vec![1, 2, 3],
-            executable: true,
-            ..AccountSharedData::default()
-        };
+        let new_token_account = AccountSharedData::create(
+            123,
+            vec![1, 2, 3],
+            Pubkey::default(),
+            true,
+            Epoch::default(),
+        );
         bank.store_account_and_update_capitalization(
             &inline_spl_token_v2_0::new_token_program::id(),
             &new_token_account,

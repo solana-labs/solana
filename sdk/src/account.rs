@@ -31,7 +31,7 @@ pub struct AccountSharedData {
     pub lamports: u64,
     /// data held in this account
     #[serde(with = "serde_bytes")]
-    pub data: Vec<u8>, // will be: Arc<Vec<u8>>,
+    data: Vec<u8>, // will be: Arc<Vec<u8>>,
     /// the program that owns this account. If executable, the program that loads this account.
     pub owner: Pubkey,
     /// this account's data contains a loaded program (and is now read-only)
@@ -77,7 +77,9 @@ impl From<Account> for AccountSharedData {
 
 pub trait WritableAccount: ReadableAccount {
     fn set_lamports(&mut self, lamports: u64);
+    fn set_data(&mut self, data: Vec<u8>);
     fn data_as_mut_slice(&mut self) -> &mut [u8];
+    fn resize_data(&mut self, new_len: usize, value: u8);
     fn set_owner(&mut self, owner: Pubkey);
     fn set_executable(&mut self, executable: bool);
     fn set_rent_epoch(&mut self, epoch: Epoch);
@@ -120,8 +122,14 @@ impl WritableAccount for Account {
     fn set_lamports(&mut self, lamports: u64) {
         self.lamports = lamports;
     }
+    fn set_data(&mut self, data: Vec<u8>) {
+        self.data = data;
+    }
     fn data_as_mut_slice(&mut self) -> &mut [u8] {
         &mut self.data
+    }
+    fn resize_data(&mut self, new_len: usize, value: u8) {
+        self.data.resize(new_len, value);
     }
     fn set_owner(&mut self, owner: Pubkey) {
         self.owner = owner;
@@ -153,8 +161,14 @@ impl WritableAccount for AccountSharedData {
     fn set_lamports(&mut self, lamports: u64) {
         self.lamports = lamports;
     }
+    fn set_data(&mut self, data: Vec<u8>) {
+        self.data = data;
+    }
     fn data_as_mut_slice(&mut self) -> &mut [u8] {
         &mut self.data
+    }
+    fn resize_data(&mut self, new_len: usize, value: u8) {
+        self.data.resize(new_len, value);
     }
     fn set_owner(&mut self, owner: Pubkey) {
         self.owner = owner;
@@ -435,6 +449,53 @@ impl AccountSharedData {
     }
     pub fn serialize_data<T: serde::Serialize>(&mut self, state: &T) -> Result<(), bincode::Error> {
         shared_serialize_data(self, state)
+    }
+
+    pub fn new_with_owner(owner: &Pubkey) -> Self {
+        Self {
+            owner: *owner,
+            ..Self::default()
+        }
+    }
+
+    pub fn new_with_lamports(lamports: u64) -> Self {
+        Self {
+            lamports,
+            ..Self::default()
+        }
+    }
+
+    pub fn new_with_data_and_owner(data: Vec<u8>, owner: &Pubkey) -> Self {
+        Self {
+            data,
+            owner: *owner,
+            ..Self::default()
+        }
+    }
+
+    pub fn new_with_lamports_data(lamports: u64, data: Vec<u8>) -> Self {
+        Self {
+            lamports,
+            data,
+            ..Self::default()
+        }
+    }
+
+    pub fn new_with_lamports_data_owner(lamports: u64, data: Vec<u8>, owner: &Pubkey) -> Self {
+        Self {
+            lamports,
+            data,
+            owner: *owner,
+            ..Self::default()
+        }
+    }
+
+    pub fn data_truncate(&mut self, len: usize) {
+        self.data.truncate(len);
+    }
+
+    pub fn data_push(&mut self, value: u8) {
+        self.data.push(value);
     }
 }
 

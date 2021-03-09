@@ -10,8 +10,7 @@ use crate::{
 };
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
-    account::AccountSharedData,
-    account::ReadableAccount,
+    account::{AccountSharedData, ReadableAccount},
     account_utils::{State, StateMut},
     clock::{Clock, Epoch, UnixTimestamp},
     ic_msg,
@@ -1544,7 +1543,7 @@ pub fn rewrite_stakes(
 ) -> Result<RewriteStakeStatus, InstructionError> {
     match stake_account.state()? {
         StakeState::Initialized(mut meta) => {
-            let meta_status = meta.rewrite_rent_exempt_reserve(rent, stake_account.data.len());
+            let meta_status = meta.rewrite_rent_exempt_reserve(rent, stake_account.data().len());
 
             if meta_status.is_none() {
                 return Err(InstructionError::InvalidAccountData);
@@ -1554,7 +1553,7 @@ pub fn rewrite_stakes(
             Ok(("initialized", meta_status.unwrap_or_default(), (0, 0)))
         }
         StakeState::Stake(mut meta, mut stake) => {
-            let meta_status = meta.rewrite_rent_exempt_reserve(rent, stake_account.data.len());
+            let meta_status = meta.rewrite_rent_exempt_reserve(rent, stake_account.data().len());
             let stake_status = stake
                 .delegation
                 .rewrite_stake(stake_account.lamports, meta.rent_exempt_reserve);
@@ -1613,7 +1612,7 @@ pub fn create_lockup_stake_account(
     let mut stake_account =
         AccountSharedData::new(lamports, std::mem::size_of::<StakeState>(), &id());
 
-    let rent_exempt_reserve = rent.minimum_balance(stake_account.data.len());
+    let rent_exempt_reserve = rent.minimum_balance(stake_account.data().len());
     assert!(
         lamports >= rent_exempt_reserve,
         "lamports: {} is less than rent_exempt_reserve {}",
@@ -1682,7 +1681,7 @@ fn do_create_account(
 
     let vote_state = VoteState::from(vote_account).expect("vote_state");
 
-    let rent_exempt_reserve = rent.minimum_balance(stake_account.data.len());
+    let rent_exempt_reserve = rent.minimum_balance(stake_account.data().len());
 
     stake_account
         .set_state(&StakeState::Stake(

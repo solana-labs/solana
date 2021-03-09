@@ -91,6 +91,7 @@ mod test {
     use crate::validator_info::ValidatorInfo;
     use serde_json::json;
     use solana_config_program::create_config_account;
+    use solana_sdk::account::ReadableAccount;
 
     #[test]
     fn test_parse_config() {
@@ -101,7 +102,7 @@ mod test {
         let stake_config_account = create_config_account(vec![], &stake_config, 10);
         assert_eq!(
             parse_config(
-                &stake_config_account.data,
+                &stake_config_account.data(),
                 &solana_stake_program::config::id()
             )
             .unwrap(),
@@ -124,7 +125,7 @@ mod test {
             10,
         );
         assert_eq!(
-            parse_config(&validator_info_config_account.data, &info_pubkey).unwrap(),
+            parse_config(&validator_info_config_account.data(), &info_pubkey).unwrap(),
             ConfigAccountType::ValidatorInfo(UiConfig {
                 keys: vec![
                     UiConfigKey {

@@ -224,10 +224,7 @@ mod test {
     fn test_base64_zstd() {
         let encoded_account = UiAccount::encode(
             &Pubkey::default(),
-            AccountSharedData {
-                data: vec![0; 1024],
-                ..AccountSharedData::default()
-            },
+            AccountSharedData::new_with_lamports_data(u64::default(), vec![0; 1024]),
             UiAccountEncoding::Base64Zstd,
             None,
             None,
@@ -238,8 +235,8 @@ mod test {
         ));
 
         let decoded_account = encoded_account.decode::<Account>().unwrap();
-        assert_eq!(decoded_account.data, vec![0; 1024]);
+        assert_eq!(decoded_account.data(), &vec![0; 1024]);
         let decoded_account = encoded_account.decode::<AccountSharedData>().unwrap();
-        assert_eq!(decoded_account.data, vec![0; 1024]);
+        assert_eq!(decoded_account.data(), &vec![0; 1024]);
     }
 }

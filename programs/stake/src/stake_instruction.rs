@@ -635,10 +635,7 @@ mod tests {
     }
 
     fn create_default_stake_account() -> RefCell<AccountSharedData> {
-        RefCell::new(AccountSharedData {
-            owner: id(),
-            ..AccountSharedData::default()
-        })
+        RefCell::new(AccountSharedData::new_with_owner(&id()))
     }
 
     fn invalid_stake_state_pubkey() -> Pubkey {
@@ -673,25 +670,13 @@ mod tests {
                 } else if sysvar::rent::check_id(&meta.pubkey) {
                     account::create_account_shared_data(&Rent::default(), 1)
                 } else if meta.pubkey == invalid_stake_state_pubkey() {
-                    AccountSharedData {
-                        owner: id(),
-                        ..AccountSharedData::default()
-                    }
+                    AccountSharedData::new_with_owner(&id())
                 } else if meta.pubkey == invalid_vote_state_pubkey() {
-                    AccountSharedData {
-                        owner: solana_vote_program::id(),
-                        ..AccountSharedData::default()
-                    }
+                    AccountSharedData::new_with_owner(&solana_vote_program::id())
                 } else if meta.pubkey == spoofed_stake_state_pubkey() {
-                    AccountSharedData {
-                        owner: spoofed_stake_program_id(),
-                        ..AccountSharedData::default()
-                    }
+                    AccountSharedData::new_with_owner(&spoofed_stake_program_id())
                 } else {
-                    AccountSharedData {
-                        owner: id(),
-                        ..AccountSharedData::default()
-                    }
+                    AccountSharedData::new_with_owner(&id())
                 })
             })
             .collect();

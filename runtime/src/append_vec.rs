@@ -5,7 +5,7 @@ use log::*;
 use memmap2::MmapMut;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{
-    account::AccountSharedData,
+    account::{AccountSharedData, ReadableAccount, WritableAccount},
     clock::{Epoch, Slot},
     hash::Hash,
     pubkey::Pubkey,
@@ -84,13 +84,13 @@ pub struct StoredAccountMeta<'a> {
 impl<'a> StoredAccountMeta<'a> {
     /// Return a new Account by copying all the data referenced by the `StoredAccountMeta`.
     pub fn clone_account(&self) -> AccountSharedData {
-        AccountSharedData {
-            lamports: self.account_meta.lamports,
-            owner: self.account_meta.owner,
-            executable: self.account_meta.executable,
-            rent_epoch: self.account_meta.rent_epoch,
-            data: self.data.to_vec(),
-        }
+        AccountSharedData::create(
+            self.account_meta.lamports,
+            self.data.to_vec(),
+            self.account_meta.owner,
+            self.account_meta.executable,
+            self.account_meta.rent_epoch,
+        )
     }
 
     fn sanitize(&self) -> bool {
@@ -468,7 +468,7 @@ impl AppendVec {
             let account_meta = AccountMeta::from(*account);
             let account_meta_ptr = &account_meta as *const AccountMeta;
             let data_len = stored_meta.data_len as usize;
-            let data_ptr = account.data.as_ptr();
+            let data_ptr = account.data().as_ptr();
             let hash_ptr = hash.as_ref().as_ptr();
             let ptrs = [
                 (meta_ptr as *const u8, mem::size_of::<StoredMeta>()),
@@ -512,7 +512,7 @@ pub mod test_utils {
     use super::StoredMeta;
     use rand::distributions::Alphanumeric;
     use rand::{thread_rng, Rng};
-    use solana_sdk::account::AccountSharedData;
+    use solana_sdk::account::{AccountSharedData, WritableAccount};
     use solana_sdk::pubkey::Pubkey;
     use std::fs::create_dir_all;
     use std::path::PathBuf;
@@ -546,7 +546,7 @@ pub mod test_utils {
     pub fn create_test_account(sample: usize) -> (StoredMeta, AccountSharedData) {
         let data_len = sample % 256;
         let mut account = AccountSharedData::new(sample as u64, 0, &Pubkey::default());
-        account.data = (0..data_len).map(|_| data_len as u8).collect();
+        account.set_data((0..data_len).map(|_| data_len as u8).collect());
         let stored_meta = StoredMeta {
             write_version: 0,
             pubkey: Pubkey::default(),
@@ -741,7 +741,7 @@ pub mod tests {
         let owner = Pubkey::default();
         let data_len = 3_u64;
         let mut account = AccountSharedData::new(0, data_len as usize, &owner);
-        account.data = b"abc".to_vec();
+        account.set_data(b"abc".to_vec());
         let stored_meta = StoredMeta {
             write_version: 0,
             pubkey,

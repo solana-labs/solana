@@ -1,6 +1,6 @@
 use log::*;
 use solana_sdk::{
-    account::AccountSharedData,
+    account::{AccountSharedData, ReadableAccount, WritableAccount},
     account_utils::StateMut,
     ic_msg,
     instruction::InstructionError,
@@ -79,7 +79,7 @@ fn allocate(
 
     // if it looks like the `to` account is already in use, bail
     //   (note that the id check is also enforced by message_processor)
-    if !account.data.is_empty() || !system_program::check_id(&account.owner) {
+    if !account.data().is_empty() || !system_program::check_id(&account.owner) {
         ic_msg!(
             invoke_context,
             "Allocate: account {:?} already in use",
@@ -98,7 +98,7 @@ fn allocate(
         return Err(SystemError::InvalidAccountDataLength.into());
     }
 
-    account.data = vec![0; space as usize];
+    account.set_data(vec![0; space as usize]);
 
     Ok(())
 }
@@ -423,9 +423,9 @@ pub enum SystemAccountKind {
 
 pub fn get_system_account_kind(account: &AccountSharedData) -> Option<SystemAccountKind> {
     if system_program::check_id(&account.owner) {
-        if account.data.is_empty() {
+        if account.data().is_empty() {
             Some(SystemAccountKind::System)
-        } else if account.data.len() == nonce::State::size() {
+        } else if account.data().len() == nonce::State::size() {
             match account.state().ok()? {
                 nonce::state::Versions::Current(state) => match *state {
                     nonce::State::Initialized(_) => Some(SystemAccountKind::Nonce),
@@ -530,7 +530,7 @@ mod tests {
         assert_eq!(from_account.borrow().lamports, 50);
         assert_eq!(to_account.borrow().lamports, 50);
         assert_eq!(to_account.borrow().owner, new_owner);
-        assert_eq!(to_account.borrow().data, [0, 0]);
+        assert_eq!(to_account.borrow().data(), &[0, 0]);
     }
 
     #[test]
@@ -564,7 +564,7 @@ mod tests {
         assert_eq!(from_account.borrow().lamports, 50);
         assert_eq!(to_account.borrow().lamports, 50);
         assert_eq!(to_account.borrow().owner, new_owner);
-        assert_eq!(to_account.borrow().data, [0, 0]);
+        assert_eq!(to_account.borrow().data(), &[0, 0]);
     }
 
     #[test]
@@ -601,7 +601,7 @@ mod tests {
         assert_eq!(from_account.borrow().lamports, 50);
         assert_eq!(to_account.borrow().lamports, 50);
         assert_eq!(to_account.borrow().owner, new_owner);
-        assert_eq!(to_account.borrow().data, [0, 0]);
+        assert_eq!(to_account.borrow().data(), &[0, 0]);
     }
 
     #[test]
@@ -681,11 +681,10 @@ mod tests {
         let from_lamports = from_account.borrow().lamports;
         let to_lamports = to_account.borrow().lamports;
         let to_owner = to_account.borrow().owner;
-        let to_data = &to_account.borrow().data;
         assert_eq!(from_lamports, 100);
         assert_eq!(to_lamports, 0);
         assert_eq!(to_owner, new_owner);
-        assert_eq!(*to_data, [0, 0]);
+        assert_eq!(to_account.borrow().data(), &[0, 0]);
     }
 
     #[test]
@@ -752,7 +751,7 @@ mod tests {
         assert!(result.is_ok());
         assert_eq!(to_account.borrow().lamports, 50);
         assert_eq!(
-            to_account.borrow().data.len() as u64,
+            to_account.borrow().data().len() as u64,
             MAX_PERMITTED_DATA_LENGTH
         );
     }
@@ -913,11 +912,8 @@ mod tests {
         let from_account = AccountSharedData::new_ref(100, 0, &system_program::id());
 
         let populated_key = solana_sdk::pubkey::new_rand();
-        let populated_account = AccountSharedData {
-            data: vec![0, 1, 2, 3],
-            ..AccountSharedData::default()
-        }
-        .into();
+        let populated_account =
+            AccountSharedData::new_with_lamports_data(u64::default(), vec![0, 1, 2, 3]).into();
 
         let signers = [from, populated_key]
             .iter()

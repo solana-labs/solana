@@ -1,7 +1,13 @@
 //! calculate and collect rent from Accounts
 use solana_sdk::{
-    account::AccountSharedData, clock::Epoch, epoch_schedule::EpochSchedule,
-    genesis_config::GenesisConfig, incinerator, pubkey::Pubkey, rent::Rent, sysvar,
+    account::{AccountSharedData, ReadableAccount},
+    clock::Epoch,
+    epoch_schedule::EpochSchedule,
+    genesis_config::GenesisConfig,
+    incinerator,
+    pubkey::Pubkey,
+    rent::Rent,
+    sysvar,
 };
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug, AbiExample)]
@@ -75,7 +81,7 @@ impl RentCollector {
 
             let (rent_due, exempt) =
                 self.rent
-                    .due(account.lamports, account.data.len(), years_elapsed);
+                    .due(account.lamports, account.data().len(), years_elapsed);
 
             if exempt || rent_due != 0 {
                 if account.lamports > rent_due {
@@ -117,6 +123,7 @@ impl RentCollector {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use solana_sdk::account::WritableAccount;
 
     #[test]
     fn test_collect_from_account_created_and_existing() {
@@ -125,11 +132,13 @@ mod tests {
         let new_epoch = 3;
 
         let (mut created_account, mut existing_account) = {
-            let account = AccountSharedData {
-                lamports: old_lamports,
-                rent_epoch: old_epoch,
-                ..AccountSharedData::default()
-            };
+            let account = AccountSharedData::create(
+                old_lamports,
+                Vec::default(),
+                Pubkey::default(),
+                bool::default(),
+                old_epoch,
+            );
 
             (account.clone(), account)
         };

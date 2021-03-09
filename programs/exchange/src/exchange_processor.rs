@@ -8,8 +8,13 @@ use num_derive::{FromPrimitive, ToPrimitive};
 use serde_derive::Serialize;
 use solana_metrics::inc_new_counter_info;
 use solana_sdk::{
-    decode_error::DecodeError, instruction::InstructionError, keyed_account::KeyedAccount,
-    process_instruction::InvokeContext, program_utils::limited_deserialize, pubkey::Pubkey,
+    account::{ReadableAccount, WritableAccount},
+    decode_error::DecodeError,
+    instruction::InstructionError,
+    keyed_account::KeyedAccount,
+    process_instruction::InvokeContext,
+    program_utils::limited_deserialize,
+    pubkey::Pubkey,
 };
 use std::cmp;
 use thiserror::Error;
@@ -188,7 +193,7 @@ impl ExchangeProcessor {
             error!("Not enough accounts");
             return Err(InstructionError::InvalidArgument);
         }
-        Self::is_account_unallocated(&keyed_accounts[NEW_ACCOUNT_INDEX].try_account_ref()?.data)?;
+        Self::is_account_unallocated(&keyed_accounts[NEW_ACCOUNT_INDEX].try_account_ref()?.data())?;
         Self::serialize(
             &ExchangeState::Account(
                 TokenAccountInfo::default()
@@ -197,7 +202,7 @@ impl ExchangeProcessor {
             ),
             &mut keyed_accounts[NEW_ACCOUNT_INDEX]
                 .try_account_ref_mut()?
-                .data,
+                .data_as_mut_slice(),
         )
     }
 
@@ -216,13 +221,13 @@ impl ExchangeProcessor {
         }
 
         let mut to_account =
-            Self::deserialize_account(&keyed_accounts[TO_ACCOUNT_INDEX].try_account_ref()?.data)?;
+            Self::deserialize_account(&keyed_accounts[TO_ACCOUNT_INDEX].try_account_ref()?.data())?;
 
         if &faucet::id() == keyed_accounts[FROM_ACCOUNT_INDEX].unsigned_key() {
             to_account.tokens[token] += tokens;
         } else {
             let state: ExchangeState =
-                bincode::deserialize(&keyed_accounts[FROM_ACCOUNT_INDEX].try_account_ref()?.data)
+                bincode::deserialize(&keyed_accounts[FROM_ACCOUNT_INDEX].try_account_ref()?.data())
                     .map_err(Self::map_to_invalid_arg)?;
             match state {
                 ExchangeState::Account(mut from_account) => {
@@ -243,7 +248,7 @@ impl ExchangeProcessor {
                         &ExchangeState::Account(from_account),
                         &mut keyed_accounts[FROM_ACCOUNT_INDEX]
                             .try_account_ref_mut()?
-                            .data,
+                            .data_as_mut_slice(),
                     )?;
                 }
                 ExchangeState::Trade(mut from_trade) => {
@@ -273,7 +278,7 @@ impl ExchangeProcessor {
                         &ExchangeState::Trade(from_trade),
                         &mut keyed_accounts[FROM_ACCOUNT_INDEX]
                             .try_account_ref_mut()?
-                            .data,
+                            .data_as_mut_slice(),
                     )?;
                 }
                 _ => {
@@ -285,7 +290,9 @@ impl ExchangeProcessor {
 
         Self::serialize(
             &ExchangeState::Account(to_account),
-            &mut keyed_accounts[TO_ACCOUNT_INDEX].try_account_ref_mut()?.data,
+            &mut keyed_accounts[TO_ACCOUNT_INDEX]
+                .try_account_ref_mut()?
+                .data_as_mut_slice(),
         )
     }
 
@@ -302,10 +309,11 @@ impl ExchangeProcessor {
             return Err(InstructionError::InvalidArgument);
         }
 
-        Self::is_account_unallocated(&keyed_accounts[ORDER_INDEX].try_account_ref()?.data)?;
+        Self::is_account_unallocated(&keyed_accounts[ORDER_INDEX].try_account_ref()?.data())?;
 
-        let mut account =
-            Self::deserialize_account(&keyed_accounts[ACCOUNT_INDEX].try_account_ref_mut()?.data)?;
+        let mut account = Self::deserialize_account(
+            &keyed_accounts[ACCOUNT_INDEX].try_account_ref_mut()?.data(),
+        )?;
 
         if &account.owner != keyed_accounts[OWNER_INDEX].unsigned_key() {
             error!("Signer does not own account");
@@ -338,11 +346,15 @@ impl ExchangeProcessor {
                 price: info.price,
                 tokens_settled: 0,
             }),
-            &mut keyed_accounts[ORDER_INDEX].try_account_ref_mut()?.data,
+            &mut keyed_accounts[ORDER_INDEX]
+                .try_account_ref_mut()?
+                .data_as_mut_slice(),
         )?;
         Self::serialize(
             &ExchangeState::Account(account),
-            &mut keyed_accounts[ACCOUNT_INDEX].try_account_ref_mut()?.data,
+            &mut keyed_accounts[ACCOUNT_INDEX]
+                .try_account_ref_mut()?
+                .data_as_mut_slice(),
         )
     }
 
@@ -355,7 +367,8 @@ impl ExchangeProcessor {
             return Err(InstructionError::InvalidArgument);
         }
 
-        let order = Self::deserialize_order(&keyed_accounts[ORDER_INDEX].try_account_ref()?.data)?;
+        let order =
+            Self::deserialize_order(&keyed_accounts[ORDER_INDEX].try_account_ref()?.data())?;
 
         if &order.owner != keyed_accounts[OWNER_INDEX].unsigned_key() {
             error!("Signer does not own order");
@@ -374,7 +387,9 @@ impl ExchangeProcessor {
         // Turn trade order into a token account
         Self::serialize(
             &ExchangeState::Account(account),
-            &mut keyed_accounts[ORDER_INDEX].try_account_ref_mut()?.data,
+            &mut keyed_accounts[ORDER_INDEX]
+                .try_account_ref_mut()?
+                .data_as_mut_slice(),
         )
     }
 
@@ -389,11 +404,13 @@ impl ExchangeProcessor {
         }
 
         let mut to_order =
-            Self::deserialize_order(&keyed_accounts[TO_ORDER_INDEX].try_account_ref()?.data)?;
+            Self::deserialize_order(&keyed_accounts[TO_ORDER_INDEX].try_account_ref()?.data())?;
         let mut from_order =
-            Self::deserialize_order(&keyed_accounts[FROM_ORDER_INDEX].try_account_ref()?.data)?;
+            Self::deserialize_order(&keyed_accounts[FROM_ORDER_INDEX].try_account_ref()?.data())?;
         let mut profit_account = Self::deserialize_account(
-            &keyed_accounts[PROFIT_ACCOUNT_INDEX].try_account_ref()?.data,
+            &keyed_accounts[PROFIT_ACCOUNT_INDEX]
+                .try_account_ref()?
+                .data(),
         )?;
 
         if to_order.side != OrderSide::Ask {
@@ -429,12 +446,16 @@ impl ExchangeProcessor {
             // Turn into token account
             Self::serialize(
                 &ExchangeState::Account(Self::trade_to_token_account(&from_order)),
-                &mut keyed_accounts[TO_ORDER_INDEX].try_account_ref_mut()?.data,
+                &mut keyed_accounts[TO_ORDER_INDEX]
+                    .try_account_ref_mut()?
+                    .data_as_mut_slice(),
             )?;
         } else {
             Self::serialize(
                 &ExchangeState::Trade(to_order),
-                &mut keyed_accounts[TO_ORDER_INDEX].try_account_ref_mut()?.data,
+                &mut keyed_accounts[TO_ORDER_INDEX]
+                    .try_account_ref_mut()?
+                    .data_as_mut_slice(),
             )?;
         }
 
@@ -442,12 +463,16 @@ impl ExchangeProcessor {
             // Turn into token account
             Self::serialize(
                 &ExchangeState::Account(Self::trade_to_token_account(&from_order)),
-                &mut keyed_accounts[FROM_ORDER_INDEX].try_account_ref_mut()?.data,
+                &mut keyed_accounts[FROM_ORDER_INDEX]
+                    .try_account_ref_mut()?
+                    .data_as_mut_slice(),
             )?;
         } else {
             Self::serialize(
                 &ExchangeState::Trade(from_order),
-                &mut keyed_accounts[FROM_ORDER_INDEX].try_account_ref_mut()?.data,
+                &mut keyed_accounts[FROM_ORDER_INDEX]
+                    .try_account_ref_mut()?
+                    .data_as_mut_slice(),
             )?;
         }
 
@@ -455,7 +480,7 @@ impl ExchangeProcessor {
             &ExchangeState::Account(profit_account),
             &mut keyed_accounts[PROFIT_ACCOUNT_INDEX]
                 .try_account_ref_mut()?
-                .data,
+                .data_as_mut_slice(),
         )
     }
 }

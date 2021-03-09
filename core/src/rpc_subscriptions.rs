@@ -28,7 +28,7 @@ use solana_runtime::{
     commitment::{BlockCommitmentCache, CommitmentSlots},
 };
 use solana_sdk::{
-    account::AccountSharedData,
+    account::{AccountSharedData, ReadableAccount},
     clock::{Slot, UnixTimestamp},
     commitment_config::CommitmentConfig,
     pubkey::Pubkey,
@@ -332,8 +332,8 @@ fn filter_program_results(
     let accounts_is_empty = accounts.is_empty();
     let keyed_accounts = accounts.into_iter().filter(move |(_, account)| {
         filters.iter().all(|filter_type| match filter_type {
-            RpcFilterType::DataSize(size) => account.data.len() as u64 == *size,
-            RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data),
+            RpcFilterType::DataSize(size) => account.data().len() as u64 == *size,
+            RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data()),
         })
     });
     let accounts: Box<dyn Iterator<Item = RpcKeyedAccount>> = if program_id == &spl_token_id_v2_0()

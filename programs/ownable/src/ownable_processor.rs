@@ -3,6 +3,7 @@
 use crate::ownable_instruction::OwnableError;
 use bincode::serialize_into;
 use solana_sdk::{
+    account::{ReadableAccount, WritableAccount},
     instruction::InstructionError,
     keyed_account::{next_keyed_account, KeyedAccount},
     process_instruction::InvokeContext,
@@ -37,7 +38,7 @@ pub fn process_instruction(
     let keyed_accounts_iter = &mut keyed_accounts.iter();
     let account_keyed_account = &mut next_keyed_account(keyed_accounts_iter)?;
     let mut account_owner_pubkey: Pubkey =
-        limited_deserialize(&account_keyed_account.try_account_ref()?.data)?;
+        limited_deserialize(&account_keyed_account.try_account_ref()?.data())?;
 
     if account_owner_pubkey == Pubkey::default() {
         account_owner_pubkey = new_owner_pubkey;
@@ -51,7 +52,7 @@ pub fn process_instruction(
     }
 
     let mut account = account_keyed_account.try_account_ref_mut()?;
-    serialize_into(&mut account.data[..], &account_owner_pubkey)
+    serialize_into(account.data_as_mut_slice(), &account_owner_pubkey)
         .map_err(|_| InstructionError::AccountDataTooSmall)
 }
 

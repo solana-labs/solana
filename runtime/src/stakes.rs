@@ -2,7 +2,10 @@
 //! node stakes
 use crate::vote_account::{ArcVoteAccount, VoteAccounts};
 use solana_sdk::{
-    account::AccountSharedData, clock::Epoch, pubkey::Pubkey, sysvar::stake_history::StakeHistory,
+    account::{AccountSharedData, ReadableAccount},
+    clock::Epoch,
+    pubkey::Pubkey,
+    sysvar::stake_history::StakeHistory,
 };
 use solana_stake_program::stake_state::{new_stake_history_entry, Delegation, StakeState};
 use solana_vote_program::vote_state::VoteState;
@@ -109,7 +112,7 @@ impl Stakes {
     pub fn is_stake(account: &AccountSharedData) -> bool {
         solana_vote_program::check_id(&account.owner)
             || solana_stake_program::check_id(&account.owner)
-                && account.data.len() >= std::mem::size_of::<StakeState>()
+                && account.data().len() >= std::mem::size_of::<StakeState>()
     }
 
     pub fn store(
@@ -127,7 +130,7 @@ impl Stakes {
             // when account is removed (lamports == 0 or data uninitialized), don't read so that
             // given `pubkey` can be used for any owner in the future, while not affecting Stakes.
             if account.lamports != 0
-                && !(check_vote_init && VoteState::is_uninitialized_no_deser(&account.data))
+                && !(check_vote_init && VoteState::is_uninitialized_no_deser(&account.data()))
             {
                 let stake = old.as_ref().map_or_else(
                     || {
@@ -227,7 +230,7 @@ impl Stakes {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use solana_sdk::{pubkey::Pubkey, rent::Rent};
+    use solana_sdk::{account::WritableAccount, pubkey::Pubkey, rent::Rent};
     use solana_stake_program::stake_state;
     use solana_vote_program::vote_state::{self, VoteState, VoteStateVersions};
 
@@ -409,8 +412,8 @@ pub mod tests {
         }
 
         // Vote account too big
-        let cache_data = vote_account.data.clone();
-        vote_account.data.push(0);
+        let cache_data = vote_account.data().to_vec();
+        vote_account.data_push(0);
         stakes.store(&vote_pubkey, &vote_account, true, true);
 
         {
@@ -429,7 +432,7 @@ pub mod tests {
             assert!(vote_accounts.get(&vote_pubkey).is_none());
         }
 
-        vote_account.data = cache_data;
+        vote_account.set_data(cache_data);
         stakes.store(&vote_pubkey, &vote_account, true, true);
 
         {

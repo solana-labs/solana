@@ -376,15 +376,9 @@ mod tests {
                 } else if sysvar::rent::check_id(&meta.pubkey) {
                     account::create_account_shared_data(&Rent::free(), 1)
                 } else if meta.pubkey == invalid_vote_state_pubkey() {
-                    AccountSharedData {
-                        owner: invalid_vote_state_pubkey(),
-                        ..AccountSharedData::default()
-                    }
+                    AccountSharedData::new_with_owner(&invalid_vote_state_pubkey())
                 } else {
-                    AccountSharedData {
-                        owner: id(),
-                        ..AccountSharedData::default()
-                    }
+                    AccountSharedData::new_with_owner(&id())
                 })
             })
             .collect();
