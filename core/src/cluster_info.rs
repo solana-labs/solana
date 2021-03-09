@@ -545,13 +545,20 @@ struct ResponseScore {
 }
 
 // Retains only CRDS values associated with nodes with enough stake.
-// (ContactInfo are exempt)
+// (some crds types are exempted)
 fn retain_staked(values: &mut Vec<CrdsValue>, stakes: &HashMap<Pubkey, u64>) {
     values.retain(|value| {
         match value.data {
-            // TODO: Confirm that NodeInstance does not need to be exempted.
-            // TODO: What about Version?
             CrdsData::ContactInfo(_) => true,
+            // May Impact new validators starting up without any stake yet.
+            CrdsData::Vote(_, _) => true,
+            // Unstaked nodes can still help repair.
+            CrdsData::EpochSlots(_, _) => true,
+            // Unstaked nodes can still serve snapshots.
+            CrdsData::SnapshotHashes(_) => true,
+            // Otherwise unstaked voting nodes will show up with no version in
+            // the various dashboards.
+            CrdsData::Version(_) => true,
             _ => {
                 let stake = stakes.get(&value.pubkey()).copied();
                 stake.unwrap_or_default() >= MIN_STAKE_FOR_GOSSIP
