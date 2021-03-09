@@ -115,7 +115,7 @@ pub const DEFAULT_CONTACT_SAVE_INTERVAL_MILLIS: u64 = 60_000;
 /// Minimum serialized size of a Protocol::PullResponse packet.
 const PULL_RESPONSE_MIN_SERIALIZED_SIZE: usize = 161;
 // Limit number of unique pubkeys in the crds table.
-const CRDS_UNIQUE_PUBKEY_CAPACITY: usize = 1024;
+const CRDS_UNIQUE_PUBKEY_CAPACITY: usize = 4096;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ClusterInfoError {
