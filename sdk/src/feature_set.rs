@@ -107,6 +107,10 @@ pub mod check_program_owner {
     solana_sdk::declare_id!("5XnbR5Es9YXEARRuP6mdvoxiW3hx5atNNeBmwVd8P3QD");
 }
 
+pub mod cpi_share_ro_and_exec_accounts {
+    solana_sdk::declare_id!("6VgVBi3uRVqp56TtEwNou8idgdmhCD1aYqX8FaJ1fnJb");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -133,7 +137,8 @@ lazy_static! {
         (full_inflation::mainnet::certusone::vote::id(), "Community vote allowing Certus One to enable full inflation"),
         (warp_timestamp_again::id(), "warp timestamp again, adjust bounding to 25% fast 80% slow #15204"),
         (check_init_vote_data::id(), "check initialized Vote data"),
-        (check_program_owner::id(), "limit programs to operating on accounts owned by itself")
+        (check_program_owner::id(), "limit programs to operating on accounts owned by itself"),
+        (cpi_share_ro_and_exec_accounts::id(), "Share RO and Executable accounts during cross-program invocations"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

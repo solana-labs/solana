@@ -59,7 +59,7 @@ pub trait InvokeContext {
     /// Get the bank's active feature set
     fn is_feature_active(&self, feature_id: &Pubkey) -> bool;
     /// Get an account from a pre-account
-    fn get_account(&self, pubkey: &Pubkey) -> Option<RefCell<AccountSharedData>>;
+    fn get_account(&self, pubkey: &Pubkey) -> Option<Rc<RefCell<AccountSharedData>>>;
     /// Update timing
     fn update_timing(
         &mut self,
@@ -333,7 +333,7 @@ impl InvokeContext for MockInvokeContext {
     fn is_feature_active(&self, _feature_id: &Pubkey) -> bool {
         true
     }
-    fn get_account(&self, _pubkey: &Pubkey) -> Option<RefCell<AccountSharedData>> {
+    fn get_account(&self, _pubkey: &Pubkey) -> Option<Rc<RefCell<AccountSharedData>>> {
         None
     }
     fn update_timing(

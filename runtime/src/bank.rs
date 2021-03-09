@@ -117,8 +117,8 @@ type BankStatusCache = StatusCache<Result<()>>;
 #[frozen_abi(digest = "EcB9J7sm37t1R47vLcvGuNeiRciB4Efq1EDWDWL6Bp5h")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 type TransactionAccountRefCells = Vec<Rc<RefCell<AccountSharedData>>>;
-type TransactionAccountDepRefCells = Vec<(Pubkey, RefCell<AccountSharedData>)>;
-type TransactionLoaderRefCells = Vec<Vec<(Pubkey, RefCell<AccountSharedData>)>>;
+type TransactionAccountDepRefCells = Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>;
+type TransactionLoaderRefCells = Vec<Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>>;
 
 // Eager rent collection repeats in cyclic manner.
 // Each cycle is composed of <partition_count> number of tiny pubkey subranges
@@ -2727,13 +2727,13 @@ impl Bank {
             .collect();
         let account_dep_refcells: Vec<_> = account_deps
             .drain(..)
-            .map(|(pubkey, account_dep)| (pubkey, RefCell::new(account_dep)))
+            .map(|(pubkey, account_dep)| (pubkey, Rc::new(RefCell::new(account_dep))))
             .collect();
         let loader_refcells: Vec<Vec<_>> = loaders
             .iter_mut()
             .map(|v| {
                 v.drain(..)
-                    .map(|(pubkey, account)| (pubkey, RefCell::new(account)))
+                    .map(|(pubkey, account)| (pubkey, Rc::new(RefCell::new(account))))
                     .collect()
             })
             .collect();
@@ -2755,8 +2755,9 @@ impl Bank {
             .iter_mut()
             .zip(loader_refcells)
             .for_each(|(ls, mut lrcs)| {
-                lrcs.drain(..)
-                    .for_each(|(pubkey, lrc)| ls.push((pubkey, lrc.into_inner())))
+                lrcs.drain(..).for_each(|(pubkey, lrc)| {
+                    ls.push((pubkey, Rc::try_unwrap(lrc).unwrap().into_inner()))
+                })
             });
     }
 

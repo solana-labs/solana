@@ -16,7 +16,7 @@ use solana_sdk::{
     bpf_loader, bpf_loader_deprecated,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
-    feature_set::ristretto_mul_syscall_enabled,
+    feature_set::{cpi_share_ro_and_exec_accounts, ristretto_mul_syscall_enabled},
     hash::{Hasher, HASH_BYTES},
     ic_msg,
     instruction::{AccountMeta, Instruction, InstructionError},
@@ -859,6 +859,7 @@ trait SyscallInvokeSigned<'a> {
     fn translate_accounts(
         &self,
         account_keys: &[Pubkey],
+        caller_write_privileges: &[bool],
         program_account_index: usize,
         account_infos_addr: u64,
         account_infos_len: u64,
@@ -930,6 +931,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
     fn translate_accounts(
         &self,
         account_keys: &[Pubkey],
+        caller_write_privileges: &[bool],
         program_account_index: usize,
         account_infos_addr: u64,
         account_infos_len: u64,
@@ -1027,6 +1029,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
 
         get_translated_accounts(
             account_keys,
+            caller_write_privileges,
             program_account_index,
             &account_info_keys,
             account_infos,
@@ -1228,6 +1231,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
     fn translate_accounts(
         &self,
         account_keys: &[Pubkey],
+        caller_write_privileges: &[bool],
         program_account_index: usize,
         account_infos_addr: u64,
         account_infos_len: u64,
@@ -1310,6 +1314,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
 
         get_translated_accounts(
             account_keys,
+            caller_write_privileges,
             program_account_index,
             &account_info_keys,
             account_infos,
@@ -1395,6 +1400,7 @@ impl<'a> SyscallObject<BpfError> for SyscallInvokeSignedC<'a> {
 
 fn get_translated_accounts<'a, T, F>(
     account_keys: &[Pubkey],
+    caller_write_privileges: &[bool],
     program_account_index: usize,
     account_info_keys: &[&Pubkey],
     account_infos: &[T],
@@ -1416,9 +1422,13 @@ where
             SyscallError::InstructionError(InstructionError::MissingAccount)
         })?;
 
-        if i == program_account_index || account.borrow().executable {
-            // Use the known executable
-            accounts.push(Rc::new(account));
+        if i == program_account_index
+            || account.borrow().executable
+            || (invoke_context.is_feature_active(&cpi_share_ro_and_exec_accounts::id())
+                && !caller_write_privileges[i])
+        {
+            // Use the known account
+            accounts.push(account);
             refs.push(None);
         } else if let Some(account_info) =
             account_info_keys
@@ -1496,11 +1506,12 @@ fn check_authorized_program(
     Ok(())
 }
 
+#[allow(clippy::type_complexity)]
 fn get_upgradeable_executable(
     callee_program_id: &Pubkey,
-    program_account: &RefCell<AccountSharedData>,
+    program_account: &Rc<RefCell<AccountSharedData>>,
     invoke_context: &Ref<&mut dyn InvokeContext>,
-) -> Result<Option<(Pubkey, RefCell<AccountSharedData>)>, EbpfError<BpfError>> {
+) -> Result<Option<(Pubkey, Rc<RefCell<AccountSharedData>>)>, EbpfError<BpfError>> {
     if program_account.borrow().owner == bpf_loader_upgradeable::id() {
         match program_account.borrow().state() {
             Ok(UpgradeableLoaderState::Program {
@@ -1541,7 +1552,7 @@ fn call<'a>(
     signers_seeds_len: u64,
     memory_mapping: &MemoryMapping,
 ) -> Result<u64, EbpfError<BpfError>> {
-    let (message, executables, accounts, account_refs, caller_privileges) = {
+    let (message, executables, accounts, account_refs, caller_write_privileges) = {
         let invoke_context = syscall.get_context()?;
 
         invoke_context
@@ -1573,7 +1584,7 @@ fn call<'a>(
                 &invoke_context,
             )
             .map_err(SyscallError::InstructionError)?;
-        let caller_privileges = message
+        let caller_write_privileges = message
             .account_keys
             .iter()
             .map(|key| {
@@ -1590,6 +1601,7 @@ fn call<'a>(
         check_authorized_program(&callee_program_id, &instruction.data)?;
         let (accounts, account_refs) = syscall.translate_accounts(
             &message.account_keys,
+            &caller_write_privileges,
             callee_program_id_index,
             account_infos_addr,
             account_infos_len,
@@ -1598,11 +1610,13 @@ fn call<'a>(
 
         // Construct executables
 
-        let program_account = (**accounts.get(callee_program_id_index).ok_or_else(|| {
-            ic_msg!(invoke_context, "Unknown program {}", callee_program_id);
-            SyscallError::InstructionError(InstructionError::MissingAccount)
-        })?)
-        .clone();
+        let program_account = accounts
+            .get(callee_program_id_index)
+            .ok_or_else(|| {
+                ic_msg!(invoke_context, "Unknown program {}", callee_program_id,);
+                SyscallError::InstructionError(InstructionError::MissingAccount)
+            })?
+            .clone();
         let programdata_executable =
             get_upgradeable_executable(&callee_program_id, &program_account, &invoke_context)?;
         let mut executables = vec![(callee_program_id, program_account)];
@@ -1619,7 +1633,7 @@ fn call<'a>(
             executables,
             accounts,
             account_refs,
-            caller_privileges,
+            caller_write_privileges,
         )
     };
 
@@ -1630,7 +1644,7 @@ fn call<'a>(
         &message,
         &executables,
         &accounts,
-        &caller_privileges,
+        &caller_write_privileges,
         *(&mut *(syscall.get_context_mut()?)),
     ) {
         Ok(()) => (),
