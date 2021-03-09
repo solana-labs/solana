@@ -12,7 +12,31 @@ use crate::{
     short_vec, system_instruction, sysvar,
 };
 use itertools::Itertools;
-use std::convert::TryFrom;
+use lazy_static::lazy_static;
+use std::convert::{TryFrom, TryInto};
+
+lazy_static! {
+    // Copied keys over since direct references create cyclical dependency.
+    static ref BUILTIN_PROGRAMS_KEYS: [Pubkey; 12] = vec![
+        "Budget1111111111111111111111111111111111111",
+        "Config1111111111111111111111111111111111111",
+        "Exchange11111111111111111111111111111111111",
+        "ExchangeFaucet11111111111111111111111111111",
+        "FaiLure111111111111111111111111111111111111",
+        "NativeLoader1111111111111111111111111111111",
+        "Noop111111111111111111111111111111111111111",
+        "Stake11111111111111111111111111111111111111",
+        "StakeConfig11111111111111111111111111111111",
+        "Vest111111111111111111111111111111111111111",
+        "Vote111111111111111111111111111111111111111",
+        "ownab1e111111111111111111111111111111111111",
+    ]
+    .into_iter()
+    .map(|s| s.parse().unwrap())
+    .collect::<Vec<_>>()
+    .try_into()
+    .unwrap();
+}
 
 fn position(keys: &[Pubkey], key: &Pubkey) -> u8 {
     keys.iter().position(|k| k == key).unwrap() as u8
@@ -346,7 +370,9 @@ impl Message {
         let mut readonly_keys = vec![];
         for (i, key) in self.account_keys.iter().enumerate() {
             if self.is_writable(i) {
-                if demote_sysvar_write_locks && sysvar::is_sysvar_id(key) {
+                if demote_sysvar_write_locks
+                    && (sysvar::is_sysvar_id(key) || BUILTIN_PROGRAMS_KEYS.contains(key))
+                {
                     readonly_keys.push(key);
                 } else {
                     writable_keys.push(key);
@@ -467,6 +493,7 @@ impl Message {
 mod tests {
     use super::*;
     use crate::instruction::AccountMeta;
+    use std::collections::HashSet;
 
     #[test]
     fn test_message_unique_program_ids() {
@@ -476,6 +503,16 @@ mod tests {
             Instruction::new_with_bincode(program_id0, &0, vec![]),
         ]);
         assert_eq!(program_ids, vec![program_id0]);
+    }
+
+    #[test]
+    fn test_builtin_program_keys() {
+        let keys: HashSet<Pubkey> = BUILTIN_PROGRAMS_KEYS.iter().copied().collect();
+        assert_eq!(keys.len(), 12);
+        for k in keys {
+            let k = format!("{}", k);
+            assert!(k.ends_with("11111111111111111111111111111"));
+        }
     }
 
     #[test]

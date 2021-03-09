@@ -158,7 +158,7 @@ lazy_static! {
         (require_stake_for_gossip::id(), "require stakes for propagating crds values through gossip #15561"),
         (cpi_data_cost::id(), "charge the compute budget for data passed via CPI"),
         (upgradeable_close_instruction::id(), "close upgradeable buffer accounts"),
-        (demote_sysvar_write_locks::id(), "demote sysvar write locks to readonly #15497"),
+        (demote_sysvar_write_locks::id(), "demote builtins and sysvar write locks to readonly #15497"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
