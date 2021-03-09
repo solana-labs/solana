@@ -509,6 +509,7 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
                     44 => InstructionError::BorshIoError(String::new()),
                     45 => InstructionError::AccountNotRentExempt,
                     46 => InstructionError::InvalidAccountOwner,
+                    47 => InstructionError::ArithmeticOverflow,
                     _ => return Err("Invalid InstructionError"),
                 };
 
@@ -734,6 +735,9 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                             }
                             InstructionError::InvalidAccountOwner => {
                                 tx_by_addr::InstructionErrorType::InvalidAccountOwner
+                            }
+                            InstructionError::ArithmeticOverflow => {
+                                tx_by_addr::InstructionErrorType::ArithmeticOverflow
                             }
                         } as i32,
                         custom: match instruction_error {

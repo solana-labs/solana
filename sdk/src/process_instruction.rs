@@ -292,11 +292,11 @@ impl Default for MockInvokeContext {
 }
 impl InvokeContext for MockInvokeContext {
     fn push(&mut self, _key: &Pubkey) -> Result<(), InstructionError> {
-        self.invoke_depth += 1;
+        self.invoke_depth = self.invoke_depth.saturating_add(1);
         Ok(())
     }
     fn pop(&mut self) {
-        self.invoke_depth -= 1;
+        self.invoke_depth = self.invoke_depth.saturating_sub(1);
     }
     fn invoke_depth(&self) -> usize {
         self.invoke_depth
