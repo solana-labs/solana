@@ -6,31 +6,33 @@ use crate::serialize_utils::{
     append_slice, append_u16, append_u8, read_pubkey, read_slice, read_u16, read_u8,
 };
 use crate::{
+    bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
     hash::Hash,
     instruction::{AccountMeta, CompiledInstruction, Instruction},
     pubkey::Pubkey,
-    short_vec, system_instruction, sysvar,
+    short_vec, system_instruction, system_program, sysvar,
 };
 use itertools::Itertools;
 use lazy_static::lazy_static;
-use std::convert::{TryFrom, TryInto};
+use std::{convert::TryFrom, str::FromStr};
 
 lazy_static! {
     // Copied keys over since direct references create cyclical dependency.
-    static ref BUILTIN_PROGRAMS_KEYS: [Pubkey; 7] = vec![
-        "11111111111111111111111111111111",
-        "Config1111111111111111111111111111111111111",
-        "Feature111111111111111111111111111111111111",
-        "NativeLoader1111111111111111111111111111111",
-        "Stake11111111111111111111111111111111111111",
-        "StakeConfig11111111111111111111111111111111",
-        "Vote111111111111111111111111111111111111111",
-    ]
-    .into_iter()
-    .map(|s| s.parse().unwrap())
-    .collect::<Vec<_>>()
-    .try_into()
-    .unwrap();
+    static ref BUILTIN_PROGRAMS_KEYS: [Pubkey; 10] = {
+        let parse = |s| Pubkey::from_str(s).unwrap();
+        [
+            parse("Config1111111111111111111111111111111111111"),
+            parse("Feature111111111111111111111111111111111111"),
+            parse("NativeLoader1111111111111111111111111111111"),
+            parse("Stake11111111111111111111111111111111111111"),
+            parse("StakeConfig11111111111111111111111111111111"),
+            parse("Vote111111111111111111111111111111111111111"),
+            system_program::id(),
+            bpf_loader::id(),
+            bpf_loader_deprecated::id(),
+            bpf_loader_upgradeable::id(),
+        ]
+    };
 }
 
 fn position(keys: &[Pubkey], key: &Pubkey) -> u8 {
@@ -503,10 +505,10 @@ mod tests {
     #[test]
     fn test_builtin_program_keys() {
         let keys: HashSet<Pubkey> = BUILTIN_PROGRAMS_KEYS.iter().copied().collect();
-        assert_eq!(keys.len(), 7);
+        assert_eq!(keys.len(), 10);
         for k in keys {
             let k = format!("{}", k);
-            assert!(k.ends_with("11111111111111111111111111111"));
+            assert!(k.ends_with("11111111111111111111111"));
         }
     }
 
@@ -517,7 +519,7 @@ mod tests {
         let builtins = format!("{:?}", *BUILTIN_PROGRAMS_KEYS);
         assert_eq!(
             format!("{}", hash::hash(builtins.as_bytes())),
-            "2SJx58oZA3NUcW6MnKFGyG5xSwXvmEXhoyJnz2Z5mHVh"
+            "ACqmMkYbo9eqK6QrRSrB3HLyR6uHhLf31SCfGUAJjiWj"
         );
     }
 
