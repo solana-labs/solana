@@ -1,6 +1,14 @@
 /* eslint-disable @typescript-eslint/no-redeclare */
 
-import { array, number, optional, pick, string, StructType } from "superstruct";
+import {
+  array,
+  nullable,
+  number,
+  optional,
+  pick,
+  string,
+  StructType,
+} from "superstruct";
 import { Pubkey } from "validators/pubkey";
 
 export type InitializeInfo = StructType<typeof InitializeInfo>;
@@ -32,7 +40,7 @@ export const VoteInfo = pick({
   vote: pick({
     hash: string(),
     slots: array(number()),
-    timestamp: optional(number()),
+    timestamp: optional(nullable(number())),
   }),
 });
 
