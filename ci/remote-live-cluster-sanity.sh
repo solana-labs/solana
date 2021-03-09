@@ -38,7 +38,7 @@ sys_tuner_pid=$!
 
 (
   echo "$(date): VALIDATOR STARTED." &&
-  ./solana-keygen new --no-passphrase -so ./identity.json &&
+  ./solana-keygen new --force --no-passphrase --silent --outfile ./identity.json &&
   ./solana-validator \
     --identity ./identity.json \
     --ledger ./cluster-sanity/ledger \
