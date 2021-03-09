@@ -562,14 +562,9 @@ impl LocalCluster {
         }
         info!("Checking for vote account registration of {}", node_pubkey);
         match (
-            client.get_account_with_commitment(
-                &stake_account_pubkey,
-                CommitmentConfig::processed(),
-            ),
-            client.get_account_with_commitment(
-                &vote_account_pubkey,
-                CommitmentConfig::processed(),
-            ),
+            client
+                .get_account_with_commitment(&stake_account_pubkey, CommitmentConfig::processed()),
+            client.get_account_with_commitment(&vote_account_pubkey, CommitmentConfig::processed()),
         ) {
             (Ok(Some(stake_account)), Ok(Some(vote_account))) => {
                 match (
