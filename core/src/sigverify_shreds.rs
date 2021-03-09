@@ -4,8 +4,11 @@ use crate::sigverify_stage::SigVerifier;
 use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
 use solana_ledger::shred::{OFFSET_OF_SHRED_SLOT, SIZE_OF_SHRED_SLOT};
 use solana_ledger::sigverify_shreds::verify_shreds_gpu;
-use solana_perf::packet::{limited_deserialize, Packets};
-use solana_perf::recycler_cache::RecyclerCache;
+use solana_perf::{
+    self,
+    packet::{limited_deserialize, Packets},
+    recycler_cache::RecyclerCache,
+};
 use solana_runtime::bank_forks::BankForks;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, RwLock};
@@ -67,7 +70,7 @@ impl SigVerifier for ShredSigVerifier {
         leader_slots.insert(std::u64::MAX, [0u8; 32]);
 
         let r = verify_shreds_gpu(&batches, &leader_slots, &self.recycler_cache);
-        sigverify::mark_disabled(&mut batches, &r);
+        solana_perf::sigverify::mark_disabled(&mut batches, &r);
         batches
     }
 }
