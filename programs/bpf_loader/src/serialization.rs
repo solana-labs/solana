@@ -233,7 +233,7 @@ pub fn deserialize_parameters_aligned(
             if post_len != pre_len
                 && (post_len.saturating_sub(pre_len)) <= MAX_PERMITTED_DATA_INCREASE
             {
-                account.data.resize(post_len, 0);
+                account.resize_data(post_len, 0);
                 data_end = start + post_len;
             }
             account

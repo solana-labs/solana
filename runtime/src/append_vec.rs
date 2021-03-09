@@ -541,7 +541,7 @@ pub mod test_utils {
     pub fn create_test_account(sample: usize) -> (StoredMeta, AccountSharedData) {
         let data_len = sample % 256;
         let mut account = AccountSharedData::new(sample as u64, 0, &Pubkey::default());
-        account.data = (0..data_len).map(|_| data_len as u8).collect();
+        account.set_data((0..data_len).map(|_| data_len as u8).collect());
         let stored_meta = StoredMeta {
             write_version: 0,
             pubkey: Pubkey::default(),
