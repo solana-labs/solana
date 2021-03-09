@@ -477,7 +477,7 @@ impl Message {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::instruction::AccountMeta;
+    use crate::{hash, instruction::AccountMeta};
     use std::collections::HashSet;
 
     #[test]
@@ -498,6 +498,17 @@ mod tests {
             let k = format!("{}", k);
             assert!(k.ends_with("11111111111111111111111111111"));
         }
+    }
+
+    #[test]
+    fn test_builtin_program_keys_abi_freeze() {
+        // Once the feature is flipped on, we can't further modify
+        // BUILTIN_PROGRAMS_KEYS without the risk of breaking consensus.
+        let builtins = format!("{:?}", *BUILTIN_PROGRAMS_KEYS);
+        assert_eq!(
+            format!("{}", hash::hash(builtins.as_bytes())),
+            "5Rdd7fxQPQooAzmYcb1TT1ZtnJJzJS3qrZqpDW4F66bK"
+        );
     }
 
     #[test]
