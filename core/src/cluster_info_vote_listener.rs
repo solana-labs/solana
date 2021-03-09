@@ -337,32 +337,23 @@ impl ClusterInfoVoteListener {
         votes: Vec<Transaction>,
         labels: Vec<CrdsValueLabel>,
     ) -> (Vec<Transaction>, Vec<(CrdsValueLabel, Slot, Packets)>) {
-        let msgs = packet::to_packets_chunked(&votes, 1);
-        let r = sigverify::ed25519_verify_cpu(&msgs);
+        let mut msgs = packet::to_packets_chunked(&votes, 1);
+        sigverify::ed25519_verify_cpu(&mut msgs);
 
-        assert_eq!(
-            r.iter()
-                .map(|packets_results| packets_results.len())
-                .sum::<usize>(),
-            votes.len()
-        );
+        let (vote_txs, packets) = izip!(labels.into_iter(), votes.into_iter(), msgs,)
+            .filter_map(|(label, vote, packet)| {
+                let slot = vote_transaction::parse_vote_transaction(&vote)
+                    .and_then(|(_, vote, _)| vote.slots.last().copied())?;
 
-        let (vote_txs, packets) = izip!(
-            labels.into_iter(),
-            votes.into_iter(),
-            r.iter().flatten(),
-            msgs,
-        )
-        .filter_map(|(label, vote, verify_result, packet)| {
-            let slot = vote_transaction::parse_vote_transaction(&vote)
-                .and_then(|(_, vote, _)| vote.slots.last().copied())?;
-            if *verify_result != 0 {
-                Some((vote, (label, slot, packet)))
-            } else {
-                None
-            }
-        })
-        .unzip();
+                // to_packets_chunked() above split into 1 packet long chunks
+                assert_eq!(packet.packets.len(), 1);
+                if !packet.packets[0].meta.discard {
+                    Some((vote, (label, slot, packet)))
+                } else {
+                    None
+                }
+            })
+            .unzip();
         (vote_txs, packets)
     }
 

@@ -1,34 +1,35 @@
 import React from "react";
 import {
   TokenListProvider,
-  KnownToken,
-  KnownTokenMap,
+  TokenInfoMap,
+  TokenInfo,
+  TokenListContainer,
 } from "@solana/spl-token-registry";
 import { clusterSlug, useCluster } from "providers/cluster";
 
-const TokenRegistryContext = React.createContext<KnownTokenMap>(new Map());
+const TokenRegistryContext = React.createContext<TokenInfoMap>(new Map());
 
 type ProviderProps = { children: React.ReactNode };
 
 export function TokenRegistryProvider({ children }: ProviderProps) {
-  const [tokenRegistry, setTokenRegistry] = React.useState<KnownTokenMap>(
+  const [tokenRegistry, setTokenRegistry] = React.useState<TokenInfoMap>(
     new Map()
   );
   const { cluster } = useCluster();
 
   React.useEffect(() => {
-    new TokenListProvider()
-      .resolve(clusterSlug(cluster))
-      .then((tokens: KnownToken[]) => {
-        setTokenRegistry(
-          tokens.reduce((map: KnownTokenMap, item: KnownToken) => {
-            if (item.tokenName && item.tokenSymbol) {
-              map.set(item.mintAddress, item);
-            }
-            return map;
-          }, new Map())
-        );
-      });
+    new TokenListProvider().resolve().then((tokens: TokenListContainer) => {
+      const tokenList = tokens
+        .filterByClusterSlug(clusterSlug(cluster))
+        .getList();
+
+      setTokenRegistry(
+        tokenList.reduce((map: TokenInfoMap, item: TokenInfo) => {
+          map.set(item.address, item);
+          return map;
+        }, new Map())
+      );
+    });
   }, [cluster]);
 
   return (

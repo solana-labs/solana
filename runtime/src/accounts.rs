@@ -163,14 +163,13 @@ impl Accounts {
     }
 
     fn construct_instructions_account(message: &Message) -> Account {
-        let mut account = Account {
-            data: message.serialize_instructions(),
-            ..Account::default()
-        };
-
+        let mut data = message.serialize_instructions();
         // add room for current instruction index.
-        account.data.resize(account.data.len() + 2, 0);
-        account
+        data.resize(data.len() + 2, 0);
+        Account {
+            data,
+            ..Account::default()
+        }
     }
 
     fn load_transaction(
@@ -193,7 +192,6 @@ impl Accounts {
             let mut tx_rent: TransactionRent = 0;
             let mut accounts = Vec::with_capacity(message.account_keys.len());
             let mut account_deps = Vec::with_capacity(message.account_keys.len());
-            let rent_fix_enabled = feature_set.cumulative_rent_related_fixes_enabled();
 
             for (i, key) in message.account_keys.iter().enumerate() {
                 let account = if message.is_non_loader_key(key, i) {
@@ -214,11 +212,8 @@ impl Accounts {
                             .load(ancestors, key)
                             .map(|(mut account, _)| {
                                 if message.is_writable(i) {
-                                    let rent_due = rent_collector.collect_from_existing_account(
-                                        &key,
-                                        &mut account,
-                                        rent_fix_enabled,
-                                    );
+                                    let rent_due = rent_collector
+                                        .collect_from_existing_account(&key, &mut account);
                                     (account, rent_due)
                                 } else {
                                     (account, 0)
@@ -837,7 +832,6 @@ impl Accounts {
         rent_collector: &RentCollector,
         last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
         fix_recent_blockhashes_sysvar_delay: bool,
-        rent_fix_enabled: bool,
     ) {
         let accounts_to_store = self.collect_accounts_to_store(
             txs,
@@ -847,7 +841,6 @@ impl Accounts {
             rent_collector,
             last_blockhash_with_fee_calculator,
             fix_recent_blockhashes_sysvar_delay,
-            rent_fix_enabled,
         );
         self.accounts_db.store_cached(slot, &accounts_to_store);
     }
@@ -872,7 +865,6 @@ impl Accounts {
         rent_collector: &RentCollector,
         last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
         fix_recent_blockhashes_sysvar_delay: bool,
-        rent_fix_enabled: bool,
     ) -> Vec<(&'a Pubkey, &'a Account)> {
         let mut accounts = Vec::with_capacity(loaded.len());
         for (i, ((raccs, _nonce_rollback), (_, tx))) in loaded
@@ -941,11 +933,8 @@ impl Accounts {
                         }
                     }
                     if account.rent_epoch == 0 {
-                        loaded_transaction.rent += rent_collector.collect_from_created_account(
-                            &key,
-                            account,
-                            rent_fix_enabled,
-                        );
+                        loaded_transaction.rent +=
+                            rent_collector.collect_from_created_account(&key, account);
                     }
                     accounts.push((key, &*account));
                 }
@@ -1900,7 +1889,6 @@ mod tests {
             &rent_collector,
             &(Hash::default(), FeeCalculator::default()),
             true,
-            true,
         );
         assert_eq!(collected_accounts.len(), 2);
         assert!(collected_accounts
@@ -2266,7 +2254,6 @@ mod tests {
             &rent_collector,
             &(next_blockhash, FeeCalculator::default()),
             true,
-            true,
         );
         assert_eq!(collected_accounts.len(), 2);
         assert_eq!(
@@ -2376,7 +2363,6 @@ mod tests {
             loaded.as_mut_slice(),
             &rent_collector,
             &(next_blockhash, FeeCalculator::default()),
-            true,
             true,
         );
         assert_eq!(collected_accounts.len(), 1);

@@ -40,29 +40,29 @@ where
     V: Borrow<(Slot, UnixTimestamp)>,
 {
     let mut stake_per_timestamp: BTreeMap<UnixTimestamp, u128> = BTreeMap::new();
-    let mut total_stake = 0;
+    let mut total_stake: u128 = 0;
     for (vote_pubkey, slot_timestamp) in unique_timestamps {
         let (timestamp_slot, timestamp) = slot_timestamp.borrow();
         let offset = slot.saturating_sub(*timestamp_slot) as u32 * slot_duration;
-        let estimate = timestamp + offset.as_secs() as i64;
+        let estimate = timestamp.saturating_add(offset.as_secs() as i64);
         let stake = stakes
             .get(vote_pubkey.borrow())
             .map(|(stake, _account)| stake)
             .unwrap_or(&0);
         stake_per_timestamp
             .entry(estimate)
-            .and_modify(|stake_sum| *stake_sum += *stake as u128)
+            .and_modify(|stake_sum| *stake_sum = stake_sum.saturating_add(*stake as u128))
             .or_insert(*stake as u128);
-        total_stake += *stake as u128;
+        total_stake = total_stake.saturating_add(*stake as u128);
     }
     if total_stake == 0 {
         return None;
     }
-    let mut stake_accumulator = 0;
+    let mut stake_accumulator: u128 = 0;
     let mut estimate = 0;
     // Populate `estimate` with stake-weighted median timestamp
     for (timestamp, stake) in stake_per_timestamp.into_iter() {
-        stake_accumulator += stake;
+        stake_accumulator = stake_accumulator.saturating_add(stake);
         if stake_accumulator > total_stake / 2 {
             estimate = timestamp;
             break;
@@ -84,15 +84,16 @@ where
             // estimate offset since the start of the epoch is higher than
             // `MAX_ALLOWABLE_DRIFT_PERCENTAGE_SLOW`
             estimate = epoch_start_timestamp
-                + poh_estimate_offset.as_secs() as i64
-                + max_allowable_drift_slow.as_secs() as i64;
+                .saturating_add(poh_estimate_offset.as_secs() as i64)
+                .saturating_add(max_allowable_drift_slow.as_secs() as i64);
         } else if estimate_offset < poh_estimate_offset
             && poh_estimate_offset - estimate_offset > max_allowable_drift_fast
         {
             // estimate offset since the start of the epoch is lower than
             // `MAX_ALLOWABLE_DRIFT_PERCENTAGE_FAST`
-            estimate = epoch_start_timestamp + poh_estimate_offset.as_secs() as i64
-                - max_allowable_drift_fast.as_secs() as i64;
+            estimate = epoch_start_timestamp
+                .saturating_add(poh_estimate_offset.as_secs() as i64)
+                .saturating_sub(max_allowable_drift_fast.as_secs() as i64);
         }
     }
     Some(estimate)

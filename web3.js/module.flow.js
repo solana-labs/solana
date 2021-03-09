@@ -298,16 +298,18 @@ declare module '@solana/web3.js' {
   };
 
   declare export type TokenAmount = {
-    uiAmount: number,
+    uiAmount: number | null,
     decimals: number,
     amount: string,
+    uiAmountString?: string,
   };
 
   declare export type TokenAccountBalancePair = {
     address: PublicKey,
     amount: string,
     decimals: number,
-    uiAmount: number,
+    uiAmount: number | null,
+    uiAmountString?: string,
   };
 
   declare type AccountChangeCallback = (
@@ -531,7 +533,6 @@ declare module '@solana/web3.js' {
     removeSignatureListener(id: number): Promise<void>;
     onRootChange(callback: RootChangeCallback): number;
     removeRootChangeListener(id: number): Promise<void>;
-    validatorExit(): Promise<boolean>;
     getMinimumBalanceForRentExemption(
       dataLength: number,
       commitment: ?Commitment,

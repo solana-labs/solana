@@ -354,7 +354,7 @@ impl AccountsBackgroundService {
                     } else {
                         // under sustained writes, shrink can lag behind so cap to
                         // SHRUNKEN_ACCOUNT_PER_INTERVAL (which is based on INTERVAL_MS,
-                        // which in turn roughly asscociated block time)
+                        // which in turn roughly associated block time)
                         consumed_budget = bank
                             .process_stale_slot_with_budget(
                                 consumed_budget,

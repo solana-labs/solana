@@ -15,6 +15,7 @@ import { normalizeTokenAmount } from "utils";
 import { addressLabel } from "utils/tx";
 import { reportError } from "utils/sentry";
 import { useTokenRegistry } from "providers/mints/token-registry";
+import { BigNumber } from "bignumber.js";
 
 export function TokenAccountSection({
   account,
@@ -88,16 +89,16 @@ function MintAccountCard({
             )}
           </td>
         </tr>
-        {tokenInfo?.website && (
+        {tokenInfo?.extensions?.website && (
           <tr>
             <td>Website</td>
             <td className="text-lg-right">
               <a
                 rel="noopener noreferrer"
                 target="_blank"
-                href={tokenInfo.website}
+                href={tokenInfo.extensions.website}
               >
-                {tokenInfo.website}
+                {tokenInfo.extensions.website}
                 <span className="fe fe-external-link ml-2"></span>
               </a>
             </td>
@@ -153,15 +154,13 @@ function TokenAccountCard({
       <>
         ◎
         <span className="text-monospace">
-          {new Intl.NumberFormat("en-US", { maximumFractionDigits: 9 }).format(
-            info.tokenAmount.uiAmount
-          )}
+          {new BigNumber(info.tokenAmount.uiAmountString).toFormat(9)}
         </span>
       </>
     );
   } else {
-    balance = <>{info.tokenAmount.uiAmount}</>;
-    unit = tokenRegistry.get(info.mint.toBase58())?.tokenSymbol || "tokens";
+    balance = <>{info.tokenAmount.uiAmountString}</>;
+    unit = tokenRegistry.get(info.mint.toBase58())?.symbol || "tokens";
   }
 
   return (
@@ -221,9 +220,9 @@ function TokenAccountCard({
               <>
                 ◎
                 <span className="text-monospace">
-                  {new Intl.NumberFormat("en-US", {
-                    maximumFractionDigits: 9,
-                  }).format(info.rentExemptReserve.uiAmount)}
+                  {new BigNumber(
+                    info.rentExemptReserve.uiAmountString
+                  ).toFormat(9)}
                 </span>
               </>
             </td>

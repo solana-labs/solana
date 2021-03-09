@@ -111,14 +111,14 @@ impl ExecuteTimings {
 }
 
 type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "3ZaEt781qwhfQSE4DZPBHhng2S6MuimchRjkR9ZWzDFs")]
+#[frozen_abi(digest = "EcB9J7sm37t1R47vLcvGuNeiRciB4Efq1EDWDWL6Bp5h")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 type TransactionAccountRefCells = Vec<Rc<RefCell<Account>>>;
 type TransactionAccountDepRefCells = Vec<(Pubkey, RefCell<Account>)>;
 type TransactionLoaderRefCells = Vec<Vec<(Pubkey, RefCell<Account>)>>;
 
 // Eager rent collection repeats in cyclic manner.
-// Each cycle is composed of <partiion_count> number of tiny pubkey subranges
+// Each cycle is composed of <partition_count> number of tiny pubkey subranges
 // to scan, which is always multiple of the number of slots in epoch.
 type PartitionIndex = u64;
 type PartitionsPerCycle = u64;
@@ -437,7 +437,7 @@ pub struct TransactionLogCollector {
     // active `TransactionLogCollectorFilter`
     pub logs: Vec<TransactionLogInfo>,
 
-    // For each `mentioned_addresses`, maintain a list of indicies into `logs` to easily
+    // For each `mentioned_addresses`, maintain a list of indices into `logs` to easily
     // locate the logs from transactions that included the mentioned addresses.
     pub mentioned_address_map: HashMap<Pubkey, Vec<usize>>,
 }
@@ -2058,10 +2058,7 @@ impl Bank {
         shrink.stop();
 
         info!(
-            "exhaustively_free_unused_resource()
-            flush: {},
-            clean: {},
-            shrink: {}",
+            "exhaustively_free_unused_resource() {} {} {}",
             flush, clean, shrink,
         );
     }
@@ -3003,7 +3000,11 @@ impl Bank {
         let transaction_log_collector_config =
             self.transaction_log_collector_config.read().unwrap();
 
-        for (i, ((r, _nonce_rollback), tx)) in executed.iter().zip(txs.iter()).enumerate() {
+        for (i, ((r, _nonce_rollback), (_, tx))) in executed
+            .iter()
+            .zip(OrderedIterator::new(txs, batch.iteration_order()))
+            .enumerate()
+        {
             if let Some(debug_keys) = &self.transaction_debug_keys {
                 for key in &tx.message.account_keys {
                     if debug_keys.contains(key) {
@@ -3012,7 +3013,6 @@ impl Bank {
                     }
                 }
             }
-
             if transaction_log_collector_config.filter != TransactionLogCollectorFilter::None {
                 let mut transaction_log_collector = self.transaction_log_collector.write().unwrap();
                 let transaction_log_index = transaction_log_collector.logs.len();
@@ -3192,7 +3192,6 @@ impl Bank {
             &self.rent_collector,
             &self.last_blockhash_with_fee_calculator(),
             self.fix_recent_blockhashes_sysvar_delay(),
-            self.cumulative_rent_related_fixes_enabled(),
         );
         self.collect_rent(executed, loaded_accounts);
 
@@ -3441,11 +3440,9 @@ impl Bank {
         // parallelize?
         let mut rent = 0;
         for (pubkey, mut account) in accounts {
-            rent += self.rent_collector.collect_from_existing_account(
-                &pubkey,
-                &mut account,
-                self.cumulative_rent_related_fixes_enabled(),
-            );
+            rent += self
+                .rent_collector
+                .collect_from_existing_account(&pubkey, &mut account);
             // Store all of them unconditionally to purge old AppendVec,
             // even if collected rent is 0 (= not updated).
             self.store_account(&pubkey, &account);
@@ -3564,30 +3561,9 @@ impl Bank {
         let (parent_epoch, mut parent_slot_index) =
             self.get_epoch_and_slot_index(self.parent_slot());
 
-        let should_enable = match self.cluster_type() {
-            ClusterType::MainnetBeta => {
-                #[cfg(not(test))]
-                let should_enable = self.cumulative_rent_related_fixes_enabled();
-
-                // needed for test_rent_eager_across_epoch_with_gap_under_multi_epoch_cycle,
-                // which depends on ClusterType::MainnetBeta
-                #[cfg(test)]
-                let should_enable = true;
-
-                should_enable
-            }
-            _ => self.cumulative_rent_related_fixes_enabled(),
-        };
-
         let mut partitions = vec![];
         if parent_epoch < current_epoch {
-            // this needs to be gated because this potentially can change the behavior
-            // (= bank hash) at each start of epochs
-            let slot_skipped = if should_enable {
-                (self.slot() - self.parent_slot()) > 1
-            } else {
-                current_slot_index > 0
-            };
+            let slot_skipped = (self.slot() - self.parent_slot()) > 1;
             if slot_skipped {
                 // Generate special partitions because there are skipped slots
                 // exactly at the epoch transition.
@@ -3601,9 +3577,7 @@ impl Bank {
                     parent_epoch,
                 ));
 
-                // this needs to be gated because this potentially can change the behavior
-                // (= bank hash) at each start of epochs
-                if should_enable && current_slot_index > 0 {
+                if current_slot_index > 0 {
                     // ... for current epoch
                     partitions.push(self.partition_from_slot_indexes_with_gapped_epochs(
                         0,
@@ -3634,8 +3608,8 @@ impl Bank {
         let cycle_params = self.determine_collection_cycle_params(epoch);
         let (_, _, in_multi_epoch_cycle, _, _, partition_count) = cycle_params;
 
-        // use common code-path for both very-likely and very-unlikely for the sake of minimized
-        // risk of any mis-calculation instead of neligilbe faster computation per slot for the
+        // use common codepath for both very likely and very unlikely for the sake of minimized
+        // risk of any miscalculation instead of negligibly faster computation per slot for the
         // likely case.
         let mut start_partition_index =
             Self::partition_index_from_slot_index(start_slot_index, cycle_params);
@@ -3647,7 +3621,7 @@ impl Bank {
         let in_middle_of_cycle = start_partition_index > 0;
         if in_multi_epoch_cycle && is_special_new_epoch && in_middle_of_cycle {
             // Adjust slot indexes so that the final partition ranges are continuous!
-            // This is neeed because the caller gives us off-by-one indexes when
+            // This is need because the caller gives us off-by-one indexes when
             // an epoch boundary is crossed.
             // Usually there is no need for this adjustment because cycles are aligned
             // with epochs. But for multi-epoch cycles, adjust the indexes if it
@@ -3967,25 +3941,9 @@ impl Bank {
     }
 
     pub fn deposit(&self, pubkey: &Pubkey, lamports: u64) -> u64 {
+        // This doesn't collect rents intentionally.
+        // Rents should only be applied to actual TXes
         let mut account = self.get_account(pubkey).unwrap_or_default();
-
-        let rent_fix_enabled = self.cumulative_rent_related_fixes_enabled();
-
-        // don't collect rents if we're in the new behavior;
-        // in genral, it's not worthwhile to account for rents outside the runtime (transactions)
-        // there are too many and subtly nuanced modification codepaths
-        if !rent_fix_enabled {
-            // previously we're too much collecting rents as if it existed since epoch 0...
-            self.collected_rent.fetch_add(
-                self.rent_collector.collect_from_existing_account(
-                    pubkey,
-                    &mut account,
-                    rent_fix_enabled,
-                ),
-                Relaxed,
-            );
-        }
-
         account.lamports += lamports;
         self.store_account(pubkey, &account);
         account.lamports
@@ -4666,10 +4624,6 @@ impl Bank {
     pub fn no_overflow_rent_distribution_enabled(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::no_overflow_rent_distribution::id())
-    }
-
-    pub fn cumulative_rent_related_fixes_enabled(&self) -> bool {
-        self.feature_set.cumulative_rent_related_fixes_enabled()
     }
 
     pub fn stake_program_v2_enabled(&self) -> bool {
@@ -6393,7 +6347,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn test_rent_eager_under_fixed_cycle_for_developemnt() {
+    fn test_rent_eager_under_fixed_cycle_for_development() {
         solana_logger::setup();
         let leader_pubkey = solana_sdk::pubkey::new_rand();
         let leader_lamports = 3;
@@ -6539,11 +6493,11 @@ pub(crate) mod tests {
         let max_exact = 64;
         // Make sure `max_exact` divides evenly when calculating `calculate_partition_width`
         assert!(should_cause_overflow(max_exact));
-        // Make sure `max_unexact` doesn't divide evenly when calculating `calculate_partition_width`
-        let max_unexact = 10;
-        assert!(!should_cause_overflow(max_unexact));
+        // Make sure `max_inexact` doesn't divide evenly when calculating `calculate_partition_width`
+        let max_inexact = 10;
+        assert!(!should_cause_overflow(max_inexact));
 
-        for max in &[max_exact, max_unexact] {
+        for max in &[max_exact, max_inexact] {
             let range = Bank::pubkey_range_from_partition((max - 1, max - 1, *max));
             assert_eq!(
                 range,
@@ -10264,19 +10218,19 @@ pub(crate) mod tests {
             if bank.slot == 32 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "4syPxVrVFUpksTre5BB5w7qd3BxSU4WzUT6R2fjFgMJ2"
+                    "7AkMgAb2v4tuoiSf3NnVgaBxSvp7XidbrSwsPEn4ENTp"
                 );
             }
             if bank.slot == 64 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "4GKgnCxQs6AJxcqYQkxa8oF8gEp13bfRNCm2uzCceA26"
+                    "2JzWWRBtQgdXboaACBRXNNKsHeBtn57uYmqH1AgGUkdG"
                 );
             }
             if bank.slot == 128 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "9YwXsk2qpM7bZLnWGdtqCmDEygiu1KpEcr4zWWBTUKw6"
+                    "FQnVhDVjhCyfBxFb3bdm3CLiuCePvWuW5TGDsLBZnKAo"
                 );
                 break;
             }
@@ -12277,5 +12231,80 @@ pub(crate) mod tests {
             &mint_keypair.pubkey(),
             genesis_config.epoch_schedule.get_first_slot_in_epoch(1),
         );
+    }
+
+    #[test]
+    fn test_tx_log_order() {
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config_with_leader(
+            1_000_000_000_000_000,
+            &Pubkey::new_unique(),
+            bootstrap_validator_stake_lamports(),
+        );
+        let bank = Arc::new(Bank::new(&genesis_config));
+        *bank.transaction_log_collector_config.write().unwrap() = TransactionLogCollectorConfig {
+            mentioned_addresses: HashSet::new(),
+            filter: TransactionLogCollectorFilter::All,
+        };
+        let blockhash = bank.last_blockhash();
+
+        let sender0 = Keypair::new();
+        let sender1 = Keypair::new();
+        bank.transfer(100, &mint_keypair, &sender0.pubkey())
+            .unwrap();
+        bank.transfer(100, &mint_keypair, &sender1.pubkey())
+            .unwrap();
+
+        let recipient0 = Pubkey::new_unique();
+        let recipient1 = Pubkey::new_unique();
+        let tx0 = system_transaction::transfer(&sender0, &recipient0, 10, blockhash);
+        let success_sig = tx0.signatures[0];
+        let tx1 = system_transaction::transfer(&sender1, &recipient1, 110, blockhash); // Should produce insufficient funds log
+        let failure_sig = tx1.signatures[0];
+        let txs = vec![tx0, tx1];
+
+        // Use non-sequential batch ordering
+        let batch = bank.prepare_batch(&txs, Some(vec![1, 0]));
+
+        let log_results = bank
+            .load_execute_and_commit_transactions(
+                &batch,
+                MAX_PROCESSING_AGE,
+                false,
+                false,
+                true,
+                &mut ExecuteTimings::default(),
+            )
+            .3;
+        assert_eq!(log_results.len(), 2);
+        assert!(log_results[0]
+            .clone()
+            .pop()
+            .unwrap()
+            .contains(&"failed".to_string()));
+        assert!(log_results[1]
+            .clone()
+            .pop()
+            .unwrap()
+            .contains(&"success".to_string()));
+
+        let stored_logs = &bank.transaction_log_collector.read().unwrap().logs;
+        let success_log_info = stored_logs
+            .iter()
+            .find(|transaction_log_info| transaction_log_info.signature == success_sig)
+            .unwrap();
+        assert!(success_log_info.result.is_ok());
+        let success_log = success_log_info.log_messages.clone().pop().unwrap();
+        assert!(success_log.contains(&"success".to_string()));
+        let failure_log_info = stored_logs
+            .iter()
+            .find(|transaction_log_info| transaction_log_info.signature == failure_sig)
+            .unwrap();
+        assert!(failure_log_info.result.is_err());
+        let failure_log = failure_log_info.log_messages.clone().pop().unwrap();
+        assert!(failure_log.contains(&"failed".to_string()));
     }
 }

@@ -1,4 +1,4 @@
-use crate::StoredExtendedRewards;
+use crate::{StoredExtendedRewards, StoredTransactionStatusMeta};
 use solana_account_decoder::parse_token::{real_number_string_trimmed, UiTokenAmount};
 use solana_sdk::{
     hash::Hash,
@@ -312,6 +312,13 @@ impl From<TransactionStatusMeta> for generated::TransactionStatusMeta {
     }
 }
 
+impl From<StoredTransactionStatusMeta> for generated::TransactionStatusMeta {
+    fn from(meta: StoredTransactionStatusMeta) -> Self {
+        let meta: TransactionStatusMeta = meta.into();
+        meta.into()
+    }
+}
+
 impl TryFrom<generated::TransactionStatusMeta> for TransactionStatusMeta {
     type Error = bincode::Error;
 
@@ -502,6 +509,7 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
                     44 => InstructionError::BorshIoError(String::new()),
                     45 => InstructionError::AccountNotRentExempt,
                     46 => InstructionError::InvalidAccountOwner,
+                    47 => InstructionError::ArithmeticOverflow,
                     _ => return Err("Invalid InstructionError"),
                 };
 
@@ -727,6 +735,9 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                             }
                             InstructionError::InvalidAccountOwner => {
                                 tx_by_addr::InstructionErrorType::InvalidAccountOwner
+                            }
+                            InstructionError::ArithmeticOverflow => {
+                                tx_by_addr::InstructionErrorType::ArithmeticOverflow
                             }
                         } as i32,
                         custom: match instruction_error {

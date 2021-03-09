@@ -1,76 +1,80 @@
 #![allow(clippy::integer_arithmetic)]
-use clap::{
-    crate_description, crate_name, value_t, value_t_or_exit, values_t, values_t_or_exit, App,
-    AppSettings, Arg, ArgMatches, SubCommand,
-};
-use console::style;
-use fd_lock::FdLock;
-use log::*;
-use rand::{seq::SliceRandom, thread_rng, Rng};
-use solana_clap_utils::{
-    input_parsers::{keypair_of, keypairs_of, pubkey_of, value_of},
-    input_validators::{
-        is_keypair_or_ask_keyword, is_parsable, is_pubkey, is_pubkey_or_keypair, is_slot,
+use {
+    clap::{
+        crate_description, crate_name, value_t, value_t_or_exit, values_t, values_t_or_exit, App,
+        AppSettings, Arg, ArgMatches, SubCommand,
     },
-    keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
-};
-use solana_client::{rpc_client::RpcClient, rpc_request::MAX_MULTIPLE_ACCOUNTS};
-use solana_core::ledger_cleanup_service::{
-    DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS,
-};
-use solana_core::{
-    cluster_info::{ClusterInfo, Node, MINIMUM_VALIDATOR_PORT_RANGE_WIDTH, VALIDATOR_PORT_RANGE},
-    contact_info::ContactInfo,
-    gossip_service::GossipService,
-    poh_service,
-    rpc::JsonRpcConfig,
-    rpc_pubsub_service::PubSubConfig,
-    tpu::DEFAULT_TPU_COALESCE_MS,
-    validator::{is_snapshot_config_invalid, Validator, ValidatorConfig},
-};
-use solana_download_utils::{download_genesis_if_missing, download_snapshot};
-use solana_ledger::blockstore_db::BlockstoreRecoveryMode;
-use solana_perf::recycler::enable_recycler_warming;
-use solana_runtime::{
-    accounts_index::AccountIndex,
-    bank_forks::{ArchiveFormat, SnapshotConfig, SnapshotVersion},
-    hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
-    snapshot_utils::get_highest_snapshot_archive_path,
-};
-use solana_sdk::{
-    clock::{Slot, DEFAULT_S_PER_SLOT},
-    commitment_config::CommitmentConfig,
-    genesis_config::GenesisConfig,
-    hash::Hash,
-    pubkey::Pubkey,
-    signature::{Keypair, Signer},
-};
-use solana_validator::{
-    dashboard::Dashboard, get_validator_rpc_addr, new_spinner_progress_bar, println_name_value,
-    record_start, redirect_stderr_to_file,
-};
-use std::{
-    collections::{HashSet, VecDeque},
-    env,
-    fs::{self, File},
-    net::{IpAddr, SocketAddr, TcpListener, UdpSocket},
-    path::{Path, PathBuf},
-    process::exit,
-    str::FromStr,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
+    console::style,
+    fd_lock::FdLock,
+    log::*,
+    rand::{seq::SliceRandom, thread_rng, Rng},
+    solana_clap_utils::{
+        input_parsers::{keypair_of, keypairs_of, pubkey_of, value_of},
+        input_validators::{
+            is_keypair_or_ask_keyword, is_parsable, is_pubkey, is_pubkey_or_keypair, is_slot,
+        },
+        keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
-    thread::sleep,
-    time::{Duration, Instant, SystemTime},
+    solana_client::{rpc_client::RpcClient, rpc_request::MAX_MULTIPLE_ACCOUNTS},
+    solana_core::ledger_cleanup_service::{
+        DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS,
+    },
+    solana_core::{
+        cluster_info::{
+            ClusterInfo, Node, MINIMUM_VALIDATOR_PORT_RANGE_WIDTH, VALIDATOR_PORT_RANGE,
+        },
+        contact_info::ContactInfo,
+        gossip_service::GossipService,
+        poh_service,
+        rpc::JsonRpcConfig,
+        rpc_pubsub_service::PubSubConfig,
+        tpu::DEFAULT_TPU_COALESCE_MS,
+        validator::{
+            is_snapshot_config_invalid, Validator, ValidatorConfig, ValidatorStartProgress,
+        },
+    },
+    solana_download_utils::{download_genesis_if_missing, download_snapshot},
+    solana_ledger::blockstore_db::BlockstoreRecoveryMode,
+    solana_perf::recycler::enable_recycler_warming,
+    solana_runtime::{
+        accounts_index::AccountIndex,
+        bank_forks::{ArchiveFormat, SnapshotConfig, SnapshotVersion},
+        hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
+        snapshot_utils::get_highest_snapshot_archive_path,
+    },
+    solana_sdk::{
+        clock::{Slot, DEFAULT_S_PER_SLOT},
+        commitment_config::CommitmentConfig,
+        genesis_config::GenesisConfig,
+        hash::Hash,
+        pubkey::Pubkey,
+        signature::{Keypair, Signer},
+    },
+    solana_validator::{
+        admin_rpc_service, dashboard::Dashboard, new_spinner_progress_bar, println_name_value,
+        redirect_stderr_to_file,
+    },
+    std::{
+        collections::{HashSet, VecDeque},
+        env,
+        fs::{self, File},
+        net::{IpAddr, SocketAddr, TcpListener, UdpSocket},
+        path::{Path, PathBuf},
+        process::exit,
+        str::FromStr,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc, RwLock,
+        },
+        thread::sleep,
+        time::{Duration, Instant, SystemTime},
+    },
 };
 
 #[derive(Debug, PartialEq)]
 enum Operation {
     Initialize,
-    Monitor,
     Run,
-    WaitForRestartWindow { min_idle_time_in_minutes: usize },
 }
 
 fn wait_for_restart_window(
@@ -82,13 +86,10 @@ fn wait_for_restart_window(
 
     let min_idle_slots = (min_idle_time_in_minutes as f64 * 60. / DEFAULT_S_PER_SLOT) as Slot;
 
-    let rpc_addr = get_validator_rpc_addr(&ledger_path).map_err(|err| {
-        format!(
-            "Unable to read validator RPC address from {}: {}",
-            ledger_path.display(),
-            err
-        )
-    })?;
+    let admin_client = admin_rpc_service::connect(&ledger_path);
+    let rpc_addr = admin_rpc_service::runtime()
+        .block_on(async move { admin_client.await?.rpc_addr().await })
+        .map_err(|err| format!("Unable to get validator RPC address: {}", err))?;
 
     let rpc_client = match rpc_addr {
         None => return Err("RPC not available".into()),
@@ -754,6 +755,7 @@ fn rpc_bootstrap(
     use_progress_bar: bool,
     maximum_local_snapshot_age: Slot,
     should_check_duplicate_instance: bool,
+    start_progress: &Arc<RwLock<ValidatorStartProgress>>,
 ) {
     if !no_port_check {
         let mut order: Vec<_> = (0..cluster_entrypoints.len()).collect();
@@ -774,6 +776,8 @@ fn rpc_bootstrap(
     let mut gossip = None;
     loop {
         if gossip.is_none() {
+            *start_progress.write().unwrap() = ValidatorStartProgress::SearchingForRpcService;
+
             gossip = Some(start_gossip_node(
                 &identity_keypair,
                 &cluster_entrypoints,
@@ -877,6 +881,11 @@ fn rpc_bootstrap(
                         .get_slot_with_commitment(CommitmentConfig::finalized())
                         .map_err(|err| format!("Failed to get RPC node slot: {}", err))
                         .and_then(|slot| {
+                            *start_progress.write().unwrap() =
+                                ValidatorStartProgress::DownloadingSnapshot {
+                                    slot: snapshot_hash.0,
+                                    rpc_addr: rpc_contact_info.rpc,
+                                };
                             info!("RPC node root slot: {}", slot);
                             let (cluster_info, gossip_exit_flag, gossip_service) =
                                 gossip.take().unwrap();
@@ -977,7 +986,7 @@ pub fn main() {
             Arg::with_name("identity")
                 .short("i")
                 .long("identity")
-                .value_name("PATH")
+                .value_name("KEYPAIR")
                 .takes_value(true)
                 .validator(is_keypair_or_ask_keyword)
                 .help("Validator identity keypair"),
@@ -985,7 +994,7 @@ pub fn main() {
         .arg(
             Arg::with_name("authorized_voter_keypairs")
                 .long("authorized-voter")
-                .value_name("PATH")
+                .value_name("KEYPAIR")
                 .takes_value(true)
                 .validator(is_keypair_or_ask_keyword)
                 .requires("vote_account")
@@ -997,7 +1006,7 @@ pub fn main() {
         .arg(
             Arg::with_name("vote_account")
                 .long("vote-account")
-                .value_name("PUBKEY")
+                .value_name("ADDRESS")
                 .takes_value(true)
                 .validator(is_pubkey_or_keypair)
                 .requires("identity")
@@ -1085,7 +1094,13 @@ pub fn main() {
                 .value_name("PORT")
                 .takes_value(true)
                 .validator(solana_validator::port_validator)
-                .help("Use this port for JSON RPC and the next port for the RPC websocket"),
+                .help("Enable JSON RPC on this port, and the next port for the RPC websocket"),
+        )
+        .arg(
+            Arg::with_name("minimal_rpc_api")
+                .long("--minimal-rpc-api")
+                .takes_value(false)
+                .help("Only expose the RPC methods required to serve snapshots to other nodes"),
         )
         .arg(
             Arg::with_name("private_rpc")
@@ -1098,20 +1113,6 @@ pub fn main() {
                 .long("--no-port-check")
                 .takes_value(false)
                 .help("Do not perform TCP/UDP reachable port checks at start-up")
-        )
-        .arg(
-            Arg::with_name("enable_rpc_exit")
-                .long("enable-rpc-exit")
-                .takes_value(false)
-                .help("Enable the JSON RPC 'validatorExit' API. \
-                       Only enable in a debug environment"),
-        )
-        .arg(
-            Arg::with_name("enable_rpc_set_log_filter")
-                .long("enable-rpc-set-log-filter")
-                .takes_value(false)
-                .help("Enable the JSON RPC 'setLogFilter' API. \
-                       Only enable in a debug environment"),
         )
         .arg(
             Arg::with_name("enable_rpc_transaction_history")
@@ -1359,7 +1360,7 @@ pub fn main() {
             Arg::with_name("trusted_validators")
                 .long("trusted-validator")
                 .validator(is_pubkey)
-                .value_name("PUBKEY")
+                .value_name("VALIDATOR IDENTITY")
                 .multiple(true)
                 .takes_value(true)
                 .help("A snapshot hash must be published in gossip by this validator to be accepted. \
@@ -1369,7 +1370,7 @@ pub fn main() {
             Arg::with_name("debug_key")
                 .long("debug-key")
                 .validator(is_pubkey)
-                .value_name("PUBKEY")
+                .value_name("ADDRESS")
                 .multiple(true)
                 .takes_value(true)
                 .help("Log when transactions are processed which reference a given key."),
@@ -1384,7 +1385,7 @@ pub fn main() {
             Arg::with_name("repair_validators")
                 .long("repair-validator")
                 .validator(is_pubkey)
-                .value_name("PUBKEY")
+                .value_name("VALIDATOR IDENTITY")
                 .multiple(true)
                 .takes_value(true)
                 .help("A list of validators to request repairs from. If specified, repair will not \
@@ -1394,7 +1395,7 @@ pub fn main() {
             Arg::with_name("gossip_validators")
                 .long("gossip-validator")
                 .validator(is_pubkey)
-                .value_name("PUBKEY")
+                .value_name("VALIDATOR IDENTITY")
                 .multiple(true)
                 .takes_value(true)
                 .help("A list of validators to gossip with.  If specified, gossip \
@@ -1602,6 +1603,14 @@ pub fn main() {
                 .help("EXPERIMENTAL: Specify which CPU core PoH is pinned to"),
         )
         .arg(
+            Arg::with_name("poh_hashes_per_batch")
+                .hidden(true)
+                .long("poh-hashes-per-batch")
+                .takes_value(true)
+                .value_name("NUM")
+                .help("Specify hashes per batch in PoH service"),
+        )
+        .arg(
             Arg::with_name("account_indexes")
                 .long("account-index")
                 .takes_value(true)
@@ -1646,16 +1655,31 @@ pub fn main() {
         )
         .after_help("The default subcommand is run")
         .subcommand(
+             SubCommand::with_name("exit")
+             .about("Send an exit request to the validator")
+         )
+        .subcommand(
              SubCommand::with_name("init")
              .about("Initialize the ledger directory then exit")
+         )
+        .subcommand(
+             SubCommand::with_name("monitor")
+             .about("Monitor the validator")
          )
         .subcommand(
              SubCommand::with_name("run")
              .about("Run the validator")
          )
         .subcommand(
-             SubCommand::with_name("monitor")
-             .about("Monitor the validator")
+             SubCommand::with_name("set-log-filter")
+             .about("Adjust the validator log filter")
+             .arg(
+                 Arg::with_name("filter")
+                     .takes_value(true)
+                     .index(1)
+                     .help("New filter using the same format as the RUST_LOG environment variable")
+             )
+             .after_help("Note: the new filter only applies to the currently running validator instance")
          )
         .subcommand(
              SubCommand::with_name("wait-for-restart-window")
@@ -1673,27 +1697,68 @@ pub fn main() {
          )
         .get_matches();
 
+    let ledger_path = PathBuf::from(matches.value_of("ledger_path").unwrap());
+
     let operation = match matches.subcommand() {
         ("", _) | ("run", _) => Operation::Run,
         ("init", _) => Operation::Initialize,
-        ("monitor", _) => Operation::Monitor,
-        ("wait-for-restart-window", Some(subcommand_matches)) => Operation::WaitForRestartWindow {
-            min_idle_time_in_minutes: value_t_or_exit!(
-                subcommand_matches,
-                "min_idle_time_in_minutes",
-                usize
-            ),
-        },
+        ("exit", _) => {
+            let admin_client = admin_rpc_service::connect(&ledger_path);
+            admin_rpc_service::runtime()
+                .block_on(async move { admin_client.await?.exit().await })
+                .unwrap_or_else(|err| {
+                    println!("exit request failed: {}", err);
+                    exit(1);
+                });
+            return;
+        }
+        ("monitor", _) => {
+            let dashboard = Dashboard::new(&ledger_path, None, None).unwrap_or_else(|err| {
+                println!(
+                    "Error: Unable to connect to validator at {}: {:?}",
+                    ledger_path.display(),
+                    err,
+                );
+                exit(1);
+            });
+            dashboard.run(Duration::from_secs(2));
+            return;
+        }
+        ("set-log-filter", Some(subcommand_matches)) => {
+            let filter = value_t_or_exit!(subcommand_matches, "filter", String);
+            let admin_client = admin_rpc_service::connect(&ledger_path);
+            admin_rpc_service::runtime()
+                .block_on(async move { admin_client.await?.set_log_filter(filter).await })
+                .unwrap_or_else(|err| {
+                    println!("set log filter failed: {}", err);
+                    exit(1);
+                });
+            return;
+        }
+        ("wait-for-restart-window", Some(subcommand_matches)) => {
+            let min_idle_time_in_minutes =
+                value_t_or_exit!(subcommand_matches, "min_idle_time_in_minutes", usize);
+            wait_for_restart_window(&ledger_path, min_idle_time_in_minutes).unwrap_or_else(|err| {
+                println!("{}", err);
+                exit(1);
+            });
+            return;
+        }
         _ => unreachable!(),
     };
 
-    let identity_keypair = Arc::new(keypair_of(&matches, "identity").unwrap_or_else(Keypair::new));
+    let identity_keypair = Arc::new(keypair_of(&matches, "identity").unwrap_or_else(|| {
+        clap::Error::with_description(
+            "The --identity <KEYPAIR> argument is required",
+            clap::ErrorKind::ArgumentNotFound,
+        )
+        .exit();
+    }));
 
     let authorized_voter_keypairs = keypairs_of(&matches, "authorized_voter_keypairs")
         .map(|keypairs| keypairs.into_iter().map(Arc::new).collect())
         .unwrap_or_else(|| vec![identity_keypair.clone()]);
 
-    let ledger_path = PathBuf::from(matches.value_of("ledger_path").unwrap());
     let init_complete_file = matches.value_of("init_complete_file");
 
     let rpc_bootstrap_config = RpcBootstrapConfig {
@@ -1792,8 +1857,6 @@ pub fn main() {
         expected_shred_version: value_t!(matches, "expected_shred_version", u16).ok(),
         new_hard_forks: hardforks_of(&matches, "hard_forks"),
         rpc_config: JsonRpcConfig {
-            enable_validator_exit: matches.is_present("enable_rpc_exit"),
-            enable_set_log_filter: matches.is_present("enable_rpc_set_log_filter"),
             enable_rpc_transaction_history: matches.is_present("enable_rpc_transaction_history"),
             enable_cpi_and_log_storage: matches.is_present("enable_cpi_and_log_storage"),
             enable_bigtable_ledger_storage: matches
@@ -1803,6 +1866,7 @@ pub fn main() {
             faucet_addr: matches.value_of("rpc_faucet_addr").map(|address| {
                 solana_net_utils::parse_host_port(address).expect("failed to parse faucet address")
             }),
+            minimal_api: matches.is_present("minimal_rpc_api"),
             max_multiple_accounts: Some(value_t_or_exit!(
                 matches,
                 "rpc_max_multiple_accounts",
@@ -1866,6 +1930,8 @@ pub fn main() {
         no_poh_speed_test: matches.is_present("no_poh_speed_test"),
         poh_pinned_cpu_core: value_of(&matches, "poh_pinned_cpu_core")
             .unwrap_or(poh_service::DEFAULT_PINNED_CPU_CORE),
+        poh_hashes_per_batch: value_of(&matches, "poh_hashes_per_batch")
+            .unwrap_or(poh_service::DEFAULT_HASHES_PER_BATCH),
         account_indexes,
         accounts_db_caching_enabled: !matches.is_present("no_accounts_db_caching"),
         accounts_db_test_hash_calculation: matches.is_present("accounts_db_test_hash_calculation"),
@@ -2037,30 +2103,6 @@ pub fn main() {
         })
     });
 
-    match operation {
-        Operation::Monitor => {
-            let dashboard = Dashboard::new(&ledger_path, None).unwrap_or_else(|err| {
-                println!(
-                    "Error: Unable to connect to validator at {}: {:?}",
-                    ledger_path.display(),
-                    err,
-                );
-                exit(1);
-            });
-            dashboard.run();
-        }
-        Operation::WaitForRestartWindow {
-            min_idle_time_in_minutes,
-        } => {
-            wait_for_restart_window(&ledger_path, min_idle_time_in_minutes).unwrap_or_else(|err| {
-                println!("{}", err);
-                exit(1);
-            });
-            exit(0);
-        }
-        Operation::Initialize | Operation::Run => {}
-    }
-
     let mut ledger_fd_lock = FdLock::new(fs::File::open(&ledger_path).unwrap());
     let _ledger_lock = ledger_fd_lock.try_lock().unwrap_or_else(|_| {
         println!(
@@ -2069,15 +2111,6 @@ pub fn main() {
         );
         exit(1);
     });
-
-    record_start(
-        &ledger_path,
-        validator_config
-            .rpc_addrs
-            .as_ref()
-            .map(|(rpc_addr, _)| rpc_addr),
-    )
-    .unwrap_or_else(|err| println!("Error: failed to record validator start: {}", err));
 
     let logfile = {
         let logfile = matches
@@ -2097,6 +2130,17 @@ pub fn main() {
 
     info!("{} {}", crate_name!(), solana_version::version!());
     info!("Starting validator with: {:#?}", std::env::args_os());
+
+    let start_progress = Arc::new(RwLock::new(ValidatorStartProgress::default()));
+    admin_rpc_service::run(
+        &ledger_path,
+        admin_rpc_service::AdminRpcRequestMetadata {
+            rpc_addr: validator_config.rpc_addrs.map(|(rpc_addr, _)| rpc_addr),
+            start_time: std::time::SystemTime::now(),
+            validator_exit: validator_config.validator_exit.clone(),
+            start_progress: start_progress.clone(),
+        },
+    );
 
     let gossip_host: IpAddr = matches
         .value_of("gossip_host")
@@ -2212,7 +2256,9 @@ pub fn main() {
             use_progress_bar,
             maximum_local_snapshot_age,
             should_check_duplicate_instance,
+            &start_progress,
         );
+        *start_progress.write().unwrap() = ValidatorStartProgress::Initializing;
     }
 
     if operation == Operation::Initialize {
@@ -2228,6 +2274,7 @@ pub fn main() {
         cluster_entrypoints,
         &validator_config,
         should_check_duplicate_instance,
+        start_progress,
     );
 
     if let Some(filename) = init_complete_file {

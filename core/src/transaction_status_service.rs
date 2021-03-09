@@ -124,7 +124,7 @@ impl TransactionStatusService {
                         transaction.signatures[0],
                         writable_keys,
                         readonly_keys,
-                        &TransactionStatusMeta {
+                        TransactionStatusMeta {
                             status,
                             fee,
                             pre_balances,

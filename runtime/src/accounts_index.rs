@@ -548,7 +548,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         F: FnMut(&Pubkey, (&T, Slot)),
     {
         for pubkey in index.get(index_key) {
-            // Maybe these reads from the AccountsIndex can be batched everytime it
+            // Maybe these reads from the AccountsIndex can be batched every time it
             // grabs the read lock as well...
             if let Some((list_r, index)) = self.get(&pubkey, Some(ancestors), max_root) {
                 func(
@@ -975,8 +975,8 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         max_clean_root: Option<Slot>,
         account_indexes: &HashSet<AccountIndex>,
     ) {
-        let roots_traker = &self.roots_tracker.read().unwrap();
-        let max_root = Self::get_max_root(&roots_traker.roots, &list, max_clean_root);
+        let roots_tracker = &self.roots_tracker.read().unwrap();
+        let max_root = Self::get_max_root(&roots_tracker.roots, &list, max_clean_root);
 
         let mut purged_slots: HashSet<Slot> = HashSet::new();
         list.retain(|(slot, value)| {

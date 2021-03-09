@@ -22,7 +22,7 @@ const AccountState = enums(["initialized", "uninitialized", "frozen"]);
 
 const TokenAmount = pick({
   decimals: number(),
-  uiAmount: number(),
+  uiAmountString: string(),
   amount: string(),
 });
 

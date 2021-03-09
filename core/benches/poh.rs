@@ -3,7 +3,7 @@
 #![feature(test)]
 extern crate test;
 
-use solana_core::poh_service::NUM_HASHES_PER_BATCH;
+use solana_core::poh_service::DEFAULT_HASHES_PER_BATCH;
 use solana_ledger::poh::Poh;
 use solana_sdk::hash::Hash;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -43,7 +43,7 @@ fn bench_arc_mutex_poh_batched_hash(bencher: &mut Bencher) {
     bencher.iter(|| {
         // NOTE: This block attempts to look as close as possible to `PohService::tick_producer()`
         loop {
-            if poh.lock().unwrap().hash(NUM_HASHES_PER_BATCH) {
+            if poh.lock().unwrap().hash(DEFAULT_HASHES_PER_BATCH) {
                 poh.lock().unwrap().tick().unwrap();
                 if exit.load(Ordering::Relaxed) {
                     break;
@@ -58,6 +58,6 @@ fn bench_arc_mutex_poh_batched_hash(bencher: &mut Bencher) {
 fn bench_poh_lock_time_per_batch(bencher: &mut Bencher) {
     let mut poh = Poh::new(Hash::default(), None);
     bencher.iter(|| {
-        poh.hash(NUM_HASHES_PER_BATCH);
+        poh.hash(DEFAULT_HASHES_PER_BATCH);
     })
 }

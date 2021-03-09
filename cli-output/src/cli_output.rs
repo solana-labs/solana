@@ -1623,8 +1623,32 @@ impl fmt::Display for CliProgramAuthority {
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct CliProgram {
+    pub program_id: String,
+    pub owner: String,
+    pub data_len: usize,
+}
+impl QuietDisplay for CliProgram {}
+impl VerboseDisplay for CliProgram {}
+impl fmt::Display for CliProgram {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f)?;
+        writeln_name_value(f, "Program Id:", &self.program_id)?;
+        writeln_name_value(f, "Owner:", &self.owner)?;
+        writeln_name_value(
+            f,
+            "Data Length:",
+            &format!("{:?} ({:#x?}) bytes", self.data_len, self.data_len),
+        )?;
+        Ok(())
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CliUpgradeableProgram {
     pub program_id: String,
+    pub owner: String,
     pub programdata_address: String,
     pub authority: String,
     pub last_deploy_slot: u64,
@@ -1636,6 +1660,7 @@ impl fmt::Display for CliUpgradeableProgram {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f)?;
         writeln_name_value(f, "Program Id:", &self.program_id)?;
+        writeln_name_value(f, "Owner:", &self.owner)?;
         writeln_name_value(f, "ProgramData Address:", &self.programdata_address)?;
         writeln_name_value(f, "Authority:", &self.authority)?;
         writeln_name_value(

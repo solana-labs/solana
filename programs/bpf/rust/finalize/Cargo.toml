@@ -1,7 +1,7 @@
 [package]
-name = "solana-logger"
+name = "solana-bpf-rust-finalize"
 version = "1.6.0"
-description = "Solana Logger"
+description = "Solana BPF test program written in Rust"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
@@ -9,12 +9,10 @@ homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
-env_logger = "0.8.3"
-lazy_static = "1.4.0"
-log = "0.4.11"
+solana-program = { path = "../../../../sdk/program", version = "1.6.0" }
 
 [lib]
-name = "solana_logger"
+crate-type = ["cdylib"]
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

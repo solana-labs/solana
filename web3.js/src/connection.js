@@ -760,12 +760,14 @@ const GetSupplyRpcResult = jsonRpcResultAndContext(
  * @typedef {Object} TokenAmount
  * @property {string} amount Raw amount of tokens as string ignoring decimals
  * @property {number} decimals Number of decimals configured for token's mint
- * @property {number} uiAmount Token account as float, accounts for decimals
+ * @property {number | null} uiAmount Token amount as float, accounts for decimals
+ * @property {string | undefined} uiAmountString Token amount as string, accounts for decimals
  */
 type TokenAmount = {
   amount: string,
   decimals: number,
-  uiAmount: number,
+  uiAmount: number | null,
+  uiAmountString?: string,
 };
 
 /**
@@ -773,8 +775,9 @@ type TokenAmount = {
  */
 const TokenAmountResult = pick({
   amount: string(),
-  uiAmount: number(),
+  uiAmount: nullable(number()),
   decimals: number(),
+  uiAmountString: optional(nullable(string())),
 });
 
 /**
@@ -784,13 +787,15 @@ const TokenAmountResult = pick({
  * @property {PublicKey} address Address of the token account
  * @property {string} amount Raw amount of tokens as string ignoring decimals
  * @property {number} decimals Number of decimals configured for token's mint
- * @property {number} uiAmount Token account as float, accounts for decimals
+ * @property {number | null} uiAmount Token amount as float, accounts for decimals
+ * @property {string | undefined} uiAmountString Token amount as string, accounts for decimals
  */
 type TokenAccountBalancePair = {
   address: PublicKey,
   amount: string,
   decimals: number,
   uiAmount: number,
+  uiAmountString?: string,
 };
 
 /**
@@ -801,8 +806,9 @@ const GetTokenLargestAccountsResult = jsonRpcResultAndContext(
     pick({
       address: PublicKeyFromString,
       amount: string(),
-      uiAmount: number(),
+      uiAmount: nullable(number()),
       decimals: number(),
+      uiAmountString: optional(nullable(string())),
     }),
   ),
 );
@@ -2680,18 +2686,6 @@ export class Connection {
 
     const wireTransaction = transaction.serialize();
     return await this.sendRawTransaction(wireTransaction, options);
-  }
-
-  /**
-   * @private
-   */
-  async validatorExit(): Promise<boolean> {
-    const unsafeRes = await this._rpcRequest('validatorExit', []);
-    const res = create(unsafeRes, jsonRpcResult(boolean()));
-    if (res.error) {
-      throw new Error('validator exit failed: ' + res.error.message);
-    }
-    return res.result;
   }
 
   /**

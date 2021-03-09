@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 use crate::clock::DEFAULT_TICKS_PER_SECOND;
 use std::time::Duration;
 

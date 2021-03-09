@@ -198,6 +198,9 @@ pub enum InstructionError {
 
     #[error("Invalid account owner")]
     InvalidAccountOwner,
+
+    #[error("Program arithmetic overflowed")]
+    ArithmeticOverflow,
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]

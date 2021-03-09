@@ -218,7 +218,10 @@ impl GenesisConfig {
     }
 
     pub fn ns_per_slot(&self) -> u128 {
-        self.poh_config.target_tick_duration.as_nanos() * self.ticks_per_slot() as u128
+        self.poh_config
+            .target_tick_duration
+            .as_nanos()
+            .saturating_mul(self.ticks_per_slot() as u128)
     }
 
     pub fn slots_per_year(&self) -> f64 {

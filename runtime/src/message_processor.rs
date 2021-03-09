@@ -632,7 +632,7 @@ impl MessageProcessor {
             ) {
                 ic_msg!(
                     invoke_context,
-                    "{}'s signer priviledge escalated",
+                    "{}'s signer privilege escalated",
                     account.pubkey
                 );
                 return Err(InstructionError::PrivilegeEscalation);
