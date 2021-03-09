@@ -1,10 +1,10 @@
 use crate::{account_info::AccountInfo, entrypoint::ProgramResult, instruction::Instruction};
-
+use log::*;
 /// Invoke a cross-program instruction
 ///
 /// Note that the program id of the instruction being issued must also be included in
 /// `account_infos`.
-pub fn invoke(instruction: &Instruction, account_infos: &[AccountInfo]) -> ProgramResult {
+pub fn invoke<'a>(instruction: &'a Instruction, account_infos: &'a [AccountInfo<'a>]) -> ProgramResult {
     invoke_signed(instruction, account_infos, &[])
 }
 
@@ -12,10 +12,10 @@ pub fn invoke(instruction: &Instruction, account_infos: &[AccountInfo]) -> Progr
 ///
 /// Note that the program id of the instruction being issued must also be included in
 /// `account_infos`.
-pub fn invoke_signed(
+pub fn invoke_signed<'a>(
     instruction: &Instruction,
-    account_infos: &[AccountInfo],
-    signers_seeds: &[&[&[u8]]],
+    account_infos: &'a[AccountInfo<'a>],
+    signers_seeds: &'a[&'a[&'a[u8]]],
 ) -> ProgramResult {
     // Check that the account RefCells are consistent with the request
     for account_meta in instruction.accounts.iter() {
@@ -23,6 +23,7 @@ pub fn invoke_signed(
             if account_meta.pubkey == *account_info.key {
                 if account_meta.is_writable {
                     let _ = account_info.try_borrow_mut_lamports()?;
+                    error!("Borrowing here: {}, {:?}", account_info.try_borrow_data().unwrap().len(), *account_info.key);
                     let _ = account_info.try_borrow_mut_data()?;
                 } else {
                     let _ = account_info.try_borrow_lamports()?;

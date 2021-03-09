@@ -2,8 +2,143 @@ use crate::{clock::Epoch, program_error::ProgramError, pubkey::Pubkey};
 use std::{
     cell::{Ref, RefCell, RefMut},
     cmp, fmt,
+    ops::{Deref, Index},
     rc::Rc,
+    slice::SliceIndex,
+    sync::Arc,
 };
+use log::*;
+
+pub enum DataAccessor<'a> {
+    Vec(&'a mut Arc<Vec<u8>>),
+    Slice(&'a mut [u8]),
+}
+/*
+impl<'a> std::io::Write for DataAccessor<'a> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        match self {
+            DataAccessor::Vec(data) => {
+                Arc::make_mut(data).write(buf)
+            },
+            DataAccessor::Slice(data) => {
+                data.write(buf)
+            }
+        }
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        match self {
+            DataAccessor::Vec(data) => {
+                Arc::make_mut(data).flush()
+            },
+            DataAccessor::Slice(data) => {
+                (*data).flush()
+            }
+        }
+    }
+
+}
+*/
+impl<'a> Deref for DataAccessor<'a> {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            DataAccessor::Vec(data) => {
+                &data[..]
+            },
+            DataAccessor::Slice(data) => {
+                data
+            }
+        }
+    }
+}
+
+impl<'a, I> Index<I> for DataAccessor<'a>
+where
+    I: SliceIndex<[u8]>,
+{
+    type Output = I::Output;
+
+    #[inline]
+    fn index(&self, index: I) -> &Self::Output {
+        match self {
+            DataAccessor::Vec(data) => {
+                data.index(index)
+            },
+            DataAccessor::Slice(data) => {
+                data.index(index)
+            }
+        }
+    }
+}
+/*
+impl<'a, I> IndexMut<I> for DataAccessor<'a>
+where
+    I: SliceIndex<[u8]>,
+{
+    #[inline]
+    fn index_mut(&mut self, index: I) -> &mut Self::Output {
+        match self {
+            DataAccessor::Vec(mut data) => {
+                Arc::make_mut(&mut data).index_mut(index)
+            },
+            DataAccessor::Slice(data) => {
+                data.index_mut(index)
+            }
+        }
+    }
+}
+*/
+
+impl<'a> DataAccessor<'a>
+{
+    pub fn len(&self) -> usize {
+        match self {
+            DataAccessor::Vec(data) => {
+                data.len()
+            },
+            DataAccessor::Slice(data) => {
+                data.len()
+            }
+        }
+    }
+    pub fn is_empty(&self) -> bool {
+        match self {
+            DataAccessor::Vec(data) => {
+                data.is_empty()
+            },
+            DataAccessor::Slice(data) => {
+                data.is_empty()
+            }
+        }
+    }
+    pub fn serialize_into<T:serde::Serialize>(&mut self, value: &T) -> Result<(), Box<bincode::ErrorKind>> {
+        match self {
+            DataAccessor::Vec(data) => {
+                assert!(data.len() != 65548);
+                error!("serialize into: {}", data.len());
+
+                bincode::serialize_into(&mut Arc::make_mut(data), value)
+            },
+            DataAccessor::Slice(data) => {
+                bincode::serialize_into(data, value)
+            }
+        }
+    }
+    /*
+    pub fn borrow_mut(&mut self) -> &mut [u8] {
+        match self {
+            DataAccessor::Vec(data) => {
+                
+                &mut Arc::make_mut(data)
+            },
+            DataAccessor::Slice(data) => {
+                data
+            }
+        }
+    }*/
+}
+
 
 /// Account information
 #[derive(Clone)]
@@ -17,7 +152,7 @@ pub struct AccountInfo<'a> {
     /// The lamports in the account.  Modifiable by programs.
     pub lamports: Rc<RefCell<&'a mut u64>>,
     /// The data held in this account.  Modifiable by programs.
-    pub data: Rc<RefCell<&'a mut [u8]>>,
+    pub data: Rc<RefCell<DataAccessor<'a>>>,
     /// Program that owns this account
     pub owner: &'a Pubkey,
     /// This account's data contains a loaded program (and is now read-only)
@@ -78,7 +213,7 @@ impl<'a> AccountInfo<'a> {
         self.data.borrow().len()
     }
 
-    pub fn try_data_len(&self) -> Result<usize, ProgramError> {
+    pub fn try_data_len(&'a self) -> Result<usize, ProgramError> {
         Ok(self.try_borrow_data()?.len())
     }
 
@@ -86,7 +221,7 @@ impl<'a> AccountInfo<'a> {
         self.data.borrow().is_empty()
     }
 
-    pub fn try_data_is_empty(&self) -> Result<bool, ProgramError> {
+    pub fn try_data_is_empty(&'a self) -> Result<bool, ProgramError> {
         Ok(self.try_borrow_data()?.is_empty())
     }
 
@@ -102,13 +237,15 @@ impl<'a> AccountInfo<'a> {
             .map_err(|_| ProgramError::AccountBorrowFailed)
     }
 
-    pub fn try_borrow_data(&self) -> Result<Ref<&mut [u8]>, ProgramError> {
+    pub fn try_borrow_data(&'a self) -> Result<Ref<'a, DataAccessor<'a>>, ProgramError> {
         self.data
             .try_borrow()
             .map_err(|_| ProgramError::AccountBorrowFailed)
     }
 
-    pub fn try_borrow_mut_data(&self) -> Result<RefMut<&'a mut [u8]>, ProgramError> {
+    pub fn try_borrow_mut_data(&'a self) -> Result<RefMut<'a, DataAccessor<'a>>, ProgramError> {
+       assert!(self.data_len() != 65548);
+       error!("try_borrow_mut_data: {}", self.data_len());
         self.data
             .try_borrow_mut()
             .map_err(|_| ProgramError::AccountBorrowFailed)
@@ -119,7 +256,7 @@ impl<'a> AccountInfo<'a> {
         is_signer: bool,
         is_writable: bool,
         lamports: &'a mut u64,
-        data: &'a mut [u8],
+        data: &'a mut Arc<Vec<u8>>,
         owner: &'a Pubkey,
         executable: bool,
         rent_epoch: Epoch,
@@ -129,7 +266,7 @@ impl<'a> AccountInfo<'a> {
             is_signer,
             is_writable,
             lamports: Rc::new(RefCell::new(lamports)),
-            data: Rc::new(RefCell::new(data)),
+            data: Rc::new(RefCell::new(DataAccessor::Vec(data))),
             owner,
             executable,
             rent_epoch,
@@ -144,7 +281,8 @@ impl<'a> AccountInfo<'a> {
         if bincode::serialized_size(state)? > self.data_len() as u64 {
             return Err(Box::new(bincode::ErrorKind::SizeLimit));
         }
-        bincode::serialize_into(&mut self.data.borrow_mut()[..], state)
+        error!("serialize_data: {}", self.data.borrow().len());
+        self.data.borrow_mut().serialize_into(state)
     }
 }
 
@@ -161,7 +299,7 @@ impl<'a, T: IntoAccountInfo<'a>> From<T> for AccountInfo<'a> {
 /// Provides information required to construct an `AccountInfo`, used in
 /// conversion implementations.
 pub trait Account {
-    fn get(&mut self) -> (&mut u64, &mut [u8], &Pubkey, bool, Epoch);
+    fn get(&mut self) -> (&mut u64, &mut Arc<Vec<u8>>, &Pubkey, bool, Epoch);
 }
 
 /// Convert (&'a Pubkey, &'a mut T) where T: Account into an `AccountInfo`

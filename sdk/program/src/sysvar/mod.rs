@@ -3,6 +3,7 @@
 use crate::{account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey};
 use derive_more::From;
 use std::convert::TryFrom;
+use log::*;
 
 pub mod clock;
 pub mod epoch_schedule;
@@ -70,7 +71,8 @@ pub trait Sysvar:
         bincode::deserialize(&account_info.data.borrow()).map_err(|_| ProgramError::InvalidArgument)
     }
     fn to_account_info(&self, account_info: &mut AccountInfo) -> Option<()> {
-        bincode::serialize_into(&mut account_info.data.borrow_mut()[..], self).ok()
+        error!("to_account_info: {}", account_info.data.borrow().len());
+        account_info.data.borrow_mut().serialize_into(self).ok()
     }
 }
 

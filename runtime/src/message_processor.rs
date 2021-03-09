@@ -62,6 +62,13 @@ pub struct ExecuteDetailsTimings {
     pub total_account_count: u64,
     pub total_data_size: usize,
     pub data_size_changed: usize,
+    pub unnecessary_copies: usize,
+    pub unnecessary_copies_size: usize,
+    pub data_reallocs: usize,
+    pub data_reallocs_size: usize,
+    pub largest: std::string::String,
+    pub largest_count: usize,
+    pub largest_size: usize,
 }
 
 impl ExecuteDetailsTimings {
@@ -74,6 +81,18 @@ impl ExecuteDetailsTimings {
         self.total_account_count += other.total_account_count;
         self.total_data_size += other.total_data_size;
         self.data_size_changed += other.data_size_changed;
+        self.unnecessary_copies += other.unnecessary_copies;
+        self.unnecessary_copies_size += other.unnecessary_copies_size;
+        self.data_reallocs += other.data_reallocs;
+        self.data_reallocs_size += other.data_reallocs_size;
+        if other.largest_size > self.largest_size {
+            self.largest = other.largest.clone();
+            self.largest_count = other.largest_count;
+            self.largest_size = other.largest_size;
+        }
+        else if other.largest_size == self.largest_size && other.largest == self.largest {
+            self.largest_count += other.largest_count;
+        }
     }
 }
 
@@ -154,20 +173,84 @@ impl PreAccount {
             return Err(InstructionError::AccountDataSizeChanged);
         }
 
+        let ptr_same = std::ptr::eq(pre.data.as_ref(), post.data.as_ref());
+        if !ptr_same {
+            timings.data_reallocs += 1;
+            timings.data_reallocs_size += post.data.len();
+        }
+        let mut same = ptr_same;
+        if !same {
+            same = pre.data == post.data; // too expensive for now
+            if same {
+                timings.unnecessary_copies += 1;
+                let sz = post.data.len();
+                timings.unnecessary_copies_size += sz;
+                if format!("{:?}", self.key) == timings.largest {
+                    timings.largest_count += 1;
+                    if format!("{:?}", self.key) == "SqJP6vrvMad5XBQK5PCFEZjeuQSFi959sdpqtSNvnsX" {
+                        let mut desc = format!(", len different");
+                        if post.data.len() == pre.data.len() {
+                            let mut start_diff = pre.data.len();
+                            let mut total_bytes = 0;
+                            for i in 0..post.data.len() {
+                                let l = post.data[i];
+                                let r = pre.data[i];
+                                if l != r {
+                                    start_diff = std::cmp::min(start_diff, i);
+                                    total_bytes += 1;
+                                }
+        
+                            }
+                            desc = format!(", start offset diff: {}, total bytes difft: {}", start_diff, total_bytes);
+                        }
+                        error!("Unnecessary copy{}", desc);
+                    }
+                }
+                else if sz > timings.largest_size && sz != 1048588 {
+                    if format!("{:?}", self.key) == "SqJP6vrvMad5XBQK5PCFEZjeuQSFi959sdpqtSNvnsX" {
+                        let mut desc = format!(", len different");
+                        if post.data.len() == pre.data.len() {
+                            let mut start_diff = pre.data.len();
+                            let mut total_bytes = 0;
+                            for i in 0..post.data.len() {
+                                let l = post.data[i];
+                                let r = pre.data[i];
+                                if l != r {
+                                    start_diff = std::cmp::min(start_diff, i);
+                                    total_bytes += 1;
+                                }
+        
+                            }
+                            desc = format!(", start offset diff: {}, total bytes difft: {}", start_diff, total_bytes);
+                        }
+                        error!("Unnecessary copy {:?} {}", self.key, desc);
+                    }
+                    else {
+                        error!("Found new largest: {:?}, {}", self.key, format!("{:?}", self.key) == "SqJP6vrvMad5XBQK5PCFEZjeuQSFi959sdpqtSNvnsX");
+                    }
+
+                    timings.largest_count = 1;
+                    timings.largest = format!("{:?}", self.key);
+                    timings.largest_size = sz;
+                }
+            }
+        }
+
         // Only the owner may change account data
         //   and if the account is writable
         //   and if the account is not executable
         if !(*program_id == pre.owner
             && is_writable  // line coverage used to get branch coverage
             && !pre.executable)
-            && pre.data != post.data
         {
-            if pre.executable {
-                return Err(InstructionError::ExecutableDataModified);
-            } else if is_writable {
-                return Err(InstructionError::ExternalAccountDataModified);
-            } else {
-                return Err(InstructionError::ReadonlyDataModified);
+            if !same {
+                if pre.executable {
+                    return Err(InstructionError::ExecutableDataModified);
+                } else if is_writable {
+                    return Err(InstructionError::ExternalAccountDataModified);
+                } else {
+                    return Err(InstructionError::ReadonlyDataModified);
+                }
             }
         }
 
@@ -213,12 +296,23 @@ impl PreAccount {
         pre.lamports = account.lamports;
         pre.owner = account.owner;
         pre.executable = account.executable;
+        if format!("{:?}", self.key) == "SqJP6vrvMad5XBQK5PCFEZjeuQSFi959sdpqtSNvnsX" {
+            let ptr_same = std::ptr::eq(pre.data.as_ref(), account.data.as_ref());
+            error!("update for account: {:?}, same: {}, ptr same: {}", self.key, &pre.data[..] == &account.data[..], ptr_same);
+            if &pre.data[..] == &account.data[..] && !ptr_same {
+//                assert!(false);
+                error!("could fail");
+            }
+        }
         if pre.data.len() != account.data.len() {
             // Only system account can change data size, copy with alloc
+            error!("Update1: {}, {}", pre.data.len(), account.data.len());
             pre.data = account.data.clone();
         } else {
             // Copy without allocate
-            pre.data.clone_from_slice(&account.data);
+            assert!(pre.data.len() == account.data.len());
+            error!("Update2: {}, {}", pre.data.len(), account.data.len());
+            pre.data = account.data.clone();
         }
 
         self.changed = true;
@@ -964,7 +1058,12 @@ impl MessageProcessor {
                 // Find the matching PreAccount
                 for pre_account in pre_accounts.iter_mut() {
                     if *key == pre_account.key() {
-                        // Verify account has no outstanding references and take one
+                        let ptr_same = std::ptr::eq(pre_account.account.borrow().data.as_ref(), account.borrow().data.as_ref());
+                        if &pre_account.account.borrow().data[..] == &account.borrow().data[..] && !ptr_same {
+                            //assert!(false, "key: {:?}, {}", pre_account.key, pre_account.account.borrow().data.len());
+                            error!("could fail key: {:?}, {}", pre_account.key, pre_account.account.borrow().data.len());
+                        }
+                                    // Verify account has no outstanding references and take one
                         let account = account
                             .try_borrow_mut()
                             .map_err(|_| InstructionError::AccountBorrowOutstanding)?;
@@ -1018,8 +1117,9 @@ impl MessageProcessor {
             for (i, key) in message.account_keys.iter().enumerate() {
                 if solana_sdk::sysvar::instructions::check_id(key) {
                     let mut mut_account_ref = accounts[i].borrow_mut();
+                    error!("store_current_index: {:?}", key);
                     solana_sdk::sysvar::instructions::store_current_index(
-                        &mut mut_account_ref.data,
+                        mut_account_ref.data.get_mut_data(),
                         instruction_index as u16,
                     );
                     break;

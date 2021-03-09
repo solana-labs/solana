@@ -13,6 +13,7 @@ use std::{
     convert::TryFrom,
     iter::FromIterator,
 };
+use log::*;
 
 #[repr(C)]
 #[derive(Debug)]
@@ -208,6 +209,7 @@ where
         self.try_account_ref()?.state()
     }
     fn set_state(&self, state: &T) -> Result<(), InstructionError> {
+        error!("set_state");
         self.try_account_ref_mut()?.set_state(state)
     }
 }

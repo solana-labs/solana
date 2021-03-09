@@ -2235,7 +2235,14 @@ impl AccountsDb {
         //TODO: thread this as a ref
         self.get_account_accessor_from_cache_or_storage(slot, pubkey, store_id, offset)
             .get_loaded_account()
-            .map(|loaded_account| (loaded_account.account(), slot))
+            .map(|loaded_account| {
+                let acct = loaded_account.account();
+                let sz = acct.data.len();
+                if sz == 65548 {
+                    //error!("Loaded account: {:?}, size: {}", pubkey, sz);
+                }
+                (acct, slot)}
+            )
     }
 
     pub fn load_account_hash(&self, ancestors: &Ancestors, pubkey: &Pubkey) -> Hash {

@@ -309,8 +309,7 @@ impl program_stubs::SyscallStubs for SyscallStubs {
                     let account = &accounts[i];
                     **account_info.try_borrow_mut_lamports().unwrap() = account.borrow().lamports;
 
-                    let mut data = account_info.try_borrow_mut_data()?;
-                    let new_data = &account.borrow().data;
+
                     if *account_info.owner != account.borrow().owner {
                         // TODO Figure out a better way to allow the System Program to set the account owner
                         #[allow(clippy::transmute_ptr_to_ptr)]
@@ -328,7 +327,11 @@ impl program_stubs::SyscallStubs for SyscallStubs {
                             new_data.len()
                         );
                     }
-                    data.clone_from_slice(new_data);
+                    if &account_info.borrow().data[..] != &account.borrow().data[..] {
+                        let mut data = account_info.try_borrow_mut_data()?;
+                        let new_data = &account.borrow().data;
+                        data.clone_from_slice(new_data); // would like to clone the arc here
+                    }
                 }
             }
         }

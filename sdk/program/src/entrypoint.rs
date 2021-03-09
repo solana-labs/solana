@@ -2,7 +2,7 @@
 //! BPFLoader.  For more information see './bpf_loader.rs'
 
 extern crate alloc;
-use crate::{account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey};
+use crate::{account_info::{AccountInfo, DataAccessor}, program_error::ProgramError, pubkey::Pubkey};
 use alloc::vec::Vec;
 use std::{
     alloc::Layout,
@@ -14,6 +14,7 @@ use std::{
     result::Result as ResultGeneric,
     slice::{from_raw_parts, from_raw_parts_mut},
 };
+use log::*;
 
 pub type ProgramResult = ResultGeneric<(), ProgramError>;
 
@@ -179,7 +180,8 @@ pub unsafe fn deserialize<'a>(input: *mut u8) -> (&'a Pubkey, Vec<AccountInfo<'a
             offset += size_of::<u64>();
 
             let data = Rc::new(RefCell::new({
-                from_raw_parts_mut(input.add(offset), data_len)
+                error!("Dataentrypoint: {}", data_len);
+                DataAccessor::Slice(from_raw_parts_mut(input.add(offset), data_len))
             }));
             offset += data_len + MAX_PERMITTED_DATA_INCREASE;
             offset += (offset as *const u8).align_offset(align_of::<u128>()); // padding

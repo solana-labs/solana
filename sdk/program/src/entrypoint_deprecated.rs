@@ -3,7 +3,7 @@
 //!  './bpf_loader_deprecated.rs'
 
 extern crate alloc;
-use crate::{account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey};
+use crate::{account_info::{AccountInfo, DataAccessor}, program_error::ProgramError, pubkey::Pubkey};
 use alloc::vec::Vec;
 use std::{
     cell::RefCell,
@@ -13,7 +13,7 @@ use std::{
     result::Result as ResultGeneric,
     slice::{from_raw_parts, from_raw_parts_mut},
 };
-
+use log::*;
 pub type ProgramResult = ResultGeneric<(), ProgramError>;
 
 /// User implemented function to process an instruction
@@ -89,7 +89,8 @@ pub unsafe fn deserialize<'a>(input: *mut u8) -> (&'a Pubkey, Vec<AccountInfo<'a
             offset += size_of::<u64>();
 
             let data = Rc::new(RefCell::new({
-                from_raw_parts_mut(input.add(offset), data_len)
+                error!("entrypoint_deprecated: {}", data_len);
+                DataAccessor::Slice(from_raw_parts_mut(input.add(offset), data_len))
             }));
             offset += data_len;
 

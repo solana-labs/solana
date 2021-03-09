@@ -8,16 +8,58 @@ use std::{
     iter::FromIterator,
     ops::{Deref, DerefMut, Index, IndexMut},
     slice::SliceIndex,
-    sync::RwLock,
+    sync::{Arc, RwLock},
 };
+use log::*;
+use solana_program::{pubkey::Pubkey};
 
 #[derive(Debug, Default, AbiExample)]
 pub struct AccountData {
-    data: Vec<u8>,
+    data: Arc<Vec<u8>>, // TODO bad
     cache: RwLock<HashMap<TypeId, Option<SysvarEnum>>>,
 }
 
 impl AccountData {
+    pub fn get_mut_data(&mut self) -> &mut [u8] {
+        assert!(self.data.len() != 65548);
+        error!("get_mut_data: {:?}", self.data.len());
+        &mut Arc::make_mut(&mut self.data)[..]
+    }
+
+    pub fn get_arc_ref(&mut self) -> &mut Arc<Vec<u8>> {
+        &mut self.data
+    }
+    pub fn make_data_match(&mut self, new_data: &[u8], key: &Pubkey) {
+        let new_len = new_data.len();
+        let diff = new_len != self.data.len() || &self.data[..] != new_data;
+        if diff {
+
+            if format!("{:?}", key) == "SqJP6vrvMad5XBQK5PCFEZjeuQSFi959sdpqtSNvnsX" {
+                let mut desc = format!(", len different");
+                if new_len == self.data.len() {
+                    let mut start_diff = self.data.len();
+                    let mut total_bytes = 0;
+                    for i in 0..new_data.len() {
+                        let l = new_data[i];
+                        let r = self.data[i];
+                        if l != r {
+                            start_diff = std::cmp::min(start_diff, i);
+                            total_bytes += 1;
+                        }
+
+                    }
+                    desc = format!(", start offset diff: {}, total bytes difft: {}", start_diff, total_bytes);
+                }
+                error!("Updating data: lens: {}, count: {}, len: {}, key: {:?}{}", new_len != self.data.len(), Arc::strong_count(&self.data), new_data.len(), key, desc);
+                //assert!(self.data.len() != 65548);
+
+            }
+            //assert!(self.data.len() != 65548);
+
+            self.data = Arc::new(new_data.to_vec());
+        }
+    }
+
     /// Reads the sysvar from the serialized data and caches the result.
     /// Following reads of the same sysvar will read from the cache until the
     /// data is mutated.
@@ -49,7 +91,9 @@ impl AccountData {
     {
         // serialize_into will not write to the buffer if it fails. So we will
         // update the cache only if this succeeds.
-        bincode::serialize_into(&mut self.data[..], sysvar)?;
+        assert!(self.data.len() != 65548);
+
+        bincode::serialize_into(&mut Arc::make_mut(&mut self.data)[..], sysvar)?;
         let key = std::any::TypeId::of::<S>();
         let mut cache = self.cache.write().unwrap();
         cache.clear(); // Invalidate existing cache.
@@ -61,7 +105,7 @@ impl AccountData {
 impl From<Vec<u8>> for AccountData {
     fn from(data: Vec<u8>) -> Self {
         Self {
-            data,
+            data: Arc::new(data),
             cache: RwLock::default(),
         }
     }
@@ -69,7 +113,7 @@ impl From<Vec<u8>> for AccountData {
 
 impl From<AccountData> for Vec<u8> {
     fn from(account_data: AccountData) -> Self {
-        account_data.data
+        account_data.data.to_vec() // can this be right? the output is owned by caller?
     }
 }
 
@@ -89,12 +133,20 @@ impl Deref for AccountData {
         &self.data
     }
 }
-
 impl DerefMut for AccountData {
     fn deref_mut(&mut self) -> &mut Self::Target {
         // Invalidate the cache since the data may be mutated.
         self.cache.write().unwrap().clear();
-        &mut self.data
+        let mut swap = vec![];
+        assert!(self.data.len() != 65548);
+
+        self.data = Arc::new(if let Some(data) = Arc::get_mut(&mut self.data) {
+            std::mem::swap(&mut swap, data);
+            swap
+        } else {
+            self.data.to_vec()
+        });
+        Arc::get_mut(&mut self.data).unwrap()
     }
 }
 
@@ -124,7 +176,10 @@ where
     fn index_mut(&mut self, index: I) -> &mut Self::Output {
         // Invalidate the cache since the data may be mutated.
         self.cache.write().unwrap().clear();
-        self.data.index_mut(index)
+        assert!(self.data.len() != 65548);
+        error!("idnex mut: {}", self.data.len());
+
+        Arc::make_mut(&mut self.data).index_mut(index)
     }
 }
 
@@ -150,7 +205,7 @@ impl Serialize for AccountData {
     where
         S: Serializer,
     {
-        serde_bytes::serialize(&self.data, serializer)
+        serde_bytes::serialize(&self.data[..], serializer)
     }
 }
 

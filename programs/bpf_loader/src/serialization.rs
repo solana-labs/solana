@@ -119,8 +119,7 @@ pub fn deserialize_parameters_unaligned(
             let end = start + keyed_account.data_len()?;
             keyed_account
                 .try_account_ref_mut()?
-                .data
-                .clone_from_slice(&buffer[start..end]);
+                .data.make_data_match(&buffer[start..end], keyed_account.unsigned_key());
             start += keyed_account.data_len()? // data
                 + size_of::<Pubkey>() // owner
                 + size_of::<u8>() // executable
@@ -227,10 +226,9 @@ pub fn deserialize_parameters_aligned(
             if post_len != pre_len
                 && (post_len.saturating_sub(pre_len)) <= MAX_PERMITTED_DATA_INCREASE
             {
-                account.data.resize(post_len, 0);
                 data_end = start + post_len;
             }
-            account.data.clone_from_slice(&buffer[start..data_end]);
+            account.data.make_data_match(&buffer[start..data_end], keyed_account.unsigned_key());
             start += pre_len + MAX_PERMITTED_DATA_INCREASE; // data
             start += (start as *const u8).align_offset(align_of::<u128>());
             start += size_of::<u64>(); // rent_epoch

@@ -3,7 +3,8 @@ use solana_program::{
     account_info::AccountInfo,
     sysvar::{Sysvar, SysvarEnum},
 };
-use std::{cell::RefCell, cmp, convert::TryFrom, fmt, rc::Rc};
+use std::{cell::RefCell, cmp, convert::TryFrom, fmt, rc::Rc, sync::Arc};
+use log::*;
 
 /// An Account with data that is stored on chain
 #[repr(C)]
@@ -106,6 +107,7 @@ impl Account {
     }
 
     pub fn serialize_data<T: serde::Serialize>(&mut self, state: &T) -> Result<(), bincode::Error> {
+        error!("serialize_data: {}", self.data.len());
         if bincode::serialized_size(state)? > self.data.len() as u64 {
             return Err(Box::new(bincode::ErrorKind::SizeLimit));
         }
@@ -143,10 +145,12 @@ where
 /// Return the information required to construct an `AccountInfo`.  Used by the
 /// `AccountInfo` conversion implementations.
 impl solana_program::account_info::Account for Account {
-    fn get(&mut self) -> (&mut u64, &mut [u8], &Pubkey, bool, Epoch) {
+    // note that this makes a copy of the data if there is > 0 other references
+    fn get(&mut self) -> (&mut u64, &mut Arc<Vec<u8>>, &Pubkey, bool, Epoch) {
+        error!("get arc ref: {}", self.data.len());
         (
             &mut self.lamports,
-            &mut self.data,
+            self.data.get_arc_ref(),
             &self.owner,
             self.executable,
             self.rent_epoch,
@@ -166,12 +170,14 @@ pub fn create_is_signer_account_infos<'a>(
     accounts
         .iter_mut()
         .map(|(key, is_signer, account)| {
+            error!("create_is_signer_account_infos: {}", account.data.len());
+
             AccountInfo::new(
                 key,
                 *is_signer,
                 false,
                 &mut account.lamports,
-                &mut account.data,
+                account.data.get_arc_ref(),
                 &account.owner,
                 account.executable,
                 account.rent_epoch,
