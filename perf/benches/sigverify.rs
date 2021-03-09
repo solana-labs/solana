@@ -13,13 +13,13 @@ fn bench_sigverify(bencher: &mut Bencher) {
     let tx = test_tx();
 
     // generate packet vector
-    let batches = to_packets_chunked(&std::iter::repeat(tx).take(128).collect::<Vec<_>>(), 128);
+    let mut batches = to_packets_chunked(&std::iter::repeat(tx).take(128).collect::<Vec<_>>(), 128);
 
     let recycler = Recycler::new_without_limit("");
     let recycler_out = Recycler::new_without_limit("");
     // verify packets
     bencher.iter(|| {
-        let _ans = sigverify::ed25519_verify(&batches, &recycler, &recycler_out);
+        let _ans = sigverify::ed25519_verify(&mut batches, &recycler, &recycler_out);
     })
 }
 
