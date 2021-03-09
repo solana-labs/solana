@@ -158,7 +158,7 @@ lazy_static! {
         (per_byte_logging_cost::id(), "charge the compute budget per byte for logging"),
         (check_init_vote_data::id(), "check initialized Vote data"),
         (check_program_owner::id(), "limit programs to operating on accounts owned by itself"),
-        (demote_sysvar_write_locks::id(), "demote sysvar write locks to readonly #15497"),
+        (demote_sysvar_write_locks::id(), "demote builtins and sysvar write locks to readonly #15497"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
