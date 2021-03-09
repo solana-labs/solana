@@ -3,7 +3,7 @@
 use crate::ConfigKeys;
 use bincode::deserialize;
 use solana_sdk::{
-    account::ReadableAccount,
+    account::{ReadableAccount, WritableAccount},
     feature_set, ic_msg,
     instruction::InstructionError,
     keyed_account::{next_keyed_account, KeyedAccount},
@@ -120,7 +120,10 @@ pub fn process_instruction(
         return Err(InstructionError::InvalidInstructionData);
     }
 
-    config_keyed_account.try_account_ref_mut()?.data[..data.len()].copy_from_slice(&data);
+    config_keyed_account
+        .try_account_ref_mut()?
+        .data_as_mut_slice()[..data.len()]
+        .copy_from_slice(&data);
     Ok(())
 }
 

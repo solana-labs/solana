@@ -1253,7 +1253,11 @@ pub mod test {
         },
     };
     use solana_sdk::{
-        account::AccountSharedData, clock::Slot, hash::Hash, pubkey::Pubkey, signature::Signer,
+        account::{AccountSharedData, WritableAccount},
+        clock::Slot,
+        hash::Hash,
+        pubkey::Pubkey,
+        signature::Signer,
         slot_history::SlotHistory,
     };
     use solana_vote_program::{
@@ -1582,7 +1586,7 @@ pub mod test {
             }
             VoteState::serialize(
                 &VoteStateVersions::new_current(vote_state),
-                &mut account.data,
+                &mut account.data_as_mut_slice(),
             )
             .expect("serialize state");
             stakes.push((

@@ -1,7 +1,11 @@
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use solana_sdk::{
-    account::ReadableAccount, bpf_loader_deprecated, entrypoint::MAX_PERMITTED_DATA_INCREASE,
-    instruction::InstructionError, keyed_account::KeyedAccount, pubkey::Pubkey,
+    account::{ReadableAccount, WritableAccount},
+    bpf_loader_deprecated,
+    entrypoint::MAX_PERMITTED_DATA_INCREASE,
+    instruction::InstructionError,
+    keyed_account::KeyedAccount,
+    pubkey::Pubkey,
 };
 use std::{
     io::prelude::*,
@@ -120,7 +124,7 @@ pub fn deserialize_parameters_unaligned(
             let end = start + keyed_account.data_len()?;
             keyed_account
                 .try_account_ref_mut()?
-                .data
+                .data_as_mut_slice()
                 .clone_from_slice(&buffer[start..end]);
             start += keyed_account.data_len()? // data
                 + size_of::<Pubkey>() // owner
@@ -222,7 +226,7 @@ pub fn deserialize_parameters_aligned(
             start += size_of::<Pubkey>(); // owner
             account.lamports = LittleEndian::read_u64(&buffer[start..]);
             start += size_of::<u64>(); // lamports
-            let pre_len = account.data.len();
+            let pre_len = account.data_as_mut_slice().len();
             let post_len = LittleEndian::read_u64(&buffer[start..]) as usize;
             start += size_of::<u64>(); // data length
             let mut data_end = start + pre_len;
@@ -232,7 +236,9 @@ pub fn deserialize_parameters_aligned(
                 account.data.resize(post_len, 0);
                 data_end = start + post_len;
             }
-            account.data.clone_from_slice(&buffer[start..data_end]);
+            account
+                .data_as_mut_slice()
+                .clone_from_slice(&buffer[start..data_end]);
             start += pre_len + MAX_PERMITTED_DATA_INCREASE; // data
             start += (start as *const u8).align_offset(align_of::<u128>());
             start += size_of::<u64>(); // rent_epoch

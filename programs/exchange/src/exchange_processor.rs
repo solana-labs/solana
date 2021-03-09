@@ -8,9 +8,13 @@ use num_derive::{FromPrimitive, ToPrimitive};
 use serde_derive::Serialize;
 use solana_metrics::inc_new_counter_info;
 use solana_sdk::{
-    account::ReadableAccount, decode_error::DecodeError, instruction::InstructionError,
-    keyed_account::KeyedAccount, process_instruction::InvokeContext,
-    program_utils::limited_deserialize, pubkey::Pubkey,
+    account::{ReadableAccount, WritableAccount},
+    decode_error::DecodeError,
+    instruction::InstructionError,
+    keyed_account::KeyedAccount,
+    process_instruction::InvokeContext,
+    program_utils::limited_deserialize,
+    pubkey::Pubkey,
 };
 use std::cmp;
 use thiserror::Error;
@@ -198,7 +202,7 @@ impl ExchangeProcessor {
             ),
             &mut keyed_accounts[NEW_ACCOUNT_INDEX]
                 .try_account_ref_mut()?
-                .data,
+                .data_as_mut_slice(),
         )
     }
 
@@ -244,7 +248,7 @@ impl ExchangeProcessor {
                         &ExchangeState::Account(from_account),
                         &mut keyed_accounts[FROM_ACCOUNT_INDEX]
                             .try_account_ref_mut()?
-                            .data,
+                            .data_as_mut_slice(),
                     )?;
                 }
                 ExchangeState::Trade(mut from_trade) => {
@@ -274,7 +278,7 @@ impl ExchangeProcessor {
                         &ExchangeState::Trade(from_trade),
                         &mut keyed_accounts[FROM_ACCOUNT_INDEX]
                             .try_account_ref_mut()?
-                            .data,
+                            .data_as_mut_slice(),
                     )?;
                 }
                 _ => {
@@ -286,7 +290,9 @@ impl ExchangeProcessor {
 
         Self::serialize(
             &ExchangeState::Account(to_account),
-            &mut keyed_accounts[TO_ACCOUNT_INDEX].try_account_ref_mut()?.data,
+            &mut keyed_accounts[TO_ACCOUNT_INDEX]
+                .try_account_ref_mut()?
+                .data_as_mut_slice(),
         )
     }
 
@@ -340,11 +346,15 @@ impl ExchangeProcessor {
                 price: info.price,
                 tokens_settled: 0,
             }),
-            &mut keyed_accounts[ORDER_INDEX].try_account_ref_mut()?.data,
+            &mut keyed_accounts[ORDER_INDEX]
+                .try_account_ref_mut()?
+                .data_as_mut_slice(),
         )?;
         Self::serialize(
             &ExchangeState::Account(account),
-            &mut keyed_accounts[ACCOUNT_INDEX].try_account_ref_mut()?.data,
+            &mut keyed_accounts[ACCOUNT_INDEX]
+                .try_account_ref_mut()?
+                .data_as_mut_slice(),
         )
     }
 
@@ -377,7 +387,9 @@ impl ExchangeProcessor {
         // Turn trade order into a token account
         Self::serialize(
             &ExchangeState::Account(account),
-            &mut keyed_accounts[ORDER_INDEX].try_account_ref_mut()?.data,
+            &mut keyed_accounts[ORDER_INDEX]
+                .try_account_ref_mut()?
+                .data_as_mut_slice(),
         )
     }
 
@@ -434,12 +446,16 @@ impl ExchangeProcessor {
             // Turn into token account
             Self::serialize(
                 &ExchangeState::Account(Self::trade_to_token_account(&from_order)),
-                &mut keyed_accounts[TO_ORDER_INDEX].try_account_ref_mut()?.data,
+                &mut keyed_accounts[TO_ORDER_INDEX]
+                    .try_account_ref_mut()?
+                    .data_as_mut_slice(),
             )?;
         } else {
             Self::serialize(
                 &ExchangeState::Trade(to_order),
-                &mut keyed_accounts[TO_ORDER_INDEX].try_account_ref_mut()?.data,
+                &mut keyed_accounts[TO_ORDER_INDEX]
+                    .try_account_ref_mut()?
+                    .data_as_mut_slice(),
             )?;
         }
 
@@ -447,12 +463,16 @@ impl ExchangeProcessor {
             // Turn into token account
             Self::serialize(
                 &ExchangeState::Account(Self::trade_to_token_account(&from_order)),
-                &mut keyed_accounts[FROM_ORDER_INDEX].try_account_ref_mut()?.data,
+                &mut keyed_accounts[FROM_ORDER_INDEX]
+                    .try_account_ref_mut()?
+                    .data_as_mut_slice(),
             )?;
         } else {
             Self::serialize(
                 &ExchangeState::Trade(from_order),
-                &mut keyed_accounts[FROM_ORDER_INDEX].try_account_ref_mut()?.data,
+                &mut keyed_accounts[FROM_ORDER_INDEX]
+                    .try_account_ref_mut()?
+                    .data_as_mut_slice(),
             )?;
         }
 
@@ -460,7 +480,7 @@ impl ExchangeProcessor {
             &ExchangeState::Account(profit_account),
             &mut keyed_accounts[PROFIT_ACCOUNT_INDEX]
                 .try_account_ref_mut()?
-                .data,
+                .data_as_mut_slice(),
         )
     }
 }

@@ -1,5 +1,4 @@
-use crate::account::AccountSharedData;
-use crate::account::ReadableAccount;
+use crate::account::{AccountSharedData, ReadableAccount, WritableAccount};
 pub use solana_program::feature::*;
 
 pub fn from_account<T: ReadableAccount>(account: &T) -> Option<Feature> {
@@ -11,7 +10,7 @@ pub fn from_account<T: ReadableAccount>(account: &T) -> Option<Feature> {
 }
 
 pub fn to_account(feature: &Feature, account: &mut AccountSharedData) -> Option<()> {
-    bincode::serialize_into(&mut account.data[..], feature).ok()
+    bincode::serialize_into(account.data_as_mut_slice(), feature).ok()
 }
 
 pub fn create_account(feature: &Feature, lamports: u64) -> AccountSharedData {
