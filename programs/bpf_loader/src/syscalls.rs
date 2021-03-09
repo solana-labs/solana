@@ -10,7 +10,7 @@ use solana_rbpf::{
 };
 use solana_runtime::message_processor::MessageProcessor;
 use solana_sdk::{
-    account::Account,
+    account::AccountSharedData,
     account_info::AccountInfo,
     account_utils::StateMut,
     bpf_loader, bpf_loader_deprecated,
@@ -851,9 +851,12 @@ struct AccountReferences<'a> {
     ref_to_len_in_vm: &'a mut u64,
     serialized_len_ptr: &'a mut u64,
 }
-type TranslatedAccount<'a> = (Rc<RefCell<Account>>, Option<AccountReferences<'a>>);
+type TranslatedAccount<'a> = (
+    Rc<RefCell<AccountSharedData>>,
+    Option<AccountReferences<'a>>,
+);
 type TranslatedAccounts<'a> = (
-    Vec<Rc<RefCell<Account>>>,
+    Vec<Rc<RefCell<AccountSharedData>>>,
     Vec<Option<AccountReferences<'a>>>,
 );
 
@@ -1018,7 +1021,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
             };
 
             Ok((
-                Rc::new(RefCell::new(Account {
+                Rc::new(RefCell::new(AccountSharedData {
                     lamports: *lamports,
                     data: data.to_vec(),
                     executable: account_info.executable,
@@ -1301,7 +1304,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
             )?;
 
             Ok((
-                Rc::new(RefCell::new(Account {
+                Rc::new(RefCell::new(AccountSharedData {
                     lamports: *lamports,
                     data: data.to_vec(),
                     executable: account_info.executable,
@@ -1512,9 +1515,9 @@ fn check_authorized_program(
 
 fn get_upgradeable_executable(
     callee_program_id: &Pubkey,
-    program_account: &RefCell<Account>,
+    program_account: &RefCell<AccountSharedData>,
     invoke_context: &Ref<&mut dyn InvokeContext>,
-) -> Result<Option<(Pubkey, RefCell<Account>)>, EbpfError<BpfError>> {
+) -> Result<Option<(Pubkey, RefCell<AccountSharedData>)>, EbpfError<BpfError>> {
     if program_account.borrow().owner == bpf_loader_upgradeable::id() {
         match program_account.borrow().state() {
             Ok(UpgradeableLoaderState::Program {

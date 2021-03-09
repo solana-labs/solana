@@ -116,13 +116,13 @@ impl EpochStakes {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use solana_sdk::account::Account;
+    use solana_sdk::account::AccountSharedData;
     use solana_vote_program::vote_state::create_account_with_authorized;
     use std::iter;
 
     struct VoteAccountInfo {
         vote_account: Pubkey,
-        account: Account,
+        account: AccountSharedData,
         authorized_voter: Pubkey,
     }
 

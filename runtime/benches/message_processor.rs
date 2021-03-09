@@ -4,7 +4,7 @@ extern crate test;
 
 use log::*;
 use solana_runtime::message_processor::{ExecuteDetailsTimings, PreAccount};
-use solana_sdk::{account::Account, pubkey, rent::Rent};
+use solana_sdk::{account::AccountSharedData, pubkey, rent::Rent};
 use test::Bencher;
 
 #[bench]
@@ -15,10 +15,10 @@ fn bench_verify_account_changes_data(bencher: &mut Bencher) {
     let non_owner = pubkey::new_rand();
     let pre = PreAccount::new(
         &pubkey::new_rand(),
-        &Account::new(0, BUFSIZE, &owner),
+        &AccountSharedData::new(0, BUFSIZE, &owner),
         false,
     );
-    let post = Account::new(0, BUFSIZE, &owner);
+    let post = AccountSharedData::new(0, BUFSIZE, &owner);
     assert_eq!(
         pre.verify(
             &owner,
@@ -52,7 +52,7 @@ fn bench_verify_account_changes_data(bencher: &mut Bencher) {
 
     let pre = PreAccount::new(
         &pubkey::new_rand(),
-        &Account::new(0, BUFSIZE, &owner),
+        &AccountSharedData::new(0, BUFSIZE, &owner),
         false,
     );
     bencher.iter(|| {

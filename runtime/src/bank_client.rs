@@ -117,7 +117,7 @@ impl SyncClient for BankClient {
     }
 
     fn get_account(&self, pubkey: &Pubkey) -> Result<Option<Account>> {
-        Ok(self.bank.get_account(pubkey))
+        Ok(self.bank.get_account(pubkey).map(Account::from))
     }
 
     fn get_account_with_commitment(
@@ -125,7 +125,7 @@ impl SyncClient for BankClient {
         pubkey: &Pubkey,
         _commitment_config: CommitmentConfig,
     ) -> Result<Option<Account>> {
-        Ok(self.bank.get_account(pubkey))
+        Ok(self.bank.get_account(pubkey).map(Account::from))
     }
 
     fn get_balance(&self, pubkey: &Pubkey) -> Result<u64> {

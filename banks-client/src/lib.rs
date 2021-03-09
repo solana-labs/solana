@@ -129,7 +129,7 @@ impl BanksClient {
         self.get_account(sysvar::rent::id()).map(|result| {
             let rent_sysvar = result?
                 .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Rent sysvar not present"))?;
-            from_account::<Rent>(&rent_sysvar).ok_or_else(|| {
+            from_account::<Rent, _>(&rent_sysvar).ok_or_else(|| {
                 io::Error::new(io::ErrorKind::Other, "Failed to deserialize Rent sysvar")
             })
         })

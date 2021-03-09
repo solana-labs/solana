@@ -40,7 +40,7 @@ pub fn calculate_non_circulating_supply(bank: &Arc<Bank>) -> NonCirculatingSuppl
         bank.get_program_accounts(&solana_stake_program::id())
     };
     for (pubkey, account) in stake_accounts.iter() {
-        let stake_account = StakeState::from(&account).unwrap_or_default();
+        let stake_account = StakeState::from(account).unwrap_or_default();
         match stake_account {
             StakeState::Initialized(meta) => {
                 if meta.lockup.is_in_force(&clock, None)
@@ -138,6 +138,7 @@ mod tests {
     use super::*;
     use solana_sdk::{
         account::Account,
+        account::AccountSharedData,
         epoch_schedule::EpochSchedule,
         genesis_config::{ClusterType, GenesisConfig},
     };
@@ -212,7 +213,10 @@ mod tests {
         bank = Arc::new(new_from_parent(&bank));
         let new_balance = 11;
         for key in non_circulating_accounts {
-            bank.store_account(&key, &Account::new(new_balance, 0, &Pubkey::default()));
+            bank.store_account(
+                &key,
+                &AccountSharedData::new(new_balance, 0, &Pubkey::default()),
+            );
         }
         let non_circulating_supply = calculate_non_circulating_supply(&bank);
         assert_eq!(

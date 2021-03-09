@@ -828,7 +828,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
             self.program_id_index.insert(account_owner, pubkey, slot);
         }
         // Note because of the below check below on the account data length, when an
-        // account hits zero lamports and is reset to Account::Default, then we skip
+        // account hits zero lamports and is reset to AccountSharedData::Default, then we skip
         // the below updates to the secondary indexes.
         //
         // Skipping means not updating secondary index to mark the account as missing.
@@ -837,7 +837,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         // removed from the secondary index, the scan function will:
         // 1) consult the primary index via `get(&pubkey, Some(ancestors), max_root)`
         // and find the zero-lamport version
-        // 2) When the fetch from storage occurs, it will return Account::Default
+        // 2) When the fetch from storage occurs, it will return AccountSharedData::Default
         // (as persisted tombstone for snapshots). This will then ultimately be
         // filtered out by post-scan filters, like in `get_filtered_spl_token_accounts_by_owner()`.
         if *account_owner == inline_spl_token_v2_0::id()

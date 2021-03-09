@@ -242,7 +242,7 @@ impl Banks for BanksServer {
         commitment: CommitmentLevel,
     ) -> Option<Account> {
         let bank = self.bank(commitment);
-        bank.get_account(&address)
+        bank.get_account(&address).map(Account::from)
     }
 }
 

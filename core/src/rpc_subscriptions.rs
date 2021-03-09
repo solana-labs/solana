@@ -28,7 +28,7 @@ use solana_runtime::{
     commitment::{BlockCommitmentCache, CommitmentSlots},
 };
 use solana_sdk::{
-    account::Account,
+    account::AccountSharedData,
     clock::{Slot, UnixTimestamp},
     commitment_config::CommitmentConfig,
     pubkey::Pubkey,
@@ -276,7 +276,7 @@ impl RpcNotifier {
 }
 
 fn filter_account_result(
-    result: Option<(Account, Slot)>,
+    result: Option<(AccountSharedData, Slot)>,
     pubkey: &Pubkey,
     last_notified_slot: Slot,
     encoding: Option<UiAccountEncoding>,
@@ -320,7 +320,7 @@ fn filter_signature_result(
 }
 
 fn filter_program_results(
-    accounts: Vec<(Pubkey, Account)>,
+    accounts: Vec<(Pubkey, AccountSharedData)>,
     program_id: &Pubkey,
     last_notified_slot: Slot,
     config: Option<ProgramConfig>,

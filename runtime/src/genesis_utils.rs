@@ -1,5 +1,6 @@
 use solana_sdk::{
     account::Account,
+    account::AccountSharedData,
     feature::{self, Feature},
     feature_set::FeatureSet,
     fee_calculator::FeeRateGovernor,
@@ -110,13 +111,15 @@ pub fn create_genesis_config_with_vote_accounts_and_cluster_type(
         // Create accounts
         let node_account = Account::new(VALIDATOR_LAMPORTS, 0, &system_program::id());
         let vote_account = vote_state::create_account(&vote_pubkey, &node_pubkey, 0, *stake);
-        let stake_account = stake_state::create_account(
+        let stake_account = Account::from(stake_state::create_account(
             &stake_pubkey,
             &vote_pubkey,
             &vote_account,
             &genesis_config_info.genesis_config.rent,
             *stake,
-        );
+        ));
+
+        let vote_account = Account::from(vote_account);
 
         // Put newly created accounts into genesis
         genesis_config_info.genesis_config.accounts.extend(vec![
@@ -163,12 +166,12 @@ pub fn activate_all_features(genesis_config: &mut GenesisConfig) {
     for feature_id in FeatureSet::default().inactive {
         genesis_config.accounts.insert(
             feature_id,
-            feature::create_account(
+            Account::from(feature::create_account(
                 &Feature {
                     activated_at: Some(0),
                 },
                 std::cmp::max(genesis_config.rent.minimum_balance(Feature::size_of()), 1),
-            ),
+            )),
         );
     }
 }
@@ -185,7 +188,7 @@ pub fn create_genesis_config_with_leader_ex(
     fee_rate_governor: FeeRateGovernor,
     rent: Rent,
     cluster_type: ClusterType,
-    mut initial_accounts: Vec<(Pubkey, Account)>,
+    mut initial_accounts: Vec<(Pubkey, AccountSharedData)>,
 ) -> GenesisConfig {
     let validator_vote_account = vote_state::create_account(
         &validator_vote_account_pubkey,
@@ -204,17 +207,21 @@ pub fn create_genesis_config_with_leader_ex(
 
     initial_accounts.push((
         *mint_pubkey,
-        Account::new(mint_lamports, 0, &system_program::id()),
+        AccountSharedData::new(mint_lamports, 0, &system_program::id()),
     ));
     initial_accounts.push((
         *validator_pubkey,
-        Account::new(validator_lamports, 0, &system_program::id()),
+        AccountSharedData::new(validator_lamports, 0, &system_program::id()),
     ));
     initial_accounts.push((*validator_vote_account_pubkey, validator_vote_account));
     initial_accounts.push((*validator_stake_account_pubkey, validator_stake_account));
 
     let mut genesis_config = GenesisConfig {
-        accounts: initial_accounts.iter().cloned().collect(),
+        accounts: initial_accounts
+            .iter()
+            .cloned()
+            .map(|(key, account)| (key, Account::from(account)))
+            .collect(),
         fee_rate_governor,
         rent,
         cluster_type,

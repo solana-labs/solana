@@ -868,7 +868,7 @@ impl Validator {
 
 fn active_vote_account_exists_in_bank(bank: &Arc<Bank>, vote_account: &Pubkey) -> bool {
     if let Some(account) = &bank.get_account(vote_account) {
-        if let Some(vote_state) = VoteState::from(&account) {
+        if let Some(vote_state) = VoteState::from(account) {
             return !vote_state.votes.is_empty();
         }
     }

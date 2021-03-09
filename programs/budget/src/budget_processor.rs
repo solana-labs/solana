@@ -229,7 +229,7 @@ mod tests {
     use crate::id;
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
-    use solana_sdk::account::Account;
+    use solana_sdk::account::AccountSharedData;
     use solana_sdk::client::SyncClient;
     use solana_sdk::genesis_config::create_genesis_config;
     use solana_sdk::hash::hash;
@@ -522,10 +522,10 @@ mod tests {
     fn test_pay_when_account_data() {
         let (bank, alice_keypair) = create_bank(42);
         let game_pubkey = solana_sdk::pubkey::new_rand();
-        let game_account = Account {
+        let game_account = AccountSharedData {
             lamports: 1,
             data: vec![1, 2, 3],
-            ..Account::default()
+            ..AccountSharedData::default()
         };
         bank.store_account(&game_pubkey, &game_account);
         assert_eq!(bank.get_account(&game_pubkey).unwrap().data, vec![1, 2, 3]);
