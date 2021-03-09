@@ -8,7 +8,7 @@ use crate::{
     hash::Hash,
     instruction::{AccountMeta, CompiledInstruction, Instruction},
     pubkey::Pubkey,
-    short_vec, system_instruction, sysvar,
+    short_vec, system_instruction, system_program, sysvar,
 };
 use itertools::Itertools;
 use lazy_static::lazy_static;
@@ -16,7 +16,7 @@ use std::convert::{TryFrom, TryInto};
 
 lazy_static! {
     // Copied keys over since direct references create cyclical dependency.
-    static ref BUILTIN_PROGRAMS_KEYS: [Pubkey; 12] = vec![
+    static ref BUILTIN_PROGRAMS_KEYS: [Pubkey; 13] = vec![
         "Budget1111111111111111111111111111111111111",
         "Config1111111111111111111111111111111111111",
         "Exchange11111111111111111111111111111111111",
@@ -32,6 +32,9 @@ lazy_static! {
     ]
     .into_iter()
     .map(|s| s.parse().unwrap())
+    .chain(
+        std::iter::once(system_program::id())
+    )
     .collect::<Vec<_>>()
     .try_into()
     .unwrap();
@@ -489,7 +492,7 @@ mod tests {
     #[test]
     fn test_builtin_program_keys() {
         let keys: HashSet<Pubkey> = BUILTIN_PROGRAMS_KEYS.iter().copied().collect();
-        assert_eq!(keys.len(), 12);
+        assert_eq!(keys.len(), 13);
         for k in keys {
             let k = format!("{}", k);
             assert!(k.ends_with("11111111111111111111111111111"));
