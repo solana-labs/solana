@@ -12,24 +12,55 @@ use crate::{
 };
 use itertools::Itertools;
 use lazy_static::lazy_static;
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+use solana_frozen_abi::abi_example::AbiExample;
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+use solana_frozen_abi::abi_example::ConstantValue;
 use std::convert::{TryFrom, TryInto};
+use std::fmt::Debug;
+
+// Once the feature is flipped on, we can't further modify
+// BUILTIN_PROGRAMS_KEYS without the risk of breaking consensus.
+#[frozen_abi(digest = "88Q19V89XX2TJw6k6MeqdeSeDuRJuEq2Uq3SXpr4zdLs")]
+#[derive(Serialize, Deserialize, Debug)]
+struct BuiltinProgramsKeys(pub [Pubkey; 7]);
+
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+impl ConstantValue for BuiltinProgramsKeys {}
+
+impl Default for BuiltinProgramsKeys {
+    fn default() -> Self {
+        BuiltinProgramsKeys(
+            vec![
+                "11111111111111111111111111111111",
+                "Config1111111111111111111111111111111111111",
+                "Feature111111111111111111111111111111111111",
+                "NativeLoader1111111111111111111111111111111",
+                "Stake11111111111111111111111111111111111111",
+                "StakeConfig11111111111111111111111111111111",
+                "Vote111111111111111111111111111111111111111",
+            ]
+            .into_iter()
+            .map(|s| s.parse().unwrap())
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap(),
+        )
+    }
+}
+
+// this custom impl is fine because BuiltinProgramsKeys is a
+// singleton type just for this abi protection
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+impl AbiExample for BuiltinProgramsKeys {
+    fn example() -> Self {
+        Self::default()
+    }
+}
 
 lazy_static! {
     // Copied keys over since direct references create cyclical dependency.
-    static ref BUILTIN_PROGRAMS_KEYS: [Pubkey; 7] = vec![
-        "11111111111111111111111111111111",
-        "Config1111111111111111111111111111111111111",
-        "Feature111111111111111111111111111111111111",
-        "NativeLoader1111111111111111111111111111111",
-        "Stake11111111111111111111111111111111111111",
-        "StakeConfig11111111111111111111111111111111",
-        "Vote111111111111111111111111111111111111111",
-    ]
-    .into_iter()
-    .map(|s| s.parse().unwrap())
-    .collect::<Vec<_>>()
-    .try_into()
-    .unwrap();
+    static ref BUILTIN_PROGRAMS_KEYS: BuiltinProgramsKeys = BuiltinProgramsKeys::default();
 }
 
 fn position(keys: &[Pubkey], key: &Pubkey) -> u8 {
@@ -359,7 +390,7 @@ impl Message {
         for (i, key) in self.account_keys.iter().enumerate() {
             if self.is_writable(i) {
                 if demote_sysvar_write_locks
-                    && (sysvar::is_sysvar_id(key) || BUILTIN_PROGRAMS_KEYS.contains(key))
+                    && (sysvar::is_sysvar_id(key) || BUILTIN_PROGRAMS_KEYS.0.contains(key))
                 {
                     readonly_keys.push(key);
                 } else {
@@ -468,7 +499,7 @@ impl Message {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{hash, instruction::AccountMeta};
+    use crate::instruction::AccountMeta;
     use std::collections::HashSet;
 
     #[test]
@@ -483,23 +514,12 @@ mod tests {
 
     #[test]
     fn test_builtin_program_keys() {
-        let keys: HashSet<Pubkey> = BUILTIN_PROGRAMS_KEYS.iter().copied().collect();
+        let keys: HashSet<Pubkey> = BUILTIN_PROGRAMS_KEYS.0.iter().copied().collect();
         assert_eq!(keys.len(), 7);
         for k in keys {
             let k = format!("{}", k);
             assert!(k.ends_with("11111111111111111111111111111"));
         }
-    }
-
-    #[test]
-    fn test_builtin_program_keys_abi_freeze() {
-        // Once the feature is flipped on, we can't further modify
-        // BUILTIN_PROGRAMS_KEYS without the risk of breaking consensus.
-        let builtins = format!("{:?}", *BUILTIN_PROGRAMS_KEYS);
-        assert_eq!(
-            format!("{}", hash::hash(builtins.as_bytes())),
-            "2SJx58oZA3NUcW6MnKFGyG5xSwXvmEXhoyJnz2Z5mHVh"
-        );
     }
 
     #[test]

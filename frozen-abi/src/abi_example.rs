@@ -4,6 +4,7 @@ use log::*;
 
 use serde::Serialize;
 use std::any::type_name;
+use std::fmt::Debug;
 
 pub trait AbiExample: Sized {
     fn example() -> Self;
@@ -441,7 +442,11 @@ pub trait AbiEnumVisitor: Serialize {
 }
 
 pub trait IgnoreAsHelper {}
-pub trait EvenAsOpaque {}
+pub trait EvenAsOpaque: IgnoreAsHelper {}
+pub trait ConstantValue: EvenAsOpaque + Debug {}
+
+impl<T: EvenAsOpaque> IgnoreAsHelper for T {}
+impl<T: ConstantValue> EvenAsOpaque for T {}
 
 impl<T: Serialize + ?Sized> AbiEnumVisitor for T {
     default fn visit_for_abi(&self, _digester: &mut AbiDigester) -> DigestResult {
@@ -484,12 +489,21 @@ impl<T: Serialize + IgnoreAsHelper> AbiEnumVisitor for &T {
 
 // force to call self.serialize instead of T::visit_for_abi() to work around the
 // inability of implementing AbiExample for private structs from other crates
-impl<T: Serialize + IgnoreAsHelper + EvenAsOpaque> AbiEnumVisitor for &T {
+impl<T: Serialize + EvenAsOpaque> AbiEnumVisitor for &T {
     default fn visit_for_abi(&self, digester: &mut AbiDigester) -> DigestResult {
         info!("AbiEnumVisitor for (IgnoreAsOpaque): {}", type_name::<T>());
         let top_scope = type_name::<T>().split("::").next().unwrap();
         self.serialize(digester.create_new_opaque(top_scope))
             .map_err(DigestError::wrap_by_type::<T>)
+    }
+}
+
+impl<T: Serialize + ConstantValue> AbiEnumVisitor for &T {
+    default fn visit_for_abi(&self, digester: &mut AbiDigester) -> DigestResult {
+        info!("AbiEnumVisitor for (ConstantValue): {}", type_name::<T>());
+        let ret = <T>::visit_for_abi(&self, digester);
+        digester.update(&[&format!("value {:#?}", self)]);
+        ret
     }
 }
 
