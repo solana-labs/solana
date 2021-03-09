@@ -49,6 +49,7 @@ pub enum PohRecorderError {
 type Result<T> = std::result::Result<T, PohRecorderError>;
 
 pub type WorkingBankEntry = (Arc<Bank>, (Entry, u64));
+pub type BankStart = (Arc<Bank>, Arc<Instant>);
 
 #[derive(Clone)]
 pub struct WorkingBank {
@@ -137,7 +138,7 @@ impl PohRecorder {
         self.working_bank.as_ref().map(|w| w.bank.clone())
     }
 
-    pub fn bank_start(&self) -> Option<(Arc<Bank>, Arc<Instant>)> {
+    pub fn bank_start(&self) -> Option<BankStart> {
         self.working_bank
             .as_ref()
             .map(|w| (w.bank.clone(), w.start.clone()))
@@ -535,25 +536,12 @@ impl PohRecorder {
         )
     }
 
-    // Get the current processing bank if the processing time hasn't expired
-    pub fn is_bank_still_processing_txs(
-        bank_creation_time: &Instant,
-        max_tx_ingestion_time: Option<u64>,
-    ) -> bool {
-        // Do this check outside of the poh lock, hence not a method on PohRecorder
-        max_tx_ingestion_time
-            .map(|max_tx_ingestion_time| {
-                bank_creation_time.elapsed().as_millis() <= max_tx_ingestion_time as u128
-            })
-            .unwrap_or(true)
-    }
-
-    pub fn get_bank_still_processing_txs(
-        bank_start: &Option<(Arc<Bank>, Arc<Instant>)>,
-    ) -> Option<Arc<Bank>> {
+    // Filters the return result of PohRecorder::bank_start(), returns the bank
+    // if it's still processing transactions
+    pub fn get_bank_still_processing_txs(bank_start: &Option<BankStart>) -> Option<&Arc<Bank>> {
         bank_start.as_ref().and_then(|(bank, bank_creation_time)| {
-            if Self::is_bank_still_processing_txs(bank_creation_time, bank.max_tx_ingestion_time) {
-                Some(bank.clone())
+            if Bank::is_bank_still_processing_txs(bank_creation_time, bank.max_tx_ingestion_time) {
+                Some(bank)
             } else {
                 None
             }

@@ -90,6 +90,7 @@ use std::{
         LockResult, RwLockWriteGuard, {Arc, RwLock, RwLockReadGuard},
     },
     time::Duration,
+    time::Instant,
 };
 
 pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
@@ -4640,6 +4641,19 @@ impl Bank {
     pub fn check_init_vote_data_enabled(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::check_init_vote_data::id())
+    }
+
+    // Get the current processing bank if the processing time hasn't expired
+    pub fn is_bank_still_processing_txs(
+        bank_creation_time: &Instant,
+        max_tx_ingestion_time: Option<u64>,
+    ) -> bool {
+        // Do this check outside of the poh lock, hence not a method on PohRecorder
+        max_tx_ingestion_time
+            .map(|max_tx_ingestion_time| {
+                bank_creation_time.elapsed().as_millis() <= max_tx_ingestion_time as u128
+            })
+            .unwrap_or(true)
     }
 
     pub fn deactivate_feature(&mut self, id: &Pubkey) {

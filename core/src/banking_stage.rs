@@ -161,7 +161,7 @@ pub struct BankingStage {
 
 #[derive(Debug, Clone)]
 pub enum BufferedPacketsDecision {
-    Consume(Arc<Bank>),
+    Consume(Option<u64>),
     Forward,
     ForwardAndHold,
     Hold,
@@ -330,7 +330,7 @@ impl BankingStage {
                             gossip_vote_sender,
                         );
                     if processed < verified_txs_len
-                        || !PohRecorder::is_bank_still_processing_txs(
+                        || !Bank::is_bank_still_processing_txs(
                             &bank_creation_time,
                             max_tx_ingestion_time,
                         )
@@ -387,7 +387,7 @@ impl BankingStage {
     fn consume_or_forward_packets(
         my_pubkey: &Pubkey,
         leader_pubkey: Option<Pubkey>,
-        bank_still_processing_txs: Option<Arc<Bank>>,
+        bank_still_processing_txs: Option<&Arc<Bank>>,
         would_be_leader: bool,
         would_be_leader_shortly: bool,
     ) -> BufferedPacketsDecision {
@@ -398,7 +398,7 @@ impl BankingStage {
             |x| {
                 if let Some(bank) = bank_still_processing_txs {
                     // If the bank is available, this node is the leader
-                    BufferedPacketsDecision::Consume(bank)
+                    BufferedPacketsDecision::Consume(bank.max_tx_ingestion_time)
                 } else if would_be_leader_shortly {
                     // If the node will be the leader soon, hold the packets for now
                     BufferedPacketsDecision::Hold
@@ -429,6 +429,7 @@ impl BankingStage {
         gossip_vote_sender: &ReplayVoteSender,
         banking_stage_stats: &BankingStageStats,
     ) -> BufferedPacketsDecision {
+        let bank_start;
         let (
             leader_at_slot_offset,
             bank_still_processing_txs,
@@ -436,9 +437,10 @@ impl BankingStage {
             would_be_leader_shortly,
         ) = {
             let poh = poh_recorder.lock().unwrap();
+            bank_start = poh.bank_start();
             (
                 poh.leader_after_n_slots(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET),
-                PohRecorder::get_bank_still_processing_txs(&poh.bank_start()),
+                PohRecorder::get_bank_still_processing_txs(&bank_start),
                 poh.would_be_leader(HOLD_TRANSACTIONS_SLOT_OFFSET * DEFAULT_TICKS_PER_SLOT),
                 poh.would_be_leader(
                     (FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET - 1) * DEFAULT_TICKS_PER_SLOT,
@@ -455,10 +457,10 @@ impl BankingStage {
         );
 
         match decision {
-            BufferedPacketsDecision::Consume(ref bank) => {
+            BufferedPacketsDecision::Consume(max_tx_ingestion_time) => {
                 Self::consume_buffered_packets(
                     my_pubkey,
-                    bank.max_tx_ingestion_time,
+                    max_tx_ingestion_time,
                     poh_recorder,
                     buffered_packets,
                     transaction_status_sender,
@@ -872,10 +874,8 @@ impl BankingStage {
 
             // If `bank_creation_time` is None, it's a test so ignore the option so
             // allow processing
-            let is_bank_still_processing_txs = PohRecorder::is_bank_still_processing_txs(
-                bank_creation_time,
-                bank.max_tx_ingestion_time,
-            );
+            let is_bank_still_processing_txs =
+                Bank::is_bank_still_processing_txs(bank_creation_time, bank.max_tx_ingestion_time);
             match (result, is_bank_still_processing_txs) {
                 (Err(PohRecorderError::MaxHeightReached), _) | (_, false) => {
                     info!(
@@ -1948,13 +1948,7 @@ mod tests {
         let my_pubkey1 = solana_sdk::pubkey::new_rand();
         let bank = Arc::new(Bank::default());
         assert_matches!(
-            BankingStage::consume_or_forward_packets(
-                &my_pubkey,
-                None,
-                Some(bank.clone()),
-                false,
-                false
-            ),
+            BankingStage::consume_or_forward_packets(&my_pubkey, None, Some(&bank), false, false),
             BufferedPacketsDecision::Hold
         );
         assert_matches!(
@@ -2001,7 +1995,7 @@ mod tests {
             BankingStage::consume_or_forward_packets(
                 &my_pubkey,
                 Some(my_pubkey1),
-                Some(bank.clone()),
+                Some(&bank),
                 false,
                 false
             ),
@@ -2021,7 +2015,7 @@ mod tests {
             BankingStage::consume_or_forward_packets(
                 &my_pubkey1,
                 Some(my_pubkey1),
-                Some(bank),
+                Some(&bank),
                 false,
                 false
             ),
