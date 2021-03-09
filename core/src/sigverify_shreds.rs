@@ -4,11 +4,7 @@ use crate::sigverify_stage::SigVerifier;
 use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
 use solana_ledger::shred::Shred;
 use solana_ledger::sigverify_shreds::verify_shreds_gpu;
-use solana_perf::{
-    self,
-    packet::{limited_deserialize, Packets},
-    recycler_cache::RecyclerCache,
-};
+use solana_perf::{self, packet::Packets, recycler_cache::RecyclerCache};
 use solana_runtime::bank_forks::BankForks;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, RwLock};
