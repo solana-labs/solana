@@ -1,5 +1,5 @@
 use crate::{
-    account::{from_account, Account},
+    account::{from_account, AccountSharedData},
     account_utils::{State, StateMut},
 };
 use solana_program::{clock::Epoch, instruction::InstructionError, pubkey::Pubkey, sysvar::Sysvar};
@@ -14,7 +14,7 @@ pub struct KeyedAccount<'a> {
     is_signer: bool, // Transaction was signed by this account's key
     is_writable: bool,
     key: &'a Pubkey,
-    pub account: &'a RefCell<Account>,
+    pub account: &'a RefCell<AccountSharedData>,
 }
 
 impl<'a> KeyedAccount<'a> {
@@ -58,26 +58,26 @@ impl<'a> KeyedAccount<'a> {
         Ok(self.try_borrow()?.rent_epoch)
     }
 
-    pub fn try_account_ref(&'a self) -> Result<Ref<Account>, InstructionError> {
+    pub fn try_account_ref(&'a self) -> Result<Ref<AccountSharedData>, InstructionError> {
         self.try_borrow()
     }
 
-    pub fn try_account_ref_mut(&'a self) -> Result<RefMut<Account>, InstructionError> {
+    pub fn try_account_ref_mut(&'a self) -> Result<RefMut<AccountSharedData>, InstructionError> {
         self.try_borrow_mut()
     }
 
-    fn try_borrow(&self) -> Result<Ref<Account>, InstructionError> {
+    fn try_borrow(&self) -> Result<Ref<AccountSharedData>, InstructionError> {
         self.account
             .try_borrow()
             .map_err(|_| InstructionError::AccountBorrowFailed)
     }
-    fn try_borrow_mut(&self) -> Result<RefMut<Account>, InstructionError> {
+    fn try_borrow_mut(&self) -> Result<RefMut<AccountSharedData>, InstructionError> {
         self.account
             .try_borrow_mut()
             .map_err(|_| InstructionError::AccountBorrowFailed)
     }
 
-    pub fn new(key: &'a Pubkey, is_signer: bool, account: &'a RefCell<Account>) -> Self {
+    pub fn new(key: &'a Pubkey, is_signer: bool, account: &'a RefCell<AccountSharedData>) -> Self {
         Self {
             is_signer,
             is_writable: true,
@@ -86,7 +86,11 @@ impl<'a> KeyedAccount<'a> {
         }
     }
 
-    pub fn new_readonly(key: &'a Pubkey, is_signer: bool, account: &'a RefCell<Account>) -> Self {
+    pub fn new_readonly(
+        key: &'a Pubkey,
+        is_signer: bool,
+        account: &'a RefCell<AccountSharedData>,
+    ) -> Self {
         Self {
             is_signer,
             is_writable: false,
@@ -102,8 +106,8 @@ impl<'a> PartialEq for KeyedAccount<'a> {
     }
 }
 
-impl<'a> From<(&'a Pubkey, &'a RefCell<Account>)> for KeyedAccount<'a> {
-    fn from((key, account): (&'a Pubkey, &'a RefCell<Account>)) -> Self {
+impl<'a> From<(&'a Pubkey, &'a RefCell<AccountSharedData>)> for KeyedAccount<'a> {
+    fn from((key, account): (&'a Pubkey, &'a RefCell<AccountSharedData>)) -> Self {
         Self {
             is_signer: false,
             is_writable: true,
@@ -113,8 +117,8 @@ impl<'a> From<(&'a Pubkey, &'a RefCell<Account>)> for KeyedAccount<'a> {
     }
 }
 
-impl<'a> From<(&'a Pubkey, bool, &'a RefCell<Account>)> for KeyedAccount<'a> {
-    fn from((key, is_signer, account): (&'a Pubkey, bool, &'a RefCell<Account>)) -> Self {
+impl<'a> From<(&'a Pubkey, bool, &'a RefCell<AccountSharedData>)> for KeyedAccount<'a> {
+    fn from((key, is_signer, account): (&'a Pubkey, bool, &'a RefCell<AccountSharedData>)) -> Self {
         Self {
             is_signer,
             is_writable: true,
@@ -124,8 +128,8 @@ impl<'a> From<(&'a Pubkey, bool, &'a RefCell<Account>)> for KeyedAccount<'a> {
     }
 }
 
-impl<'a> From<&'a (&'a Pubkey, &'a RefCell<Account>)> for KeyedAccount<'a> {
-    fn from((key, account): &'a (&'a Pubkey, &'a RefCell<Account>)) -> Self {
+impl<'a> From<&'a (&'a Pubkey, &'a RefCell<AccountSharedData>)> for KeyedAccount<'a> {
+    fn from((key, account): &'a (&'a Pubkey, &'a RefCell<AccountSharedData>)) -> Self {
         Self {
             is_signer: false,
             is_writable: true,
@@ -136,13 +140,13 @@ impl<'a> From<&'a (&'a Pubkey, &'a RefCell<Account>)> for KeyedAccount<'a> {
 }
 
 pub fn create_keyed_accounts<'a>(
-    accounts: &'a [(&'a Pubkey, &'a RefCell<Account>)],
+    accounts: &'a [(&'a Pubkey, &'a RefCell<AccountSharedData>)],
 ) -> Vec<KeyedAccount<'a>> {
     accounts.iter().map(Into::into).collect()
 }
 
 pub fn create_keyed_is_signer_accounts<'a>(
-    accounts: &'a [(&'a Pubkey, bool, &'a RefCell<Account>)],
+    accounts: &'a [(&'a Pubkey, bool, &'a RefCell<AccountSharedData>)],
 ) -> Vec<KeyedAccount<'a>> {
     accounts
         .iter()
@@ -156,7 +160,7 @@ pub fn create_keyed_is_signer_accounts<'a>(
 }
 
 pub fn create_keyed_readonly_accounts(
-    accounts: &[(Pubkey, RefCell<Account>)],
+    accounts: &[(Pubkey, RefCell<AccountSharedData>)],
 ) -> Vec<KeyedAccount> {
     accounts
         .iter()
@@ -212,7 +216,8 @@ pub fn from_keyed_account<S: Sysvar>(
     if !S::check_id(keyed_account.unsigned_key()) {
         return Err(InstructionError::InvalidArgument);
     }
-    from_account::<S>(&*keyed_account.try_account_ref()?).ok_or(InstructionError::InvalidArgument)
+    from_account::<S, AccountSharedData>(&*keyed_account.try_account_ref()?)
+        .ok_or(InstructionError::InvalidArgument)
 }
 
 #[cfg(test)]
@@ -244,12 +249,12 @@ mod tests {
         let wrong_key = Pubkey::new_unique();
 
         let account = create_account(&test_sysvar, 42);
-        let test_sysvar = from_account::<TestSysvar>(&account).unwrap();
+        let test_sysvar = from_account::<TestSysvar, _>(&account).unwrap();
         assert_eq!(test_sysvar, TestSysvar::default());
 
-        let mut account = Account::new(42, TestSysvar::size_of(), &key);
+        let mut account = AccountSharedData::new(42, TestSysvar::size_of(), &key);
         to_account(&test_sysvar, &mut account).unwrap();
-        let test_sysvar = from_account::<TestSysvar>(&account).unwrap();
+        let test_sysvar = from_account::<TestSysvar, _>(&account).unwrap();
         assert_eq!(test_sysvar, TestSysvar::default());
 
         let account = RefCell::new(account);

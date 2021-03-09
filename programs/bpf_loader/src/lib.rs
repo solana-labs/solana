@@ -866,7 +866,7 @@ mod tests {
         message_processor::{Executors, ThisInvokeContext},
     };
     use solana_sdk::{
-        account::{create_account, Account},
+        account::{create_account_shared_data as create_account, AccountSharedData},
         account_utils::StateMut,
         client::SyncClient,
         clock::Clock,
@@ -933,7 +933,7 @@ mod tests {
     fn test_bpf_loader_write() {
         let program_id = bpf_loader::id();
         let program_key = solana_sdk::pubkey::new_rand();
-        let program_account = Account::new_ref(1, 0, &program_id);
+        let program_account = AccountSharedData::new_ref(1, 0, &program_id);
         let keyed_accounts = vec![KeyedAccount::new(&program_key, false, &program_account)];
         let instruction_data = bincode::serialize(&LoaderInstruction::Write {
             offset: 3,
@@ -1004,7 +1004,8 @@ mod tests {
         let mut elf = Vec::new();
         let rent = Rent::default();
         file.read_to_end(&mut elf).unwrap();
-        let program_account = Account::new_ref(rent.minimum_balance(elf.len()), 0, &program_id);
+        let program_account =
+            AccountSharedData::new_ref(rent.minimum_balance(elf.len()), 0, &program_id);
         program_account.borrow_mut().data = elf;
         let keyed_accounts = vec![KeyedAccount::new(&program_key, false, &program_account)];
         let instruction_data = bincode::serialize(&LoaderInstruction::Finalize).unwrap();
@@ -1069,7 +1070,7 @@ mod tests {
         let mut file = File::open("test_elfs/noop_aligned.so").expect("file open failed");
         let mut elf = Vec::new();
         file.read_to_end(&mut elf).unwrap();
-        let program_account = Account::new_ref(1, 0, &program_id);
+        let program_account = AccountSharedData::new_ref(1, 0, &program_id);
         program_account.borrow_mut().data = elf;
         program_account.borrow_mut().executable = true;
 
@@ -1098,7 +1099,7 @@ mod tests {
         keyed_accounts[0].account.borrow_mut().executable = true;
 
         // Case: With program and parameter account
-        let parameter_account = Account::new_ref(1, 0, &program_id);
+        let parameter_account = AccountSharedData::new_ref(1, 0, &program_id);
         keyed_accounts.push(KeyedAccount::new(&program_key, false, &parameter_account));
         assert_eq!(
             Ok(()),
@@ -1139,7 +1140,7 @@ mod tests {
 
         // Case: With duplicate accounts
         let duplicate_key = solana_sdk::pubkey::new_rand();
-        let parameter_account = Account::new_ref(1, 0, &program_id);
+        let parameter_account = AccountSharedData::new_ref(1, 0, &program_id);
         let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &program_account)];
         keyed_accounts.push(KeyedAccount::new(&duplicate_key, false, &parameter_account));
         keyed_accounts.push(KeyedAccount::new(&duplicate_key, false, &parameter_account));
@@ -1163,13 +1164,13 @@ mod tests {
         let mut file = File::open("test_elfs/noop_unaligned.so").expect("file open failed");
         let mut elf = Vec::new();
         file.read_to_end(&mut elf).unwrap();
-        let program_account = Account::new_ref(1, 0, &program_id);
+        let program_account = AccountSharedData::new_ref(1, 0, &program_id);
         program_account.borrow_mut().data = elf;
         program_account.borrow_mut().executable = true;
         let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &program_account)];
 
         // Case: With program and parameter account
-        let parameter_account = Account::new_ref(1, 0, &program_id);
+        let parameter_account = AccountSharedData::new_ref(1, 0, &program_id);
         keyed_accounts.push(KeyedAccount::new(&program_key, false, &parameter_account));
         assert_eq!(
             Ok(()),
@@ -1183,7 +1184,7 @@ mod tests {
 
         // Case: With duplicate accounts
         let duplicate_key = solana_sdk::pubkey::new_rand();
-        let parameter_account = Account::new_ref(1, 0, &program_id);
+        let parameter_account = AccountSharedData::new_ref(1, 0, &program_id);
         let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &program_account)];
         keyed_accounts.push(KeyedAccount::new(&duplicate_key, false, &parameter_account));
         keyed_accounts.push(KeyedAccount::new(&duplicate_key, false, &parameter_account));
@@ -1207,13 +1208,13 @@ mod tests {
         let mut file = File::open("test_elfs/noop_aligned.so").expect("file open failed");
         let mut elf = Vec::new();
         file.read_to_end(&mut elf).unwrap();
-        let program_account = Account::new_ref(1, 0, &program_id);
+        let program_account = AccountSharedData::new_ref(1, 0, &program_id);
         program_account.borrow_mut().data = elf;
         program_account.borrow_mut().executable = true;
         let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &program_account)];
 
         // Case: With program and parameter account
-        let parameter_account = Account::new_ref(1, 0, &program_id);
+        let parameter_account = AccountSharedData::new_ref(1, 0, &program_id);
         keyed_accounts.push(KeyedAccount::new(&program_key, false, &parameter_account));
         assert_eq!(
             Ok(()),
@@ -1227,7 +1228,7 @@ mod tests {
 
         // Case: With duplicate accounts
         let duplicate_key = solana_sdk::pubkey::new_rand();
-        let parameter_account = Account::new_ref(1, 0, &program_id);
+        let parameter_account = AccountSharedData::new_ref(1, 0, &program_id);
         let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &program_account)];
         keyed_accounts.push(KeyedAccount::new(&duplicate_key, false, &parameter_account));
         keyed_accounts.push(KeyedAccount::new(&duplicate_key, false, &parameter_account));
@@ -1247,13 +1248,13 @@ mod tests {
         let instruction =
             bincode::serialize(&UpgradeableLoaderInstruction::InitializeBuffer).unwrap();
         let buffer_address = Pubkey::new_unique();
-        let buffer_account = Account::new_ref(
+        let buffer_account = AccountSharedData::new_ref(
             1,
             UpgradeableLoaderState::buffer_len(9).unwrap(),
             &bpf_loader_upgradeable::id(),
         );
         let authority_address = Pubkey::new_unique();
-        let authority_account = Account::new_ref(
+        let authority_account = AccountSharedData::new_ref(
             1,
             UpgradeableLoaderState::buffer_len(9).unwrap(),
             &bpf_loader_upgradeable::id(),
@@ -1305,7 +1306,7 @@ mod tests {
     #[test]
     fn test_bpf_loader_upgradeable_write() {
         let buffer_address = Pubkey::new_unique();
-        let buffer_account = Account::new_ref(
+        let buffer_account = AccountSharedData::new_ref(
             1,
             UpgradeableLoaderState::buffer_len(9).unwrap(),
             &bpf_loader_upgradeable::id(),
@@ -1372,7 +1373,7 @@ mod tests {
             bytes: vec![42; 6],
         })
         .unwrap();
-        let buffer_account = Account::new_ref(
+        let buffer_account = AccountSharedData::new_ref(
             1,
             UpgradeableLoaderState::buffer_len(9).unwrap(),
             &bpf_loader_upgradeable::id(),
@@ -1564,7 +1565,7 @@ mod tests {
             UpgradeableLoaderState::programdata_len(elf.len()).unwrap(),
         );
         let buffer_address = Pubkey::new_unique();
-        let mut buffer_account = Account::new(
+        let mut buffer_account = AccountSharedData::new(
             min_programdata_balance,
             UpgradeableLoaderState::buffer_len(elf.len()).unwrap(),
             &bpf_loader_upgradeable::id(),
@@ -1576,12 +1577,12 @@ mod tests {
             .unwrap();
         buffer_account.data[UpgradeableLoaderState::buffer_data_offset().unwrap()..]
             .copy_from_slice(&elf);
-        let program_account = Account::new(
+        let program_account = AccountSharedData::new(
             min_programdata_balance,
             UpgradeableLoaderState::program_len().unwrap(),
             &bpf_loader_upgradeable::id(),
         );
-        let programdata_account = Account::new(
+        let programdata_account = AccountSharedData::new(
             1,
             UpgradeableLoaderState::programdata_len(elf.len()).unwrap(),
             &bpf_loader_upgradeable::id(),
@@ -1590,8 +1591,8 @@ mod tests {
         // Test successful deploy
         bank.clear_signatures();
         bank.store_account(&buffer_address, &buffer_account);
-        bank.store_account(&program_keypair.pubkey(), &Account::default());
-        bank.store_account(&programdata_address, &Account::default());
+        bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
+        bank.store_account(&programdata_address, &AccountSharedData::default());
         let before = bank.get_balance(&mint_keypair.pubkey());
         let message = Message::new(
             &bpf_loader_upgradeable::deploy_with_max_program_len(
@@ -1683,7 +1684,7 @@ mod tests {
         // Test initialized ProgramData account
         bank.clear_signatures();
         bank.store_account(&buffer_address, &buffer_account);
-        bank.store_account(&program_keypair.pubkey(), &Account::default());
+        bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
         let message = Message::new(
             &bpf_loader_upgradeable::deploy_with_max_program_len(
                 &mint_keypair.pubkey(),
@@ -1772,9 +1773,9 @@ mod tests {
 
         // Test invalid Buffer account state
         bank.clear_signatures();
-        bank.store_account(&buffer_address, &Account::default());
-        bank.store_account(&program_keypair.pubkey(), &Account::default());
-        bank.store_account(&programdata_address, &Account::default());
+        bank.store_account(&buffer_address, &AccountSharedData::default());
+        bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
+        bank.store_account(&programdata_address, &AccountSharedData::default());
         let message = Message::new(
             &bpf_loader_upgradeable::deploy_with_max_program_len(
                 &mint_keypair.pubkey(),
@@ -1801,8 +1802,8 @@ mod tests {
         // Test program account not rent exempt
         bank.clear_signatures();
         bank.store_account(&buffer_address, &buffer_account);
-        bank.store_account(&program_keypair.pubkey(), &Account::default());
-        bank.store_account(&programdata_address, &Account::default());
+        bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
+        bank.store_account(&programdata_address, &AccountSharedData::default());
         let message = Message::new(
             &bpf_loader_upgradeable::deploy_with_max_program_len(
                 &mint_keypair.pubkey(),
@@ -1829,8 +1830,8 @@ mod tests {
         // Test program account not rent exempt because data is larger than needed
         bank.clear_signatures();
         bank.store_account(&buffer_address, &buffer_account);
-        bank.store_account(&program_keypair.pubkey(), &Account::default());
-        bank.store_account(&programdata_address, &Account::default());
+        bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
+        bank.store_account(&programdata_address, &AccountSharedData::default());
         let mut instructions = bpf_loader_upgradeable::deploy_with_max_program_len(
             &mint_keypair.pubkey(),
             &program_keypair.pubkey(),
@@ -1862,8 +1863,8 @@ mod tests {
         // Test program account too small
         bank.clear_signatures();
         bank.store_account(&buffer_address, &buffer_account);
-        bank.store_account(&program_keypair.pubkey(), &Account::default());
-        bank.store_account(&programdata_address, &Account::default());
+        bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
+        bank.store_account(&programdata_address, &AccountSharedData::default());
         let mut instructions = bpf_loader_upgradeable::deploy_with_max_program_len(
             &mint_keypair.pubkey(),
             &program_keypair.pubkey(),
@@ -1896,11 +1897,11 @@ mod tests {
         bank.clear_signatures();
         bank.store_account(
             &mint_keypair.pubkey(),
-            &Account::new(min_program_balance, 0, &system_program::id()),
+            &AccountSharedData::new(min_program_balance, 0, &system_program::id()),
         );
         bank.store_account(&buffer_address, &buffer_account);
-        bank.store_account(&program_keypair.pubkey(), &Account::default());
-        bank.store_account(&programdata_address, &Account::default());
+        bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
+        bank.store_account(&programdata_address, &AccountSharedData::default());
         let message = Message::new(
             &bpf_loader_upgradeable::deploy_with_max_program_len(
                 &mint_keypair.pubkey(),
@@ -1925,14 +1926,14 @@ mod tests {
         );
         bank.store_account(
             &mint_keypair.pubkey(),
-            &Account::new(1_000_000_000, 0, &system_program::id()),
+            &AccountSharedData::new(1_000_000_000, 0, &system_program::id()),
         );
 
         // Test max_data_len
         bank.clear_signatures();
         bank.store_account(&buffer_address, &buffer_account);
-        bank.store_account(&program_keypair.pubkey(), &Account::default());
-        bank.store_account(&programdata_address, &Account::default());
+        bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
+        bank.store_account(&programdata_address, &AccountSharedData::default());
         let message = Message::new(
             &bpf_loader_upgradeable::deploy_with_max_program_len(
                 &mint_keypair.pubkey(),
@@ -1960,13 +1961,13 @@ mod tests {
         bank.clear_signatures();
         bank.store_account(
             &mint_keypair.pubkey(),
-            &Account::new(u64::MAX / 2, 0, &system_program::id()),
+            &AccountSharedData::new(u64::MAX / 2, 0, &system_program::id()),
         );
         let mut modified_buffer_account = buffer_account.clone();
         modified_buffer_account.lamports = u64::MAX / 2;
         bank.store_account(&buffer_address, &modified_buffer_account);
-        bank.store_account(&program_keypair.pubkey(), &Account::default());
-        bank.store_account(&programdata_address, &Account::default());
+        bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
+        bank.store_account(&programdata_address, &AccountSharedData::default());
         let message = Message::new(
             &bpf_loader_upgradeable::deploy_with_max_program_len(
                 &mint_keypair.pubkey(),
@@ -1993,8 +1994,8 @@ mod tests {
         // Test not the system account
         bank.clear_signatures();
         bank.store_account(&buffer_address, &buffer_account);
-        bank.store_account(&program_keypair.pubkey(), &Account::default());
-        bank.store_account(&programdata_address, &Account::default());
+        bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
+        bank.store_account(&programdata_address, &AccountSharedData::default());
         let mut instructions = bpf_loader_upgradeable::deploy_with_max_program_len(
             &mint_keypair.pubkey(),
             &program_keypair.pubkey(),
@@ -2024,8 +2025,8 @@ mod tests {
             .data
             .truncate(UpgradeableLoaderState::buffer_len(1).unwrap());
         bank.store_account(&buffer_address, &modified_buffer_account);
-        bank.store_account(&program_keypair.pubkey(), &Account::default());
-        bank.store_account(&programdata_address, &Account::default());
+        bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
+        bank.store_account(&programdata_address, &AccountSharedData::default());
         let message = Message::new(
             &bpf_loader_upgradeable::deploy_with_max_program_len(
                 &mint_keypair.pubkey(),
@@ -2051,7 +2052,7 @@ mod tests {
 
         // Test small buffer account
         bank.clear_signatures();
-        let mut modified_buffer_account = Account::new(
+        let mut modified_buffer_account = AccountSharedData::new(
             min_programdata_balance,
             UpgradeableLoaderState::buffer_len(elf.len()).unwrap(),
             &bpf_loader_upgradeable::id(),
@@ -2065,8 +2066,8 @@ mod tests {
             .copy_from_slice(&elf);
         modified_buffer_account.data.truncate(5);
         bank.store_account(&buffer_address, &modified_buffer_account);
-        bank.store_account(&program_keypair.pubkey(), &Account::default());
-        bank.store_account(&programdata_address, &Account::default());
+        bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
+        bank.store_account(&programdata_address, &AccountSharedData::default());
         let message = Message::new(
             &bpf_loader_upgradeable::deploy_with_max_program_len(
                 &mint_keypair.pubkey(),
@@ -2092,7 +2093,7 @@ mod tests {
 
         // Mismatched buffer and program authority
         bank.clear_signatures();
-        let mut modified_buffer_account = Account::new(
+        let mut modified_buffer_account = AccountSharedData::new(
             min_programdata_balance,
             UpgradeableLoaderState::buffer_len(elf.len()).unwrap(),
             &bpf_loader_upgradeable::id(),
@@ -2105,8 +2106,8 @@ mod tests {
         modified_buffer_account.data[UpgradeableLoaderState::buffer_data_offset().unwrap()..]
             .copy_from_slice(&elf);
         bank.store_account(&buffer_address, &modified_buffer_account);
-        bank.store_account(&program_keypair.pubkey(), &Account::default());
-        bank.store_account(&programdata_address, &Account::default());
+        bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
+        bank.store_account(&programdata_address, &AccountSharedData::default());
         let message = Message::new(
             &bpf_loader_upgradeable::deploy_with_max_program_len(
                 &mint_keypair.pubkey(),
@@ -2132,7 +2133,7 @@ mod tests {
 
         // Deploy buffer with mismatched None authority
         bank.clear_signatures();
-        let mut modified_buffer_account = Account::new(
+        let mut modified_buffer_account = AccountSharedData::new(
             min_programdata_balance,
             UpgradeableLoaderState::buffer_len(elf.len()).unwrap(),
             &bpf_loader_upgradeable::id(),
@@ -2145,8 +2146,8 @@ mod tests {
         modified_buffer_account.data[UpgradeableLoaderState::buffer_data_offset().unwrap()..]
             .copy_from_slice(&elf);
         bank.store_account(&buffer_address, &modified_buffer_account);
-        bank.store_account(&program_keypair.pubkey(), &Account::default());
-        bank.store_account(&programdata_address, &Account::default());
+        bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
+        bank.store_account(&programdata_address, &AccountSharedData::default());
         let message = Message::new(
             &bpf_loader_upgradeable::deploy_with_max_program_len(
                 &mint_keypair.pubkey(),
@@ -2202,7 +2203,7 @@ mod tests {
         let (programdata_address, _) =
             Pubkey::find_program_address(&[program_address.as_ref()], &id());
         let spill_address = Pubkey::new_unique();
-        let upgrade_authority_account = Account::new_ref(1, 0, &Pubkey::new_unique());
+        let upgrade_authority_account = AccountSharedData::new_ref(1, 0, &Pubkey::new_unique());
 
         #[allow(clippy::type_complexity)]
         fn get_accounts(
@@ -2215,12 +2216,12 @@ mod tests {
             min_program_balance: u64,
             min_programdata_balance: u64,
         ) -> (
-            Rc<RefCell<Account>>,
-            Rc<RefCell<Account>>,
-            Rc<RefCell<Account>>,
-            Rc<RefCell<Account>>,
+            Rc<RefCell<AccountSharedData>>,
+            Rc<RefCell<AccountSharedData>>,
+            Rc<RefCell<AccountSharedData>>,
+            Rc<RefCell<AccountSharedData>>,
         ) {
-            let buffer_account = Account::new_ref(
+            let buffer_account = AccountSharedData::new_ref(
                 1,
                 UpgradeableLoaderState::buffer_len(elf_new.len()).unwrap(),
                 &bpf_loader_upgradeable::id(),
@@ -2234,7 +2235,7 @@ mod tests {
             buffer_account.borrow_mut().data
                 [UpgradeableLoaderState::buffer_data_offset().unwrap()..]
                 .copy_from_slice(&elf_new);
-            let programdata_account = Account::new_ref(
+            let programdata_account = AccountSharedData::new_ref(
                 min_programdata_balance,
                 UpgradeableLoaderState::programdata_len(elf_orig.len().max(elf_new.len())).unwrap(),
                 &bpf_loader_upgradeable::id(),
@@ -2246,7 +2247,7 @@ mod tests {
                     upgrade_authority_address: Some(*upgrade_authority_address),
                 })
                 .unwrap();
-            let program_account = Account::new_ref(
+            let program_account = AccountSharedData::new_ref(
                 min_program_balance,
                 UpgradeableLoaderState::program_len().unwrap(),
                 &bpf_loader_upgradeable::id(),
@@ -2258,7 +2259,7 @@ mod tests {
                     programdata_address: *programdata_address,
                 })
                 .unwrap();
-            let spill_account = Account::new_ref(0, 0, &Pubkey::new_unique());
+            let spill_account = AccountSharedData::new_ref(0, 0, &Pubkey::new_unique());
 
             (
                 buffer_account,
@@ -2648,7 +2649,7 @@ mod tests {
             min_program_balance,
             min_programdata_balance,
         );
-        let buffer_account = Account::new_ref(
+        let buffer_account = AccountSharedData::new_ref(
             1,
             UpgradeableLoaderState::buffer_len(elf_orig.len().max(elf_new.len()) + 1).unwrap(),
             &bpf_loader_upgradeable::id(),
@@ -2845,13 +2846,13 @@ mod tests {
         let instruction = bincode::serialize(&UpgradeableLoaderInstruction::SetAuthority).unwrap();
         let slot = 0;
         let upgrade_authority_address = Pubkey::new_unique();
-        let upgrade_authority_account = Account::new_ref(1, 0, &Pubkey::new_unique());
+        let upgrade_authority_account = AccountSharedData::new_ref(1, 0, &Pubkey::new_unique());
         let new_upgrade_authority_address = Pubkey::new_unique();
-        let new_upgrade_authority_account = Account::new_ref(1, 0, &Pubkey::new_unique());
+        let new_upgrade_authority_account = AccountSharedData::new_ref(1, 0, &Pubkey::new_unique());
         let program_address = Pubkey::new_unique();
         let (programdata_address, _) =
             Pubkey::find_program_address(&[program_address.as_ref()], &id());
-        let programdata_account = Account::new_ref(
+        let programdata_account = AccountSharedData::new_ref(
             1,
             UpgradeableLoaderState::programdata_len(0).unwrap(),
             &bpf_loader_upgradeable::id(),
@@ -3037,11 +3038,11 @@ mod tests {
     fn test_bpf_loader_upgradeable_set_buffer_authority() {
         let instruction = bincode::serialize(&UpgradeableLoaderInstruction::SetAuthority).unwrap();
         let authority_address = Pubkey::new_unique();
-        let authority_account = Account::new_ref(1, 0, &Pubkey::new_unique());
+        let authority_account = AccountSharedData::new_ref(1, 0, &Pubkey::new_unique());
         let new_authority_address = Pubkey::new_unique();
-        let new_authority_account = Account::new_ref(1, 0, &Pubkey::new_unique());
+        let new_authority_account = AccountSharedData::new_ref(1, 0, &Pubkey::new_unique());
         let buffer_address = Pubkey::new_unique();
-        let buffer_account = Account::new_ref(
+        let buffer_account = AccountSharedData::new_ref(
             1,
             UpgradeableLoaderState::buffer_len(0).unwrap(),
             &bpf_loader_upgradeable::id(),
@@ -3264,11 +3265,11 @@ mod tests {
             0..elf.len(),
             0..255,
             |bytes: &mut [u8]| {
-                let program_account = Account::new_ref(1, 0, &program_id);
+                let program_account = AccountSharedData::new_ref(1, 0, &program_id);
                 program_account.borrow_mut().data = bytes.to_vec();
                 program_account.borrow_mut().executable = true;
 
-                let parameter_account = Account::new_ref(1, 0, &program_id);
+                let parameter_account = AccountSharedData::new_ref(1, 0, &program_id);
                 let keyed_accounts = vec![
                     KeyedAccount::new(&program_key, false, &program_account),
                     KeyedAccount::new(&program_key, false, &parameter_account),

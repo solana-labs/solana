@@ -19,6 +19,7 @@ use solana_runtime::genesis_utils::{
 };
 use solana_sdk::{
     account::Account,
+    account::AccountSharedData,
     client::SyncClient,
     clock::{DEFAULT_DEV_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
     commitment_config::CommitmentConfig,
@@ -69,7 +70,7 @@ pub struct ClusterConfig {
     pub native_instruction_processors: Vec<(String, Pubkey)>,
     pub cluster_type: ClusterType,
     pub poh_config: PohConfig,
-    pub additional_accounts: Vec<(Pubkey, Account)>,
+    pub additional_accounts: Vec<(Pubkey, AccountSharedData)>,
 }
 
 impl Default for ClusterConfig {
@@ -169,9 +170,12 @@ impl LocalCluster {
             stakes_in_genesis,
             config.cluster_type,
         );
-        genesis_config
-            .accounts
-            .extend(config.additional_accounts.drain(..));
+        genesis_config.accounts.extend(
+            config
+                .additional_accounts
+                .drain(..)
+                .map(|(key, account)| (key, Account::from(account))),
+        );
         genesis_config.ticks_per_slot = config.ticks_per_slot;
         genesis_config.epoch_schedule = EpochSchedule::custom(
             config.slots_per_epoch,
@@ -558,9 +562,14 @@ impl LocalCluster {
         }
         info!("Checking for vote account registration of {}", node_pubkey);
         match (
-            client
-                .get_account_with_commitment(&stake_account_pubkey, CommitmentConfig::processed()),
-            client.get_account_with_commitment(&vote_account_pubkey, CommitmentConfig::processed()),
+            client.get_account_with_commitment(
+                &stake_account_pubkey,
+                CommitmentConfig::processed(),
+            ),
+            client.get_account_with_commitment(
+                &vote_account_pubkey,
+                CommitmentConfig::processed(),
+            ),
         ) {
             (Ok(Some(stake_account)), Ok(Some(vote_account))) => {
                 match (

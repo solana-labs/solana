@@ -3,7 +3,7 @@ use rand::{thread_rng, Rng};
 use rayon::prelude::*;
 use solana_runtime::{accounts_db::AccountsDb, accounts_index::Ancestors};
 use solana_sdk::genesis_config::ClusterType;
-use solana_sdk::{account::Account, clock::Slot, pubkey::Pubkey};
+use solana_sdk::{account::AccountSharedData, clock::Slot, pubkey::Pubkey};
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -37,7 +37,7 @@ fn test_shrink_and_clean() {
             while alive_accounts.len() <= 10 {
                 alive_accounts.push((
                     solana_sdk::pubkey::new_rand(),
-                    Account::new(thread_rng().gen_range(0, 50), 0, &owner),
+                    AccountSharedData::new(thread_rng().gen_range(0, 50), 0, &owner),
                 ));
             }
 
@@ -78,7 +78,7 @@ fn test_bad_bank_hash() {
             let key = Keypair::new().pubkey();
             let lamports = thread_rng().gen_range(0, 100);
             let some_data_len = thread_rng().gen_range(0, 1000);
-            let account = Account::new(lamports, some_data_len, &key);
+            let account = AccountSharedData::new(lamports, some_data_len, &key);
             (key, account)
         })
         .collect();

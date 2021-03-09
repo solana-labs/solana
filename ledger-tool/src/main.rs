@@ -31,7 +31,7 @@ use solana_runtime::{
     snapshot_utils::SnapshotVersion,
 };
 use solana_sdk::{
-    account::Account,
+    account::AccountSharedData,
     clock::{Epoch, Slot},
     feature::{self, Feature},
     feature_set,
@@ -1876,7 +1876,7 @@ fn main() {
                     if let Some(faucet_pubkey) = faucet_pubkey {
                         bank.store_account(
                             &faucet_pubkey,
-                            &Account::new(faucet_lamports, 0, &system_program::id()),
+                            &AccountSharedData::new(faucet_lamports, 0, &system_program::id()),
                         );
                     }
 
@@ -1936,7 +1936,7 @@ fn main() {
 
                             bank.store_account(
                                 identity_pubkey,
-                                &Account::new(
+                                &AccountSharedData::new(
                                     bootstrap_validator_lamports,
                                     0,
                                     &system_program::id(),
@@ -2253,7 +2253,7 @@ fn main() {
                                     // capitalizaion, which doesn't affect inflation behavior!
                                     base_bank.store_account(
                                         &feature_set::secp256k1_program_enabled::id(),
-                                        &Account::default(),
+                                        &AccountSharedData::default(),
                                     );
                                     force_enabled_count -= 1;
                                 } else {
@@ -2270,7 +2270,7 @@ fn main() {
                                     // capitalizaion, which doesn't affect inflation behavior!
                                     base_bank.store_account(
                                         &feature_set::instructions_sysvar_enabled::id(),
-                                        &Account::default(),
+                                        &AccountSharedData::default(),
                                     );
                                     force_enabled_count -= 1;
                                 } else {

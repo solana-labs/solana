@@ -1,4 +1,4 @@
-use solana_sdk::{account::Account, pubkey::Pubkey, rent::Rent};
+use solana_sdk::{account::AccountSharedData, pubkey::Pubkey, rent::Rent};
 
 mod spl_token {
     solana_sdk::declare_id!("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
@@ -29,13 +29,13 @@ static SPL_PROGRAMS: &[(Pubkey, &[u8])] = &[
     ),
 ];
 
-pub fn spl_programs(rent: &Rent) -> Vec<(Pubkey, Account)> {
+pub fn spl_programs(rent: &Rent) -> Vec<(Pubkey, AccountSharedData)> {
     SPL_PROGRAMS
         .iter()
         .map(|(program_id, elf)| {
             (
                 *program_id,
-                Account {
+                AccountSharedData {
                     lamports: rent.minimum_balance(elf.len()).min(1),
                     data: elf.to_vec(),
                     owner: solana_program::bpf_loader::id(),

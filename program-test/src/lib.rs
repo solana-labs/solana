@@ -20,7 +20,7 @@ use {
         genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
     },
     solana_sdk::{
-        account::Account,
+        account::AccountSharedData,
         clock::Slot,
         genesis_config::GenesisConfig,
         keyed_account::KeyedAccount,
@@ -111,7 +111,7 @@ pub fn builtin_process_instruction(
     set_invoke_context(invoke_context);
 
     // Copy all the accounts into a HashMap to ensure there are no duplicates
-    let mut accounts: HashMap<Pubkey, Account> = keyed_accounts
+    let mut accounts: HashMap<Pubkey, AccountSharedData> = keyed_accounts
         .iter()
         .map(|ka| (*ka.unsigned_key(), ka.account.borrow().clone()))
         .collect();
@@ -238,8 +238,8 @@ impl program_stubs::SyscallStubs for SyscallStubs {
 
         stable_log::program_invoke(&logger, &program_id, invoke_context.invoke_depth());
 
-        fn ai_to_a(ai: &AccountInfo) -> Account {
-            Account {
+        fn ai_to_a(ai: &AccountInfo) -> AccountSharedData {
+            AccountSharedData {
                 lamports: ai.lamports(),
                 data: ai.try_borrow_data().unwrap().to_vec(),
                 owner: *ai.owner,
@@ -409,7 +409,7 @@ fn setup_fee_calculator(bank: Bank) -> Bank {
 }
 
 pub struct ProgramTest {
-    accounts: Vec<(Pubkey, Account)>,
+    accounts: Vec<(Pubkey, AccountSharedData)>,
     builtins: Vec<Builtin>,
     bpf_compute_max_units: Option<u64>,
     prefer_bpf: bool,
@@ -468,7 +468,7 @@ impl ProgramTest {
     }
 
     /// Add an account to the test environment
-    pub fn add_account(&mut self, address: Pubkey, account: Account) {
+    pub fn add_account(&mut self, address: Pubkey, account: AccountSharedData) {
         self.accounts.push((address, account));
     }
 
@@ -482,7 +482,7 @@ impl ProgramTest {
     ) {
         self.add_account(
             address,
-            Account {
+            AccountSharedData {
                 lamports,
                 data: read_file(find_file(filename).unwrap_or_else(|| {
                     panic!("Unable to locate {}", filename);
@@ -505,7 +505,7 @@ impl ProgramTest {
     ) {
         self.add_account(
             address,
-            Account {
+            AccountSharedData {
                 lamports,
                 data: base64::decode(data_base64)
                     .unwrap_or_else(|err| panic!("Failed to base64 decode: {}", err)),
@@ -568,7 +568,7 @@ impl ProgramTest {
 
             self.add_account(
                 program_id,
-                Account {
+                AccountSharedData {
                     lamports: Rent::default().minimum_balance(data.len()).min(1),
                     data,
                     owner: loader,
