@@ -1,5 +1,5 @@
 use dashmap::DashMap;
-use solana_sdk::{account::Account, clock::Slot, hash::Hash, pubkey::Pubkey};
+use solana_sdk::{account::AccountSharedData, clock::Slot, hash::Hash, pubkey::Pubkey};
 use std::{
     collections::BTreeSet,
     ops::Deref,
@@ -42,7 +42,7 @@ impl SlotCacheInner {
         );
     }
 
-    pub fn insert(&self, pubkey: &Pubkey, account: Account, hash: Hash) {
+    pub fn insert(&self, pubkey: &Pubkey, account: AccountSharedData, hash: Hash) {
         if self.cache.contains_key(pubkey) {
             self.same_account_writes.fetch_add(1, Ordering::Relaxed);
             self.same_account_writes_size
@@ -86,7 +86,7 @@ impl Deref for SlotCacheInner {
 
 #[derive(Debug, Clone)]
 pub struct CachedAccount {
-    pub account: Account,
+    pub account: AccountSharedData,
     pub hash: Hash,
 }
 
@@ -123,7 +123,7 @@ impl AccountsCache {
         );
     }
 
-    pub fn store(&self, slot: Slot, pubkey: &Pubkey, account: Account, hash: Hash) {
+    pub fn store(&self, slot: Slot, pubkey: &Pubkey, account: AccountSharedData, hash: Hash) {
         let slot_cache = self.slot_cache(slot).unwrap_or_else(||
             // DashMap entry.or_insert() returns a RefMut, essentially a write lock,
             // which is dropped after this block ends, minimizing time held by the lock.
@@ -235,7 +235,7 @@ pub mod tests {
         cache.store(
             inserted_slot,
             &Pubkey::new_unique(),
-            Account::new(1, 0, &Pubkey::default()),
+            AccountSharedData::new(1, 0, &Pubkey::default()),
             Hash::default(),
         );
         // If the cache is told the size limit is 0, it should return the one slot
@@ -253,7 +253,7 @@ pub mod tests {
         cache.store(
             inserted_slot,
             &Pubkey::new_unique(),
-            Account::new(1, 0, &Pubkey::default()),
+            AccountSharedData::new(1, 0, &Pubkey::default()),
             Hash::default(),
         );
 

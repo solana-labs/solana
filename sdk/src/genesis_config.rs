@@ -4,6 +4,7 @@
 
 use crate::{
     account::Account,
+    account::AccountSharedData,
     clock::{UnixTimestamp, DEFAULT_TICKS_PER_SLOT},
     epoch_schedule::EpochSchedule,
     fee_calculator::FeeRateGovernor,
@@ -98,7 +99,7 @@ pub fn create_genesis_config(lamports: u64) -> (GenesisConfig, Keypair) {
         GenesisConfig::new(
             &[(
                 faucet_keypair.pubkey(),
-                Account::new(lamports, 0, &system_program::id()),
+                AccountSharedData::new(lamports, 0, &system_program::id()),
             )],
             &[],
         ),
@@ -131,13 +132,14 @@ impl Default for GenesisConfig {
 
 impl GenesisConfig {
     pub fn new(
-        accounts: &[(Pubkey, Account)],
+        accounts: &[(Pubkey, AccountSharedData)],
         native_instruction_processors: &[(String, Pubkey)],
     ) -> Self {
         Self {
             accounts: accounts
                 .iter()
                 .cloned()
+                .map(|(key, account)| (key, Account::from(account)))
                 .collect::<BTreeMap<Pubkey, Account>>(),
             native_instruction_processors: native_instruction_processors.to_vec(),
             ..GenesisConfig::default()
@@ -201,8 +203,8 @@ impl GenesisConfig {
         file.write_all(&serialized)
     }
 
-    pub fn add_account(&mut self, pubkey: Pubkey, account: Account) {
-        self.accounts.insert(pubkey, account);
+    pub fn add_account(&mut self, pubkey: Pubkey, account: AccountSharedData) {
+        self.accounts.insert(pubkey, Account::from(account));
     }
 
     pub fn add_native_instruction_processor(&mut self, name: String, program_id: Pubkey) {
@@ -318,11 +320,11 @@ mod tests {
         let mut config = GenesisConfig::default();
         config.add_account(
             faucet_keypair.pubkey(),
-            Account::new(10_000, 0, &Pubkey::default()),
+            AccountSharedData::new(10_000, 0, &Pubkey::default()),
         );
         config.add_account(
             solana_sdk::pubkey::new_rand(),
-            Account::new(1, 0, &Pubkey::default()),
+            AccountSharedData::new(1, 0, &Pubkey::default()),
         );
         config.add_native_instruction_processor("hi".to_string(), solana_sdk::pubkey::new_rand());
 

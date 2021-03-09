@@ -22,7 +22,7 @@ use solana_runtime::{
     },
 };
 use solana_sdk::{
-    account::Account,
+    account::AccountSharedData,
     bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
     client::SyncClient,
     clock::{DEFAULT_SLOTS_PER_EPOCH, MAX_PROCESSING_AGE},
@@ -544,10 +544,10 @@ fn test_program_bpf_duplicate_accounts() {
         let bank = Arc::new(bank);
         let bank_client = BankClient::new_shared(&bank);
         let program_id = load_bpf_program(&bank_client, &bpf_loader::id(), &mint_keypair, program);
-        let payee_account = Account::new(10, 1, &program_id);
+        let payee_account = AccountSharedData::new(10, 1, &program_id);
         let payee_pubkey = solana_sdk::pubkey::new_rand();
         bank.store_account(&payee_pubkey, &payee_account);
-        let account = Account::new(10, 1, &program_id);
+        let account = AccountSharedData::new(10, 1, &program_id);
 
         let pubkey = solana_sdk::pubkey::new_rand();
         let account_metas = vec![
@@ -780,15 +780,15 @@ fn test_program_bpf_invoke_sanity() {
             load_bpf_program(&bank_client, &bpf_loader::id(), &mint_keypair, program.3);
 
         let argument_keypair = Keypair::new();
-        let account = Account::new(42, 100, &invoke_program_id);
+        let account = AccountSharedData::new(42, 100, &invoke_program_id);
         bank.store_account(&argument_keypair.pubkey(), &account);
 
         let invoked_argument_keypair = Keypair::new();
-        let account = Account::new(10, 10, &invoked_program_id);
+        let account = AccountSharedData::new(10, 10, &invoked_program_id);
         bank.store_account(&invoked_argument_keypair.pubkey(), &account);
 
         let from_keypair = Keypair::new();
-        let account = Account::new(84, 0, &solana_sdk::system_program::id());
+        let account = AccountSharedData::new(84, 0, &solana_sdk::system_program::id());
         bank.store_account(&from_keypair.pubkey(), &account);
 
         let (derived_key1, bump_seed1) =
@@ -996,9 +996,9 @@ fn test_program_bpf_invoke_sanity() {
         }
 
         // Attempt to realloc into unauthorized address space
-        let account = Account::new(84, 0, &solana_sdk::system_program::id());
+        let account = AccountSharedData::new(84, 0, &solana_sdk::system_program::id());
         bank.store_account(&from_keypair.pubkey(), &account);
-        bank.store_account(&derived_key1, &Account::default());
+        bank.store_account(&derived_key1, &AccountSharedData::default());
         let instruction = Instruction::new_with_bytes(
             invoke_program_id,
             &[
@@ -1061,11 +1061,11 @@ fn test_program_bpf_program_id_spoofing() {
     );
 
     let from_pubkey = Pubkey::new_unique();
-    let account = Account::new(10, 0, &solana_sdk::system_program::id());
+    let account = AccountSharedData::new(10, 0, &solana_sdk::system_program::id());
     bank.store_account(&from_pubkey, &account);
 
     let to_pubkey = Pubkey::new_unique();
-    let account = Account::new(0, 0, &solana_sdk::system_program::id());
+    let account = AccountSharedData::new(0, 0, &solana_sdk::system_program::id());
     bank.store_account(&to_pubkey, &account);
 
     let account_metas = vec![
@@ -1148,7 +1148,7 @@ fn test_program_bpf_ro_modify() {
     );
 
     let test_keypair = Keypair::new();
-    let account = Account::new(10, 0, &solana_sdk::system_program::id());
+    let account = AccountSharedData::new(10, 0, &solana_sdk::system_program::id());
     bank.store_account(&test_keypair.pubkey(), &account);
 
     let account_metas = vec![
@@ -1261,7 +1261,7 @@ fn assert_instruction_count() {
         println!("Test program: {:?}", program.0);
         let program_id = solana_sdk::pubkey::new_rand();
         let key = solana_sdk::pubkey::new_rand();
-        let mut account = RefCell::new(Account::default());
+        let mut account = RefCell::new(AccountSharedData::default());
         let parameter_accounts = vec![KeyedAccount::new(&key, false, &mut account)];
         let count = run_program(program.0, &program_id, &parameter_accounts[..], &[]).unwrap();
         println!("  {} : {:?} ({:?})", program.0, count, program.1,);

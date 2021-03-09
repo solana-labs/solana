@@ -11,7 +11,7 @@ use solana_runtime::{
     bank::*,
 };
 use solana_sdk::{
-    account::Account,
+    account::AccountSharedData,
     genesis_config::{create_genesis_config, ClusterType},
     hash::Hash,
     pubkey::Pubkey,
@@ -27,7 +27,8 @@ use test::Bencher;
 fn deposit_many(bank: &Bank, pubkeys: &mut Vec<Pubkey>, num: usize) {
     for t in 0..num {
         let pubkey = solana_sdk::pubkey::new_rand();
-        let account = Account::new((t + 1) as u64, 0, &Account::default().owner);
+        let account =
+            AccountSharedData::new((t + 1) as u64, 0, &AccountSharedData::default().owner);
         pubkeys.push(pubkey);
         assert!(bank.get_account(&pubkey).is_none());
         bank.deposit(&pubkey, (t + 1) as u64);
@@ -157,10 +158,11 @@ fn bench_delete_dependencies(bencher: &mut Bencher) {
         false,
     );
     let mut old_pubkey = Pubkey::default();
-    let zero_account = Account::new(0, 0, &Account::default().owner);
+    let zero_account = AccountSharedData::new(0, 0, &AccountSharedData::default().owner);
     for i in 0..1000 {
         let pubkey = solana_sdk::pubkey::new_rand();
-        let account = Account::new((i + 1) as u64, 0, &Account::default().owner);
+        let account =
+            AccountSharedData::new((i + 1) as u64, 0, &AccountSharedData::default().owner);
         accounts.store_slow_uncached(i, &pubkey, &account);
         accounts.store_slow_uncached(i, &old_pubkey, &zero_account);
         old_pubkey = pubkey;
@@ -195,7 +197,7 @@ fn store_accounts_with_possible_contention<F: 'static>(
         (0..num_keys)
             .map(|_| {
                 let pubkey = solana_sdk::pubkey::new_rand();
-                let account = Account::new(1, 0, &Account::default().owner);
+                let account = AccountSharedData::new(1, 0, &AccountSharedData::default().owner);
                 accounts.store_slow_uncached(slot, &pubkey, &account);
                 pubkey
             })
@@ -215,7 +217,7 @@ fn store_accounts_with_possible_contention<F: 'static>(
 
     let num_new_keys = 1000;
     let new_accounts: Vec<_> = (0..num_new_keys)
-        .map(|_| Account::new(1, 0, &Account::default().owner))
+        .map(|_| AccountSharedData::new(1, 0, &AccountSharedData::default().owner))
         .collect();
     bencher.iter(|| {
         for account in &new_accounts {
@@ -247,7 +249,9 @@ fn bench_concurrent_read_write(bencher: &mut Bencher) {
 #[ignore]
 fn bench_concurrent_scan_write(bencher: &mut Bencher) {
     store_accounts_with_possible_contention("concurrent_scan_write", bencher, |accounts, _| loop {
-        test::black_box(accounts.load_by_program(&HashMap::new(), &Account::default().owner));
+        test::black_box(
+            accounts.load_by_program(&HashMap::new(), &AccountSharedData::default().owner),
+        );
     })
 }
 
@@ -301,7 +305,7 @@ fn bench_rwlock_hashmap_single_reader_with_n_writers(bencher: &mut Bencher) {
     })
 }
 
-fn setup_bench_dashmap_iter() -> (Arc<Accounts>, DashMap<Pubkey, (Account, Hash)>) {
+fn setup_bench_dashmap_iter() -> (Arc<Accounts>, DashMap<Pubkey, (AccountSharedData, Hash)>) {
     let accounts = Arc::new(Accounts::new_with_config(
         vec![
             PathBuf::from(std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string()))
@@ -320,7 +324,7 @@ fn setup_bench_dashmap_iter() -> (Arc<Accounts>, DashMap<Pubkey, (Account, Hash)
         dashmap.insert(
             Pubkey::new_unique(),
             (
-                Account::new(1, 0, &Account::default().owner),
+                AccountSharedData::new(1, 0, &AccountSharedData::default().owner),
                 Hash::new_unique(),
             ),
         );

@@ -5,7 +5,7 @@ use log::*;
 use memmap2::MmapMut;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{
-    account::Account,
+    account::AccountSharedData,
     clock::{Epoch, Slot},
     hash::Hash,
     pubkey::Pubkey,
@@ -57,8 +57,8 @@ pub struct AccountMeta {
     pub rent_epoch: Epoch,
 }
 
-impl<'a> From<&'a Account> for AccountMeta {
-    fn from(account: &'a Account) -> Self {
+impl<'a> From<&'a AccountSharedData> for AccountMeta {
+    fn from(account: &'a AccountSharedData) -> Self {
         Self {
             lamports: account.lamports,
             owner: account.owner,
@@ -83,8 +83,8 @@ pub struct StoredAccountMeta<'a> {
 
 impl<'a> StoredAccountMeta<'a> {
     /// Return a new Account by copying all the data referenced by the `StoredAccountMeta`.
-    pub fn clone_account(&self) -> Account {
-        Account {
+    pub fn clone_account(&self) -> AccountSharedData {
+        AccountSharedData {
             lamports: self.account_meta.lamports,
             owner: self.account_meta.owner,
             executable: self.account_meta.executable,
@@ -103,8 +103,8 @@ impl<'a> StoredAccountMeta<'a> {
     }
 
     fn sanitize_lamports(&self) -> bool {
-        // Sanitize 0 lamports to ensure to be same as Account::default()
-        self.account_meta.lamports != 0 || self.clone_account() == Account::default()
+        // Sanitize 0 lamports to ensure to be same as AccountSharedData::default()
+        self.account_meta.lamports != 0 || self.clone_account() == AccountSharedData::default()
     }
 
     fn ref_executable_byte(&self) -> &u8 {
@@ -431,7 +431,7 @@ impl AppendVec {
             next,
         ))
     }
-    pub fn get_account_test(&self, offset: usize) -> Option<(StoredMeta, Account)> {
+    pub fn get_account_test(&self, offset: usize) -> Option<(StoredMeta, AccountSharedData)> {
         let (stored_account, _) = self.get_account(offset)?;
         let meta = stored_account.meta.clone();
         Some((meta, stored_account.clone_account()))
@@ -457,7 +457,7 @@ impl AppendVec {
     /// and will be available to other threads.
     pub fn append_accounts(
         &self,
-        accounts: &[(StoredMeta, &Account)],
+        accounts: &[(StoredMeta, &AccountSharedData)],
         hashes: &[Hash],
     ) -> Vec<usize> {
         let _lock = self.append_lock.lock().unwrap();
@@ -496,7 +496,7 @@ impl AppendVec {
     pub fn append_account(
         &self,
         storage_meta: StoredMeta,
-        account: &Account,
+        account: &AccountSharedData,
         hash: Hash,
     ) -> Option<usize> {
         let res = self.append_accounts(&[(storage_meta, account)], &[hash]);
@@ -512,7 +512,7 @@ pub mod test_utils {
     use super::StoredMeta;
     use rand::distributions::Alphanumeric;
     use rand::{thread_rng, Rng};
-    use solana_sdk::account::Account;
+    use solana_sdk::account::AccountSharedData;
     use solana_sdk::pubkey::Pubkey;
     use std::fs::create_dir_all;
     use std::path::PathBuf;
@@ -543,9 +543,9 @@ pub mod test_utils {
         TempFile { path: buf }
     }
 
-    pub fn create_test_account(sample: usize) -> (StoredMeta, Account) {
+    pub fn create_test_account(sample: usize) -> (StoredMeta, AccountSharedData) {
         let data_len = sample % 256;
-        let mut account = Account::new(sample as u64, 0, &Pubkey::default());
+        let mut account = AccountSharedData::new(sample as u64, 0, &Pubkey::default());
         account.data = (0..data_len).map(|_| data_len as u8).collect();
         let stored_meta = StoredMeta {
             write_version: 0,
@@ -566,7 +566,7 @@ pub mod tests {
     use std::time::Instant;
 
     impl AppendVec {
-        fn append_account_test(&self, data: &(StoredMeta, Account)) -> Option<usize> {
+        fn append_account_test(&self, data: &(StoredMeta, AccountSharedData)) -> Option<usize> {
             self.append_account(data.0.clone(), &data.1, Hash::default())
         }
     }
@@ -740,7 +740,7 @@ pub mod tests {
         let pubkey = solana_sdk::pubkey::new_rand();
         let owner = Pubkey::default();
         let data_len = 3_u64;
-        let mut account = Account::new(0, data_len as usize, &owner);
+        let mut account = AccountSharedData::new(0, data_len as usize, &owner);
         account.data = b"abc".to_vec();
         let stored_meta = StoredMeta {
             write_version: 0,

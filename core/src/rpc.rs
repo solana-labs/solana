@@ -49,7 +49,7 @@ use solana_runtime::{
     snapshot_utils::get_highest_snapshot_archive_path,
 };
 use solana_sdk::{
-    account::Account,
+    account::AccountSharedData,
     account_utils::StateMut,
     clock::{Slot, UnixTimestamp, MAX_RECENT_BLOCKHASHES},
     commitment_config::{CommitmentConfig, CommitmentLevel},
@@ -1157,7 +1157,7 @@ impl JsonRpcRequestProcessor {
             .get_account(&stake_history::id())
             .ok_or_else(Error::internal_error)?;
         let stake_history =
-            solana_sdk::account::from_account::<StakeHistory>(&stake_history_account)
+            solana_sdk::account::from_account::<StakeHistory, _>(&stake_history_account)
                 .ok_or_else(Error::internal_error)?;
 
         let (active, activating, deactivating) = delegation.stake_activating_and_deactivating(
@@ -1381,8 +1381,8 @@ impl JsonRpcRequestProcessor {
         bank: &Arc<Bank>,
         program_id: &Pubkey,
         filters: Vec<RpcFilterType>,
-    ) -> Vec<(Pubkey, Account)> {
-        let filter_closure = |account: &Account| {
+    ) -> Vec<(Pubkey, AccountSharedData)> {
+        let filter_closure = |account: &AccountSharedData| {
             filters.iter().all(|filter_type| match filter_type {
                 RpcFilterType::DataSize(size) => account.data.len() as u64 == *size,
                 RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data),
@@ -1396,7 +1396,7 @@ impl JsonRpcRequestProcessor {
             bank.get_filtered_indexed_accounts(&IndexKey::ProgramId(*program_id), |account| {
                 // The program-id account index checks for Account owner on inclusion. However, due
                 // to the current AccountsDb implementation, an account may remain in storage as a
-                // zero-lamport Account::Default() after being wiped and reinitialized in later
+                // zero-lamport AccountSharedData::Default() after being wiped and reinitialized in later
                 // updates. We include the redundant filters here to avoid returning these
                 // accounts.
                 account.owner == *program_id && filter_closure(account)
@@ -1412,10 +1412,10 @@ impl JsonRpcRequestProcessor {
         bank: &Arc<Bank>,
         owner_key: &Pubkey,
         mut filters: Vec<RpcFilterType>,
-    ) -> Vec<(Pubkey, Account)> {
+    ) -> Vec<(Pubkey, AccountSharedData)> {
         // The by-owner accounts index checks for Token Account state and Owner address on
         // inclusion. However, due to the current AccountsDb implementation, an account may remain
-        // in storage as a zero-lamport Account::Default() after being wiped and reinitialized in
+        // in storage as a zero-lamport AccountSharedData::Default() after being wiped and reinitialized in
         // later updates. We include the redundant filters here to avoid returning these accounts.
         //
         // Filter on Token Account state
@@ -1452,10 +1452,10 @@ impl JsonRpcRequestProcessor {
         bank: &Arc<Bank>,
         mint_key: &Pubkey,
         mut filters: Vec<RpcFilterType>,
-    ) -> Vec<(Pubkey, Account)> {
+    ) -> Vec<(Pubkey, AccountSharedData)> {
         // The by-mint accounts index checks for Token Account state and Mint address on inclusion.
         // However, due to the current AccountsDb implementation, an account may remain in storage
-        // as be zero-lamport Account::Default() after being wiped and reinitialized in later
+        // as be zero-lamport AccountSharedData::Default() after being wiped and reinitialized in later
         // updates. We include the redundant filters here to avoid returning these accounts.
         //
         // Filter on Token Account state
@@ -1641,7 +1641,7 @@ fn get_spl_token_mint_filter(program_id: &Pubkey, filters: &[RpcFilterType]) -> 
 pub(crate) fn get_parsed_token_account(
     bank: Arc<Bank>,
     pubkey: &Pubkey,
-    account: Account,
+    account: AccountSharedData,
 ) -> UiAccount {
     let additional_data = get_token_account_mint(&account.data)
         .and_then(|mint_pubkey| get_mint_owner_and_decimals(&bank, &mint_pubkey).ok())
@@ -1663,7 +1663,7 @@ pub(crate) fn get_parsed_token_accounts<I>(
     keyed_accounts: I,
 ) -> impl Iterator<Item = RpcKeyedAccount>
 where
-    I: Iterator<Item = (Pubkey, Account)>,
+    I: Iterator<Item = (Pubkey, AccountSharedData)>,
 {
     let mut mint_decimals: HashMap<Pubkey, u8> = HashMap::new();
     keyed_accounts.filter_map(move |(pubkey, account)| {
@@ -3216,7 +3216,10 @@ pub mod tests {
                     .unwrap()
                     .set_root(*root, &AbsRequestSender::default(), Some(0));
                 let mut stakes = HashMap::new();
-                stakes.insert(leader_vote_keypair.pubkey(), (1, Account::default()));
+                stakes.insert(
+                    leader_vote_keypair.pubkey(),
+                    (1, AccountSharedData::default()),
+                );
                 let block_time = bank_forks
                     .read()
                     .unwrap()
@@ -3822,7 +3825,7 @@ pub mod tests {
 
         let address = solana_sdk::pubkey::new_rand();
         let data = vec![1, 2, 3, 4, 5];
-        let mut account = Account::new(42, 5, &Pubkey::default());
+        let mut account = AccountSharedData::new(42, 5, &Pubkey::default());
         account.data = data.clone();
         bank.store_account(&address, &account);
 
@@ -3879,7 +3882,7 @@ pub mod tests {
 
         let address = Pubkey::new(&[9; 32]);
         let data = vec![1, 2, 3, 4, 5];
-        let mut account = Account::new(42, 5, &Pubkey::default());
+        let mut account = AccountSharedData::new(42, 5, &Pubkey::default());
         account.data = data.clone();
         bank.store_account(&address, &account);
 
@@ -5611,11 +5614,11 @@ pub mod tests {
             close_authority: COption::Some(owner),
         };
         TokenAccount::pack(token_account, &mut account_data).unwrap();
-        let token_account = Account {
+        let token_account = AccountSharedData {
             lamports: 111,
             data: account_data.to_vec(),
             owner: spl_token_id_v2_0(),
-            ..Account::default()
+            ..AccountSharedData::default()
         };
         let token_account_pubkey = solana_sdk::pubkey::new_rand();
         bank.store_account(&token_account_pubkey, &token_account);
@@ -5630,11 +5633,11 @@ pub mod tests {
             freeze_authority: COption::Some(owner),
         };
         Mint::pack(mint_state, &mut mint_data).unwrap();
-        let mint_account = Account {
+        let mint_account = AccountSharedData {
             lamports: 111,
             data: mint_data.to_vec(),
             owner: spl_token_id_v2_0(),
-            ..Account::default()
+            ..AccountSharedData::default()
         };
         bank.store_account(&Pubkey::from_str(&mint.to_string()).unwrap(), &mint_account);
 
@@ -5707,11 +5710,11 @@ pub mod tests {
             close_authority: COption::Some(owner),
         };
         TokenAccount::pack(token_account, &mut account_data).unwrap();
-        let token_account = Account {
+        let token_account = AccountSharedData {
             lamports: 111,
             data: account_data.to_vec(),
             owner: spl_token_id_v2_0(),
-            ..Account::default()
+            ..AccountSharedData::default()
         };
         let token_with_different_mint_pubkey = solana_sdk::pubkey::new_rand();
         bank.store_account(&token_with_different_mint_pubkey, &token_account);
@@ -5926,11 +5929,11 @@ pub mod tests {
             freeze_authority: COption::Some(owner),
         };
         Mint::pack(mint_state, &mut mint_data).unwrap();
-        let mint_account = Account {
+        let mint_account = AccountSharedData {
             lamports: 111,
             data: mint_data.to_vec(),
             owner: spl_token_id_v2_0(),
-            ..Account::default()
+            ..AccountSharedData::default()
         };
         bank.store_account(
             &Pubkey::from_str(&new_mint.to_string()).unwrap(),
@@ -5948,11 +5951,11 @@ pub mod tests {
             close_authority: COption::Some(owner),
         };
         TokenAccount::pack(token_account, &mut account_data).unwrap();
-        let token_account = Account {
+        let token_account = AccountSharedData {
             lamports: 111,
             data: account_data.to_vec(),
             owner: spl_token_id_v2_0(),
-            ..Account::default()
+            ..AccountSharedData::default()
         };
         let token_with_smaller_balance = solana_sdk::pubkey::new_rand();
         bank.store_account(&token_with_smaller_balance, &token_account);
@@ -6012,11 +6015,11 @@ pub mod tests {
             close_authority: COption::Some(owner),
         };
         TokenAccount::pack(token_account, &mut account_data).unwrap();
-        let token_account = Account {
+        let token_account = AccountSharedData {
             lamports: 111,
             data: account_data.to_vec(),
             owner: spl_token_id_v2_0(),
-            ..Account::default()
+            ..AccountSharedData::default()
         };
         let token_account_pubkey = solana_sdk::pubkey::new_rand();
         bank.store_account(&token_account_pubkey, &token_account);
@@ -6031,11 +6034,11 @@ pub mod tests {
             freeze_authority: COption::Some(owner),
         };
         Mint::pack(mint_state, &mut mint_data).unwrap();
-        let mint_account = Account {
+        let mint_account = AccountSharedData {
             lamports: 111,
             data: mint_data.to_vec(),
             owner: spl_token_id_v2_0(),
-            ..Account::default()
+            ..AccountSharedData::default()
         };
         bank.store_account(&Pubkey::from_str(&mint.to_string()).unwrap(), &mint_account);
 

@@ -1209,7 +1209,7 @@ pub mod tests {
         self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
     };
     use solana_sdk::{
-        account::Account,
+        account::AccountSharedData,
         epoch_schedule::EpochSchedule,
         hash::Hash,
         pubkey::Pubkey,
@@ -2458,7 +2458,7 @@ pub mod tests {
         let mut hash = bank.last_blockhash();
 
         let present_account_key = Keypair::new();
-        let present_account = Account::new(1, 10, &Pubkey::default());
+        let present_account = AccountSharedData::new(1, 10, &Pubkey::default());
         bank.store_account(&present_account_key.pubkey(), &present_account);
 
         let entries: Vec<_> = (0..NUM_TRANSFERS)
@@ -2840,7 +2840,7 @@ pub mod tests {
         }
 
         let present_account_key = Keypair::new();
-        let present_account = Account::new(1, 10, &Pubkey::default());
+        let present_account = AccountSharedData::new(1, 10, &Pubkey::default());
         bank.store_account(&present_account_key.pubkey(), &present_account);
 
         let mut i = 0;
@@ -3013,7 +3013,7 @@ pub mod tests {
         let bank = Arc::new(Bank::new(&genesis_config));
 
         let present_account_key = Keypair::new();
-        let present_account = Account::new(1, 10, &Pubkey::default());
+        let present_account = AccountSharedData::new(1, 10, &Pubkey::default());
         bank.store_account(&present_account_key.pubkey(), &present_account);
 
         let keypair = Keypair::new();
@@ -3347,8 +3347,11 @@ pub mod tests {
                     .map(|(root, stake)| {
                         let mut vote_state = VoteState::default();
                         vote_state.root_slot = Some(root);
-                        let mut vote_account =
-                            Account::new(1, VoteState::size_of(), &solana_vote_program::id());
+                        let mut vote_account = AccountSharedData::new(
+                            1,
+                            VoteState::size_of(),
+                            &solana_vote_program::id(),
+                        );
                         let versioned = VoteStateVersions::new_current(vote_state);
                         VoteState::serialize(&versioned, &mut vote_account.data).unwrap();
                         (

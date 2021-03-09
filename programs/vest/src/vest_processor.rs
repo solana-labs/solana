@@ -7,7 +7,7 @@ use chrono::prelude::*;
 use solana_config_program::date_instruction::DateConfig;
 use solana_config_program::get_config_data;
 use solana_sdk::{
-    account::Account,
+    account::AccountSharedData,
     feature_set,
     instruction::InstructionError,
     keyed_account::{next_keyed_account, KeyedAccount},
@@ -38,7 +38,7 @@ fn verify_date_account(
 fn verify_account<'a>(
     keyed_account: &'a KeyedAccount,
     expected_pubkey: &Pubkey,
-) -> Result<RefMut<'a, Account>, InstructionError> {
+) -> Result<RefMut<'a, AccountSharedData>, InstructionError> {
     if keyed_account.unsigned_key() != expected_pubkey {
         return Err(VestError::Unauthorized.into());
     }
@@ -49,7 +49,7 @@ fn verify_account<'a>(
 fn verify_signed_account<'a>(
     keyed_account: &'a KeyedAccount,
     expected_pubkey: &Pubkey,
-) -> Result<RefMut<'a, Account>, InstructionError> {
+) -> Result<RefMut<'a, AccountSharedData>, InstructionError> {
     if keyed_account.signer_key().is_none() {
         return Err(InstructionError::MissingRequiredSignature);
     }
@@ -270,7 +270,7 @@ mod tests {
     fn test_verify_account_unauthorized() {
         // Ensure client can't sneak in with an untrusted date account.
         let date_pubkey = solana_sdk::pubkey::new_rand();
-        let account = Account::new_ref(1, 0, &solana_config_program::id());
+        let account = AccountSharedData::new_ref(1, 0, &solana_config_program::id());
         let keyed_account = KeyedAccount::new(&date_pubkey, false, &account);
 
         let mallory_pubkey = solana_sdk::pubkey::new_rand(); // <-- Attack! Not the expected account.
@@ -284,7 +284,7 @@ mod tests {
     fn test_verify_signed_account_missing_signature() {
         // Ensure client can't sneak in with an unsigned account.
         let date_pubkey = solana_sdk::pubkey::new_rand();
-        let account = Account::new_ref(1, 0, &solana_config_program::id());
+        let account = AccountSharedData::new_ref(1, 0, &solana_config_program::id());
         let keyed_account = KeyedAccount::new(&date_pubkey, false, &account); // <-- Attack! Unsigned transaction.
 
         assert_eq!(
@@ -297,7 +297,7 @@ mod tests {
     fn test_verify_date_account_incorrect_program_id() {
         // Ensure client can't sneak in with a non-Config account.
         let date_pubkey = solana_sdk::pubkey::new_rand();
-        let account = Account::new_ref(1, 0, &id()); // <-- Attack! Pass Vest account where Config account is expected.
+        let account = AccountSharedData::new_ref(1, 0, &id()); // <-- Attack! Pass Vest account where Config account is expected.
         let keyed_account = KeyedAccount::new(&date_pubkey, false, &account);
         assert_eq!(
             verify_date_account(&keyed_account, &date_pubkey).unwrap_err(),
@@ -309,7 +309,7 @@ mod tests {
     fn test_verify_date_account_uninitialized_config() {
         // Ensure no panic when `get_config_data()` returns an error.
         let date_pubkey = solana_sdk::pubkey::new_rand();
-        let account = Account::new_ref(1, 0, &solana_config_program::id()); // <-- Attack! Zero space.
+        let account = AccountSharedData::new_ref(1, 0, &solana_config_program::id()); // <-- Attack! Zero space.
         let keyed_account = KeyedAccount::new(&date_pubkey, false, &account);
         assert_eq!(
             verify_date_account(&keyed_account, &date_pubkey).unwrap_err(),
@@ -321,7 +321,7 @@ mod tests {
     fn test_verify_date_account_invalid_date_config() {
         // Ensure no panic when `deserialize::<DateConfig>()` returns an error.
         let date_pubkey = solana_sdk::pubkey::new_rand();
-        let account = Account::new_ref(1, 1, &solana_config_program::id()); // Attack! 1 byte, enough to sneak by `get_config_data()`, but not DateConfig deserialize.
+        let account = AccountSharedData::new_ref(1, 1, &solana_config_program::id()); // Attack! 1 byte, enough to sneak by `get_config_data()`, but not DateConfig deserialize.
         let keyed_account = KeyedAccount::new(&date_pubkey, false, &account);
         assert_eq!(
             verify_date_account(&keyed_account, &date_pubkey).unwrap_err(),
@@ -333,7 +333,7 @@ mod tests {
     fn test_verify_date_account_deserialize() {
         // Ensure no panic when `deserialize::<DateConfig>()` returns an error.
         let date_pubkey = solana_sdk::pubkey::new_rand();
-        let account = Account::new_ref(1, 1, &solana_config_program::id()); // Attack! 1 byte, enough to sneak by `get_config_data()`, but not DateConfig deserialize.
+        let account = AccountSharedData::new_ref(1, 1, &solana_config_program::id()); // Attack! 1 byte, enough to sneak by `get_config_data()`, but not DateConfig deserialize.
         let keyed_account = KeyedAccount::new(&date_pubkey, false, &account);
         assert_eq!(
             verify_date_account(&keyed_account, &date_pubkey).unwrap_err(),
