@@ -16,7 +16,7 @@ use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
 use solana_ledger::poh::Poh;
 use solana_runtime::bank::Bank;
 pub use solana_sdk::clock::Slot;
-use solana_sdk::clock::{NUM_CONSECUTIVE_LEADER_SLOTS, SLOT_MS};
+use solana_sdk::clock::NUM_CONSECUTIVE_LEADER_SLOTS;
 use solana_sdk::hash::Hash;
 use solana_sdk::poh_config::PohConfig;
 use solana_sdk::pubkey::Pubkey;
@@ -536,18 +536,28 @@ impl PohRecorder {
     }
 
     // Get the current processing bank if the processing time hasn't expired
-    pub fn is_bank_still_processing_txs(bank_creation_time: &Instant) -> bool {
+    pub fn is_bank_still_processing_txs(
+        bank_creation_time: &Instant,
+        max_tx_ingestion_time: Option<u64>,
+    ) -> bool {
         // Do this check outside of the poh lock, hence not a method on PohRecorder
-        bank_creation_time.elapsed().as_millis() <= SLOT_MS as u128
+        max_tx_ingestion_time
+            .map(|max_tx_ingestion_time| {
+                bank_creation_time.elapsed().as_millis() <= max_tx_ingestion_time as u128
+            })
+            .unwrap_or(true)
     }
 
-    pub fn is_bank_start_still_processing_txs(
+    pub fn get_bank_still_processing_txs(
         bank_start: &Option<(Arc<Bank>, Arc<Instant>)>,
-    ) -> bool {
-        bank_start
-            .as_ref()
-            .map(|(_, bank_creation_time)| Self::is_bank_still_processing_txs(bank_creation_time))
-            .unwrap_or(false)
+    ) -> Option<Arc<Bank>> {
+        bank_start.as_ref().and_then(|(bank, bank_creation_time)| {
+            if Self::is_bank_still_processing_txs(bank_creation_time, bank.max_tx_ingestion_time) {
+                Some(bank.clone())
+            } else {
+                None
+            }
+        })
     }
 
     #[cfg(test)]

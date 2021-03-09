@@ -38,7 +38,7 @@ use solana_sdk::{
     clock::{
         Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp, DEFAULT_TICKS_PER_SECOND,
         MAX_PROCESSING_AGE, MAX_RECENT_BLOCKHASHES, MAX_TRANSACTION_FORWARDING_DELAY,
-        SECONDS_PER_DAY,
+        SECONDS_PER_DAY, SLOT_MS,
     },
     epoch_info::EpochInfo,
     epoch_schedule::EpochSchedule,
@@ -880,6 +880,8 @@ pub struct Bank {
     pub drop_callback: RwLock<OptionalDropCallback>,
 
     pub freeze_started: AtomicBool,
+
+    pub max_tx_ingestion_time: Option<u64>,
 }
 
 impl Default for BlockhashQueue {
@@ -1070,6 +1072,7 @@ impl Bank {
                     .map(|drop_callback| drop_callback.clone_box()),
             )),
             freeze_started: AtomicBool::new(false),
+            max_tx_ingestion_time: parent.max_tx_ingestion_time,
         };
 
         datapoint_info!(
@@ -1217,6 +1220,7 @@ impl Bank {
             feature_set: new(),
             drop_callback: RwLock::new(OptionalDropCallback(None)),
             freeze_started: AtomicBool::new(fields.hash != Hash::default()),
+            max_tx_ingestion_time: Some(SLOT_MS),
         };
         bank.finish_init(genesis_config, additional_builtins);
 
