@@ -9,9 +9,9 @@ use solana_sdk::{clock::Slot, pubkey::Pubkey, timing::timestamp};
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
+        mpsc::RecvTimeoutError,
         {Arc, RwLock},
     },
-    thread::sleep,
     thread::{self, Builder, JoinHandle},
     time::{Duration, Instant},
 };
@@ -85,6 +85,14 @@ impl ClusterSlotsService {
             if exit.load(Ordering::Relaxed) {
                 break;
             }
+            let slots = match completed_slots_receiver.recv_timeout(Duration::from_millis(200)) {
+                Ok(slots) => Some(slots),
+                Err(RecvTimeoutError::Timeout) => None,
+                Err(RecvTimeoutError::Disconnected) => {
+                    warn!("Cluster slots service - sender disconnected");
+                    break;
+                }
+            };
             let new_root = bank_forks.read().unwrap().root();
             let id = cluster_info.id();
             let mut lowest_slot_elapsed = Measure::start("lowest_slot_elapsed");
@@ -93,11 +101,14 @@ impl ClusterSlotsService {
             lowest_slot_elapsed.stop();
             let mut update_completed_slots_elapsed =
                 Measure::start("update_completed_slots_elapsed");
-            Self::update_completed_slots(
-                &completed_slots_receiver,
-                &cluster_info,
-                &rpc_subscriptions,
-            );
+            if let Some(slots) = slots {
+                Self::update_completed_slots(
+                    slots,
+                    &completed_slots_receiver,
+                    &cluster_info,
+                    &rpc_subscriptions,
+                );
+            }
             cluster_slots.update(new_root, &cluster_info, &bank_forks);
             update_completed_slots_elapsed.stop();
 
@@ -123,16 +134,15 @@ impl ClusterSlotsService {
                 cluster_slots_service_timing = ClusterSlotsServiceTiming::default();
                 last_stats = Instant::now();
             }
-            sleep(Duration::from_millis(200));
         }
     }
 
     fn update_completed_slots(
+        mut slots: Vec<Slot>,
         completed_slots_receiver: &CompletedSlotsReceiver,
         cluster_info: &ClusterInfo,
         rpc_subscriptions: &Option<Arc<RpcSubscriptions>>,
     ) {
-        let mut slots: Vec<Slot> = vec![];
         while let Ok(mut more) = completed_slots_receiver.try_recv() {
             slots.append(&mut more);
         }
@@ -140,7 +150,7 @@ impl ClusterSlotsService {
         slots.sort();
         if let Some(rpc_subscriptions) = rpc_subscriptions {
             for slot in &slots {
-                rpc_subscriptions.notify_slot_update(SlotUpdate::ShredsFull {
+                rpc_subscriptions.notify_slot_update(SlotUpdate::Completed {
                     slot: *slot,
                     timestamp: timestamp(),
                 });

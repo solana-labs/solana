@@ -18,7 +18,7 @@ use crate::{
 use crossbeam_channel::Receiver;
 use lru::LruCache;
 use solana_client::rpc_response::SlotUpdate;
-use solana_ledger::shred::{get_shred_slot_index_type, Shred, ShredFetchStats};
+use solana_ledger::shred::{get_shred_slot_index_type, ShredFetchStats};
 use solana_ledger::{
     blockstore::{Blockstore, CompletedSlotsReceiver},
     leader_schedule_cache::LeaderScheduleCache,
@@ -34,7 +34,7 @@ use solana_streamer::streamer::PacketReceiver;
 use std::{
     cmp,
     collections::hash_set::HashSet,
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     net::UdpSocket,
     ops::{Deref, DerefMut},
     sync::atomic::{AtomicBool, AtomicU64, Ordering},
@@ -223,7 +223,7 @@ pub type ShredFilterAndHasher = (ShredFilter, PacketHasher);
 fn check_if_already_received(
     packet: &Packet,
     shreds_received: &Mutex<ShredFilterAndHasher>,
-) -> Option<(Slot, bool)> {
+) -> Option<Slot> {
     let shred = get_shred_slot_index_type(packet, &mut ShredFetchStats::default())?;
     let mut shreds_received = shreds_received.lock().unwrap();
     let (cache, hasher) = shreds_received.deref_mut();
@@ -235,27 +235,21 @@ fn check_if_already_received(
                 None
             } else {
                 sent.push(hash);
-                Some((shred.0, shred.2))
+                Some(shred.0)
             }
         }
         None => {
             let hash = hasher.hash_packet(packet);
             cache.put(shred, vec![hash]);
-            Some((shred.0, shred.2))
+            Some(shred.0)
         }
     }
 }
 
-#[derive(Default)]
-struct FirstShredRecord {
-    data_received: bool,
-    coding_received: bool,
-}
-
+// Returns true if this is the first time receiving a shred for `shred_slot`.
 fn check_if_first_shred_received(
     shred_slot: Slot,
-    is_data_shred: bool,
-    first_shreds_received: &Mutex<BTreeMap<Slot, FirstShredRecord>>,
+    first_shreds_received: &Mutex<BTreeSet<Slot>>,
     root_bank: &Bank,
 ) -> bool {
     if shred_slot <= root_bank.slot() {
@@ -263,49 +257,18 @@ fn check_if_first_shred_received(
     }
 
     let mut first_shreds_received_locked = first_shreds_received.lock().unwrap();
-    if !first_shreds_received_locked.contains_key(&shred_slot) {
+    if !first_shreds_received_locked.contains(&shred_slot) {
         info!("First time receiving a shred from slot: {}", shred_slot);
-        if first_shreds_received_locked.len() >= 100 {
+        first_shreds_received_locked.insert(shred_slot);
+        if first_shreds_received_locked.len() > 100 {
             let mut slots_before_root =
                 first_shreds_received_locked.split_off(&(root_bank.slot() + 1));
             // `slots_before_root` now contains all slots <= root
             std::mem::swap(&mut slots_before_root, &mut first_shreds_received_locked);
         }
-    }
-
-    let mut record = first_shreds_received_locked.entry(shred_slot).or_default();
-    if is_data_shred && !record.data_received {
-        record.data_received = true;
-        true
-    } else if !is_data_shred && !record.coding_received {
-        record.coding_received = true;
         true
     } else {
         false
-    }
-}
-
-fn send_first_shred_received_notification(
-    packet: &Packet,
-    shred_slot: Slot,
-    is_data_shred: bool,
-    rpc_subscriptions: &Arc<RpcSubscriptions>,
-) {
-    if is_data_shred {
-        let parent_offset = Shred::get_parent_offset_from_packet(packet);
-        let shred_parent = parent_offset.and_then(|offset| shred_slot.checked_sub(offset as u64));
-        if let Some(parent) = shred_parent {
-            rpc_subscriptions.notify_slot_update(SlotUpdate::FirstDataShredReceived {
-                slot: shred_slot,
-                parent,
-                timestamp: timestamp(),
-            });
-        }
-    } else {
-        rpc_subscriptions.notify_slot_update(SlotUpdate::FirstCodingShredReceived {
-            slot: shred_slot,
-            timestamp: timestamp(),
-        });
     }
 }
 
@@ -338,7 +301,7 @@ fn retransmit(
     last_peer_update: &AtomicU64,
     shreds_received: &Mutex<ShredFilterAndHasher>,
     max_slots: &MaxSlots,
-    first_shreds_received: &Mutex<BTreeMap<Slot, FirstShredRecord>>,
+    first_shreds_received: &Mutex<BTreeSet<Slot>>,
     rpc_subscriptions: &Option<Arc<RpcSubscriptions>>,
 ) -> Result<()> {
     let timer = Duration::new(1, 0);
@@ -410,26 +373,18 @@ fn retransmit(
                 repair_total += 1;
                 continue;
             }
-            let (shred_slot, is_data_shred) =
-                match check_if_already_received(packet, shreds_received) {
-                    Some(shred) => shred,
-                    None => continue,
-                };
+            let shred_slot = match check_if_already_received(packet, shreds_received) {
+                Some(slot) => slot,
+                None => continue,
+            };
             max_slot = max_slot.max(shred_slot);
 
             if let Some(rpc_subscriptions) = rpc_subscriptions {
-                if check_if_first_shred_received(
-                    shred_slot,
-                    is_data_shred,
-                    first_shreds_received,
-                    &root_bank,
-                ) {
-                    send_first_shred_received_notification(
-                        packet,
-                        shred_slot,
-                        is_data_shred,
-                        rpc_subscriptions,
-                    );
+                if check_if_first_shred_received(shred_slot, first_shreds_received, &root_bank) {
+                    rpc_subscriptions.notify_slot_update(SlotUpdate::FirstShredReceived {
+                        slot: shred_slot,
+                        timestamp: timestamp(),
+                    });
                 }
             }
 
@@ -538,7 +493,7 @@ pub fn retransmitter(
         LruCache::new(DEFAULT_LRU_SIZE),
         PacketHasher::default(),
     )));
-    let first_shreds_received = Arc::new(Mutex::new(BTreeMap::new()));
+    let first_shreds_received = Arc::new(Mutex::new(BTreeSet::new()));
     (0..sockets.len())
         .map(|s| {
             let sockets = sockets.clone();
@@ -792,7 +747,7 @@ mod tests {
         // unique shred for (1, 5) should pass
         assert_eq!(
             check_if_already_received(&packet, &shreds_received),
-            Some((slot, true))
+            Some(slot)
         );
         // duplicate shred for (1, 5) blocked
         assert_eq!(check_if_already_received(&packet, &shreds_received), None);
@@ -802,7 +757,7 @@ mod tests {
         // first duplicate shred for (1, 5) passed
         assert_eq!(
             check_if_already_received(&packet, &shreds_received),
-            Some((slot, true))
+            Some(slot)
         );
         // then blocked
         assert_eq!(check_if_already_received(&packet, &shreds_received), None);
@@ -818,7 +773,7 @@ mod tests {
         // Coding at (1, 5) passes
         assert_eq!(
             check_if_already_received(&packet, &shreds_received),
-            Some((slot, false))
+            Some(slot)
         );
         // then blocked
         assert_eq!(check_if_already_received(&packet, &shreds_received), None);
@@ -828,7 +783,7 @@ mod tests {
         // 2nd unique coding at (1, 5) passes
         assert_eq!(
             check_if_already_received(&packet, &shreds_received),
-            Some((slot, false))
+            Some(slot)
         );
         // same again is blocked
         assert_eq!(check_if_already_received(&packet, &shreds_received), None);
