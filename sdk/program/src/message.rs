@@ -16,12 +16,13 @@ use std::convert::{TryFrom, TryInto};
 
 lazy_static! {
     // Copied keys over since direct references create cyclical dependency.
-    static ref BUILTIN_PROGRAMS_KEYS: [Pubkey; 13] = vec![
+    static ref BUILTIN_PROGRAMS_KEYS: [Pubkey; 14] = vec![
         "Budget1111111111111111111111111111111111111",
         "Config1111111111111111111111111111111111111",
         "Exchange11111111111111111111111111111111111",
         "ExchangeFaucet11111111111111111111111111111",
         "FaiLure111111111111111111111111111111111111",
+        "Feature111111111111111111111111111111111111",
         "NativeLoader1111111111111111111111111111111",
         "Noop111111111111111111111111111111111111111",
         "Stake11111111111111111111111111111111111111",
@@ -492,7 +493,7 @@ mod tests {
     #[test]
     fn test_builtin_program_keys() {
         let keys: HashSet<Pubkey> = BUILTIN_PROGRAMS_KEYS.iter().copied().collect();
-        assert_eq!(keys.len(), 13);
+        assert_eq!(keys.len(), 14);
         for k in keys {
             let k = format!("{}", k);
             assert!(k.ends_with("11111111111111111111111111111"));
