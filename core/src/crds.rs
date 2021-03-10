@@ -61,6 +61,7 @@ pub struct Crds {
 #[derive(PartialEq, Debug)]
 pub enum CrdsError {
     InsertFailed,
+    UnknownStakes,
 }
 
 /// This structure stores some local metadata associated with the CrdsValue
@@ -425,6 +426,62 @@ impl Crds {
         }
         Some(value)
     }
+
+    /// Returns true if the number of unique pubkeys in the table exceeds the
+    /// given capacity (plus some margin).
+    /// Allows skipping unnecessary calls to trim without obtaining a write
+    /// lock on gossip.
+    pub(crate) fn should_trim(&self, cap: usize) -> bool {
+        // Allow 10% overshoot so that the computation cost is amortized down.
+        10 * self.records.len() > 11 * cap
+    }
+
+    /// Trims the table by dropping all values associated with the pubkeys with
+    /// the lowest stake, so that the number of unique pubkeys are bounded.
+    pub(crate) fn trim(
+        &mut self,
+        cap: usize, // Capacity hint for number of unique pubkeys.
+        // Set of pubkeys to never drop.
+        // e.g. trusted validators, self pubkey, ...
+        keep: &[Pubkey],
+        stakes: &HashMap<Pubkey, u64>,
+    ) -> Result<Vec<VersionedCrdsValue>, CrdsError> {
+        if self.should_trim(cap) {
+            let size = self.records.len().saturating_sub(cap);
+            self.drop(size, keep, stakes)
+        } else {
+            Ok(Vec::default())
+        }
+    }
+
+    // Drops 'size' many pubkeys with the lowest stake.
+    fn drop(
+        &mut self,
+        size: usize,
+        keep: &[Pubkey],
+        stakes: &HashMap<Pubkey, u64>,
+    ) -> Result<Vec<VersionedCrdsValue>, CrdsError> {
+        if stakes.is_empty() {
+            return Err(CrdsError::UnknownStakes);
+        }
+        let mut keys: Vec<_> = self
+            .records
+            .keys()
+            .map(|k| (stakes.get(k).copied().unwrap_or_default(), *k))
+            .collect();
+        if size < keys.len() {
+            keys.select_nth_unstable(size);
+        }
+        let keys: Vec<_> = keys
+            .into_iter()
+            .take(size)
+            .map(|(_, k)| k)
+            .filter(|k| !keep.contains(k))
+            .flat_map(|k| &self.records[&k])
+            .map(|k| self.table.get_index(*k).unwrap().0.clone())
+            .collect();
+        Ok(keys.iter().map(|k| self.remove(k).unwrap()).collect())
+    }
 }
 
 #[cfg(test)]
@@ -433,6 +490,7 @@ mod test {
     use crate::{contact_info::ContactInfo, crds_value::NodeInstance};
     use rand::{thread_rng, Rng};
     use rayon::ThreadPoolBuilder;
+    use solana_sdk::signature::Signer;
     use std::{collections::HashSet, iter::repeat_with};
 
     #[test]
@@ -811,6 +869,56 @@ mod test {
             }
         }
         assert!(crds.records.is_empty());
+    }
+
+    #[test]
+    fn test_drop() {
+        fn num_unique_pubkeys<'a, I>(values: I) -> usize
+        where
+            I: IntoIterator<Item = &'a VersionedCrdsValue>,
+        {
+            values
+                .into_iter()
+                .map(|v| v.value.pubkey())
+                .collect::<HashSet<_>>()
+                .len()
+        }
+        let mut rng = thread_rng();
+        let keypairs: Vec<_> = repeat_with(Keypair::new).take(64).collect();
+        let stakes = keypairs
+            .iter()
+            .map(|k| (k.pubkey(), rng.gen_range(0, 1000)))
+            .collect();
+        let mut crds = Crds::default();
+        for _ in 0..2048 {
+            let keypair = &keypairs[rng.gen_range(0, keypairs.len())];
+            let value = VersionedCrdsValue::new_rand(&mut rng, Some(keypair));
+            let _ = crds.insert_versioned(value);
+        }
+        let num_values = crds.table.len();
+        let num_pubkeys = num_unique_pubkeys(crds.table.values());
+        assert!(!crds.should_trim(num_pubkeys));
+        assert!(crds.should_trim(num_pubkeys * 5 / 6));
+        let purged = crds.drop(16, &[], &stakes).unwrap();
+        assert_eq!(purged.len() + crds.table.len(), num_values);
+        assert_eq!(num_unique_pubkeys(&purged), 16);
+        assert_eq!(num_unique_pubkeys(crds.table.values()), num_pubkeys - 16);
+        let attach_stake = |v: &VersionedCrdsValue| {
+            let pk = v.value.pubkey();
+            (stakes[&pk], pk)
+        };
+        assert!(
+            purged.iter().map(attach_stake).max().unwrap()
+                < crds.table.values().map(attach_stake).min().unwrap()
+        );
+        let purged = purged
+            .into_iter()
+            .map(|v| v.value.pubkey())
+            .collect::<HashSet<_>>();
+        for (k, v) in crds.table {
+            assert!(!purged.contains(&k.pubkey()));
+            assert!(!purged.contains(&v.value.pubkey()));
+        }
     }
 
     #[test]
