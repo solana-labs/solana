@@ -77,6 +77,7 @@ module.exports = {
 		items: [
 		    "developing/clients/jsonrpc-api",
 		    "developing/clients/javascript-api",
+		    "developing/clients/rust-api",
 		],
 	    },
 	    {
