@@ -746,10 +746,10 @@ fn main() {
         .long("no-snapshot")
         .takes_value(false)
         .help("Do not start from a local snapshot if present");
-    let bpf_jit_arg = Arg::with_name("bpf_jit")
-        .long("bpf-jit")
+    let no_bpf_jit_arg = Arg::with_name("no_bpf_jit")
+        .long("no-bpf-jit")
         .takes_value(false)
-        .help("Process with JIT instead of interpreter");
+        .help("Disable the just-in-time compiler and instead use the interpreter for BP");
     let no_accounts_db_caching_arg = Arg::with_name("no_accounts_db_caching")
         .long("no-accounts-db-caching")
         .takes_value(false)
@@ -1019,7 +1019,7 @@ fn main() {
             .arg(&halt_at_slot_arg)
             .arg(&hard_forks_arg)
             .arg(&no_accounts_db_caching_arg)
-            .arg(&bpf_jit_arg)
+            .arg(&no_bpf_jit_arg)
             .arg(&allow_dead_slots_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
             .arg(
@@ -1684,7 +1684,7 @@ fn main() {
                 dev_halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                 new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                 poh_verify: !arg_matches.is_present("skip_poh_verify"),
-                bpf_jit: arg_matches.is_present("bpf_jit"),
+                bpf_jit: !matches.is_present("no_bpf_jit"),
                 accounts_db_caching_enabled: !arg_matches.is_present("no_accounts_db_caching"),
                 allow_dead_slots: arg_matches.is_present("allow_dead_slots"),
                 ..ProcessOptions::default()
