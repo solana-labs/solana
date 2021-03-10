@@ -77,6 +77,18 @@ enum Operation {
     Run,
 }
 
+fn monitor_validator(ledger_path: &Path) {
+    let dashboard = Dashboard::new(ledger_path, None, None).unwrap_or_else(|err| {
+        println!(
+            "Error: Unable to connect to validator at {}: {:?}",
+            ledger_path.display(),
+            err,
+        );
+        exit(1);
+    });
+    dashboard.run(Duration::from_secs(2));
+}
+
 fn wait_for_restart_window(
     ledger_path: &Path,
     min_idle_time_in_minutes: usize,
@@ -185,7 +197,7 @@ fn wait_for_restart_window(
                                     Ok(())
                                 } else {
                                     Err(format!(
-                                        "Validator will be leader for soon. Next leader slot is {}",
+                                        "Validator will be leader soon. Next leader slot is {}",
                                         next_leader_slot
                                     ))
                                 }
@@ -207,7 +219,7 @@ fn wait_for_restart_window(
                             break; // Restart!
                         }
                     }
-                    Err(why) => why,
+                    Err(why) => style(why).yellow().to_string(),
                 }
             }
         };
@@ -1665,6 +1677,29 @@ pub fn main() {
         .subcommand(
              SubCommand::with_name("exit")
              .about("Send an exit request to the validator")
+             .arg(
+                 Arg::with_name("force")
+                     .short("f")
+                     .long("force")
+                     .takes_value(false)
+                     .help("Request the validator exit immediately instead of waiting for a restart window")
+             )
+             .arg(
+                 Arg::with_name("monitor")
+                     .short("m")
+                     .long("monitor")
+                     .takes_value(false)
+                     .help("Monitor the validator after sending the exit request")
+             )
+             .arg(
+                 Arg::with_name("min_idle_time")
+                     .takes_value(true)
+                     .long("min-idle-time")
+                     .value_name("MINUTES")
+                     .validator(is_parsable::<usize>)
+                     .default_value("10")
+                     .help("Minimum time that the validator should not be leader before restarting")
+             )
          )
         .subcommand(
              SubCommand::with_name("init")
@@ -1693,12 +1728,13 @@ pub fn main() {
              SubCommand::with_name("wait-for-restart-window")
              .about("Monitor the validator for a good time to restart")
              .arg(
-                 Arg::with_name("min_idle_time_in_minutes")
+                 Arg::with_name("min_idle_time")
                      .takes_value(true)
                      .index(1)
                      .validator(is_parsable::<usize>)
+                     .value_name("MINUTES")
                      .default_value("10")
-                     .help("Minimum time that the validator should not be leader")
+                     .help("Minimum time that the validator should not be leader before restarting")
              )
              .after_help("Note: If this command exits with a non-zero status \
                           then this not a good time for a restart")
@@ -1710,7 +1746,18 @@ pub fn main() {
     let operation = match matches.subcommand() {
         ("", _) | ("run", _) => Operation::Run,
         ("init", _) => Operation::Initialize,
-        ("exit", _) => {
+        ("exit", Some(subcommand_matches)) => {
+            let min_idle_time = value_t_or_exit!(subcommand_matches, "min_idle_time", usize);
+            let force = subcommand_matches.is_present("force");
+            let monitor = subcommand_matches.is_present("monitor");
+
+            if !force {
+                wait_for_restart_window(&ledger_path, min_idle_time).unwrap_or_else(|err| {
+                    println!("{}", err);
+                    exit(1);
+                });
+            }
+
             let admin_client = admin_rpc_service::connect(&ledger_path);
             admin_rpc_service::runtime()
                 .block_on(async move { admin_client.await?.exit().await })
@@ -1718,18 +1765,15 @@ pub fn main() {
                     println!("exit request failed: {}", err);
                     exit(1);
                 });
+            println!("Exit request sent");
+
+            if monitor {
+                monitor_validator(&ledger_path);
+            }
             return;
         }
         ("monitor", _) => {
-            let dashboard = Dashboard::new(&ledger_path, None, None).unwrap_or_else(|err| {
-                println!(
-                    "Error: Unable to connect to validator at {}: {:?}",
-                    ledger_path.display(),
-                    err,
-                );
-                exit(1);
-            });
-            dashboard.run(Duration::from_secs(2));
+            monitor_validator(&ledger_path);
             return;
         }
         ("set-log-filter", Some(subcommand_matches)) => {
@@ -1744,9 +1788,8 @@ pub fn main() {
             return;
         }
         ("wait-for-restart-window", Some(subcommand_matches)) => {
-            let min_idle_time_in_minutes =
-                value_t_or_exit!(subcommand_matches, "min_idle_time_in_minutes", usize);
-            wait_for_restart_window(&ledger_path, min_idle_time_in_minutes).unwrap_or_else(|err| {
+            let min_idle_time = value_t_or_exit!(subcommand_matches, "min_idle_time", usize);
+            wait_for_restart_window(&ledger_path, min_idle_time).unwrap_or_else(|err| {
                 println!("{}", err);
                 exit(1);
             });
