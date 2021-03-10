@@ -8,7 +8,7 @@ use solana_sdk::{
     account::{AccountSharedData, ReadableAccount},
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-    feature_set::{instructions_sysvar_enabled, track_writable_deescalation, FeatureSet},
+    feature_set::{instructions_sysvar_enabled, FeatureSet},
     ic_msg,
     instruction::{CompiledInstruction, Instruction, InstructionError},
     keyed_account::{create_keyed_readonly_accounts, KeyedAccount},
@@ -82,15 +82,13 @@ impl ExecuteDetailsTimings {
 #[derive(Clone, Debug, Default)]
 pub struct PreAccount {
     key: Pubkey,
-    is_writable: bool,
     account: RefCell<AccountSharedData>,
     changed: bool,
 }
 impl PreAccount {
-    pub fn new(key: &Pubkey, account: &AccountSharedData, is_writable: bool) -> Self {
+    pub fn new(key: &Pubkey, account: &AccountSharedData) -> Self {
         Self {
             key: *key,
-            is_writable,
             account: RefCell::new(account.clone()),
             changed: false,
         }
@@ -99,18 +97,12 @@ impl PreAccount {
     pub fn verify(
         &self,
         program_id: &Pubkey,
-        is_writable: Option<bool>,
+        is_writable: bool,
         rent: &Rent,
         post: &AccountSharedData,
         timings: &mut ExecuteDetailsTimings,
     ) -> Result<(), InstructionError> {
         let pre = self.account.borrow();
-
-        let is_writable = if let Some(is_writable) = is_writable {
-            is_writable
-        } else {
-            self.is_writable
-        };
 
         // Only the owner of the account may change owner and
         //   only if the account is writable and
@@ -331,8 +323,6 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         accounts: &[Rc<RefCell<AccountSharedData>>],
         caller_privileges: Option<&[bool]>,
     ) -> Result<(), InstructionError> {
-        let track_writable_deescalation =
-            self.is_feature_active(&track_writable_deescalation::id());
         match self.program_ids.last() {
             Some(program_id) => MessageProcessor::verify_and_update(
                 message,
@@ -341,7 +331,6 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
                 accounts,
                 program_id,
                 &self.rent,
-                track_writable_deescalation,
                 caller_privileges,
                 &mut self.timings,
             ),
@@ -870,9 +859,8 @@ impl MessageProcessor {
         {
             let mut work = |_unique_index: usize, account_index: usize| {
                 let key = &message.account_keys[account_index];
-                let is_writable = message.is_writable(account_index);
                 let account = accounts[account_index].borrow();
-                pre_accounts.push(PreAccount::new(key, &account, is_writable));
+                pre_accounts.push(PreAccount::new(key, &account));
                 Ok(())
             };
             let _ = instruction.visit_each_account(&mut work);
@@ -916,7 +904,7 @@ impl MessageProcessor {
                     .map_err(|_| InstructionError::AccountBorrowOutstanding)?;
                 pre_accounts[unique_index].verify(
                     &program_id,
-                    Some(message.is_writable(account_index)),
+                    message.is_writable(account_index),
                     rent,
                     &account,
                     timings,
@@ -943,7 +931,6 @@ impl MessageProcessor {
         accounts: &[Rc<RefCell<AccountSharedData>>],
         program_id: &Pubkey,
         rent: &Rent,
-        track_writable_deescalation: bool,
         caller_privileges: Option<&[bool]>,
         timings: &mut ExecuteDetailsTimings,
     ) -> Result<(), InstructionError> {
@@ -953,14 +940,10 @@ impl MessageProcessor {
             if account_index < message.account_keys.len() && account_index < accounts.len() {
                 let key = &message.account_keys[account_index];
                 let account = &accounts[account_index];
-                let is_writable = if track_writable_deescalation {
-                    Some(if let Some(caller_privileges) = caller_privileges {
-                        caller_privileges[account_index]
-                    } else {
-                        message.is_writable(account_index)
-                    })
+                let is_writable = if let Some(caller_privileges) = caller_privileges {
+                    caller_privileges[account_index]
                 } else {
-                    None
+                    message.is_writable(account_index)
                 };
                 // Find the matching PreAccount
                 for pre_account in pre_accounts.iter_mut() {
@@ -1132,11 +1115,11 @@ mod tests {
                 1,
                 &program_ids[i],
             ))));
-            pre_accounts.push(PreAccount::new(&keys[i], &accounts[i].borrow(), false))
+            pre_accounts.push(PreAccount::new(&keys[i], &accounts[i].borrow()))
         }
         let account = AccountSharedData::new(1, 1, &solana_sdk::pubkey::Pubkey::default());
         for program_id in program_ids.iter() {
-            pre_accounts.push(PreAccount::new(program_id, &account.clone(), false));
+            pre_accounts.push(PreAccount::new(program_id, &account.clone()));
         }
 
         let mut invoke_context = ThisInvokeContext::new(
@@ -1282,7 +1265,6 @@ mod tests {
                         data: vec![],
                         ..AccountSharedData::default()
                     },
-                    false,
                 ),
                 post: AccountSharedData {
                     owner: *owner,
@@ -1322,7 +1304,7 @@ mod tests {
         pub fn verify(&self) -> Result<(), InstructionError> {
             self.pre.verify(
                 &self.program_id,
-                Some(self.is_writable),
+                self.is_writable,
                 &self.rent,
                 &self.post,
                 &mut ExecuteDetailsTimings::default(),
@@ -2004,16 +1986,16 @@ mod tests {
 
         let mut program_account = AccountSharedData::new(1, 0, &native_loader::id());
         program_account.executable = true;
-        let executable_preaccount = PreAccount::new(&callee_program_id, &program_account, true);
+        let executable_preaccount = PreAccount::new(&callee_program_id, &program_account);
         let executable_accounts = vec![(callee_program_id, RefCell::new(program_account.clone()))];
 
         let owned_key = solana_sdk::pubkey::new_rand();
         let owned_account = AccountSharedData::new(42, 1, &callee_program_id);
-        let owned_preaccount = PreAccount::new(&owned_key, &owned_account, true);
+        let owned_preaccount = PreAccount::new(&owned_key, &owned_account);
 
         let not_owned_key = solana_sdk::pubkey::new_rand();
         let not_owned_account = AccountSharedData::new(84, 1, &solana_sdk::pubkey::new_rand());
-        let not_owned_preaccount = PreAccount::new(&not_owned_key, &not_owned_account, true);
+        let not_owned_preaccount = PreAccount::new(&not_owned_key, &not_owned_account);
 
         #[allow(unused_mut)]
         let mut accounts = vec![

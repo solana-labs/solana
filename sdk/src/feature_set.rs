@@ -83,16 +83,8 @@ pub mod stake_program_v3 {
     solana_sdk::declare_id!("Ego6nTu7WsBcZBvVqJQKp6Yku2N3mrfG8oYCfaLZkAeK");
 }
 
-pub mod use_loaded_executables {
-    solana_sdk::declare_id!("3Jq7mE2chDpf6oeEDsuGK7orTYEgyQjCPvaRppTNdVGK");
-}
-
 pub mod turbine_retransmit_peers_patch {
     solana_sdk::declare_id!("5Lu3JnWSFwRYpXzwDMkanWSk6XqSuF2i5fpnVhzB5CTc");
-}
-
-pub mod track_writable_deescalation {
-    solana_sdk::declare_id!("HVPSxqskEtRLRT2ZeEMmkmt9FWqoFX4vrN6f5VaadLED");
 }
 
 pub mod require_custodian_for_locked_stake_authorize {
@@ -103,16 +95,8 @@ pub mod spl_token_v2_self_transfer_fix {
     solana_sdk::declare_id!("BL99GYhdjjcv6ys22C9wPgn2aTVERDbPHHo4NbS3hgp7");
 }
 
-pub mod matching_buffer_upgrade_authorities {
-    solana_sdk::declare_id!("B5PSjDEJvKJEUQSL7q94N7XCEoWJCYum8XfUg7yuugUU");
-}
-
 pub mod warp_timestamp_again {
     solana_sdk::declare_id!("GvDsGDkH5gyzwpDhxNixx8vtx1kwYHH13RiNAPw27zXb");
-}
-
-pub mod per_byte_logging_cost {
-    solana_sdk::declare_id!("59dM4SV6dPEKXPfkrkhFkRdn4K6xwKxdNAPMyXG7J1wT");
 }
 
 pub mod check_init_vote_data {
@@ -142,16 +126,12 @@ lazy_static! {
         (simple_capitalization::id(), "simple capitalization"),
         (bpf_loader_upgradeable_program::id(), "upgradeable bpf loader"),
         (stake_program_v3::id(), "solana_stake_program v3"),
-        (use_loaded_executables::id(), "use loaded executable accounts"),
         (turbine_retransmit_peers_patch::id(), "turbine retransmit peers patch #14631"),
-        (track_writable_deescalation::id(), "track account writable deescalation"),
         (require_custodian_for_locked_stake_authorize::id(), "require custodian to authorize withdrawer change for locked stake"),
         (spl_token_v2_self_transfer_fix::id(), "spl-token self-transfer fix"),
-        (matching_buffer_upgrade_authorities::id(), "Upgradeable buffer and program authorities must match"),
         (full_inflation::mainnet::certusone::enable::id(), "Full inflation enabled by Certus One"),
         (full_inflation::mainnet::certusone::vote::id(), "Community vote allowing Certus One to enable full inflation"),
         (warp_timestamp_again::id(), "warp timestamp again, adjust bounding to 25% fast 80% slow #15204"),
-        (per_byte_logging_cost::id(), "charge the compute budget per byte for logging"),
         (check_init_vote_data::id(), "check initialized Vote data"),
         (check_program_owner::id(), "limit programs to operating on accounts owned by itself")
         /*************** ADD NEW FEATURES HERE ***************/
