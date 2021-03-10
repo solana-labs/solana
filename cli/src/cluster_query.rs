@@ -774,7 +774,7 @@ pub fn process_catchup(
             } else if average_time_remaining <= 0.0 {
                 format!(
                     " (AVG: {:.1} slots/second (falling))",
-                    average_catchup_slots_per_second.abs()
+                    average_catchup_slots_per_second
                 )
             } else {
                 let total_node_slot_delta = node_slot as i64 - start_node_slot as i64;
