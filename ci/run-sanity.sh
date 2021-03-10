@@ -26,7 +26,7 @@ while [[ $($solana_cli --url http://localhost:8899 slot --commitment recent) -le
   sleep 1
 done
 
-$solana_validator --ledger config/ledger exit || true
+$solana_validator --ledger config/ledger exit --force || true
 
 wait $pid
 
