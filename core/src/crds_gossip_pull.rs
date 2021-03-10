@@ -9,12 +9,16 @@
 //! with random hash functions.  So each subsequent request will have a different distribution
 //! of false positives.
 
-use crate::contact_info::ContactInfo;
-use crate::crds::{Crds, VersionedCrdsValue};
-use crate::crds_gossip::{get_stake, get_weight, CRDS_GOSSIP_DEFAULT_BLOOM_ITEMS};
-use crate::crds_gossip_error::CrdsGossipError;
-use crate::crds_value::{CrdsValue, CrdsValueLabel};
+use crate::{
+    cluster_info::CRDS_UNIQUE_PUBKEY_CAPACITY,
+    contact_info::ContactInfo,
+    crds::{Crds, VersionedCrdsValue},
+    crds_gossip::{get_stake, get_weight, CRDS_GOSSIP_DEFAULT_BLOOM_ITEMS},
+    crds_gossip_error::CrdsGossipError,
+    crds_value::{CrdsValue, CrdsValueLabel},
+};
 use itertools::Itertools;
+use lru::LruCache;
 use rand::distributions::{Distribution, WeightedIndex};
 use rand::Rng;
 use rayon::{prelude::*, ThreadPool};
@@ -168,10 +172,9 @@ pub struct ProcessPullStats {
     pub timeout_count: usize,
 }
 
-#[derive(Clone)]
 pub struct CrdsGossipPull {
     /// timestamp of last request
-    pub pull_request_time: HashMap<Pubkey, u64>,
+    pull_request_time: LruCache<Pubkey, u64>,
     /// hash and insert time
     pub purged_values: VecDeque<(Hash, u64)>,
     // Hash value and record time (ms) of the pull responses which failed to be
@@ -188,7 +191,7 @@ impl Default for CrdsGossipPull {
     fn default() -> Self {
         Self {
             purged_values: VecDeque::new(),
-            pull_request_time: HashMap::new(),
+            pull_request_time: LruCache::new(CRDS_UNIQUE_PUBKEY_CAPACITY),
             failed_inserts: VecDeque::new(),
             crds_timeout: CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
             msg_timeout: CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS,
@@ -263,8 +266,12 @@ impl CrdsGossipPull {
             })
             .map(|item| {
                 let max_weight = f32::from(u16::max_value()) - 1.0;
-                let req_time: u64 = *self.pull_request_time.get(&item.id).unwrap_or(&0);
-                let since = ((now - req_time) / 1024) as u32;
+                let req_time: u64 = self
+                    .pull_request_time
+                    .peek(&item.id)
+                    .copied()
+                    .unwrap_or_default();
+                let since = (now.saturating_sub(req_time).min(3600 * 1000) / 1024) as u32;
                 let stake = get_stake(&item.id, stakes);
                 let weight = get_weight(max_weight, since, stake);
                 (weight, item)
@@ -277,7 +284,7 @@ impl CrdsGossipPull {
     /// It's important to use the local nodes request creation time as the weight
     /// instead of the response received time otherwise failed nodes will increase their weight.
     pub fn mark_pull_request_creation_time(&mut self, from: &Pubkey, now: u64) {
-        self.pull_request_time.insert(*from, now);
+        self.pull_request_time.put(*from, now);
     }
 
     /// Store an old hash in the purged values set
@@ -605,6 +612,20 @@ impl CrdsGossipPull {
             stats.timeout_count,
             stats.success,
         )
+    }
+
+    // Only for tests and simulations.
+    pub(crate) fn mock_clone(&self) -> Self {
+        let mut pull_request_time = LruCache::new(self.pull_request_time.cap());
+        for (k, v) in self.pull_request_time.iter().rev() {
+            pull_request_time.put(*k, *v);
+        }
+        Self {
+            pull_request_time,
+            purged_values: self.purged_values.clone(),
+            failed_inserts: self.failed_inserts.clone(),
+            ..*self
+        }
     }
 }
 #[cfg(test)]

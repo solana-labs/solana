@@ -264,6 +264,11 @@ impl Crds {
             .map(move |i| self.table.index(*i))
     }
 
+    /// Returns number of known pubkeys (network size).
+    pub(crate) fn num_nodes(&self) -> usize {
+        self.records.len()
+    }
+
     pub fn len(&self) -> usize {
         self.table.len()
     }
