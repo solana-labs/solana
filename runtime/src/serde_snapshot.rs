@@ -313,8 +313,7 @@ where
 
                 // Move the corresponding AppendVec from the snapshot into the directory pointed
                 // at by `local_dir`
-                let append_vec_relative_path =
-                    AppendVec::new_relative_path(slot, storage_entry.id());
+                let append_vec_relative_path = AppendVec::file_name(slot, storage_entry.id());
                 let append_vec_abs_path = stream_append_vecs_path
                     .as_ref()
                     .join(&append_vec_relative_path);

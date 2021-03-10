@@ -279,13 +279,8 @@ impl AppendVec {
         self.file_size
     }
 
-    // Get the file path relative to the top level accounts directory
-    pub fn get_relative_path<P: AsRef<Path>>(append_vec_path: P) -> Option<PathBuf> {
-        append_vec_path.as_ref().file_name().map(PathBuf::from)
-    }
-
-    pub fn new_relative_path(slot: Slot, id: usize) -> PathBuf {
-        PathBuf::from(&format!("{}.{}", slot, id))
+    pub fn file_name(slot: Slot, id: usize) -> String {
+        format!("{}.{}", slot, id)
     }
 
     pub fn new_from_file<P: AsRef<Path>>(path: P, current_len: usize) -> io::Result<(Self, usize)> {
@@ -717,16 +712,6 @@ pub mod tests {
         trace!(
             "sequential read time: {} ms",
             duration_as_ms(&now.elapsed()),
-        );
-    }
-
-    #[test]
-    fn test_relative_path() {
-        let relative_path = AppendVec::new_relative_path(0, 2);
-        let full_path = Path::new("/tmp").join(&relative_path);
-        assert_eq!(
-            relative_path,
-            AppendVec::get_relative_path(full_path).unwrap()
         );
     }
 

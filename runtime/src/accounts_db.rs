@@ -380,8 +380,8 @@ pub struct AccountStorageEntry {
 
 impl AccountStorageEntry {
     pub fn new(path: &Path, slot: Slot, id: usize, file_size: u64) -> Self {
-        let tail = AppendVec::new_relative_path(slot, id);
-        let path = Path::new(path).join(&tail);
+        let tail = AppendVec::file_name(slot, id);
+        let path = Path::new(path).join(tail);
         let accounts = AppendVec::new(&path, true, file_size as usize);
 
         Self {
@@ -541,10 +541,6 @@ impl AccountStorageEntry {
         count -= 1;
         *count_and_status = (count, status);
         count
-    }
-
-    pub fn get_relative_path(&self) -> Option<PathBuf> {
-        AppendVec::get_relative_path(self.accounts.get_path())
     }
 
     pub fn get_path(&self) -> PathBuf {
