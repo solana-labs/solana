@@ -710,7 +710,7 @@ pub struct AccountsDb {
     pub shrink_paths: RwLock<Option<Vec<PathBuf>>>,
 
     /// Directory of paths this accounts_db needs to hold/remove
-    temp_paths: Option<Vec<TempDir>>,
+    pub(crate) temp_paths: Option<Vec<TempDir>>,
 
     /// Starting file size of appendvecs
     file_size: u64,

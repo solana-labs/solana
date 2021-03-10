@@ -3214,7 +3214,6 @@ dependencies = [
  "dir-diff",
  "flate2",
  "fnv",
- "fs_extra",
  "itertools 0.9.0",
  "lazy_static",
  "libc",
