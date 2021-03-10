@@ -78,9 +78,10 @@ impl ClusterSlots {
         {
             let mut cluster_slots = self.cluster_slots.write().unwrap();
             *cluster_slots = cluster_slots.split_off(&(root + 1));
-            // Trimming is done at 2x size so that amortized it has a constant
-            // cost. The slots furthest away from the root are discarded.
-            if cluster_slots.len() > 2 * CLUSTER_SLOTS_TRIM_SIZE {
+            // Allow 10% overshoot so that the computation cost is amortized
+            // down. The slots furthest away from the root are discarded.
+            if 10 * cluster_slots.len() > 11 * CLUSTER_SLOTS_TRIM_SIZE {
+                warn!("trimming cluster slots");
                 let key = *cluster_slots.keys().nth(CLUSTER_SLOTS_TRIM_SIZE).unwrap();
                 cluster_slots.split_off(&key);
             }
