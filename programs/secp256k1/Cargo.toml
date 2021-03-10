@@ -3,6 +3,7 @@ name = "solana-secp256k1-program"
 description = "Solana Secp256k1 program"
 version = "1.5.15"
 homepage = "https://solana.com/"
+documentation = "https://docs.rs/solana-secp256k1-program"
 repository = "https://github.com/solana-labs/solana"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 license = "Apache-2.0"

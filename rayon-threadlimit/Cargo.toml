@@ -3,6 +3,7 @@ name = "solana-rayon-threadlimit"
 version = "1.5.15"
 description = "solana-rayon-threadlimit"
 homepage = "https://solana.com/"
+documentation = "https://docs.rs/solana-rayon-threadlimit"
 readme = "../README.md"
 repository = "https://github.com/solana-labs/solana"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]

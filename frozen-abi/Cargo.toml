@@ -5,6 +5,7 @@ description = "Solana Frozen ABI"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
 homepage = "https://solana.com/"
+documentation = "https://docs.rs/solana-frozen-abi"
 license = "Apache-2.0"
 edition = "2018"
 
