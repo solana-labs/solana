@@ -1997,7 +1997,7 @@ mod tests {
                 remaining: string.len() as u64,
             }));
         let mut syscall_panic = SyscallPanic {
-            compute_meter: compute_meter,
+            compute_meter,
             loader_id: &bpf_loader::id(),
         };
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
