@@ -365,7 +365,7 @@ fn bench_load_largest_accounts(b: &mut Bencher) {
     for _ in 0..10_000 {
         let lamports = rng.gen();
         let pubkey = Pubkey::new_unique();
-        let account = AccountSharedData::new(lamports, 0, &Pubkey::default());
+        let account = Account::new(lamports, 0, &Pubkey::default());
         accounts.store_slow_uncached(0, &pubkey, &account);
     }
     let ancestors = vec![(0, 0)].into_iter().collect();

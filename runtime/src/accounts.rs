@@ -31,12 +31,8 @@ use solana_sdk::{
     transaction::{Transaction, TransactionError},
 };
 use std::{
-<<<<<<< HEAD
-    collections::{HashMap, HashSet},
-=======
     cmp::Reverse,
-    collections::{hash_map, BinaryHeap, HashMap, HashSet},
->>>>>>> 9c1198c0c... Improve load_largest_accounts more (#15785)
+    collections::{BinaryHeap, HashMap, HashSet},
     ops::RangeBounds,
     path::PathBuf,
     sync::{Arc, Mutex, RwLock},
@@ -2473,13 +2469,13 @@ mod tests {
             Accounts::new_with_config(Vec::new(), &ClusterType::Development, HashSet::new(), false);
 
         let pubkey0 = Pubkey::new_unique();
-        let account0 = AccountSharedData::new(42, 0, &Pubkey::default());
+        let account0 = Account::new(42, 0, &Pubkey::default());
         accounts.store_slow_uncached(0, &pubkey0, &account0);
         let pubkey1 = Pubkey::new_unique();
-        let account1 = AccountSharedData::new(42, 0, &Pubkey::default());
+        let account1 = Account::new(42, 0, &Pubkey::default());
         accounts.store_slow_uncached(0, &pubkey1, &account1);
         let pubkey2 = Pubkey::new_unique();
-        let account2 = AccountSharedData::new(41, 0, &Pubkey::default());
+        let account2 = Account::new(41, 0, &Pubkey::default());
         accounts.store_slow_uncached(0, &pubkey2, &account2);
 
         let ancestors = vec![(0, 0)].into_iter().collect();
