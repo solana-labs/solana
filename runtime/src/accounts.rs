@@ -545,31 +545,28 @@ impl Accounts {
         let account_balances = self.accounts_db.scan_accounts(
             ancestors,
             |collector: &mut BinaryHeap<Reverse<(u64, Pubkey)>>, option| {
-                if let Some(data) = option
-                    .filter(|(pubkey, account, _)| {
-                        account.lamports != 0
-                            && match filter {
-                                AccountAddressFilter::Exclude => {
-                                    !filter_by_address.contains(&pubkey)
-                                }
-                                AccountAddressFilter::Include => {
-                                    filter_by_address.contains(&pubkey)
-                                }
-                            }
-                    })
-                    .map(|(pubkey, account, _slot)| (account.lamports, *pubkey))
-                {
+                if let Some((pubkey, account, _slot)) = option {
+                    if account.lamports == 0 {
+                        return;
+                    }
+                    let contains_address = filter_by_address.contains(pubkey);
+                    let collect = match filter {
+                        AccountAddressFilter::Exclude => !contains_address,
+                        AccountAddressFilter::Include => contains_address,
+                    };
+                    if !collect {
+                        return;
+                    }
                     if collector.len() == num {
                         let Reverse(entry) = collector
                             .peek()
                             .expect("BinaryHeap::peek should succeed when len > 0");
-                        if *entry < data {
-                            collector.pop();
-                        } else {
+                        if *entry >= (account.lamports, *pubkey) {
                             return;
                         }
+                        collector.pop();
                     }
-                    collector.push(Reverse(data));
+                    collector.push(Reverse((account.lamports, *pubkey)));
                 }
             },
         );
