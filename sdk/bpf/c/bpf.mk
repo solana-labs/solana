@@ -14,8 +14,8 @@ TEST_PREFIX ?= test_
 OUT_DIR ?= ./out
 OS := $(shell uname)
 
-LLVM_DIR = $(LOCAL_PATH)../dependencies/bpf-tools/llvm/
-LLVM_SYSTEM_INC_DIRS := $(LLVM_DIR)/lib/clang/8.0.0/include
+LLVM_DIR = $(LOCAL_PATH)../dependencies/bpf-tools/llvm
+LLVM_SYSTEM_INC_DIRS := $(LLVM_DIR)/lib/clang/11.0.1/include
 
 ifdef LLVM_DIR
 CC := $(LLVM_DIR)/bin/clang
@@ -144,7 +144,7 @@ $1: $2
 endef
 
 define CC_RULE
-$1: $2 
+$1: $2
 	@echo "[cxx] $1 ($2)"
 	$(_@)mkdir -p $(dir $1)
 	$(_@)$(CXX) $(BPF_CXX_FLAGS) -o $1 -c $2 -MD -MF $(1:.o=.d)

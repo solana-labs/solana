@@ -130,7 +130,7 @@ if [[ ! -e criterion-$version.md || ! -e criterion ]]; then
 fi
 
 # Install Rust-BPF
-version=v1.0
+version=v1.1
 if [[ ! -e bpf-tools-$version.md || ! -e bpf-tools ]]; then
   (
     set -e
@@ -157,7 +157,7 @@ set -e
 rustup toolchain link bpf bpf-tools/rust
 
 # Install Rust-BPF Sysroot sources
-version=v1.0
+version=v1.1
 if [[ ! -e rust-bpf-sysroot-$version.md || ! -e rust-bpf-sysroot ]]; then
   (
     set -e
