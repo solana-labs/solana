@@ -7,7 +7,7 @@ use crate::{
 use chrono::prelude::{DateTime, Utc};
 use log::*;
 use solana_sdk::{
-    account::ReadableAccount,
+    account::{ReadableAccount, WritableAccount},
     hash::hash,
     instruction::InstructionError,
     keyed_account::{next_keyed_account, KeyedAccount},
@@ -147,7 +147,11 @@ pub fn process_instruction(
                 pending_budget: Some(*expr),
                 initialized: true,
             };
-            budget_state.serialize(&mut contract_keyed_account.try_account_ref_mut()?.data)
+            budget_state.serialize(
+                &mut contract_keyed_account
+                    .try_account_ref_mut()?
+                    .data_as_mut_slice(),
+            )
         }
         BudgetInstruction::ApplyTimestamp(dt) => {
             let witness_keyed_account = next_keyed_account(keyed_accounts_iter)?;
@@ -173,7 +177,11 @@ pub fn process_instruction(
                 dt,
             )?;
             trace!("apply timestamp committed");
-            budget_state.serialize(&mut contract_keyed_account.try_account_ref_mut()?.data)
+            budget_state.serialize(
+                &mut contract_keyed_account
+                    .try_account_ref_mut()?
+                    .data_as_mut_slice(),
+            )
         }
         BudgetInstruction::ApplySignature => {
             let witness_keyed_account = next_keyed_account(keyed_accounts_iter)?;
@@ -198,7 +206,11 @@ pub fn process_instruction(
                 next_keyed_account(keyed_accounts_iter),
             )?;
             trace!("apply signature committed");
-            budget_state.serialize(&mut contract_keyed_account.try_account_ref_mut()?.data)
+            budget_state.serialize(
+                &mut contract_keyed_account
+                    .try_account_ref_mut()?
+                    .data_as_mut_slice(),
+            )
         }
         BudgetInstruction::ApplyAccountData => {
             let witness_keyed_account = next_keyed_account(keyed_accounts_iter)?;
@@ -219,7 +231,11 @@ pub fn process_instruction(
                 next_keyed_account(keyed_accounts_iter),
             )?;
             trace!("apply account data committed");
-            budget_state.serialize(&mut contract_keyed_account.try_account_ref_mut()?.data)
+            budget_state.serialize(
+                &mut contract_keyed_account
+                    .try_account_ref_mut()?
+                    .data_as_mut_slice(),
+            )
         }
     }
 }

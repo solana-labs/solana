@@ -7,7 +7,7 @@ use chrono::prelude::*;
 use solana_config_program::date_instruction::DateConfig;
 use solana_config_program::get_config_data;
 use solana_sdk::{
-    account::{AccountSharedData, ReadableAccount},
+    account::{AccountSharedData, ReadableAccount, WritableAccount},
     feature_set,
     instruction::InstructionError,
     keyed_account::{next_keyed_account, KeyedAccount},
@@ -147,7 +147,7 @@ pub fn process_instruction(
         }
     }
 
-    vest_state.serialize(&mut contract_account.data)
+    vest_state.serialize(contract_account.data_as_mut_slice())
 }
 
 #[cfg(test)]

@@ -24,7 +24,7 @@ use solana_rbpf::{
 };
 use solana_runtime::message_processor::MessageProcessor;
 use solana_sdk::{
-    account::ReadableAccount,
+    account::{ReadableAccount, WritableAccount},
     account_utils::State,
     bpf_loader, bpf_loader_deprecated,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
@@ -330,7 +330,7 @@ fn process_loader_upgradeable_instruction(
                 return Err(InstructionError::InvalidAccountData);
             }
             write_program_data(
-                &mut buffer.try_account_ref_mut()?.data,
+                buffer.try_account_ref_mut()?.data_as_mut_slice(),
                 UpgradeableLoaderState::buffer_data_offset()? + offset as usize,
                 &bytes,
                 invoke_context,
@@ -434,7 +434,7 @@ fn process_loader_upgradeable_instruction(
                 slot: clock.slot,
                 upgrade_authority_address,
             })?;
-            programdata.try_account_ref_mut()?.data
+            programdata.try_account_ref_mut()?.data_as_mut_slice()
                 [programdata_data_offset..programdata_data_offset + buffer_data_len]
                 .copy_from_slice(&buffer.try_account_ref()?.data()[buffer_data_offset..]);
 
@@ -562,10 +562,10 @@ fn process_loader_upgradeable_instruction(
                 slot: clock.slot,
                 upgrade_authority_address: Some(*authority.unsigned_key()),
             })?;
-            programdata.try_account_ref_mut()?.data
+            programdata.try_account_ref_mut()?.data_as_mut_slice()
                 [programdata_data_offset..programdata_data_offset + buffer_data_len]
                 .copy_from_slice(&buffer.try_account_ref()?.data()[buffer_data_offset..]);
-            for i in &mut programdata.try_account_ref_mut()?.data
+            for i in &mut programdata.try_account_ref_mut()?.data_as_mut_slice()
                 [programdata_data_offset + buffer_data_len..]
             {
                 *i = 0
@@ -668,7 +668,7 @@ fn process_loader_instruction(
                 return Err(InstructionError::MissingRequiredSignature);
             }
             write_program_data(
-                &mut program.try_account_ref_mut()?.data,
+                &mut program.try_account_ref_mut()?.data_as_mut_slice(),
                 offset as usize,
                 &bytes,
                 invoke_context,
@@ -1023,7 +1023,7 @@ mod tests {
         program_account.borrow_mut().executable = false; // Un-finalize the account
 
         // Case: Finalize
-        program_account.borrow_mut().data[0] = 0; // bad elf
+        program_account.borrow_mut().data_as_mut_slice()[0] = 0; // bad elf
         let keyed_accounts = vec![KeyedAccount::new(&program_key, true, &program_account)];
         assert_eq!(
             Err(InstructionError::InvalidAccountData),
@@ -1552,7 +1552,7 @@ mod tests {
                 authority_address: Some(upgrade_authority_keypair.pubkey()),
             })
             .unwrap();
-        buffer_account.data[UpgradeableLoaderState::buffer_data_offset().unwrap()..]
+        buffer_account.data_as_mut_slice()[UpgradeableLoaderState::buffer_data_offset().unwrap()..]
             .copy_from_slice(&elf);
         let program_account = AccountSharedData::new(
             min_programdata_balance,
@@ -2039,7 +2039,8 @@ mod tests {
                 authority_address: Some(upgrade_authority_keypair.pubkey()),
             })
             .unwrap();
-        modified_buffer_account.data[UpgradeableLoaderState::buffer_data_offset().unwrap()..]
+        modified_buffer_account.data_as_mut_slice()
+            [UpgradeableLoaderState::buffer_data_offset().unwrap()..]
             .copy_from_slice(&elf);
         modified_buffer_account.data.truncate(5);
         bank.store_account(&buffer_address, &modified_buffer_account);
@@ -2080,7 +2081,8 @@ mod tests {
                 authority_address: Some(buffer_address),
             })
             .unwrap();
-        modified_buffer_account.data[UpgradeableLoaderState::buffer_data_offset().unwrap()..]
+        modified_buffer_account.data_as_mut_slice()
+            [UpgradeableLoaderState::buffer_data_offset().unwrap()..]
             .copy_from_slice(&elf);
         bank.store_account(&buffer_address, &modified_buffer_account);
         bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
@@ -2120,7 +2122,8 @@ mod tests {
                 authority_address: None,
             })
             .unwrap();
-        modified_buffer_account.data[UpgradeableLoaderState::buffer_data_offset().unwrap()..]
+        modified_buffer_account.data_as_mut_slice()
+            [UpgradeableLoaderState::buffer_data_offset().unwrap()..]
             .copy_from_slice(&elf);
         bank.store_account(&buffer_address, &modified_buffer_account);
         bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
@@ -2209,7 +2212,7 @@ mod tests {
                     authority_address: Some(*buffer_authority),
                 })
                 .unwrap();
-            buffer_account.borrow_mut().data
+            buffer_account.borrow_mut().data_as_mut_slice()
                 [UpgradeableLoaderState::buffer_data_offset().unwrap()..]
                 .copy_from_slice(&elf_new);
             let programdata_account = AccountSharedData::new_ref(
