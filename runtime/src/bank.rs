@@ -12292,4 +12292,105 @@ pub(crate) mod tests {
         let failure_log = failure_log_info.log_messages.clone().pop().unwrap();
         assert!(failure_log.contains(&"failed".to_string()));
     }
+
+    #[test]
+    fn test_get_largest_accounts() {
+        let GenesisConfigInfo { genesis_config, .. } =
+            create_genesis_config_with_leader(42, &solana_sdk::pubkey::new_rand(), 42);
+        let bank = Bank::new(&genesis_config);
+
+        let pubkeys: Vec<_> = (0..5).map(|_| Pubkey::new_unique()).collect();
+        let pubkeys_hashset: HashSet<_> = pubkeys.iter().cloned().collect();
+
+        let pubkeys_balances: Vec<_> = pubkeys
+            .iter()
+            .cloned()
+            .zip(vec![
+                sol_to_lamports(2.0),
+                sol_to_lamports(3.0),
+                sol_to_lamports(3.0),
+                sol_to_lamports(4.0),
+                sol_to_lamports(5.0),
+            ])
+            .collect();
+
+        // Initialize accounts; all have larger SOL balances than current Bank built-ins
+        let account0 = Account::new(pubkeys_balances[0].1, 0, &Pubkey::default());
+        bank.store_account(&pubkeys_balances[0].0, &account0);
+        let account1 = Account::new(pubkeys_balances[1].1, 0, &Pubkey::default());
+        bank.store_account(&pubkeys_balances[1].0, &account1);
+        let account2 = Account::new(pubkeys_balances[2].1, 0, &Pubkey::default());
+        bank.store_account(&pubkeys_balances[2].0, &account2);
+        let account3 = Account::new(pubkeys_balances[3].1, 0, &Pubkey::default());
+        bank.store_account(&pubkeys_balances[3].0, &account3);
+        let account4 = Account::new(pubkeys_balances[4].1, 0, &Pubkey::default());
+        bank.store_account(&pubkeys_balances[4].0, &account4);
+
+        // Create HashSet to exclude an account
+        let exclude4: HashSet<_> = pubkeys[4..].iter().cloned().collect();
+
+        let mut sorted_accounts = pubkeys_balances.clone();
+        sorted_accounts.sort_by(|a, b| a.1.cmp(&b.1).reverse());
+
+        // Return only one largest account
+        assert_eq!(
+            bank.get_largest_accounts(1, &pubkeys_hashset, AccountAddressFilter::Include),
+            vec![(pubkeys[4], sol_to_lamports(5.0))]
+        );
+        assert_eq!(
+            bank.get_largest_accounts(1, &HashSet::new(), AccountAddressFilter::Exclude),
+            vec![(pubkeys[4], sol_to_lamports(5.0))]
+        );
+        assert_eq!(
+            bank.get_largest_accounts(1, &exclude4, AccountAddressFilter::Exclude),
+            vec![(pubkeys[3], sol_to_lamports(4.0))]
+        );
+
+        // Return all added accounts
+        let results =
+            bank.get_largest_accounts(10, &pubkeys_hashset, AccountAddressFilter::Include);
+        assert_eq!(results.len(), sorted_accounts.len());
+        for pubkey_balance in sorted_accounts.iter() {
+            assert!(results.contains(pubkey_balance));
+        }
+        let mut sorted_results = results.clone();
+        sorted_results.sort_by(|a, b| a.1.cmp(&b.1).reverse());
+        assert_eq!(sorted_results, results);
+
+        let expected_accounts = sorted_accounts[1..].to_vec();
+        let results = bank.get_largest_accounts(10, &exclude4, AccountAddressFilter::Exclude);
+        // results include 5 Bank builtins
+        assert_eq!(results.len(), 10);
+        for pubkey_balance in expected_accounts.iter() {
+            assert!(results.contains(pubkey_balance));
+        }
+        let mut sorted_results = results.clone();
+        sorted_results.sort_by(|a, b| a.1.cmp(&b.1).reverse());
+        assert_eq!(sorted_results, results);
+
+        // Return 3 added accounts
+        let expected_accounts = sorted_accounts[0..4].to_vec();
+        let results = bank.get_largest_accounts(4, &pubkeys_hashset, AccountAddressFilter::Include);
+        assert_eq!(results.len(), expected_accounts.len());
+        for pubkey_balance in expected_accounts.iter() {
+            assert!(results.contains(pubkey_balance));
+        }
+
+        let expected_accounts = expected_accounts[1..4].to_vec();
+        let results = bank.get_largest_accounts(3, &exclude4, AccountAddressFilter::Exclude);
+        assert_eq!(results.len(), expected_accounts.len());
+        for pubkey_balance in expected_accounts.iter() {
+            assert!(results.contains(pubkey_balance));
+        }
+
+        // Exclude more, and non-sequential, accounts
+        let exclude: HashSet<_> = vec![pubkeys[0], pubkeys[2], pubkeys[4]]
+            .iter()
+            .cloned()
+            .collect();
+        assert_eq!(
+            bank.get_largest_accounts(2, &exclude, AccountAddressFilter::Exclude),
+            vec![pubkeys_balances[3], pubkeys_balances[1]]
+        );
+    }
 }

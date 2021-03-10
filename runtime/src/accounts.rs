@@ -538,9 +538,8 @@ impl Accounts {
         filter_by_address: &HashSet<Pubkey>,
         filter: AccountAddressFilter,
     ) -> Vec<(Pubkey, u64)> {
-        let mut accounts_balances = self.accounts_db.scan_accounts(
-            ancestors,
-            |collector: &mut Vec<(Pubkey, u64)>, option| {
+        self.accounts_db
+            .scan_accounts(ancestors, |collector: &mut Vec<(Pubkey, u64)>, option| {
                 if let Some(data) = option
                     .filter(|(pubkey, account, _)| {
                         let should_include_pubkey = match filter {
@@ -551,14 +550,24 @@ impl Accounts {
                     })
                     .map(|(pubkey, account, _slot)| (*pubkey, account.lamports))
                 {
-                    collector.push(data)
+                    let index_of_first_smaller_account =
+                        collector.iter().position(|&(entry_pubkey, entry_balance)| {
+                            entry_balance < data.1
+                                || (entry_balance == data.1 && entry_pubkey > data.0)
+                        });
+                    match index_of_first_smaller_account {
+                        Some(i) => {
+                            collector.insert(i, data);
+                        }
+                        None => {
+                            if collector.len() <= num {
+                                collector.push(data);
+                            }
+                        }
+                    }
+                    collector.truncate(num);
                 }
-            },
-        );
-
-        accounts_balances.sort_by(|a, b| a.1.cmp(&b.1).reverse());
-        accounts_balances.truncate(num);
-        accounts_balances
+            })
     }
 
     pub fn calculate_capitalization(
