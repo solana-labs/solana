@@ -6,6 +6,7 @@ authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
+documentation = "https://docs.rs/solana-bpf-rust-sanity"
 edition = "2018"
 
 [dependencies]
