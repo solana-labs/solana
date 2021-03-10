@@ -30,7 +30,6 @@ use solana_sdk::{
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     clock::Clock,
     entrypoint::SUCCESS,
-    feature_set::matching_buffer_upgrade_authorities,
     ic_logger_msg, ic_msg,
     instruction::InstructionError,
     keyed_account::{from_keyed_account, next_keyed_account, KeyedAccount},
@@ -303,27 +302,18 @@ fn process_loader_upgradeable_instruction(
                 return Err(InstructionError::AccountAlreadyInitialized);
             }
 
-            if invoke_context.is_feature_active(&matching_buffer_upgrade_authorities::id()) {
-                let authority = next_keyed_account(account_iter)?;
+            let authority = next_keyed_account(account_iter)?;
 
-                buffer.set_state(&UpgradeableLoaderState::Buffer {
-                    authority_address: Some(*authority.unsigned_key()),
-                })?;
-            } else {
-                let authority = next_keyed_account(account_iter)
-                    .ok()
-                    .map(|account| account.unsigned_key());
-                buffer.set_state(&UpgradeableLoaderState::Buffer {
-                    authority_address: authority.cloned(),
-                })?;
-            }
+            buffer.set_state(&UpgradeableLoaderState::Buffer {
+                authority_address: Some(*authority.unsigned_key()),
+            })?;
         }
         UpgradeableLoaderInstruction::Write { offset, bytes } => {
             let buffer = next_keyed_account(account_iter)?;
             let authority = next_keyed_account(account_iter)?;
 
             if let UpgradeableLoaderState::Buffer { authority_address } = buffer.state()? {
-                if authority_address == None {
+                if authority_address.is_none() {
                     ic_logger_msg!(logger, "Buffer is immutable");
                     return Err(InstructionError::Immutable); // TODO better error code
                 }
@@ -354,19 +344,9 @@ fn process_loader_upgradeable_instruction(
             let rent = from_keyed_account::<Rent>(next_keyed_account(account_iter)?)?;
             let clock = from_keyed_account::<Clock>(next_keyed_account(account_iter)?)?;
             let system = next_keyed_account(account_iter)?;
-            let (upgrade_authority_address, upgrade_authority_signer) =
-                if invoke_context.is_feature_active(&matching_buffer_upgrade_authorities::id()) {
-                    let authority = next_keyed_account(account_iter)?;
-                    (
-                        Some(*authority.unsigned_key()),
-                        authority.signer_key().is_none(),
-                    )
-                } else {
-                    let authority = next_keyed_account(account_iter)
-                        .ok()
-                        .map(|account| account.unsigned_key());
-                    (authority.cloned(), false)
-                };
+            let authority = next_keyed_account(account_iter)?;
+            let upgrade_authority_address = Some(*authority.unsigned_key());
+            let upgrade_authority_signer = authority.signer_key().is_none();
 
             // Verify Program account
 
@@ -386,15 +366,13 @@ fn process_loader_upgradeable_instruction(
             // Verify Buffer account
 
             if let UpgradeableLoaderState::Buffer { authority_address } = buffer.state()? {
-                if invoke_context.is_feature_active(&matching_buffer_upgrade_authorities::id()) {
-                    if authority_address != upgrade_authority_address {
-                        ic_logger_msg!(logger, "Buffer and upgrade authority don't match");
-                        return Err(InstructionError::IncorrectAuthority);
-                    }
-                    if upgrade_authority_signer {
-                        ic_logger_msg!(logger, "Upgrade authority did not sign");
-                        return Err(InstructionError::MissingRequiredSignature);
-                    }
+                if authority_address != upgrade_authority_address {
+                    ic_logger_msg!(logger, "Buffer and upgrade authority don't match");
+                    return Err(InstructionError::IncorrectAuthority);
+                }
+                if upgrade_authority_signer {
+                    ic_logger_msg!(logger, "Upgrade authority did not sign");
+                    return Err(InstructionError::MissingRequiredSignature);
                 }
             } else {
                 ic_logger_msg!(logger, "Invalid Buffer account");
@@ -511,15 +489,13 @@ fn process_loader_upgradeable_instruction(
             // Verify Buffer account
 
             if let UpgradeableLoaderState::Buffer { authority_address } = buffer.state()? {
-                if invoke_context.is_feature_active(&matching_buffer_upgrade_authorities::id()) {
-                    if authority_address != Some(*authority.unsigned_key()) {
-                        ic_logger_msg!(logger, "Buffer and upgrade authority don't match");
-                        return Err(InstructionError::IncorrectAuthority);
-                    }
-                    if authority.signer_key().is_none() {
-                        ic_logger_msg!(logger, "Upgrade authority did not sign");
-                        return Err(InstructionError::MissingRequiredSignature);
-                    }
+                if authority_address != Some(*authority.unsigned_key()) {
+                    ic_logger_msg!(logger, "Buffer and upgrade authority don't match");
+                    return Err(InstructionError::IncorrectAuthority);
+                }
+                if authority.signer_key().is_none() {
+                    ic_logger_msg!(logger, "Upgrade authority did not sign");
+                    return Err(InstructionError::MissingRequiredSignature);
                 }
             } else {
                 ic_logger_msg!(logger, "Invalid Buffer account");
@@ -553,7 +529,7 @@ fn process_loader_upgradeable_instruction(
                 upgrade_authority_address,
             } = programdata.state()?
             {
-                if upgrade_authority_address == None {
+                if upgrade_authority_address.is_none() {
                     ic_logger_msg!(logger, "Program not upgradeable");
                     return Err(InstructionError::Immutable);
                 }
@@ -614,13 +590,11 @@ fn process_loader_upgradeable_instruction(
 
             match account.state()? {
                 UpgradeableLoaderState::Buffer { authority_address } => {
-                    if invoke_context.is_feature_active(&matching_buffer_upgrade_authorities::id())
-                        && new_authority == None
-                    {
+                    if new_authority.is_none() {
                         ic_logger_msg!(logger, "Buffer authority is not optional");
                         return Err(InstructionError::IncorrectAuthority);
                     }
-                    if authority_address == None {
+                    if authority_address.is_none() {
                         ic_logger_msg!(logger, "Buffer is immutable");
                         return Err(InstructionError::Immutable);
                     }
@@ -640,7 +614,7 @@ fn process_loader_upgradeable_instruction(
                     slot,
                     upgrade_authority_address,
                 } => {
-                    if upgrade_authority_address == None {
+                    if upgrade_authority_address.is_none() {
                         ic_logger_msg!(logger, "Program not upgradeable");
                         return Err(InstructionError::Immutable);
                     }

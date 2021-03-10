@@ -16,13 +16,12 @@ fn bench_verify_account_changes_data(bencher: &mut Bencher) {
     let pre = PreAccount::new(
         &pubkey::new_rand(),
         &AccountSharedData::new(0, BUFSIZE, &owner),
-        false,
     );
     let post = AccountSharedData::new(0, BUFSIZE, &owner);
     assert_eq!(
         pre.verify(
             &owner,
-            Some(false),
+            false,
             &Rent::default(),
             &post,
             &mut ExecuteDetailsTimings::default()
@@ -34,7 +33,7 @@ fn bench_verify_account_changes_data(bencher: &mut Bencher) {
     bencher.iter(|| {
         pre.verify(
             &owner,
-            Some(false),
+            false,
             &Rent::default(),
             &post,
             &mut ExecuteDetailsTimings::default(),
@@ -53,12 +52,11 @@ fn bench_verify_account_changes_data(bencher: &mut Bencher) {
     let pre = PreAccount::new(
         &pubkey::new_rand(),
         &AccountSharedData::new(0, BUFSIZE, &owner),
-        false,
     );
     bencher.iter(|| {
         pre.verify(
             &non_owner,
-            Some(false),
+            false,
             &Rent::default(),
             &post,
             &mut ExecuteDetailsTimings::default(),
