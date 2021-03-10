@@ -542,11 +542,15 @@ impl Accounts {
             .scan_accounts(ancestors, |collector: &mut Vec<(Pubkey, u64)>, option| {
                 if let Some(data) = option
                     .filter(|(pubkey, account, _)| {
-                        let should_include_pubkey = match filter {
-                            AccountAddressFilter::Exclude => !filter_by_address.contains(&pubkey),
-                            AccountAddressFilter::Include => filter_by_address.contains(&pubkey),
-                        };
-                        should_include_pubkey && account.lamports != 0
+                        account.lamports != 0
+                            && match filter {
+                                AccountAddressFilter::Exclude => {
+                                    !filter_by_address.contains(&pubkey)
+                                }
+                                AccountAddressFilter::Include => {
+                                    filter_by_address.contains(&pubkey)
+                                }
+                            }
                     })
                     .map(|(pubkey, account, _slot)| (*pubkey, account.lamports))
                 {
