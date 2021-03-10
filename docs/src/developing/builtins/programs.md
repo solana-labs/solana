@@ -13,7 +13,7 @@ across upgrades.
 
 For each builtin program the program id and description each supported
 instruction is provided. A transaction can mix and match instructions from different
-programs, as well include instructions from deployed programs.
+programs, as well include instructions from on-chain programs.
 
 ## System Program
 

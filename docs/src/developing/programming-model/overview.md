@@ -14,4 +14,4 @@ transaction. If any instruction is invalid, all account changes in the
 transaction are discarded.
 
 To start developing immediately you can build, deploy, and run one of the
-[examples](developing/deployed-programs/examples.md).
+[examples](developing/on-chain-programs/examples.md).
