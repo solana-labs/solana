@@ -763,32 +763,38 @@ pub fn process_catchup(
         let slots_per_second =
             (previous_slot_distance - slot_distance) as f64 / f64::from(sleep_interval);
 
-        let average_time_remaining = slot_distance == 0 || if total_sleep_interval == 0 {
-            "".to_string()
-        } else {
-            let distance_delta = start_slot_distance as i64 - slot_distance as i64;
-            let average_catchup_slots_per_second = distance_delta as f64 / f64::from(total_sleep_interval);
-            let average_time_remaining = (slot_distance as f64 / average_catchup_slots_per_second).round();
-            if !average_time_remaining.is_normal() {
+        let average_time_remaining = slot_distance == 0
+            || if total_sleep_interval == 0 {
                 "".to_string()
-            } else if average_time_remaining < 0.0 {
-                format!(
-                    " (AVG: {:.1} slots/second (falling))",
-                    average_catchup_slots_per_second
-                )
             } else {
-                // important not to miss next scheduled lead slots
-                let total_node_slot_delta = node_slot as i64 - start_node_slot as i64;
-                let average_node_slots_per_second = total_node_slot_delta as f64 / f64::from(total_sleep_interval);
-                let expected_finish_slot = (node_slot as f64 + average_time_remaining as f64 * average_node_slots_per_second as f64).round();
-                format!(
-                    " (AVG: {:.1} slots/second, ETA: slot {} in {})",
-                    average_catchup_slots_per_second,
-                    expected_finish_slot,
-                    humantime::format_duration(Duration::from_secs_f64(average_time_remaining))
-                )
-            }
-        };
+                let distance_delta = start_slot_distance as i64 - slot_distance as i64;
+                let average_catchup_slots_per_second =
+                    distance_delta as f64 / f64::from(total_sleep_interval);
+                let average_time_remaining =
+                    (slot_distance as f64 / average_catchup_slots_per_second).round();
+                if !average_time_remaining.is_normal() {
+                    "".to_string()
+                } else if average_time_remaining < 0.0 {
+                    format!(
+                        " (AVG: {:.1} slots/second (falling))",
+                        average_catchup_slots_per_second
+                    )
+                } else {
+                    // important not to miss next scheduled lead slots
+                    let total_node_slot_delta = node_slot as i64 - start_node_slot as i64;
+                    let average_node_slots_per_second =
+                        total_node_slot_delta as f64 / f64::from(total_sleep_interval);
+                    let expected_finish_slot = (node_slot as f64
+                        + average_time_remaining as f64 * average_node_slots_per_second as f64)
+                        .round();
+                    format!(
+                        " (AVG: {:.1} slots/second, ETA: slot {} in {})",
+                        average_catchup_slots_per_second,
+                        expected_finish_slot,
+                        humantime::format_duration(Duration::from_secs_f64(average_time_remaining))
+                    )
+                }
+            };
 
         progress_bar.set_message(&format!(
             "{} slot(s) {} (us:{} them:{}){}",
