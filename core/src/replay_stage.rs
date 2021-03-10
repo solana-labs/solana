@@ -2583,7 +2583,7 @@ pub(crate) mod tests {
                 &Arc::new(RpcSubscriptions::new(
                     &exit,
                     bank_forks.clone(),
-                    block_commitment_cache.clone(),
+                    block_commitment_cache,
                     OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
                 )),
             );
