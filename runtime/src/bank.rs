@@ -12315,15 +12315,15 @@ pub(crate) mod tests {
             .collect();
 
         // Initialize accounts; all have larger SOL balances than current Bank built-ins
-        let account0 = Account::new(pubkeys_balances[0].1, 0, &Pubkey::default());
+        let account0 = AccountSharedData::new(pubkeys_balances[0].1, 0, &Pubkey::default());
         bank.store_account(&pubkeys_balances[0].0, &account0);
-        let account1 = Account::new(pubkeys_balances[1].1, 0, &Pubkey::default());
+        let account1 = AccountSharedData::new(pubkeys_balances[1].1, 0, &Pubkey::default());
         bank.store_account(&pubkeys_balances[1].0, &account1);
-        let account2 = Account::new(pubkeys_balances[2].1, 0, &Pubkey::default());
+        let account2 = AccountSharedData::new(pubkeys_balances[2].1, 0, &Pubkey::default());
         bank.store_account(&pubkeys_balances[2].0, &account2);
-        let account3 = Account::new(pubkeys_balances[3].1, 0, &Pubkey::default());
+        let account3 = AccountSharedData::new(pubkeys_balances[3].1, 0, &Pubkey::default());
         bank.store_account(&pubkeys_balances[3].0, &account3);
-        let account4 = Account::new(pubkeys_balances[4].1, 0, &Pubkey::default());
+        let account4 = AccountSharedData::new(pubkeys_balances[4].1, 0, &Pubkey::default());
         bank.store_account(&pubkeys_balances[4].0, &account4);
 
         // Create HashSet to exclude an account
