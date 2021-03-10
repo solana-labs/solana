@@ -7,7 +7,7 @@ smart contracts elsewhere) with the Solana tools.
 
 To learn about developing and executing programs on Solana, start with the
 [overview](developing/programming-model/overview.md) and then dig into the
-details of [deployed programs](developing/deployed-programs/overview.md).
+details of [on-chain programs](developing/on-chain-programs/overview.md).
 
 To deploy a program, use the Solana tools to interact with the on-chain loader
 to:

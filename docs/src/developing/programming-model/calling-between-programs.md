@@ -275,7 +275,7 @@ result against the addresses supplied in the instruction.
 ## Examples
 
 Refer to [Developing with
-Rust](developing/deployed-programs/../../../deployed-programs/developing-rust.md#examples)
+Rust](developing/on-chain-programs/../../../on-chain-programs/developing-rust.md#examples)
 and [Developing with
-C](developing/deployed-programs/../../../deployed-programs/developing-c.md#examples)
+C](developing/on-chain-programs/../../../on-chain-programs/developing-c.md#examples)
 for examples of how to use cross-program invocation.
