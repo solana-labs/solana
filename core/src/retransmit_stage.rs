@@ -258,7 +258,7 @@ fn check_if_first_shred_received(
 
     let mut first_shreds_received_locked = first_shreds_received.lock().unwrap();
     if !first_shreds_received_locked.contains(&shred_slot) {
-        info!("First time receiving a shred from slot: {}", shred_slot);
+        datapoint_info!("retransmit-first-shred", ("slot", shred_slot, i64));
         first_shreds_received_locked.insert(shred_slot);
         if first_shreds_received_locked.len() > 100 {
             let mut slots_before_root =
