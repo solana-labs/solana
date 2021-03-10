@@ -7,7 +7,7 @@ use dashmap::DashMap;
 use rand::Rng;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use solana_runtime::{
-    accounts::{create_test_accounts, Accounts},
+    accounts::{create_test_accounts, AccountAddressFilter, Accounts},
     bank::*,
 };
 use solana_sdk::{
@@ -358,5 +358,27 @@ fn bench_dashmap_iter(bencher: &mut Bencher) {
                 .map(|cached_account| (*cached_account.key(), cached_account.value().1))
                 .collect::<Vec<(Pubkey, Hash)>>(),
         );
+    });
+}
+
+#[bench]
+fn bench_load_largest_accounts(b: &mut Bencher) {
+    let accounts =
+        Accounts::new_with_config(Vec::new(), &ClusterType::Development, HashSet::new(), false);
+    let mut rng = rand::thread_rng();
+    for _ in 0..10_000 {
+        let lamports = rng.gen();
+        let pubkey = Pubkey::new_unique();
+        let account = AccountSharedData::new(lamports, 0, &Pubkey::default());
+        accounts.store_slow_uncached(0, &pubkey, &account);
+    }
+    let ancestors = vec![(0, 0)].into_iter().collect();
+    b.iter(|| {
+        accounts.load_largest_accounts(
+            &ancestors,
+            20,
+            &HashSet::new(),
+            AccountAddressFilter::Exclude,
+        )
     });
 }

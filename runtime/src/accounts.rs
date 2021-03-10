@@ -31,7 +31,8 @@ use solana_sdk::{
     transaction::{Transaction, TransactionError},
 };
 use std::{
-    collections::{hash_map, HashMap, HashSet},
+    cmp::Reverse,
+    collections::{hash_map, BinaryHeap, HashMap, HashSet},
     ops::RangeBounds,
     path::PathBuf,
     sync::{Arc, Mutex},
@@ -538,36 +539,42 @@ impl Accounts {
         filter_by_address: &HashSet<Pubkey>,
         filter: AccountAddressFilter,
     ) -> Vec<(Pubkey, u64)> {
-        self.accounts_db
-            .scan_accounts(ancestors, |collector: &mut Vec<(Pubkey, u64)>, option| {
-                if let Some(data) = option
-                    .filter(|(pubkey, account, _)| {
-                        let should_include_pubkey = match filter {
-                            AccountAddressFilter::Exclude => !filter_by_address.contains(&pubkey),
-                            AccountAddressFilter::Include => filter_by_address.contains(&pubkey),
-                        };
-                        should_include_pubkey && account.lamports != 0
-                    })
-                    .map(|(pubkey, account, _slot)| (*pubkey, account.lamports))
-                {
-                    let index_of_first_smaller_account =
-                        collector.iter().position(|&(entry_pubkey, entry_balance)| {
-                            entry_balance < data.1
-                                || (entry_balance == data.1 && entry_pubkey > data.0)
-                        });
-                    match index_of_first_smaller_account {
-                        Some(i) => {
-                            collector.insert(i, data);
-                        }
-                        None => {
-                            if collector.len() <= num {
-                                collector.push(data);
-                            }
-                        }
+        if num == 0 {
+            return vec![];
+        }
+        let account_balances = self.accounts_db.scan_accounts(
+            ancestors,
+            |collector: &mut BinaryHeap<Reverse<(u64, Pubkey)>>, option| {
+                if let Some((pubkey, account, _slot)) = option {
+                    if account.lamports == 0 {
+                        return;
                     }
-                    collector.truncate(num);
+                    let contains_address = filter_by_address.contains(pubkey);
+                    let collect = match filter {
+                        AccountAddressFilter::Exclude => !contains_address,
+                        AccountAddressFilter::Include => contains_address,
+                    };
+                    if !collect {
+                        return;
+                    }
+                    if collector.len() == num {
+                        let Reverse(entry) = collector
+                            .peek()
+                            .expect("BinaryHeap::peek should succeed when len > 0");
+                        if *entry >= (account.lamports, *pubkey) {
+                            return;
+                        }
+                        collector.pop();
+                    }
+                    collector.push(Reverse((account.lamports, *pubkey)));
                 }
-            })
+            },
+        );
+        account_balances
+            .into_sorted_vec()
+            .into_iter()
+            .map(|Reverse((balance, pubkey))| (pubkey, balance))
+            .collect()
     }
 
     pub fn calculate_capitalization(
@@ -2394,5 +2401,130 @@ mod tests {
             &collected_nonce_account,
             &next_blockhash
         ));
+    }
+
+    #[test]
+    fn test_load_largest_accounts() {
+        let accounts =
+            Accounts::new_with_config(Vec::new(), &ClusterType::Development, HashSet::new(), false);
+
+        let pubkey0 = Pubkey::new_unique();
+        let account0 = AccountSharedData::new(42, 0, &Pubkey::default());
+        accounts.store_slow_uncached(0, &pubkey0, &account0);
+        let pubkey1 = Pubkey::new_unique();
+        let account1 = AccountSharedData::new(42, 0, &Pubkey::default());
+        accounts.store_slow_uncached(0, &pubkey1, &account1);
+        let pubkey2 = Pubkey::new_unique();
+        let account2 = AccountSharedData::new(41, 0, &Pubkey::default());
+        accounts.store_slow_uncached(0, &pubkey2, &account2);
+
+        let ancestors = vec![(0, 0)].into_iter().collect();
+        let all_pubkeys: HashSet<_> = vec![pubkey0, pubkey1, pubkey2].into_iter().collect();
+
+        // num == 0 should always return empty set
+        assert_eq!(
+            accounts.load_largest_accounts(
+                &ancestors,
+                0,
+                &HashSet::new(),
+                AccountAddressFilter::Exclude
+            ),
+            vec![]
+        );
+        assert_eq!(
+            accounts.load_largest_accounts(
+                &ancestors,
+                0,
+                &all_pubkeys,
+                AccountAddressFilter::Include
+            ),
+            vec![]
+        );
+
+        // list should be sorted by balance, then pubkey, descending
+        assert!(pubkey1 > pubkey0);
+        assert_eq!(
+            accounts.load_largest_accounts(
+                &ancestors,
+                1,
+                &HashSet::new(),
+                AccountAddressFilter::Exclude
+            ),
+            vec![(pubkey1, 42)]
+        );
+        assert_eq!(
+            accounts.load_largest_accounts(
+                &ancestors,
+                2,
+                &HashSet::new(),
+                AccountAddressFilter::Exclude
+            ),
+            vec![(pubkey1, 42), (pubkey0, 42)]
+        );
+        assert_eq!(
+            accounts.load_largest_accounts(
+                &ancestors,
+                3,
+                &HashSet::new(),
+                AccountAddressFilter::Exclude
+            ),
+            vec![(pubkey1, 42), (pubkey0, 42), (pubkey2, 41)]
+        );
+
+        // larger num should not affect results
+        assert_eq!(
+            accounts.load_largest_accounts(
+                &ancestors,
+                6,
+                &HashSet::new(),
+                AccountAddressFilter::Exclude
+            ),
+            vec![(pubkey1, 42), (pubkey0, 42), (pubkey2, 41)]
+        );
+
+        // AccountAddressFilter::Exclude should exclude entry
+        let exclude1: HashSet<_> = vec![pubkey1].into_iter().collect();
+        assert_eq!(
+            accounts.load_largest_accounts(&ancestors, 1, &exclude1, AccountAddressFilter::Exclude),
+            vec![(pubkey0, 42)]
+        );
+        assert_eq!(
+            accounts.load_largest_accounts(&ancestors, 2, &exclude1, AccountAddressFilter::Exclude),
+            vec![(pubkey0, 42), (pubkey2, 41)]
+        );
+        assert_eq!(
+            accounts.load_largest_accounts(&ancestors, 3, &exclude1, AccountAddressFilter::Exclude),
+            vec![(pubkey0, 42), (pubkey2, 41)]
+        );
+
+        // AccountAddressFilter::Include should limit entries
+        let include1_2: HashSet<_> = vec![pubkey1, pubkey2].into_iter().collect();
+        assert_eq!(
+            accounts.load_largest_accounts(
+                &ancestors,
+                1,
+                &include1_2,
+                AccountAddressFilter::Include
+            ),
+            vec![(pubkey1, 42)]
+        );
+        assert_eq!(
+            accounts.load_largest_accounts(
+                &ancestors,
+                2,
+                &include1_2,
+                AccountAddressFilter::Include
+            ),
+            vec![(pubkey1, 42), (pubkey2, 41)]
+        );
+        assert_eq!(
+            accounts.load_largest_accounts(
+                &ancestors,
+                3,
+                &include1_2,
+                AccountAddressFilter::Include
+            ),
+            vec![(pubkey1, 42), (pubkey2, 41)]
+        );
     }
 }
