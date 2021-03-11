@@ -1,7 +1,7 @@
 #![allow(clippy::integer_arithmetic)]
 use clap::{
-    crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App, Arg,
-    ArgMatches, SubCommand,
+    crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App, AppSettings,
+    Arg, ArgMatches, SubCommand,
 };
 use itertools::Itertools;
 use log::*;
@@ -811,6 +811,9 @@ fn main() {
     let matches = App::new(crate_name!())
         .about(crate_description!())
         .version(solana_version::version!())
+        .setting(AppSettings::InferSubcommands)
+        .setting(AppSettings::SubcommandRequiredElseHelp)
+        .setting(AppSettings::VersionlessSubcommands)
         .arg(
             Arg::with_name("ledger_path")
                 .short("l")
@@ -818,7 +821,8 @@ fn main() {
                 .value_name("DIR")
                 .takes_value(true)
                 .global(true)
-                .help("Use DIR for ledger location"),
+                .default_value("ledger")
+                .help("Use DIR as ledger location"),
         )
         .arg(
             Arg::with_name("wal_recovery_mode")
@@ -1355,7 +1359,11 @@ fn main() {
 
     // Canonicalize ledger path to avoid issues with symlink creation
     let ledger_path = fs::canonicalize(&ledger_path).unwrap_or_else(|err| {
-        eprintln!("Unable to access ledger path: {:?}", err);
+        eprintln!(
+            "Unable to access ledger path '{}': {}",
+            ledger_path.display(),
+            err
+        );
         exit(1);
     });
 
