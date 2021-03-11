@@ -5120,7 +5120,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_bank_capitalization() {
-        let bank = Arc::new(Bank::new(&GenesisConfig {
+        let bank0 = Arc::new(Bank::new(&GenesisConfig {
             accounts: (0..42)
                 .map(|_| {
                     (
@@ -5132,13 +5132,16 @@ pub(crate) mod tests {
             cluster_type: ClusterType::MainnetBeta,
             ..GenesisConfig::default()
         }));
-        let sysvar_lamports_at_slot0 = 10;
-        assert_eq!(bank.capitalization(), 42 * 42 + sysvar_lamports_at_slot0);
-        let bank1 = Bank::new_from_parent(&bank, &Pubkey::default(), 1);
-        let sysvar_lamports_at_slot1 = 2;
+        let sysvar_and_native_proram_delta0 = 10;
+        assert_eq!(
+            bank0.capitalization(),
+            42 * 42 + sysvar_and_native_proram_delta0
+        );
+        let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+        let sysvar_and_native_proram_delta1 = 2;
         assert_eq!(
             bank1.capitalization(),
-            42 * 42 + sysvar_lamports_at_slot0 + sysvar_lamports_at_slot1
+            42 * 42 + sysvar_and_native_proram_delta0 + sysvar_and_native_proram_delta1,
         );
     }
 
@@ -5712,9 +5715,9 @@ pub(crate) mod tests {
 
         let current_capitalization = bank.capitalization.load(Relaxed);
 
-        let sysvar_delta = 1;
+        let sysvar_and_native_proram_delta = 1;
         assert_eq!(
-            previous_capitalization - current_capitalization + sysvar_delta,
+            previous_capitalization - current_capitalization + sysvar_and_native_proram_delta,
             burned_portion
         );
 
@@ -6797,10 +6800,10 @@ pub(crate) mod tests {
         // not being eagerly-collected for exact rewards calculation
         bank.restore_old_behavior_for_fragile_tests();
 
-        let sysvar_lamports_at_slot0 = 10;
+        let sysvar_and_native_proram_delta = 10;
         assert_eq!(
             bank.capitalization(),
-            42 * 1_000_000_000 + sysvar_lamports_at_slot0
+            42 * 1_000_000_000 + sysvar_and_native_proram_delta
         );
         assert!(bank.rewards.read().unwrap().is_empty());
 
@@ -6852,7 +6855,9 @@ pub(crate) mod tests {
         assert_ne!(bank1.capitalization(), bank.capitalization());
 
         // verify the inflation is represented in validator_points *
-        // let inflation = bank1.capitalization() - bank.capitalization();
+        let sysvar_and_native_proram_delta = 2;
+        let inflation =
+            bank1.capitalization() - bank.capitalization() - sysvar_and_native_proram_delta;
 
         let rewards = bank1
             .get_account(&sysvar::rewards::id())
@@ -6869,10 +6874,8 @@ pub(crate) mod tests {
         );
 
         // verify the rewards are the right size
-        //assert!(
-        //    ((rewards.validator_point_value * validator_points as f64) - (inflation + sysvar_lamports_at_slot0) as f64).abs()
-        //        < 1.0 // rounding, truncating
-        //);
+        let total_rewards = rewards.validator_point_value * validator_points as f64;
+        assert!((total_rewards - inflation as f64).abs() < 1.0); // rounding, truncating
 
         // verify validator rewards show up in bank1.rewards vector
         assert_eq!(
@@ -6920,10 +6923,10 @@ pub(crate) mod tests {
         // not being eagerly-collected for exact rewards calculation
         bank.restore_old_behavior_for_fragile_tests();
 
-        let sysvar_lamports_at_slot0 = 10;
+        let sysvar_and_native_proram_delta = 10;
         assert_eq!(
             bank.capitalization(),
-            42 * 1_000_000_000 + sysvar_lamports_at_slot0
+            42 * 1_000_000_000 + sysvar_and_native_proram_delta
         );
         assert!(bank.rewards.read().unwrap().is_empty());
 
@@ -7369,9 +7372,9 @@ pub(crate) mod tests {
         ); // Leader collects fee after the bank is frozen
 
         // verify capitalization
-        let sysvar_delta = 1;
+        let sysvar_and_native_proram_delta = 1;
         assert_eq!(
-            capitalization - expected_fee_burned + sysvar_delta,
+            capitalization - expected_fee_burned + sysvar_and_native_proram_delta,
             bank.capitalization()
         );
 
@@ -10724,9 +10727,9 @@ pub(crate) mod tests {
 
         // assert that everything gets in order....
         assert!(bank1.get_account(&reward_pubkey).is_none());
-        let sysvar_delta = 1;
+        let sysvar_and_native_proram_delta = 1;
         assert_eq!(
-            bank0.capitalization() + 1 + 1_000_000_000 + sysvar_delta,
+            bank0.capitalization() + 1 + 1_000_000_000 + sysvar_and_native_proram_delta,
             bank1.capitalization()
         );
         assert_eq!(bank1.capitalization(), bank1.calculate_capitalization());

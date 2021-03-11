@@ -3487,6 +3487,7 @@ impl AccountsDb {
         AccountsHash::checked_cast_for_capitalization(balances.map(|b| b as u128).sum::<u128>())
     }
 
+    // remove this by inlining and remove extra unused params upto all callchain
     pub fn account_balance_for_capitalization(
         lamports: u64,
         _owner: &Pubkey,
@@ -6987,10 +6988,6 @@ pub mod tests {
             )],
         );
         db.update_accounts_hash_test(some_slot, &ancestors);
-        //assert_matches!(
-        //    db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1),
-        //    Ok(_)
-        //);
         assert_matches!(
             db.verify_bank_hash_and_lamports(some_slot, &ancestors, 2),
             Ok(_)
@@ -7883,14 +7880,6 @@ pub mod tests {
             ),
             10
         );
-        assert_eq!(
-            AccountsDb::account_balance_for_capitalization(
-                10,
-                &solana_sdk::pubkey::new_rand(),
-                false,
-            ),
-            10
-        );
     }
 
     #[test]
@@ -7908,9 +7897,9 @@ pub mod tests {
             1
         );
 
-        // currently transactions can send any lamports to sysvars although this is not sensible.
+        // transactions can send any lamports to sysvars although this is not sensible.
         assert_eq!(
-            AccountsDb::account_balance_for_capitalization(10, &solana_sdk::sysvar::id(), false,),
+            AccountsDb::account_balance_for_capitalization(10, &solana_sdk::sysvar::id(), false),
             10
         );
     }
