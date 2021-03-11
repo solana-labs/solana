@@ -1,6 +1,4 @@
-use crate::{
-    cluster_info::ClusterInfo, cluster_slots::ClusterSlots,
-};
+use crate::{cluster_info::ClusterInfo, cluster_slots::ClusterSlots};
 use solana_ledger::blockstore::{Blockstore, CompletedSlotsReceiver};
 use solana_measure::measure::Measure;
 use solana_runtime::bank_forks::BankForks;
@@ -98,11 +96,7 @@ impl ClusterSlotsService {
             let mut update_completed_slots_elapsed =
                 Measure::start("update_completed_slots_elapsed");
             if let Some(slots) = slots {
-                Self::update_completed_slots(
-                    slots,
-                    &completed_slots_receiver,
-                    &cluster_info,
-                );
+                Self::update_completed_slots(slots, &completed_slots_receiver, &cluster_info);
             }
             cluster_slots.update(new_root, &cluster_info, &bank_forks);
             update_completed_slots_elapsed.stop();

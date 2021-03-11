@@ -4305,7 +4305,7 @@ pub mod tests {
         let ledger_path = get_tmp_ledger_path!();
         let BlockstoreSignals {
             blockstore: ledger,
-            completed_slots_receiver: recvr,
+            completed_slots_receivers: [recvr, _],
             ..
         } = Blockstore::open_with_signal(&ledger_path, None, true).unwrap();
         let ledger = Arc::new(ledger);
@@ -4331,7 +4331,7 @@ pub mod tests {
         let ledger_path = get_tmp_ledger_path!();
         let BlockstoreSignals {
             blockstore: ledger,
-            completed_slots_receiver: recvr,
+            completed_slots_receivers: [recvr, _],
             ..
         } = Blockstore::open_with_signal(&ledger_path, None, true).unwrap();
         let ledger = Arc::new(ledger);
@@ -4375,7 +4375,7 @@ pub mod tests {
         let ledger_path = get_tmp_ledger_path!();
         let BlockstoreSignals {
             blockstore: ledger,
-            completed_slots_receiver: recvr,
+            completed_slots_receivers: [recvr, _],
             ..
         } = Blockstore::open_with_signal(&ledger_path, None, true).unwrap();
         let ledger = Arc::new(ledger);
