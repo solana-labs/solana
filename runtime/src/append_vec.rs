@@ -5,7 +5,7 @@ use log::*;
 use memmap2::MmapMut;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{
-    account::{AccountSharedData, ReadableAccount},
+    account::{Account, AccountSharedData, ReadableAccount},
     clock::{Epoch, Slot},
     hash::Hash,
     pubkey::Pubkey,
@@ -84,13 +84,13 @@ pub struct StoredAccountMeta<'a> {
 impl<'a> StoredAccountMeta<'a> {
     /// Return a new Account by copying all the data referenced by the `StoredAccountMeta`.
     pub fn clone_account(&self) -> AccountSharedData {
-        AccountSharedData {
+        AccountSharedData::from(Account {
             lamports: self.account_meta.lamports,
             owner: self.account_meta.owner,
             executable: self.account_meta.executable,
             rent_epoch: self.account_meta.rent_epoch,
             data: self.data.to_vec(),
-        }
+        })
     }
 
     fn sanitize(&self) -> bool {

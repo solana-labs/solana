@@ -446,7 +446,7 @@ mod tests {
     use crate::{bank::Bank, bank_client::BankClient};
     use bincode::serialize;
     use solana_sdk::{
-        account::{self, AccountSharedData},
+        account::{self, Account, AccountSharedData},
         client::SyncClient,
         fee_calculator::FeeCalculator,
         genesis_config::create_genesis_config,
@@ -912,10 +912,10 @@ mod tests {
         let from_account = AccountSharedData::new_ref(100, 0, &system_program::id());
 
         let populated_key = solana_sdk::pubkey::new_rand();
-        let populated_account = AccountSharedData {
+        let populated_account = AccountSharedData::from(Account {
             data: vec![0, 1, 2, 3],
-            ..AccountSharedData::default()
-        }
+            ..Account::default()
+        })
         .into();
 
         let signers = [from, populated_key]

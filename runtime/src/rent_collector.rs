@@ -123,6 +123,7 @@ impl RentCollector {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use solana_sdk::account::Account;
 
     #[test]
     fn test_collect_from_account_created_and_existing() {
@@ -131,11 +132,11 @@ mod tests {
         let new_epoch = 3;
 
         let (mut created_account, mut existing_account) = {
-            let account = AccountSharedData {
+            let account = AccountSharedData::from(Account {
                 lamports: old_lamports,
                 rent_epoch: old_epoch,
-                ..AccountSharedData::default()
-            };
+                ..Account::default()
+            });
 
             (account.clone(), account)
         };

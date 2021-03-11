@@ -3100,6 +3100,7 @@ pub mod tests {
         accounts_background_service::AbsRequestSender, commitment::BlockCommitment,
     };
     use solana_sdk::{
+        account::Account,
         clock::MAX_RECENT_BLOCKHASHES,
         fee_calculator::DEFAULT_BURN_PERCENT,
         hash::{hash, Hash},
@@ -5614,12 +5615,12 @@ pub mod tests {
             close_authority: COption::Some(owner),
         };
         TokenAccount::pack(token_account, &mut account_data).unwrap();
-        let token_account = AccountSharedData {
+        let token_account = AccountSharedData::from(Account {
             lamports: 111,
             data: account_data.to_vec(),
             owner: spl_token_id_v2_0(),
-            ..AccountSharedData::default()
-        };
+            ..Account::default()
+        });
         let token_account_pubkey = solana_sdk::pubkey::new_rand();
         bank.store_account(&token_account_pubkey, &token_account);
 
@@ -5633,12 +5634,12 @@ pub mod tests {
             freeze_authority: COption::Some(owner),
         };
         Mint::pack(mint_state, &mut mint_data).unwrap();
-        let mint_account = AccountSharedData {
+        let mint_account = AccountSharedData::from(Account {
             lamports: 111,
             data: mint_data.to_vec(),
             owner: spl_token_id_v2_0(),
-            ..AccountSharedData::default()
-        };
+            ..Account::default()
+        });
         bank.store_account(&Pubkey::from_str(&mint.to_string()).unwrap(), &mint_account);
 
         let req = format!(
@@ -5710,12 +5711,12 @@ pub mod tests {
             close_authority: COption::Some(owner),
         };
         TokenAccount::pack(token_account, &mut account_data).unwrap();
-        let token_account = AccountSharedData {
+        let token_account = AccountSharedData::from(Account {
             lamports: 111,
             data: account_data.to_vec(),
             owner: spl_token_id_v2_0(),
-            ..AccountSharedData::default()
-        };
+            ..Account::default()
+        });
         let token_with_different_mint_pubkey = solana_sdk::pubkey::new_rand();
         bank.store_account(&token_with_different_mint_pubkey, &token_account);
 
@@ -5929,12 +5930,12 @@ pub mod tests {
             freeze_authority: COption::Some(owner),
         };
         Mint::pack(mint_state, &mut mint_data).unwrap();
-        let mint_account = AccountSharedData {
+        let mint_account = AccountSharedData::from(Account {
             lamports: 111,
             data: mint_data.to_vec(),
             owner: spl_token_id_v2_0(),
-            ..AccountSharedData::default()
-        };
+            ..Account::default()
+        });
         bank.store_account(
             &Pubkey::from_str(&new_mint.to_string()).unwrap(),
             &mint_account,
@@ -5951,12 +5952,12 @@ pub mod tests {
             close_authority: COption::Some(owner),
         };
         TokenAccount::pack(token_account, &mut account_data).unwrap();
-        let token_account = AccountSharedData {
+        let token_account = AccountSharedData::from(Account {
             lamports: 111,
             data: account_data.to_vec(),
             owner: spl_token_id_v2_0(),
-            ..AccountSharedData::default()
-        };
+            ..Account::default()
+        });
         let token_with_smaller_balance = solana_sdk::pubkey::new_rand();
         bank.store_account(&token_with_smaller_balance, &token_account);
 
@@ -6015,12 +6016,12 @@ pub mod tests {
             close_authority: COption::Some(owner),
         };
         TokenAccount::pack(token_account, &mut account_data).unwrap();
-        let token_account = AccountSharedData {
+        let token_account = AccountSharedData::from(Account {
             lamports: 111,
             data: account_data.to_vec(),
             owner: spl_token_id_v2_0(),
-            ..AccountSharedData::default()
-        };
+            ..Account::default()
+        });
         let token_account_pubkey = solana_sdk::pubkey::new_rand();
         bank.store_account(&token_account_pubkey, &token_account);
 
@@ -6034,12 +6035,12 @@ pub mod tests {
             freeze_authority: COption::Some(owner),
         };
         Mint::pack(mint_state, &mut mint_data).unwrap();
-        let mint_account = AccountSharedData {
+        let mint_account = AccountSharedData::from(Account {
             lamports: 111,
             data: mint_data.to_vec(),
             owner: spl_token_id_v2_0(),
-            ..AccountSharedData::default()
-        };
+            ..Account::default()
+        });
         bank.store_account(&Pubkey::from_str(&mint.to_string()).unwrap(), &mint_account);
 
         let req = format!(

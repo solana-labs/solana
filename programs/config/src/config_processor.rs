@@ -134,7 +134,7 @@ mod tests {
     use bincode::serialized_size;
     use serde_derive::{Deserialize, Serialize};
     use solana_sdk::{
-        account::AccountSharedData,
+        account::{Account, AccountSharedData},
         keyed_account::create_keyed_is_signer_accounts,
         process_instruction::MockInvokeContext,
         signature::{Keypair, Signer},
@@ -183,11 +183,11 @@ mod tests {
             } => space,
             _ => panic!("Not a CreateAccount system instruction"),
         };
-        let config_account = RefCell::new(AccountSharedData {
+        let config_account = RefCell::new(AccountSharedData::from(Account {
             data: vec![0; space as usize],
             owner: id(),
-            ..AccountSharedData::default()
-        });
+            ..Account::default()
+        }));
         let accounts = vec![(&config_pubkey, true, &config_account)];
         let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
         assert_eq!(
@@ -338,10 +338,10 @@ mod tests {
         let my_config = MyConfig::new(42);
 
         let instruction = config_instruction::store(&config_pubkey, false, keys, &my_config);
-        let signer0_account = RefCell::new(AccountSharedData {
+        let signer0_account = RefCell::new(AccountSharedData::from(Account {
             owner: id(),
-            ..AccountSharedData::default()
-        });
+            ..Account::default()
+        }));
         let accounts = vec![(&signer0_pubkey, true, &signer0_account)];
         let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
         assert_eq!(

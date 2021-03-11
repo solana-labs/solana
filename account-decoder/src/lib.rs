@@ -224,10 +224,10 @@ mod test {
     fn test_base64_zstd() {
         let encoded_account = UiAccount::encode(
             &Pubkey::default(),
-            AccountSharedData {
+            AccountSharedData::from(Account {
                 data: vec![0; 1024],
-                ..AccountSharedData::default()
-            },
+                ..Account::default()
+            }),
             UiAccountEncoding::Base64Zstd,
             None,
             None,
