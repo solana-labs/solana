@@ -326,8 +326,6 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         accounts: &[Rc<RefCell<AccountSharedData>>],
         caller_write_privileges: Option<&[bool]>,
     ) -> Result<(), InstructionError> {
-        let cpi_share_ro_and_exec_accounts =
-            self.is_feature_active(&cpi_share_ro_and_exec_accounts::id());
         match self.program_ids.last() {
             Some(program_id) => MessageProcessor::verify_and_update(
                 message,
@@ -338,7 +336,6 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
                 &self.rent,
                 caller_write_privileges,
                 &mut self.timings,
-                cpi_share_ro_and_exec_accounts,
             ),
             None => Err(InstructionError::GenericError), // Should never happen
         }
@@ -956,7 +953,6 @@ impl MessageProcessor {
         rent: &Rent,
         caller_write_privileges: Option<&[bool]>,
         timings: &mut ExecuteDetailsTimings,
-        cpi_share_ro_and_exec_accounts: bool,
     ) -> Result<(), InstructionError> {
         // Verify the per-account instruction results
         let (mut pre_sum, mut post_sum) = (0_u128, 0_u128);
@@ -982,7 +978,7 @@ impl MessageProcessor {
                         pre_account.verify(&program_id, is_writable, &rent, &account, timings)?;
                         pre_sum += u128::from(pre_account.lamports());
                         post_sum += u128::from(account.lamports);
-                        if !cpi_share_ro_and_exec_accounts || (is_writable && !account.executable) {
+                        if is_writable && !account.executable {
                             pre_account.update(&account);
                         }
                         return Ok(());
