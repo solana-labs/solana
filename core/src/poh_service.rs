@@ -121,6 +121,7 @@ impl PohService {
         let mut total_lock_time_ns = 0;
         let mut total_hash_time_ns = 0;
         let mut total_tick_time_ns = 0;
+        let mut sleep_deficit_ns = 0;
         loop {
             num_hashes += hashes_per_batch;
             let should_tick = {
@@ -148,6 +149,12 @@ impl PohService {
                 }
                 num_ticks += 1;
                 let elapsed_ns = now.elapsed().as_nanos() as u64;
+
+                /*if elapsed_ns > target_tick_ns {
+                    sleep_deficit_ns += elapsed_ns - target_tick_ns;
+                }
+                let sleep_time_ns = target_tick_ns.saturating_sub(sleep_deficit);*/
+
                 // sleep is not accurate enough to get a predictable time.
                 // Kernel can not schedule the thread for a while.
                 while (now.elapsed().as_nanos() as u64) < target_tick_ns {

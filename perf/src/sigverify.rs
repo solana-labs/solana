@@ -30,6 +30,13 @@ const TRACER_KEY: Pubkey = Pubkey::new_from_array(TRACER_KEY_BYTES);
 lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(get_thread_count())
+        .spawn_handler(|_thread| {
+            if affinity::get_core_num() >= 4 {
+                let cores: Vec<_> = (2..affinity::get_core_num()).into_iter().collect();
+                affinity::set_thread_affinity(&cores).unwrap();
+            }
+            Ok(())
+        })
         .thread_name(|ix| format!("sigverify_{}", ix))
         .build()
         .unwrap();

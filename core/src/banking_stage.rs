@@ -227,6 +227,10 @@ impl BankingStage {
                     .name("solana-banking-stage-tx".to_string())
                     .spawn(move || {
                         thread_mem_usage::datapoint("solana-banking-stage-tx");
+                        if affinity::get_core_num() >= 4 {
+                            let cores: Vec<_> = (2..affinity::get_core_num()).into_iter().collect();
+                            affinity::set_thread_affinity(&cores).unwrap();
+                        }
                         Self::process_loop(
                             my_pubkey,
                             &verified_receiver,
