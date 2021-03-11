@@ -8,7 +8,7 @@ use solana_sdk::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-    feature_set::{instructions_sysvar_enabled, FeatureSet},
+    feature_set::{cpi_share_ro_and_exec_accounts, instructions_sysvar_enabled, FeatureSet},
     ic_msg,
     instruction::{CompiledInstruction, Instruction, InstructionError},
     keyed_account::{create_keyed_readonly_accounts, KeyedAccount},
@@ -82,14 +82,14 @@ impl ExecuteDetailsTimings {
 #[derive(Clone, Debug, Default)]
 pub struct PreAccount {
     key: Pubkey,
-    account: RefCell<AccountSharedData>,
+    account: Rc<RefCell<AccountSharedData>>,
     changed: bool,
 }
 impl PreAccount {
     pub fn new(key: &Pubkey, account: &AccountSharedData) -> Self {
         Self {
             key: *key,
-            account: RefCell::new(account.clone()),
+            account: Rc::new(RefCell::new(account.clone())),
             changed: false,
         }
     }
@@ -254,7 +254,8 @@ pub struct ThisInvokeContext<'a> {
     program_ids: Vec<Pubkey>,
     rent: Rent,
     pre_accounts: Vec<PreAccount>,
-    account_deps: &'a [(Pubkey, RefCell<AccountSharedData>)],
+    executables: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
+    account_deps: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
     programs: &'a [(Pubkey, ProcessInstructionWithContext)],
     logger: Rc<RefCell<dyn Logger>>,
     bpf_compute_budget: BpfComputeBudget,
@@ -270,7 +271,8 @@ impl<'a> ThisInvokeContext<'a> {
         program_id: &Pubkey,
         rent: Rent,
         pre_accounts: Vec<PreAccount>,
-        account_deps: &'a [(Pubkey, RefCell<AccountSharedData>)],
+        executables: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        account_deps: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
         programs: &'a [(Pubkey, ProcessInstructionWithContext)],
         log_collector: Option<Rc<LogCollector>>,
         bpf_compute_budget: BpfComputeBudget,
@@ -284,6 +286,7 @@ impl<'a> ThisInvokeContext<'a> {
             program_ids,
             rent,
             pre_accounts,
+            executables,
             account_deps,
             programs,
             logger: Rc::new(RefCell::new(ThisLogger { log_collector })),
@@ -321,7 +324,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         message: &Message,
         instruction: &CompiledInstruction,
         accounts: &[Rc<RefCell<AccountSharedData>>],
-        caller_privileges: Option<&[bool]>,
+        caller_write_privileges: Option<&[bool]>,
     ) -> Result<(), InstructionError> {
         match self.program_ids.last() {
             Some(program_id) => MessageProcessor::verify_and_update(
@@ -331,7 +334,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
                 accounts,
                 program_id,
                 &self.rent,
-                caller_privileges,
+                caller_write_privileges,
                 &mut self.timings,
             ),
             None => Err(InstructionError::GenericError), // Should never happen
@@ -368,23 +371,37 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     fn is_feature_active(&self, feature_id: &Pubkey) -> bool {
         self.feature_set.is_active(feature_id)
     }
-    fn get_account(&self, pubkey: &Pubkey) -> Option<RefCell<AccountSharedData>> {
-        if let Some(account) = self.pre_accounts.iter().find_map(|pre| {
-            if pre.key == *pubkey {
+    fn get_account(&self, pubkey: &Pubkey) -> Option<Rc<RefCell<AccountSharedData>>> {
+        if self.is_feature_active(&cpi_share_ro_and_exec_accounts::id()) {
+            if let Some((_, account)) = self.executables.iter().find(|(key, _)| key == pubkey) {
+                Some(account.clone())
+            } else if let Some((_, account)) =
+                self.account_deps.iter().find(|(key, _)| key == pubkey)
+            {
+                Some(account.clone())
+            } else if let Some(pre) = self.pre_accounts.iter().find(|pre| pre.key == *pubkey) {
                 Some(pre.account.clone())
             } else {
                 None
             }
-        }) {
-            return Some(account);
-        }
-        self.account_deps.iter().find_map(|(key, account)| {
-            if key == pubkey {
-                Some(account.clone())
-            } else {
-                None
+        } else {
+            if let Some(account) = self.pre_accounts.iter().find_map(|pre| {
+                if pre.key == *pubkey {
+                    Some(pre.account.clone())
+                } else {
+                    None
+                }
+            }) {
+                return Some(account);
             }
-        })
+            self.account_deps.iter().find_map(|(key, account)| {
+                if key == pubkey {
+                    Some(account.clone())
+                } else {
+                    None
+                }
+            })
+        }
     }
     fn update_timing(
         &mut self,
@@ -508,7 +525,7 @@ impl MessageProcessor {
     fn create_keyed_accounts<'a>(
         message: &'a Message,
         instruction: &'a CompiledInstruction,
-        executable_accounts: &'a [(Pubkey, RefCell<AccountSharedData>)],
+        executable_accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
         accounts: &'a [Rc<RefCell<AccountSharedData>>],
     ) -> Vec<KeyedAccount<'a>> {
         let mut keyed_accounts = create_keyed_readonly_accounts(&executable_accounts);
@@ -665,7 +682,7 @@ impl MessageProcessor {
     ) -> Result<(), InstructionError> {
         let invoke_context = RefCell::new(invoke_context);
 
-        let (message, executables, accounts, account_refs, caller_privileges) = {
+        let (message, executables, accounts, account_refs, caller_write_privileges) = {
             let invoke_context = invoke_context.borrow();
 
             let caller_program_id = invoke_context.get_caller()?;
@@ -676,11 +693,11 @@ impl MessageProcessor {
                 .iter()
                 .map(|seeds| Pubkey::create_program_address(&seeds, caller_program_id))
                 .collect::<Result<Vec<_>, solana_sdk::pubkey::PubkeyError>>()?;
-            let mut caller_privileges = keyed_accounts
+            let mut caller_write_privileges = keyed_accounts
                 .iter()
                 .map(|keyed_account| keyed_account.is_writable())
                 .collect::<Vec<bool>>();
-            caller_privileges.insert(0, false);
+            caller_write_privileges.insert(0, false);
             let (message, callee_program_id, _) =
                 Self::create_message(&instruction, &keyed_accounts, &signers, &invoke_context)?;
             let mut accounts = vec![];
@@ -756,7 +773,7 @@ impl MessageProcessor {
                 executables,
                 accounts,
                 account_refs,
-                caller_privileges,
+                caller_write_privileges,
             )
         };
 
@@ -765,7 +782,7 @@ impl MessageProcessor {
             &message,
             &executables,
             &accounts,
-            &caller_privileges,
+            &caller_write_privileges,
             *(&mut *(invoke_context.borrow_mut())),
         )?;
 
@@ -801,9 +818,9 @@ impl MessageProcessor {
     /// This method calls the instruction's program entrypoint function
     pub fn process_cross_program_instruction(
         message: &Message,
-        executable_accounts: &[(Pubkey, RefCell<AccountSharedData>)],
+        executable_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         accounts: &[Rc<RefCell<AccountSharedData>>],
-        caller_privileges: &[bool],
+        caller_write_privileges: &[bool],
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
         if let Some(instruction) = message.instructions.get(0) {
@@ -814,7 +831,7 @@ impl MessageProcessor {
                 message,
                 instruction,
                 accounts,
-                Some(caller_privileges),
+                Some(caller_write_privileges),
             )?;
 
             // Construct keyed accounts
@@ -870,7 +887,7 @@ impl MessageProcessor {
 
     /// Verify there are no outstanding borrows
     pub fn verify_account_references(
-        accounts: &[(Pubkey, RefCell<AccountSharedData>)],
+        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
     ) -> Result<(), InstructionError> {
         for (_, account) in accounts.iter() {
             account
@@ -885,7 +902,7 @@ impl MessageProcessor {
         message: &Message,
         instruction: &CompiledInstruction,
         pre_accounts: &[PreAccount],
-        executable_accounts: &[(Pubkey, RefCell<AccountSharedData>)],
+        executable_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         accounts: &[Rc<RefCell<AccountSharedData>>],
         rent: &Rent,
         timings: &mut ExecuteDetailsTimings,
@@ -898,10 +915,13 @@ impl MessageProcessor {
         {
             let program_id = instruction.program_id(&message.account_keys);
             let mut work = |unique_index: usize, account_index: usize| {
-                // Verify account has no outstanding references and take one
-                let account = accounts[account_index]
-                    .try_borrow_mut()
-                    .map_err(|_| InstructionError::AccountBorrowOutstanding)?;
+                {
+                    // Verify account has no outstanding references
+                    let _ = accounts[account_index]
+                        .try_borrow_mut()
+                        .map_err(|_| InstructionError::AccountBorrowOutstanding)?;
+                }
+                let account = accounts[account_index].borrow();
                 pre_accounts[unique_index].verify(
                     &program_id,
                     message.is_writable(account_index),
@@ -931,7 +951,7 @@ impl MessageProcessor {
         accounts: &[Rc<RefCell<AccountSharedData>>],
         program_id: &Pubkey,
         rent: &Rent,
-        caller_privileges: Option<&[bool]>,
+        caller_write_privileges: Option<&[bool]>,
         timings: &mut ExecuteDetailsTimings,
     ) -> Result<(), InstructionError> {
         // Verify the per-account instruction results
@@ -940,25 +960,27 @@ impl MessageProcessor {
             if account_index < message.account_keys.len() && account_index < accounts.len() {
                 let key = &message.account_keys[account_index];
                 let account = &accounts[account_index];
-                let is_writable = if let Some(caller_privileges) = caller_privileges {
-                    caller_privileges[account_index]
+                let is_writable = if let Some(caller_write_privileges) = caller_write_privileges {
+                    caller_write_privileges[account_index]
                 } else {
                     message.is_writable(account_index)
                 };
                 // Find the matching PreAccount
                 for pre_account in pre_accounts.iter_mut() {
                     if *key == pre_account.key() {
-                        // Verify account has no outstanding references and take one
-                        let account = account
-                            .try_borrow_mut()
-                            .map_err(|_| InstructionError::AccountBorrowOutstanding)?;
-
+                        {
+                            // Verify account has no outstanding references
+                            let _ = account
+                                .try_borrow_mut()
+                                .map_err(|_| InstructionError::AccountBorrowOutstanding)?;
+                        }
+                        let account = account.borrow();
                         pre_account.verify(&program_id, is_writable, &rent, &account, timings)?;
                         pre_sum += u128::from(pre_account.lamports());
                         post_sum += u128::from(account.lamports);
-
-                        pre_account.update(&account);
-
+                        if is_writable && !account.executable {
+                            pre_account.update(&account);
+                        }
                         return Ok(());
                     }
                 }
@@ -984,9 +1006,9 @@ impl MessageProcessor {
         &self,
         message: &Message,
         instruction: &CompiledInstruction,
-        executable_accounts: &[(Pubkey, RefCell<AccountSharedData>)],
+        executable_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         accounts: &[Rc<RefCell<AccountSharedData>>],
-        account_deps: &[(Pubkey, RefCell<AccountSharedData>)],
+        account_deps: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         rent_collector: &RentCollector,
         log_collector: Option<Rc<LogCollector>>,
         executors: Rc<RefCell<Executors>>,
@@ -1017,6 +1039,7 @@ impl MessageProcessor {
             program_id,
             rent_collector.rent,
             pre_accounts,
+            executable_accounts,
             account_deps,
             &self.programs,
             log_collector,
@@ -1052,12 +1075,13 @@ impl MessageProcessor {
     /// This method calls each instruction in the message over the set of loaded Accounts
     /// The accounts are committed back to the bank only if every instruction succeeds
     #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::type_complexity)]
     pub fn process_message(
         &self,
         message: &Message,
-        loaders: &[Vec<(Pubkey, RefCell<AccountSharedData>)>],
+        loaders: &[Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>],
         accounts: &[Rc<RefCell<AccountSharedData>>],
-        account_deps: &[(Pubkey, RefCell<AccountSharedData>)],
+        account_deps: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         rent_collector: &RentCollector,
         log_collector: Option<Rc<LogCollector>>,
         executors: Rc<RefCell<Executors>>,
@@ -1126,6 +1150,7 @@ mod tests {
             &program_ids[0],
             Rent::default(),
             pre_accounts,
+            &[],
             &[],
             &[],
             None,
@@ -1234,7 +1259,7 @@ mod tests {
     fn test_verify_account_references() {
         let accounts = vec![(
             solana_sdk::pubkey::new_rand(),
-            RefCell::new(AccountSharedData::default()),
+            Rc::new(RefCell::new(AccountSharedData::default())),
         )];
 
         assert!(MessageProcessor::verify_account_references(&accounts).is_ok());
@@ -1677,8 +1702,11 @@ mod tests {
         let account = AccountSharedData::new_ref(0, 1, &mock_system_program_id);
         accounts.push(account);
 
-        let mut loaders: Vec<Vec<(Pubkey, RefCell<AccountSharedData>)>> = Vec::new();
-        let account = RefCell::new(create_loadable_account("mock_system_program", 1));
+        let mut loaders: Vec<Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>> = Vec::new();
+        let account = Rc::new(RefCell::new(create_loadable_account(
+            "mock_system_program",
+            1,
+        )));
         loaders.push(vec![(mock_system_program_id, account)]);
 
         let executors = Rc::new(RefCell::new(Executors::default()));
@@ -1844,8 +1872,11 @@ mod tests {
         let account = AccountSharedData::new_ref(0, 1, &mock_program_id);
         accounts.push(account);
 
-        let mut loaders: Vec<Vec<(Pubkey, RefCell<AccountSharedData>)>> = Vec::new();
-        let account = RefCell::new(create_loadable_account("mock_system_program", 1));
+        let mut loaders: Vec<Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>> = Vec::new();
+        let account = Rc::new(RefCell::new(create_loadable_account(
+            "mock_system_program",
+            1,
+        )));
         loaders.push(vec![(mock_program_id, account)]);
 
         let executors = Rc::new(RefCell::new(Executors::default()));
@@ -1989,7 +2020,10 @@ mod tests {
         let mut program_account = AccountSharedData::new(1, 0, &native_loader::id());
         program_account.executable = true;
         let executable_preaccount = PreAccount::new(&callee_program_id, &program_account);
-        let executable_accounts = vec![(callee_program_id, RefCell::new(program_account.clone()))];
+        let executable_accounts = vec![(
+            callee_program_id,
+            Rc::new(RefCell::new(program_account.clone())),
+        )];
 
         let owned_key = solana_sdk::pubkey::new_rand();
         let owned_account = AccountSharedData::new(42, 1, &callee_program_id);
@@ -2016,6 +2050,7 @@ mod tests {
                 executable_preaccount,
             ],
             &[],
+            &[],
             programs.as_slice(),
             None,
             BpfComputeBudget::default(),
@@ -2036,7 +2071,7 @@ mod tests {
             metas.clone(),
         );
         let message = Message::new(&[instruction], None);
-        let caller_privileges = message
+        let caller_write_privileges = message
             .account_keys
             .iter()
             .enumerate()
@@ -2047,7 +2082,7 @@ mod tests {
                 &message,
                 &executable_accounts,
                 &accounts,
-                &caller_privileges,
+                &caller_write_privileges,
                 &mut invoke_context,
             ),
             Err(InstructionError::ExternalAccountDataModified)
@@ -2071,7 +2106,7 @@ mod tests {
             let instruction =
                 Instruction::new_with_bincode(callee_program_id, &case.0, metas.clone());
             let message = Message::new(&[instruction], None);
-            let caller_privileges = message
+            let caller_write_privileges = message
                 .account_keys
                 .iter()
                 .enumerate()
@@ -2082,7 +2117,7 @@ mod tests {
                     &message,
                     &executable_accounts,
                     &accounts,
-                    &caller_privileges,
+                    &caller_write_privileges,
                     &mut invoke_context,
                 ),
                 case.1

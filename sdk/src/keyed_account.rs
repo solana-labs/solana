@@ -6,6 +6,7 @@ use solana_program::{clock::Epoch, instruction::InstructionError, pubkey::Pubkey
 use std::{
     cell::{Ref, RefCell, RefMut},
     iter::FromIterator,
+    rc::Rc,
 };
 
 #[repr(C)]
@@ -160,7 +161,7 @@ pub fn create_keyed_is_signer_accounts<'a>(
 }
 
 pub fn create_keyed_readonly_accounts(
-    accounts: &[(Pubkey, RefCell<AccountSharedData>)],
+    accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
 ) -> Vec<KeyedAccount> {
     accounts
         .iter()

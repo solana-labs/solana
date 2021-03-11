@@ -1089,6 +1089,7 @@ mod tests {
             vec![],
             &[],
             &[],
+            &[],
             None,
             BpfComputeBudget {
                 max_units: 1,

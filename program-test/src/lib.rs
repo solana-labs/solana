@@ -247,7 +247,10 @@ impl program_stubs::SyscallStubs for SyscallStubs {
                 rent_epoch: ai.rent_epoch,
             }
         }
-        let executables = vec![(program_id, RefCell::new(ai_to_a(program_account_info)))];
+        let executables = vec![(
+            program_id,
+            Rc::new(RefCell::new(ai_to_a(program_account_info))),
+        )];
 
         // Convert AccountInfos into Accounts
         let mut accounts = vec![];
