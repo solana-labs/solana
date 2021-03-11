@@ -1042,7 +1042,8 @@ pub fn main() {
                 .value_name("DIR")
                 .takes_value(true)
                 .required(true)
-                .help("Use DIR as persistent ledger location"),
+                .default_value("ledger")
+                .help("Use DIR as ledger location"),
         )
         .arg(
             Arg::with_name("entrypoint")
