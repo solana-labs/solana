@@ -638,8 +638,12 @@ mod test {
     use rand::thread_rng;
     use rayon::ThreadPoolBuilder;
     use solana_perf::test_tx::test_tx;
-    use solana_sdk::hash::{hash, HASH_BYTES};
-    use solana_sdk::packet::PACKET_DATA_SIZE;
+    use solana_sdk::{
+        hash::{hash, HASH_BYTES},
+        packet::PACKET_DATA_SIZE,
+        timing::timestamp,
+    };
+    use std::iter::repeat_with;
 
     #[test]
     fn test_hash_as_u64() {
@@ -1028,6 +1032,41 @@ mod test {
             assert_eq!(to, old.label().pubkey());
             assert_eq!(self_info, entry);
         }
+    }
+
+    #[test]
+    fn test_pull_request_time() {
+        const NUM_REPS: usize = 2 * CRDS_UNIQUE_PUBKEY_CAPACITY;
+        let mut rng = rand::thread_rng();
+        let pubkeys: Vec<_> = repeat_with(Pubkey::new_unique).take(NUM_REPS).collect();
+        let mut node = CrdsGossipPull::default();
+        let mut requests = HashMap::new();
+        let now = timestamp();
+        for k in 0..NUM_REPS {
+            let pubkey = pubkeys[rng.gen_range(0, pubkeys.len())];
+            let now = now + k as u64;
+            node.mark_pull_request_creation_time(&pubkey, now);
+            *requests.entry(pubkey).or_default() = now;
+        }
+        assert!(node.pull_request_time.len() <= CRDS_UNIQUE_PUBKEY_CAPACITY);
+        // Assert that timestamps match most recent request.
+        for (pk, ts) in &node.pull_request_time {
+            assert_eq!(*ts, requests[pk]);
+        }
+        // Assert that most recent pull timestamps are maintained.
+        let max_ts = requests
+            .iter()
+            .filter(|(pk, _)| !node.pull_request_time.contains(*pk))
+            .map(|(_, ts)| *ts)
+            .max()
+            .unwrap();
+        let min_ts = requests
+            .iter()
+            .filter(|(pk, _)| node.pull_request_time.contains(*pk))
+            .map(|(_, ts)| *ts)
+            .min()
+            .unwrap();
+        assert!(max_ts <= min_ts);
     }
 
     #[test]
