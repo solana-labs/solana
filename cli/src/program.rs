@@ -649,13 +649,13 @@ fn process_program_deploy(
         .get_account_with_commitment(&program_pubkey, config.commitment)?
         .value
     {
-        // if account.owner != bpf_loader_upgradeable::id() {
-        //     return Err(format!(
-        //         "Account {:?} is not an upgradeable program or already in use",
-        //         program_pubkey
-        //     )
-        //     .into());
-        // }
+        if account.owner != bpf_loader_upgradeable::id() {
+            return Err(format!(
+                "Account {} is not an upgradeable program or already in use",
+                program_pubkey
+            )
+            .into());
+        }
 
         if !account.executable {
             // Continue an initial deploy
