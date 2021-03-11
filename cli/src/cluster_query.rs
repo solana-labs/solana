@@ -742,6 +742,10 @@ pub fn process_catchup(
         }
     };
 
+    let start_node_slot = get_slot_while_retrying(&node_client)?;
+    let start_rpc_slot = get_slot_while_retrying(rpc_client)?;
+    let start_slot_distance = start_rpc_slot as i64 - start_node_slot as i64;
+    let mut total_sleep_interval = 0;
     loop {
         // humbly retry; the reference node (rpc_client) could be spotty,
         // especially if pointing to api.meinnet-beta.solana.com at times
@@ -758,14 +762,37 @@ pub fn process_catchup(
         let slot_distance = rpc_slot as i64 - node_slot as i64;
         let slots_per_second =
             (previous_slot_distance - slot_distance) as f64 / f64::from(sleep_interval);
-        let time_remaining = (slot_distance as f64 / slots_per_second).round();
-        let time_remaining = if !time_remaining.is_normal() || time_remaining <= 0.0 {
+
+        let average_time_remaining = if slot_distance == 0 || total_sleep_interval == 0 {
             "".to_string()
         } else {
-            format!(
-                ". Time remaining: {}",
-                humantime::format_duration(Duration::from_secs_f64(time_remaining))
-            )
+            let distance_delta = start_slot_distance as i64 - slot_distance as i64;
+            let average_catchup_slots_per_second =
+                distance_delta as f64 / f64::from(total_sleep_interval);
+            let average_time_remaining =
+                (slot_distance as f64 / average_catchup_slots_per_second).round();
+            if !average_time_remaining.is_normal() {
+                "".to_string()
+            } else if average_time_remaining < 0.0 {
+                format!(
+                    " (AVG: {:.1} slots/second (falling))",
+                    average_catchup_slots_per_second
+                )
+            } else {
+                // important not to miss next scheduled lead slots
+                let total_node_slot_delta = node_slot as i64 - start_node_slot as i64;
+                let average_node_slots_per_second =
+                    total_node_slot_delta as f64 / f64::from(total_sleep_interval);
+                let expected_finish_slot = (node_slot as f64
+                    + average_time_remaining as f64 * average_node_slots_per_second as f64)
+                    .round();
+                format!(
+                    " (AVG: {:.1} slots/second, ETA: slot {} in {})",
+                    average_catchup_slots_per_second,
+                    expected_finish_slot,
+                    humantime::format_duration(Duration::from_secs_f64(average_time_remaining))
+                )
+            }
         };
 
         progress_bar.set_message(&format!(
@@ -790,7 +817,7 @@ pub fn process_catchup(
                         "gaining"
                     },
                     slots_per_second,
-                    time_remaining
+                    average_time_remaining
                 )
             },
         ));
@@ -801,6 +828,7 @@ pub fn process_catchup(
         sleep(Duration::from_secs(sleep_interval as u64));
         previous_rpc_slot = rpc_slot;
         previous_slot_distance = slot_distance;
+        total_sleep_interval += sleep_interval;
     }
 }
 
