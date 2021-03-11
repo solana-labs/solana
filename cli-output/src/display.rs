@@ -4,7 +4,7 @@ use {
     console::style,
     indicatif::{ProgressBar, ProgressStyle},
     solana_sdk::{
-        clock::UnixTimestamp, hash::Hash, native_token::lamports_to_sol,
+        clock::UnixTimestamp, hash::Hash, message::Message, native_token::lamports_to_sol,
         program_utils::limited_deserialize, transaction::Transaction,
     },
     solana_transaction_status::UiTransactionStatusMeta,
@@ -125,6 +125,37 @@ pub fn println_signers(
     println!();
 }
 
+fn format_account_mode(message: &Message, index: usize, fee_payer_index: Option<usize>) -> String {
+    format!(
+        "{}r{}{}{}{}",
+        if message.is_signer(index) {
+            "S" // upper case because of signing is special by definition
+        } else {
+            "-"
+        },
+        if message.is_writable(index) {
+            "w" // comment for consistent rust fmt (no joking; lol)
+        } else {
+            "-"
+        },
+        if message.is_executable(index) {
+            "x"
+        } else {
+            "-"
+        },
+        if Some(index) == fee_payer_index {
+            "F" // upper case because of being only one acount in tx
+        } else {
+            "-"
+        },
+        if message.is_key_passed_to_program(index) {
+            "d" // d stands for data
+        } else {
+            "-"
+        }
+    )
+}
+
 pub fn write_transaction<W: io::Write>(
     w: &mut W,
     transaction: &Transaction,
@@ -168,23 +199,45 @@ pub fn write_transaction<W: io::Write>(
         )?;
     }
     writeln!(w, "{}{:?}", prefix, message.header)?;
+    let mut fee_payer_index = None;
     for (account_index, account) in message.account_keys.iter().enumerate() {
-        writeln!(w, "{}Account {}: {:?}", prefix, account_index, account)?;
+        if fee_payer_index.is_none() && message.is_non_loader_key(account, account_index) {
+            fee_payer_index = Some(account_index)
+        }
+        writeln!(
+            w,
+            "{}Account {}: {} {}",
+            prefix,
+            account_index,
+            format_account_mode(message, account_index, fee_payer_index),
+            account
+        )?;
     }
     for (instruction_index, instruction) in message.instructions.iter().enumerate() {
         let program_pubkey = message.account_keys[instruction.program_id_index as usize];
         writeln!(w, "{}Instruction {}", prefix, instruction_index)?;
         writeln!(
             w,
-            "{}  Program: {} ({})",
-            prefix, program_pubkey, instruction.program_id_index
+            "{}  Program:   {} {} ({})",
+            prefix,
+            format_account_mode(
+                message,
+                instruction.program_id_index as usize,
+                fee_payer_index
+            ),
+            program_pubkey,
+            instruction.program_id_index
         )?;
-        for (account_index, account) in instruction.accounts.iter().enumerate() {
-            let account_pubkey = message.account_keys[*account as usize];
+        for (account_index, &account) in instruction.accounts.iter().enumerate() {
+            let account_pubkey = message.account_keys[account as usize];
             writeln!(
                 w,
-                "{}  Account {}: {} ({})",
-                prefix, account_index, account_pubkey, account
+                "{}  Account {}: {} {} ({})",
+                prefix,
+                account_index,
+                format_account_mode(message, account as usize, fee_payer_index),
+                account_pubkey,
+                account
             )?;
         }
 
