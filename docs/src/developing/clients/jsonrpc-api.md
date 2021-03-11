@@ -54,6 +54,11 @@ gives a convenient interface for the RPC methods.
 - [getSlotLeader](jsonrpc-api.md#getslotleader)
 - [getStakeActivation](jsonrpc-api.md#getstakeactivation)
 - [getSupply](jsonrpc-api.md#getsupply)
+- [getTokenAccountBalance](jsonrpc-api.md#gettokenaccountbalance)
+- [getTokenAccountsByDelegate](jsonrpc-api.md#gettokenaccountsbydelegate)
+- [getTokenAccountsByOwner](jsonrpc-api.md#gettokenaccountsbyowner)
+- [getTokenLargestAccounts](jsonrpc-api.md#gettokenlargestaccounts)
+- [getTokenSupply](jsonrpc-api.md#gettokensupply)
 - [getTransactionCount](jsonrpc-api.md#gettransactioncount)
 - [getVersion](jsonrpc-api.md#getversion)
 - [getVoteAccounts](jsonrpc-api.md#getvoteaccounts)
@@ -74,16 +79,6 @@ gives a convenient interface for the RPC methods.
   - [signatureUnsubscribe](jsonrpc-api.md#signatureunsubscribe)
   - [slotSubscribe](jsonrpc-api.md#slotsubscribe)
   - [slotUnsubscribe](jsonrpc-api.md#slotunsubscribe)
-
-## Unstable Methods
-
-Unstable methods may see breaking changes in patch releases and may not be supported in perpetuity.
-
-- [getTokenAccountBalance](jsonrpc-api.md#gettokenaccountbalance)
-- [getTokenAccountsByDelegate](jsonrpc-api.md#gettokenaccountsbydelegate)
-- [getTokenAccountsByOwner](jsonrpc-api.md#gettokenaccountsbyowner)
-- [getTokenLargestAccounts](jsonrpc-api.md#gettokenlargestaccounts)
-- [getTokenSupply](jsonrpc-api.md#gettokensupply)
 
 ## Request Formatting
 
@@ -2370,7 +2365,7 @@ Result:
 
 ### getTokenAccountBalance
 
-Returns the token balance of an SPL Token account. **UNSTABLE**
+Returns the token balance of an SPL Token account.
 
 #### Parameters:
 
@@ -2416,7 +2411,7 @@ Result:
 
 ### getTokenAccountsByDelegate
 
-Returns all SPL Token accounts by approved Delegate. **UNSTABLE**
+Returns all SPL Token accounts by approved Delegate.
 
 #### Parameters:
 
@@ -2506,7 +2501,7 @@ Result:
 
 ### getTokenAccountsByOwner
 
-Returns all SPL Token accounts by token owner. **UNSTABLE**
+Returns all SPL Token accounts by token owner.
 
 #### Parameters:
 
@@ -2596,7 +2591,7 @@ Result:
 
 ### getTokenLargestAccounts
 
-Returns the 20 largest accounts of a particular SPL Token type. **UNSTABLE**
+Returns the 20 largest accounts of a particular SPL Token type.
 
 #### Parameters:
 
@@ -2652,7 +2647,7 @@ Result:
 
 ### getTokenSupply
 
-Returns the total supply of an SPL Token type. **UNSTABLE**
+Returns the total supply of an SPL Token type.
 
 #### Parameters:
 
