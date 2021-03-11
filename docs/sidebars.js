@@ -82,10 +82,10 @@ module.exports = {
 	    },
 	    {
 		type: "category",
-		label: "Builtins",
+		label: "Runtime Facilities",
 		items: [
-		    "developing/builtins/programs",
-		    "developing/builtins/sysvars",
+		    "developing/runtime-facilities/programs",
+		    "developing/runtime-facilities/sysvars",
 		],
 	    },
 	    {

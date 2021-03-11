@@ -140,8 +140,8 @@ successfully deployed. The runtime will reject transactions that specify program
 that are not executable.
 
 
-Unlike on-chain programs, [builtins](developing/builtins/programs.md) are handled
-differently in that they are built directly into the Solana runtime.
+Unlike on-chain programs, [Native Programs](/developing/runtime-facilities/programs)
+are handled differently in that they are built directly into the Solana runtime.
 
 ### Accounts
 
