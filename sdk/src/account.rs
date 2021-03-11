@@ -397,9 +397,6 @@ impl AccountSharedData {
     pub fn set_data(&mut self, data: Vec<u8>) {
         self.data = data;
     }
-    pub fn resize_data(&mut self, new_len: usize, value: u8) {
-        self.data.resize(new_len, value);
-    }
     pub fn new(lamports: u64, space: usize, owner: &Pubkey) -> Self {
         shared_new(lamports, space, owner)
     }
@@ -545,17 +542,6 @@ pub mod tests {
         assert_eq!(account.data(), &vec![1, 2]);
         account.set_data(vec![]);
         assert_eq!(account.data().len(), 0);
-    }
-
-    #[test]
-    fn test_account_data_resize() {
-        let key = Pubkey::new_unique();
-        let (_, mut account) = make_two_accounts(&key);
-        assert_eq!(account.data(), &vec![0, 0]);
-        account.resize_data(5, 2);
-        assert_eq!(account.data(), &vec![0, 0, 2, 2, 2]);
-        account.resize_data(1, 1);
-        assert_eq!(account.data(), &vec![0]);
     }
 
     #[test]
