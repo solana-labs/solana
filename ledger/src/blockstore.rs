@@ -114,7 +114,7 @@ pub struct CompletedDataSetInfo {
 pub struct BlockstoreSignals {
     pub blockstore: Blockstore,
     pub ledger_signal_receiver: Receiver<bool>,
-    pub completed_slots_receiver: CompletedSlotsReceiver,
+    pub completed_slots_receivers: [CompletedSlotsReceiver; 2],
 }
 
 // ledger window
@@ -378,15 +378,18 @@ impl Blockstore {
             enforce_ulimit_nofile,
         )?;
         let (ledger_signal_sender, ledger_signal_receiver) = sync_channel(1);
-        let (completed_slots_sender, completed_slots_receiver) =
+        let (completed_slots_sender1, completed_slots_receiver1) =
             sync_channel(MAX_COMPLETED_SLOTS_IN_CHANNEL);
+        let (completed_slots_sender2, completed_slots_receiver2) =
+            sync_channel(MAX_COMPLETED_SLOTS_IN_CHANNEL);
+
         blockstore.new_shreds_signals = vec![ledger_signal_sender];
-        blockstore.completed_slots_senders = vec![completed_slots_sender];
+        blockstore.completed_slots_senders = vec![completed_slots_sender1, completed_slots_sender2];
 
         Ok(BlockstoreSignals {
             blockstore,
             ledger_signal_receiver,
-            completed_slots_receiver,
+            completed_slots_receivers: [completed_slots_receiver1, completed_slots_receiver2],
         })
     }
 

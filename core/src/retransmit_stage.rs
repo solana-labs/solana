@@ -12,6 +12,7 @@ use crate::{
     repair_service::DuplicateSlotsResetSender,
     repair_service::RepairInfo,
     result::{Error, Result},
+    rpc_completed_slots_service::RpcCompletedSlotsService,
     rpc_subscriptions::RpcSubscriptions,
     window_service::{should_retransmit_and_persist, WindowService},
 };
@@ -563,7 +564,7 @@ impl RetransmitStage {
         repair_socket: Arc<UdpSocket>,
         verified_receiver: Receiver<Vec<Packets>>,
         exit: &Arc<AtomicBool>,
-        completed_slots_receiver: CompletedSlotsReceiver,
+        completed_slots_receivers: [CompletedSlotsReceiver; 2],
         epoch_schedule: EpochSchedule,
         cfg: Option<Arc<AtomicBool>>,
         shred_version: u16,
@@ -588,16 +589,23 @@ impl RetransmitStage {
             rpc_subscriptions.clone(),
         );
 
-        let leader_schedule_cache_clone = leader_schedule_cache.clone();
+        let [rpc_completed_slots_receiver, cluster_completed_slots_receiver] =
+            completed_slots_receivers;
+        let rpc_completed_slots_hdl = RpcCompletedSlotsService::spawn(
+            rpc_completed_slots_receiver,
+            rpc_subscriptions,
+            exit.clone(),
+        );
         let cluster_slots_service = ClusterSlotsService::new(
             blockstore.clone(),
             cluster_slots.clone(),
             bank_forks.clone(),
             cluster_info.clone(),
-            completed_slots_receiver,
-            rpc_subscriptions,
+            cluster_completed_slots_receiver,
             exit.clone(),
         );
+
+        let leader_schedule_cache_clone = leader_schedule_cache.clone();
         let repair_info = RepairInfo {
             bank_forks,
             epoch_schedule,
@@ -633,7 +641,11 @@ impl RetransmitStage {
             completed_data_sets_sender,
         );
 
-        let thread_hdls = t_retransmit;
+        let mut thread_hdls = t_retransmit;
+        if let Some(thread_hdl) = rpc_completed_slots_hdl {
+            thread_hdls.push(thread_hdl);
+        }
+
         Self {
             thread_hdls,
             window_service,
