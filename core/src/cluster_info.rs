@@ -117,7 +117,7 @@ const PULL_RESPONSE_MIN_SERIALIZED_SIZE: usize = 161;
 // Limit number of unique pubkeys in the crds table.
 const CRDS_UNIQUE_PUBKEY_CAPACITY: usize = 4096;
 /// Minimum stake that a node should have so that its CRDS values are
-/// propagated through gossip (ContactInfo is exempted).
+/// propagated through gossip (few types are exempted).
 const MIN_STAKE_FOR_GOSSIP: u64 = 1;
 /// Minimum number of staked nodes for enforcing stakes in gossip.
 const MIN_NUM_STAKED_NODES: usize = 500;
@@ -559,7 +559,11 @@ fn retain_staked(values: &mut Vec<CrdsValue>, stakes: &HashMap<Pubkey, u64>) {
             // Otherwise unstaked voting nodes will show up with no version in
             // the various dashboards.
             CrdsData::Version(_) => true,
-            _ => {
+            CrdsData::LowestSlot(_, _)
+            | CrdsData::AccountsHashes(_)
+            | CrdsData::LegacyVersion(_)
+            | CrdsData::NodeInstance(_)
+            | CrdsData::DuplicateShred(_, _) => {
                 let stake = stakes.get(&value.pubkey()).copied();
                 stake.unwrap_or_default() >= MIN_STAKE_FOR_GOSSIP
             }

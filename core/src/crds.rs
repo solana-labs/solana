@@ -28,7 +28,7 @@ use crate::contact_info::ContactInfo;
 use crate::crds_shards::CrdsShards;
 use crate::crds_value::{CrdsData, CrdsValue, CrdsValueLabel, LowestSlot};
 use bincode::serialize;
-use indexmap::map::{rayon::ParValues, Entry, IndexMap, Values};
+use indexmap::map::{rayon::ParValues, Entry, IndexMap};
 use indexmap::set::IndexSet;
 use rayon::{prelude::*, ThreadPool};
 use solana_sdk::hash::{hash, Hash};
@@ -272,7 +272,8 @@ impl Crds {
         self.table.is_empty()
     }
 
-    pub fn values(&self) -> Values<'_, CrdsValueLabel, VersionedCrdsValue> {
+    #[cfg(test)]
+    pub(crate) fn values(&self) -> impl Iterator<Item = &VersionedCrdsValue> {
         self.table.values()
     }
 
