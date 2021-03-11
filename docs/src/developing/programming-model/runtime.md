@@ -92,7 +92,7 @@ total budget consumption will be a combination of the various costs of the
 operations it performs.
 
 At runtime a program may log how much of the compute budget remains.  See
-[debugging](developing/deployed-programs/debugging.md#monitoring-compute-budget-consumption)
+[debugging](developing/on-chain-programs/debugging.md#monitoring-compute-budget-consumption)
 for more information.
 
 The budget values are conditional on feature enablement, take a look the compute

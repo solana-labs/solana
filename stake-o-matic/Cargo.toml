@@ -3,6 +3,7 @@ authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 description = "I will find you and I will stake you"
 edition = "2018"
 homepage = "https://solana.com/"
+documentation = "https://docs.rs/"
 license = "Apache-2.0"
 name = "solana-stake-o-matic"
 repository = "https://github.com/solana-labs/stake-o-matic"

@@ -5,6 +5,7 @@ description = "Solana transaction status types"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
 homepage = "https://solana.com/"
+documentation = "https://docs.rs/solana-transaction-status"
 license = "Apache-2.0"
 edition = "2018"
 
