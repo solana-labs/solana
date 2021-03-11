@@ -6772,7 +6772,7 @@ pub(crate) mod tests {
         solana_logger::setup();
 
         // create a bank that ticks really slowly...
-        let bank = Arc::new(Bank::new(&GenesisConfig {
+        let bank0 = Arc::new(Bank::new(&GenesisConfig {
             accounts: (0..42)
                 .map(|_| {
                     (
@@ -6798,20 +6798,20 @@ pub(crate) mod tests {
 
         // enable lazy rent collection because this test depends on rent-due accounts
         // not being eagerly-collected for exact rewards calculation
-        bank.restore_old_behavior_for_fragile_tests();
+        bank0.restore_old_behavior_for_fragile_tests();
 
-        let sysvar_and_native_proram_delta = 10;
+        let sysvar_and_native_proram_delta0 = 10;
         assert_eq!(
-            bank.capitalization(),
-            42 * 1_000_000_000 + sysvar_and_native_proram_delta
+            bank0.capitalization(),
+            42 * 1_000_000_000 + sysvar_and_native_proram_delta0
         );
-        assert!(bank.rewards.read().unwrap().is_empty());
+        assert!(bank0.rewards.read().unwrap().is_empty());
 
         let ((vote_id, mut vote_account), (stake_id, stake_account)) =
             crate::stakes::tests::create_staked_node_accounts(1_0000);
 
         // set up accounts
-        bank.store_account_and_update_capitalization(&stake_id, &stake_account);
+        bank0.store_account_and_update_capitalization(&stake_id, &stake_account);
 
         // generate some rewards
         let mut vote_state = Some(VoteState::from(&vote_account).unwrap());
@@ -6821,7 +6821,7 @@ pub(crate) mod tests {
             }
             let versioned = VoteStateVersions::Current(Box::new(vote_state.take().unwrap()));
             VoteState::to(&versioned, &mut vote_account).unwrap();
-            bank.store_account_and_update_capitalization(&vote_id, &vote_account);
+            bank0.store_account_and_update_capitalization(&vote_id, &vote_account);
             match versioned {
                 VoteStateVersions::Current(v) => {
                     vote_state = Some(*v);
@@ -6829,9 +6829,9 @@ pub(crate) mod tests {
                 _ => panic!("Has to be of type Current"),
             };
         }
-        bank.store_account_and_update_capitalization(&vote_id, &vote_account);
+        bank0.store_account_and_update_capitalization(&vote_id, &vote_account);
 
-        let validator_points: u128 = bank
+        let validator_points: u128 = bank0
             .stake_delegation_accounts(&mut null_tracer())
             .iter()
             .flat_map(|(_vote_pubkey, (stake_group, vote_account))| {
@@ -6847,17 +6847,17 @@ pub(crate) mod tests {
 
         // put a child bank in epoch 1, which calls update_rewards()...
         let bank1 = Bank::new_from_parent(
-            &bank,
+            &bank0,
             &Pubkey::default(),
-            bank.get_slots_in_epoch(bank.epoch()) + 1,
+            bank0.get_slots_in_epoch(bank0.epoch()) + 1,
         );
         // verify that there's inflation
-        assert_ne!(bank1.capitalization(), bank.capitalization());
+        assert_ne!(bank1.capitalization(), bank0.capitalization());
 
         // verify the inflation is represented in validator_points *
-        let sysvar_and_native_proram_delta = 2;
-        let inflation =
-            bank1.capitalization() - bank.capitalization() - sysvar_and_native_proram_delta;
+        let sysvar_and_native_proram_delta1 = 2;
+        let paid_rewards =
+            bank1.capitalization() - bank0.capitalization() - sysvar_and_native_proram_delta1;
 
         let rewards = bank1
             .get_account(&sysvar::rewards::id())
@@ -6874,8 +6874,8 @@ pub(crate) mod tests {
         );
 
         // verify the rewards are the right size
-        let total_rewards = rewards.validator_point_value * validator_points as f64;
-        assert!((total_rewards - inflation as f64).abs() < 1.0); // rounding, truncating
+        let allocated_rewards = rewards.validator_point_value * validator_points as f64;
+        assert!((allocated_rewards - paid_rewards as f64).abs() < 1.0); // rounding, truncating
 
         // verify validator rewards show up in bank1.rewards vector
         assert_eq!(
