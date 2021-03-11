@@ -207,7 +207,7 @@ impl PreAccount {
         pre.executable = account.executable;
         if pre.data().len() != account.data().len() {
             // Only system account can change data size, copy with alloc
-            pre.data = account.data.clone();
+            pre.set_data(account.data().clone());
         } else {
             // Copy without allocate
             pre.data_as_mut_slice().clone_from_slice(&account.data());
@@ -806,7 +806,9 @@ impl MessageProcessor {
                         );
                         return Err(InstructionError::InvalidRealloc);
                     }
-                    account_ref.try_account_ref_mut()?.data = account.data.clone();
+                    account_ref
+                        .try_account_ref_mut()?
+                        .set_data(account.data().clone());
                 }
             }
         }
@@ -1319,8 +1321,8 @@ mod tests {
             self
         }
         pub fn data(mut self, pre: Vec<u8>, post: Vec<u8>) -> Self {
-            self.pre.account.borrow_mut().data = pre;
-            self.post.data = post;
+            self.pre.account.borrow_mut().set_data(pre);
+            self.post.set_data(post);
             self
         }
         pub fn rent_epoch(mut self, pre: u64, post: u64) -> Self {
@@ -1682,7 +1684,7 @@ mod tests {
                     }
                     // Change data in a read-only account
                     MockSystemInstruction::AttemptDataChange { data } => {
-                        keyed_accounts[1].account.borrow_mut().data = vec![data];
+                        keyed_accounts[1].account.borrow_mut().set_data(vec![data]);
                         Ok(())
                     }
                 }
@@ -1849,7 +1851,7 @@ mod tests {
                             let mut dup_account = keyed_accounts[2].try_account_ref_mut()?;
                             dup_account.lamports -= lamports;
                             to_account.lamports += lamports;
-                            dup_account.data = vec![data];
+                            dup_account.set_data(vec![data]);
                         }
                         keyed_accounts[0].try_account_ref_mut()?.lamports -= lamports;
                         keyed_accounts[1].try_account_ref_mut()?.lamports += lamports;

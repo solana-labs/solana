@@ -161,7 +161,7 @@ pub fn builtin_process_instruction(
             let key = keyed_account.unsigned_key();
             let (lamports, data, _owner) = &account_refs[key];
             account.lamports = **lamports.borrow();
-            account.data = data.borrow().to_vec();
+            account.set_data(data.borrow().to_vec());
         }
     }
 

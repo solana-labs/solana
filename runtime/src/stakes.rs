@@ -432,7 +432,7 @@ pub mod tests {
             assert!(vote_accounts.get(&vote_pubkey).is_none());
         }
 
-        vote_account.data = cache_data;
+        vote_account.set_data(cache_data);
         stakes.store(&vote_pubkey, &vote_account, true, true);
 
         {

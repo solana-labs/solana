@@ -394,6 +394,9 @@ impl Account {
 }
 
 impl AccountSharedData {
+    pub fn set_data(&mut self, data: Vec<u8>) {
+        self.data = data;
+    }
     pub fn new(lamports: u64, space: usize, owner: &Pubkey) -> Self {
         shared_new(lamports, space, owner)
     }
@@ -528,6 +531,17 @@ pub mod tests {
         account2.rent_epoch = 4;
         assert!(accounts_equal(&account1, &account2));
         (account1, account2)
+    }
+
+    #[test]
+    fn test_account_data_set_data() {
+        let key = Pubkey::new_unique();
+        let (_, mut account) = make_two_accounts(&key);
+        assert_eq!(account.data(), &vec![0, 0]);
+        account.set_data(vec![1, 2]);
+        assert_eq!(account.data(), &vec![1, 2]);
+        account.set_data(vec![]);
+        assert_eq!(account.data().len(), 0);
     }
 
     #[test]
