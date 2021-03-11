@@ -1,9 +1,9 @@
 ---
-title: "Builtin Programs"
+title: "Native Programs"
 ---
 
-Solana contains a small handful of builtin programs, which are required to run
-validator nodes. Unlike third-party programs, the builtin programs are part of
+Solana contains a small handful of native programs, which are required to run
+validator nodes. Unlike third-party programs, the native programs are part of
 the validator implementation and can be upgraded as part of cluster upgrades.
 Upgrades may occur to add features, fix bugs, or improve performance. Interface
 changes to individual instructions should rarely, if ever, occur. Instead, when
@@ -11,7 +11,7 @@ change is needed, new instructions are added and previous ones are marked
 deprecated. Apps can upgrade on their own timeline without concern of breakages
 across upgrades.
 
-For each builtin program the program id and description each supported
+For each native program the program id and description each supported
 instruction is provided. A transaction can mix and match instructions from different
 programs, as well include instructions from on-chain programs.
 
