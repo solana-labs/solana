@@ -1213,7 +1213,7 @@ The result will be an RpcResponse JSON object with `value` set to a JSON object 
 
 - `blockhash: <string>` - a Hash as base-58 encoded string
 - `feeCalculator: <object>` - FeeCalculator object, the fee schedule for this block hash
-- `lastValidSlot: <u64>` - last slot in which a blockhash will be valid (NOTE: this can be inaccurate when there are [skipped slots](../../terminology.md#skipped-slot))
+- `lastValidSlot: <u64>` - DEPRECATED - this value is inaccurate and should not be relied upon
 
 #### Example:
 
