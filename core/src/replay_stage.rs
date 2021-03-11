@@ -8,7 +8,9 @@ use crate::{
     cluster_slot_state_verifier::*,
     cluster_slots::ClusterSlots,
     commitment_service::{AggregateCommitmentService, CommitmentAggregationData},
-    consensus::{ComputedBankState, Stake, SwitchForkDecision, Tower, VotedStakes},
+    consensus::{
+        ComputedBankState, Stake, SwitchForkDecision, Tower, VotedStakes, SWITCH_FORK_THRESHOLD,
+    },
     fork_choice::{ForkChoice, SelectVoteAndResetForkResult},
     heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
     optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSender},
@@ -59,6 +61,8 @@ use std::{
 pub const MAX_ENTRY_RECV_PER_ITER: usize = 512;
 pub const SUPERMINORITY_THRESHOLD: f64 = 1f64 / 3f64;
 pub const MAX_UNCONFIRMED_SLOTS: usize = 5;
+pub const DUPLICATE_LIVENESS_THRESHOLD: f64 = 0.1;
+pub const DUPLICATE_THRESHOLD: f64 = 1.0 - SWITCH_FORK_THRESHOLD - DUPLICATE_LIVENESS_THRESHOLD;
 
 #[derive(PartialEq, Debug)]
 pub(crate) enum HeaviestForkFailures {
@@ -1765,7 +1769,25 @@ impl ReplayStage {
                     let reset_bank = heaviest_bank_on_same_voted_fork;
                     // If we can't switch and our last vote was on a non-duplicate/confirmed slot, then
                     // reset to the the next votable bank on the same fork as our last vote,
-                    // but don't vote
+                    // but don't vote.
+
+                    // We don't just reset to the heaviest fork when switch threshold fails because
+                    // a situation like this can occur:
+
+                    /* Figure 1:
+                                  slot 0
+                                    |
+                                  slot 1
+                                /        \
+                    slot 2 (last vote)     |
+                                |      slot 8 (10%)
+                        slot 4 (9%)
+                    */
+
+                    // Imagine 90% of validators voted on slot 4, but only 9% landed. If everybody that fails
+                    // the switch theshold abandons slot 4 to build on slot 8 (because it's *currently* heavier),
+                    // then there will be no blocks to include the votes for slot 4, and the network halts
+                    // because 90% of validators can't vote
                     info!(
                         "Waiting to switch vote to {}, resetting to slot {:?} for now",
                         heaviest_bank.slot(),
@@ -1777,18 +1799,41 @@ impl ReplayStage {
                     reset_bank.map(|b| (b, switch_fork_decision))
                 }
                 SwitchForkDecision::FailedSwitchDuplicateRollback(latest_duplicate_ancestor) => {
-                    // If we can't switch and our last vote was on an unconfirmed, duplicate slot, then we need
-                    // to reset to the heaviest bank, which will be the heaviest descendant of
-                    // a nonduplicate branch. This is because in the case of *unconfirmed* duplicate
-                    // slots, somebody needs to generate an alternative branch to escape a 50-50 split
-                    // where both partitions have voted on different versions of the same duplicate slot.
-                    // As opposed to case a) where the concern is that a leader abandoning its fork may
-                    // be abandoning votes only *observable* the next block that could make its fork the heaviest
-                    // this is safe to do because as soon as sufficient vote hashes are observed in gossip,
-                    // the duplicate slot becomes unlocked, so the lock on the duplicate slot is not indefinite.
+                    // If we can't switch and our last vote was on an unconfirmed, duplicate slot,
+                    // then we need to reset to the heaviest bank, even if the heaviest bank is not
+                    // a descendant of the last vote (usually for switch threshold failures we reset
+                    // to the heaviest descendant of the last vote, but in this case, the last vote
+                    // was on a duplicate branch). This is because in the case of *unconfirmed* duplicate
+                    // slots, somebody needs to generate an alternative branch to escape a situation
+                    // like a 50-50 split  where both partitions have voted on different versions of the
+                    // same duplicate slot.
+
+                    // Unlike the situation described in `Figure 1` above, this is safe. To see why,
+                    // imagine the same situation described in Figure 1 above occurs, but slot 2 is
+                    // a duplicate block. There are now a few cases:
+                    //
+                    // Note first that DUPLICATE_THRESHOLD + SWITCH_FORK_THRESHOLD + DUPLICATE_LIVENESS_THRESHOLD = 1;
+                    //
+                    // 1) > DUPLICATE_THRESHOLD of the network voted on some version of slot 2. Because duplicate slots can be confirmed
+                    // by gossip, unlike the situation described in `Figure 1`, we don't need those
+                    // votes to land in a descendant to confirm slot 2. Once slot 2 is confirmed by
+                    // gossip votes, that fork is added back to the fork choice set and falls back into
+                    // normal fork choice, which is covered by the `FailedSwitchThreshold` case above
+                    // (everyone will resume building on their last voted fork, slot 4, since slot 8
+                    // doesn't have for switch threshold)
+                    //
+                    // 2) <= DUPLICATE_THRESHOLD of the network voted on some version of slot 2, > SWITCH_FORK_THRESHOLD of the network voted
+                    // on slot 8. Then everybody abandons the duplicate fork from fork choice and both builds
+                    // on slot 8's fork. They can also vote on slot 8's fork because it has sufficient weight
+                    // to pass the switching threshold
+                    //
+                    // 3) <= DUPLICATE_THRESHOLD of the network voted on some version of slot 2, <= SWITCH_FORK_THRESHOLD of the network voted
+                    // on slot 8. This means more than DUPLICATE_LIVENESS_THRESHOLD of the network is gone, so we cannot
+                    // guarantee progress anyways
 
                     // Note the heaviest fork is never descended from a known unconfirmed duplicate slot
-                    // because the fork choice rule ensures that, thus it's safe to use as the reset bank.
+                    // because the fork choice rule ensures that (marks it as an invalid candidate),
+                    // thus it's safe to use as the reset bank.
                     let reset_bank = Some(heaviest_bank);
                     info!(
                         "Waiting to switch vote to {}, resetting to slot {:?} for now, latest duplicate ancestor: {:?}",

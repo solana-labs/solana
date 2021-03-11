@@ -282,6 +282,7 @@ impl HeaviestSubtreeForkChoice {
 
         true
     }
+
     pub fn all_slots_stake_voted_subtree(&self) -> Vec<(Slot, u64)> {
         self.fork_infos
             .iter()
@@ -360,11 +361,27 @@ impl HeaviestSubtreeForkChoice {
         }
     }
 
-    #[allow(clippy::map_entry)]
+    fn insert_mark_valid_aggregate_operations(
+        &self,
+        update_operations: &mut BTreeMap<(Slot, UpdateLabel), UpdateOperation>,
+        slot: Slot,
+    ) {
+        self.do_insert_aggregate_operations(update_operations, true, slot);
+    }
+
     fn insert_aggregate_operations(
         &self,
         update_operations: &mut BTreeMap<(Slot, UpdateLabel), UpdateOperation>,
-        mark_valid: bool,
+        slot: Slot,
+    ) {
+        self.do_insert_aggregate_operations(update_operations, false, slot);
+    }
+
+    #[allow(clippy::map_entry)]
+    fn do_insert_aggregate_operations(
+        &self,
+        update_operations: &mut BTreeMap<(Slot, UpdateLabel), UpdateOperation>,
+        should_mark_valid: bool,
         slot: Slot,
     ) {
         for parent in self.ancestor_iterator(slot) {
@@ -372,7 +389,7 @@ impl HeaviestSubtreeForkChoice {
             if update_operations.contains_key(&aggregate_label) {
                 break;
             } else {
-                if mark_valid {
+                if should_mark_valid {
                     update_operations
                         .insert((parent, UpdateLabel::MarkValid), UpdateOperation::MarkValid);
                 }
@@ -409,6 +426,7 @@ impl HeaviestSubtreeForkChoice {
                     If slot 4 is a duplicate slot, so no longer qualifies as a candidate until
                     the slot is confirmed, the weight of votes on slot 4 should still count towards
                     slot 2, otherwise we might pick slot 3 as the heaviest fork to build blocks on
+                    instead of slot 2.
                 */
 
                 // See comment above for why this check is outside of the `is_candidate` check.
@@ -477,11 +495,7 @@ impl HeaviestSubtreeForkChoice {
                         .entry((old_latest_vote_slot, UpdateLabel::Subtract))
                         .and_modify(|update| update.update_stake(stake_update))
                         .or_insert(UpdateOperation::Subtract(stake_update));
-                    self.insert_aggregate_operations(
-                        &mut update_operations,
-                        false,
-                        old_latest_vote_slot,
-                    );
+                    self.insert_aggregate_operations(&mut update_operations, old_latest_vote_slot);
                 }
             }
 
@@ -495,7 +509,7 @@ impl HeaviestSubtreeForkChoice {
                 .entry((new_vote_slot, UpdateLabel::Add))
                 .and_modify(|update| update.update_stake(stake_update))
                 .or_insert(UpdateOperation::Add(stake_update));
-            self.insert_aggregate_operations(&mut update_operations, false, new_vote_slot);
+            self.insert_aggregate_operations(&mut update_operations, new_vote_slot);
         }
 
         update_operations
@@ -666,7 +680,7 @@ impl ForkChoice for HeaviestSubtreeForkChoice {
                 fork_info.is_candidate = false;
                 // Aggregate to find the new best slots excluding this fork
                 let mut aggregate_operations = BTreeMap::new();
-                self.insert_aggregate_operations(&mut aggregate_operations, false, invalid_slot);
+                self.insert_aggregate_operations(&mut aggregate_operations, invalid_slot);
                 self.process_update_operations(aggregate_operations);
             }
         }
@@ -680,7 +694,7 @@ impl ForkChoice for HeaviestSubtreeForkChoice {
             // slot will incur this aggregation operation
             if !fork_info.is_candidate {
                 fork_info.is_candidate = true;
-                self.insert_aggregate_operations(&mut aggregate_operations, true, valid_slot);
+                self.insert_mark_valid_aggregate_operations(&mut aggregate_operations, valid_slot);
             }
         }
 
