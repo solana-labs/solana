@@ -65,7 +65,6 @@ pub const SIZE_OF_CODING_SHRED_HEADER: usize = 6;
 pub const SIZE_OF_SIGNATURE: usize = 64;
 pub const SIZE_OF_SHRED_TYPE: usize = 1;
 pub const SIZE_OF_SHRED_SLOT: usize = 8;
-pub const SIZE_OF_SHRED_PARENT_OFFSET: usize = 2;
 pub const SIZE_OF_SHRED_INDEX: usize = 4;
 pub const SIZE_OF_NONCE: usize = 4;
 pub const SIZE_OF_DATA_SHRED_IGNORED_TAIL: usize =
