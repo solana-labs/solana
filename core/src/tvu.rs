@@ -107,7 +107,7 @@ impl Tvu {
         tower: Tower,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         exit: &Arc<AtomicBool>,
-        completed_slots_receiver: CompletedSlotsReceiver,
+        completed_slots_receivers: [CompletedSlotsReceiver; 2],
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         cfg: Option<Arc<AtomicBool>>,
         transaction_status_sender: Option<TransactionStatusSender>,
@@ -168,7 +168,7 @@ impl Tvu {
             repair_socket,
             verified_receiver,
             &exit,
-            completed_slots_receiver,
+            completed_slots_receivers,
             *bank_forks.read().unwrap().working_bank().epoch_schedule(),
             cfg,
             tvu_config.shred_version,
@@ -356,7 +356,7 @@ pub mod tests {
         let BlockstoreSignals {
             blockstore,
             ledger_signal_receiver,
-            completed_slots_receiver,
+            completed_slots_receivers,
             ..
         } = Blockstore::open_with_signal(&blockstore_path, None, true)
             .expect("Expected to successfully open ledger");
@@ -398,7 +398,7 @@ pub mod tests {
             tower,
             &leader_schedule_cache,
             &exit,
-            completed_slots_receiver,
+            completed_slots_receivers,
             block_commitment_cache,
             None,
             None,
