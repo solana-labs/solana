@@ -8,7 +8,7 @@ import {
   PROGRAM_NAME_BY_ID,
   SYSVAR_IDS,
   LoaderName,
-  SEARCHABLE_PROGRAMS,
+  programLabel,
 } from "utils/tx";
 import { Cluster, useCluster } from "providers/cluster";
 import { useTokenRegistry } from "providers/mints/token-registry";
@@ -66,13 +66,14 @@ export function SearchBar() {
   );
 }
 
-function buildProgramOptions(search: string) {
+function buildProgramOptions(search: string, cluster: Cluster) {
   const matchedPrograms = Object.entries(PROGRAM_NAME_BY_ID).filter(
-    ([address, name]) => {
+    ([address]) => {
+      const name = programLabel(address, cluster);
+      if (!name) return false;
       return (
-        SEARCHABLE_PROGRAMS.includes(name) &&
-        (name.toLowerCase().includes(search.toLowerCase()) ||
-          address.includes(search))
+        name.toLowerCase().includes(search.toLowerCase()) ||
+        address.includes(search)
       );
     }
   );
@@ -178,7 +179,7 @@ function buildOptions(
 
   const options = [];
 
-  const programOptions = buildProgramOptions(search);
+  const programOptions = buildProgramOptions(search, cluster);
   if (programOptions) {
     options.push(programOptions);
   }
