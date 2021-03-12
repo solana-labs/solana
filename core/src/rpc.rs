@@ -719,11 +719,12 @@ impl JsonRpcRequestProcessor {
     pub fn get_confirmed_block(
         &self,
         slot: Slot,
-        config: Option<RpcConfirmedBlockConfigWrapper>,
+        config: Option<RpcEncodingConfigWrapper<RpcConfirmedBlockConfig>>,
     ) -> Result<Option<EncodedConfirmedBlock>> {
-        let encoding = config
-            .and_then(|config| config.encoding())
-            .unwrap_or(UiTransactionEncoding::Json);
+        let config = config
+            .map(|config| config.convert_to_current())
+            .unwrap_or_default();
+        let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Json);
         if self.config.enable_rpc_transaction_history
             && slot
                 <= self
@@ -989,9 +990,12 @@ impl JsonRpcRequestProcessor {
     pub fn get_confirmed_transaction(
         &self,
         signature: Signature,
-        encoding: Option<UiTransactionEncoding>,
+        config: Option<RpcEncodingConfigWrapper<RpcConfirmedTransactionConfig>>,
     ) -> Option<EncodedConfirmedTransaction> {
-        let encoding = encoding.unwrap_or(UiTransactionEncoding::Json);
+        let config = config
+            .map(|config| config.convert_to_current())
+            .unwrap_or_default();
+        let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Json);
         if self.config.enable_rpc_transaction_history {
             match self
                 .blockstore
@@ -2180,7 +2184,7 @@ pub mod rpc_full {
             &self,
             meta: Self::Metadata,
             slot: Slot,
-            config: Option<RpcConfirmedBlockConfigWrapper>,
+            config: Option<RpcEncodingConfigWrapper<RpcConfirmedBlockConfig>>,
         ) -> Result<Option<EncodedConfirmedBlock>>;
 
         #[rpc(meta, name = "getBlockTime")]
@@ -2208,7 +2212,7 @@ pub mod rpc_full {
             &self,
             meta: Self::Metadata,
             signature_str: String,
-            encoding: Option<UiTransactionEncoding>,
+            config: Option<RpcEncodingConfigWrapper<RpcConfirmedTransactionConfig>>,
         ) -> Result<Option<EncodedConfirmedTransaction>>;
 
         #[rpc(meta, name = "getConfirmedSignaturesForAddress")]
@@ -2788,7 +2792,7 @@ pub mod rpc_full {
             &self,
             meta: Self::Metadata,
             slot: Slot,
-            config: Option<RpcConfirmedBlockConfigWrapper>,
+            config: Option<RpcEncodingConfigWrapper<RpcConfirmedBlockConfig>>,
         ) -> Result<Option<EncodedConfirmedBlock>> {
             debug!("get_confirmed_block rpc request received: {:?}", slot);
             meta.get_confirmed_block(slot, config)
@@ -2832,14 +2836,14 @@ pub mod rpc_full {
             &self,
             meta: Self::Metadata,
             signature_str: String,
-            encoding: Option<UiTransactionEncoding>,
+            config: Option<RpcEncodingConfigWrapper<RpcConfirmedTransactionConfig>>,
         ) -> Result<Option<EncodedConfirmedTransaction>> {
             debug!(
                 "get_confirmed_transaction rpc request received: {:?}",
                 signature_str
             );
             let signature = verify_signature(&signature_str)?;
-            Ok(meta.get_confirmed_transaction(signature, encoding))
+            Ok(meta.get_confirmed_transaction(signature, config))
         }
 
         fn get_confirmed_signatures_for_address(
