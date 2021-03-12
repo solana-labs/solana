@@ -1,14 +1,16 @@
-use serde_derive::{Deserialize, Serialize};
-use solana_config_program::ConfigState;
-use solana_sdk::{
-    hash::Hash,
-    pubkey::Pubkey,
-    signature::{Signable, Signature},
+use {
+    serde::{Deserialize, Serialize},
+    solana_config_program::ConfigState,
+    solana_sdk::{
+        hash::Hash,
+        pubkey::Pubkey,
+        signature::{Signable, Signature},
+    },
+    std::{borrow::Cow, error, io},
 };
-use std::{borrow::Cow, error, io};
 
 /// Information required to download and apply a given update
-#[derive(Serialize, Deserialize, Default, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
 pub struct UpdateManifest {
     pub timestamp_secs: u64, // When the release was deployed in seconds since UNIX EPOCH
     pub download_url: String, // Download URL to the release tar.bz2
