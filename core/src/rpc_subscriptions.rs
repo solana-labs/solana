@@ -952,6 +952,11 @@ impl RpcSubscriptions {
 
     pub fn notify_slot(&self, slot: Slot, parent: Slot, root: Slot) {
         self.enqueue_notification(NotificationEntry::Slot(SlotInfo { slot, parent, root }));
+        self.enqueue_notification(NotificationEntry::SlotUpdate(SlotUpdate::CreatedBank {
+            slot,
+            parent,
+            timestamp: timestamp(),
+        }));
     }
 
     pub fn notify_signatures_received(&self, slot_signatures: (Slot, Vec<Signature>)) {

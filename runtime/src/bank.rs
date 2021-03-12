@@ -754,6 +754,15 @@ pub struct Bank {
     /// The number of transactions processed without error
     transaction_count: AtomicU64,
 
+    /// The number of transaction errors in this slot
+    transaction_error_count: AtomicU64,
+
+    /// The number of transaction entries in this slot
+    transaction_entries_count: AtomicU64,
+
+    /// The max number of transaction in an entry in this slot
+    transactions_per_entry_max: AtomicU64,
+
     /// Bank tick height
     tick_height: AtomicU64,
 
@@ -1020,6 +1029,9 @@ impl Bank {
             capitalization: AtomicU64::new(parent.capitalization()),
             inflation: parent.inflation.clone(),
             transaction_count: AtomicU64::new(parent.transaction_count()),
+            transaction_error_count: AtomicU64::new(0),
+            transaction_entries_count: AtomicU64::new(0),
+            transactions_per_entry_max: AtomicU64::new(0),
             // we will .clone_with_epoch() this soon after stake data update; so just .clone() for now
             stakes: RwLock::new(parent.stakes.read().unwrap().clone()),
             epoch_stakes: parent.epoch_stakes.clone(),
@@ -1158,6 +1170,9 @@ impl Bank {
             parent_slot: fields.parent_slot,
             hard_forks: Arc::new(RwLock::new(fields.hard_forks)),
             transaction_count: AtomicU64::new(fields.transaction_count),
+            transaction_error_count: new(),
+            transaction_entries_count: new(),
+            transactions_per_entry_max: new(),
             tick_height: AtomicU64::new(fields.tick_height),
             signature_count: AtomicU64::new(fields.signature_count),
             capitalization: AtomicU64::new(fields.capitalization),
@@ -3149,6 +3164,16 @@ impl Bank {
         inc_new_counter_info!("bank-process_transactions-txs", tx_count as usize);
         inc_new_counter_info!("bank-process_transactions-sigs", signature_count as usize);
 
+        if !txs.is_empty() {
+            let processed_tx_count = txs.len() as u64;
+            let failed_tx_count = processed_tx_count.saturating_sub(tx_count);
+            self.transaction_error_count
+                .fetch_add(failed_tx_count, Relaxed);
+            self.transaction_entries_count.fetch_add(1, Relaxed);
+            self.transactions_per_entry_max
+                .fetch_max(processed_tx_count, Relaxed);
+        }
+
         if executed
             .iter()
             .any(|(res, _nonce_rollback)| Self::can_commit(res))
@@ -4086,6 +4111,18 @@ impl Bank {
 
     pub fn transaction_count(&self) -> u64 {
         self.transaction_count.load(Relaxed)
+    }
+
+    pub fn transaction_error_count(&self) -> u64 {
+        self.transaction_error_count.load(Relaxed)
+    }
+
+    pub fn transaction_entries_count(&self) -> u64 {
+        self.transaction_entries_count.load(Relaxed)
+    }
+
+    pub fn transactions_per_entry_max(&self) -> u64 {
+        self.transactions_per_entry_max.load(Relaxed)
     }
 
     fn increment_transaction_count(&self, tx_count: u64) {
