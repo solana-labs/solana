@@ -60,6 +60,14 @@ function MintAccountCard({
   const refresh = () => fetchInfo(account.pubkey);
 
   const tokenInfo = tokenRegistry.get(mintAddress);
+
+  let bridgeContractAddress;
+  if (tokenInfo?.extensions?.bridgeContract && !tokenInfo.extensions.address) {
+    bridgeContractAddress = tokenInfo?.extensions?.bridgeContract.match(
+      /0x[a-fA-F0-9]{40,64}/
+    );
+  }
+
   return (
     <div className="card">
       <div className="card-header">
@@ -128,6 +136,16 @@ function MintAccountCard({
           <tr>
             <td>Status</td>
             <td className="text-lg-right">Uninitialized</td>
+          </tr>
+        )}
+        {tokenInfo?.extensions?.bridgeContract && (
+          <tr>
+            <td>Wormhole Bridge Contract</td>
+            <td className="text-lg-right">
+              <a href={tokenInfo?.extensions?.bridgeContract} target="_blank">
+                {tokenInfo?.extensions?.address || bridgeContractAddress}
+              </a>
+            </td>
           </tr>
         )}
       </TableCardBody>
