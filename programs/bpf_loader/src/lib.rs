@@ -30,6 +30,7 @@ use solana_sdk::{
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     clock::Clock,
     entrypoint::SUCCESS,
+    feature_set::skip_ro_deserialization,
     ic_logger_msg, ic_msg,
     instruction::InstructionError,
     keyed_account::{from_keyed_account, next_keyed_account, KeyedAccount},
@@ -818,7 +819,12 @@ impl Executor for BpfExecutor {
             execute_time.stop();
         }
         let mut deserialize_time = Measure::start("deserialize");
-        deserialize_parameters(loader_id, parameter_accounts, &parameter_bytes)?;
+        deserialize_parameters(
+            loader_id,
+            parameter_accounts,
+            &parameter_bytes,
+            invoke_context.is_feature_active(&skip_ro_deserialization::id()),
+        )?;
         deserialize_time.stop();
         invoke_context.update_timing(
             serialize_time.as_us(),

@@ -107,6 +107,10 @@ pub mod cpi_share_ro_and_exec_accounts {
     solana_sdk::declare_id!("6VgVBi3uRVqp56TtEwNou8idgdmhCD1aYqX8FaJ1fnJb");
 }
 
+pub mod skip_ro_deserialization {
+    solana_sdk::declare_id!("6Sw5JV84f7QkDe8gvRxpcPWFnPpfpgEnNziiy8sELaCp");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -134,6 +138,7 @@ lazy_static! {
         (check_init_vote_data::id(), "check initialized Vote data"),
         (check_program_owner::id(), "limit programs to operating on accounts owned by itself"),
         (cpi_share_ro_and_exec_accounts::id(), "Share RO and Executable accounts during cross-program invocations"),
+        (skip_ro_deserialization::id(), "Skip deserialization of read-only accounts"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
