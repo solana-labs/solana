@@ -1,4 +1,3 @@
-#![allow(clippy::integer_arithmetic)]
 extern crate proc_macro;
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
