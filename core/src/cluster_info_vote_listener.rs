@@ -4,6 +4,7 @@ use crate::{
     optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
     optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSender},
     poh_recorder::PohRecorder,
+    replay_stage::DUPLICATE_THRESHOLD,
     result::{Error, Result},
     rpc_subscriptions::RpcSubscriptions,
     sigverify,
@@ -21,6 +22,7 @@ use solana_perf::packet::{self, Packets};
 use solana_runtime::{
     bank::Bank,
     bank_forks::BankForks,
+    commitment::VOTE_THRESHOLD_SIZE,
     epoch_stakes::{EpochAuthorizedVoters, EpochStakes},
     stakes::Stakes,
     vote_sender_types::{ReplayVoteReceiver, ReplayedVote},
@@ -44,14 +46,17 @@ use std::{
 };
 
 // Map from a vote account to the authorized voter for an epoch
+pub type ThresholdConfirmedSlots = Vec<(Slot, Hash)>;
 pub type VerifiedLabelVotePacketsSender = CrossbeamSender<Vec<(CrdsValueLabel, Slot, Packets)>>;
 pub type VerifiedLabelVotePacketsReceiver = CrossbeamReceiver<Vec<(CrdsValueLabel, Slot, Packets)>>;
 pub type VerifiedVoteTransactionsSender = CrossbeamSender<Vec<Transaction>>;
 pub type VerifiedVoteTransactionsReceiver = CrossbeamReceiver<Vec<Transaction>>;
 pub type VerifiedVoteSender = CrossbeamSender<(Pubkey, Vec<Slot>)>;
 pub type VerifiedVoteReceiver = CrossbeamReceiver<(Pubkey, Vec<Slot>)>;
-pub type GossipConfirmedSlotsSender = CrossbeamSender<Vec<(Slot, Hash)>>;
-pub type GossipConfirmedSlotsReceiver = CrossbeamReceiver<Vec<(Slot, Hash)>>;
+pub type GossipConfirmedSlotsSender = CrossbeamSender<ThresholdConfirmedSlots>;
+pub type GossipConfirmedSlotsReceiver = CrossbeamReceiver<ThresholdConfirmedSlots>;
+
+const THRESHOLDS_TO_CHECK: [f64; 2] = [DUPLICATE_THRESHOLD, VOTE_THRESHOLD_SIZE];
 
 #[derive(Default)]
 pub struct SlotVoteTracker {
@@ -426,6 +431,7 @@ impl ClusterInfoVoteListener {
         let mut confirmation_verifier =
             OptimisticConfirmationVerifier::new(bank_forks.read().unwrap().root());
         let mut last_process_root = Instant::now();
+        let cluster_confirmed_slot_sender = Some(cluster_confirmed_slot_sender);
         loop {
             if exit.load(Ordering::Relaxed) {
                 return Ok(());
@@ -454,12 +460,12 @@ impl ClusterInfoVoteListener {
                 &verified_vote_sender,
                 &replay_votes_receiver,
                 &bank_notification_sender,
+                &cluster_confirmed_slot_sender,
             );
             match confirmed_slots {
                 Ok(confirmed_slots) => {
                     confirmation_verifier
                         .add_new_optimistic_confirmed_slots(confirmed_slots.clone());
-                    let _ = cluster_confirmed_slot_sender.send(confirmed_slots);
                 }
                 Err(e) => match e {
                     Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Timeout)
@@ -480,7 +486,7 @@ impl ClusterInfoVoteListener {
         subscriptions: &RpcSubscriptions,
         verified_vote_sender: &VerifiedVoteSender,
         replay_votes_receiver: &ReplayVoteReceiver,
-    ) -> Result<Vec<(Slot, Hash)>> {
+    ) -> Result<ThresholdConfirmedSlots> {
         Self::listen_and_confirm_votes(
             gossip_vote_txs_receiver,
             vote_tracker,
@@ -488,6 +494,7 @@ impl ClusterInfoVoteListener {
             subscriptions,
             verified_vote_sender,
             replay_votes_receiver,
+            &None,
             &None,
         )
     }
@@ -500,7 +507,8 @@ impl ClusterInfoVoteListener {
         verified_vote_sender: &VerifiedVoteSender,
         replay_votes_receiver: &ReplayVoteReceiver,
         bank_notification_sender: &Option<BankNotificationSender>,
-    ) -> Result<Vec<(Slot, Hash)>> {
+        cluster_confirmed_slot_sender: &Option<GossipConfirmedSlotsSender>,
+    ) -> Result<ThresholdConfirmedSlots> {
         let mut sel = Select::new();
         sel.recv(gossip_vote_txs_receiver);
         sel.recv(replay_votes_receiver);
@@ -529,6 +537,7 @@ impl ClusterInfoVoteListener {
                     subscriptions,
                     verified_vote_sender,
                     bank_notification_sender,
+                    cluster_confirmed_slot_sender,
                 ));
             } else {
                 remaining_wait_time = remaining_wait_time
@@ -547,9 +556,10 @@ impl ClusterInfoVoteListener {
         subscriptions: &RpcSubscriptions,
         verified_vote_sender: &VerifiedVoteSender,
         diff: &mut HashMap<Slot, HashMap<Pubkey, bool>>,
-        new_optimistic_confirmed_slots: &mut Vec<(Slot, Hash)>,
+        new_optimistic_confirmed_slots: &mut ThresholdConfirmedSlots,
         is_gossip_vote: bool,
         bank_notification_sender: &Option<BankNotificationSender>,
+        cluster_confirmed_slot_sender: &Option<GossipConfirmedSlotsSender>,
     ) {
         if vote.slots.is_empty() {
             return;
@@ -585,7 +595,7 @@ impl ClusterInfoVoteListener {
                 // Fast track processing of the last slot in a vote transactions
                 // so that notifications for optimistic confirmation can be sent
                 // as soon as possible.
-                let (is_confirmed, is_new) = Self::track_optimistic_confirmation_vote(
+                let (reached_threshold_results, is_new) = Self::track_optimistic_confirmation_vote(
                     vote_tracker,
                     last_vote_slot,
                     last_vote_hash,
@@ -594,7 +604,12 @@ impl ClusterInfoVoteListener {
                     total_stake,
                 );
 
-                if is_confirmed {
+                if reached_threshold_results[0] {
+                    if let Some(sender) = cluster_confirmed_slot_sender {
+                        let _ = sender.send(vec![(last_vote_slot, last_vote_hash)]);
+                    }
+                }
+                if reached_threshold_results[1] {
                     new_optimistic_confirmed_slots.push((last_vote_slot, last_vote_hash));
                     // Notify subscribers about new optimistic confirmation
                     if let Some(sender) = bank_notification_sender {
@@ -678,7 +693,8 @@ impl ClusterInfoVoteListener {
         subscriptions: &RpcSubscriptions,
         verified_vote_sender: &VerifiedVoteSender,
         bank_notification_sender: &Option<BankNotificationSender>,
-    ) -> Vec<(Slot, Hash)> {
+        cluster_confirmed_slot_sender: &Option<GossipConfirmedSlotsSender>,
+    ) -> ThresholdConfirmedSlots {
         let mut diff: HashMap<Slot, HashMap<Pubkey, bool>> = HashMap::new();
         let mut new_optimistic_confirmed_slots = vec![];
 
@@ -705,6 +721,7 @@ impl ClusterInfoVoteListener {
                 &mut new_optimistic_confirmed_slots,
                 is_gossip,
                 bank_notification_sender,
+                cluster_confirmed_slot_sender,
             );
         }
 
@@ -764,14 +781,14 @@ impl ClusterInfoVoteListener {
         pubkey: Pubkey,
         stake: u64,
         total_epoch_stake: u64,
-    ) -> (bool, bool) {
+    ) -> (Vec<bool>, bool) {
         let slot_tracker = vote_tracker.get_or_insert_slot_tracker(slot);
         // Insert vote and check for optimistic confirmation
         let mut w_slot_tracker = slot_tracker.write().unwrap();
 
         w_slot_tracker
             .get_or_insert_optimistic_votes_tracker(hash)
-            .add_vote_pubkey(pubkey, stake, total_epoch_stake)
+            .add_vote_pubkey(pubkey, stake, total_epoch_stake, &THRESHOLDS_TO_CHECK)
     }
 
     fn sum_stake(sum: &mut u64, epoch_stakes: Option<&EpochStakes>, pubkey: &Pubkey) {
@@ -1013,6 +1030,7 @@ mod tests {
             &verified_vote_sender,
             &replay_votes_receiver,
             &None,
+            &None,
         )
         .unwrap();
 
@@ -1041,6 +1059,7 @@ mod tests {
             &subscriptions,
             &verified_vote_sender,
             &replay_votes_receiver,
+            &None,
             &None,
         )
         .unwrap();
@@ -1119,6 +1138,7 @@ mod tests {
             &subscriptions,
             &verified_vote_sender,
             &replay_votes_receiver,
+            &None,
             &None,
         )
         .unwrap();
@@ -1239,6 +1259,7 @@ mod tests {
             &verified_vote_sender,
             &replay_votes_receiver,
             &None,
+            &None,
         )
         .unwrap();
 
@@ -1333,6 +1354,7 @@ mod tests {
                     &subscriptions,
                     &verified_vote_sender,
                     &replay_votes_receiver,
+                    &None,
                     &None,
                 );
             }
@@ -1478,6 +1500,7 @@ mod tests {
             &subscriptions,
             &verified_vote_sender,
             &None,
+            &None,
         );
 
         // Setup next epoch
@@ -1531,6 +1554,7 @@ mod tests {
             &new_root_bank,
             &subscriptions,
             &verified_vote_sender,
+            &None,
             &None,
         );
     }
