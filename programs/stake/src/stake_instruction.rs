@@ -622,7 +622,7 @@ mod tests {
     use super::*;
     use bincode::serialize;
     use solana_sdk::{
-        account::{self, AccountSharedData},
+        account::{self, Account, AccountSharedData},
         process_instruction::MockInvokeContext,
         rent::Rent,
         sysvar::stake_history::StakeHistory,
@@ -635,10 +635,10 @@ mod tests {
     }
 
     fn create_default_stake_account() -> RefCell<AccountSharedData> {
-        RefCell::new(AccountSharedData {
+        RefCell::new(AccountSharedData::from(Account {
             owner: id(),
-            ..AccountSharedData::default()
-        })
+            ..Account::default()
+        }))
     }
 
     fn invalid_stake_state_pubkey() -> Pubkey {
@@ -673,25 +673,25 @@ mod tests {
                 } else if sysvar::rent::check_id(&meta.pubkey) {
                     account::create_account_shared_data(&Rent::default(), 1)
                 } else if meta.pubkey == invalid_stake_state_pubkey() {
-                    AccountSharedData {
+                    AccountSharedData::from(Account {
                         owner: id(),
-                        ..AccountSharedData::default()
-                    }
+                        ..Account::default()
+                    })
                 } else if meta.pubkey == invalid_vote_state_pubkey() {
-                    AccountSharedData {
+                    AccountSharedData::from(Account {
                         owner: solana_vote_program::id(),
-                        ..AccountSharedData::default()
-                    }
+                        ..Account::default()
+                    })
                 } else if meta.pubkey == spoofed_stake_state_pubkey() {
-                    AccountSharedData {
+                    AccountSharedData::from(Account {
                         owner: spoofed_stake_program_id(),
-                        ..AccountSharedData::default()
-                    }
+                        ..Account::default()
+                    })
                 } else {
-                    AccountSharedData {
+                    AccountSharedData::from(Account {
                         owner: id(),
-                        ..AccountSharedData::default()
-                    }
+                        ..Account::default()
+                    })
                 })
             })
             .collect();

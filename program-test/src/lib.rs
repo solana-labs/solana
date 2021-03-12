@@ -20,7 +20,7 @@ use {
         genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
     },
     solana_sdk::{
-        account::{AccountSharedData, ReadableAccount},
+        account::{Account, AccountSharedData, ReadableAccount},
         clock::Slot,
         genesis_config::GenesisConfig,
         keyed_account::KeyedAccount,
@@ -239,13 +239,13 @@ impl program_stubs::SyscallStubs for SyscallStubs {
         stable_log::program_invoke(&logger, &program_id, invoke_context.invoke_depth());
 
         fn ai_to_a(ai: &AccountInfo) -> AccountSharedData {
-            AccountSharedData {
+            AccountSharedData::from(Account {
                 lamports: ai.lamports(),
                 data: ai.try_borrow_data().unwrap().to_vec(),
                 owner: *ai.owner,
                 executable: ai.executable,
                 rent_epoch: ai.rent_epoch,
-            }
+            })
         }
         let executables = vec![(
             program_id,
@@ -486,7 +486,7 @@ impl ProgramTest {
     ) {
         self.add_account(
             address,
-            AccountSharedData {
+            AccountSharedData::from(Account {
                 lamports,
                 data: read_file(find_file(filename).unwrap_or_else(|| {
                     panic!("Unable to locate {}", filename);
@@ -494,7 +494,7 @@ impl ProgramTest {
                 owner,
                 executable: false,
                 rent_epoch: 0,
-            },
+            }),
         );
     }
 
@@ -509,14 +509,14 @@ impl ProgramTest {
     ) {
         self.add_account(
             address,
-            AccountSharedData {
+            AccountSharedData::from(Account {
                 lamports,
                 data: base64::decode(data_base64)
                     .unwrap_or_else(|err| panic!("Failed to base64 decode: {}", err)),
                 owner,
                 executable: false,
                 rent_epoch: 0,
-            },
+            }),
         );
     }
 
@@ -572,13 +572,13 @@ impl ProgramTest {
 
             self.add_account(
                 program_id,
-                AccountSharedData {
+                AccountSharedData::from(Account {
                     lamports: Rent::default().minimum_balance(data.len()).min(1),
                     data,
                     owner: loader,
                     executable: true,
                     rent_epoch: 0,
-                },
+                }),
             );
         } else {
             info!("\"{}\" program loaded as native code", program_name);

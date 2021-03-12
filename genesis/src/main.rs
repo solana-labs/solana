@@ -19,7 +19,7 @@ use solana_ledger::{
 };
 use solana_runtime::hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE;
 use solana_sdk::{
-    account::AccountSharedData,
+    account::{Account, AccountSharedData},
     clock,
     epoch_schedule::EpochSchedule,
     fee_calculator::FeeRateGovernor,
@@ -620,13 +620,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         });
                     genesis_config.add_account(
                         address,
-                        AccountSharedData {
+                        AccountSharedData::from(Account {
                             lamports: genesis_config.rent.minimum_balance(program_data.len()),
                             data: program_data,
                             executable: true,
                             owner: loader,
                             rent_epoch: 0,
-                        },
+                        }),
                     );
                 }
                 _ => unreachable!(),

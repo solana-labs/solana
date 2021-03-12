@@ -32,7 +32,7 @@ use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_debug, inc_new_counter_debug, inc_new_counter_info};
 use solana_sdk::{
     account::{
-        create_account_shared_data as create_account, from_account, AccountSharedData,
+        create_account_shared_data as create_account, from_account, Account, AccountSharedData,
         ReadableAccount,
     },
     clock::{
@@ -4829,13 +4829,13 @@ impl Bank {
         };
 
         if reconfigure_token2_native_mint {
-            let mut native_mint_account = solana_sdk::account::AccountSharedData {
+            let mut native_mint_account = solana_sdk::account::AccountSharedData::from(Account {
                 owner: inline_spl_token_v2_0::id(),
                 data: inline_spl_token_v2_0::native_mint::ACCOUNT_DATA.to_vec(),
                 lamports: sol_to_lamports(1.),
                 executable: false,
                 rent_epoch: self.epoch() + 1,
-            };
+            });
 
             // As a workaround for
             // https://github.com/solana-labs/solana-program-library/issues/374, ensure that the
@@ -11094,20 +11094,18 @@ pub(crate) mod tests {
         // Setup original token account
         bank.store_account_and_update_capitalization(
             &inline_spl_token_v2_0::id(),
-            &AccountSharedData {
+            &AccountSharedData::from(Account {
                 lamports: 100,
-                ..AccountSharedData::default()
-            },
+                ..Account::default()
+            }),
         );
         assert_eq!(bank.get_balance(&inline_spl_token_v2_0::id()), 100);
 
         // Setup new token account
-        let new_token_account = AccountSharedData {
+        let new_token_account = AccountSharedData::from(Account {
             lamports: 123,
-            data: vec![1, 2, 3],
-            executable: true,
-            ..AccountSharedData::default()
-        };
+            ..Account::default()
+        });
         bank.store_account_and_update_capitalization(
             &inline_spl_token_v2_0::new_token_program::id(),
             &new_token_account,

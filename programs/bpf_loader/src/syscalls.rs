@@ -10,7 +10,7 @@ use solana_rbpf::{
 };
 use solana_runtime::message_processor::MessageProcessor;
 use solana_sdk::{
-    account::{AccountSharedData, ReadableAccount},
+    account::{Account, AccountSharedData, ReadableAccount},
     account_info::AccountInfo,
     account_utils::StateMut,
     bpf_loader, bpf_loader_deprecated,
@@ -1009,13 +1009,13 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
             };
 
             Ok((
-                Rc::new(RefCell::new(AccountSharedData {
+                Rc::new(RefCell::new(AccountSharedData::from(Account {
                     lamports: *lamports,
                     data: data.to_vec(),
                     executable: account_info.executable,
                     owner: *owner,
                     rent_epoch: account_info.rent_epoch,
-                })),
+                }))),
                 Some(AccountReferences {
                     lamports,
                     owner,
@@ -1294,13 +1294,13 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
             )?;
 
             Ok((
-                Rc::new(RefCell::new(AccountSharedData {
+                Rc::new(RefCell::new(AccountSharedData::from(Account {
                     lamports: *lamports,
                     data: data.to_vec(),
                     executable: account_info.executable,
                     owner: *owner,
                     rent_epoch: account_info.rent_epoch,
-                })),
+                }))),
                 Some(AccountReferences {
                     lamports,
                     owner,

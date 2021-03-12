@@ -1121,6 +1121,7 @@ impl MessageProcessor {
 mod tests {
     use super::*;
     use solana_sdk::{
+        account::Account,
         instruction::{AccountMeta, Instruction, InstructionError},
         message::Message,
         native_loader::create_loadable_account,
@@ -1288,18 +1289,18 @@ mod tests {
                 is_writable: true,
                 pre: PreAccount::new(
                     &solana_sdk::pubkey::new_rand(),
-                    &AccountSharedData {
+                    &AccountSharedData::from(Account {
                         owner: *owner,
                         lamports: std::u64::MAX,
                         data: vec![],
-                        ..AccountSharedData::default()
-                    },
+                        ..Account::default()
+                    }),
                 ),
-                post: AccountSharedData {
+                post: AccountSharedData::from(Account {
                     owner: *owner,
                     lamports: std::u64::MAX,
-                    ..AccountSharedData::default()
-                },
+                    ..Account::default()
+                }),
             }
         }
         pub fn read_only(mut self) -> Self {

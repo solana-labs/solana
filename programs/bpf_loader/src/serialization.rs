@@ -251,7 +251,10 @@ pub fn deserialize_parameters_aligned(
 mod tests {
     use super::*;
     use solana_sdk::{
-        account::AccountSharedData, account_info::AccountInfo, bpf_loader, entrypoint::deserialize,
+        account::{Account, AccountSharedData},
+        account_info::AccountInfo,
+        bpf_loader,
+        entrypoint::deserialize,
     };
     use std::{
         cell::RefCell,
@@ -271,35 +274,35 @@ mod tests {
             solana_sdk::pubkey::new_rand(),
         ];
         let accounts = [
-            RefCell::new(AccountSharedData {
+            RefCell::new(AccountSharedData::from(Account {
                 lamports: 1,
                 data: vec![1u8, 2, 3, 4, 5],
                 owner: bpf_loader::id(),
                 executable: false,
                 rent_epoch: 100,
-            }),
+            })),
             // dup of first
-            RefCell::new(AccountSharedData {
+            RefCell::new(AccountSharedData::from(Account {
                 lamports: 1,
                 data: vec![1u8, 2, 3, 4, 5],
                 owner: bpf_loader::id(),
                 executable: false,
                 rent_epoch: 100,
-            }),
-            RefCell::new(AccountSharedData {
+            })),
+            RefCell::new(AccountSharedData::from(Account {
                 lamports: 2,
                 data: vec![11u8, 12, 13, 14, 15, 16, 17, 18, 19],
                 owner: bpf_loader::id(),
                 executable: true,
                 rent_epoch: 200,
-            }),
-            RefCell::new(AccountSharedData {
+            })),
+            RefCell::new(AccountSharedData::from(Account {
                 lamports: 3,
                 data: vec![],
                 owner: bpf_loader::id(),
                 executable: false,
                 rent_epoch: 3100,
-            }),
+            })),
         ];
 
         let keyed_accounts: Vec<_> = keys

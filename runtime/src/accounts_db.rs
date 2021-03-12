@@ -5048,7 +5048,7 @@ pub mod tests {
     use assert_matches::assert_matches;
     use rand::{thread_rng, Rng};
     use solana_sdk::{
-        account::{AccountSharedData, ReadableAccount, WritableAccount},
+        account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
         hash::HASH_BYTES,
         pubkey::PUBKEY_BYTES,
     };
@@ -5406,10 +5406,10 @@ pub mod tests {
             let idx = thread_rng().gen_range(0, 99);
             let ancestors = vec![(0, 0)].into_iter().collect();
             let account = db.load_slow(&ancestors, &pubkeys[idx]).unwrap();
-            let default_account = AccountSharedData {
+            let default_account = AccountSharedData::from(Account {
                 lamports: (idx + 1) as u64,
-                ..AccountSharedData::default()
-            };
+                ..Account::default()
+            });
             assert_eq!((default_account, 0), account);
         }
 
@@ -5422,10 +5422,10 @@ pub mod tests {
             let account0 = db.load_slow(&ancestors, &pubkeys[idx]).unwrap();
             let ancestors = vec![(1, 1)].into_iter().collect();
             let account1 = db.load_slow(&ancestors, &pubkeys[idx]).unwrap();
-            let default_account = AccountSharedData {
+            let default_account = AccountSharedData::from(Account {
                 lamports: (idx + 1) as u64,
-                ..AccountSharedData::default()
-            };
+                ..Account::default()
+            });
             assert_eq!(&default_account, &account0.0);
             assert_eq!(&default_account, &account1.0);
         }
@@ -5620,10 +5620,10 @@ pub mod tests {
                     let ancestors = vec![(slot, 0)].into_iter().collect();
                     assert!(accounts.load_slow(&ancestors, &pubkeys[idx]).is_none());
                 } else {
-                    let default_account = AccountSharedData {
+                    let default_account = AccountSharedData::from(Account {
                         lamports: account.lamports,
-                        ..AccountSharedData::default()
-                    };
+                        ..Account::default()
+                    });
                     assert_eq!(default_account, account);
                 }
             }
@@ -5712,10 +5712,10 @@ pub mod tests {
         create_account(&db, &mut pubkeys, 0, 1, 0, 0);
         let ancestors = vec![(0, 0)].into_iter().collect();
         let account = db.load_slow(&ancestors, &pubkeys[0]).unwrap();
-        let default_account = AccountSharedData {
+        let default_account = AccountSharedData::from(Account {
             lamports: 1,
-            ..AccountSharedData::default()
-        };
+            ..Account::default()
+        });
         assert_eq!((default_account, 0), account);
     }
 
