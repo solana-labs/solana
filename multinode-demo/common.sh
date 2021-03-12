@@ -25,7 +25,7 @@ if [[ $(uname) != Linux ]]; then
 fi
 
 if [[ -n $USE_INSTALL || ! -f "$SAFECOIN_ROOT"/Cargo.toml ]]; then
-  solana_program() {
+  safecoin_program() {
     declare program="$1"
     if [[ -z $program ]]; then
       printf "safecoin"
@@ -34,7 +34,7 @@ if [[ -n $USE_INSTALL || ! -f "$SAFECOIN_ROOT"/Cargo.toml ]]; then
     fi
   }
 else
-  solana_program() {
+  safecoin_program() {
     declare program="$1"
     declare crate="$program"
     if [[ -z $program ]]; then
@@ -61,15 +61,15 @@ else
   }
 fi
 
-safecoin_bench_tps=$(solana_program bench-tps)
-safecoin_faucet=$(solana_program faucet)
-safecoin_validator=$(solana_program validator)
+safecoin_bench_tps=$(safecoin_program bench-tps)
+safecoin_faucet=$(safecoin_program faucet)
+safecoin_validator=$(safecoin_program validator)
 safecoin_validator_cuda="$safecoin_validator --cuda"
-safecoin_genesis=$(solana_program genesis)
-safecoin_gossip=$(solana_program gossip)
-safecoin_keygen=$(solana_program keygen)
-safecoin_ledger_tool=$(solana_program ledger-tool)
-solana_cli=$(solana_program)
+safecoin_genesis=$(safecoin_program genesis)
+safecoin_gossip=$(safecoin_program gossip)
+safecoin_keygen=$(safecoin_program keygen)
+safecoin_ledger_tool=$(safecoin_program ledger-tool)
+safecoin_cli=$(safecoin_program)
 
 export RUST_BACKTRACE=1
 
