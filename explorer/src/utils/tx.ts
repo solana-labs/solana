@@ -22,61 +22,92 @@ import { TokenInfoMap } from "@solana/spl-token-registry";
 export type ProgramName = typeof PROGRAM_NAME_BY_ID[keyof typeof PROGRAM_NAME_BY_ID];
 
 export enum PROGRAM_NAMES {
-  BREAK_SOLANA = "Break Solana Program",
-  BUDGET = "Budget Program",
+  // native built-ins
   CONFIG = "Config Program",
-  EXCHANGE = "Exchange Program",
   STAKE = "Stake Program",
-  STORAGE = "Storage Program",
   SYSTEM = "System Program",
-  VEST = "Vest Program",
   VOTE = "Vote Program",
-  SPL_TOKEN = "SPL Token Program",
-  ASSOCIATED_TOKEN = "SPL Associated Token Program",
-  MEMO = "Memo Program",
-  MEMO_2 = "Memo Program 2",
-  SWAP = "Swap Program",
+
+  // spl
+  ASSOCIATED_TOKEN = "Associated Token Program",
+  FEATURE_PROPOSAL = "Feature Proposal Program",
   LENDING = "Lending Program",
+  MEMO = "Memo Program",
+  MEMO_2 = "Memo Program v2",
+  SWAP = "Swap Program",
+  TOKEN = "Token Program",
+
+  // other
+  BONFIDA_POOL = "Bonfida Pool Program",
+  BREAK_SOLANA = "Break Solana Program",
+  RAYDIUM_LIQUIDITY_1 = "Raydium Liquidity Pool Program v1",
+  RAYDIUM_LIQUIDITY_2 = "Raydium Liquidity Pool Program v2",
+  RAYDIUM_STAKING = "Raydium Staking Program",
   SERUM_2 = "Serum Program v2",
   SERUM_3 = "Serum Program v3",
 }
 
-export const SEARCHABLE_PROGRAMS: ProgramName[] = [
-  PROGRAM_NAMES.BREAK_SOLANA,
-  PROGRAM_NAMES.BUDGET,
-  PROGRAM_NAMES.CONFIG,
-  PROGRAM_NAMES.EXCHANGE,
-  PROGRAM_NAMES.STAKE,
-  PROGRAM_NAMES.STORAGE,
-  PROGRAM_NAMES.SYSTEM,
-  PROGRAM_NAMES.VEST,
-  PROGRAM_NAMES.VOTE,
-  PROGRAM_NAMES.SPL_TOKEN,
-  PROGRAM_NAMES.ASSOCIATED_TOKEN,
-  PROGRAM_NAMES.MEMO,
-  PROGRAM_NAMES.MEMO_2,
-  PROGRAM_NAMES.SWAP,
-  PROGRAM_NAMES.LENDING,
-  PROGRAM_NAMES.SERUM_2,
-  PROGRAM_NAMES.SERUM_3,
+const ALL_CLUSTERS = [
+  Cluster.Custom,
+  Cluster.Devnet,
+  Cluster.Testnet,
+  Cluster.MainnetBeta,
 ];
 
+const LIVE_CLUSTERS = [Cluster.Devnet, Cluster.Testnet, Cluster.MainnetBeta];
+
+const MAINNET_ONLY = [Cluster.MainnetBeta];
+
+export const PROGRAM_DEPLOYMENTS = {
+  // native built-ins
+  [PROGRAM_NAMES.CONFIG]: ALL_CLUSTERS,
+  [PROGRAM_NAMES.STAKE]: ALL_CLUSTERS,
+  [PROGRAM_NAMES.SYSTEM]: ALL_CLUSTERS,
+  [PROGRAM_NAMES.VOTE]: ALL_CLUSTERS,
+
+  // spl
+  [PROGRAM_NAMES.ASSOCIATED_TOKEN]: ALL_CLUSTERS,
+  [PROGRAM_NAMES.FEATURE_PROPOSAL]: ALL_CLUSTERS,
+  [PROGRAM_NAMES.LENDING]: LIVE_CLUSTERS,
+  [PROGRAM_NAMES.MEMO]: ALL_CLUSTERS,
+  [PROGRAM_NAMES.MEMO_2]: ALL_CLUSTERS,
+  [PROGRAM_NAMES.SWAP]: LIVE_CLUSTERS,
+  [PROGRAM_NAMES.TOKEN]: ALL_CLUSTERS,
+
+  // other
+  [PROGRAM_NAMES.BONFIDA_POOL]: MAINNET_ONLY,
+  [PROGRAM_NAMES.BREAK_SOLANA]: LIVE_CLUSTERS,
+  [PROGRAM_NAMES.RAYDIUM_LIQUIDITY_1]: MAINNET_ONLY,
+  [PROGRAM_NAMES.RAYDIUM_LIQUIDITY_2]: MAINNET_ONLY,
+  [PROGRAM_NAMES.RAYDIUM_STAKING]: MAINNET_ONLY,
+  [PROGRAM_NAMES.SERUM_2]: MAINNET_ONLY,
+  [PROGRAM_NAMES.SERUM_3]: MAINNET_ONLY,
+} as const;
+
 export const PROGRAM_NAME_BY_ID = {
-  BrEAK7zGZ6dM71zUDACDqJnekihmwF15noTddWTsknjC: PROGRAM_NAMES.BREAK_SOLANA,
-  Budget1111111111111111111111111111111111111: PROGRAM_NAMES.BUDGET,
+  // native built-ins
   Config1111111111111111111111111111111111111: PROGRAM_NAMES.CONFIG,
-  Exchange11111111111111111111111111111111111: PROGRAM_NAMES.EXCHANGE,
   [StakeProgram.programId.toBase58()]: PROGRAM_NAMES.STAKE,
-  Storage111111111111111111111111111111111111: PROGRAM_NAMES.STORAGE,
   [SystemProgram.programId.toBase58()]: PROGRAM_NAMES.SYSTEM,
-  Vest111111111111111111111111111111111111111: PROGRAM_NAMES.VEST,
   [VOTE_PROGRAM_ID.toBase58()]: PROGRAM_NAMES.VOTE,
-  TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA: PROGRAM_NAMES.SPL_TOKEN,
+
+  // spl
   ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL: PROGRAM_NAMES.ASSOCIATED_TOKEN,
+  Feat1YXHhH6t1juaWF74WLcfv4XoNocjXA6sPWHNgAse: PROGRAM_NAMES.FEATURE_PROPOSAL,
   Memo1UhkJRfHyvLMcVucJwxXeuD728EqVDDwQDxFMNo: PROGRAM_NAMES.MEMO,
   MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr: PROGRAM_NAMES.MEMO_2,
   SwaPpA9LAaLfeLi3a68M4DjnLqgtticKg6CnyNwgAC8: PROGRAM_NAMES.SWAP,
+  TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA: PROGRAM_NAMES.TOKEN,
   LendZqTs7gn5CTSJU1jWKhKuVpjJGom45nnwPb2AMTi: PROGRAM_NAMES.LENDING,
+
+  // other
+  WvmTNLpGMVbwJVYztYL4Hnsy82cJhQorxjnnXcRm3b6: PROGRAM_NAMES.BONFIDA_POOL,
+  BrEAK7zGZ6dM71zUDACDqJnekihmwF15noTddWTsknjC: PROGRAM_NAMES.BREAK_SOLANA,
+  RVKd61ztZW9GUwhRbbLoYVRE5Xf1B2tVscKqwZqXgEr:
+    PROGRAM_NAMES.RAYDIUM_LIQUIDITY_1,
+  "27haf8L6oxUeXrHrgEgsexjSY5hbVUWEmvv9Nyxg8vQv":
+    PROGRAM_NAMES.RAYDIUM_LIQUIDITY_2,
+  EhhTKczWMGQt46ynNeRX1WfeagwwJd7ufHvCDjRxjo5Q: PROGRAM_NAMES.RAYDIUM_STAKING,
   EUqojwWA2rd19FZrzeBncJsm38Jm1hEhE3zsmX3bRc2o: PROGRAM_NAMES.SERUM_2,
   "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin": PROGRAM_NAMES.SERUM_3,
 } as const;
@@ -104,7 +135,18 @@ export const SYSVAR_IDS = {
   SysvarS1otHashes111111111111111111111111111: "Sysvar: Slot Hashes",
   SysvarS1otHistory11111111111111111111111111: "Sysvar: Slot History",
   [SYSVAR_STAKE_HISTORY_PUBKEY.toBase58()]: "Sysvar: Stake History",
+  Sysvar1nstructions1111111111111111111111111: "Sysvar: Instructions",
 };
+
+export function programLabel(
+  address: string,
+  cluster: Cluster
+): string | undefined {
+  const programName = PROGRAM_NAME_BY_ID[address];
+  if (programName && PROGRAM_DEPLOYMENTS[programName].includes(cluster)) {
+    return programName;
+  }
+}
 
 export function addressLabel(
   address: string,
@@ -112,7 +154,7 @@ export function addressLabel(
   tokenRegistry?: TokenInfoMap
 ): string | undefined {
   return (
-    PROGRAM_NAME_BY_ID[address] ||
+    programLabel(address, cluster) ||
     LOADER_IDS[address] ||
     SYSVAR_IDS[address] ||
     SYSVAR_ID[address] ||
