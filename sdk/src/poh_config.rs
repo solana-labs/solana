@@ -1,5 +1,4 @@
-#![allow(clippy::integer_arithmetic)]
-use crate::clock::DEFAULT_TICKS_PER_SECOND;
+use crate::{clock::DEFAULT_TICKS_PER_SECOND, unchecked_div_by_const};
 use std::time::Duration;
 
 #[derive(Serialize, Deserialize, Clone, Debug, AbiExample)]
@@ -29,8 +28,9 @@ impl PohConfig {
 
 impl Default for PohConfig {
     fn default() -> Self {
-        Self::new_sleep(Duration::from_micros(
-            1000 * 1000 / DEFAULT_TICKS_PER_SECOND,
-        ))
+        Self::new_sleep(Duration::from_micros(unchecked_div_by_const!(
+            1000 * 1000,
+            DEFAULT_TICKS_PER_SECOND
+        )))
     }
 }
