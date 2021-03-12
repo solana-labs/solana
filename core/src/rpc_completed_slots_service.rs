@@ -3,13 +3,8 @@ use solana_client::rpc_response::SlotUpdate;
 use solana_ledger::blockstore::CompletedSlotsReceiver;
 use solana_sdk::timing::timestamp;
 use std::{
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        mpsc::RecvTimeoutError,
-        Arc,
-    },
+    sync::Arc,
     thread::{Builder, JoinHandle},
-    time::Duration,
 };
 
 pub struct RpcCompletedSlotsService;
