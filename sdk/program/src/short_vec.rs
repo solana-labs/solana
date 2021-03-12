@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 use serde::{
     de::{self, Deserializer, SeqAccess, Visitor},
     ser::{self, SerializeTuple, Serializer},

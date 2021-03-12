@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 //! configuration for epochs, slots
 
 /// 1 Epoch = 400 * 8192 ms ~= 55 minutes
