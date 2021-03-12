@@ -1662,6 +1662,68 @@ mod test {
         );
     }
 
+    #[test]
+    fn test_mark_valid_invalid_forks() {
+        let mut heaviest_subtree_fork_choice = setup_forks();
+        let stake = 100;
+        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys(3, stake);
+
+        let pubkey_votes: Vec<(Pubkey, Slot)> = vec![
+            (vote_pubkeys[0], 6),
+            (vote_pubkeys[1], 6),
+            (vote_pubkeys[2], 2),
+        ];
+        let expected_best_slot = 6;
+        assert_eq!(
+            heaviest_subtree_fork_choice.add_votes(
+                &pubkey_votes,
+                bank.epoch_stakes_map(),
+                bank.epoch_schedule()
+            ),
+            expected_best_slot,
+        );
+
+        // Mark slot 5 as invalid, the best fork should be its ancestor 3,
+        // not the other for at 4.
+        let invalid_candidate = 5;
+        heaviest_subtree_fork_choice.mark_fork_invalid_candidate(invalid_candidate);
+        assert_eq!(heaviest_subtree_fork_choice.best_overall_slot(), 3);
+        assert!(!heaviest_subtree_fork_choice
+            .is_candidate_slot(invalid_candidate)
+            .unwrap());
+
+        // The ancestor is still a candidate
+        assert!(heaviest_subtree_fork_choice.is_candidate_slot(3).unwrap());
+
+        // Adding another descendant to the invalid candidate won't
+        // update the best slot, even if it contains votes
+        let new_leaf_slot = 7;
+        heaviest_subtree_fork_choice.add_new_leaf_slot(new_leaf_slot, Some(6));
+        assert_eq!(heaviest_subtree_fork_choice.best_overall_slot(), 3);
+        let pubkey_votes: Vec<(Pubkey, Slot)> = vec![(vote_pubkeys[0], new_leaf_slot)];
+        let expected_best_slot = 3;
+        assert_eq!(
+            heaviest_subtree_fork_choice.add_votes(
+                &pubkey_votes,
+                bank.epoch_stakes_map(),
+                bank.epoch_schedule()
+            ),
+            expected_best_slot,
+        );
+
+        // If we mark slot a descendant of `invalid_candidate` as valid, then that
+        // should also mark `invalid_candidate` as valid, and the best slot should
+        // be the leaf of the heaviest fork, `new_leaf_slot`.
+        heaviest_subtree_fork_choice.mark_fork_valid_candidate(invalid_candidate);
+        assert!(heaviest_subtree_fork_choice
+            .is_candidate_slot(invalid_candidate)
+            .unwrap());
+        assert_eq!(
+            heaviest_subtree_fork_choice.best_overall_slot(),
+            new_leaf_slot
+        );
+    }
+
     fn setup_forks() -> HeaviestSubtreeForkChoice {
         /*
             Build fork structure:
