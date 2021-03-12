@@ -142,7 +142,11 @@ function MintAccountCard({
           <tr>
             <td>Wormhole Bridge Contract</td>
             <td className="text-lg-right">
-              <a href={tokenInfo?.extensions?.bridgeContract} target="_blank">
+              <a
+                href={tokenInfo?.extensions?.bridgeContract}
+                target="_blank"
+                rel="noreferrer"
+              >
                 {tokenInfo?.extensions?.address || bridgeContractAddress}
               </a>
             </td>
