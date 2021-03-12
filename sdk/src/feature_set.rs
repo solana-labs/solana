@@ -179,6 +179,10 @@ pub mod check_duplicates_by_hash {
     solana_sdk::declare_id!("8ZqTSYHgzyaYCcXJPMViRy6afCFSgNvYooPDeVdyj5GC");
 }
 
+pub mod require_stake_for_gossip {
+    solana_sdk::declare_id!("6oNzd5Z3M2L1xo4Q5hoox7CR2DuW7m1ETLWH5jHJthwa");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -221,9 +225,15 @@ lazy_static! {
         (per_byte_logging_cost::id(), "charge the compute budget per byte for logging"),
         (check_init_vote_data::id(), "check initialized Vote data"),
         (check_program_owner::id(), "limit programs to operating on accounts owned by itself"),
+<<<<<<< HEAD
         (cpi_data_cost::id(), "charge the compute budget for data passed via CPI"),
         (upgradeable_close_instruction::id(), "close upgradeable buffer accounts"),
         (check_duplicates_by_hash::id(), "use transaction message hash for duplicate check"),
+=======
+        (cpi_share_ro_and_exec_accounts::id(), "Share RO and Executable accounts during cross-program invocations"),
+        (skip_ro_deserialization::id(), "Skip deserialization of read-only accounts"),
+        (require_stake_for_gossip::id(), "require stakes for propagating crds values through gossip #15561"),
+>>>>>>> f2865dfd6... requires stakes for propagating crds values through gossip (#15561)
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
