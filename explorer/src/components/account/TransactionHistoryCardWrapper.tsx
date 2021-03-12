@@ -1,15 +1,34 @@
 import React from "react";
-import { PublicKey } from "@solana/web3.js";
+import { ConfirmedSignatureInfo, PublicKey } from "@solana/web3.js";
 import { FetchStatus } from "providers/cache";
 import { useAccountInfo, useAccountHistory } from "providers/accounts";
 import { useFetchAccountHistory } from "providers/accounts/history";
-import { Signature } from "components/common/Signature";
 import { ErrorCard } from "components/common/ErrorCard";
 import { LoadingCard } from "components/common/LoadingCard";
-import { Slot } from "components/common/Slot";
-import { displayTimestamp } from "utils/date";
+import { MoreTabs } from "pages/AccountDetailsPage";
+import { TransactionHistoryDetails } from "./TransactionHistoryDetails";
+import { TokenBalancesDetails } from "./TokenBalancesDetails";
+import { TokenInstructionsDetails } from "./TokenInstructionsDetails";
 
-export function TransactionHistoryCard({ pubkey }: { pubkey: PublicKey }) {
+export type SlotRow = {
+  slot: number;
+  signature: string;
+  err: object | null;
+  blockTime: number | null | undefined;
+  statusClass: string;
+  statusText: string;
+  signatureInfo: ConfirmedSignatureInfo;
+};
+
+export function TransactionHistoryCardWrapper({
+  pubkey,
+  tab,
+  title,
+}: {
+  pubkey: PublicKey;
+  tab: MoreTabs;
+  title: string;
+}) {
   const address = pubkey.toBase58();
   const info = useAccountInfo(address);
   const history = useAccountHistory(address);
@@ -36,6 +55,7 @@ export function TransactionHistoryCard({ pubkey }: { pubkey: PublicKey }) {
   }
 
   const transactions = history.data.fetched;
+
   if (transactions.length === 0) {
     if (history.status === FetchStatus.Fetching) {
       return <LoadingCard message="Loading history" />;
@@ -49,8 +69,8 @@ export function TransactionHistoryCard({ pubkey }: { pubkey: PublicKey }) {
     );
   }
 
-  const hasTimestamps = !!transactions.find((element) => !!element.blockTime);
-  const detailsList: React.ReactNode[] = [];
+  const slotRows: SlotRow[] = [];
+
   for (var i = 0; i < transactions.length; i++) {
     const slot = transactions[i].slot;
     const slotTransactions = [transactions[i]];
@@ -60,10 +80,10 @@ export function TransactionHistoryCard({ pubkey }: { pubkey: PublicKey }) {
       slotTransactions.push(transactions[++i]);
     }
 
-    slotTransactions.forEach(({ signature, err, blockTime }) => {
+    for (let slotTransaction of slotTransactions) {
       let statusText;
       let statusClass;
-      if (err) {
+      if (slotTransaction.err) {
         statusClass = "warning";
         statusText = "Failed";
       } else {
@@ -71,37 +91,23 @@ export function TransactionHistoryCard({ pubkey }: { pubkey: PublicKey }) {
         statusText = "Success";
       }
 
-      detailsList.push(
-        <tr key={signature}>
-          <td className="w-1">
-            <Slot slot={slot} link />
-          </td>
-
-          {hasTimestamps && (
-            <td className="text-muted">
-              {blockTime ? displayTimestamp(blockTime * 1000, true) : "---"}
-            </td>
-          )}
-
-          <td>
-            <span className={`badge badge-soft-${statusClass}`}>
-              {statusText}
-            </span>
-          </td>
-
-          <td>
-            <Signature signature={signature} link />
-          </td>
-        </tr>
-      );
-    });
+      slotRows.push({
+        slot,
+        signature: slotTransaction.signature,
+        err: slotTransaction.err,
+        blockTime: slotTransaction.blockTime,
+        statusClass,
+        statusText,
+        signatureInfo: transactions[i],
+      });
+    }
   }
 
   const fetching = history.status === FetchStatus.Fetching;
   return (
     <div className="card">
       <div className="card-header align-items-center">
-        <h3 className="card-header-title">Transaction History</h3>
+        <h3 className="card-header-title">{title}</h3>
         <button
           className="btn btn-white btn-sm"
           disabled={fetching}
@@ -121,19 +127,15 @@ export function TransactionHistoryCard({ pubkey }: { pubkey: PublicKey }) {
         </button>
       </div>
 
-      <div className="table-responsive mb-0">
-        <table className="table table-sm table-nowrap card-table">
-          <thead>
-            <tr>
-              <th className="text-muted w-1">Slot</th>
-              {hasTimestamps && <th className="text-muted">Timestamp</th>}
-              <th className="text-muted">Result</th>
-              <th className="text-muted">Transaction Signature</th>
-            </tr>
-          </thead>
-          <tbody className="list">{detailsList}</tbody>
-        </table>
-      </div>
+      {tab === "history" && (
+        <TransactionHistoryDetails pubkey={pubkey} slotRows={slotRows} />
+      )}
+      {tab === "balances" && (
+        <TokenBalancesDetails pubkey={pubkey} slotRows={slotRows} />
+      )}
+      {tab === "instructions" && (
+        <TokenInstructionsDetails pubkey={pubkey} slotRows={slotRows} />
+      )}
 
       <div className="card-footer">
         {history.data.foundOldest ? (

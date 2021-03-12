@@ -25,12 +25,6 @@ import {
   useFetchTransactionDetails,
   useTransactionDetailsCache,
 } from "providers/transactions/details";
-import { create } from "superstruct";
-import { ParsedInfo } from "validators";
-import {
-  TokenInstructionType,
-  IX_TITLES,
-} from "components/instruction/token/types";
 import { reportError } from "utils/sentry";
 import { intoTransactionInstruction, displayAddress } from "utils/tx";
 import {
@@ -52,6 +46,7 @@ import { Location } from "history";
 import { useQuery } from "utils/url";
 import { TokenInfoMap } from "@solana/spl-token-registry";
 import { useTokenRegistry } from "providers/mints/token-registry";
+import { instructionTypeName } from "utils/instruction";
 
 const TRUNCATE_TOKEN_LENGTH = 10;
 const ALL_TOKENS = "";
@@ -362,21 +357,6 @@ const FilterDropdown = ({ filter, toggle, show, tokens }: FilterProps) => {
     </div>
   );
 };
-
-function instructionTypeName(
-  ix: ParsedInstruction,
-  tx: ConfirmedSignatureInfo
-): string {
-  try {
-    const parsed = create(ix.parsed, ParsedInfo);
-    const { type: rawType } = parsed;
-    const type = create(rawType, TokenInstructionType);
-    return IX_TITLES[type];
-  } catch (err) {
-    reportError(err, { signature: tx.signature });
-    return "Unknown";
-  }
-}
 
 const TokenTransactionRow = React.memo(
   ({
