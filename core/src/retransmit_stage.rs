@@ -591,11 +591,8 @@ impl RetransmitStage {
 
         let [rpc_completed_slots_receiver, cluster_completed_slots_receiver] =
             completed_slots_receivers;
-        let rpc_completed_slots_hdl = RpcCompletedSlotsService::spawn(
-            rpc_completed_slots_receiver,
-            rpc_subscriptions,
-            exit.clone(),
-        );
+        let rpc_completed_slots_hdl =
+            RpcCompletedSlotsService::spawn(rpc_completed_slots_receiver, rpc_subscriptions);
         let cluster_slots_service = ClusterSlotsService::new(
             blockstore.clone(),
             cluster_slots.clone(),
