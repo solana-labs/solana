@@ -63,9 +63,13 @@ function MintAccountCard({
 
   let bridgeContractAddress;
   if (tokenInfo?.extensions?.bridgeContract && !tokenInfo.extensions.address) {
-    bridgeContractAddress = tokenInfo?.extensions?.bridgeContract.match(
+    const extractEth = tokenInfo?.extensions?.bridgeContract.match(
       /0x[a-fA-F0-9]{40,64}/
     );
+
+    if (extractEth) {
+      bridgeContractAddress = extractEth[0];
+    }
   }
 
   return (
