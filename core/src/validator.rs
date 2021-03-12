@@ -486,7 +486,7 @@ impl Validator {
         );
 
         let poh_config = Arc::new(genesis_config.poh_config.clone());
-        let (mut poh_recorder, entry_receiver) = PohRecorder::new_with_clear_signal(
+        let (mut poh_recorder, entry_receiver, receiver_mixin, sender_mixin_result) = PohRecorder::new_with_clear_signal(
             bank.tick_height(),
             bank.last_blockhash(),
             bank.slot(),
@@ -644,6 +644,8 @@ impl Validator {
             bank.ticks_per_slot(),
             config.poh_pinned_cpu_core,
             config.poh_hashes_per_batch,
+            receiver_mixin,
+            sender_mixin_result,
         );
         assert_eq!(
             blockstore.new_shreds_signals.len(),

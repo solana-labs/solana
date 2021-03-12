@@ -1280,7 +1280,7 @@ pub fn create_test_recorder(
 ) {
     let exit = Arc::new(AtomicBool::new(false));
     let poh_config = Arc::new(poh_config.unwrap_or_default());
-    let (mut poh_recorder, entry_receiver) = PohRecorder::new(
+    let (mut poh_recorder, entry_receiver, receiver_mixin, sender_mixin_result) = PohRecorder::new(
         bank.tick_height(),
         bank.last_blockhash(),
         bank.slot(),
@@ -1301,6 +1301,8 @@ pub fn create_test_recorder(
         bank.ticks_per_slot(),
         poh_service::DEFAULT_PINNED_CPU_CORE,
         poh_service::DEFAULT_HASHES_PER_BATCH,
+        receiver_mixin,
+        sender_mixin_result,
     );
 
     (exit, poh_recorder, poh_service, entry_receiver)

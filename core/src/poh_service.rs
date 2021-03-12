@@ -1,10 +1,11 @@
 //! The `poh_service` module implements a service that records the passing of
 //! "ticks", a measure of time in the PoH stream
 use crate::poh_recorder::PohRecorder;
+use solana_ledger::poh::PohEntry;
 use solana_measure::measure::Measure;
-use solana_sdk::poh_config::PohConfig;
+use solana_sdk::{hash::Hash, poh_config::PohConfig};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc::{Receiver, Sender}};
 use std::thread::{self, sleep, Builder, JoinHandle};
 use std::time::Instant;
 
@@ -32,6 +33,9 @@ impl PohService {
         ticks_per_slot: u64,
         pinned_cpu_core: usize,
         hashes_per_batch: u64,
+        receiver_mixin: Receiver<Hash>,
+        sender_mixin_result: Sender<Option<PohEntry>>,
+    
     ) -> Self {
         let poh_exit_ = poh_exit.clone();
         let poh_config = poh_config.clone();
@@ -69,6 +73,8 @@ impl PohService {
                         poh_config.target_tick_duration.as_nanos() as u64 - adjustment_per_tick,
                         ticks_per_slot,
                         hashes_per_batch,
+                        receiver_mixin,
+                        sender_mixin_result,
                     );
                 }
                 poh_exit_.store(true, Ordering::Relaxed);
@@ -111,8 +117,11 @@ impl PohService {
         target_tick_ns: u64,
         ticks_per_slot: u64,
         hashes_per_batch: u64,
+        receiver_mixin: Receiver<Hash>,
+        sender_mixin_result: Sender<Option<PohEntry>>,
     ) {
-        let poh = poh_recorder.lock().unwrap().poh.clone();
+        let recorder = poh_recorder.lock().unwrap();
+        let poh = recorder.poh.clone();
         let mut now = Instant::now();
         let mut last_metric = Instant::now();
         let mut num_ticks = 0;
@@ -125,14 +134,23 @@ impl PohService {
             num_hashes += hashes_per_batch;
             let should_tick = {
                 let mut lock_time = Measure::start("lock");
-                let mut poh_l = poh.lock().unwrap();
+                let mut poh_l = poh.lock().unwrap(); // keep locked?
                 lock_time.stop();
                 total_lock_time_ns += lock_time.as_ns();
-                let mut hash_time = Measure::start("hash");
-                let r = poh_l.hash(hashes_per_batch);
-                hash_time.stop();
-                total_hash_time_ns += hash_time.as_ns();
-                r
+                let mixin = receiver_mixin.try_recv();
+                if let Ok(mixin) = mixin {
+                    let res = poh_l.record(mixin);
+                    let should_tick = res.is_none();
+                    sender_mixin_result.send(res);
+                    should_tick
+                }
+                else {
+                    let mut hash_time = Measure::start("hash");
+                    let r = poh_l.hash(hashes_per_batch);
+                    hash_time.stop();
+                    total_hash_time_ns += hash_time.as_ns();
+                    r
+                }
             };
             if should_tick {
                 // Lock PohRecorder only for the final hash...

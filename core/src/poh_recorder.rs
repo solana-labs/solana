@@ -14,7 +14,11 @@ use solana_ledger::blockstore::Blockstore;
 use solana_ledger::entry::Entry;
 use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
 use solana_ledger::poh::Poh;
+use solana_ledger::poh::PohEntry;
 use solana_runtime::bank::Bank;
+use rayon::prelude::*;
+use rayon::{ThreadPool, ThreadPoolBuilder};
+
 pub use solana_sdk::clock::Slot;
 use solana_sdk::clock::NUM_CONSECUTIVE_LEADER_SLOTS;
 use solana_sdk::hash::Hash;
@@ -79,6 +83,8 @@ pub struct PohRecorder {
     tick_overhead_us: u64,
     record_us: u64,
     last_metric: Instant,
+    sender_mixin: Sender<Hash>,
+    receiver_mixin_result: Receiver<Option<PohEntry>>,
 }
 
 impl PohRecorder {
@@ -424,12 +430,8 @@ impl PohRecorder {
 
             {
                 let now = Instant::now();
-                let mut poh_lock = self.poh.lock().unwrap();
-
-                self.record_lock_contention_us += timing::duration_as_us(&now.elapsed());
-                let now = Instant::now();
-                let res = poh_lock.record(mixin);
-                drop(poh_lock);
+                self.sender_mixin.send(mixin);
+                let res = self.receiver_mixin_result.recv().unwrap();
                 self.record_us += timing::duration_as_us(&now.elapsed());
                 if let Some(poh_entry) = res {
                     let entry = Entry {
@@ -460,11 +462,16 @@ impl PohRecorder {
         clear_bank_signal: Option<SyncSender<bool>>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         poh_config: &Arc<PohConfig>,
-    ) -> (Self, Receiver<WorkingBankEntry>) {
+    ) -> (Self, Receiver<WorkingBankEntry>,    Receiver<Hash>,
+        Sender<Option<PohEntry>>,
+    ) {
+
         let poh = Arc::new(Mutex::new(Poh::new(
             last_entry_hash,
             poh_config.hashes_per_tick,
         )));
+        let (sender_mixin, receiver_mixin) = channel();
+        let (sender_mixin_result, receiver_mixin_result) = channel();
         let (sender, receiver) = channel();
         let (leader_first_tick_height, leader_last_tick_height, grace_ticks) =
             Self::compute_leader_slot_tick_heights(next_leader_slot, ticks_per_slot);
@@ -491,8 +498,12 @@ impl PohRecorder {
                 record_us: 0,
                 tick_overhead_us: 0,
                 last_metric: Instant::now(),
+                sender_mixin,
+                receiver_mixin_result,
             },
             receiver,
+            receiver_mixin,
+            sender_mixin_result,
         )
     }
 
@@ -509,7 +520,8 @@ impl PohRecorder {
         blockstore: &Arc<Blockstore>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         poh_config: &Arc<PohConfig>,
-    ) -> (Self, Receiver<WorkingBankEntry>) {
+    ) -> (Self, Receiver<WorkingBankEntry>,    Receiver<Hash>,
+        Sender<Option<PohEntry>>,) {
         Self::new_with_clear_signal(
             tick_height,
             last_entry_hash,
@@ -534,12 +546,14 @@ impl PohRecorder {
 mod tests {
     use super::*;
     use bincode::serialize;
+    use rayon::prelude::*;
     use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use solana_ledger::{blockstore::Blockstore, blockstore_meta::SlotMeta, get_tmp_ledger_path};
     use solana_perf::test_tx::test_tx;
     use solana_sdk::clock::DEFAULT_TICKS_PER_SLOT;
     use solana_sdk::hash::hash;
     use std::sync::mpsc::sync_channel;
+    use solana_measure::measure::Measure;
 
     #[test]
     fn test_poh_recorder_no_zero_tick() {
@@ -968,6 +982,40 @@ mod tests {
                 &Arc::new(LeaderScheduleCache::default()),
                 &Arc::new(PohConfig::default()),
             );
+            poh_recorder.tick();
+            poh_recorder.tick();
+            assert_eq!(poh_recorder.tick_cache.len(), 2);
+            let hash = poh_recorder.poh.lock().unwrap().hash;
+            poh_recorder.reset(hash, 0, Some((4, 4)));
+            assert_eq!(poh_recorder.tick_cache.len(), 0);
+        }
+        Blockstore::destroy(&ledger_path).unwrap();
+    }
+
+    #[test]
+    fn test_sync() {
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blockstore = Blockstore::open(&ledger_path)
+                .expect("Expected to be able to open database ledger");
+            let (mut poh_recorder, _entry_receiver) = PohRecorder::new(
+                0,
+                Hash::default(),
+                0,
+                Some((4, 4)),
+                DEFAULT_TICKS_PER_SLOT,
+                &Pubkey::default(),
+                &Arc::new(blockstore),
+                &Arc::new(LeaderScheduleCache::default()),
+                &Arc::new(PohConfig::default()),
+            );
+            /*
+            (0..2u64).par_iter().for_each(|i| {
+                //let m = Measure::start("");
+
+            });
+            */
+
             poh_recorder.tick();
             poh_recorder.tick();
             assert_eq!(poh_recorder.tick_cache.len(), 2);
