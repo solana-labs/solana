@@ -457,7 +457,8 @@ Returns identity and transaction information about a confirmed block in the ledg
 #### Parameters:
 
 - `<u64>` - slot, as u64 integer
-- `<string>` - encoding for each returned Transaction, either "json", "jsonParsed", "base58" (*slow*), "base64". If parameter not provided, the default encoding is "json".
+- `<object>` - (optional) Configuration object containing the following optional fields:
+  - (optional) `encoding: <string>` - encoding for each returned Transaction, either "json", "jsonParsed", "base58" (*slow*), "base64". If parameter not provided, the default encoding is "json".
   "jsonParsed" encoding attempts to use program-specific instruction parsers to return more human-readable and explicit data in the `transaction.message.instructions` list. If "jsonParsed" is requested but a parser cannot be found, the instruction falls back to regular JSON encoding (`accounts`, `data`, and `programIdIndex` fields).
 
 #### Results:
@@ -495,7 +496,7 @@ The result field will be an object with the following fields:
 Request:
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
-  {"jsonrpc": "2.0","id":1,"method":"getConfirmedBlock","params":[430, "json"]}
+  {"jsonrpc": "2.0","id":1,"method":"getConfirmedBlock","params":[430, {"encoding": "json"}]}
 '
 ```
 
@@ -849,9 +850,9 @@ Returns transaction details for a confirmed transaction
 #### Parameters:
 
 - `<string>` - transaction signature as base-58 encoded string
-- `<string>` - encoding for each returned Transaction, either "json", "jsonParsed", "base58" (*slow*), "base64". If parameter not provided, the default encoding is "json".
+- `<object>` - (optional) Configuration object containing the following optional fields:
+  - (optional) `encoding: <string>` - encoding for each returned Transaction, either "json", "jsonParsed", "base58" (*slow*), "base64". If parameter not provided, the default encoding is "json".
   "jsonParsed" encoding attempts to use program-specific instruction parsers to return more human-readable and explicit data in the `transaction.message.instructions` list. If "jsonParsed" is requested but a parser cannot be found, the instruction falls back to regular JSON encoding (`accounts`, `data`, and `programIdIndex` fields).
-- `<string>` - (optional) encoding for the returned Transaction, either "json", "jsonParsed", "base58" (*slow*), or "base64". If parameter not provided, the default encoding is JSON.
 
 #### Results:
 
