@@ -4,7 +4,7 @@
 
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender};
-use solana_client::rpc_response::SlotUpdate;
+use solana_client::rpc_response::{SlotTransactionStats, SlotUpdate};
 use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use solana_sdk::{clock::Slot, timing::timestamp};
 use std::{
@@ -140,6 +140,22 @@ impl OptimisticallyConfirmedBankTracker {
             }
             BankNotification::Frozen(bank) => {
                 let frozen_slot = bank.slot();
+                if let Some(parent) = bank.parent() {
+                    let num_successful_transactions = bank
+                        .transaction_count()
+                        .saturating_sub(parent.transaction_count());
+                    subscriptions.notify_slot_update(SlotUpdate::Frozen {
+                        slot: frozen_slot,
+                        timestamp: timestamp(),
+                        stats: SlotTransactionStats {
+                            num_transaction_entries: bank.transaction_entries_count(),
+                            num_successful_transactions,
+                            num_failed_transactions: bank.transaction_error_count(),
+                            max_transactions_per_entry: bank.transactions_per_entry_max(),
+                        },
+                    });
+                }
+
                 if pending_optimistically_confirmed_banks.remove(&bank.slot()) {
                     let mut w_optimistically_confirmed_bank =
                         optimistically_confirmed_bank.write().unwrap();
@@ -149,10 +165,6 @@ impl OptimisticallyConfirmedBankTracker {
                     }
                     drop(w_optimistically_confirmed_bank);
                 }
-                subscriptions.notify_slot_update(SlotUpdate::Frozen {
-                    slot: frozen_slot,
-                    timestamp: timestamp(),
-                });
             }
             BankNotification::Root(bank) => {
                 let root_slot = bank.slot();
