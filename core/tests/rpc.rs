@@ -151,22 +151,31 @@ fn test_rpc_slot_updates() {
     let test_validator = TestValidator::with_no_fees(Pubkey::new_unique());
 
     // Create the pub sub runtime
-    let rt = Runtime::new().unwrap();
+    let mut rt = Runtime::new().unwrap();
     let rpc_pubsub_url = test_validator.rpc_pubsub_url();
     let (update_sender, update_receiver) = channel::<Arc<SlotUpdate>>();
 
     // Subscribe to slot updates
-    rt.spawn(async move {
+    rt.spawn({
         let connect = ws::try_connect::<PubsubClient>(&rpc_pubsub_url).unwrap();
-        let client = connect.await.unwrap();
-
-        tokio_02::spawn(async move {
-            let mut update_sub = client.slots_updates_subscribe().unwrap();
-            loop {
-                let response = update_sub.next().await.unwrap();
-                update_sender.send(response.unwrap()).unwrap();
-            }
-        });
+        connect
+            .and_then(move |client| {
+                tokio_01::spawn(
+                    client
+                        .slots_updates_subscribe()
+                        .and_then(move |update_stream| {
+                            update_stream.for_each(move |update| {
+                                update_sender.send(update).unwrap();
+                                future::ok(())
+                            })
+                        })
+                        .map_err(|err| {
+                            eprintln!("slot update sub err: {:#?}", err);
+                        }),
+                );
+                future::ok(())
+            })
+            .map_err(|_| ())
     });
 
     let first_update = update_receiver
@@ -206,6 +215,8 @@ fn test_rpc_slot_updates() {
             }
         }
     }
+
+    rt.shutdown_now().wait().unwrap();
 }
 
 #[test]
