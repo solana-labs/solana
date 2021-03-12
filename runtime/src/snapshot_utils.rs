@@ -187,7 +187,6 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
         snapshot_package_output_path.as_ref().to_path_buf(),
         bank.capitalization(),
         hash_for_testing,
-        bank.simple_capitalization_enabled(),
     );
 
     Ok(package)
@@ -978,7 +977,6 @@ pub fn process_accounts_package_pre(
     if let Some(expected_hash) = accounts_package.hash_for_testing {
         let (hash, lamports) = AccountsDb::calculate_accounts_hash_without_index(
             &accounts_package.storages,
-            accounts_package.simple_capitalization_testing,
             thread_pool,
         );
 

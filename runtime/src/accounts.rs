@@ -577,11 +577,7 @@ impl Accounts {
             .collect()
     }
 
-    pub fn calculate_capitalization(
-        &self,
-        ancestors: &Ancestors,
-        simple_capitalization_enabled: bool,
-    ) -> u64 {
+    pub fn calculate_capitalization(&self, ancestors: &Ancestors) -> u64 {
         self.accounts_db.unchecked_scan_accounts(
             "calculate_capitalization_scan_elapsed",
             ancestors,
@@ -592,7 +588,6 @@ impl Accounts {
                         lamports,
                         &loaded_account.owner(),
                         loaded_account.executable(),
-                        simple_capitalization_enabled,
                     );
 
                     *total_capitalization = AccountsDb::checked_iterative_sum_for_capitalization(
@@ -610,14 +605,11 @@ impl Accounts {
         slot: Slot,
         ancestors: &Ancestors,
         total_lamports: u64,
-        simple_capitalization_enabled: bool,
     ) -> bool {
-        if let Err(err) = self.accounts_db.verify_bank_hash_and_lamports(
-            slot,
-            ancestors,
-            total_lamports,
-            simple_capitalization_enabled,
-        ) {
+        if let Err(err) =
+            self.accounts_db
+                .verify_bank_hash_and_lamports(slot, ancestors, total_lamports)
+        {
             warn!("verify_bank_hash failed: {:?}", err);
             false
         } else {

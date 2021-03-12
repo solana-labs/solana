@@ -3487,27 +3487,13 @@ impl AccountsDb {
         AccountsHash::checked_cast_for_capitalization(balances.map(|b| b as u128).sum::<u128>())
     }
 
+    // remove this by inlining and remove extra unused params upto all callchain
     pub fn account_balance_for_capitalization(
         lamports: u64,
-        owner: &Pubkey,
-        executable: bool,
-        simple_capitalization_enabled: bool,
+        _owner: &Pubkey,
+        _executable: bool,
     ) -> u64 {
-        if simple_capitalization_enabled {
-            return lamports;
-        }
-
-        let is_specially_retained = (solana_sdk::native_loader::check_id(owner) && executable)
-            || solana_sdk::sysvar::check_id(owner);
-
-        if is_specially_retained {
-            // specially retained accounts always have an initial 1 lamport
-            // balance, but could be modified by transfers which increase
-            // the balance but don't affect the capitalization.
-            lamports - 1
-        } else {
-            lamports
-        }
+        lamports
     }
 
     fn calculate_accounts_hash(
@@ -3515,7 +3501,6 @@ impl AccountsDb {
         slot: Slot,
         ancestors: &Ancestors,
         check_hash: bool,
-        simple_capitalization_enabled: bool,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         use BankHashVerificationError::*;
         let mut scan = Measure::start("scan");
@@ -3560,7 +3545,6 @@ impl AccountsDb {
                                                         account_info.lamports,
                                                         loaded_account.owner(),
                                                         loaded_account.executable(),
-                                                        simple_capitalization_enabled,
                                                     );
 
                                                 if check_hash {
@@ -3626,36 +3610,12 @@ impl AccountsDb {
         bank_hash_info.snapshot_hash
     }
 
-    pub fn update_accounts_hash(
-        &self,
-        slot: Slot,
-        ancestors: &Ancestors,
-        simple_capitalization_enabled: bool,
-    ) -> (Hash, u64) {
-        self.update_accounts_hash_with_index_option(
-            true,
-            false,
-            slot,
-            ancestors,
-            simple_capitalization_enabled,
-            None,
-        )
+    pub fn update_accounts_hash(&self, slot: Slot, ancestors: &Ancestors) -> (Hash, u64) {
+        self.update_accounts_hash_with_index_option(true, false, slot, ancestors, None)
     }
 
-    pub fn update_accounts_hash_test(
-        &self,
-        slot: Slot,
-        ancestors: &Ancestors,
-        simple_capitalization_enabled: bool,
-    ) -> (Hash, u64) {
-        self.update_accounts_hash_with_index_option(
-            true,
-            true,
-            slot,
-            ancestors,
-            simple_capitalization_enabled,
-            None,
-        )
+    pub fn update_accounts_hash_test(&self, slot: Slot, ancestors: &Ancestors) -> (Hash, u64) {
+        self.update_accounts_hash_with_index_option(true, true, slot, ancestors, None)
     }
 
     /// Scan through all the account storage in parallel
@@ -3701,18 +3661,16 @@ impl AccountsDb {
         use_index: bool,
         slot: Slot,
         ancestors: &Ancestors,
-        simple_capitalization_enabled: bool,
     ) -> (Hash, u64) {
         if !use_index {
             let combined_maps = self.get_snapshot_storages(slot);
 
             Self::calculate_accounts_hash_without_index(
                 &combined_maps,
-                simple_capitalization_enabled,
                 Some(&self.thread_pool_clean),
             )
         } else {
-            self.calculate_accounts_hash(slot, ancestors, false, simple_capitalization_enabled)
+            self.calculate_accounts_hash(slot, ancestors, false)
                 .unwrap()
         }
     }
@@ -3723,23 +3681,14 @@ impl AccountsDb {
         debug_verify: bool,
         slot: Slot,
         ancestors: &Ancestors,
-        simple_capitalization_enabled: bool,
         expected_capitalization: Option<u64>,
     ) -> (Hash, u64) {
-        let (hash, total_lamports) = self.calculate_accounts_hash_helper(
-            use_index,
-            slot,
-            ancestors,
-            simple_capitalization_enabled,
-        );
+        let (hash, total_lamports) =
+            self.calculate_accounts_hash_helper(use_index, slot, ancestors);
         if debug_verify {
             // calculate the other way (store or non-store) and verify results match.
-            let (hash_other, total_lamports_other) = self.calculate_accounts_hash_helper(
-                !use_index,
-                slot,
-                ancestors,
-                simple_capitalization_enabled,
-            );
+            let (hash_other, total_lamports_other) =
+                self.calculate_accounts_hash_helper(!use_index, slot, ancestors);
 
             let success = hash == hash_other
                 && total_lamports == total_lamports_other
@@ -3754,7 +3703,6 @@ impl AccountsDb {
 
     fn scan_snapshot_stores(
         storage: &[SnapshotStorage],
-        simple_capitalization_enabled: bool,
         mut stats: &mut crate::accounts_hash::HashStats,
         bins: usize,
     ) -> Vec<Vec<Vec<CalculateHashIntermediate>>> {
@@ -3778,7 +3726,6 @@ impl AccountsDb {
                         raw_lamports,
                         loaded_account.owner(),
                         loaded_account.executable(),
-                        simple_capitalization_enabled,
                     )
                 };
 
@@ -3807,7 +3754,6 @@ impl AccountsDb {
     // intended to be faster than calculate_accounts_hash
     pub fn calculate_accounts_hash_without_index(
         storages: &[SnapshotStorage],
-        simple_capitalization_enabled: bool,
         thread_pool: Option<&ThreadPool>,
     ) -> (Hash, u64) {
         let scan_and_hash = || {
@@ -3816,7 +3762,6 @@ impl AccountsDb {
             const PUBKEY_BINS_FOR_CALCULATING_HASHES: usize = 64;
             let result = Self::scan_snapshot_stores(
                 storages,
-                simple_capitalization_enabled,
                 &mut stats,
                 PUBKEY_BINS_FOR_CALCULATING_HASHES,
             );
@@ -3835,12 +3780,11 @@ impl AccountsDb {
         slot: Slot,
         ancestors: &Ancestors,
         total_lamports: u64,
-        simple_capitalization_enabled: bool,
     ) -> Result<(), BankHashVerificationError> {
         use BankHashVerificationError::*;
 
         let (calculated_hash, calculated_lamports) =
-            self.calculate_accounts_hash(slot, ancestors, true, simple_capitalization_enabled)?;
+            self.calculate_accounts_hash(slot, ancestors, true)?;
 
         if calculated_lamports != total_lamports {
             warn!(
@@ -5071,13 +5015,13 @@ pub mod tests {
     #[should_panic(expected = "assertion failed: bins <= max_plus_1 && bins > 0")]
     fn test_accountsdb_scan_snapshot_stores_illegal_bins2() {
         let mut stats = HashStats::default();
-        AccountsDb::scan_snapshot_stores(&[], true, &mut stats, 257);
+        AccountsDb::scan_snapshot_stores(&[], &mut stats, 257);
     }
     #[test]
     #[should_panic(expected = "assertion failed: bins <= max_plus_1 && bins > 0")]
     fn test_accountsdb_scan_snapshot_stores_illegal_bins() {
         let mut stats = HashStats::default();
-        AccountsDb::scan_snapshot_stores(&[], true, &mut stats, 0);
+        AccountsDb::scan_snapshot_stores(&[], &mut stats, 0);
     }
 
     fn sample_storages_and_accounts() -> (SnapshotStorages, Vec<CalculateHashIntermediate>) {
@@ -5164,11 +5108,11 @@ pub mod tests {
 
         let bins = 1;
         let mut stats = HashStats::default();
-        let result = AccountsDb::scan_snapshot_stores(&storages, true, &mut stats, bins);
+        let result = AccountsDb::scan_snapshot_stores(&storages, &mut stats, bins);
         assert_eq!(result, vec![vec![raw_expected.clone()]]);
 
         let bins = 2;
-        let result = AccountsDb::scan_snapshot_stores(&storages, true, &mut stats, bins);
+        let result = AccountsDb::scan_snapshot_stores(&storages, &mut stats, bins);
         let mut expected = vec![Vec::new(); bins];
         expected[0].push(raw_expected[0].clone());
         expected[0].push(raw_expected[1].clone());
@@ -5177,7 +5121,7 @@ pub mod tests {
         assert_eq!(result, vec![expected]);
 
         let bins = 4;
-        let result = AccountsDb::scan_snapshot_stores(&storages, true, &mut stats, bins);
+        let result = AccountsDb::scan_snapshot_stores(&storages, &mut stats, bins);
         let mut expected = vec![Vec::new(); bins];
         expected[0].push(raw_expected[0].clone());
         expected[1].push(raw_expected[1].clone());
@@ -5186,7 +5130,7 @@ pub mod tests {
         assert_eq!(result, vec![expected]);
 
         let bins = 256;
-        let result = AccountsDb::scan_snapshot_stores(&storages, true, &mut stats, bins);
+        let result = AccountsDb::scan_snapshot_stores(&storages, &mut stats, bins);
         let mut expected = vec![Vec::new(); bins];
         expected[0].push(raw_expected[0].clone());
         expected[127].push(raw_expected[1].clone());
@@ -5207,7 +5151,7 @@ pub mod tests {
         storages[0].splice(0..0, vec![arc; MAX_ITEMS_PER_CHUNK]);
 
         let mut stats = HashStats::default();
-        let result = AccountsDb::scan_snapshot_stores(&storages, true, &mut stats, bins);
+        let result = AccountsDb::scan_snapshot_stores(&storages, &mut stats, bins);
         assert_eq!(result.len(), 2); // 2 chunks
         assert_eq!(result[0].len(), 0); // nothing found in first slots
         assert_eq!(result[1].len(), bins);
@@ -5219,7 +5163,7 @@ pub mod tests {
         solana_logger::setup();
 
         let (storages, _size, _slot_expected) = sample_storage();
-        let result = AccountsDb::calculate_accounts_hash_without_index(&storages, true, None);
+        let result = AccountsDb::calculate_accounts_hash_without_index(&storages, None);
         let expected_hash = Hash::from_str("GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn").unwrap();
         assert_eq!(result, (expected_hash, 0));
     }
@@ -5234,7 +5178,7 @@ pub mod tests {
                 item.hash
             });
         let sum = raw_expected.iter().map(|item| item.lamports).sum();
-        let result = AccountsDb::calculate_accounts_hash_without_index(&storages, true, None);
+        let result = AccountsDb::calculate_accounts_hash_without_index(&storages, None);
 
         assert_eq!(result, (expected_hash, sum));
     }
@@ -6319,8 +6263,8 @@ pub mod tests {
 
         let ancestors = linear_ancestors(latest_slot);
         assert_eq!(
-            daccounts.update_accounts_hash(latest_slot, &ancestors, true),
-            accounts.update_accounts_hash(latest_slot, &ancestors, true)
+            daccounts.update_accounts_hash(latest_slot, &ancestors),
+            accounts.update_accounts_hash(latest_slot, &ancestors)
         );
     }
 
@@ -6473,12 +6417,12 @@ pub mod tests {
 
         let ancestors = linear_ancestors(current_slot);
         info!("ancestors: {:?}", ancestors);
-        let hash = accounts.update_accounts_hash_test(current_slot, &ancestors, true);
+        let hash = accounts.update_accounts_hash_test(current_slot, &ancestors);
 
         accounts.clean_accounts(None);
 
         assert_eq!(
-            accounts.update_accounts_hash_test(current_slot, &ancestors, true),
+            accounts.update_accounts_hash_test(current_slot, &ancestors),
             hash
         );
 
@@ -6595,7 +6539,7 @@ pub mod tests {
         accounts.add_root(current_slot);
 
         accounts.print_accounts_stats("pre_f");
-        accounts.update_accounts_hash(4, &HashMap::default(), true);
+        accounts.update_accounts_hash(4, &HashMap::default());
 
         let accounts = f(accounts, current_slot);
 
@@ -6607,7 +6551,7 @@ pub mod tests {
         assert_load_account(&accounts, current_slot, dummy_pubkey, dummy_lamport);
 
         accounts
-            .verify_bank_hash_and_lamports(4, &HashMap::default(), 1222, true)
+            .verify_bank_hash_and_lamports(4, &HashMap::default(), 1222)
             .unwrap();
     }
 
@@ -6987,15 +6931,15 @@ pub mod tests {
 
         db.store_uncached(some_slot, &[(&key, &account)]);
         db.add_root(some_slot);
-        db.update_accounts_hash_test(some_slot, &ancestors, true);
+        db.update_accounts_hash_test(some_slot, &ancestors);
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1, true),
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1),
             Ok(_)
         );
 
         db.bank_hashes.write().unwrap().remove(&some_slot).unwrap();
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1, true),
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1),
             Err(MissingBankHash)
         );
 
@@ -7010,7 +6954,7 @@ pub mod tests {
             .unwrap()
             .insert(some_slot, bank_hash_info);
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1, true),
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1),
             Err(MismatchedBankHash)
         );
     }
@@ -7029,9 +6973,9 @@ pub mod tests {
 
         db.store_uncached(some_slot, &[(&key, &account)]);
         db.add_root(some_slot);
-        db.update_accounts_hash_test(some_slot, &ancestors, true);
+        db.update_accounts_hash_test(some_slot, &ancestors);
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1, true),
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1),
             Ok(_)
         );
 
@@ -7043,18 +6987,14 @@ pub mod tests {
                 &solana_sdk::native_loader::create_loadable_account("foo", 1),
             )],
         );
-        db.update_accounts_hash_test(some_slot, &ancestors, true);
+        db.update_accounts_hash_test(some_slot, &ancestors);
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1, false),
-            Ok(_)
-        );
-        assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 2, true),
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 2),
             Ok(_)
         );
 
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 10, true),
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 10),
             Err(MismatchedTotalLamports(expected, actual)) if expected == 2 && actual == 10
         );
     }
@@ -7072,9 +7012,9 @@ pub mod tests {
             .unwrap()
             .insert(some_slot, BankHashInfo::default());
         db.add_root(some_slot);
-        db.update_accounts_hash_test(some_slot, &ancestors, true);
+        db.update_accounts_hash_test(some_slot, &ancestors);
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 0, true),
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 0),
             Ok(_)
         );
     }
@@ -7099,7 +7039,7 @@ pub mod tests {
         db.store_accounts_unfrozen(some_slot, accounts, &[some_hash], false);
         db.add_root(some_slot);
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1, true),
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1),
             Err(MismatchedAccountHash)
         );
     }
@@ -7663,14 +7603,14 @@ pub mod tests {
         );
 
         let no_ancestors = HashMap::default();
-        accounts.update_accounts_hash(current_slot, &no_ancestors, true);
+        accounts.update_accounts_hash(current_slot, &no_ancestors);
         accounts
-            .verify_bank_hash_and_lamports(current_slot, &no_ancestors, 22300, true)
+            .verify_bank_hash_and_lamports(current_slot, &no_ancestors, 22300)
             .unwrap();
 
         let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
         accounts
-            .verify_bank_hash_and_lamports(current_slot, &no_ancestors, 22300, true)
+            .verify_bank_hash_and_lamports(current_slot, &no_ancestors, 22300)
             .unwrap();
 
         // repeating should be no-op
@@ -7928,7 +7868,7 @@ pub mod tests {
     fn test_account_balance_for_capitalization_normal() {
         // system accounts
         assert_eq!(
-            AccountsDb::account_balance_for_capitalization(10, &Pubkey::default(), false, true),
+            AccountsDb::account_balance_for_capitalization(10, &Pubkey::default(), false),
             10
         );
         // any random program data accounts
@@ -7936,16 +7876,6 @@ pub mod tests {
             AccountsDb::account_balance_for_capitalization(
                 10,
                 &solana_sdk::pubkey::new_rand(),
-                false,
-                true,
-            ),
-            10
-        );
-        assert_eq!(
-            AccountsDb::account_balance_for_capitalization(
-                10,
-                &solana_sdk::pubkey::new_rand(),
-                false,
                 false,
             ),
             10
@@ -7963,37 +7893,13 @@ pub mod tests {
                 normal_sysvar.lamports,
                 &normal_sysvar.owner,
                 normal_sysvar.executable,
-                false,
-            ),
-            0
-        );
-        assert_eq!(
-            AccountsDb::account_balance_for_capitalization(
-                normal_sysvar.lamports,
-                &normal_sysvar.owner,
-                normal_sysvar.executable,
-                true,
             ),
             1
         );
 
-        // currently transactions can send any lamports to sysvars although this is not sensible.
+        // transactions can send any lamports to sysvars although this is not sensible.
         assert_eq!(
-            AccountsDb::account_balance_for_capitalization(
-                10,
-                &solana_sdk::sysvar::id(),
-                false,
-                false
-            ),
-            9
-        );
-        assert_eq!(
-            AccountsDb::account_balance_for_capitalization(
-                10,
-                &solana_sdk::sysvar::id(),
-                false,
-                true
-            ),
+            AccountsDb::account_balance_for_capitalization(10, &solana_sdk::sysvar::id(), false),
             10
         );
     }
@@ -8006,16 +7912,6 @@ pub mod tests {
                 normal_native_program.lamports,
                 &normal_native_program.owner,
                 normal_native_program.executable,
-                false,
-            ),
-            0
-        );
-        assert_eq!(
-            AccountsDb::account_balance_for_capitalization(
-                normal_native_program.lamports,
-                &normal_native_program.owner,
-                normal_native_program.executable,
-                true,
             ),
             1
         );
@@ -8026,16 +7922,6 @@ pub mod tests {
                 1,
                 &solana_sdk::native_loader::id(),
                 false,
-                false,
-            ),
-            1
-        );
-        assert_eq!(
-            AccountsDb::account_balance_for_capitalization(
-                1,
-                &solana_sdk::native_loader::id(),
-                false,
-                true,
             ),
             1
         );

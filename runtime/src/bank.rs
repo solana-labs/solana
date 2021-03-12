@@ -1336,11 +1336,7 @@ impl Bank {
         let old_account = self.get_sysvar_account(pubkey);
         let new_account = updater(&old_account);
 
-        if !self.simple_capitalization_enabled() {
-            self.store_account(pubkey, &new_account);
-        } else {
-            self.store_account_and_update_capitalization(pubkey, &new_account);
-        }
+        self.store_account_and_update_capitalization(pubkey, &new_account);
     }
 
     fn inherit_specially_retained_account_balance(
@@ -2232,11 +2228,7 @@ impl Bank {
             name,
             self.inherit_specially_retained_account_balance(&existing_genuine_program),
         );
-        if !self.simple_capitalization_enabled() {
-            self.store_account(&program_id, &account);
-        } else {
-            self.store_account_and_update_capitalization(&program_id, &account);
-        }
+        self.store_account_and_update_capitalization(&program_id, &account);
 
         debug!("Added native program {} under {:?}", name, program_id);
     }
@@ -4195,7 +4187,6 @@ impl Bank {
             self.slot(),
             &self.ancestors,
             self.capitalization(),
-            self.simple_capitalization_enabled(),
         )
     }
 
@@ -4226,9 +4217,7 @@ impl Bank {
     }
 
     pub fn calculate_capitalization(&self) -> u64 {
-        self.rc
-            .accounts
-            .calculate_capitalization(&self.ancestors, self.simple_capitalization_enabled())
+        self.rc.accounts.calculate_capitalization(&self.ancestors)
     }
 
     pub fn calculate_and_verify_capitalization(&self) -> bool {
@@ -4276,7 +4265,6 @@ impl Bank {
                 debug_verify,
                 self.slot(),
                 &self.ancestors,
-                self.simple_capitalization_enabled(),
                 Some(self.capitalization()),
             );
         assert_eq!(total_lamports, self.capitalization());
@@ -4613,28 +4601,6 @@ impl Bank {
             .is_active(&feature_set::check_init_vote_data::id())
     }
 
-    pub fn simple_capitalization_enabled(&self) -> bool {
-        self.simple_capitalization_enabled_at_genesis()
-            || self
-                .feature_set
-                .is_active(&feature_set::simple_capitalization::id())
-    }
-
-    fn simple_capitalization_enabled_at_genesis(&self) -> bool {
-        // genesis builtin initialization codepath is called even before the initial
-        // feature activation, so we need to peek this flag at very early bank
-        // initialization phase for the development genesis case
-        if let Some(account) = self.get_account(&feature_set::simple_capitalization::id()) {
-            if let Some(feature) = feature::from_account(&account) {
-                if feature.activated_at == Some(0) {
-                    return true;
-                }
-            }
-        }
-
-        false
-    }
-
     pub fn deactivate_feature(&mut self, id: &Pubkey) {
         let mut feature_set = Arc::make_mut(&mut self.feature_set).clone();
         feature_set.active.remove(&id);
@@ -4679,10 +4645,6 @@ impl Bank {
             // bugs which again creates bad stake accounts..
 
             self.rewrite_stakes();
-        }
-
-        if new_feature_activations.contains(&feature_set::simple_capitalization::id()) {
-            self.adjust_capitalization_for_existing_specially_retained_accounts();
         }
 
         self.ensure_feature_builtins(init_finish_or_warp, &new_feature_activations);
@@ -4786,40 +4748,6 @@ impl Bank {
             }
         }
     }
-
-    fn adjust_capitalization_for_existing_specially_retained_accounts(&self) {
-        use solana_sdk::{bpf_loader, bpf_loader_deprecated, secp256k1_program};
-        let mut existing_sysvar_account_count = 8;
-        let mut existing_native_program_account_count = 4;
-
-        if self.get_account(&sysvar::rewards::id()).is_some() {
-            existing_sysvar_account_count += 1;
-        }
-
-        if self.get_account(&bpf_loader::id()).is_some() {
-            existing_native_program_account_count += 1;
-        }
-
-        if self.get_account(&bpf_loader_deprecated::id()).is_some() {
-            existing_native_program_account_count += 1;
-        }
-
-        if self.get_account(&secp256k1_program::id()).is_some() {
-            existing_native_program_account_count += 1;
-        }
-
-        info!(
-            "Adjusted capitalization for existing {} sysvars and {} native programs from {}",
-            existing_sysvar_account_count,
-            existing_native_program_account_count,
-            self.capitalization()
-        );
-        self.capitalization.fetch_add(
-            existing_sysvar_account_count + existing_native_program_account_count,
-            Relaxed,
-        );
-    }
-
     fn reconfigure_token2_native_mint(&mut self) {
         let reconfigure_token2_native_mint = match self.cluster_type() {
             ClusterType::Development => true,
@@ -5193,7 +5121,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_bank_capitalization() {
-        let bank = Arc::new(Bank::new(&GenesisConfig {
+        let bank0 = Arc::new(Bank::new(&GenesisConfig {
             accounts: (0..42)
                 .map(|_| {
                     (
@@ -5205,9 +5133,17 @@ pub(crate) mod tests {
             cluster_type: ClusterType::MainnetBeta,
             ..GenesisConfig::default()
         }));
-        assert_eq!(bank.capitalization(), 42 * 42);
-        let bank1 = Bank::new_from_parent(&bank, &Pubkey::default(), 1);
-        assert_eq!(bank1.capitalization(), 42 * 42);
+        let sysvar_and_native_proram_delta0 = 10;
+        assert_eq!(
+            bank0.capitalization(),
+            42 * 42 + sysvar_and_native_proram_delta0
+        );
+        let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+        let sysvar_and_native_proram_delta1 = 2;
+        assert_eq!(
+            bank1.capitalization(),
+            42 * 42 + sysvar_and_native_proram_delta0 + sysvar_and_native_proram_delta1,
+        );
     }
 
     #[test]
@@ -5493,19 +5429,6 @@ pub(crate) mod tests {
         assert_eq!(bank.capitalization(), bank.calculate_capitalization());
     }
 
-    fn assert_capitalization_diff_with_new_bank(
-        bank: &Bank,
-        updater: impl Fn() -> Bank,
-        asserter: impl Fn(u64, u64),
-    ) -> Bank {
-        let old = bank.capitalization();
-        let bank = updater();
-        let new = bank.capitalization();
-        asserter(old, new);
-        assert_eq!(bank.capitalization(), bank.calculate_capitalization());
-        bank
-    }
-
     #[test]
     fn test_store_account_and_update_capitalization_missing() {
         let (genesis_config, _mint_keypair) = create_genesis_config(0);
@@ -5708,7 +5631,6 @@ pub(crate) mod tests {
             burn_percent: 10,
         };
 
-        genesis_config.disable_cap_altering_features_for_preciseness();
         let mut bank = Bank::new(&genesis_config);
         // Enable rent collection
         bank.rent_collector.epoch = 5;
@@ -5794,8 +5716,9 @@ pub(crate) mod tests {
 
         let current_capitalization = bank.capitalization.load(Relaxed);
 
+        let sysvar_and_native_proram_delta = 1;
         assert_eq!(
-            previous_capitalization - current_capitalization,
+            previous_capitalization - current_capitalization + sysvar_and_native_proram_delta,
             burned_portion
         );
 
@@ -6701,11 +6624,6 @@ pub(crate) mod tests {
                 .map(|(slot, _)| *slot)
                 .collect::<Vec<Slot>>()
         }
-
-        fn first_slot_in_next_epoch(&self) -> Slot {
-            self.epoch_schedule()
-                .get_first_slot_in_epoch(self.epoch() + 1)
-        }
     }
 
     #[test]
@@ -6855,7 +6773,7 @@ pub(crate) mod tests {
         solana_logger::setup();
 
         // create a bank that ticks really slowly...
-        let bank = Arc::new(Bank::new(&GenesisConfig {
+        let bank0 = Arc::new(Bank::new(&GenesisConfig {
             accounts: (0..42)
                 .map(|_| {
                     (
@@ -6881,16 +6799,20 @@ pub(crate) mod tests {
 
         // enable lazy rent collection because this test depends on rent-due accounts
         // not being eagerly-collected for exact rewards calculation
-        bank.restore_old_behavior_for_fragile_tests();
+        bank0.restore_old_behavior_for_fragile_tests();
 
-        assert_eq!(bank.capitalization(), 42 * 1_000_000_000);
-        assert!(bank.rewards.read().unwrap().is_empty());
+        let sysvar_and_native_proram_delta0 = 10;
+        assert_eq!(
+            bank0.capitalization(),
+            42 * 1_000_000_000 + sysvar_and_native_proram_delta0
+        );
+        assert!(bank0.rewards.read().unwrap().is_empty());
 
         let ((vote_id, mut vote_account), (stake_id, stake_account)) =
             crate::stakes::tests::create_staked_node_accounts(1_0000);
 
         // set up accounts
-        bank.store_account_and_update_capitalization(&stake_id, &stake_account);
+        bank0.store_account_and_update_capitalization(&stake_id, &stake_account);
 
         // generate some rewards
         let mut vote_state = Some(VoteState::from(&vote_account).unwrap());
@@ -6900,7 +6822,7 @@ pub(crate) mod tests {
             }
             let versioned = VoteStateVersions::Current(Box::new(vote_state.take().unwrap()));
             VoteState::to(&versioned, &mut vote_account).unwrap();
-            bank.store_account_and_update_capitalization(&vote_id, &vote_account);
+            bank0.store_account_and_update_capitalization(&vote_id, &vote_account);
             match versioned {
                 VoteStateVersions::Current(v) => {
                     vote_state = Some(*v);
@@ -6908,9 +6830,9 @@ pub(crate) mod tests {
                 _ => panic!("Has to be of type Current"),
             };
         }
-        bank.store_account_and_update_capitalization(&vote_id, &vote_account);
+        bank0.store_account_and_update_capitalization(&vote_id, &vote_account);
 
-        let validator_points: u128 = bank
+        let validator_points: u128 = bank0
             .stake_delegation_accounts(&mut null_tracer())
             .iter()
             .flat_map(|(_vote_pubkey, (stake_group, vote_account))| {
@@ -6926,15 +6848,17 @@ pub(crate) mod tests {
 
         // put a child bank in epoch 1, which calls update_rewards()...
         let bank1 = Bank::new_from_parent(
-            &bank,
+            &bank0,
             &Pubkey::default(),
-            bank.get_slots_in_epoch(bank.epoch()) + 1,
+            bank0.get_slots_in_epoch(bank0.epoch()) + 1,
         );
         // verify that there's inflation
-        assert_ne!(bank1.capitalization(), bank.capitalization());
+        assert_ne!(bank1.capitalization(), bank0.capitalization());
 
         // verify the inflation is represented in validator_points *
-        let inflation = bank1.capitalization() - bank.capitalization();
+        let sysvar_and_native_proram_delta1 = 2;
+        let paid_rewards =
+            bank1.capitalization() - bank0.capitalization() - sysvar_and_native_proram_delta1;
 
         let rewards = bank1
             .get_account(&sysvar::rewards::id())
@@ -6951,10 +6875,8 @@ pub(crate) mod tests {
         );
 
         // verify the rewards are the right size
-        assert!(
-            ((rewards.validator_point_value * validator_points as f64) - inflation as f64).abs()
-                < 1.0 // rounding, truncating
-        );
+        let allocated_rewards = rewards.validator_point_value * validator_points as f64;
+        assert!((allocated_rewards - paid_rewards as f64).abs() < 1.0); // rounding, truncating
 
         // verify validator rewards show up in bank1.rewards vector
         assert_eq!(
@@ -7002,7 +6924,11 @@ pub(crate) mod tests {
         // not being eagerly-collected for exact rewards calculation
         bank.restore_old_behavior_for_fragile_tests();
 
-        assert_eq!(bank.capitalization(), 42 * 1_000_000_000);
+        let sysvar_and_native_proram_delta = 10;
+        assert_eq!(
+            bank.capitalization(),
+            42 * 1_000_000_000 + sysvar_and_native_proram_delta
+        );
         assert!(bank.rewards.read().unwrap().is_empty());
 
         let vote_id = solana_sdk::pubkey::new_rand();
@@ -7418,7 +7344,6 @@ pub(crate) mod tests {
         let (expected_fee_collected, expected_fee_burned) =
             genesis_config.fee_rate_governor.burn(expected_fee_paid);
 
-        genesis_config.disable_cap_altering_features_for_preciseness();
         let mut bank = Bank::new(&genesis_config);
 
         let capitalization = bank.capitalization();
@@ -7448,7 +7373,11 @@ pub(crate) mod tests {
         ); // Leader collects fee after the bank is frozen
 
         // verify capitalization
-        assert_eq!(capitalization - expected_fee_burned, bank.capitalization());
+        let sysvar_and_native_proram_delta = 1;
+        assert_eq!(
+            capitalization - expected_fee_burned + sysvar_and_native_proram_delta,
+            bank.capitalization()
+        );
 
         assert_eq!(
             *bank.rewards.read().unwrap(),
@@ -8219,7 +8148,8 @@ pub(crate) mod tests {
         assert_eq!(None, bank3.get_account_modified_since_parent(&pubkey));
     }
 
-    fn do_test_bank_update_sysvar_account(simple_capitalization_enabled: bool) {
+    #[test]
+    fn test_bank_update_sysvar_account() {
         use sysvar::clock::Clock;
 
         let dummy_clock_id = solana_sdk::pubkey::new_rand();
@@ -8229,9 +8159,7 @@ pub(crate) mod tests {
         let expected_next_slot = expected_previous_slot + 1;
 
         // First, initialize the clock sysvar
-        if simple_capitalization_enabled {
-            activate_all_features(&mut genesis_config);
-        }
+        activate_all_features(&mut genesis_config);
         let bank1 = Arc::new(Bank::new(&genesis_config));
         assert_eq!(bank1.calculate_capitalization(), bank1.capitalization());
 
@@ -8256,12 +8184,7 @@ pub(crate) mod tests {
                 );
             },
             |old, new| {
-                // only if simple_capitalization_enabled, cap should increment
-                if simple_capitalization_enabled {
-                    assert_eq!(old + 1, new);
-                } else {
-                    assert_eq!(old, new);
-                }
+                assert_eq!(old + 1, new);
             },
         );
 
@@ -8347,16 +8270,6 @@ pub(crate) mod tests {
                 assert_eq!(old, new);
             },
         );
-    }
-
-    #[test]
-    fn test_bank_update_sysvar_account_with_simple_capitalization_disabled() {
-        do_test_bank_update_sysvar_account(false)
-    }
-
-    #[test]
-    fn test_bank_update_sysvar_account_with_simple_capitalization_enabled() {
-        do_test_bank_update_sysvar_account(true);
     }
 
     #[test]
@@ -10577,11 +10490,10 @@ pub(crate) mod tests {
         assert_eq!(bank.get_account_modified_slot(&loader_id).unwrap().1, slot);
     }
 
-    fn do_test_add_native_program(simple_capitalization_enabled: bool) {
+    #[test]
+    fn test_add_native_program() {
         let (mut genesis_config, _mint_keypair) = create_genesis_config(100_000);
-        if simple_capitalization_enabled {
-            activate_all_features(&mut genesis_config);
-        }
+        activate_all_features(&mut genesis_config);
 
         let slot = 123;
         let program_id = solana_sdk::pubkey::new_rand();
@@ -10597,11 +10509,7 @@ pub(crate) mod tests {
             &bank,
             || bank.add_native_program("mock_program", &program_id, false),
             |old, new| {
-                if simple_capitalization_enabled {
-                    assert_eq!(old + 1, new);
-                } else {
-                    assert_eq!(old, new);
-                }
+                assert_eq!(old + 1, new);
             },
         );
 
@@ -10642,16 +10550,6 @@ pub(crate) mod tests {
             bank.get_account_modified_slot(&program_id).unwrap().1,
             bank.parent_slot()
         );
-    }
-
-    #[test]
-    fn test_add_native_program_with_simple_capitalization_disabled() {
-        do_test_add_native_program(false);
-    }
-
-    #[test]
-    fn test_add_native_program_with_simple_capitalization_enabled() {
-        do_test_add_native_program(true);
     }
 
     #[test]
@@ -10815,7 +10713,6 @@ pub(crate) mod tests {
             reward_pubkey,
             Account::new(u64::MAX, 0, &solana_sdk::pubkey::new_rand()),
         );
-        genesis_config.disable_cap_altering_features_for_preciseness();
         let bank0 = Bank::new(&genesis_config);
         // because capitalization has been reset with bogus capitalization calculation allowing overflows,
         // deliberately substract 1 lamport to simulate it
@@ -10831,8 +10728,9 @@ pub(crate) mod tests {
 
         // assert that everything gets in order....
         assert!(bank1.get_account(&reward_pubkey).is_none());
+        let sysvar_and_native_proram_delta = 1;
         assert_eq!(
-            bank0.capitalization() + 1 + 1_000_000_000,
+            bank0.capitalization() + 1 + 1_000_000_000 + sysvar_and_native_proram_delta,
             bank1.capitalization()
         );
         assert_eq!(bank1.capitalization(), bank1.calculate_capitalization());
@@ -11146,116 +11044,6 @@ pub(crate) mod tests {
         let versioned = VoteStateVersions::new_current(vote_state);
         VoteState::to(&versioned, &mut vote_account).unwrap();
         bank.store_account(vote_pubkey, &vote_account);
-    }
-
-    #[test]
-    fn test_simple_capitalization_adjustment_minimum_genesis_set() {
-        solana_logger::setup();
-
-        let (mut genesis_config, _mint_keypair) = create_genesis_config(0);
-        let feature_balance =
-            std::cmp::max(genesis_config.rent.minimum_balance(Feature::size_of()), 1);
-
-        // inhibit deprecated rewards sysvar creation altogether
-        genesis_config.accounts.insert(
-            feature_set::deprecate_rewards_sysvar::id(),
-            Account::from(feature::create_account(
-                &Feature {
-                    activated_at: Some(0),
-                },
-                feature_balance,
-            )),
-        );
-
-        let bank0 = Bank::new(&genesis_config);
-        let bank1 = Arc::new(new_from_parent(&Arc::new(bank0)));
-
-        // schedule activation of simple capitalization
-        bank1.store_account_and_update_capitalization(
-            &feature_set::simple_capitalization::id(),
-            &feature::create_account(&Feature { activated_at: None }, feature_balance),
-        );
-
-        // 12 is minimum adjusted cap increase in adjust_capitalization_for_existing_specially_retained_accounts
-        assert_capitalization_diff_with_new_bank(
-            &bank1,
-            || Bank::new_from_parent(&bank1, &Pubkey::default(), bank1.first_slot_in_next_epoch()),
-            |old, new| assert_eq!(old + 12, new),
-        );
-    }
-
-    #[test]
-    fn test_simple_capitalization_adjustment_full_set() {
-        solana_logger::setup();
-
-        let (mut genesis_config, _mint_keypair) = create_genesis_config(0);
-        let feature_balance =
-            std::cmp::max(genesis_config.rent.minimum_balance(Feature::size_of()), 1);
-
-        // activate all features but simple capitalization
-        activate_all_features(&mut genesis_config);
-        genesis_config
-            .accounts
-            .remove(&feature_set::simple_capitalization::id());
-        // intentionally create deprecated rewards sysvar creation
-        genesis_config
-            .accounts
-            .remove(&feature_set::deprecate_rewards_sysvar::id());
-
-        // intentionally create bogus native programs
-        #[allow(clippy::unnecessary_wraps)]
-        fn mock_process_instruction(
-            _program_id: &Pubkey,
-            _keyed_accounts: &[KeyedAccount],
-            _data: &[u8],
-            _invoke_context: &mut dyn InvokeContext,
-        ) -> std::result::Result<(), solana_sdk::instruction::InstructionError> {
-            Ok(())
-        }
-        let builtins = Builtins {
-            genesis_builtins: vec![
-                Builtin::new(
-                    "mock bpf",
-                    solana_sdk::bpf_loader::id(),
-                    mock_process_instruction,
-                ),
-                Builtin::new(
-                    "mock bpf",
-                    solana_sdk::bpf_loader_deprecated::id(),
-                    mock_process_instruction,
-                ),
-            ],
-            feature_builtins: (vec![]),
-        };
-
-        let bank0 = Arc::new(Bank::new_with_paths(
-            &genesis_config,
-            Vec::new(),
-            &[],
-            None,
-            Some(&builtins),
-            HashSet::new(),
-            false,
-        ));
-        // move to next epoch to create now deprecated rewards sysvar intentionally
-        let bank1 = Arc::new(Bank::new_from_parent(
-            &bank0,
-            &Pubkey::default(),
-            bank0.first_slot_in_next_epoch(),
-        ));
-
-        // schedule activation of simple capitalization
-        bank1.store_account_and_update_capitalization(
-            &feature_set::simple_capitalization::id(),
-            &feature::create_account(&Feature { activated_at: None }, feature_balance),
-        );
-
-        // 16 is maximum adjusted cap increase in adjust_capitalization_for_existing_specially_retained_accounts
-        assert_capitalization_diff_with_new_bank(
-            &bank1,
-            || Bank::new_from_parent(&bank1, &Pubkey::default(), bank1.first_slot_in_next_epoch()),
-            |old, new| assert_eq!(old + 16, new),
-        );
     }
 
     #[test]
