@@ -199,7 +199,6 @@ fn process_instruction(
         }
         NESTED_INVOKE => {
             msg!("nested invoke");
-
             const ARGUMENT_INDEX: usize = 0;
             const INVOKED_ARGUMENT_INDEX: usize = 1;
             const INVOKED_PROGRAM_INDEX: usize = 3;
@@ -231,8 +230,10 @@ fn process_instruction(
         }
         WRITE_ACCOUNT => {
             msg!("write account");
+            const ARGUMENT_INDEX: usize = 0;
+
             for i in 0..instruction_data[1] {
-                accounts[0].data.borrow_mut()[i as usize] = instruction_data[1];
+                accounts[ARGUMENT_INDEX].data.borrow_mut()[i as usize] = instruction_data[1];
             }
         }
         _ => panic!(),

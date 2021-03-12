@@ -342,7 +342,7 @@ pub fn process_instruction(
 mod tests {
     use super::*;
     use solana_sdk::{
-        account::{self, AccountSharedData},
+        account::{self, Account, AccountSharedData},
         process_instruction::MockInvokeContext,
         rent::Rent,
     };
@@ -376,15 +376,15 @@ mod tests {
                 } else if sysvar::rent::check_id(&meta.pubkey) {
                     account::create_account_shared_data(&Rent::free(), 1)
                 } else if meta.pubkey == invalid_vote_state_pubkey() {
-                    AccountSharedData {
+                    AccountSharedData::from(Account {
                         owner: invalid_vote_state_pubkey(),
-                        ..AccountSharedData::default()
-                    }
+                        ..Account::default()
+                    })
                 } else {
-                    AccountSharedData {
+                    AccountSharedData::from(Account {
                         owner: id(),
-                        ..AccountSharedData::default()
-                    }
+                        ..Account::default()
+                    })
                 })
             })
             .collect();

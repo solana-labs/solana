@@ -5,7 +5,11 @@ pub mod date_instruction;
 
 use bincode::{deserialize, serialize, serialized_size};
 use serde_derive::{Deserialize, Serialize};
-use solana_sdk::{account::AccountSharedData, pubkey::Pubkey, short_vec};
+use solana_sdk::{
+    account::{Account, AccountSharedData},
+    pubkey::Pubkey,
+    short_vec,
+};
 
 solana_sdk::declare_id!("Config1111111111111111111111111111111111111");
 
@@ -43,10 +47,10 @@ pub fn create_config_account<T: ConfigState>(
 ) -> AccountSharedData {
     let mut data = serialize(&ConfigKeys { keys }).unwrap();
     data.extend_from_slice(&serialize(config_data).unwrap());
-    AccountSharedData {
+    AccountSharedData::from(Account {
         lamports,
         data,
         owner: id(),
-        ..AccountSharedData::default()
-    }
+        ..Account::default()
+    })
 }

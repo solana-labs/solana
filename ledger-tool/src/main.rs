@@ -1,7 +1,7 @@
 #![allow(clippy::integer_arithmetic)]
 use clap::{
-    crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App, Arg,
-    ArgMatches, SubCommand,
+    crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App, AppSettings,
+    Arg, ArgMatches, SubCommand,
 };
 use itertools::Itertools;
 use log::*;
@@ -811,6 +811,9 @@ fn main() {
     let matches = App::new(crate_name!())
         .about(crate_description!())
         .version(solana_version::version!())
+        .setting(AppSettings::InferSubcommands)
+        .setting(AppSettings::SubcommandRequiredElseHelp)
+        .setting(AppSettings::VersionlessSubcommands)
         .arg(
             Arg::with_name("ledger_path")
                 .short("l")
@@ -818,7 +821,8 @@ fn main() {
                 .value_name("DIR")
                 .takes_value(true)
                 .global(true)
-                .help("Use DIR for ledger location"),
+                .default_value("ledger")
+                .help("Use DIR as ledger location"),
         )
         .arg(
             Arg::with_name("wal_recovery_mode")
@@ -1235,13 +1239,6 @@ fn main() {
                            bugs are feature-gated behind this)"),
             )
             .arg(
-                Arg::with_name("enable_simple_capitalization")
-                    .required(false)
-                    .long("enable-simple-capitalization")
-                    .takes_value(false)
-                    .help("Enable simple capitalization to test hardcoded cap adjustments"),
-            )
-            .arg(
                 Arg::with_name("recalculate_capitalization")
                     .required(false)
                     .long("recalculate-capitalization")
@@ -1355,7 +1352,11 @@ fn main() {
 
     // Canonicalize ledger path to avoid issues with symlink creation
     let ledger_path = fs::canonicalize(&ledger_path).unwrap_or_else(|err| {
-        eprintln!("Unable to access ledger path: {:?}", err);
+        eprintln!(
+            "Unable to access ledger path '{}': {}",
+            ledger_path.display(),
+            err
+        );
         exit(1);
     });
 
@@ -2186,30 +2187,6 @@ fn main() {
                             genesis_config.rent.minimum_balance(Feature::size_of()),
                             1,
                         );
-                        if arg_matches.is_present("enable_simple_capitalization") {
-                            if base_bank
-                                .get_account(&feature_set::simple_capitalization::id())
-                                .is_none()
-                            {
-                                base_bank.store_account(
-                                    &feature_set::simple_capitalization::id(),
-                                    &feature::create_account(
-                                        &Feature { activated_at: None },
-                                        feature_account_balance,
-                                    ),
-                                );
-                                let old_cap = base_bank.set_capitalization();
-                                let new_cap = base_bank.capitalization();
-                                warn!(
-                                    "Skewing capitalization a bit to enable simple capitalization as \
-                                    requested: increasing {} from {} to {}",
-                                    feature_account_balance, old_cap, new_cap,
-                                );
-                                assert_eq!(old_cap + feature_account_balance, new_cap);
-                            } else {
-                                warn!("Already simple_capitalization is activated (or scheduled)");
-                            }
-                        }
                         if arg_matches.is_present("enable_stake_program_v2") {
                             let mut force_enabled_count = 0;
                             if base_bank

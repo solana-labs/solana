@@ -60,8 +60,9 @@ followed to contain, respond and remediate:
 ### 1. Establish a new draft security advisory
 In response to an email to security@solana.com, a member of the `solana-labs/admins` group will
 1. Create a new draft security advisory for the incident at https://github.com/solana-labs/solana/security/advisories
-2. Add the reporter's github user and the `solana-labs/security-incident-response` group to the draft security advisory
-3. Respond to the reporter by email, sharing a link to the draft security advisory
+1. Add the reporter's github user and the `solana-labs/security-incident-response` group to the draft security advisory
+1. Create a private fork of the repository (grey button towards the bottom of the page)
+1. Respond to the reporter by email, sharing a link to the draft security advisory
 
 ### 2. Triage
 Within the draft security advisory, discuss and determine the severity of the

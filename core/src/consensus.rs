@@ -1253,7 +1253,7 @@ pub mod test {
         },
     };
     use solana_sdk::{
-        account::{AccountSharedData, WritableAccount},
+        account::{Account, AccountSharedData, WritableAccount},
         clock::Slot,
         hash::Hash,
         pubkey::Pubkey,
@@ -2255,10 +2255,10 @@ pub mod test {
     #[test]
     fn test_stake_is_updated_for_entire_branch() {
         let mut voted_stakes = HashMap::new();
-        let account = AccountSharedData {
+        let account = AccountSharedData::from(Account {
             lamports: 1,
-            ..AccountSharedData::default()
-        };
+            ..Account::default()
+        });
         let set: HashSet<u64> = vec![0u64, 1u64].into_iter().collect();
         let ancestors: HashMap<u64, HashSet<u64>> = [(2u64, set)].iter().cloned().collect();
         Tower::update_ancestor_voted_stakes(&mut voted_stakes, 2, account.lamports, &ancestors);

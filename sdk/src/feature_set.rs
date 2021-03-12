@@ -71,10 +71,6 @@ pub mod filter_stake_delegation_accounts {
     solana_sdk::declare_id!("GE7fRxmW46K6EmCD9AMZSbnaJ2e3LfqCZzdHi9hmYAgi");
 }
 
-pub mod simple_capitalization {
-    solana_sdk::declare_id!("9r69RnnxABmpcPFfj1yhg4n9YFR2MNaLdKJCC6v3Speb");
-}
-
 pub mod bpf_loader_upgradeable_program {
     solana_sdk::declare_id!("FbhK8HN9qvNHvJcoFVHAEUCNkagHvu7DTWzdnLuVQ5u4");
 }
@@ -111,6 +107,10 @@ pub mod cpi_share_ro_and_exec_accounts {
     solana_sdk::declare_id!("6VgVBi3uRVqp56TtEwNou8idgdmhCD1aYqX8FaJ1fnJb");
 }
 
+pub mod skip_ro_deserialization {
+    solana_sdk::declare_id!("6Sw5JV84f7QkDe8gvRxpcPWFnPpfpgEnNziiy8sELaCp");
+}
+
 pub mod require_stake_for_gossip {
     solana_sdk::declare_id!("6oNzd5Z3M2L1xo4Q5hoox7CR2DuW7m1ETLWH5jHJthwa");
 }
@@ -131,7 +131,6 @@ lazy_static! {
         (stake_program_v2::id(), "solana_stake_program v2"),
         (rewrite_stake::id(), "rewrite stake"),
         (filter_stake_delegation_accounts::id(), "filter stake_delegation_accounts #14062"),
-        (simple_capitalization::id(), "simple capitalization"),
         (bpf_loader_upgradeable_program::id(), "upgradeable bpf loader"),
         (stake_program_v3::id(), "solana_stake_program v3"),
         (turbine_retransmit_peers_patch::id(), "turbine retransmit peers patch #14631"),
@@ -143,6 +142,7 @@ lazy_static! {
         (check_init_vote_data::id(), "check initialized Vote data"),
         (check_program_owner::id(), "limit programs to operating on accounts owned by itself"),
         (cpi_share_ro_and_exec_accounts::id(), "Share RO and Executable accounts during cross-program invocations"),
+        (skip_ro_deserialization::id(), "Skip deserialization of read-only accounts"),
         (require_stake_for_gossip::id(), "require stakes for propagating crds values through gossip #15561"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
