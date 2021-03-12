@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 //! This account contains the serialized transaction instructions
 
 use crate::{instruction::Instruction, sanitize::SanitizeError, sysvar::Sysvar};

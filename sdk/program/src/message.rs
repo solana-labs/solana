@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 //! A library for generating a message from a sequence of instructions
 
 use crate::sanitize::{Sanitize, SanitizeError};

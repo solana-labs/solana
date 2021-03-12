@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 use crate::clock::DEFAULT_MS_PER_SLOT;
 use crate::message::Message;
 use crate::secp256k1_program;
