@@ -3634,7 +3634,6 @@ impl AccountsDb {
                                         account_info.lamports,
                                         loaded_account.owner(),
                                         loaded_account.executable(),
-                                        simple_capitalization_enabled,
                                     );
 
                                     if check_hash {
@@ -3644,48 +3643,11 @@ impl AccountsDb {
                                                 "Cluster type must be set at initialization",
                                             ),
                                             pubkey,
-<<<<<<< HEAD
                                         );
                                         if computed_hash != *loaded_hash {
                                             mismatch_found.fetch_add(1, Ordering::Relaxed);
                                             return None;
                                         }
-=======
-                                            account_info.store_id,
-                                            account_info.offset,
-                                        )
-                                        .get_loaded_account()
-                                        .and_then(
-                                            |loaded_account| {
-                                                let loaded_hash = loaded_account.loaded_hash();
-                                                let balance =
-                                                    Self::account_balance_for_capitalization(
-                                                        account_info.lamports,
-                                                        loaded_account.owner(),
-                                                        loaded_account.executable(),
-                                                    );
-
-                                                if check_hash {
-                                                    let computed_hash = loaded_account
-                                                        .compute_hash(
-                                                            *slot,
-                                                            &self.expected_cluster_type(),
-                                                            pubkey,
-                                                        );
-                                                    if computed_hash != *loaded_hash {
-                                                        mismatch_found
-                                                            .fetch_add(1, Ordering::Relaxed);
-                                                        return None;
-                                                    }
-                                                }
-
-                                                sum += balance as u128;
-                                                Some(*loaded_hash)
-                                            },
-                                        )
-                                    } else {
-                                        None
->>>>>>> 4bbeb9c03... Remove old feature: simple_capitalization (#15763)
                                     }
 
                                     Some((*loaded_hash, balance))
@@ -4001,16 +3963,7 @@ impl AccountsDb {
 
     fn scan_snapshot_stores(
         storage: &[SnapshotStorage],
-<<<<<<< HEAD
-        simple_capitalization_enabled: bool,
     ) -> (Vec<Vec<CalculateHashIntermediate>>, Measure) {
-=======
-        mut stats: &mut crate::accounts_hash::HashStats,
-        bins: usize,
-    ) -> Vec<Vec<Vec<CalculateHashIntermediate>>> {
-        let max_plus_1 = std::u8::MAX as usize + 1;
-        assert!(bins <= max_plus_1 && bins > 0);
->>>>>>> 4bbeb9c03... Remove old feature: simple_capitalization (#15763)
         let mut time = Measure::start("scan all accounts");
         let result: Vec<Vec<CalculateHashIntermediate>> = Self::scan_account_storage_no_bank(
             &storage,
@@ -4053,18 +4006,7 @@ impl AccountsDb {
         thread_pool: Option<&ThreadPool>,
     ) -> (Hash, u64) {
         let scan_and_hash = || {
-<<<<<<< HEAD
-            let result = Self::scan_snapshot_stores(storages, simple_capitalization_enabled);
-=======
-            let mut stats = HashStats::default();
-            // When calculating hashes, it is helpful to break the pubkeys found into bins based on the pubkey value.
-            const PUBKEY_BINS_FOR_CALCULATING_HASHES: usize = 64;
-            let result = Self::scan_snapshot_stores(
-                storages,
-                &mut stats,
-                PUBKEY_BINS_FOR_CALCULATING_HASHES,
-            );
->>>>>>> 4bbeb9c03... Remove old feature: simple_capitalization (#15763)
+            let result = Self::scan_snapshot_stores(storages);
 
             Self::rest_of_hash_calculation(result)
         };
@@ -5317,7 +5259,6 @@ pub mod tests {
     }
 
     #[test]
-<<<<<<< HEAD
     fn test_accountsdb_rest_of_hash_calculation() {
         solana_logger::setup();
 
@@ -5519,16 +5460,9 @@ pub mod tests {
             let result = AccountsDb::de_dup_accounts_from_stores(first_slice == 1, &[]);
             assert_eq!((vec![Hash::default(); 0], 0), result);
         }
-=======
-    #[should_panic(expected = "assertion failed: bins <= max_plus_1 && bins > 0")]
-    fn test_accountsdb_scan_snapshot_stores_illegal_bins2() {
-        let mut stats = HashStats::default();
-        AccountsDb::scan_snapshot_stores(&[], &mut stats, 257);
->>>>>>> 4bbeb9c03... Remove old feature: simple_capitalization (#15763)
     }
 
     #[test]
-<<<<<<< HEAD
     fn test_accountsdb_flatten_hashes() {
         solana_logger::setup();
         const COUNT: usize = 4;
@@ -5549,12 +5483,6 @@ pub mod tests {
                 expected
             );
         }
-=======
-    #[should_panic(expected = "assertion failed: bins <= max_plus_1 && bins > 0")]
-    fn test_accountsdb_scan_snapshot_stores_illegal_bins() {
-        let mut stats = HashStats::default();
-        AccountsDb::scan_snapshot_stores(&[], &mut stats, 0);
->>>>>>> 4bbeb9c03... Remove old feature: simple_capitalization (#15763)
     }
 
     #[test]
@@ -5610,52 +5538,8 @@ pub mod tests {
     }
 
     #[test]
-<<<<<<< HEAD
     fn test_accountsdb_remove_zero_balance_accounts() {
         solana_logger::setup();
-=======
-    fn test_accountsdb_scan_snapshot_stores() {
-        let (mut storages, raw_expected) = sample_storages_and_accounts();
-
-        let bins = 1;
-        let mut stats = HashStats::default();
-        let result = AccountsDb::scan_snapshot_stores(&storages, &mut stats, bins);
-        assert_eq!(result, vec![vec![raw_expected.clone()]]);
-
-        let bins = 2;
-        let result = AccountsDb::scan_snapshot_stores(&storages, &mut stats, bins);
-        let mut expected = vec![Vec::new(); bins];
-        expected[0].push(raw_expected[0].clone());
-        expected[0].push(raw_expected[1].clone());
-        expected[bins - 1].push(raw_expected[2].clone());
-        expected[bins - 1].push(raw_expected[3].clone());
-        assert_eq!(result, vec![expected]);
-
-        let bins = 4;
-        let result = AccountsDb::scan_snapshot_stores(&storages, &mut stats, bins);
-        let mut expected = vec![Vec::new(); bins];
-        expected[0].push(raw_expected[0].clone());
-        expected[1].push(raw_expected[1].clone());
-        expected[2].push(raw_expected[2].clone());
-        expected[bins - 1].push(raw_expected[3].clone());
-        assert_eq!(result, vec![expected]);
-
-        let bins = 256;
-        let result = AccountsDb::scan_snapshot_stores(&storages, &mut stats, bins);
-        let mut expected = vec![Vec::new(); bins];
-        expected[0].push(raw_expected[0].clone());
-        expected[127].push(raw_expected[1].clone());
-        expected[128].push(raw_expected[2].clone());
-        expected[bins - 1].push(raw_expected.last().unwrap().clone());
-        assert_eq!(result, vec![expected]);
-
-        // enough stores to get to 2nd chunk
-        let bins = 1;
-        let (_temp_dirs, paths) = get_temp_accounts_paths(1).unwrap();
-        let slot_expected: Slot = 0;
-        let size: usize = 123;
-        let data = AccountStorageEntry::new(&paths[0], slot_expected, 0, size as u64);
->>>>>>> 4bbeb9c03... Remove old feature: simple_capitalization (#15763)
 
         let key = Pubkey::new_unique();
         let hash = Hash::new_unique();
@@ -5676,17 +5560,8 @@ pub mod tests {
         );
         account_maps.insert(0, val); // has to be before other entry since sort order matters
 
-<<<<<<< HEAD
         let result = AccountsDb::de_dup_accounts_from_stores(true, &account_maps[..]);
         assert_eq!(result, (vec![], 0));
-=======
-        let mut stats = HashStats::default();
-        let result = AccountsDb::scan_snapshot_stores(&storages, &mut stats, bins);
-        assert_eq!(result.len(), 2); // 2 chunks
-        assert_eq!(result[0].len(), 0); // nothing found in first slots
-        assert_eq!(result[1].len(), bins);
-        assert_eq!(result[1], vec![raw_expected]);
->>>>>>> 4bbeb9c03... Remove old feature: simple_capitalization (#15763)
     }
 
     #[test]
@@ -5699,24 +5574,6 @@ pub mod tests {
         assert_eq!(result, (expected_hash, 0));
     }
 
-<<<<<<< HEAD
-=======
-    #[test]
-    fn test_accountsdb_calculate_accounts_hash_without_index() {
-        solana_logger::setup();
-
-        let (storages, raw_expected) = sample_storages_and_accounts();
-        let expected_hash =
-            AccountsHash::compute_merkle_root_loop(raw_expected.clone(), MERKLE_FANOUT, |item| {
-                item.hash
-            });
-        let sum = raw_expected.iter().map(|item| item.lamports).sum();
-        let result = AccountsDb::calculate_accounts_hash_without_index(&storages, None);
-
-        assert_eq!(result, (expected_hash, sum));
-    }
-
->>>>>>> 4bbeb9c03... Remove old feature: simple_capitalization (#15763)
     fn sample_storage() -> (SnapshotStorages, usize, Slot) {
         let (_temp_dirs, paths) = get_temp_accounts_paths(1).unwrap();
         let slot_expected: Slot = 0;
