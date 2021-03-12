@@ -108,3 +108,27 @@ pub struct RpcGetConfirmedSignaturesForAddress2Config {
     pub until: Option<String>,  // Signature as base-58 string
     pub limit: Option<usize>,
 }
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum RpcConfirmedBlockConfigWrapper {
+    Deprecated(Option<UiTransactionEncoding>),
+    Current(Option<RpcConfirmedBlockConfig>),
+}
+
+impl RpcConfirmedBlockConfigWrapper {
+    pub fn encoding(&self) -> Option<UiTransactionEncoding> {
+        match self {
+            RpcConfirmedBlockConfigWrapper::Deprecated(encoding) => *encoding,
+            RpcConfirmedBlockConfigWrapper::Current(config) => {
+                config.as_ref().and_then(|config| config.encoding)
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcConfirmedBlockConfig {
+    pub encoding: Option<UiTransactionEncoding>,
+}

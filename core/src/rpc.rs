@@ -719,9 +719,11 @@ impl JsonRpcRequestProcessor {
     pub fn get_confirmed_block(
         &self,
         slot: Slot,
-        encoding: Option<UiTransactionEncoding>,
+        config: Option<RpcConfirmedBlockConfigWrapper>,
     ) -> Result<Option<EncodedConfirmedBlock>> {
-        let encoding = encoding.unwrap_or(UiTransactionEncoding::Json);
+        let encoding = config
+            .and_then(|config| config.encoding())
+            .unwrap_or(UiTransactionEncoding::Json);
         if self.config.enable_rpc_transaction_history
             && slot
                 <= self
@@ -2178,7 +2180,7 @@ pub mod rpc_full {
             &self,
             meta: Self::Metadata,
             slot: Slot,
-            encoding: Option<UiTransactionEncoding>,
+            config: Option<RpcConfirmedBlockConfigWrapper>,
         ) -> Result<Option<EncodedConfirmedBlock>>;
 
         #[rpc(meta, name = "getBlockTime")]
@@ -2786,10 +2788,10 @@ pub mod rpc_full {
             &self,
             meta: Self::Metadata,
             slot: Slot,
-            encoding: Option<UiTransactionEncoding>,
+            config: Option<RpcConfirmedBlockConfigWrapper>,
         ) -> Result<Option<EncodedConfirmedBlock>> {
             debug!("get_confirmed_block rpc request received: {:?}", slot);
-            meta.get_confirmed_block(slot, encoding)
+            meta.get_confirmed_block(slot, config)
         }
 
         fn get_confirmed_blocks(
