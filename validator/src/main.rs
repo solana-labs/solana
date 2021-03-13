@@ -241,7 +241,7 @@ fn wait_for_restart_window(
             snapshot_slot
                 .map(|s| s.to_string())
                 .unwrap_or_else(|| "-".to_string()),
-            delinquent_stake_percentage,
+            delinquent_stake_percentage * 100.,
             status
         ));
         std::thread::sleep(sleep_interval);
