@@ -71,6 +71,7 @@ fn test_vote_authorize_and_withdraw() {
         to: vote_account_pubkey,
         from: 0,
         sign_only: false,
+        dump_transaction_message: false,
         no_wait: false,
         blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
         nonce_account: None,

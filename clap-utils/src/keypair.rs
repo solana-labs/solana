@@ -28,6 +28,7 @@ use std::{
 
 pub struct SignOnly {
     pub blockhash: Hash,
+    pub message: Option<String>,
     pub present_signers: Vec<(Pubkey, Signature)>,
     pub absent_signers: Vec<Pubkey>,
     pub bad_signers: Vec<Pubkey>,
