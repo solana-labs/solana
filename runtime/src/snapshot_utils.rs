@@ -44,6 +44,7 @@ const MAX_SNAPSHOT_DATA_FILE_SIZE: u64 = 32 * 1024 * 1024 * 1024; // 32 GiB
 const VERSION_STRING_V1_2_0: &str = "1.2.0";
 const DEFAULT_SNAPSHOT_VERSION: SnapshotVersion = SnapshotVersion::V1_2_0;
 const TMP_SNAPSHOT_PREFIX: &str = "tmp-snapshot-";
+const TMP_SNAPSHOT_EXTENSION: &str = ".tmp"; // when downloading
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum SnapshotVersion {
@@ -206,11 +207,12 @@ fn get_archive_ext(archive_format: ArchiveFormat) -> &'static str {
 pub fn remove_tmp_snapshot_archives(snapshot_path: &Path) {
     if let Ok(entries) = fs::read_dir(&snapshot_path) {
         for entry in entries.filter_map(|entry| entry.ok()) {
-            if entry
+            let filename = entry
                 .file_name()
                 .into_string()
-                .unwrap_or_else(|_| String::new())
-                .starts_with(TMP_SNAPSHOT_PREFIX)
+                .unwrap_or_else(|_| String::new());
+            if filename.starts_with(TMP_SNAPSHOT_PREFIX)
+                | filename.ends_with(TMP_SNAPSHOT_EXTENSION)
             {
                 if entry.path().is_file() {
                     fs::remove_file(entry.path())
