@@ -1,6 +1,16 @@
 /* eslint-disable @typescript-eslint/no-redeclare */
 
-import { type, number, literal, nullable, Infer } from "superstruct";
+import {
+  type,
+  number,
+  literal,
+  nullable,
+  Infer,
+  union,
+  coerce,
+  create,
+} from "superstruct";
+import { ParsedInfo } from "validators";
 import { PublicKeyFromString } from "validators/pubkey";
 
 export type ProgramAccountInfo = Infer<typeof ProgramAccountInfo>;
@@ -26,3 +36,48 @@ export const ProgramDataAccount = type({
   type: literal("programData"),
   info: ProgramDataAccountInfo,
 });
+
+export type ProgramBufferAccountInfo = Infer<typeof ProgramBufferAccountInfo>;
+export const ProgramBufferAccountInfo = type({
+  authority: nullable(PublicKeyFromString),
+  // don't care about data yet
+});
+
+export type ProgramBufferAccount = Infer<typeof ProgramBufferAccount>;
+export const ProgramBufferAccount = type({
+  type: literal("buffer"),
+  info: ProgramBufferAccountInfo,
+});
+
+export type UpgradeableLoaderAccount = Infer<typeof UpgradeableLoaderAccount>;
+export const UpgradeableLoaderAccount = coerce(
+  union([ProgramAccount, ProgramDataAccount, ProgramBufferAccount]),
+  ParsedInfo,
+  (value) => {
+    // Coercions like `PublicKeyFromString` are not applied within
+    // union validators so we use this custom coercion as a workaround.
+    switch (value.type) {
+      case "program": {
+        return {
+          type: value.type,
+          info: create(value.info, ProgramAccountInfo),
+        };
+      }
+      case "programData": {
+        return {
+          type: value.type,
+          info: create(value.info, ProgramDataAccountInfo),
+        };
+      }
+      case "buffer": {
+        return {
+          type: value.type,
+          info: create(value.info, ProgramBufferAccountInfo),
+        };
+      }
+      default: {
+        throw new Error(`Unknown program account type: ${value.type}`);
+      }
+    }
+  }
+);

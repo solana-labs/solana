@@ -28,7 +28,7 @@ import { StakeHistoryCard } from "components/account/StakeHistoryCard";
 import { BlockhashesCard } from "components/account/BlockhashesCard";
 import { ConfigAccountSection } from "components/account/ConfigAccountSection";
 import { useFlaggedAccounts } from "providers/accounts/flagged-accounts";
-import { UpgradeableProgramSection } from "components/account/UpgradeableProgramSection";
+import { UpgradeableLoaderAccountSection } from "components/account/UpgradeableLoaderAccountSection";
 import { useTokenRegistry } from "providers/mints/token-registry";
 
 const TABS_LOOKUP: { [id: string]: Tab } = {
@@ -177,9 +177,9 @@ function InfoSection({ account }: { account: Account }) {
 
   if (data && data.program === "bpf-upgradeable-loader") {
     return (
-      <UpgradeableProgramSection
+      <UpgradeableLoaderAccountSection
         account={account}
-        programAccount={data.programAccount}
+        parsedData={data.parsed}
         programData={data.programData}
       />
     );
