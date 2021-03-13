@@ -156,7 +156,7 @@ fn get_rpc_node(
     blacklisted_rpc_nodes: &mut HashSet<Pubkey>,
     snapshot_not_required: bool,
     no_untrusted_rpc: bool,
-    ledger_path: &std::path::Path,
+    snapshot_output_dir: &Path,
 ) -> Option<(ContactInfo, Option<(Slot, Hash)>)> {
     let mut blacklist_timeout = Instant::now();
     let mut newer_cluster_snapshot_timeout = None;
@@ -235,7 +235,7 @@ fn get_rpc_node(
         blacklist_timeout = Instant::now();
 
         let mut highest_snapshot_hash: Option<(Slot, Hash)> =
-            get_highest_snapshot_archive_path(ledger_path)
+            get_highest_snapshot_archive_path(snapshot_output_dir)
                 .map(|(_path, (slot, hash, _compression))| (slot, hash));
         let eligible_rpc_peers = if snapshot_not_required {
             rpc_peers
@@ -573,6 +573,7 @@ fn rpc_bootstrap(
     node: &Node,
     identity_keypair: &Arc<Keypair>,
     ledger_path: &Path,
+    snapshot_output_dir: &Path,
     vote_account: &Pubkey,
     authorized_voter_keypairs: &[Arc<Keypair>],
     cluster_entrypoints: &[ContactInfo],
@@ -621,7 +622,7 @@ fn rpc_bootstrap(
             &mut blacklisted_rpc_nodes,
             bootstrap_config.no_snapshot_fetch,
             bootstrap_config.no_untrusted_rpc,
-            ledger_path,
+            snapshot_output_dir,
         );
         if rpc_node_details.is_none() {
             return;
@@ -677,7 +678,7 @@ fn rpc_bootstrap(
                 let mut use_local_snapshot = false;
 
                 if let Some(highest_local_snapshot_slot) =
-                    get_highest_snapshot_archive_path(ledger_path)
+                    get_highest_snapshot_archive_path(snapshot_output_dir)
                         .map(|(_path, (slot, _hash, _compression))| slot)
                 {
                     if highest_local_snapshot_slot
@@ -712,7 +713,7 @@ fn rpc_bootstrap(
                             gossip_exit_flag.store(true, Ordering::Relaxed);
                             let ret = download_snapshot(
                                 &rpc_contact_info.rpc,
-                                &ledger_path,
+                                &snapshot_output_dir,
                                 snapshot_hash,
                                 use_progress_bar,
                             );
@@ -1016,6 +1017,13 @@ pub fn main() {
                 .takes_value(true)
                 .multiple(true)
                 .help("Path to accounts shrink path which can hold a compacted account set."),
+        )
+        .arg(
+            Arg::with_name("snapshots_path")
+                .long("snapshots")
+                .value_name("PATHS")
+                .takes_value(true)
+                .help("Snapshots location"),
         )
         .arg(
             Arg::with_name("gossip_port")
@@ -1747,7 +1755,12 @@ pub fn main() {
 
     let snapshot_interval_slots = value_t_or_exit!(matches, "snapshot_interval_slots", u64);
     let maximum_local_snapshot_age = value_t_or_exit!(matches, "maximum_local_snapshot_age", u64);
-    let snapshot_path = ledger_path.join("snapshot");
+    let snapshot_output_dir = if matches.is_present("snapshots_path") {
+        PathBuf::from(matches.value_of("snapshots_path").unwrap())
+    } else {
+        ledger_path.clone()
+    };
+    let snapshot_path = snapshot_output_dir.join("snapshot");
     fs::create_dir_all(&snapshot_path).unwrap_or_else(|err| {
         eprintln!(
             "Failed to create snapshots directory {:?}: {}",
@@ -1783,7 +1796,7 @@ pub fn main() {
             std::u64::MAX
         },
         snapshot_path,
-        snapshot_package_output_path: ledger_path.clone(),
+        snapshot_package_output_path: snapshot_output_dir.clone(),
         archive_format,
         snapshot_version,
     });
@@ -1960,7 +1973,7 @@ pub fn main() {
         enable_recycler_warming();
     }
     solana_ledger::entry::init_poh();
-    solana_runtime::snapshot_utils::remove_tmp_snapshot_archives(&ledger_path);
+    solana_runtime::snapshot_utils::remove_tmp_snapshot_archives(&snapshot_output_dir);
 
     let should_check_duplicate_instance = !matches.is_present("no_duplicate_instance_check");
     if !cluster_entrypoints.is_empty() {
@@ -1968,6 +1981,7 @@ pub fn main() {
             &node,
             &identity_keypair,
             &ledger_path,
+            &snapshot_output_dir,
             &vote_account,
             &authorized_voter_keypairs,
             &cluster_entrypoints,
