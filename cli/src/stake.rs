@@ -19,8 +19,8 @@ use solana_clap_utils::{
     ArgConstant,
 };
 use solana_cli_output::{
-    return_signers, CliEpochReward, CliStakeHistory, CliStakeHistoryEntry, CliStakeState,
-    CliStakeType,
+    return_signers_with_config, CliEpochReward, CliStakeHistory, CliStakeHistoryEntry,
+    CliStakeState, CliStakeType, ReturnSignersConfig,
 };
 use solana_client::{
     blockhash_query::BlockhashQuery,
@@ -441,6 +441,7 @@ pub fn parse_stake_create_account(
     let withdrawer = pubkey_of_signer(matches, WITHDRAW_AUTHORITY_ARG.name, wallet_manager)?;
     let amount = SpendAmount::new_from_matches(matches, "amount");
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
+    let dump_transaction_message = matches.is_present(DUMP_TRANSACTION_MESSAGE.name);
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let nonce_account = pubkey_of_signer(matches, NONCE_ARG.name, wallet_manager)?;
     let (nonce_authority, nonce_authority_pubkey) =
@@ -470,6 +471,7 @@ pub fn parse_stake_create_account(
             },
             amount,
             sign_only,
+            dump_transaction_message,
             blockhash_query,
             nonce_account,
             nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
@@ -491,6 +493,7 @@ pub fn parse_stake_delegate_stake(
         pubkey_of_signer(matches, "vote_account_pubkey", wallet_manager)?.unwrap();
     let force = matches.is_present("force");
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
+    let dump_transaction_message = matches.is_present(DUMP_TRANSACTION_MESSAGE.name);
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let nonce_account = pubkey_of(matches, NONCE_ARG.name);
     let (stake_authority, stake_authority_pubkey) =
@@ -513,6 +516,7 @@ pub fn parse_stake_delegate_stake(
             stake_authority: signer_info.index_of(stake_authority_pubkey).unwrap(),
             force,
             sign_only,
+            dump_transaction_message,
             blockhash_query,
             nonce_account,
             nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
@@ -565,6 +569,7 @@ pub fn parse_stake_authorize(
         bulk_signers.push(authority);
     };
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
+    let dump_transaction_message = matches.is_present(DUMP_TRANSACTION_MESSAGE.name);
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let nonce_account = pubkey_of(matches, NONCE_ARG.name);
     let (nonce_authority, nonce_authority_pubkey) =
@@ -600,6 +605,7 @@ pub fn parse_stake_authorize(
             stake_account_pubkey,
             new_authorizations,
             sign_only,
+            dump_transaction_message,
             blockhash_query,
             nonce_account,
             nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
@@ -623,6 +629,7 @@ pub fn parse_split_stake(
     let seed = matches.value_of("seed").map(|s| s.to_string());
 
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
+    let dump_transaction_message = matches.is_present(DUMP_TRANSACTION_MESSAGE.name);
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let nonce_account = pubkey_of(matches, NONCE_ARG.name);
     let (stake_authority, stake_authority_pubkey) =
@@ -643,6 +650,7 @@ pub fn parse_split_stake(
             stake_account_pubkey,
             stake_authority: signer_info.index_of(stake_authority_pubkey).unwrap(),
             sign_only,
+            dump_transaction_message,
             blockhash_query,
             nonce_account,
             nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
@@ -666,6 +674,7 @@ pub fn parse_merge_stake(
     let source_stake_account_pubkey = pubkey_of(matches, "source_stake_account_pubkey").unwrap();
 
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
+    let dump_transaction_message = matches.is_present(DUMP_TRANSACTION_MESSAGE.name);
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let nonce_account = pubkey_of(matches, NONCE_ARG.name);
     let (stake_authority, stake_authority_pubkey) =
@@ -687,6 +696,7 @@ pub fn parse_merge_stake(
             source_stake_account_pubkey,
             stake_authority: signer_info.index_of(stake_authority_pubkey).unwrap(),
             sign_only,
+            dump_transaction_message,
             blockhash_query,
             nonce_account,
             nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
@@ -704,6 +714,7 @@ pub fn parse_stake_deactivate_stake(
     let stake_account_pubkey =
         pubkey_of_signer(matches, "stake_account_pubkey", wallet_manager)?.unwrap();
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
+    let dump_transaction_message = matches.is_present(DUMP_TRANSACTION_MESSAGE.name);
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let nonce_account = pubkey_of(matches, NONCE_ARG.name);
     let (stake_authority, stake_authority_pubkey) =
@@ -724,6 +735,7 @@ pub fn parse_stake_deactivate_stake(
             stake_account_pubkey,
             stake_authority: signer_info.index_of(stake_authority_pubkey).unwrap(),
             sign_only,
+            dump_transaction_message,
             blockhash_query,
             nonce_account,
             nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
@@ -744,6 +756,7 @@ pub fn parse_stake_withdraw_stake(
         pubkey_of_signer(matches, "destination_account_pubkey", wallet_manager)?.unwrap();
     let lamports = lamports_of_sol(matches, "amount").unwrap();
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
+    let dump_transaction_message = matches.is_present(DUMP_TRANSACTION_MESSAGE.name);
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let nonce_account = pubkey_of(matches, NONCE_ARG.name);
     let (withdraw_authority, withdraw_authority_pubkey) =
@@ -770,6 +783,7 @@ pub fn parse_stake_withdraw_stake(
             lamports,
             withdraw_authority: signer_info.index_of(withdraw_authority_pubkey).unwrap(),
             sign_only,
+            dump_transaction_message,
             blockhash_query,
             nonce_account,
             nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
@@ -792,6 +806,7 @@ pub fn parse_stake_set_lockup(
     let new_custodian = pubkey_of_signer(matches, "new_custodian", wallet_manager)?;
 
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
+    let dump_transaction_message = matches.is_present(DUMP_TRANSACTION_MESSAGE.name);
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let nonce_account = pubkey_of(matches, NONCE_ARG.name);
 
@@ -817,6 +832,7 @@ pub fn parse_stake_set_lockup(
             },
             custodian: signer_info.index_of(custodian_pubkey).unwrap(),
             sign_only,
+            dump_transaction_message,
             blockhash_query,
             nonce_account,
             nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
@@ -861,6 +877,7 @@ pub fn process_create_stake_account(
     lockup: &Lockup,
     amount: SpendAmount,
     sign_only: bool,
+    dump_transaction_message: bool,
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<&Pubkey>,
     nonce_authority: SignerIndex,
@@ -970,7 +987,13 @@ pub fn process_create_stake_account(
     let mut tx = Transaction::new_unsigned(message);
     if sign_only {
         tx.try_partial_sign(&config.signers, recent_blockhash)?;
-        return_signers(&tx, &config.output_format)
+        return_signers_with_config(
+            &tx,
+            &config.output_format,
+            &ReturnSignersConfig {
+                dump_transaction_message,
+            },
+        )
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
@@ -986,6 +1009,7 @@ pub fn process_stake_authorize(
     new_authorizations: &[(StakeAuthorize, Pubkey, SignerIndex)],
     custodian: Option<SignerIndex>,
     sign_only: bool,
+    dump_transaction_message: bool,
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<Pubkey>,
     nonce_authority: SignerIndex,
@@ -1028,7 +1052,13 @@ pub fn process_stake_authorize(
 
     if sign_only {
         tx.try_partial_sign(&config.signers, recent_blockhash)?;
-        return_signers(&tx, &config.output_format)
+        return_signers_with_config(
+            &tx,
+            &config.output_format,
+            &ReturnSignersConfig {
+                dump_transaction_message,
+            },
+        )
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
@@ -1058,6 +1088,7 @@ pub fn process_deactivate_stake_account(
     stake_account_pubkey: &Pubkey,
     stake_authority: SignerIndex,
     sign_only: bool,
+    dump_transaction_message: bool,
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<Pubkey>,
     nonce_authority: SignerIndex,
@@ -1087,7 +1118,13 @@ pub fn process_deactivate_stake_account(
 
     if sign_only {
         tx.try_partial_sign(&config.signers, recent_blockhash)?;
-        return_signers(&tx, &config.output_format)
+        return_signers_with_config(
+            &tx,
+            &config.output_format,
+            &ReturnSignersConfig {
+                dump_transaction_message,
+            },
+        )
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
@@ -1120,6 +1157,7 @@ pub fn process_withdraw_stake(
     withdraw_authority: SignerIndex,
     custodian: Option<SignerIndex>,
     sign_only: bool,
+    dump_transaction_message: bool,
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<&Pubkey>,
     nonce_authority: SignerIndex,
@@ -1155,7 +1193,13 @@ pub fn process_withdraw_stake(
 
     if sign_only {
         tx.try_partial_sign(&config.signers, recent_blockhash)?;
-        return_signers(&tx, &config.output_format)
+        return_signers_with_config(
+            &tx,
+            &config.output_format,
+            &ReturnSignersConfig {
+                dump_transaction_message,
+            },
+        )
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
@@ -1185,6 +1229,7 @@ pub fn process_split_stake(
     stake_account_pubkey: &Pubkey,
     stake_authority: SignerIndex,
     sign_only: bool,
+    dump_transaction_message: bool,
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<Pubkey>,
     nonce_authority: SignerIndex,
@@ -1294,7 +1339,13 @@ pub fn process_split_stake(
 
     if sign_only {
         tx.try_partial_sign(&config.signers, recent_blockhash)?;
-        return_signers(&tx, &config.output_format)
+        return_signers_with_config(
+            &tx,
+            &config.output_format,
+            &ReturnSignersConfig {
+                dump_transaction_message,
+            },
+        )
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
@@ -1325,6 +1376,7 @@ pub fn process_merge_stake(
     source_stake_account_pubkey: &Pubkey,
     stake_authority: SignerIndex,
     sign_only: bool,
+    dump_transaction_message: bool,
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<Pubkey>,
     nonce_authority: SignerIndex,
@@ -1392,7 +1444,13 @@ pub fn process_merge_stake(
 
     if sign_only {
         tx.try_partial_sign(&config.signers, recent_blockhash)?;
-        return_signers(&tx, &config.output_format)
+        return_signers_with_config(
+            &tx,
+            &config.output_format,
+            &ReturnSignersConfig {
+                dump_transaction_message,
+            },
+        )
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
@@ -1427,6 +1485,7 @@ pub fn process_stake_set_lockup(
     lockup: &mut LockupArgs,
     custodian: SignerIndex,
     sign_only: bool,
+    dump_transaction_message: bool,
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<Pubkey>,
     nonce_authority: SignerIndex,
@@ -1458,7 +1517,13 @@ pub fn process_stake_set_lockup(
 
     if sign_only {
         tx.try_partial_sign(&config.signers, recent_blockhash)?;
-        return_signers(&tx, &config.output_format)
+        return_signers_with_config(
+            &tx,
+            &config.output_format,
+            &ReturnSignersConfig {
+                dump_transaction_message,
+            },
+        )
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
@@ -1772,6 +1837,7 @@ pub fn process_delegate_stake(
     stake_authority: SignerIndex,
     force: bool,
     sign_only: bool,
+    dump_transaction_message: bool,
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<Pubkey>,
     nonce_authority: SignerIndex,
@@ -1856,7 +1922,13 @@ pub fn process_delegate_stake(
 
     if sign_only {
         tx.try_partial_sign(&config.signers, recent_blockhash)?;
-        return_signers(&tx, &config.output_format)
+        return_signers_with_config(
+            &tx,
+            &config.output_format,
+            &ReturnSignersConfig {
+                dump_transaction_message,
+            },
+        )
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
@@ -1953,6 +2025,7 @@ mod tests {
                         (StakeAuthorize::Withdrawer, new_withdraw_authority, 0,),
                     ],
                     sign_only: false,
+                    dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
@@ -1988,6 +2061,7 @@ mod tests {
                         (StakeAuthorize::Withdrawer, new_withdraw_authority, 2,),
                     ],
                     sign_only: false,
+                    dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
@@ -2027,6 +2101,7 @@ mod tests {
                         (StakeAuthorize::Withdrawer, new_withdraw_authority, 1,),
                     ],
                     sign_only: false,
+                    dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
@@ -2055,6 +2130,7 @@ mod tests {
                     stake_account_pubkey,
                     new_authorizations: vec![(StakeAuthorize::Staker, new_stake_authority, 0,),],
                     sign_only: false,
+                    dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
@@ -2080,6 +2156,7 @@ mod tests {
                     stake_account_pubkey,
                     new_authorizations: vec![(StakeAuthorize::Staker, new_stake_authority, 1,),],
                     sign_only: false,
+                    dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
@@ -2111,6 +2188,7 @@ mod tests {
                     stake_account_pubkey,
                     new_authorizations: vec![(StakeAuthorize::Staker, new_stake_authority, 1,),],
                     sign_only: false,
+                    dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
@@ -2143,6 +2221,7 @@ mod tests {
                         0,
                     ),],
                     sign_only: false,
+                    dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
@@ -2172,6 +2251,7 @@ mod tests {
                         1,
                     ),],
                     sign_only: false,
+                    dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
@@ -2207,6 +2287,7 @@ mod tests {
                     stake_account_pubkey,
                     new_authorizations: vec![(StakeAuthorize::Staker, stake_account_pubkey, 0)],
                     sign_only: true,
+                    dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::None(blockhash),
                     nonce_account: None,
                     nonce_authority: 0,
@@ -2241,6 +2322,7 @@ mod tests {
                     stake_account_pubkey,
                     new_authorizations: vec![(StakeAuthorize::Staker, stake_account_pubkey, 0)],
                     sign_only: false,
+                    dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(
                         blockhash_query::Source::Cluster,
                         blockhash
@@ -2288,6 +2370,7 @@ mod tests {
                     stake_account_pubkey,
                     new_authorizations: vec![(StakeAuthorize::Staker, stake_account_pubkey, 0)],
                     sign_only: false,
+                    dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(
                         blockhash_query::Source::NonceAccount(nonce_account),
                         blockhash
@@ -2321,6 +2404,7 @@ mod tests {
                     stake_account_pubkey,
                     new_authorizations: vec![(StakeAuthorize::Staker, stake_account_pubkey, 0)],
                     sign_only: false,
+                    dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(
                         blockhash_query::Source::Cluster,
                         blockhash
@@ -2359,6 +2443,7 @@ mod tests {
                     stake_account_pubkey,
                     new_authorizations: vec![(StakeAuthorize::Staker, stake_account_pubkey, 0)],
                     sign_only: false,
+                    dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(
                         blockhash_query::Source::NonceAccount(nonce_account_pubkey),
                         blockhash
@@ -2396,6 +2481,7 @@ mod tests {
                     stake_account_pubkey,
                     new_authorizations: vec![(StakeAuthorize::Staker, stake_account_pubkey, 0)],
                     sign_only: false,
+                    dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
@@ -2431,6 +2517,7 @@ mod tests {
                     stake_account_pubkey,
                     new_authorizations: vec![(StakeAuthorize::Staker, stake_account_pubkey, 0)],
                     sign_only: false,
+                    dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(
                         blockhash_query::Source::Cluster,
                         blockhash
@@ -2481,6 +2568,7 @@ mod tests {
                     },
                     amount: SpendAmount::Some(50_000_000_000),
                     sign_only: false,
+                    dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
@@ -2518,6 +2606,7 @@ mod tests {
                     lockup: Lockup::default(),
                     amount: SpendAmount::Some(50_000_000_000),
                     sign_only: false,
+                    dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
@@ -2571,6 +2660,7 @@ mod tests {
                     lockup: Lockup::default(),
                     amount: SpendAmount::Some(50_000_000_000),
                     sign_only: false,
+                    dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(
                         blockhash_query::Source::NonceAccount(nonce_account),
                         nonce_hash
@@ -2605,6 +2695,7 @@ mod tests {
                     stake_authority: 0,
                     force: false,
                     sign_only: false,
+                    dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
                     nonce_authority: 0,
@@ -2634,6 +2725,7 @@ mod tests {
                     stake_authority: 1,
                     force: false,
                     sign_only: false,
+                    dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
                     nonce_authority: 0,
@@ -2665,6 +2757,7 @@ mod tests {
                     stake_authority: 0,
                     force: true,
                     sign_only: false,
+                    dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
                     nonce_authority: 0,
@@ -2694,6 +2787,7 @@ mod tests {
                     stake_authority: 0,
                     force: false,
                     sign_only: false,
+                    dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(
                         blockhash_query::Source::Cluster,
                         blockhash
@@ -2724,6 +2818,7 @@ mod tests {
                     stake_authority: 0,
                     force: false,
                     sign_only: true,
+                    dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::None(blockhash),
                     nonce_account: None,
                     nonce_authority: 0,
@@ -2758,6 +2853,7 @@ mod tests {
                     stake_authority: 0,
                     force: false,
                     sign_only: false,
+                    dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(
                         blockhash_query::Source::Cluster,
                         blockhash
@@ -2804,6 +2900,7 @@ mod tests {
                     stake_authority: 0,
                     force: false,
                     sign_only: false,
+                    dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(
                         blockhash_query::Source::NonceAccount(nonce_account),
                         blockhash
@@ -2841,6 +2938,7 @@ mod tests {
                     stake_authority: 0,
                     force: false,
                     sign_only: false,
+                    dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
@@ -2872,6 +2970,7 @@ mod tests {
                     withdraw_authority: 0,
                     custodian: None,
                     sign_only: false,
+                    dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
@@ -2902,6 +3001,7 @@ mod tests {
                     withdraw_authority: 1,
                     custodian: None,
                     sign_only: false,
+                    dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
@@ -2937,6 +3037,7 @@ mod tests {
                     withdraw_authority: 0,
                     custodian: Some(1),
                     sign_only: false,
+                    dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
@@ -2980,6 +3081,7 @@ mod tests {
                     withdraw_authority: 0,
                     custodian: None,
                     sign_only: false,
+                    dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(
                         blockhash_query::Source::NonceAccount(nonce_account),
                         nonce_hash
@@ -3010,6 +3112,7 @@ mod tests {
                     stake_account_pubkey,
                     stake_authority: 0,
                     sign_only: false,
+                    dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
                     nonce_authority: 0,
@@ -3034,6 +3137,7 @@ mod tests {
                     stake_account_pubkey,
                     stake_authority: 1,
                     sign_only: false,
+                    dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
                     nonce_authority: 0,
@@ -3065,6 +3169,7 @@ mod tests {
                     stake_account_pubkey,
                     stake_authority: 0,
                     sign_only: false,
+                    dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(
                         blockhash_query::Source::Cluster,
                         blockhash
@@ -3092,6 +3197,7 @@ mod tests {
                     stake_account_pubkey,
                     stake_authority: 0,
                     sign_only: true,
+                    dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::None(blockhash),
                     nonce_account: None,
                     nonce_authority: 0,
@@ -3123,6 +3229,7 @@ mod tests {
                     stake_account_pubkey,
                     stake_authority: 0,
                     sign_only: false,
+                    dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(
                         blockhash_query::Source::Cluster,
                         blockhash
@@ -3166,6 +3273,7 @@ mod tests {
                     stake_account_pubkey,
                     stake_authority: 0,
                     sign_only: false,
+                    dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(
                         blockhash_query::Source::NonceAccount(nonce_account),
                         blockhash
@@ -3197,6 +3305,7 @@ mod tests {
                     stake_account_pubkey,
                     stake_authority: 0,
                     sign_only: false,
+                    dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
@@ -3231,6 +3340,7 @@ mod tests {
                     stake_account_pubkey: stake_account_keypair.pubkey(),
                     stake_authority: 0,
                     sign_only: false,
+                    dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
                     nonce_authority: 0,
@@ -3292,6 +3402,7 @@ mod tests {
                     stake_account_pubkey: stake_account_keypair.pubkey(),
                     stake_authority: 0,
                     sign_only: false,
+                    dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(
                         blockhash_query::Source::NonceAccount(nonce_account),
                         nonce_hash
@@ -3333,6 +3444,7 @@ mod tests {
                     source_stake_account_pubkey,
                     stake_authority: 0,
                     sign_only: false,
+                    dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
                     nonce_authority: 0,
