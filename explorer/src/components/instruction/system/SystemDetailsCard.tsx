@@ -19,7 +19,7 @@ import { NonceWithdrawDetailsCard } from "./NonceWithdrawDetailsCard";
 import { NonceAuthorizeDetailsCard } from "./NonceAuthorizeDetailsCard";
 import { TransferWithSeedDetailsCard } from "./TransferWithSeedDetailsCard";
 import { ParsedInfo } from "validators";
-import { coerce } from "superstruct";
+import { create } from "superstruct";
 import { reportError } from "utils/sentry";
 import {
   CreateAccountInfo,
@@ -47,54 +47,54 @@ type DetailsProps = {
 
 export function SystemDetailsCard(props: DetailsProps) {
   try {
-    const parsed = coerce(props.ix.parsed, ParsedInfo);
+    const parsed = create(props.ix.parsed, ParsedInfo);
     switch (parsed.type) {
       case "createAccount": {
-        const info = coerce(parsed.info, CreateAccountInfo);
+        const info = create(parsed.info, CreateAccountInfo);
         return <CreateDetailsCard info={info} {...props} />;
       }
       case "createAccountWithSeed": {
-        const info = coerce(parsed.info, CreateAccountWithSeedInfo);
+        const info = create(parsed.info, CreateAccountWithSeedInfo);
         return <CreateWithSeedDetailsCard info={info} {...props} />;
       }
       case "allocate": {
-        const info = coerce(parsed.info, AllocateInfo);
+        const info = create(parsed.info, AllocateInfo);
         return <AllocateDetailsCard info={info} {...props} />;
       }
       case "allocateWithSeed": {
-        const info = coerce(parsed.info, AllocateWithSeedInfo);
+        const info = create(parsed.info, AllocateWithSeedInfo);
         return <AllocateWithSeedDetailsCard info={info} {...props} />;
       }
       case "assign": {
-        const info = coerce(parsed.info, AssignInfo);
+        const info = create(parsed.info, AssignInfo);
         return <AssignDetailsCard info={info} {...props} />;
       }
       case "assignWithSeed": {
-        const info = coerce(parsed.info, AssignWithSeedInfo);
+        const info = create(parsed.info, AssignWithSeedInfo);
         return <AssignWithSeedDetailsCard info={info} {...props} />;
       }
       case "transfer": {
-        const info = coerce(parsed.info, TransferInfo);
+        const info = create(parsed.info, TransferInfo);
         return <TransferDetailsCard info={info} {...props} />;
       }
       case "advanceNonce": {
-        const info = coerce(parsed.info, AdvanceNonceInfo);
+        const info = create(parsed.info, AdvanceNonceInfo);
         return <NonceAdvanceDetailsCard info={info} {...props} />;
       }
       case "withdrawNonce": {
-        const info = coerce(parsed.info, WithdrawNonceInfo);
+        const info = create(parsed.info, WithdrawNonceInfo);
         return <NonceWithdrawDetailsCard info={info} {...props} />;
       }
       case "authorizeNonce": {
-        const info = coerce(parsed.info, AuthorizeNonceInfo);
+        const info = create(parsed.info, AuthorizeNonceInfo);
         return <NonceAuthorizeDetailsCard info={info} {...props} />;
       }
       case "initializeNonce": {
-        const info = coerce(parsed.info, InitializeNonceInfo);
+        const info = create(parsed.info, InitializeNonceInfo);
         return <NonceInitializeDetailsCard info={info} {...props} />;
       }
       case "transferWithSeed": {
-        const info = coerce(parsed.info, TransferWithSeedInfo);
+        const info = create(parsed.info, TransferWithSeedInfo);
         return <TransferWithSeedDetailsCard info={info} {...props} />;
       }
       default:

@@ -6,7 +6,7 @@ import {
   TokenAccountInfo,
   MultisigAccountInfo,
 } from "validators/accounts/token";
-import { coerce } from "superstruct";
+import { create } from "superstruct";
 import { TableCardBody } from "components/common/TableCardBody";
 import { Address } from "components/common/Address";
 import { UnknownAccountCard } from "./UnknownAccountCard";
@@ -27,15 +27,15 @@ export function TokenAccountSection({
   try {
     switch (tokenAccount.type) {
       case "mint": {
-        const info = coerce(tokenAccount.info, MintAccountInfo);
+        const info = create(tokenAccount.info, MintAccountInfo);
         return <MintAccountCard account={account} info={info} />;
       }
       case "account": {
-        const info = coerce(tokenAccount.info, TokenAccountInfo);
+        const info = create(tokenAccount.info, TokenAccountInfo);
         return <TokenAccountCard account={account} info={info} />;
       }
       case "multisig": {
-        const info = coerce(tokenAccount.info, MultisigAccountInfo);
+        const info = create(tokenAccount.info, MultisigAccountInfo);
         return <MultisigAccountCard account={account} info={info} />;
       }
     }

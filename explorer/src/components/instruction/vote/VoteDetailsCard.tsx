@@ -1,6 +1,6 @@
 import React from "react";
 import { PublicKey } from "@solana/web3.js";
-import { coerce, Struct } from "superstruct";
+import { create, Struct } from "superstruct";
 import { ParsedInfo } from "validators";
 import {
   UpdateCommissionInfo,
@@ -23,7 +23,7 @@ export function VoteDetailsCard(props: InstructionDetailsProps) {
   const { url } = useCluster();
 
   try {
-    const parsed = coerce(props.ix.parsed, ParsedInfo);
+    const parsed = create(props.ix.parsed, ParsedInfo);
 
     switch (parsed.type) {
       case "vote":
@@ -61,7 +61,7 @@ function renderDetails<T>(
   parsed: ParsedInfo,
   struct: Struct<T>
 ) {
-  const info = coerce(parsed.info, struct);
+  const info = create(parsed.info, struct);
   const attributes: JSX.Element[] = [];
 
   for (let [key, value] of Object.entries(info)) {

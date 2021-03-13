@@ -10,7 +10,7 @@ import {
 } from "@solana/web3.js";
 import { TokenAccountInfo, TokenAccount } from "validators/accounts/token";
 import { ParsedInfo } from "validators";
-import { coerce } from "superstruct";
+import { create } from "superstruct";
 import { reportError } from "utils/sentry";
 
 type LargestAccounts = {
@@ -81,7 +81,7 @@ async function fetchLargestAccounts(
               )
             ).value;
             if (accountInfo && "parsed" in accountInfo.data) {
-              const info = coerceParsedAccountInfo(accountInfo.data);
+              const info = createParsedAccountInfo(accountInfo.data);
               return {
                 ...account,
                 owner: info.owner,
@@ -144,13 +144,13 @@ export function useTokenLargestTokens(
   return context.entries[address];
 }
 
-function coerceParsedAccountInfo(
+function createParsedAccountInfo(
   parsedData: ParsedAccountData
 ): TokenAccountInfo {
   try {
-    const data = coerce(parsedData.parsed, ParsedInfo);
-    const parsed = coerce(data, TokenAccount);
-    return coerce(parsed.info, TokenAccountInfo);
+    const data = create(parsedData.parsed, ParsedInfo);
+    const parsed = create(data, TokenAccount);
+    return create(parsed.info, TokenAccountInfo);
   } catch (error) {
     throw error;
   }

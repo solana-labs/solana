@@ -1,64 +1,63 @@
 /* eslint-disable @typescript-eslint/no-redeclare */
 
 import {
-  StructType,
+  Infer,
   enums,
-  pick,
   number,
   array,
-  object,
+  type,
   nullable,
   string,
 } from "superstruct";
-import { Pubkey } from "validators/pubkey";
+import { PublicKeyFromString } from "validators/pubkey";
 
-export type VoteAccountType = StructType<typeof VoteAccountType>;
+export type VoteAccountType = Infer<typeof VoteAccountType>;
 export const VoteAccountType = enums(["vote"]);
 
-export type AuthorizedVoter = StructType<typeof AuthorizedVoter>;
-export const AuthorizedVoter = pick({
-  authorizedVoter: Pubkey,
+export type AuthorizedVoter = Infer<typeof AuthorizedVoter>;
+export const AuthorizedVoter = type({
+  authorizedVoter: PublicKeyFromString,
   epoch: number(),
 });
 
-export type PriorVoter = StructType<typeof PriorVoter>;
-export const PriorVoter = pick({
-  authorizedPubkey: Pubkey,
+export type PriorVoter = Infer<typeof PriorVoter>;
+export const PriorVoter = type({
+  authorizedPubkey: PublicKeyFromString,
   epochOfLastAuthorizedSwitch: number(),
   targetEpoch: number(),
 });
 
-export type EpochCredits = StructType<typeof EpochCredits>;
-export const EpochCredits = pick({
+export type EpochCredits = Infer<typeof EpochCredits>;
+export const EpochCredits = type({
   epoch: number(),
   credits: string(),
   previousCredits: string(),
 });
 
-export type Vote = StructType<typeof Vote>;
-export const Vote = object({
+export type Vote = Infer<typeof Vote>;
+export const Vote = type({
   slot: number(),
   confirmationCount: number(),
 });
 
-export type VoteAccountInfo = StructType<typeof VoteAccountInfo>;
-export const VoteAccountInfo = pick({
+export type VoteAccountInfo = Infer<typeof VoteAccountInfo>;
+export const VoteAccountInfo = type({
   authorizedVoters: array(AuthorizedVoter),
-  authorizedWithdrawer: Pubkey,
+  authorizedWithdrawer: PublicKeyFromString,
   commission: number(),
   epochCredits: array(EpochCredits),
-  lastTimestamp: object({
+  lastTimestamp: type({
     slot: number(),
     timestamp: number(),
   }),
-  nodePubkey: Pubkey,
+  nodePubkey: PublicKeyFromString,
   priorVoters: array(PriorVoter),
   rootSlot: nullable(number()),
   votes: array(Vote),
 });
 
-export type VoteAccount = StructType<typeof VoteAccount>;
-export const VoteAccount = pick({
+export type VoteAccount = Infer<typeof VoteAccount>;
+export const VoteAccount = type({
   type: VoteAccountType,
   info: VoteAccountInfo,
 });

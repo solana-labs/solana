@@ -2,8 +2,8 @@
 
 import {
   enums,
-  pick,
-  StructType,
+  type,
+  Infer,
   number,
   string,
   optional,
@@ -11,60 +11,60 @@ import {
   nullable,
   union,
 } from "superstruct";
-import { Pubkey } from "validators/pubkey";
+import { PublicKeyFromString } from "validators/pubkey";
 
-export type TokenAmountUi = StructType<typeof TokenAmountUi>;
-export const TokenAmountUi = pick({
+export type TokenAmountUi = Infer<typeof TokenAmountUi>;
+export const TokenAmountUi = type({
   amount: string(),
   decimals: number(),
   uiAmountString: string(),
 });
 
-const InitializeMint = pick({
-  mint: Pubkey,
+const InitializeMint = type({
+  mint: PublicKeyFromString,
   decimals: number(),
-  mintAuthority: Pubkey,
-  rentSysvar: Pubkey,
-  freezeAuthority: optional(Pubkey),
+  mintAuthority: PublicKeyFromString,
+  rentSysvar: PublicKeyFromString,
+  freezeAuthority: optional(PublicKeyFromString),
 });
 
-const InitializeAccount = pick({
-  account: Pubkey,
-  mint: Pubkey,
-  owner: Pubkey,
-  rentSysvar: Pubkey,
+const InitializeAccount = type({
+  account: PublicKeyFromString,
+  mint: PublicKeyFromString,
+  owner: PublicKeyFromString,
+  rentSysvar: PublicKeyFromString,
 });
 
-const InitializeMultisig = pick({
-  multisig: Pubkey,
-  rentSysvar: Pubkey,
-  signers: array(Pubkey),
+const InitializeMultisig = type({
+  multisig: PublicKeyFromString,
+  rentSysvar: PublicKeyFromString,
+  signers: array(PublicKeyFromString),
   m: number(),
 });
 
-const Transfer = pick({
-  source: Pubkey,
-  destination: Pubkey,
+const Transfer = type({
+  source: PublicKeyFromString,
+  destination: PublicKeyFromString,
   amount: union([string(), number()]),
-  authority: optional(Pubkey),
-  multisigAuthority: optional(Pubkey),
-  signers: optional(array(Pubkey)),
+  authority: optional(PublicKeyFromString),
+  multisigAuthority: optional(PublicKeyFromString),
+  signers: optional(array(PublicKeyFromString)),
 });
 
-const Approve = pick({
-  source: Pubkey,
-  delegate: Pubkey,
+const Approve = type({
+  source: PublicKeyFromString,
+  delegate: PublicKeyFromString,
   amount: union([string(), number()]),
-  owner: optional(Pubkey),
-  multisigOwner: optional(Pubkey),
-  signers: optional(array(Pubkey)),
+  owner: optional(PublicKeyFromString),
+  multisigOwner: optional(PublicKeyFromString),
+  signers: optional(array(PublicKeyFromString)),
 });
 
-const Revoke = pick({
-  source: Pubkey,
-  owner: optional(Pubkey),
-  multisigOwner: optional(Pubkey),
-  signers: optional(array(Pubkey)),
+const Revoke = type({
+  source: PublicKeyFromString,
+  owner: optional(PublicKeyFromString),
+  multisigOwner: optional(PublicKeyFromString),
+  signers: optional(array(PublicKeyFromString)),
 });
 
 const AuthorityType = enums([
@@ -74,97 +74,97 @@ const AuthorityType = enums([
   "closeAccount",
 ]);
 
-const SetAuthority = pick({
-  mint: optional(Pubkey),
-  account: optional(Pubkey),
+const SetAuthority = type({
+  mint: optional(PublicKeyFromString),
+  account: optional(PublicKeyFromString),
   authorityType: AuthorityType,
-  newAuthority: nullable(Pubkey),
-  authority: optional(Pubkey),
-  multisigAuthority: optional(Pubkey),
-  signers: optional(array(Pubkey)),
+  newAuthority: nullable(PublicKeyFromString),
+  authority: optional(PublicKeyFromString),
+  multisigAuthority: optional(PublicKeyFromString),
+  signers: optional(array(PublicKeyFromString)),
 });
 
-const MintTo = pick({
-  mint: Pubkey,
-  account: Pubkey,
+const MintTo = type({
+  mint: PublicKeyFromString,
+  account: PublicKeyFromString,
   amount: union([string(), number()]),
-  mintAuthority: optional(Pubkey),
-  multisigMintAuthority: optional(Pubkey),
-  signers: optional(array(Pubkey)),
+  mintAuthority: optional(PublicKeyFromString),
+  multisigMintAuthority: optional(PublicKeyFromString),
+  signers: optional(array(PublicKeyFromString)),
 });
 
-const Burn = pick({
-  account: Pubkey,
-  mint: Pubkey,
+const Burn = type({
+  account: PublicKeyFromString,
+  mint: PublicKeyFromString,
   amount: union([string(), number()]),
-  authority: optional(Pubkey),
-  multisigAuthority: optional(Pubkey),
-  signers: optional(array(Pubkey)),
+  authority: optional(PublicKeyFromString),
+  multisigAuthority: optional(PublicKeyFromString),
+  signers: optional(array(PublicKeyFromString)),
 });
 
-const CloseAccount = pick({
-  account: Pubkey,
-  destination: Pubkey,
-  owner: optional(Pubkey),
-  multisigOwner: optional(Pubkey),
-  signers: optional(array(Pubkey)),
+const CloseAccount = type({
+  account: PublicKeyFromString,
+  destination: PublicKeyFromString,
+  owner: optional(PublicKeyFromString),
+  multisigOwner: optional(PublicKeyFromString),
+  signers: optional(array(PublicKeyFromString)),
 });
 
-const FreezeAccount = pick({
-  account: Pubkey,
-  mint: Pubkey,
-  freezeAuthority: optional(Pubkey),
-  multisigFreezeAuthority: optional(Pubkey),
-  signers: optional(array(Pubkey)),
+const FreezeAccount = type({
+  account: PublicKeyFromString,
+  mint: PublicKeyFromString,
+  freezeAuthority: optional(PublicKeyFromString),
+  multisigFreezeAuthority: optional(PublicKeyFromString),
+  signers: optional(array(PublicKeyFromString)),
 });
 
-const ThawAccount = pick({
-  account: Pubkey,
-  mint: Pubkey,
-  freezeAuthority: optional(Pubkey),
-  multisigFreezeAuthority: optional(Pubkey),
-  signers: optional(array(Pubkey)),
+const ThawAccount = type({
+  account: PublicKeyFromString,
+  mint: PublicKeyFromString,
+  freezeAuthority: optional(PublicKeyFromString),
+  multisigFreezeAuthority: optional(PublicKeyFromString),
+  signers: optional(array(PublicKeyFromString)),
 });
 
-const TransferChecked = pick({
-  source: Pubkey,
-  mint: Pubkey,
-  destination: Pubkey,
-  authority: optional(Pubkey),
-  multisigAuthority: optional(Pubkey),
-  signers: optional(array(Pubkey)),
+const TransferChecked = type({
+  source: PublicKeyFromString,
+  mint: PublicKeyFromString,
+  destination: PublicKeyFromString,
+  authority: optional(PublicKeyFromString),
+  multisigAuthority: optional(PublicKeyFromString),
+  signers: optional(array(PublicKeyFromString)),
   tokenAmount: TokenAmountUi,
 });
 
-const ApproveChecked = pick({
-  source: Pubkey,
-  mint: Pubkey,
-  delegate: Pubkey,
-  owner: optional(Pubkey),
-  multisigOwner: optional(Pubkey),
-  signers: optional(array(Pubkey)),
+const ApproveChecked = type({
+  source: PublicKeyFromString,
+  mint: PublicKeyFromString,
+  delegate: PublicKeyFromString,
+  owner: optional(PublicKeyFromString),
+  multisigOwner: optional(PublicKeyFromString),
+  signers: optional(array(PublicKeyFromString)),
   tokenAmount: TokenAmountUi,
 });
 
-const MintToChecked = pick({
-  account: Pubkey,
-  mint: Pubkey,
-  mintAuthority: optional(Pubkey),
-  multisigMintAuthority: optional(Pubkey),
-  signers: optional(array(Pubkey)),
+const MintToChecked = type({
+  account: PublicKeyFromString,
+  mint: PublicKeyFromString,
+  mintAuthority: optional(PublicKeyFromString),
+  multisigMintAuthority: optional(PublicKeyFromString),
+  signers: optional(array(PublicKeyFromString)),
   tokenAmount: TokenAmountUi,
 });
 
-const BurnChecked = pick({
-  account: Pubkey,
-  mint: Pubkey,
-  authority: optional(Pubkey),
-  multisigAuthority: optional(Pubkey),
-  signers: optional(array(Pubkey)),
+const BurnChecked = type({
+  account: PublicKeyFromString,
+  mint: PublicKeyFromString,
+  authority: optional(PublicKeyFromString),
+  multisigAuthority: optional(PublicKeyFromString),
+  signers: optional(array(PublicKeyFromString)),
   tokenAmount: TokenAmountUi,
 });
 
-export type TokenInstructionType = StructType<typeof TokenInstructionType>;
+export type TokenInstructionType = Infer<typeof TokenInstructionType>;
 export const TokenInstructionType = enums([
   "initializeMint",
   "initializeAccount",
