@@ -4,7 +4,7 @@ import * as Cache from "providers/cache";
 import { ActionType, FetchStatus } from "providers/cache";
 import { TokenAccountInfo } from "validators/accounts/token";
 import { useCluster, Cluster } from "../cluster";
-import { coerce } from "superstruct";
+import { create } from "superstruct";
 import { reportError } from "utils/sentry";
 
 export type TokenInfoWithPubkey = {
@@ -68,7 +68,7 @@ async function fetchAccountTokens(
     data = {
       tokens: value.map((accountInfo) => {
         const parsedInfo = accountInfo.account.data.parsed.info;
-        const info = coerce(parsedInfo, TokenAccountInfo);
+        const info = create(parsedInfo, TokenAccountInfo);
         return { info, pubkey: accountInfo.pubkey };
       }),
     };

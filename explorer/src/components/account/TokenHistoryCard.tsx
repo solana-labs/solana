@@ -25,7 +25,7 @@ import {
   useFetchTransactionDetails,
   useTransactionDetailsCache,
 } from "providers/transactions/details";
-import { coerce } from "superstruct";
+import { create } from "superstruct";
 import { ParsedInfo } from "validators";
 import {
   TokenInstructionType,
@@ -366,9 +366,9 @@ function instructionTypeName(
   tx: ConfirmedSignatureInfo
 ): string {
   try {
-    const parsed = coerce(ix.parsed, ParsedInfo);
+    const parsed = create(ix.parsed, ParsedInfo);
     const { type: rawType } = parsed;
-    const type = coerce(rawType, TokenInstructionType);
+    const type = create(rawType, TokenInstructionType);
     return IX_TITLES[type];
   } catch (err) {
     reportError(err, { signature: tx.signature });

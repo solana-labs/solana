@@ -1,69 +1,69 @@
 /* eslint-disable @typescript-eslint/no-redeclare */
 
-import { enums, number, pick, string, StructType } from "superstruct";
-import { Pubkey } from "validators/pubkey";
+import { enums, number, type, string, Infer } from "superstruct";
+import { PublicKeyFromString } from "validators/pubkey";
 
-export type InitializeInfo = StructType<typeof InitializeInfo>;
-export const InitializeInfo = pick({
-  stakeAccount: Pubkey,
-  authorized: pick({
-    staker: Pubkey,
-    withdrawer: Pubkey,
+export type InitializeInfo = Infer<typeof InitializeInfo>;
+export const InitializeInfo = type({
+  stakeAccount: PublicKeyFromString,
+  authorized: type({
+    staker: PublicKeyFromString,
+    withdrawer: PublicKeyFromString,
   }),
-  lockup: pick({
+  lockup: type({
     unixTimestamp: number(),
     epoch: number(),
-    custodian: Pubkey,
+    custodian: PublicKeyFromString,
   }),
 });
 
-export type DelegateInfo = StructType<typeof DelegateInfo>;
-export const DelegateInfo = pick({
-  stakeAccount: Pubkey,
-  voteAccount: Pubkey,
-  stakeAuthority: Pubkey,
+export type DelegateInfo = Infer<typeof DelegateInfo>;
+export const DelegateInfo = type({
+  stakeAccount: PublicKeyFromString,
+  voteAccount: PublicKeyFromString,
+  stakeAuthority: PublicKeyFromString,
 });
 
-export type AuthorizeInfo = StructType<typeof AuthorizeInfo>;
-export const AuthorizeInfo = pick({
+export type AuthorizeInfo = Infer<typeof AuthorizeInfo>;
+export const AuthorizeInfo = type({
   authorityType: string(),
-  stakeAccount: Pubkey,
-  authority: Pubkey,
-  newAuthority: Pubkey,
+  stakeAccount: PublicKeyFromString,
+  authority: PublicKeyFromString,
+  newAuthority: PublicKeyFromString,
 });
 
-export type SplitInfo = StructType<typeof SplitInfo>;
-export const SplitInfo = pick({
-  stakeAccount: Pubkey,
-  stakeAuthority: Pubkey,
-  newSplitAccount: Pubkey,
+export type SplitInfo = Infer<typeof SplitInfo>;
+export const SplitInfo = type({
+  stakeAccount: PublicKeyFromString,
+  stakeAuthority: PublicKeyFromString,
+  newSplitAccount: PublicKeyFromString,
   lamports: number(),
 });
 
-export type WithdrawInfo = StructType<typeof WithdrawInfo>;
-export const WithdrawInfo = pick({
-  stakeAccount: Pubkey,
-  withdrawAuthority: Pubkey,
-  destination: Pubkey,
+export type WithdrawInfo = Infer<typeof WithdrawInfo>;
+export const WithdrawInfo = type({
+  stakeAccount: PublicKeyFromString,
+  withdrawAuthority: PublicKeyFromString,
+  destination: PublicKeyFromString,
   lamports: number(),
 });
 
-export type DeactivateInfo = StructType<typeof DeactivateInfo>;
-export const DeactivateInfo = pick({
-  stakeAccount: Pubkey,
-  stakeAuthority: Pubkey,
+export type DeactivateInfo = Infer<typeof DeactivateInfo>;
+export const DeactivateInfo = type({
+  stakeAccount: PublicKeyFromString,
+  stakeAuthority: PublicKeyFromString,
 });
 
-export type MergeInfo = StructType<typeof MergeInfo>;
-export const MergeInfo = pick({
-  source: Pubkey,
-  destination: Pubkey,
-  stakeAuthority: Pubkey,
-  stakeHistorySysvar: Pubkey,
-  clockSysvar: Pubkey,
+export type MergeInfo = Infer<typeof MergeInfo>;
+export const MergeInfo = type({
+  source: PublicKeyFromString,
+  destination: PublicKeyFromString,
+  stakeAuthority: PublicKeyFromString,
+  stakeHistorySysvar: PublicKeyFromString,
+  clockSysvar: PublicKeyFromString,
 });
 
-export type StakeInstructionType = StructType<typeof StakeInstructionType>;
+export type StakeInstructionType = Infer<typeof StakeInstructionType>;
 export const StakeInstructionType = enums([
   "initialize",
   "delegate",

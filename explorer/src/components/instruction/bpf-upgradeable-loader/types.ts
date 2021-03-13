@@ -1,56 +1,54 @@
 /* eslint-disable @typescript-eslint/no-redeclare */
 
-import { enums, nullable, number, pick, string, StructType } from "superstruct";
-import { Pubkey } from "validators/pubkey";
+import { enums, nullable, number, type, string, Infer } from "superstruct";
+import { PublicKeyFromString } from "validators/pubkey";
 
-export type WriteInfo = StructType<typeof WriteInfo>;
-export const WriteInfo = pick({
-  account: Pubkey,
-  authority: Pubkey,
+export type WriteInfo = Infer<typeof WriteInfo>;
+export const WriteInfo = type({
+  account: PublicKeyFromString,
+  authority: PublicKeyFromString,
   bytes: string(),
   offset: number(),
 });
 
-export type InitializeBufferInfo = StructType<typeof InitializeBufferInfo>;
-export const InitializeBufferInfo = pick({
-  account: Pubkey,
-  authority: Pubkey,
+export type InitializeBufferInfo = Infer<typeof InitializeBufferInfo>;
+export const InitializeBufferInfo = type({
+  account: PublicKeyFromString,
+  authority: PublicKeyFromString,
 });
 
-export type UpgradeInfo = StructType<typeof UpgradeInfo>;
-export const UpgradeInfo = pick({
-  programDataAccount: Pubkey,
-  programAccount: Pubkey,
-  bufferAccount: Pubkey,
-  spillAccount: Pubkey,
-  authority: Pubkey,
-  rentSysvar: Pubkey,
-  clockSysvar: Pubkey,
+export type UpgradeInfo = Infer<typeof UpgradeInfo>;
+export const UpgradeInfo = type({
+  programDataAccount: PublicKeyFromString,
+  programAccount: PublicKeyFromString,
+  bufferAccount: PublicKeyFromString,
+  spillAccount: PublicKeyFromString,
+  authority: PublicKeyFromString,
+  rentSysvar: PublicKeyFromString,
+  clockSysvar: PublicKeyFromString,
 });
 
-export type SetAuthorityInfo = StructType<typeof SetAuthorityInfo>;
-export const SetAuthorityInfo = pick({
-  account: Pubkey,
-  authority: Pubkey,
-  newAuthority: nullable(Pubkey),
+export type SetAuthorityInfo = Infer<typeof SetAuthorityInfo>;
+export const SetAuthorityInfo = type({
+  account: PublicKeyFromString,
+  authority: PublicKeyFromString,
+  newAuthority: nullable(PublicKeyFromString),
 });
 
-export type DeployWithMaxDataLenInfo = StructType<
-  typeof DeployWithMaxDataLenInfo
->;
-export const DeployWithMaxDataLenInfo = pick({
-  programDataAccount: Pubkey,
-  programAccount: Pubkey,
-  payerAccount: Pubkey,
-  bufferAccount: Pubkey,
-  authority: Pubkey,
-  rentSysvar: Pubkey,
-  clockSysvar: Pubkey,
-  systemProgram: Pubkey,
+export type DeployWithMaxDataLenInfo = Infer<typeof DeployWithMaxDataLenInfo>;
+export const DeployWithMaxDataLenInfo = type({
+  programDataAccount: PublicKeyFromString,
+  programAccount: PublicKeyFromString,
+  payerAccount: PublicKeyFromString,
+  bufferAccount: PublicKeyFromString,
+  authority: PublicKeyFromString,
+  rentSysvar: PublicKeyFromString,
+  clockSysvar: PublicKeyFromString,
+  systemProgram: PublicKeyFromString,
   maxDataLen: number(),
 });
 
-export type UpgradeableBpfLoaderInstructionType = StructType<
+export type UpgradeableBpfLoaderInstructionType = Infer<
   typeof UpgradeableBpfLoaderInstructionType
 >;
 export const UpgradeableBpfLoaderInstructionType = enums([

@@ -6,7 +6,7 @@ import {
   BPF_LOADER_PROGRAM_ID,
 } from "@solana/web3.js";
 import { InstructionCard } from "../InstructionCard";
-import { coerce } from "superstruct";
+import { create } from "superstruct";
 import { ParsedInfo } from "validators";
 import { WriteInfo, FinalizeInfo } from "./types";
 import { reportError } from "utils/sentry";
@@ -25,15 +25,15 @@ type DetailsProps = {
 
 export function BpfLoaderDetailsCard(props: DetailsProps) {
   try {
-    const parsed = coerce(props.ix.parsed, ParsedInfo);
+    const parsed = create(props.ix.parsed, ParsedInfo);
 
     switch (parsed.type) {
       case "write": {
-        const info = coerce(parsed.info, WriteInfo);
+        const info = create(parsed.info, WriteInfo);
         return <BpfLoaderWriteDetailsCard info={info} {...props} />;
       }
       case "finalize": {
-        const info = coerce(parsed.info, FinalizeInfo);
+        const info = create(parsed.info, FinalizeInfo);
         return <BpfLoaderFinalizeDetailsCard info={info} {...props} />;
       }
       default:

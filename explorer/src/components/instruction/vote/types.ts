@@ -5,74 +5,74 @@ import {
   nullable,
   number,
   optional,
-  pick,
+  type,
   string,
-  StructType,
+  Infer,
 } from "superstruct";
-import { Pubkey } from "validators/pubkey";
+import { PublicKeyFromString } from "validators/pubkey";
 
-export type InitializeInfo = StructType<typeof InitializeInfo>;
-export const InitializeInfo = pick({
-  voteAccount: Pubkey,
-  rentSysvar: Pubkey,
-  clockSysvar: Pubkey,
-  node: Pubkey,
-  authorizedVoter: Pubkey,
-  authorizedWithdrawer: Pubkey,
+export type InitializeInfo = Infer<typeof InitializeInfo>;
+export const InitializeInfo = type({
+  voteAccount: PublicKeyFromString,
+  rentSysvar: PublicKeyFromString,
+  clockSysvar: PublicKeyFromString,
+  node: PublicKeyFromString,
+  authorizedVoter: PublicKeyFromString,
+  authorizedWithdrawer: PublicKeyFromString,
   commission: number(),
 });
 
-export type AuthorizeInfo = StructType<typeof AuthorizeInfo>;
-export const AuthorizeInfo = pick({
-  voteAccount: Pubkey,
-  clockSysvar: Pubkey,
-  authority: Pubkey,
-  newAuthority: Pubkey,
+export type AuthorizeInfo = Infer<typeof AuthorizeInfo>;
+export const AuthorizeInfo = type({
+  voteAccount: PublicKeyFromString,
+  clockSysvar: PublicKeyFromString,
+  authority: PublicKeyFromString,
+  newAuthority: PublicKeyFromString,
   authorityType: number(),
 });
 
-export type VoteInfo = StructType<typeof VoteInfo>;
-export const VoteInfo = pick({
-  clockSysvar: Pubkey,
-  slotHashesSysvar: Pubkey,
-  voteAccount: Pubkey,
-  voteAuthority: Pubkey,
-  vote: pick({
+export type VoteInfo = Infer<typeof VoteInfo>;
+export const VoteInfo = type({
+  clockSysvar: PublicKeyFromString,
+  slotHashesSysvar: PublicKeyFromString,
+  voteAccount: PublicKeyFromString,
+  voteAuthority: PublicKeyFromString,
+  vote: type({
     hash: string(),
     slots: array(number()),
     timestamp: optional(nullable(number())),
   }),
 });
 
-export type WithdrawInfo = StructType<typeof WithdrawInfo>;
-export const WithdrawInfo = pick({
-  voteAccount: Pubkey,
-  destination: Pubkey,
-  withdrawAuthority: Pubkey,
+export type WithdrawInfo = Infer<typeof WithdrawInfo>;
+export const WithdrawInfo = type({
+  voteAccount: PublicKeyFromString,
+  destination: PublicKeyFromString,
+  withdrawAuthority: PublicKeyFromString,
   lamports: number(),
 });
 
-export type UpdateValidatorInfo = StructType<typeof UpdateValidatorInfo>;
-export const UpdateValidatorInfo = pick({
-  voteAccount: Pubkey,
-  newValidatorIdentity: Pubkey,
-  withdrawAuthority: Pubkey,
+export type UpdateValidatorInfo = Infer<typeof UpdateValidatorInfo>;
+export const UpdateValidatorInfo = type({
+  voteAccount: PublicKeyFromString,
+  newValidatorIdentity: PublicKeyFromString,
+  withdrawAuthority: PublicKeyFromString,
 });
 
-export type UpdateCommissionInfo = StructType<typeof UpdateCommissionInfo>;
-export const UpdateCommissionInfo = pick({
-  voteAccount: Pubkey,
-  withdrawAuthority: Pubkey,
+export type UpdateCommissionInfo = Infer<typeof UpdateCommissionInfo>;
+export const UpdateCommissionInfo = type({
+  voteAccount: PublicKeyFromString,
+  withdrawAuthority: PublicKeyFromString,
   commission: number(),
 });
 
-export type VoteSwitchInfo = StructType<typeof VoteSwitchInfo>;
-export const VoteSwitchInfo = pick({
-  voteAccount: Pubkey,
-  slotHashesSysvar: Pubkey,
-  clockSysvar: Pubkey,
-  voteAuthority: Pubkey,
-  vote: pick({
+export type VoteSwitchInfo = Infer<typeof VoteSwitchInfo>;
+export const VoteSwitchInfo = type({
+  voteAccount: PublicKeyFromString,
+  slotHashesSysvar: PublicKeyFromString,
+  clockSysvar: PublicKeyFromString,
+  voteAuthority: PublicKeyFromString,
+  vote: type({
     hash: string(),
     slots: array(number()),
     timestamp: number(),

@@ -6,7 +6,7 @@ import {
   PublicKey,
 } from "@solana/web3.js";
 import { Address } from "components/common/Address";
-import { coerce, Struct } from "superstruct";
+import { create, Struct } from "superstruct";
 import { camelToTitleCase } from "utils";
 import { reportError } from "utils/sentry";
 import { ParsedInfo } from "validators";
@@ -31,7 +31,7 @@ type DetailsProps = {
 
 export function BpfUpgradeableLoaderDetailsCard(props: DetailsProps) {
   try {
-    const parsed = coerce(props.ix.parsed, ParsedInfo);
+    const parsed = create(props.ix.parsed, ParsedInfo);
     switch (parsed.type) {
       case "write": {
         return renderDetails<WriteInfo>(props, parsed, WriteInfo);
@@ -72,7 +72,7 @@ function renderDetails<T>(
   parsed: ParsedInfo,
   struct: Struct<T>
 ) {
-  const info = coerce(parsed.info, struct);
+  const info = create(parsed.info, struct);
 
   const attributes: JSX.Element[] = [];
   for (let [key, value] of Object.entries(info)) {
