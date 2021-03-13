@@ -1,6 +1,6 @@
 [package]
 name = "solana-config-program"
-version = "1.6.0"
+version = "1.7.0"
 description = "Solana Config program"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -16,10 +16,10 @@ log = "0.4.11"
 rand_core = "0.6.2"
 serde = "1.0.122"
 serde_derive = "1.0.103"
-solana-sdk = { path = "../../sdk", version = "1.6.0" }
+solana-sdk = { path = "../../sdk", version = "1.7.0" }
 
 [dev-dependencies]
-solana-logger = { path = "../../logger", version = "1.6.0" }
+solana-logger = { path = "../../logger", version = "1.7.0" }
 
 [lib]
 crate-type = ["lib"]
