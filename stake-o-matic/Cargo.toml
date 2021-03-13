@@ -7,7 +7,7 @@ documentation = "https://docs.rs/"
 license = "Apache-2.0"
 name = "solana-stake-o-matic"
 repository = "https://github.com/solana-labs/stake-o-matic"
-version = "1.6.0"
+version = "1.7.0"
 
 [dependencies]
 clap = "2.33.0"
@@ -17,16 +17,16 @@ semver = "0.9.0"
 serde = { version = "1.0.122", features = ["derive"] }
 serde_json = "1.0.62"
 serde_yaml = "0.8.13"
-solana-clap-utils = { path = "../clap-utils", version = "1.6.0" }
-solana-client = { path = "../client", version = "1.6.0" }
-solana-cli-config = { path = "../cli-config", version = "1.6.0" }
-solana-cli-output = { path = "../cli-output", version = "1.6.0" }
-solana-logger = { path = "../logger", version = "1.6.0" }
-solana-metrics = { path = "../metrics", version = "1.6.0" }
-solana-notifier = { path = "../notifier", version = "1.6.0" }
-solana-sdk = { path = "../sdk", version = "1.6.0" }
-solana-stake-program = { path = "../programs/stake", version = "1.6.0" }
-solana-transaction-status = { path = "../transaction-status", version = "1.6.0" }
+solana-clap-utils = { path = "../clap-utils", version = "1.7.0" }
+solana-client = { path = "../client", version = "1.7.0" }
+solana-cli-config = { path = "../cli-config", version = "1.7.0" }
+solana-cli-output = { path = "../cli-output", version = "1.7.0" }
+solana-logger = { path = "../logger", version = "1.7.0" }
+solana-metrics = { path = "../metrics", version = "1.7.0" }
+solana-notifier = { path = "../notifier", version = "1.7.0" }
+solana-sdk = { path = "../sdk", version = "1.7.0" }
+solana-stake-program = { path = "../programs/stake", version = "1.7.0" }
+solana-transaction-status = { path = "../transaction-status", version = "1.7.0" }
 thiserror = "1.0.21"
 
 [package.metadata.docs.rs]
