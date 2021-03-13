@@ -38,7 +38,7 @@ use solana_sdk::{
     clock::{
         Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp, DEFAULT_TICKS_PER_SECOND,
         MAX_PROCESSING_AGE, MAX_RECENT_BLOCKHASHES, MAX_TRANSACTION_FORWARDING_DELAY,
-        SECONDS_PER_DAY, SLOT_MS,
+        SECONDS_PER_DAY,
     },
     epoch_info::EpochInfo,
     epoch_schedule::EpochSchedule,
@@ -783,7 +783,7 @@ pub struct Bank {
     ticks_per_slot: u64,
 
     /// length of a slot in ns
-    ns_per_slot: u128,
+    pub ns_per_slot: u128,
 
     /// genesis time, used for computed clock
     genesis_creation_time: UnixTimestamp,
@@ -881,8 +881,6 @@ pub struct Bank {
     pub drop_callback: RwLock<OptionalDropCallback>,
 
     pub freeze_started: AtomicBool,
-
-    pub max_tx_ingestion_time: Option<u64>,
 }
 
 impl Default for BlockhashQueue {
@@ -1073,7 +1071,6 @@ impl Bank {
                     .map(|drop_callback| drop_callback.clone_box()),
             )),
             freeze_started: AtomicBool::new(false),
-            max_tx_ingestion_time: parent.max_tx_ingestion_time,
         };
 
         datapoint_info!(
@@ -1221,7 +1218,6 @@ impl Bank {
             feature_set: new(),
             drop_callback: RwLock::new(OptionalDropCallback(None)),
             freeze_started: AtomicBool::new(fields.hash != Hash::default()),
-            max_tx_ingestion_time: Some(SLOT_MS),
         };
         bank.finish_init(genesis_config, additional_builtins);
 
@@ -4643,17 +4639,14 @@ impl Bank {
             .is_active(&feature_set::check_init_vote_data::id())
     }
 
-    // Get the current processing bank if the processing time hasn't expired
-    pub fn is_bank_still_processing_txs(
+    // Check if the wallclock time from bank creation to now has exceeded the allotted
+    // time for transaction processing
+    pub fn should_bank_still_be_processing_txs(
         bank_creation_time: &Instant,
-        max_tx_ingestion_time: Option<u64>,
+        max_tx_ingestion_nanos: u128,
     ) -> bool {
         // Do this check outside of the poh lock, hence not a method on PohRecorder
-        max_tx_ingestion_time
-            .map(|max_tx_ingestion_time| {
-                bank_creation_time.elapsed().as_millis() <= max_tx_ingestion_time as u128
-            })
-            .unwrap_or(true)
+        bank_creation_time.elapsed().as_nanos() <= max_tx_ingestion_nanos
     }
 
     pub fn deactivate_feature(&mut self, id: &Pubkey) {

@@ -540,7 +540,7 @@ impl PohRecorder {
     // if it's still processing transactions
     pub fn get_bank_still_processing_txs(bank_start: &Option<BankStart>) -> Option<&Arc<Bank>> {
         bank_start.as_ref().and_then(|(bank, bank_creation_time)| {
-            if Bank::is_bank_still_processing_txs(bank_creation_time, bank.max_tx_ingestion_time) {
+            if Bank::should_bank_still_be_processing_txs(bank_creation_time, bank.ns_per_slot) {
                 Some(bank)
             } else {
                 None

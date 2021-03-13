@@ -161,7 +161,7 @@ pub struct BankingStage {
 
 #[derive(Debug, Clone)]
 pub enum BufferedPacketsDecision {
-    Consume(Option<u64>),
+    Consume(u128),
     Forward,
     ForwardAndHold,
     Hold,
@@ -288,7 +288,7 @@ impl BankingStage {
 
     pub fn consume_buffered_packets(
         my_pubkey: &Pubkey,
-        max_tx_ingestion_time: Option<u64>,
+        max_tx_ingestion_ns: u128,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         buffered_packets: &mut UnprocessedPackets,
         transaction_status_sender: Option<TransactionStatusSender>,
@@ -330,9 +330,9 @@ impl BankingStage {
                             gossip_vote_sender,
                         );
                     if processed < verified_txs_len
-                        || !Bank::is_bank_still_processing_txs(
+                        || !Bank::should_bank_still_be_processing_txs(
                             &bank_creation_time,
-                            max_tx_ingestion_time,
+                            max_tx_ingestion_ns,
                         )
                     {
                         reached_end_of_slot =
@@ -398,7 +398,7 @@ impl BankingStage {
             |x| {
                 if let Some(bank) = bank_still_processing_txs {
                     // If the bank is available, this node is the leader
-                    BufferedPacketsDecision::Consume(bank.max_tx_ingestion_time)
+                    BufferedPacketsDecision::Consume(bank.ns_per_slot)
                 } else if would_be_leader_shortly {
                     // If the node will be the leader soon, hold the packets for now
                     BufferedPacketsDecision::Hold
@@ -457,10 +457,10 @@ impl BankingStage {
         );
 
         match decision {
-            BufferedPacketsDecision::Consume(max_tx_ingestion_time) => {
+            BufferedPacketsDecision::Consume(max_tx_ingestion_ns) => {
                 Self::consume_buffered_packets(
                     my_pubkey,
-                    max_tx_ingestion_time,
+                    max_tx_ingestion_ns,
                     poh_recorder,
                     buffered_packets,
                     transaction_status_sender,
@@ -874,9 +874,9 @@ impl BankingStage {
 
             // If `bank_creation_time` is None, it's a test so ignore the option so
             // allow processing
-            let is_bank_still_processing_txs =
-                Bank::is_bank_still_processing_txs(bank_creation_time, bank.max_tx_ingestion_time);
-            match (result, is_bank_still_processing_txs) {
+            let should_bank_still_be_processing_txs =
+                Bank::should_bank_still_be_processing_txs(bank_creation_time, bank.ns_per_slot);
+            match (result, should_bank_still_be_processing_txs) {
                 (Err(PohRecorderError::MaxHeightReached), _) | (_, false) => {
                     info!(
                         "process transactions: max height reached slot: {} height: {}",
@@ -2233,7 +2233,7 @@ mod tests {
         } = create_genesis_config(10_000);
         let mut bank = Bank::new(&genesis_config);
         // Allow arbitrary transaction processing time for the purposes of this test
-        bank.max_tx_ingestion_time = None;
+        bank.ns_per_slot = std::u128::MAX;
         let bank = Arc::new(Bank::new(&genesis_config));
 
         let pubkey = solana_sdk::pubkey::new_rand();
@@ -2461,10 +2461,10 @@ mod tests {
 
             // When the working bank in poh_recorder is None, no packets should be processed
             assert!(!poh_recorder.lock().unwrap().has_bank());
-            let max_tx_processing_time = None;
+            let max_tx_processing_ns = std::u128::MAX;
             BankingStage::consume_buffered_packets(
                 &Pubkey::default(),
-                max_tx_processing_time,
+                max_tx_processing_ns,
                 &poh_recorder,
                 &mut buffered_packets,
                 None,
@@ -2479,7 +2479,7 @@ mod tests {
                 poh_recorder.lock().unwrap().set_bank(&bank);
                 BankingStage::consume_buffered_packets(
                     &Pubkey::default(),
-                    max_tx_processing_time,
+                    max_tx_processing_ns,
                     &poh_recorder,
                     &mut buffered_packets,
                     None,
@@ -2536,7 +2536,7 @@ mod tests {
                 .spawn(move || {
                     BankingStage::consume_buffered_packets(
                         &Pubkey::default(),
-                        None,
+                        std::u128::MAX,
                         &poh_recorder_,
                         &mut buffered_packets,
                         None,
