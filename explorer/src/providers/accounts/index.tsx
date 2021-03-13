@@ -20,10 +20,9 @@ import { SysvarAccount } from "validators/accounts/sysvar";
 import { ConfigAccount } from "validators/accounts/config";
 import { FlaggedAccountsProvider } from "./flagged-accounts";
 import {
-  ProgramAccount,
-  ProgramAccountInfo,
   ProgramDataAccount,
   ProgramDataAccountInfo,
+  UpgradeableLoaderAccount,
 } from "validators/accounts/upgradeable-program";
 export { useAccountHistory } from "./history";
 
@@ -33,10 +32,10 @@ export type StakeProgramData = {
   activation?: StakeActivationData;
 };
 
-export type UpgradeableProgramAccountData = {
+export type UpgradeableLoaderAccountData = {
   program: "bpf-upgradeable-loader";
-  programData: ProgramDataAccountInfo;
-  programAccount: ProgramAccountInfo;
+  parsed: UpgradeableLoaderAccount;
+  programData?: ProgramDataAccountInfo;
 };
 
 export type TokenProgramData = {
@@ -65,7 +64,7 @@ export type ConfigProgramData = {
 };
 
 export type ProgramData =
-  | UpgradeableProgramAccountData
+  | UpgradeableLoaderAccountData
   | StakeProgramData
   | TokenProgramData
   | VoteProgramData
@@ -154,35 +153,32 @@ async function fetchAccountInfo(
           const info = create(result.data.parsed, ParsedInfo);
           switch (result.data.program) {
             case "bpf-upgradeable-loader": {
-              let programAccount: ProgramAccountInfo;
-              let programData: ProgramDataAccountInfo;
+              const parsed = create(info, UpgradeableLoaderAccount);
 
-              if (info.type === "programData") {
-                break;
-              }
-
-              const parsed = create(info, ProgramAccount);
-              programAccount = parsed.info;
-              const result = (
-                await connection.getParsedAccountInfo(parsed.info.programData)
-              ).value;
-              if (
-                result &&
-                "parsed" in result.data &&
-                result.data.program === "bpf-upgradeable-loader"
-              ) {
-                const info = create(result.data.parsed, ParsedInfo);
-                programData = create(info, ProgramDataAccount).info;
-              } else {
-                throw new Error(
-                  `invalid program data account for program: ${pubkey.toBase58()}`
-                );
+              // Fetch program data to get program upgradeability info
+              let programData: ProgramDataAccountInfo | undefined;
+              if (parsed.type === "program") {
+                const result = (
+                  await connection.getParsedAccountInfo(parsed.info.programData)
+                ).value;
+                if (
+                  result &&
+                  "parsed" in result.data &&
+                  result.data.program === "bpf-upgradeable-loader"
+                ) {
+                  const info = create(result.data.parsed, ParsedInfo);
+                  programData = create(info, ProgramDataAccount).info;
+                } else {
+                  throw new Error(
+                    `invalid program data account for program: ${pubkey.toBase58()}`
+                  );
+                }
               }
 
               data = {
                 program: result.data.program,
+                parsed,
                 programData,
-                programAccount,
               };
 
               break;
