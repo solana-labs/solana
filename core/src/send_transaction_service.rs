@@ -801,17 +801,18 @@ mod test {
             );
             let bank = Arc::new(Bank::new(&genesis_config));
 
-            let (poh_recorder, _entry_receiver, _receiver_mixin, _sender_mixin_result) = PohRecorder::new(
-                0,
-                bank.last_blockhash(),
-                0,
-                Some((2, 2)),
-                bank.ticks_per_slot(),
-                &Pubkey::default(),
-                &Arc::new(blockstore),
-                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                &Arc::new(PohConfig::default()),
-            );
+            let (poh_recorder, _entry_receiver, _receiver_mixin, _sender_mixin_result) =
+                PohRecorder::new(
+                    0,
+                    bank.last_blockhash(),
+                    0,
+                    Some((2, 2)),
+                    bank.ticks_per_slot(),
+                    &Pubkey::default(),
+                    &Arc::new(blockstore),
+                    &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+                    &Arc::new(PohConfig::default()),
+                );
 
             let node_keypair = Arc::new(Keypair::new());
             let cluster_info = Arc::new(ClusterInfo::new(

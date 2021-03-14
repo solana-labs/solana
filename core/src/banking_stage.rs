@@ -1672,17 +1672,18 @@ mod tests {
         {
             let blockstore = Blockstore::open(&ledger_path)
                 .expect("Expected to be able to open database ledger");
-            let (poh_recorder, entry_receiver, _receiver_mixin, _sender_mixin_result) = PohRecorder::new(
-                bank.tick_height(),
-                bank.last_blockhash(),
-                bank.slot(),
-                None,
-                bank.ticks_per_slot(),
-                &Pubkey::default(),
-                &Arc::new(blockstore),
-                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                &Arc::new(PohConfig::default()),
-            );
+            let (poh_recorder, entry_receiver, _receiver_mixin, _sender_mixin_result) =
+                PohRecorder::new(
+                    bank.tick_height(),
+                    bank.last_blockhash(),
+                    bank.slot(),
+                    None,
+                    bank.ticks_per_slot(),
+                    &Pubkey::default(),
+                    &Arc::new(blockstore),
+                    &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+                    &Arc::new(PohConfig::default()),
+                );
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
             poh_recorder.lock().unwrap().set_working_bank(working_bank);
@@ -2021,17 +2022,18 @@ mod tests {
         {
             let blockstore = Blockstore::open(&ledger_path)
                 .expect("Expected to be able to open database ledger");
-            let (poh_recorder, entry_receiver, _receiver_mixin, _sender_mixin_result) = PohRecorder::new(
-                bank.tick_height(),
-                bank.last_blockhash(),
-                bank.slot(),
-                Some((4, 4)),
-                bank.ticks_per_slot(),
-                &pubkey,
-                &Arc::new(blockstore),
-                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                &Arc::new(PohConfig::default()),
-            );
+            let (poh_recorder, entry_receiver, _receiver_mixin, _sender_mixin_result) =
+                PohRecorder::new(
+                    bank.tick_height(),
+                    bank.last_blockhash(),
+                    bank.slot(),
+                    Some((4, 4)),
+                    bank.ticks_per_slot(),
+                    &pubkey,
+                    &Arc::new(blockstore),
+                    &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+                    &Arc::new(PohConfig::default()),
+                );
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
             poh_recorder.lock().unwrap().set_working_bank(working_bank);
@@ -2117,17 +2119,18 @@ mod tests {
         {
             let blockstore = Blockstore::open(&ledger_path)
                 .expect("Expected to be able to open database ledger");
-            let (poh_recorder, _entry_receiver, _receiver_mixin, _sender_mixin_result) = PohRecorder::new(
-                bank.tick_height(),
-                bank.last_blockhash(),
-                bank.slot(),
-                Some((4, 4)),
-                bank.ticks_per_slot(),
-                &pubkey,
-                &Arc::new(blockstore),
-                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                &Arc::new(PohConfig::default()),
-            );
+            let (poh_recorder, _entry_receiver, _receiver_mixin, _sender_mixin_result) =
+                PohRecorder::new(
+                    bank.tick_height(),
+                    bank.last_blockhash(),
+                    bank.slot(),
+                    Some((4, 4)),
+                    bank.ticks_per_slot(),
+                    &pubkey,
+                    &Arc::new(blockstore),
+                    &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+                    &Arc::new(PohConfig::default()),
+                );
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
             poh_recorder.lock().unwrap().set_working_bank(working_bank);
@@ -2212,17 +2215,18 @@ mod tests {
         {
             let blockstore = Blockstore::open(&ledger_path)
                 .expect("Expected to be able to open database ledger");
-            let (poh_recorder, _entry_receiver, _receiver_mixin, _sender_mixin_result) = PohRecorder::new(
-                bank.tick_height(),
-                bank.last_blockhash(),
-                bank.slot(),
-                Some((4, 4)),
-                bank.ticks_per_slot(),
-                &solana_sdk::pubkey::new_rand(),
-                &Arc::new(blockstore),
-                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                &Arc::new(PohConfig::default()),
-            );
+            let (poh_recorder, _entry_receiver, _receiver_mixin, _sender_mixin_result) =
+                PohRecorder::new(
+                    bank.tick_height(),
+                    bank.last_blockhash(),
+                    bank.slot(),
+                    Some((4, 4)),
+                    bank.ticks_per_slot(),
+                    &solana_sdk::pubkey::new_rand(),
+                    &Arc::new(blockstore),
+                    &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+                    &Arc::new(PohConfig::default()),
+                );
 
             // Poh Recorder has not working bank, so should throw MaxHeightReached error on
             // record
@@ -2288,17 +2292,18 @@ mod tests {
             let blockstore = Blockstore::open(&ledger_path)
                 .expect("Expected to be able to open database ledger");
             let blockstore = Arc::new(blockstore);
-            let (poh_recorder, _entry_receiver, _receiver_mixin, _sender_mixin_result) = PohRecorder::new(
-                bank.tick_height(),
-                bank.last_blockhash(),
-                bank.slot(),
-                Some((4, 4)),
-                bank.ticks_per_slot(),
-                &pubkey,
-                &blockstore,
-                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                &Arc::new(PohConfig::default()),
-            );
+            let (poh_recorder, _entry_receiver, _receiver_mixin, _sender_mixin_result) =
+                PohRecorder::new(
+                    bank.tick_height(),
+                    bank.last_blockhash(),
+                    bank.slot(),
+                    Some((4, 4)),
+                    bank.ticks_per_slot(),
+                    &pubkey,
+                    &blockstore,
+                    &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+                    &Arc::new(PohConfig::default()),
+                );
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
             poh_recorder.lock().unwrap().set_working_bank(working_bank);
@@ -2374,17 +2379,18 @@ mod tests {
         let blockstore =
             Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger");
         let bank = Arc::new(Bank::new(&genesis_config));
-        let (poh_recorder, entry_receiver, _receiver_mixin, _sender_mixin_result) = PohRecorder::new(
-            bank.tick_height(),
-            bank.last_blockhash(),
-            bank.slot(),
-            Some((4, 4)),
-            bank.ticks_per_slot(),
-            &solana_sdk::pubkey::new_rand(),
-            &Arc::new(blockstore),
-            &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-            &Arc::new(PohConfig::default()),
-        );
+        let (poh_recorder, entry_receiver, _receiver_mixin, _sender_mixin_result) =
+            PohRecorder::new(
+                bank.tick_height(),
+                bank.last_blockhash(),
+                bank.slot(),
+                Some((4, 4)),
+                bank.ticks_per_slot(),
+                &solana_sdk::pubkey::new_rand(),
+                &Arc::new(blockstore),
+                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+                &Arc::new(PohConfig::default()),
+            );
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
         // Set up unparallelizable conflicting transactions
