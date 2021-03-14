@@ -216,7 +216,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
             }
         });
 
-        let highest_staked_node = stakes.first().cloned().unwrap().0;
+        let highest_staked_node = stakes.first().cloned().map(|x| x.0);
         let stake_total: u64 = stakes.iter().map(|(_, stake)| *stake).sum();
         let mut cumulative_stake: u64 = 0;
         for (pubkey, stake) in stakes.into_iter().rev() {
@@ -228,29 +228,31 @@ impl BroadcastRun for BroadcastFakeShredsRun {
             }
         }
 
-        if bank.slot() > MINIMUM_FAKE_SLOT && last_tick_height == bank.max_tick_height() {
-            warn!(
-                "{} sent fake slot {} to nodes: {:?}",
-                self.keypair.pubkey(),
-                bank.slot(),
-                &fake_recipients,
-            );
-            warn!(
-                "Duplicate shreds for slot {} will be broadcast in {} slot(s)",
-                bank.slot(),
-                self.config.duplicate_send_delay
-            );
+        if let Some(highest_staked_node) = highest_staked_node {
+            if bank.slot() > MINIMUM_FAKE_SLOT && last_tick_height == bank.max_tick_height() {
+                warn!(
+                    "{} sent fake slot {} to nodes: {:?}",
+                    self.keypair.pubkey(),
+                    bank.slot(),
+                    &fake_recipients,
+                );
+                warn!(
+                    "Duplicate shreds for slot {} will be broadcast in {} slot(s)",
+                    bank.slot(),
+                    self.config.duplicate_send_delay
+                );
 
-            let delayed_shreds: Option<Vec<Shred>> = vec![
-                fake_data_shreds.last().cloned(),
-                data_shreds.last().cloned(),
-            ]
-            .into_iter()
-            .collect();
-            self.delayed_deque
-                .lock()
-                .unwrap()
-                .push_back((Some(highest_staked_node), delayed_shreds));
+                let delayed_shreds: Option<Vec<Shred>> = vec![
+                    fake_data_shreds.last().cloned(),
+                    data_shreds.last().cloned(),
+                ]
+                .into_iter()
+                .collect();
+                self.delayed_deque
+                    .lock()
+                    .unwrap()
+                    .push_back((Some(highest_staked_node), delayed_shreds));
+            }
         }
 
         let fake_recipients = Arc::new(fake_recipients);
