@@ -143,7 +143,9 @@ impl PohService {
                 if let Ok(mixin) = mixin {
                     let res = poh_l.record(mixin);
                     let should_tick = res.is_none();
-                    sender_mixin_result.send(res);
+                    if sender_mixin_result.send(res).is_err() {
+                        panic!("Error returning mixin hash")
+                    }
                     should_tick
                 } else {
                     let mut hash_time = Measure::start("hash");
@@ -244,17 +246,18 @@ mod tests {
                 target_tick_duration,
                 target_tick_count: None,
             });
-            let (poh_recorder, entry_receiver) = PohRecorder::new(
-                bank.tick_height(),
-                prev_hash,
-                bank.slot(),
-                Some((4, 4)),
-                bank.ticks_per_slot(),
-                &Pubkey::default(),
-                &Arc::new(blockstore),
-                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                &poh_config,
-            );
+            let (poh_recorder, entry_receiver, receiver_mixin, sender_mixin_result) =
+                PohRecorder::new(
+                    bank.tick_height(),
+                    prev_hash,
+                    bank.slot(),
+                    Some((4, 4)),
+                    bank.ticks_per_slot(),
+                    &Pubkey::default(),
+                    &Arc::new(blockstore),
+                    &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+                    &poh_config,
+                );
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
             let exit = Arc::new(AtomicBool::new(false));
             let working_bank = WorkingBank {
@@ -322,6 +325,8 @@ mod tests {
                 0,
                 DEFAULT_PINNED_CPU_CORE,
                 hashes_per_batch,
+                receiver_mixin,
+                sender_mixin_result,
             );
             poh_recorder.lock().unwrap().set_working_bank(working_bank);
 
