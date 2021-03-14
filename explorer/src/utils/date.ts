@@ -12,7 +12,7 @@ export function displayTimestamp(
     hour: "numeric",
     minute: "numeric",
     second: "numeric",
-    hour12: false,
+    hourCycle: "h23",
     timeZoneName: shortTimeZoneName ? "short" : "long",
   }).format(expireDate);
   return `${dateString} at ${timeString}`;
@@ -33,7 +33,7 @@ export function displayTimestampUtc(
     hour: "numeric",
     minute: "numeric",
     second: "numeric",
-    hour12: false,
+    hourCycle: "h23",
     timeZone: "UTC",
     timeZoneName: shortTimeZoneName ? "short" : "long",
   }).format(expireDate);
