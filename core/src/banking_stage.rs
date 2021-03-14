@@ -1655,8 +1655,39 @@ mod tests {
         Blockstore::destroy(&ledger_path).unwrap();
     }
 
+    use solana_ledger::poh::Poh;
+    use solana_ledger::poh::PohEntry;
+    use solana_sdk::hash::Hash;
+    use std::sync::mpsc::{Receiver, Sender};
+
+    fn start_mixin(
+        receiver_mixin: Receiver<Hash>,
+        sender_mixin_result: Sender<Option<PohEntry>>,
+        poh_recorder: &Arc<Mutex<PohRecorder>>,
+    ) {
+        let recorder = poh_recorder.lock().unwrap();
+        let poh = recorder.poh.clone();
+        let tick_producer = Builder::new()
+            .name("solana-poh-service-tick_producer".to_string())
+            .spawn(move || {
+                loop {
+                    let mixin = receiver_mixin.recv();
+                    if let Ok(mixin) = mixin {
+                        let mut poh_l = poh.lock().unwrap(); // keep locked?
+                        let res = poh_l.record(mixin);
+                        let should_tick = res.is_none();
+                        if sender_mixin_result.send(res).is_err() {
+                            panic!("Error returning mixin hash")
+                        }
+                    }
+                }
+            });
+    }
+
     #[test]
     fn test_bank_record_transactions() {
+        solana_logger::setup();
+
         let GenesisConfigInfo {
             genesis_config,
             mint_keypair,
@@ -1672,7 +1703,7 @@ mod tests {
         {
             let blockstore = Blockstore::open(&ledger_path)
                 .expect("Expected to be able to open database ledger");
-            let (poh_recorder, entry_receiver, _receiver_mixin, _sender_mixin_result) =
+            let (poh_recorder, entry_receiver, receiver_mixin, sender_mixin_result) =
                 PohRecorder::new(
                     bank.tick_height(),
                     bank.last_blockhash(),
@@ -1685,6 +1716,7 @@ mod tests {
                     &Arc::new(PohConfig::default()),
                 );
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
+            start_mixin(receiver_mixin, sender_mixin_result, &poh_recorder);
 
             poh_recorder.lock().unwrap().set_working_bank(working_bank);
             let pubkey = solana_sdk::pubkey::new_rand();

@@ -91,6 +91,7 @@ impl PohService {
         poh_config: &PohConfig,
         poh_exit: &AtomicBool,
     ) {
+        error!("sleepy_tick_producer");
         while !poh_exit.load(Ordering::Relaxed) {
             sleep(poh_config.target_tick_duration);
             poh_recorder.lock().unwrap().tick();
@@ -102,6 +103,8 @@ impl PohService {
         poh_config: &PohConfig,
         poh_exit: &AtomicBool,
     ) {
+        error!("short_lived_sleepy_tick_producer");
+
         let mut warned = false;
         for _ in 0..poh_config.target_tick_count.unwrap() {
             sleep(poh_config.target_tick_duration);
@@ -122,6 +125,7 @@ impl PohService {
         receiver_mixin: Receiver<Hash>,
         sender_mixin_result: Sender<Option<PohEntry>>,
     ) {
+        error!("tick_producer");
         let recorder = poh_recorder.lock().unwrap();
         let poh = recorder.poh.clone();
         let mut now = Instant::now();

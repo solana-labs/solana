@@ -428,10 +428,13 @@ impl PohRecorder {
 
             {
                 let now = Instant::now();
+                error!("Sending mixin");
                 if self.sender_mixin.send(mixin).is_err() {
                     return Err(PohRecorderError::MaxHeightReached); // TODO error code
                 }
+                error!("waiting for result");
                 let res = self.receiver_mixin_result.recv().unwrap();
+                error!("got result");
                 self.record_us += timing::duration_as_us(&now.elapsed());
                 if let Some(poh_entry) = res {
                     let entry = Entry {
