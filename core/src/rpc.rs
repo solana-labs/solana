@@ -3833,7 +3833,7 @@ pub mod tests {
         let address = solana_sdk::pubkey::new_rand();
         let data = vec![1, 2, 3, 4, 5];
         let mut account = AccountSharedData::new(42, 5, &Pubkey::default());
-        account.data = data.clone();
+        account.set_data(data.clone());
         bank.store_account(&address, &account);
 
         let req = format!(
@@ -3890,7 +3890,7 @@ pub mod tests {
         let address = Pubkey::new(&[9; 32]);
         let data = vec![1, 2, 3, 4, 5];
         let mut account = AccountSharedData::new(42, 5, &Pubkey::default());
-        account.data = data.clone();
+        account.set_data(data.clone());
         bank.store_account(&address, &account);
 
         let non_existent_address = Pubkey::new(&[8; 32]);
