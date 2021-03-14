@@ -486,24 +486,25 @@ impl Validator {
         );
 
         let poh_config = Arc::new(genesis_config.poh_config.clone());
-        let (mut poh_recorder, entry_receiver, receiver_mixin, sender_mixin_result) = PohRecorder::new_with_clear_signal(
-            bank.tick_height(),
-            bank.last_blockhash(),
-            bank.slot(),
-            leader_schedule_cache.next_leader_slot(
-                &id,
+        let (mut poh_recorder, entry_receiver, receiver_mixin, sender_mixin_result) =
+            PohRecorder::new_with_clear_signal(
+                bank.tick_height(),
+                bank.last_blockhash(),
                 bank.slot(),
-                &bank,
-                Some(&blockstore),
-                GRACE_TICKS_FACTOR * MAX_GRACE_SLOTS,
-            ),
-            bank.ticks_per_slot(),
-            &id,
-            &blockstore,
-            blockstore.new_shreds_signals.first().cloned(),
-            &leader_schedule_cache,
-            &poh_config,
-        );
+                leader_schedule_cache.next_leader_slot(
+                    &id,
+                    bank.slot(),
+                    &bank,
+                    Some(&blockstore),
+                    GRACE_TICKS_FACTOR * MAX_GRACE_SLOTS,
+                ),
+                bank.ticks_per_slot(),
+                &id,
+                &blockstore,
+                blockstore.new_shreds_signals.first().cloned(),
+                &leader_schedule_cache,
+                &poh_config,
+            );
         if config.snapshot_config.is_some() {
             poh_recorder.set_bank(&bank);
         }

@@ -5,7 +5,10 @@ use solana_ledger::poh::PohEntry;
 use solana_measure::measure::Measure;
 use solana_sdk::{hash::Hash, poh_config::PohConfig};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, mpsc::{Receiver, Sender}};
+use std::sync::{
+    mpsc::{Receiver, Sender},
+    Arc, Mutex,
+};
 use std::thread::{self, sleep, Builder, JoinHandle};
 use std::time::Instant;
 
@@ -35,7 +38,6 @@ impl PohService {
         hashes_per_batch: u64,
         receiver_mixin: Receiver<Hash>,
         sender_mixin_result: Sender<Option<PohEntry>>,
-    
     ) -> Self {
         let poh_exit_ = poh_exit.clone();
         let poh_config = poh_config.clone();
@@ -143,8 +145,7 @@ impl PohService {
                     let should_tick = res.is_none();
                     sender_mixin_result.send(res);
                     should_tick
-                }
-                else {
+                } else {
                     let mut hash_time = Measure::start("hash");
                     let r = poh_l.hash(hashes_per_batch);
                     hash_time.stop();

@@ -10,14 +10,14 @@
 //! For Entries:
 //! * recorded entry must be >= WorkingBank::min_tick_height && entry must be < WorkingBank::max_tick_height
 //!
+use rayon::prelude::*;
+use rayon::{ThreadPool, ThreadPoolBuilder};
 use solana_ledger::blockstore::Blockstore;
 use solana_ledger::entry::Entry;
 use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
 use solana_ledger::poh::Poh;
 use solana_ledger::poh::PohEntry;
 use solana_runtime::bank::Bank;
-use rayon::prelude::*;
-use rayon::{ThreadPool, ThreadPoolBuilder};
 
 pub use solana_sdk::clock::Slot;
 use solana_sdk::clock::NUM_CONSECUTIVE_LEADER_SLOTS;
@@ -462,10 +462,12 @@ impl PohRecorder {
         clear_bank_signal: Option<SyncSender<bool>>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         poh_config: &Arc<PohConfig>,
-    ) -> (Self, Receiver<WorkingBankEntry>,    Receiver<Hash>,
+    ) -> (
+        Self,
+        Receiver<WorkingBankEntry>,
+        Receiver<Hash>,
         Sender<Option<PohEntry>>,
     ) {
-
         let poh = Arc::new(Mutex::new(Poh::new(
             last_entry_hash,
             poh_config.hashes_per_tick,
@@ -520,8 +522,12 @@ impl PohRecorder {
         blockstore: &Arc<Blockstore>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         poh_config: &Arc<PohConfig>,
-    ) -> (Self, Receiver<WorkingBankEntry>,    Receiver<Hash>,
-        Sender<Option<PohEntry>>,) {
+    ) -> (
+        Self,
+        Receiver<WorkingBankEntry>,
+        Receiver<Hash>,
+        Sender<Option<PohEntry>>,
+    ) {
         Self::new_with_clear_signal(
             tick_height,
             last_entry_hash,
@@ -549,11 +555,11 @@ mod tests {
     use rayon::prelude::*;
     use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use solana_ledger::{blockstore::Blockstore, blockstore_meta::SlotMeta, get_tmp_ledger_path};
+    use solana_measure::measure::Measure;
     use solana_perf::test_tx::test_tx;
     use solana_sdk::clock::DEFAULT_TICKS_PER_SLOT;
     use solana_sdk::hash::hash;
     use std::sync::mpsc::sync_channel;
-    use solana_measure::measure::Measure;
 
     #[test]
     fn test_poh_recorder_no_zero_tick() {
