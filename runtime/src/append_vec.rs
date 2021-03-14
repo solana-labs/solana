@@ -726,7 +726,7 @@ pub mod tests {
         let owner = Pubkey::default();
         let data_len = 3_u64;
         let mut account = AccountSharedData::new(0, data_len as usize, &owner);
-        account.data = b"abc".to_vec();
+        account.set_data(b"abc".to_vec());
         let stored_meta = StoredMeta {
             write_version: 0,
             pubkey,
