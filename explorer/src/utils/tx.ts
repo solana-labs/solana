@@ -148,6 +148,19 @@ export function programLabel(
   }
 }
 
+export function tokenLabel(
+  address: string,
+  tokenRegistry?: TokenInfoMap
+): string | undefined {
+  if (!tokenRegistry) return;
+  const tokenInfo = tokenRegistry.get(address);
+  if (!tokenInfo) return;
+  if (tokenInfo.name === tokenInfo.symbol) {
+    return tokenInfo.name;
+  }
+  return `${tokenInfo.name} (${tokenInfo.symbol})`;
+}
+
 export function addressLabel(
   address: string,
   cluster: Cluster,
@@ -158,7 +171,7 @@ export function addressLabel(
     LOADER_IDS[address] ||
     SYSVAR_IDS[address] ||
     SYSVAR_ID[address] ||
-    tokenRegistry?.get(address)?.name ||
+    tokenLabel(address, tokenRegistry) ||
     SerumMarketRegistry.get(address, cluster)
   );
 }
