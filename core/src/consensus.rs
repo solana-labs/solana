@@ -1575,11 +1575,11 @@ pub mod test {
     fn gen_stakes(stake_votes: &[(u64, &[u64])]) -> Vec<(Pubkey, (u64, ArcVoteAccount))> {
         let mut stakes = vec![];
         for (lamports, votes) in stake_votes {
-            let mut account = AccountSharedData {
+            let mut account = AccountSharedData::from(Account {
                 data: vec![0; VoteState::size_of()],
                 lamports: *lamports,
-                ..AccountSharedData::default()
-            };
+                ..Account::default()
+            });
             let mut vote_state = VoteState::default();
             for slot in *votes {
                 vote_state.process_slot_vote_unchecked(*slot);
