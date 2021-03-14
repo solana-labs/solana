@@ -1559,8 +1559,9 @@ mod tests {
     }
 
     fn truncate_data(account: &mut AccountSharedData, len: usize) {
-        // when account data becomes copy on write, this operation will be more complicated
-        account.data.truncate(len);
+        let mut data = account.data.to_vec();
+        data.truncate(len);
+        account.set_data(data);
     }
 
     #[test]
