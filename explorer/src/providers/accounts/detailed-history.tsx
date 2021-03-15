@@ -10,11 +10,11 @@ import {
 import { useCluster } from "providers/cluster";
 
 type DetailedAccountHistory = {
-  parsed: Map<string, ParsedConfirmedTransaction>;
+  transactionMap: Map<string, ParsedConfirmedTransaction>;
 };
 
 type DetailedAccountHistoryUpdate = {
-  parsed: Map<string, ParsedConfirmedTransaction>;
+  transactionMap: Map<string, ParsedConfirmedTransaction>;
 };
 
 type State = Cache.State<DetailedAccountHistory>;
@@ -55,10 +55,11 @@ function reconcile(
     return history;
   }
 
-  const merged = new Map([...history.parsed, ...update.parsed]);
-
   return {
-    parsed: merged,
+    transactionMap: new Map([
+      ...history.transactionMap,
+      ...update.transactionMap,
+    ]),
   };
 }
 
@@ -72,7 +73,7 @@ export function useDetailedAccountHistory(
   }
 
   return (
-    context.entries[address]?.data?.parsed ||
+    context.entries[address]?.data?.transactionMap ||
     new Map<string, ParsedConfirmedTransaction>()
   );
 }
@@ -95,10 +96,10 @@ async function fetchDetailedAccountHistory(
     // @ts-ignore
     const fetched = await connection.getParsedConfirmedTransactions(signatures);
 
-    const update = new Map();
-    fetched.forEach((parsed: ParsedConfirmedTransaction, index: number) => {
-      update.set(signatures[index], parsed);
-    });
+    const transactionMap = new Map();
+    fetched.forEach((parsed: ParsedConfirmedTransaction, index: number) =>
+      transactionMap.set(signatures[index], parsed)
+    );
 
     dispatch({
       type: ActionType.Update,
@@ -106,7 +107,7 @@ async function fetchDetailedAccountHistory(
       key: pubkey.toBase58(),
       status: FetchStatus.Fetched,
       data: {
-        parsed: update,
+        transactionMap,
       },
     });
   } catch (error) {
@@ -133,7 +134,7 @@ export function useFetchDetailedAccountHistory(pubkey: PublicKey) {
   return React.useCallback(
     (history: ConfirmedSignatureInfo[]) => {
       const existingMap =
-        state.entries[pubkey.toBase58()]?.data?.parsed || new Map();
+        state.entries[pubkey.toBase58()]?.data?.transactionMap || new Map();
       const allSignatures = history.map(
         (signatureInfo) => signatureInfo.signature
       );
