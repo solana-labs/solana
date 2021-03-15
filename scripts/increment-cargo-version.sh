@@ -32,8 +32,8 @@ done
 
 # shellcheck disable=2207,SC2068 # Don't want a positional arg if `not-paths` is empty
 Cargo_tomls=($(find . -mindepth 2 -name Cargo.toml ${not_paths[@]}))
-# shellcheck disable=2207
-markdownFiles=($(find . -name "*.md"))
+# shellcheck disable=2207,SC2068 # Don't want a positional arg if `not-paths` is empty
+markdownFiles=($(find . -name "*.md" ${not_paths[@]}))
 
 # Collect the name of all the internal crates
 crates=()
