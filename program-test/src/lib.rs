@@ -51,6 +51,10 @@ use {
 
 // Export types so test clients can limit their solana crate dependencies
 pub use solana_banks_client::BanksClient;
+
+// Export tokio for test clients
+pub use tokio;
+
 pub mod programs;
 
 #[macro_use]
