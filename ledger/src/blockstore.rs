@@ -1266,78 +1266,90 @@ impl Blockstore {
         leader_schedule: Option<&Arc<LeaderScheduleCache>>,
         is_recovered: bool,
     ) -> bool {
-        let shred_index = u64::from(shred.index());
-        let slot = shred.slot();
-        let last_in_slot = if shred.last_in_slot() {
-            debug!("got last in slot");
-            true
-        } else {
-            false
-        };
+        loop {
+            let shred_index = u64::from(shred.index());
+            let slot = shred.slot();
+            let last_in_slot = if shred.last_in_slot() {
+                debug!("got last in slot");
+                true
+            } else {
+                false
+            };
 
-        // Check that we do not receive shred_index >= than the last_index
-        // for the slot
-        let last_index = slot_meta.last_index;
-        if shred_index >= last_index {
-            let leader_pubkey = leader_schedule
-                .map(|leader_schedule| leader_schedule.slot_leader_at(slot, None))
-                .unwrap_or(None);
+            // Check that we do not receive shred_index >= than the last_index
+            // for the slot
+            let last_index = slot_meta.last_index;
+            if shred_index >= last_index {
+                let leader_pubkey = leader_schedule
+                    .map(|leader_schedule| leader_schedule.slot_leader_at(slot, None))
+                    .unwrap_or(None);
 
-            let ending_shred = self.get_data_shred(slot, last_index).unwrap().unwrap();
-            if self
-                .store_duplicate_if_not_existing(slot, ending_shred, shred.payload.clone())
-                .is_err()
-            {
-                warn!("store duplicate error");
+                let ending_shred = self.get_data_shred(slot, last_index).unwrap();
+                if ending_shred.is_none() {
+                    // Slot data must have been reset, try to get the updated SlotMeta
+                    // and try again
+                    continue;
+                }
+                let ending_shred = ending_shred.unwrap();
+                if self
+                    .store_duplicate_if_not_existing(slot, ending_shred, shred.payload.clone())
+                    .is_err()
+                {
+                    warn!("store duplicate error");
+                }
+
+                datapoint_error!(
+                    "blockstore_error",
+                    (
+                        "error",
+                        format!(
+                            "Leader {:?}, slot {}: received index {} >= slot.last_index {}, is_recovered: {}",
+                            leader_pubkey, slot, shred_index, last_index, is_recovered
+                        ),
+                        String
+                    )
+                );
+                return false;
+            }
+            // Check that we do not receive a shred with "last_index" true, but shred_index
+            // less than our current received
+            if last_in_slot && shred_index < slot_meta.received {
+                let leader_pubkey = leader_schedule
+                    .map(|leader_schedule| leader_schedule.slot_leader_at(slot, None))
+                    .unwrap_or(None);
+
+                let ending_shred = self.get_data_shred(slot, slot_meta.received - 1).unwrap();
+                if ending_shred.is_none() {
+                    // Slot data must have been reset, try to get the updated SlotMeta
+                    // and try again
+                    continue;
+                }
+                let ending_shred = ending_shred.unwrap();
+
+                if self
+                    .store_duplicate_if_not_existing(slot, ending_shred, shred.payload.clone())
+                    .is_err()
+                {
+                    warn!("store duplicate error");
+                }
+
+                datapoint_error!(
+                    "blockstore_error",
+                    (
+                        "error",
+                        format!(
+                            "Leader {:?}, slot {}: received shred_index {} < slot.received {}, is_recovered: {}",
+                            leader_pubkey, slot, shred_index, slot_meta.received, is_recovered
+                        ),
+                        String
+                    )
+                );
+                return false;
             }
 
-            datapoint_error!(
-                "blockstore_error",
-                (
-                    "error",
-                    format!(
-                        "Leader {:?}, slot {}: received index {} >= slot.last_index {}, is_recovered: {}",
-                        leader_pubkey, slot, shred_index, last_index, is_recovered
-                    ),
-                    String
-                )
-            );
-            return false;
+            let last_root = *last_root.read().unwrap();
+            return verify_shred_slots(slot, slot_meta.parent_slot, last_root);
         }
-        // Check that we do not receive a shred with "last_index" true, but shred_index
-        // less than our current received
-        if last_in_slot && shred_index < slot_meta.received {
-            let leader_pubkey = leader_schedule
-                .map(|leader_schedule| leader_schedule.slot_leader_at(slot, None))
-                .unwrap_or(None);
-
-            let ending_shred = self
-                .get_data_shred(slot, slot_meta.received - 1)
-                .unwrap()
-                .unwrap();
-            if self
-                .store_duplicate_if_not_existing(slot, ending_shred, shred.payload.clone())
-                .is_err()
-            {
-                warn!("store duplicate error");
-            }
-
-            datapoint_error!(
-                "blockstore_error",
-                (
-                    "error",
-                    format!(
-                        "Leader {:?}, slot {}: received shred_index {} < slot.received {}, is_recovered: {}",
-                        leader_pubkey, slot, shred_index, slot_meta.received, is_recovered
-                    ),
-                    String
-                )
-            );
-            return false;
-        }
-
-        let last_root = *last_root.read().unwrap();
-        verify_shred_slots(slot, slot_meta.parent_slot, last_root)
     }
 
     fn insert_data_shred(
