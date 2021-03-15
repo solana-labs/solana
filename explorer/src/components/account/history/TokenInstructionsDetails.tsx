@@ -9,7 +9,7 @@ import {
 } from "providers/accounts/detailed-history";
 import { SlotRow } from "../TransactionHistoryCardWrapper";
 import { Signature } from "components/common/Signature";
-import { getInstructionType } from "utils/instruction";
+import { getTokenInstructionType } from "utils/instruction";
 import { InstructionDetails } from "components/common/InstructionDetails";
 
 export function TokenInstructionsDetails({
@@ -48,43 +48,45 @@ export function TokenInstructionsDetails({
       const instructions = parsed.transaction.message.instructions;
 
       instructions.forEach((ix, index) => {
-        const instructionType = getInstructionType(
+        const instructionType = getTokenInstructionType(
           parsed,
           ix,
           signatureInfo,
           index
         );
 
-        detailsList.push(
-          <tr key={signature + index}>
-            <td className="w-1">
-              <Slot slot={slot} link />
-            </td>
-
-            {hasTimestamps && (
-              <td className="text-muted">
-                {blockTime ? displayTimestamp(blockTime * 1000, true) : "---"}
+        if (instructionType) {
+          detailsList.push(
+            <tr key={signature + index}>
+              <td className="w-1">
+                <Slot slot={slot} link />
               </td>
-            )}
 
-            <td>
-              <span className={`badge badge-soft-${statusClass}`}>
-                {statusText}
-              </span>
-            </td>
+              {hasTimestamps && (
+                <td className="text-muted">
+                  {blockTime ? displayTimestamp(blockTime * 1000, true) : "---"}
+                </td>
+              )}
 
-            <td>
-              <InstructionDetails
-                instructionType={instructionType}
-                tx={signatureInfo}
-              />
-            </td>
+              <td>
+                <span className={`badge badge-soft-${statusClass}`}>
+                  {statusText}
+                </span>
+              </td>
 
-            <td>
-              <Signature signature={signature} link />
-            </td>
-          </tr>
-        );
+              <td>
+                <InstructionDetails
+                  instructionType={instructionType}
+                  tx={signatureInfo}
+                />
+              </td>
+
+              <td>
+                <Signature signature={signature} link />
+              </td>
+            </tr>
+          );
+        }
       });
     }
   );

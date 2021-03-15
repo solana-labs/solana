@@ -46,12 +46,12 @@ export function getTokenInstructionName(
   }
 }
 
-export function getInstructionType(
+export function getTokenInstructionType(
   transaction: ParsedConfirmedTransaction,
   ix: ParsedInstruction | PartiallyDecodedInstruction,
   signatureInfo: ConfirmedSignatureInfo,
   index: number
-): InstructionType {
+): InstructionType | undefined {
   let name = "Unknown";
 
   const innerInstructions: (
@@ -80,6 +80,8 @@ export function getInstructionType(
   if ("parsed" in ix) {
     if (ix.program === "spl-token") {
       name = getTokenInstructionName(ix, signatureInfo);
+    } else {
+      return undefined;
     }
   } else if (
     transactionInstruction &&
@@ -89,6 +91,7 @@ export function getInstructionType(
       name = parseSerumInstructionTitle(transactionInstruction);
     } catch (error) {
       reportError(error, { signature: signatureInfo.signature });
+      return undefined;
     }
   } else if (
     transactionInstruction &&
@@ -98,6 +101,7 @@ export function getInstructionType(
       name = parseTokenSwapInstructionTitle(transactionInstruction);
     } catch (error) {
       reportError(error, { signature: signatureInfo.signature });
+      return undefined;
     }
   } else if (
     transactionInstruction &&
@@ -107,12 +111,15 @@ export function getInstructionType(
       name = parseTokenLendingInstructionTitle(transactionInstruction);
     } catch (error) {
       reportError(error, { signature: signatureInfo.signature });
+      return undefined;
     }
   } else {
     if (
       ix.accounts.findIndex((account) => account.equals(TOKEN_PROGRAM_ID)) >= 0
     ) {
       name = "Unknown (Inner)";
+    } else {
+      return undefined;
     }
   }
 

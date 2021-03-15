@@ -128,7 +128,7 @@ export function TokenBalancesDetails({
             </td>
 
             <td>
-              {balance.uiAmount} {units}
+              {balance.uiAmountString} {units}
             </td>
 
             <td>
