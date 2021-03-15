@@ -412,4 +412,32 @@ mod test {
         );
         assert_eq!(token_amount.ui_amount, None);
     }
+
+    #[test]
+    fn test_ui_token_amount_real_string_zero() {
+        assert_eq!(&real_number_string(0, 0), "0");
+        assert_eq!(&real_number_string_trimmed(0, 0), "0");
+        let token_amount = token_amount_to_ui_amount(0, 0);
+        assert_eq!(
+            token_amount.ui_amount_string,
+            real_number_string_trimmed(0, 0)
+        );
+        assert_eq!(token_amount.ui_amount, Some(0.0));
+        assert_eq!(&real_number_string(0, 9), "0.000000000");
+        assert_eq!(&real_number_string_trimmed(0, 9), "0");
+        let token_amount = token_amount_to_ui_amount(0, 9);
+        assert_eq!(
+            token_amount.ui_amount_string,
+            real_number_string_trimmed(0, 9)
+        );
+        assert_eq!(token_amount.ui_amount, Some(0.0));
+        assert_eq!(&real_number_string(0, 25), "0.0000000000000000000000000");
+        assert_eq!(&real_number_string_trimmed(0, 25), "0");
+        let token_amount = token_amount_to_ui_amount(0, 20);
+        assert_eq!(
+            token_amount.ui_amount_string,
+            real_number_string_trimmed(0, 20)
+        );
+        assert_eq!(token_amount.ui_amount, None);
+    }
 }
