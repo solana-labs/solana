@@ -319,9 +319,27 @@ function MoreSection({
           <TokenHistoryCard pubkey={pubkey} />
         </>
       )}
-      {tab === "history" && <TransactionHistoryCardWrapper title="Transaction History" pubkey={pubkey} tab={tab} />}
-      {tab === "balances" && <TransactionHistoryCardWrapper title="Balances History" pubkey={pubkey} tab={tab} />}
-      {tab === "instructions" && <TransactionHistoryCardWrapper title="Instructions History" pubkey={pubkey} tab={tab} />}
+      {tab === "history" && (
+        <TransactionHistoryCardWrapper
+          title="Transaction History"
+          pubkey={pubkey}
+          tab={tab}
+        />
+      )}
+      {tab === "balances" && (
+        <TransactionHistoryCardWrapper
+          title="Balances History"
+          pubkey={pubkey}
+          tab={tab}
+        />
+      )}
+      {tab === "instructions" && (
+        <TransactionHistoryCardWrapper
+          title="Instructions History"
+          pubkey={pubkey}
+          tab={tab}
+        />
+      )}
       {tab === "largest" && <TokenLargestAccountsCard pubkey={pubkey} />}
       {tab === "vote-history" && data?.program === "vote" && (
         <VotesCard voteAccount={data.parsed} />

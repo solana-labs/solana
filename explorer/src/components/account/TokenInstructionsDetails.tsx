@@ -1,7 +1,5 @@
 import React from "react";
-import {
-  PublicKey,
-} from "@solana/web3.js";
+import { PublicKey } from "@solana/web3.js";
 import { useAccountHistory } from "providers/accounts";
 import { Slot } from "components/common/Slot";
 import { displayTimestamp } from "utils/date";
@@ -11,7 +9,8 @@ import {
 } from "providers/accounts/detailed-history";
 import { SlotRow } from "./TransactionHistoryCardWrapper";
 import { Signature } from "components/common/Signature";
-import { getInstructionName } from "utils/instruction";
+import { getInstructionType } from "utils/instruction";
+import { InstructionDetails } from "components/common/InstructionDetails";
 
 export function TokenInstructionsDetails({
   pubkey,
@@ -29,24 +28,35 @@ export function TokenInstructionsDetails({
     if (history?.data?.fetched) {
       fetchDetailedAccountHistory(history.data.fetched);
     }
-  }, [history, fetchDetailedAccountHistory]);
+  }, [history]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const hasTimestamps = !!slotRows.find((element) => !!element.blockTime);
   const detailsList: React.ReactNode[] = [];
 
   slotRows.forEach(
-    ({ slot, signatureInfo, signature, blockTime, statusClass, statusText }) => {
+    ({
+      slot,
+      signatureInfo,
+      signature,
+      blockTime,
+      statusClass,
+      statusText,
+    }) => {
       const parsed = detailedHistoryMap.get(signature);
       if (!parsed) return;
 
       const instructions = parsed.transaction.message.instructions;
 
       instructions.forEach((ix, index) => {
-
-        let name = getInstructionName(parsed, ix, signatureInfo);
+        const instructionType = getInstructionType(
+          parsed,
+          ix,
+          signatureInfo,
+          index
+        );
 
         detailsList.push(
-          <tr key={signature+index}>
+          <tr key={signature + index}>
             <td className="w-1">
               <Slot slot={slot} link />
             </td>
@@ -64,7 +74,10 @@ export function TokenInstructionsDetails({
             </td>
 
             <td>
-              {name}
+              <InstructionDetails
+                instructionType={instructionType}
+                tx={signatureInfo}
+              />
             </td>
 
             <td>

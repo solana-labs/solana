@@ -1,15 +1,20 @@
 import React from "react";
 import * as Cache from "providers/cache";
 import { ActionType, FetchStatus } from "providers/cache";
-import { ConfirmedSignatureInfo, Connection, ParsedConfirmedTransaction, PublicKey } from "@solana/web3.js";
+import {
+  ConfirmedSignatureInfo,
+  Connection,
+  ParsedConfirmedTransaction,
+  PublicKey,
+} from "@solana/web3.js";
 import { useCluster } from "providers/cluster";
 
 type DetailedAccountHistory = {
-  parsed: Map<string, ParsedConfirmedTransaction>
+  parsed: Map<string, ParsedConfirmedTransaction>;
 };
 
 type DetailedAccountHistoryUpdate = {
-  parsed: Map<string, ParsedConfirmedTransaction>
+  parsed: Map<string, ParsedConfirmedTransaction>;
 };
 
 type State = Cache.State<DetailedAccountHistory>;
@@ -53,18 +58,23 @@ function reconcile(
   const merged = new Map([...history.parsed, ...update.parsed]);
 
   return {
-    parsed: merged
+    parsed: merged,
   };
 }
 
-export function useDetailedAccountHistory(address: string): Map<string, ParsedConfirmedTransaction> {
+export function useDetailedAccountHistory(
+  address: string
+): Map<string, ParsedConfirmedTransaction> {
   const context = React.useContext(StateContext);
 
   if (!context) {
     throw new Error(`useAccountHistory must be used within a AccountsProvider`);
   }
 
-  return context.entries[address]?.data?.parsed || new Map<string, ParsedConfirmedTransaction>();
+  return (
+    context.entries[address]?.data?.parsed ||
+    new Map<string, ParsedConfirmedTransaction>()
+  );
 }
 
 async function fetchDetailedAccountHistory(
@@ -83,9 +93,7 @@ async function fetchDetailedAccountHistory(
   try {
     const connection = new Connection(url);
     // @ts-ignore
-    const fetched = await connection.getParsedConfirmedTransactions(
-      signatures
-    );
+    const fetched = await connection.getParsedConfirmedTransactions(signatures);
 
     const update = new Map();
     fetched.forEach((parsed: ParsedConfirmedTransaction, index: number) => {
@@ -98,10 +106,10 @@ async function fetchDetailedAccountHistory(
       key: pubkey.toBase58(),
       status: FetchStatus.Fetched,
       data: {
-        parsed: update
+        parsed: update,
       },
     });
-  } catch(error) {
+  } catch (error) {
     dispatch({
       type: ActionType.Update,
       url,
@@ -122,15 +130,23 @@ export function useFetchDetailedAccountHistory(pubkey: PublicKey) {
     );
   }
 
-  return (history: ConfirmedSignatureInfo[]) => {
-    const existingMap = state.entries[pubkey.toBase58()]?.data?.parsed || new Map();
-    const allSignatures = history.map(signatureInfo => signatureInfo.signature);
-    const signaturesToFetch = allSignatures.filter(signature => !existingMap.has(signature));
+  return React.useCallback(
+    (history: ConfirmedSignatureInfo[]) => {
+      const existingMap =
+        state.entries[pubkey.toBase58()]?.data?.parsed || new Map();
+      const allSignatures = history.map(
+        (signatureInfo) => signatureInfo.signature
+      );
+      const signaturesToFetch = allSignatures.filter(
+        (signature) => !existingMap.has(signature)
+      );
 
-    if (signaturesToFetch.length < 1) {
-      return;
-    }
+      if (signaturesToFetch.length < 1) {
+        return;
+      }
 
-    fetchDetailedAccountHistory(dispatch, pubkey, signaturesToFetch, url);
-  };
+      fetchDetailedAccountHistory(dispatch, pubkey, signaturesToFetch, url);
+    },
+    [state, dispatch, url, pubkey]
+  );
 }

@@ -31,7 +31,7 @@ export function TokenBalancesDetails({
     if (history?.data?.fetched) {
       fetchDetailedAccountHistory(history.data.fetched);
     }
-  }, [history, fetchDetailedAccountHistory]);
+  }, [history]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const hasTimestamps = !!slotRows.find((element) => !!element.blockTime);
   const detailsList: React.ReactNode[] = [];

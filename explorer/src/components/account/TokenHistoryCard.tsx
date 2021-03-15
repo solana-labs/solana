@@ -46,7 +46,7 @@ import { Location } from "history";
 import { useQuery } from "utils/url";
 import { TokenInfoMap } from "@solana/spl-token-registry";
 import { useTokenRegistry } from "providers/mints/token-registry";
-import { instructionTypeName } from "utils/instruction";
+import { getTokenInstructionName } from "utils/instruction";
 
 const TRUNCATE_TOKEN_LENGTH = 10;
 const ALL_TOKENS = "";
@@ -454,7 +454,7 @@ const TokenTransactionRow = React.memo(
 
           if ("parsed" in ix) {
             if (ix.program === "spl-token") {
-              name = instructionTypeName(ix, tx);
+              name = getTokenInstructionName(ix, tx);
             } else {
               return undefined;
             }
@@ -501,8 +501,8 @@ const TokenTransactionRow = React.memo(
           }
 
           return {
-            name: name,
-            innerInstructions: innerInstructions,
+            name,
+            innerInstructions,
           };
         })
         .filter((name) => name !== undefined) as InstructionType[];
@@ -554,7 +554,7 @@ function InstructionDetails({
   let instructionTypes = instructionType.innerInstructions
     .map((ix) => {
       if ("parsed" in ix && ix.program === "spl-token") {
-        return instructionTypeName(ix, tx);
+        return getTokenInstructionName(ix, tx);
       }
       return undefined;
     })
