@@ -22,12 +22,9 @@ import {MOCK_PORT, url} from './url';
 import {
   BLOCKHASH_CACHE_TIMEOUT_MS,
   Commitment,
-  CompiledInnerInstruction,
   EpochInfo,
   EpochSchedule,
   InflationGovernor,
-  ParsedInnerInstruction,
-  ParsedInstruction,
   SlotInfo,
 } from '../src/connection';
 import {sleep} from '../src/util/sleep';

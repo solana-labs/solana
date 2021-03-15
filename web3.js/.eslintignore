@@ -7,3 +7,4 @@
 /.eslintrc.js
 /test/.eslintrc.js
 /test/dist
+/rollup.config.js
