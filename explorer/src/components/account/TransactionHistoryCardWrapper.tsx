@@ -130,10 +130,10 @@ export function TransactionHistoryCardWrapper({
       {tab === "history" && (
         <TransactionHistoryDetails pubkey={pubkey} slotRows={slotRows} />
       )}
-      {tab === "balances" && (
+      {tab === "token-balances" && (
         <TokenBalancesDetails pubkey={pubkey} slotRows={slotRows} />
       )}
-      {tab === "instructions" && (
+      {tab === "token-instructions" && (
         <TokenInstructionsDetails pubkey={pubkey} slotRows={slotRows} />
       )}
 
