@@ -135,6 +135,9 @@ for file in "${markdownFiles[@]}"; do
   )
 done
 
+# Update cargo lock files
+scripts/cargo-for-all-lock-files.sh tree
+
 echo "$currentVersion -> $newVersion"
 
 exit 0
