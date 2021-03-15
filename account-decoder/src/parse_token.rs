@@ -172,10 +172,12 @@ pub fn real_number_string(amount: u64, decimals: u8) -> StringDecimals {
 }
 
 pub fn real_number_string_trimmed(amount: u64, decimals: u8) -> StringDecimals {
-    let s = real_number_string(amount, decimals);
-    let zeros_trimmed = s.trim_end_matches('0');
-    let decimal_trimmed = zeros_trimmed.trim_end_matches('.');
-    decimal_trimmed.to_string()
+    let mut s = real_number_string(amount, decimals);
+    if decimals > 0 {
+        let zeros_trimmed = s.trim_end_matches('0');
+        s = zeros_trimmed.trim_end_matches('.').to_string();
+    }
+    s
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
