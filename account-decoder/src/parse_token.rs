@@ -363,6 +363,14 @@ mod test {
             real_number_string_trimmed(1, 0)
         );
         assert_eq!(token_amount.ui_amount, Some(1.0));
+        assert_eq!(&real_number_string(10, 0), "10");
+        assert_eq!(&real_number_string_trimmed(10, 0), "10");
+        let token_amount = token_amount_to_ui_amount(10, 0);
+        assert_eq!(
+            token_amount.ui_amount_string,
+            real_number_string_trimmed(10, 0)
+        );
+        assert_eq!(token_amount.ui_amount, Some(10.0));
         assert_eq!(&real_number_string(1, 9), "0.000000001");
         assert_eq!(&real_number_string_trimmed(1, 9), "0.000000001");
         let token_amount = token_amount_to_ui_amount(1, 9);
