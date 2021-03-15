@@ -1392,7 +1392,7 @@ impl fmt::Display for CliAccountBalances {
         writeln!(
             f,
             "{}",
-            style(format!("{:<44}  {}", "Address", "Balance",)).bold()
+            style(format!("{:<44}  {}", "Address", "Balance")).bold()
         )?;
         for account in &self.accounts {
             writeln!(
@@ -1684,6 +1684,8 @@ pub struct CliUpgradeableBuffer {
     pub address: String,
     pub authority: String,
     pub data_len: usize,
+    pub lamports: u64,
+    pub use_lamports_unit: bool,
 }
 impl QuietDisplay for CliUpgradeableBuffer {}
 impl VerboseDisplay for CliUpgradeableBuffer {}
@@ -1694,9 +1696,51 @@ impl fmt::Display for CliUpgradeableBuffer {
         writeln_name_value(f, "Authority:", &self.authority)?;
         writeln_name_value(
             f,
+            "Balance:",
+            &build_balance_message(self.lamports, self.use_lamports_unit, true),
+        )?;
+        writeln_name_value(
+            f,
             "Data Length:",
             &format!("{:?} ({:#x?}) bytes", self.data_len, self.data_len),
         )?;
+
+        Ok(())
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliUpgradeableBuffers {
+    pub buffers: Vec<CliUpgradeableBuffer>,
+    pub use_lamports_unit: bool,
+}
+impl QuietDisplay for CliUpgradeableBuffers {}
+impl VerboseDisplay for CliUpgradeableBuffers {}
+impl fmt::Display for CliUpgradeableBuffers {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f)?;
+        writeln!(
+            f,
+            "{}",
+            style(format!(
+                "{:<44} | {:<44} | {}",
+                "Buffer Address", "Authority", "Balance"
+            ))
+            .bold()
+        )?;
+        for buffer in self.buffers.iter() {
+            writeln!(
+                f,
+                "{}",
+                &format!(
+                    "{:<44} | {:<44} | {}",
+                    buffer.address,
+                    buffer.authority,
+                    build_balance_message(buffer.lamports, self.use_lamports_unit, true)
+                )
+            )?;
+        }
         Ok(())
     }
 }
