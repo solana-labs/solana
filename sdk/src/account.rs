@@ -247,7 +247,7 @@ fn debug_fmt<T: ReadableAccount>(item: &T, f: &mut fmt::Formatter<'_>) -> fmt::R
         f,
         "Account {{ lamports: {} data.len: {} owner: {} executable: {} rent_epoch: {}{} }}",
         item.lamports(),
-        data_len,
+        item.data().len(),
         item.owner(),
         item.executable(),
         item.rent_epoch(),
