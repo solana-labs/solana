@@ -38,6 +38,6 @@ export class Account {
    * The **unencrypted** secret key for this account
    */
   get secretKey(): Buffer {
-    return this._keypair.secretKey;
+    return toBuffer(this._keypair.secretKey);
   }
 }
