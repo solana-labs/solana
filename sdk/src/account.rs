@@ -21,6 +21,243 @@ pub struct Account {
     pub rent_epoch: Epoch,
 }
 
+<<<<<<< HEAD
+=======
+/// An Account with data that is stored on chain
+/// This will become a new in-memory representation of the 'Account' struct data.
+/// The existing 'Account' structure cannot easily change due to downstream projects.
+/// This struct will shortly rely on something like the ReadableAccount trait for access to the fields.
+#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Default, AbiExample)]
+pub struct AccountSharedData {
+    /// lamports in the account
+    pub lamports: u64,
+    /// data held in this account
+    #[serde(with = "serde_bytes")]
+    pub data: Vec<u8>, // will be: Arc<Vec<u8>>,
+    /// the program that owns this account. If executable, the program that loads this account.
+    pub owner: Pubkey,
+    /// this account's data contains a loaded program (and is now read-only)
+    pub executable: bool,
+    /// the epoch at which this account will next owe rent
+    pub rent_epoch: Epoch,
+}
+
+/// Compares two ReadableAccounts
+///
+/// Returns true if accounts are essentially equivalent as in all fields are equivalent.
+pub fn accounts_equal<T: ReadableAccount, U: ReadableAccount>(me: &T, other: &U) -> bool {
+    me.lamports() == other.lamports()
+        && me.data() == other.data()
+        && me.owner() == other.owner()
+        && me.executable() == other.executable()
+        && me.rent_epoch() == other.rent_epoch()
+}
+
+impl From<AccountSharedData> for Account {
+    fn from(other: AccountSharedData) -> Self {
+        Self {
+            lamports: other.lamports,
+            data: other.data,
+            owner: other.owner,
+            executable: other.executable,
+            rent_epoch: other.rent_epoch,
+        }
+    }
+}
+
+impl From<Account> for AccountSharedData {
+    fn from(other: Account) -> Self {
+        Self {
+            lamports: other.lamports,
+            data: other.data,
+            owner: other.owner,
+            executable: other.executable,
+            rent_epoch: other.rent_epoch,
+        }
+    }
+}
+
+pub trait WritableAccount: ReadableAccount {
+    fn set_lamports(&mut self, lamports: u64);
+    fn data_as_mut_slice(&mut self) -> &mut [u8];
+    fn set_owner(&mut self, owner: Pubkey);
+    fn set_executable(&mut self, executable: bool);
+    fn set_rent_epoch(&mut self, epoch: Epoch);
+    fn create(
+        lamports: u64,
+        data: Vec<u8>,
+        owner: Pubkey,
+        executable: bool,
+        rent_epoch: Epoch,
+    ) -> Self;
+}
+
+pub trait ReadableAccount: Sized {
+    fn lamports(&self) -> u64;
+    fn data(&self) -> &Vec<u8>;
+    fn owner(&self) -> &Pubkey;
+    fn executable(&self) -> bool;
+    fn rent_epoch(&self) -> Epoch;
+}
+
+impl ReadableAccount for Account {
+    fn lamports(&self) -> u64 {
+        self.lamports
+    }
+    fn data(&self) -> &Vec<u8> {
+        &self.data
+    }
+    fn owner(&self) -> &Pubkey {
+        &self.owner
+    }
+    fn executable(&self) -> bool {
+        self.executable
+    }
+    fn rent_epoch(&self) -> Epoch {
+        self.rent_epoch
+    }
+}
+
+impl WritableAccount for Account {
+    fn set_lamports(&mut self, lamports: u64) {
+        self.lamports = lamports;
+    }
+    fn data_as_mut_slice(&mut self) -> &mut [u8] {
+        &mut self.data
+    }
+    fn set_owner(&mut self, owner: Pubkey) {
+        self.owner = owner;
+    }
+    fn set_executable(&mut self, executable: bool) {
+        self.executable = executable;
+    }
+    fn set_rent_epoch(&mut self, epoch: Epoch) {
+        self.rent_epoch = epoch;
+    }
+    fn create(
+        lamports: u64,
+        data: Vec<u8>,
+        owner: Pubkey,
+        executable: bool,
+        rent_epoch: Epoch,
+    ) -> Self {
+        Account {
+            lamports,
+            data,
+            owner,
+            executable,
+            rent_epoch,
+        }
+    }
+}
+
+impl WritableAccount for AccountSharedData {
+    fn set_lamports(&mut self, lamports: u64) {
+        self.lamports = lamports;
+    }
+    fn data_as_mut_slice(&mut self) -> &mut [u8] {
+        &mut self.data
+    }
+    fn set_owner(&mut self, owner: Pubkey) {
+        self.owner = owner;
+    }
+    fn set_executable(&mut self, executable: bool) {
+        self.executable = executable;
+    }
+    fn set_rent_epoch(&mut self, epoch: Epoch) {
+        self.rent_epoch = epoch;
+    }
+    fn create(
+        lamports: u64,
+        data: Vec<u8>,
+        owner: Pubkey,
+        executable: bool,
+        rent_epoch: Epoch,
+    ) -> Self {
+        AccountSharedData {
+            lamports,
+            data,
+            owner,
+            executable,
+            rent_epoch,
+        }
+    }
+}
+
+impl ReadableAccount for AccountSharedData {
+    fn lamports(&self) -> u64 {
+        self.lamports
+    }
+    fn data(&self) -> &Vec<u8> {
+        &self.data
+    }
+    fn owner(&self) -> &Pubkey {
+        &self.owner
+    }
+    fn executable(&self) -> bool {
+        self.executable
+    }
+    fn rent_epoch(&self) -> Epoch {
+        self.rent_epoch
+    }
+}
+
+impl ReadableAccount for Ref<'_, AccountSharedData> {
+    fn lamports(&self) -> u64 {
+        self.lamports
+    }
+    fn data(&self) -> &Vec<u8> {
+        &self.data
+    }
+    fn owner(&self) -> &Pubkey {
+        &self.owner
+    }
+    fn executable(&self) -> bool {
+        self.executable
+    }
+    fn rent_epoch(&self) -> Epoch {
+        self.rent_epoch
+    }
+}
+
+impl ReadableAccount for Ref<'_, Account> {
+    fn lamports(&self) -> u64 {
+        self.lamports
+    }
+    fn data(&self) -> &Vec<u8> {
+        &self.data
+    }
+    fn owner(&self) -> &Pubkey {
+        &self.owner
+    }
+    fn executable(&self) -> bool {
+        self.executable
+    }
+    fn rent_epoch(&self) -> Epoch {
+        self.rent_epoch
+    }
+}
+
+fn debug_fmt<T: ReadableAccount>(item: &T, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    let data_len = cmp::min(64, item.data().len());
+    let data_str = if data_len > 0 {
+        format!(" data: {}", hex::encode(item.data()[..data_len].to_vec()))
+    } else {
+        "".to_string()
+    };
+    write!(
+        f,
+        "Account {{ lamports: {} data.len: {} owner: {} executable: {} rent_epoch: {}{} }}",
+        item.lamports(),
+        item.data().len(),
+        item.owner(),
+        item.executable(),
+        item.rent_epoch(),
+        data_str,
+    )
+}
+
+>>>>>>> 60e5fd11c... Display actual account length (#15875)
 impl fmt::Debug for Account {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let data_len = cmp::min(64, self.data.len());
