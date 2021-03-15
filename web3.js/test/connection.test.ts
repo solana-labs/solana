@@ -927,7 +927,7 @@ describe('Connection', () => {
       },
     });
 
-    // Block 0 never has any transactions in automation localnet
+    // Block 0 never has any transactions in test validator
     const block0 = await connection.getConfirmedBlock(0);
     const blockhash0 = block0.blockhash;
     expect(block0.transactions).to.have.length(0);

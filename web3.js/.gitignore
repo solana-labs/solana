@@ -22,13 +22,6 @@ doc
 # VIM swap files
 *.sw*
 
-# bpf-sdk
-/bpf-sdk
-/bpf-sdk.tar.bz2
-
-# fixtures
-/test/fixtures
-
 # `solana-test-validator` ledger location
 test-ledger/
 

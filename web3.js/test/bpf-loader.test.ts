@@ -17,52 +17,7 @@ use(chaiAsPromised);
 
 if (process.env.TEST_LIVE) {
   describe('BPF Loader', () => {
-    it('load BPF C program', async () => {
-      const data = await fs.readFile('test/fixtures/noop-c/noop.so');
-
-      const connection = new Connection(url, 'confirmed');
-      const {feeCalculator} = await connection.getRecentBlockhash();
-      const fees =
-        feeCalculator.lamportsPerSignature *
-        BpfLoader.getMinNumSignatures(data.length);
-      const payerBalance = await connection.getMinimumBalanceForRentExemption(
-        0,
-      );
-      const executableBalance = await connection.getMinimumBalanceForRentExemption(
-        data.length,
-      );
-
-      const from = new Account();
-      await helpers.airdrop({
-        connection,
-        address: from.publicKey,
-        amount: payerBalance + fees + executableBalance,
-      });
-
-      const program = new Account();
-      await BpfLoader.load(
-        connection,
-        from,
-        program,
-        data,
-        BPF_LOADER_PROGRAM_ID,
-      );
-
-      // Check that program loading costed exactly `fees + executableBalance`
-      const fromBalance = await connection.getBalance(from.publicKey);
-      expect(fromBalance).to.eq(payerBalance);
-
-      const transaction = new Transaction().add({
-        keys: [{pubkey: from.publicKey, isSigner: true, isWritable: true}],
-        programId: program.publicKey,
-      });
-      await sendAndConfirmTransaction(connection, transaction, [from], {
-        commitment: 'confirmed',
-        preflightCommitment: 'confirmed',
-      });
-    }).timeout(5000);
-
-    describe('load BPF Rust program', () => {
+    describe('load BPF program', () => {
       const connection = new Connection(url, 'confirmed');
 
       let program = new Account();
@@ -72,7 +27,7 @@ if (process.env.TEST_LIVE) {
       before(async function () {
         this.timeout(60_000);
         programData = await fs.readFile(
-          'test/fixtures/noop-rust/solana_bpf_rust_noop.so',
+          'test/fixtures/noop-program/solana_bpf_rust_noop.so',
         );
 
         const {feeCalculator} = await connection.getRecentBlockhash();
