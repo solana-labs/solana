@@ -319,7 +319,7 @@ impl Message {
             .position(|&&pubkey| pubkey == self.account_keys[index])
     }
 
-    pub fn is_executable(&self, i: usize) -> bool {
+    pub fn maybe_executable(&self, i: usize) -> bool {
         self.program_position(i).is_some()
     }
 

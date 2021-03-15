@@ -125,11 +125,11 @@ pub fn println_signers(
     println!();
 }
 
-fn format_account_mode(message: &Message, index: usize, fee_payer_index: Option<usize>) -> String {
+fn format_account_mode(message: &Message, index: usize) -> String {
     format!(
-        "{}r{}{}{}{}",
+        "{}r{}{}", // accounts are always readable...
         if message.is_signer(index) {
-            "S" // upper case because of signing is special by definition
+            "s" // stands for signer
         } else {
             "-"
         },
@@ -138,21 +138,15 @@ fn format_account_mode(message: &Message, index: usize, fee_payer_index: Option<
         } else {
             "-"
         },
-        if message.is_executable(index) {
+        if message.maybe_executable(index) {
+            // account may not be executable on-chain while being designated as
+            // program-id in the message...
             "x"
         } else {
+            // programs to be executed inside CPI cannot be marked as
+            // executable...
             "-"
         },
-        if Some(index) == fee_payer_index {
-            "F" // upper case because of being only one acount in tx
-        } else {
-            "-"
-        },
-        if message.is_key_passed_to_program(index) {
-            "d" // d stands for data
-        } else {
-            "-"
-        }
     )
 }
 
@@ -198,7 +192,6 @@ pub fn write_transaction<W: io::Write>(
             prefix, signature_index, signature, sigverify_status,
         )?;
     }
-    writeln!(w, "{}{:?}", prefix, message.header)?;
     let mut fee_payer_index = None;
     for (account_index, account) in message.account_keys.iter().enumerate() {
         if fee_payer_index.is_none() && message.is_non_loader_key(account, account_index) {
@@ -206,11 +199,16 @@ pub fn write_transaction<W: io::Write>(
         }
         writeln!(
             w,
-            "{}Account {}: {} {}",
+            "{}Account {}: {} {}{}",
             prefix,
             account_index,
-            format_account_mode(message, account_index, fee_payer_index),
-            account
+            format_account_mode(message, account_index),
+            account,
+            if Some(account_index) == fee_payer_index {
+                " (Fee payer)"
+            } else {
+                ""
+            },
         )?;
     }
     for (instruction_index, instruction) in message.instructions.iter().enumerate() {
@@ -218,26 +216,15 @@ pub fn write_transaction<W: io::Write>(
         writeln!(w, "{}Instruction {}", prefix, instruction_index)?;
         writeln!(
             w,
-            "{}  Program:   {} {} ({})",
-            prefix,
-            format_account_mode(
-                message,
-                instruction.program_id_index as usize,
-                fee_payer_index
-            ),
-            program_pubkey,
-            instruction.program_id_index
+            "{}  Program:   {} ({})",
+            prefix, program_pubkey, instruction.program_id_index
         )?;
-        for (account_index, &account) in instruction.accounts.iter().enumerate() {
-            let account_pubkey = message.account_keys[account as usize];
+        for (account_index, account) in instruction.accounts.iter().enumerate() {
+            let account_pubkey = message.account_keys[*account as usize];
             writeln!(
                 w,
-                "{}  Account {}: {} {} ({})",
-                prefix,
-                account_index,
-                format_account_mode(message, account as usize, fee_payer_index),
-                account_pubkey,
-                account
+                "{}  Account {}: {} ({})",
+                prefix, account_index, account_pubkey, account
             )?;
         }
 

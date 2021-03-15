@@ -1987,6 +1987,17 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .takes_value(true)
                         .required(true)
                         .help("The transaction signature to confirm"),
+                )
+                .after_help(// Formatted specifically for the manually-indented heredoc string
+                   "Note: This will show more detailed information for finalized transactions with verbose mode (-v/--verbose).\
+                  \n\
+                  \nAccount's mode legend in the details:\
+                  \n  |srwx|\
+                  \n    s: this account correctly signed\
+                  \n    r: this account is marked to be read (always true)\
+                  \n    w: this account is marked to be written\
+                  \n    x: this account is marked to be executed via program_id (CPI's program_id can't be marked, though)\
+                   "
                 ),
         )
         .subcommand(
