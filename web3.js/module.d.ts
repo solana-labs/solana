@@ -662,8 +662,8 @@ declare module '@solana/web3.js' {
   };
 
   export type TransactionInstructionCtorFields = {
-    keys?: Array<AccountMeta>;
-    programId?: PublicKey;
+    keys: Array<AccountMeta>;
+    programId: PublicKey;
     data?: Buffer;
   };
 
@@ -672,7 +672,7 @@ declare module '@solana/web3.js' {
     programId: PublicKey;
     data: Buffer;
 
-    constructor(opts?: TransactionInstructionCtorFields);
+    constructor(opts: TransactionInstructionCtorFields);
   }
 
   export type SignaturePubkeyPair = {
