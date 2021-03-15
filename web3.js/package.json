@@ -71,7 +71,7 @@
     "pretty:fix": "prettier --write '{,{examples,src,test}/**/}*.{j,t}s'",
     "re": "semantic-release --repository-url git@github.com:solana-labs/solana-web3.js.git",
     "test": "npm run build:fixtures && mocha -r ts-node/register './test/**/*.test.ts'",
-    "test:cover": "nyc --reporter=lcov mocha './test/**/*.test.ts'",
+    "test:cover": "TS_NODE_COMPILER_OPTIONS='{\"module\": \"commonjs\" }' nyc --reporter=lcov mocha -r ts-node/register './test/**/*.test.ts'",
     "test:browser": "TEST_LIVE=1 npm run build:fixtures && npm run build:browser-test && mocha-headless-chrome -f http://localhost:8080/mocha.html --timeout 180000",
     "test:browser-with-server": "start-server-and-test 'http-server -p 8080' 8080 test:browser",
     "test:browser-with-test-validator": "start-server-and-test 'solana-test-validator --reset --quiet' http://localhost:8899/health test:browser-with-server",
