@@ -113,7 +113,10 @@ impl SyncClient for BankClient {
     }
 
     fn get_account_data(&self, pubkey: &Pubkey) -> Result<Option<Vec<u8>>> {
-        Ok(self.bank.get_account(pubkey).map(|account| account.data))
+        Ok(self
+            .bank
+            .get_account(pubkey)
+            .map(|account| Account::from(account).data))
     }
 
     fn get_account(&self, pubkey: &Pubkey) -> Result<Option<Account>> {
