@@ -2503,6 +2503,11 @@ Result:
 
 Returns all SPL Token accounts by token owner.
 
+For practical reasons for mainnet-beta, it's STRONGLY advised to add
+[`--account-index spl-token-owner`](../../running-validator/validator-start#account-indexing)
+when using this method.  Otherwise, the response will be very slow and CPU
+resource consumption will be very high.
+
 #### Parameters:
 
 - `<string>` - Pubkey of account owner to query, as base-58 encoded string

@@ -551,6 +551,11 @@ token creation and exchange on the Solana blockchain.
 The SPL Token workflow is similar to that of native SOL tokens, but there are a
 few differences which will be discussed in this section.
 
+### Validator command line options adjustment
+
+Add [`--account-index spl-token-owner`](../running-validator/validator-start#account-indexing)
+if you're going to use [`getTokenAccountsByOwner`](developing/clients/jsonrpc-api.md#gettokenaccountsbyowner)
+
 ### Token Mints
 
 Each *type* of SPL Token is declared by creating a *mint* account.  This account
@@ -582,7 +587,7 @@ spl-token --version
 Which should result in something like
 
 ```text
-spl-token-cli 2.0.1
+spl-token-cli 3.1.0
 ```
 
 ### Account Creation
@@ -660,6 +665,13 @@ Transfer 1 tokens
 Signature: 3R6tsog17QM8KfzbcbdP4aoMfwgo6hBggJDVy7dZPVmH2xbCWjEj31JKD53NzMrf25ChFjY7Uv2dfCDq4mGFFyAj
 ```
 
+#### npm/JavaScript
+
+Install and use https://www.npmjs.com/package/@solana/spl-token
+
+example of deposit
+
+
 ### Depositing
 Since each `(user, mint)` pair requires a separate account on chain, it is
 recommended that an exchange create batches of token accounts in advance and assign them
@@ -668,15 +680,16 @@ keypairs.
 
 Monitoring for deposit transactions should follow the [block polling](#poll-for-blocks)
 method described above. Each new block should be scanned for successful transactions
-issuing SPL Token [Transfer](https://github.com/solana-labs/solana-program-library/blob/096d3d4da51a8f63db5160b126ebc56b26346fc8/token/program/src/instruction.rs#L92)
-or [Transfer2](https://github.com/solana-labs/solana-program-library/blob/096d3d4da51a8f63db5160b126ebc56b26346fc8/token/program/src/instruction.rs#L252)
+issuing SPL Token [Transfer](https://github.com/solana-labs/solana-program-library/blob/4656bbc8f39bbdffb818539bcfba68f7c337076a/token/program/src/instruction.rs#L105)
+or [TransferChecked](https://github.com/solana-labs/solana-program-library/blob/4656bbc8f39bbdffb818539bcfba68f7c337076a/token/program/src/instruction.rs#L268)
 instructions referencing user accounts, then querying the
 [token account balance](developing/clients/jsonrpc-api.md#gettokenaccountbalance)
 updates.
 
-[Considerations](https://github.com/solana-labs/solana/issues/12318) are being
-made to exend the `preBalance` and `postBalance` transaction status metadata
+There's handy `preTokenBalance` and `postTokenBalance` transaction status metadata
 fields to include SPL Token balance transfers.
+
+And let's use `jsonParsed` to reduce RPS requests.
 
 ### Withdrawing
 The withdrawal address a user provides should be the same address used for
@@ -695,7 +708,7 @@ lamports).
 
 Template `spl-token transfer` command for a withdrawal:
 ```
-$ spl-token transfer --fund-recipient <exchange token account> <withdrawal amount> <withdrawal address>
+$ spl-token transfer --fund-recipient --allow-empty-recipient <exchange token account> <withdrawal amount> <withdrawal address>
 ```
 
 ### Other Considerations
