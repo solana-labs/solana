@@ -1054,11 +1054,17 @@ const GetVoteAccounts = jsonRpcResult(
   }),
 );
 
+const ConfirmationStatus = union([
+  literal('processed'),
+  literal('confirmed'),
+  literal('finalized'),
+]);
+
 const SignatureStatusResponse = pick({
   slot: number(),
   confirmations: nullable(number()),
   err: TransactionErrorResult,
-  confirmationStatus: optional(nullable(string())),
+  confirmationStatus: optional(ConfirmationStatus),
 });
 
 /**
@@ -1501,19 +1507,32 @@ export type SignatureResult = {|
 export type TransactionError = {};
 
 /**
+ * Transaction confirmation status
+ * <pre>
+ *   'processed': Transaction landed in a block which has reached 1 confirmation by the connected node
+ *   'confirmed': Transaction landed in a block which has reached 1 confirmation by the cluster
+ *   'finalized': Transaction landed in a block which has been finalized by the cluster
+ * </pre>
+ */
+export type TransactionConfirmationStatus =
+  | 'processed'
+  | 'confirmed'
+  | 'finalized';
+
+/**
  * Signature status
  *
  * @typedef {Object} SignatureStatus
  * @property {number} slot when the transaction was processed
  * @property {number | null} confirmations the number of blocks that have been confirmed and voted on in the fork containing `slot` (TODO)
  * @property {TransactionError | null} err error, if any
- * @property {string | null} confirmationStatus the transaction's cluster confirmation status, if data available. Possible non-null responses: `processed`, `confirmed`, `finalized`
+ * @property {?TransactionConfirmationStatus} confirmationStatus the transaction's cluster confirmation status, if data available. Possible responses: `processed`, `confirmed`, `finalized`
  */
 export type SignatureStatus = {
   slot: number,
   confirmations: number | null,
   err: TransactionError | null,
-  confirmationStatus: string | null,
+  confirmationStatus?: TransactionConfirmationStatus,
 };
 
 /**
