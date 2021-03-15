@@ -171,9 +171,9 @@ impl PohService {
                         ("ticks", num_ticks as i64, i64),
                         ("hashes", num_hashes as i64, i64),
                         ("elapsed_us", us_per_slot, i64),
-                        ("total_sleep_us", total_sleep_us / 1000, i64),
-                        ("total_tick_time_us", total_lock_time_ns / 1000, i64),
-                        ("total_lock_time_us", total_tick_time_ns / 1000, i64),
+                        ("total_sleep_us", total_sleep_us, i64),
+                        ("total_tick_time_us", total_tick_time_ns / 1000, i64),
+                        ("total_lock_time_us", total_lock_time_ns / 1000, i64),
                         ("total_hash_time_us", total_hash_time_ns / 1000, i64),
                     );
                     total_sleep_us = 0;
@@ -200,12 +200,13 @@ impl PohService {
 mod tests {
     use super::*;
     use crate::poh_recorder::WorkingBank;
+    use num_format::{Buffer, Locale};
     use rand::{thread_rng, Rng};
     use rayon::iter::{IntoParallelIterator, ParallelIterator};
     use rayon::ThreadPoolBuilder;
     use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
-    use solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path};
+    use solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path, poh::compute_hash_time_ns};
     use solana_measure::measure::Measure;
     use solana_perf::test_tx::test_tx;
     use solana_runtime::bank::Bank;
@@ -218,19 +219,62 @@ mod tests {
     #[test]
     fn test_poh_service() {
         solana_logger::setup();
+
+        let hash_samples = std::env::var("HASH_SAMPLES")
+            .map(|x| x.parse().unwrap())
+            .unwrap_or(1_000_000);
+
+        let hash_ns = compute_hash_time_ns(hash_samples);
+        let default_target_tick_duration =
+            timing::duration_as_us(&PohConfig::default().target_tick_duration);
+        let target_tick_duration = Duration::from_micros(default_target_tick_duration);
+
+        let ticks_per_second = 1_000_000 / default_target_tick_duration;
+        let hashes_per_second = hash_samples * 1_000_000_000 / hash_ns;
+        let hashes_per_tick = hashes_per_second / ticks_per_second;
+        info!(
+            "{} hashes/s {} ns/hash: {} hashes/tick: {}",
+            ticks_per_second,
+            hashes_per_second,
+            hash_ns / hash_samples,
+            hashes_per_tick,
+        );
+
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(2);
         let bank = Arc::new(Bank::new(&genesis_config));
         let prev_hash = bank.last_blockhash();
         let ledger_path = get_tmp_ledger_path!();
-        {
-            let blockstore = Blockstore::open(&ledger_path)
-                .expect("Expected to be able to open database ledger");
 
-            let default_target_tick_duration =
-                timing::duration_as_us(&PohConfig::default().target_tick_duration);
-            let target_tick_duration = Duration::from_micros(default_target_tick_duration);
+        let blockstore =
+            Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger");
+        let blockstore = Arc::new(blockstore);
+
+        // specify RUN_TIME to run in a benchmark-like mode
+        // to calibrate batch size
+        let run_time = std::env::var("RUN_TIME")
+            .map(|x| x.parse().unwrap())
+            .unwrap_or(0);
+        let is_test_run = run_time == 0;
+
+        let par_batch_size = std::env::var("PAR_BATCH_SIZE")
+            .map(|x| x.parse().unwrap())
+            .unwrap_or(1);
+
+        let rayon_threads = std::env::var("RAYON_THREADS")
+            .map(|x| x.parse().unwrap())
+            .unwrap_or(1);
+
+        let use_rayon = std::env::var("USE_RAYON").is_ok();
+        let set_affinity = std::env::var("SET_AFFINITY").is_ok();
+
+        info!(
+            "batch_size: {} rayon: {} rayon_threads: {} set_affinity: {}",
+            par_batch_size, use_rayon, rayon_threads, set_affinity
+        );
+
+        for i in 0..10 {
             let poh_config = Arc::new(PohConfig {
-                hashes_per_tick: Some(clock::DEFAULT_HASHES_PER_TICK),
+                hashes_per_tick: Some((hashes_per_tick / 10) * (i + 1)),
                 target_tick_duration,
                 target_tick_count: None,
             });
@@ -241,7 +285,7 @@ mod tests {
                 Some((4, 4)),
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
-                &Arc::new(blockstore),
+                &blockstore.clone(),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
                 &poh_config,
             );
@@ -254,33 +298,23 @@ mod tests {
             };
             let ticks_per_slot = bank.ticks_per_slot();
 
-            // specify RUN_TIME to run in a benchmark-like mode
-            // to calibrate batch size
-            let run_time = std::env::var("RUN_TIME")
-                .map(|x| x.parse().unwrap())
-                .unwrap_or(0);
-            let is_test_run = run_time == 0;
-
-            let par_batch_size = std::env::var("PAR_BATCH_SIZE")
-                .map(|x| x.parse().unwrap())
-                .unwrap_or(1);
-
-            let rayon_threads = std::env::var("RAYON_THREADS")
-                .map(|x| x.parse().unwrap())
-                .unwrap_or(1);
-
-            let use_rayon = std::env::var("USE_RAYON").is_ok();
-
             let entry_producer = {
                 let poh_recorder = poh_recorder.clone();
                 let exit = exit.clone();
+                let bank = bank.clone();
 
                 Builder::new()
                     .name("solana-poh-service-entry_producer".to_string())
                     .spawn(move || {
                         let thread_pool = ThreadPoolBuilder::new()
                             .num_threads(rayon_threads)
-                            .start_handler(|_i| {})
+                            .start_handler(move |_i| {
+                                if set_affinity {
+                                    let cores: Vec<_> =
+                                        (2..affinity::get_core_num()).into_iter().collect();
+                                    affinity::set_thread_affinity(&cores).unwrap();
+                                }
+                            })
                             .build()
                             .unwrap();
                         let now = Instant::now();
@@ -313,11 +347,13 @@ mod tests {
                             }
 
                             if exit.load(Ordering::Relaxed) {
+                                let mut buf = Buffer::default();
+                                buf.write_formatted(&(total_times * par_batch_size), &Locale::en);
                                 info!(
                                     "spent:{}ms record: {}ms entries recorded: {}",
                                     now.elapsed().as_millis(),
                                     total_us / 1000,
-                                    total_times * par_batch_size,
+                                    buf.as_str(),
                                 );
                                 break;
                             }
@@ -392,7 +428,8 @@ mod tests {
                 }
             }
             info!(
-                "target_tick_duration: {} ticks_per_slot: {}",
+                "hashes_per_tick: {:?} target_tick_duration: {} ns ticks_per_slot: {}",
+                poh_config.hashes_per_tick,
                 poh_config.target_tick_duration.as_nanos(),
                 ticks_per_slot
             );
@@ -408,6 +445,7 @@ mod tests {
             poh_service.join().unwrap();
             entry_producer.join().unwrap();
         }
+        drop(blockstore);
         Blockstore::destroy(&ledger_path).unwrap();
     }
 }
