@@ -31,14 +31,15 @@ describe('Nonce', () => {
     connection = new Connection(url);
   });
 
-  if (!process.env.TEST_LIVE) {
+  if (mockServer) {
+    const server = mockServer;
     beforeEach(() => {
-      mockServer.start(MOCK_PORT);
+      server.start(MOCK_PORT);
       stubRpcWebSocket(connection);
     });
 
     afterEach(() => {
-      mockServer.stop();
+      server.stop();
       restoreRpcWebSocket(connection);
     });
   }

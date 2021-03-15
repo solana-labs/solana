@@ -1,4 +1,5 @@
 import bs58 from 'bs58';
+import invariant from 'assert';
 import {Buffer} from 'buffer';
 import {Token, u64} from '@solana/spl-token';
 import {expect, use} from 'chai';
@@ -18,7 +19,17 @@ import {
 } from '../src';
 import {DEFAULT_TICKS_PER_SLOT, NUM_TICKS_PER_SECOND} from '../src/timing';
 import {MOCK_PORT, url} from './url';
-import {BLOCKHASH_CACHE_TIMEOUT_MS} from '../src/connection';
+import {
+  BLOCKHASH_CACHE_TIMEOUT_MS,
+  Commitment,
+  CompiledInnerInstruction,
+  EpochInfo,
+  EpochSchedule,
+  InflationGovernor,
+  ParsedInnerInstruction,
+  ParsedInstruction,
+  SlotInfo,
+} from '../src/connection';
 import {sleep} from '../src/util/sleep';
 import {
   helpers,
@@ -66,14 +77,15 @@ describe('Connection', () => {
     connection = new Connection(url);
   });
 
-  if (!process.env.TEST_LIVE) {
+  if (mockServer) {
+    const server = mockServer;
     beforeEach(() => {
-      mockServer.start(MOCK_PORT);
+      server.start(MOCK_PORT);
       stubRpcWebSocket(connection);
     });
 
     afterEach(() => {
-      mockServer.stop();
+      server.stop();
       restoreRpcWebSocket(connection);
     });
   }
@@ -289,14 +301,15 @@ describe('Connection', () => {
     });
 
     const inflation = await connection.getInflationGovernor();
-
-    for (const key of [
+    const inflationKeys: (keyof InflationGovernor)[] = [
       'initial',
       'terminal',
       'taper',
       'foundation',
       'foundationTerm',
-    ]) {
+    ];
+
+    for (const key of inflationKeys) {
       expect(inflation).to.have.property(key);
       expect(inflation[key]).to.be.greaterThan(0);
     }
@@ -316,14 +329,15 @@ describe('Connection', () => {
     });
 
     const epochInfo = await connection.getEpochInfo('confirmed');
-
-    for (const key of [
+    const epochInfoKeys: (keyof EpochInfo)[] = [
       'epoch',
       'slotIndex',
       'slotsInEpoch',
       'absoluteSlot',
       'blockHeight',
-    ]) {
+    ];
+
+    for (const key of epochInfoKeys) {
       expect(epochInfo).to.have.property(key);
       expect(epochInfo[key]).to.be.at.least(0);
     }
@@ -343,13 +357,14 @@ describe('Connection', () => {
     });
 
     const epochSchedule = await connection.getEpochSchedule();
-
-    for (const key of [
+    const epochScheduleKeys: (keyof EpochSchedule)[] = [
       'firstNormalEpoch',
       'firstNormalSlot',
       'leaderScheduleSlotOffset',
       'slotsPerEpoch',
-    ]) {
+    ];
+
+    for (const key of epochScheduleKeys) {
       expect(epochSchedule).to.have.property('warmup');
       expect(epochSchedule).to.have.property(key);
       if (epochSchedule.warmup) {
@@ -385,7 +400,7 @@ describe('Connection', () => {
     });
 
     const slot = await connection.getSlot();
-    if (!process.env.TEST_LIVE) {
+    if (mockServer) {
       expect(slot).to.eq(123);
     } else {
       // No idea what the correct slot value should be on a live cluster, so
@@ -402,7 +417,7 @@ describe('Connection', () => {
     });
 
     const slotLeader = await connection.getSlotLeader();
-    if (!process.env.TEST_LIVE) {
+    if (mockServer) {
       expect(slotLeader).to.eq('11111111111111111111111111111111');
     } else {
       // No idea what the correct slotLeader value should be on a live cluster, so
@@ -427,7 +442,7 @@ describe('Connection', () => {
     });
 
     const clusterNodes = await connection.getClusterNodes();
-    if (!process.env.TEST_LIVE) {
+    if (mockServer) {
       expect(clusterNodes).to.have.length(1);
       expect(clusterNodes[0].pubkey).to.eq('11111111111111111111111111111111');
       expect(typeof clusterNodes[0].gossip).to.eq('string');
@@ -564,8 +579,8 @@ describe('Connection', () => {
 
     // Find a block that has a transaction, usually Block 1
     let slot = 0;
-    let address: ?PublicKey;
-    let expectedSignature: ?string;
+    let address: PublicKey | undefined;
+    let expectedSignature: string | undefined;
     while (!address || !expectedSignature) {
       slot++;
       const block = await connection.getConfirmedBlock(slot);
@@ -628,7 +643,7 @@ describe('Connection', () => {
       {limit: 1},
     );
     expect(confirmedSignatures2).to.have.length(1);
-    if (!process.env.TEST_LIVE) {
+    if (mockServer) {
       expect(confirmedSignatures2[0].signature).to.eq(expectedSignature);
       expect(confirmedSignatures2[0].slot).to.eq(slot);
       expect(confirmedSignatures2[0].err).to.be.null;
@@ -699,7 +714,7 @@ describe('Connection', () => {
 
     // Find a block that has a transaction, usually Block 1
     let slot = 0;
-    let confirmedTransaction: ?string;
+    let confirmedTransaction: string | undefined;
     while (!confirmedTransaction) {
       slot++;
       const block = await connection.getConfirmedBlock(slot);
@@ -791,12 +806,12 @@ describe('Connection', () => {
     expect(nullResponse).to.be.null;
   });
 
-  if (!process.env.TEST_LIVE) {
+  if (mockServer) {
     it('get parsed confirmed transaction coerces public keys of inner instructions', async () => {
       const confirmedTransaction: TransactionSignature =
         '4ADvAUQYxkh4qWKYE9QLW8gCLomGG94QchDLG4quvpBz1WqARYvzWQDDitKduAKspuy1DjcbnaDAnCAfnKpJYs48';
 
-      function getMockData(inner) {
+      function getMockData(inner: any) {
         return {
           slot: 353050305,
           transaction: {
@@ -853,15 +868,10 @@ describe('Connection', () => {
         confirmedTransaction,
       );
 
-      if (
-        result !== null &&
-        result.meta &&
-        result.meta.innerInstructions !== undefined &&
-        result.meta.innerInstructions.length > 0
-      ) {
-        expect(
-          result.meta.innerInstructions[0].instructions[0].programId,
-        ).to.be.instanceOf(PublicKey);
+      if (result && result.meta && result.meta.innerInstructions) {
+        const innerInstructions = result.meta.innerInstructions;
+        const firstIx = innerInstructions[0].instructions[0];
+        expect(firstIx.programId).to.be.instanceOf(PublicKey);
       }
 
       await mockRpcResponse({
@@ -877,15 +887,21 @@ describe('Connection', () => {
         }),
       });
 
-      //$FlowFixMe
       const result2 = await connection.getParsedConfirmedTransaction(
         confirmedTransaction,
       );
 
-      let instruction = result2.meta.innerInstructions[0].instructions[0];
-      expect(instruction.programId).to.be.instanceOf(PublicKey);
-      expect(instruction.accounts[0]).to.be.instanceOf(PublicKey);
-      expect(instruction.accounts[1]).to.be.instanceOf(PublicKey);
+      if (result2 && result2.meta && result2.meta.innerInstructions) {
+        const innerInstructions = result2.meta.innerInstructions;
+        const instruction = innerInstructions[0].instructions[0];
+        expect(instruction.programId).to.be.instanceOf(PublicKey);
+        if ('accounts' in instruction) {
+          expect(instruction.accounts[0]).to.be.instanceOf(PublicKey);
+          expect(instruction.accounts[1]).to.be.instanceOf(PublicKey);
+        } else {
+          expect('accounts' in instruction).to.be.true;
+        }
+      }
     });
   }
 
@@ -998,7 +1014,8 @@ describe('Connection', () => {
   });
 
   it('get recent blockhash', async () => {
-    for (const commitment of ['processed', 'confirmed', 'finalized']) {
+    const commitments: Commitment[] = ['processed', 'confirmed', 'finalized'];
+    for (const commitment of commitments) {
       const {blockhash, feeCalculator} = await helpers.recentBlockhash({
         connection,
         commitment,
@@ -1189,7 +1206,7 @@ describe('Connection', () => {
 
         testOwner = accountOwner;
         testToken = token;
-        testTokenAccount = tokenAccount;
+        testTokenAccount = tokenAccount as PublicKey;
       });
 
       it('get token supply', async () => {
@@ -1229,7 +1246,7 @@ describe('Connection', () => {
         const {signatures, message} = parsedTx.transaction;
         expect(signatures[0]).to.eq(testSignature);
         const ix = message.instructions[0];
-        if (ix.parsed) {
+        if ('parsed' in ix) {
           expect(ix.program).to.eq('spl-token');
           expect(ix.programId).to.eql(TOKEN_PROGRAM_ID);
         } else {
@@ -1456,11 +1473,11 @@ describe('Connection', () => {
     });
   }
 
-  if (!process.env.TEST_LIVE) {
+  if (mockServer) {
     it('stake activation should only accept state with valid string literals', async () => {
       const publicKey = new Account().publicKey;
 
-      const addStakeActivationMock = async state => {
+      const addStakeActivationMock = async (state: any) => {
         await mockRpcResponse({
           method: 'getStakeActivation',
           params: [publicKey.toBase58(), {}],
@@ -1567,7 +1584,7 @@ describe('Connection', () => {
     if (parsedAccountInfo === null) {
       expect(parsedAccountInfo).not.to.be.null;
       return;
-    } else if (parsedAccountInfo.data.parsed) {
+    } else if ('parsed' in parsedAccountInfo.data) {
       expect(parsedAccountInfo.data.parsed).not.to.be.ok;
       return;
     }
@@ -1616,6 +1633,7 @@ describe('Connection', () => {
     ).value;
     expect(confirmResult.err).to.eql(expectedErr);
 
+    invariant(transaction.signature);
     const signature = bs58.encode(transaction.signature);
     await mockRpcResponse({
       method: 'getSignatureStatuses',
@@ -1814,7 +1832,7 @@ describe('Connection', () => {
     });
 
     // it('account change notification', async () => {
-    //   if (!process.env.TEST_LIVE) {
+    //   if (mockServer) {
     //     console.log('non-live test skipped');
     //     return;
     //   }
@@ -1939,7 +1957,7 @@ describe('Connection', () => {
     });
 
     it('slot notification', async () => {
-      let notifiedSlotInfo;
+      let notifiedSlotInfo: SlotInfo | undefined;
       const subscriptionId = connection.onSlotChange(slotInfo => {
         notifiedSlotInfo = slotInfo;
       });
@@ -1963,7 +1981,7 @@ describe('Connection', () => {
     });
 
     it('root notification', async () => {
-      let roots = [];
+      let roots: number[] = [];
       const subscriptionId = connection.onRootChange(root => {
         roots.push(root);
       });
