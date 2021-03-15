@@ -11,7 +11,7 @@ import { generateTokenBalanceRows } from "components/transaction/TokenBalancesCa
 import { BalanceDelta } from "components/common/BalanceDelta";
 import { Address } from "components/common/Address";
 import { useTokenRegistry } from "providers/mints/token-registry";
-import { SlotRow } from "./TransactionHistoryCardWrapper";
+import { SlotRow } from "../TransactionHistoryCardWrapper";
 import { Signature } from "components/common/Signature";
 
 export function TokenBalancesDetails({

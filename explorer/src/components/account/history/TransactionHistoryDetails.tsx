@@ -3,7 +3,7 @@ import { PublicKey } from "@solana/web3.js";
 import { Signature } from "components/common/Signature";
 import { Slot } from "components/common/Slot";
 import { displayTimestamp } from "utils/date";
-import { SlotRow } from "./TransactionHistoryCardWrapper";
+import { SlotRow } from "../TransactionHistoryCardWrapper";
 
 export function TransactionHistoryDetails({
   pubkey,

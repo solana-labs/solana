@@ -6,9 +6,9 @@ import { useFetchAccountHistory } from "providers/accounts/history";
 import { ErrorCard } from "components/common/ErrorCard";
 import { LoadingCard } from "components/common/LoadingCard";
 import { MoreTabs } from "pages/AccountDetailsPage";
-import { TransactionHistoryDetails } from "./TransactionHistoryDetails";
-import { TokenBalancesDetails } from "./TokenBalancesDetails";
-import { TokenInstructionsDetails } from "./TokenInstructionsDetails";
+import { TransactionHistoryDetails } from "./history/TransactionHistoryDetails";
+import { TokenBalancesDetails } from "./history/TokenBalancesDetails";
+import { TokenInstructionsDetails } from "./history/TokenInstructionsDetails";
 
 export type SlotRow = {
   slot: number;

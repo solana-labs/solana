@@ -7,7 +7,7 @@ import {
   useDetailedAccountHistory,
   useFetchDetailedAccountHistory,
 } from "providers/accounts/detailed-history";
-import { SlotRow } from "./TransactionHistoryCardWrapper";
+import { SlotRow } from "../TransactionHistoryCardWrapper";
 import { Signature } from "components/common/Signature";
 import { getInstructionType } from "utils/instruction";
 import { InstructionDetails } from "components/common/InstructionDetails";
