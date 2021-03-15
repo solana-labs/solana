@@ -1,6 +1,5 @@
 [![Build status][travis-image]][travis-url]
 [![codecov][codecov-image]][codecov-url]
-[![esdoc][esdoc-image]][esdoc-url]
 <br>
 [![npm][npm-image]][npm-url]
 [![npm-downloads][npm-downloads-image]][npm-url]
@@ -12,10 +11,8 @@
 [travis-url]: https://travis-ci.org/solana-labs/solana-web3.js
 [codecov-image]: https://codecov.io/gh/solana-labs/solana-web3.js/branch/master/graph/badge.svg
 [codecov-url]: https://codecov.io/gh/solana-labs/solana-web3.js
-[esdoc-image]: https://solana-labs.github.io/solana-web3.js/badge.svg
 [npm-image]: https://img.shields.io/npm/v/@solana/web3.js.svg?style=flat
 [npm-downloads-image]: https://img.shields.io/npm/dm/@solana/web3.js.svg?style=flat
-[esdoc-url]: https://solana-labs.github.io/solana-web3.js/
 [npm-url]: https://www.npmjs.com/package/@solana/web3.js
 [semantic-release-image]: https://img.shields.io/badge/%20%20%F0%9F%93%A6%F0%9F%9A%80-semantic--release-e10079.svg
 [semantic-release-url]: https://github.com/semantic-release/semantic-release
