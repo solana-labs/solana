@@ -12269,4 +12269,48 @@ pub(crate) mod tests {
             vec![pubkeys_balances[3], pubkeys_balances[1]]
         );
     }
+
+    #[test]
+    fn test_transfer_sysvar() {
+        solana_logger::setup();
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config_with_leader(
+            1_000_000_000_000_000,
+            &Pubkey::new_unique(),
+            bootstrap_validator_stake_lamports(),
+        );
+        let bank = Arc::new(Bank::new(&genesis_config));
+
+        let blockhash = bank.last_blockhash();
+        let blockhash_sysvar = sysvar::recent_blockhashes::id();
+        info!("{:?}", bank.get_account(&sysvar::recent_blockhashes::id()));
+        let tx = system_transaction::transfer(&mint_keypair, &blockhash_sysvar, 10, blockhash);
+        bank.process_transaction(&tx).unwrap();
+        info!("{:?}", bank.get_account(&sysvar::recent_blockhashes::id()));
+
+        fn mock_ix_processor(
+            _pubkey: &Pubkey,
+            ka: &[KeyedAccount],
+            _data: &[u8],
+            _invoke_context: &mut dyn InvokeContext,
+        ) -> std::result::Result<(), InstructionError> {
+            ka[0].try_borrow_mut().data[0] = 5;
+            Ok(())
+        }
+
+        let program_id = solana_sdk::pubkey::new_rand();
+        bank.add_builtin("mock_program1", program_id, mock_ix_processor);
+
+        let accounts = vec![
+            AccountMeta::new(mint_keypair.pubkey(), true),
+            AccountMeta::new(blockhash_sysvar, false),
+        ];
+        let ix = Instruction::new_with_bincode(program_id, &[], accounts);
+        let message = Message::new(&[ix], Some(&mint_keypair.pubkey()));
+        let tx = Transaction::new(&[&mint_keypair], message, blockhash);
+        bank.process_transaction(&tx).unwrap();
+    }
 }
