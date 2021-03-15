@@ -105,6 +105,17 @@ check)
   ;;
 esac
 
+# Version bumps should occur in their own commit. Disallow bumping version
+# in dirty working trees. Gate after arg parsing to prevent breaking the
+# `check` subcommand.
+(
+  set +e
+  if ! git diff --exit-code; then
+    echo -e "\nError: Working tree is dirty. Commit or discard changes before bumping version." 1>&2
+    exit 1
+  fi
+)
+
 newVersion="$MAJOR.$MINOR.$PATCH$SPECIAL"
 
 # Update all the Cargo.toml files
