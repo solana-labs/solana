@@ -174,7 +174,7 @@ pub struct ProcessPullStats {
 
 pub struct CrdsGossipPull {
     /// timestamp of last request
-    pull_request_time: LruCache<Pubkey, u64>,
+    pub(crate) pull_request_time: LruCache<Pubkey, u64>,
     /// hash and insert time
     pub purged_values: VecDeque<(Hash, u64)>,
     // Hash value and record time (ms) of the pull responses which failed to be
