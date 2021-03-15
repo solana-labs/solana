@@ -119,7 +119,7 @@ declare module '@solana/web3.js' {
     slot: number,
     err: TransactionError | null,
     confirmations: number | null,
-    confirmationStatus: TransactionConfirmationStatus | null,
+    confirmationStatus?: TransactionConfirmationStatus,
   };
 
   declare export type ConfirmedSignatureInfo = {
