@@ -183,12 +183,19 @@ export class Secp256k1Program {
   static createInstructionWithPrivateKey(
     params: CreateSecp256k1InstructionWithPrivateKeyParams,
   ): TransactionInstruction {
-    const {privateKey, message} = params;
+    const {privateKey: pkey, message} = params;
 
     assert(
-      privateKey.length === PRIVATE_KEY_BYTES,
-      `Private key must be ${PRIVATE_KEY_BYTES} bytes but received ${privateKey.length} bytes`,
+      pkey.length === PRIVATE_KEY_BYTES,
+      `Private key must be ${PRIVATE_KEY_BYTES} bytes but received ${pkey.length} bytes`,
     );
+
+    let privateKey;
+    if (Array.isArray(pkey)) {
+      privateKey = Uint8Array.from(pkey);
+    } else {
+      privateKey = pkey;
+    }
 
     try {
       const publicKey = publicKeyCreate(privateKey, false).slice(1); // throw away leading byte

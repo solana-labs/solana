@@ -11,6 +11,7 @@ import {PublicKey} from './publickey';
 import {Account} from './account';
 import * as shortvec from './util/shortvec-encoding';
 import type {Blockhash} from './blockhash';
+import {toBuffer} from './util/to-buffer';
 
 /**
  * @typedef {string} TransactionSignature
@@ -522,7 +523,7 @@ export class Transaction {
     const signData = message.serialize();
     signers.forEach(signer => {
       const signature = nacl.sign.detached(signData, signer.secretKey);
-      this._addSignature(signer.publicKey, signature);
+      this._addSignature(signer.publicKey, toBuffer(signature));
     });
   }
 
