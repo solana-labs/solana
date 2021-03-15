@@ -16,7 +16,7 @@ use solana_sdk::{
     bpf_loader, bpf_loader_deprecated,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
-    feature_set::{cpi_share_ro_and_exec_accounts, ristretto_mul_syscall_enabled},
+    feature_set::{cpi_data_cost, cpi_share_ro_and_exec_accounts, ristretto_mul_syscall_enabled},
     hash::{Hasher, HASH_BYTES},
     ic_msg,
     instruction::{AccountMeta, Instruction, InstructionError},
@@ -984,9 +984,12 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
                     self.loader_id,
                 )?;
 
-                invoke_context.get_compute_meter().consume(
-                    data.len() as u64 / invoke_context.get_bpf_compute_budget().cpi_bytes_per_unit,
-                )?;
+                if invoke_context.is_feature_active(&cpi_data_cost::id()) {
+                    invoke_context.get_compute_meter().consume(
+                        data.len() as u64
+                            / invoke_context.get_bpf_compute_budget().cpi_bytes_per_unit,
+                    )?;
+                }
 
                 let translated = translate(
                     memory_mapping,
@@ -1276,9 +1279,12 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
             )?;
             let vm_data_addr = account_info.data_addr;
 
-            invoke_context.get_compute_meter().consume(
-                account_info.data_len / invoke_context.get_bpf_compute_budget().cpi_bytes_per_unit,
-            )?;
+            if invoke_context.is_feature_active(&cpi_data_cost::id()) {
+                invoke_context.get_compute_meter().consume(
+                    account_info.data_len
+                        / invoke_context.get_bpf_compute_budget().cpi_bytes_per_unit,
+                )?;
+            }
 
             let data = translate_slice_mut::<u8>(
                 memory_mapping,
