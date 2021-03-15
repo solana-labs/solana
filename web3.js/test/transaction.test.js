@@ -1,4 +1,3 @@
-// @flow
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
 import nacl from 'tweetnacl';

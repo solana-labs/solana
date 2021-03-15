@@ -1,5 +1,3 @@
-// @flow
-
 import {Buffer} from 'buffer';
 
 export const toBuffer = (arr: Buffer | Uint8Array | Array<number>): Buffer => {

@@ -1,5 +1,3 @@
-// @flow
-
 import invariant from 'assert';
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
@@ -45,9 +43,9 @@ const SIGNATURE_LENGTH = 64;
  * @property {boolean} isWritable True if the `pubkey` can be loaded as a read-write account.
  */
 export type AccountMeta = {
-  pubkey: PublicKey,
-  isSigner: boolean,
-  isWritable: boolean,
+  pubkey: PublicKey;
+  isSigner: boolean;
+  isWritable: boolean;
 };
 
 /**
@@ -58,11 +56,11 @@ export type AccountMeta = {
  * @property {PublicKey} programId
  * @property {?Buffer} data
  */
-export type TransactionInstructionCtorFields = {|
-  keys: Array<AccountMeta>,
-  programId: PublicKey,
-  data?: Buffer,
-|};
+export type TransactionInstructionCtorFields = {
+  keys: Array<AccountMeta>;
+  programId: PublicKey;
+  data?: Buffer;
+};
 
 /**
  * Configuration object for Transaction.serialize()
@@ -72,8 +70,8 @@ export type TransactionInstructionCtorFields = {|
  * @property {boolean|undefined} verifySignatures Verify provided signatures (default: true)
  */
 export type SerializeConfig = {
-  requireAllSignatures?: boolean,
-  verifySignatures?: boolean,
+  requireAllSignatures?: boolean;
+  verifySignatures?: boolean;
 };
 
 /**
@@ -106,12 +104,12 @@ export class TransactionInstruction {
 }
 
 /**
- * @private
+ * @internal
  */
-type SignaturePubkeyPair = {|
-  signature: Buffer | null,
-  publicKey: PublicKey,
-|};
+type SignaturePubkeyPair = {
+  signature: Buffer | null;
+  publicKey: PublicKey;
+};
 
 /**
  * List of Transaction object fields that may be initialized at construction
@@ -122,12 +120,12 @@ type SignaturePubkeyPair = {|
  * @property {?Array<SignaturePubkeyPair>} signatures One or more signatures
  *
  */
-type TransactionCtorFields = {|
-  recentBlockhash?: Blockhash | null,
-  nonceInfo?: NonceInformation | null,
-  feePayer?: PublicKey | null,
-  signatures?: Array<SignaturePubkeyPair>,
-|};
+type TransactionCtorFields = {
+  recentBlockhash?: Blockhash | null;
+  nonceInfo?: NonceInformation | null;
+  feePayer?: PublicKey | null;
+  signatures?: Array<SignaturePubkeyPair>;
+};
 
 /**
  * NonceInformation to be used to build a Transaction.
@@ -136,10 +134,10 @@ type TransactionCtorFields = {|
  * @property {Blockhash} nonce The current Nonce blockhash
  * @property {TransactionInstruction} nonceInstruction AdvanceNonceAccount Instruction
  */
-type NonceInformation = {|
-  nonce: Blockhash,
-  nonceInstruction: TransactionInstruction,
-|};
+type NonceInformation = {
+  nonce: Blockhash;
+  nonceInstruction: TransactionInstruction;
+};
 
 /**
  * Transaction class
@@ -164,7 +162,7 @@ export class Transaction {
   /**
    * The transaction fee payer
    */
-  feePayer: ?PublicKey;
+  feePayer?: PublicKey;
 
   /**
    * The instructions to atomically execute
@@ -174,13 +172,13 @@ export class Transaction {
   /**
    * A recent transaction id. Must be populated by the caller
    */
-  recentBlockhash: ?Blockhash;
+  recentBlockhash?: Blockhash;
 
   /**
    * Optional Nonce information. If populated, transaction will use a durable
    * Nonce hash instead of a recentBlockhash. Must be populated by the caller
    */
-  nonceInfo: ?NonceInformation;
+  nonceInfo?: NonceInformation;
 
   /**
    * Construct an empty Transaction
@@ -194,7 +192,7 @@ export class Transaction {
    */
   add(
     ...items: Array<
-      Transaction | TransactionInstruction | TransactionInstructionCtorFields,
+      Transaction | TransactionInstruction | TransactionInstructionCtorFields
     >
   ): Transaction {
     if (items.length === 0) {
@@ -384,7 +382,7 @@ export class Transaction {
   }
 
   /**
-   * @private
+   * @internal
    */
   _compile(): Message {
     const message = this.compileMessage();
@@ -517,7 +515,7 @@ export class Transaction {
   }
 
   /**
-   * @private
+   * @internal
    */
   _partialSign(message: Message, ...signers: Array<Account>) {
     const signData = message.serialize();
@@ -538,7 +536,7 @@ export class Transaction {
   }
 
   /**
-   * @private
+   * @internal
    */
   _addSignature(pubkey: PublicKey, signature: Buffer) {
     invariant(signature.length === 64);
@@ -561,7 +559,7 @@ export class Transaction {
   }
 
   /**
-   * @private
+   * @internal
    */
   _verifySignatures(signData: Buffer, requireAllSignatures: boolean): boolean {
     for (const {signature, publicKey} of this.signatures) {
@@ -601,11 +599,11 @@ export class Transaction {
   }
 
   /**
-   * @private
+   * @internal
    */
   _serialize(signData: Buffer): Buffer {
     const {signatures} = this;
-    const signatureCount = [];
+    const signatureCount: number[] = [];
     shortvec.encodeLength(signatureCount, signatures.length);
     const transactionLength =
       signatureCount.length + signatures.length * 64 + signData.length;
@@ -634,7 +632,7 @@ export class Transaction {
 
   /**
    * Deprecated method
-   * @private
+   * @internal
    */
   get keys(): Array<PublicKey> {
     invariant(this.instructions.length === 1);
@@ -643,7 +641,7 @@ export class Transaction {
 
   /**
    * Deprecated method
-   * @private
+   * @internal
    */
   get programId(): PublicKey {
     invariant(this.instructions.length === 1);
@@ -652,7 +650,7 @@ export class Transaction {
 
   /**
    * Deprecated method
-   * @private
+   * @internal
    */
   get data(): Buffer {
     invariant(this.instructions.length === 1);

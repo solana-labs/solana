@@ -1,5 +1,3 @@
-// @flow
-
 import http from 'http';
 import https from 'https';
 
@@ -8,7 +6,7 @@ export const DESTROY_TIMEOUT_MS = 5000;
 export class AgentManager {
   _agent: http.Agent | https.Agent;
   _activeRequests = 0;
-  _destroyTimeout: TimeoutID | null = null;
+  _destroyTimeout: ReturnType<typeof setTimeout> | null = null;
   _useHttps: boolean;
 
   static _newAgent(useHttps: boolean): http.Agent | https.Agent {
@@ -27,8 +25,10 @@ export class AgentManager {
 
   requestStart(): http.Agent | https.Agent {
     this._activeRequests++;
-    clearTimeout(this._destroyTimeout);
-    this._destroyTimeout = null;
+    if (this._destroyTimeout !== null) {
+      clearTimeout(this._destroyTimeout);
+      this._destroyTimeout = null;
+    }
     return this._agent;
   }
 

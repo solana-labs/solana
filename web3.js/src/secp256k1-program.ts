@@ -1,5 +1,3 @@
-// @flow
-
 import {Buffer} from 'buffer';
 import * as BufferLayout from 'buffer-layout';
 import secp256k1 from 'secp256k1';
@@ -25,12 +23,12 @@ const SIGNATURE_OFFSETS_SERIALIZED_SIZE = 11;
  * @property {Buffer | Uint8Array | Array<number>} signature
  * @property {number} recoveryId
  */
-export type CreateSecp256k1InstructionWithPublicKeyParams = {|
-  publicKey: Buffer | Uint8Array | Array<number>,
-  message: Buffer | Uint8Array | Array<number>,
-  signature: Buffer | Uint8Array | Array<number>,
-  recoveryId: number,
-|};
+export type CreateSecp256k1InstructionWithPublicKeyParams = {
+  publicKey: Buffer | Uint8Array | Array<number>;
+  message: Buffer | Uint8Array | Array<number>;
+  signature: Buffer | Uint8Array | Array<number>;
+  recoveryId: number;
+};
 
 /**
  * Params for creating an secp256k1 instruction using an Ethereum address
@@ -40,12 +38,12 @@ export type CreateSecp256k1InstructionWithPublicKeyParams = {|
  * @property {Buffer | Uint8Array | Array<number>} signature
  * @property {number} recoveryId
  */
-export type CreateSecp256k1InstructionWithEthAddressParams = {|
-  ethAddress: Buffer | Uint8Array | Array<number> | string,
-  message: Buffer | Uint8Array | Array<number>,
-  signature: Buffer | Uint8Array | Array<number>,
-  recoveryId: number,
-|};
+export type CreateSecp256k1InstructionWithEthAddressParams = {
+  ethAddress: Buffer | Uint8Array | Array<number> | string;
+  message: Buffer | Uint8Array | Array<number>;
+  signature: Buffer | Uint8Array | Array<number>;
+  recoveryId: number;
+};
 
 /**
  * Params for creating an secp256k1 instruction using a private key
@@ -53,10 +51,10 @@ export type CreateSecp256k1InstructionWithEthAddressParams = {|
  * @property {Buffer | Uint8Array | Array<number>} privateKey
  * @property {Buffer | Uint8Array | Array<number>} message
  */
-export type CreateSecp256k1InstructionWithPrivateKeyParams = {|
-  privateKey: Buffer | Uint8Array | Array<number>,
-  message: Buffer | Uint8Array | Array<number>,
-|};
+export type CreateSecp256k1InstructionWithPrivateKeyParams = {
+  privateKey: Buffer | Uint8Array | Array<number>;
+  message: Buffer | Uint8Array | Array<number>;
+};
 
 const SECP256K1_INSTRUCTION_LAYOUT = BufferLayout.struct([
   BufferLayout.u8('numSignatures'),
@@ -73,6 +71,11 @@ const SECP256K1_INSTRUCTION_LAYOUT = BufferLayout.struct([
 ]);
 
 export class Secp256k1Program {
+  /**
+   * @internal
+   */
+  constructor() {}
+
   /**
    * Public key that identifies the secp256k1 program
    */
@@ -126,13 +129,15 @@ export class Secp256k1Program {
   ): TransactionInstruction {
     const {ethAddress: rawAddress, message, signature, recoveryId} = params;
 
-    let ethAddress = rawAddress;
+    let ethAddress;
     if (typeof rawAddress === 'string') {
       if (rawAddress.startsWith('0x')) {
         ethAddress = Buffer.from(rawAddress.substr(2), 'hex');
       } else {
         ethAddress = Buffer.from(rawAddress, 'hex');
       }
+    } else {
+      ethAddress = rawAddress;
     }
 
     assert(

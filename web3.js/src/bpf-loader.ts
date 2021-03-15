@@ -1,5 +1,3 @@
-// @flow
-
 import {Account} from './account';
 import {PublicKey} from './publickey';
 import {Loader} from './loader';

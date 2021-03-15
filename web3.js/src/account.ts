@@ -1,6 +1,5 @@
-// @flow
-import nacl from 'tweetnacl';
-import type {KeyPair} from 'tweetnacl';
+import * as nacl from 'tweetnacl';
+import type {SignKeyPair as KeyPair} from 'tweetnacl';
 
 import {toBuffer} from './util/to-buffer';
 import {PublicKey} from './publickey';
@@ -9,6 +8,7 @@ import {PublicKey} from './publickey';
  * An account key pair (public and secret keys).
  */
 export class Account {
+  /** @internal */
   _keypair: KeyPair;
 
   /**

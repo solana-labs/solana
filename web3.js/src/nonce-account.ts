@@ -1,4 +1,3 @@
-// @flow
 import * as BufferLayout from 'buffer-layout';
 
 import type {Blockhash} from './blockhash';
@@ -11,7 +10,7 @@ import {toBuffer} from './util/to-buffer';
 /**
  * See https://github.com/solana-labs/solana/blob/0ea2843ec9cdc517572b8e62c959f41b55cf4453/sdk/src/nonce_state.rs#L29-L32
  *
- * @private
+ * @internal
  */
 const NonceAccountLayout = BufferLayout.struct([
   BufferLayout.u32('version'),
@@ -23,6 +22,12 @@ const NonceAccountLayout = BufferLayout.struct([
 
 export const NONCE_ACCOUNT_LENGTH = NonceAccountLayout.span;
 
+type NonceAccountArgs = {
+  authorizedPubkey: PublicKey;
+  nonce: Blockhash;
+  feeCalculator: FeeCalculator;
+};
+
 /**
  * NonceAccount class
  */
@@ -30,6 +35,15 @@ export class NonceAccount {
   authorizedPubkey: PublicKey;
   nonce: Blockhash;
   feeCalculator: FeeCalculator;
+
+  /**
+   * @internal
+   */
+  constructor(args: NonceAccountArgs) {
+    this.authorizedPubkey = args.authorizedPubkey;
+    this.nonce = args.nonce;
+    this.feeCalculator = args.feeCalculator;
+  }
 
   /**
    * Deserialize NonceAccount from the account data.
@@ -41,10 +55,10 @@ export class NonceAccount {
     buffer: Buffer | Uint8Array | Array<number>,
   ): NonceAccount {
     const nonceAccount = NonceAccountLayout.decode(toBuffer(buffer), 0);
-    nonceAccount.authorizedPubkey = new PublicKey(
-      nonceAccount.authorizedPubkey,
-    );
-    nonceAccount.nonce = new PublicKey(nonceAccount.nonce).toString();
-    return nonceAccount;
+    return new NonceAccount({
+      authorizedPubkey: new PublicKey(nonceAccount.authorizedPubkey),
+      nonce: new PublicKey(nonceAccount.nonce).toString(),
+      feeCalculator: nonceAccount.feeCalculator,
+    });
   }
 }

@@ -1,4 +1,3 @@
-// @flow
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
 import {Token, u64} from '@solana/spl-token';

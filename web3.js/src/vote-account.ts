@@ -1,4 +1,3 @@
-// @flow
 import * as BufferLayout from 'buffer-layout';
 
 import * as Layout from './layout';
@@ -9,24 +8,24 @@ export const VOTE_PROGRAM_ID = new PublicKey(
   'Vote111111111111111111111111111111111111111',
 );
 
-export type Lockout = {|
-  slot: number,
-  confirmationCount: number,
-|};
+export type Lockout = {
+  slot: number;
+  confirmationCount: number;
+};
 
 /**
  * History of how many credits earned by the end of each epoch
  */
-export type EpochCredits = {|
-  epoch: number,
-  credits: number,
-  prevCredits: number,
-|};
+export type EpochCredits = {
+  epoch: number;
+  credits: number;
+  prevCredits: number;
+};
 
 /**
  * See https://github.com/solana-labs/solana/blob/8a12ed029cfa38d4a45400916c2463fb82bbec8c/programs/vote_api/src/vote_state.rs#L68-L88
  *
- * @private
+ * @internal
  */
 const VoteAccountLayout = BufferLayout.struct([
   Layout.publicKey('nodePubkey'),
@@ -59,6 +58,19 @@ const VoteAccountLayout = BufferLayout.struct([
   ),
 ]);
 
+type VoteAccountArgs = {
+  nodePubkey: PublicKey;
+  authorizedVoterPubkey: PublicKey;
+  authorizedWithdrawerPubkey: PublicKey;
+  commission: number;
+  votes: Array<Lockout>;
+  rootSlot: number | null;
+  epoch: number;
+  credits: number;
+  lastEpochCredits: number;
+  epochCredits: Array<EpochCredits>;
+};
+
 /**
  * VoteAccount class
  */
@@ -75,6 +87,22 @@ export class VoteAccount {
   epochCredits: Array<EpochCredits>;
 
   /**
+   * @internal
+   */
+  constructor(args: VoteAccountArgs) {
+    this.nodePubkey = args.nodePubkey;
+    this.authorizedVoterPubkey = args.authorizedVoterPubkey;
+    this.authorizedWithdrawerPubkey = args.authorizedWithdrawerPubkey;
+    this.commission = args.commission;
+    this.votes = args.votes;
+    this.rootSlot = args.rootSlot;
+    this.epoch = args.epoch;
+    this.credits = args.credits;
+    this.lastEpochCredits = args.lastEpochCredits;
+    this.epochCredits = args.epochCredits;
+  }
+
+  /**
    * Deserialize VoteAccount from the account data.
    *
    * @param buffer account data
@@ -84,14 +112,23 @@ export class VoteAccount {
     buffer: Buffer | Uint8Array | Array<number>,
   ): VoteAccount {
     const va = VoteAccountLayout.decode(toBuffer(buffer), 0);
-    va.nodePubkey = new PublicKey(va.nodePubkey);
-    va.authorizedVoterPubkey = new PublicKey(va.authorizedVoterPubkey);
-    va.authorizedWithdrawerPubkey = new PublicKey(
-      va.authorizedWithdrawerPubkey,
-    );
+
+    let rootSlot: number | null = va.rootSlot;
     if (!va.rootSlotValid) {
-      va.rootSlot = null;
+      rootSlot = null;
     }
-    return va;
+
+    return new VoteAccount({
+      nodePubkey: new PublicKey(va.nodePubkey),
+      authorizedVoterPubkey: new PublicKey(va.authorizedVoterPubkey),
+      authorizedWithdrawerPubkey: new PublicKey(va.authorizedWithdrawerPubkey),
+      commission: va.commission,
+      votes: va.votes,
+      rootSlot,
+      epoch: va.epoch,
+      credits: va.credits,
+      lastEpochCredits: va.lastEpochCredits,
+      epochCredits: va.epochCredits,
+    });
   }
 }

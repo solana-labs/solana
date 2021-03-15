@@ -1,5 +1,3 @@
-// @flow
-
 import {Buffer} from 'buffer';
 import * as BufferLayout from 'buffer-layout';
 
@@ -9,16 +7,18 @@ import * as Layout from './layout';
  * @typedef {Object} InstructionType
  * @property (index} The Instruction index (from solana upstream program)
  * @property (BufferLayout} The BufferLayout to use to build data
+ * @internal
  */
-export type InstructionType = {|
-  index: number,
-  layout: typeof BufferLayout,
-|};
+export type InstructionType = {
+  index: number;
+  layout: typeof BufferLayout;
+};
 
 /**
  * Populate a buffer of instruction data using an InstructionType
+ * @internal
  */
-export function encodeData(type: InstructionType, fields: Object): Buffer {
+export function encodeData(type: InstructionType, fields?: any): Buffer {
   const allocLength =
     type.layout.span >= 0 ? type.layout.span : Layout.getAlloc(type, fields);
   const data = Buffer.alloc(allocLength);
@@ -29,8 +29,9 @@ export function encodeData(type: InstructionType, fields: Object): Buffer {
 
 /**
  * Decode instruction data buffer using an InstructionType
+ * @internal
  */
-export function decodeData(type: InstructionType, buffer: Buffer): Object {
+export function decodeData(type: InstructionType, buffer: Buffer): any {
   let data;
   try {
     data = type.layout.decode(buffer);

@@ -1,14 +1,8 @@
-// @flow
-
 import BN from 'bn.js';
 import bs58 from 'bs58';
 import nacl from 'tweetnacl';
 import {sha256} from 'crypto-hash';
 import {Buffer} from 'buffer';
-
-let naclLowLevel = nacl.lowlevel;
-
-type PublicKeyNonce = [PublicKey, number]; // This type exists to workaround an esdoc parse error
 
 /**
  * Maximum length of derived pubkey seed
@@ -19,10 +13,12 @@ export const MAX_SEED_LENGTH = 32;
  * A public key
  */
 export class PublicKey {
+  /** @internal */
   _bn: BN;
 
   /**
    * Create a new PublicKey object
+   * @param value ed25519 public key as buffer or base-58 encoded string
    */
   constructor(value: number | string | Buffer | Uint8Array | Array<number>) {
     if (typeof value === 'string') {
@@ -70,7 +66,7 @@ export class PublicKey {
   }
 
   /**
-   * Returns a string representation of the public key
+   * Return the base-58 representation of the public key
    */
   toString(): string {
     return this.toBase58();
@@ -130,7 +126,7 @@ export class PublicKey {
   static async findProgramAddress(
     seeds: Array<Buffer | Uint8Array>,
     programId: PublicKey,
-  ): Promise<PublicKeyNonce> {
+  ): Promise<[PublicKey, number]> {
     let nonce = 255;
     let address;
     while (nonce != 0) {
@@ -147,10 +143,13 @@ export class PublicKey {
   }
 }
 
+// @ts-ignore
+let naclLowLevel = nacl.lowlevel;
+
 // Check that a pubkey is on the curve.
 // This function and its dependents were sourced from:
 // https://github.com/dchest/tweetnacl-js/blob/f1ec050ceae0861f34280e62498b1d3ed9c350c6/nacl.js#L792
-function is_on_curve(p) {
+function is_on_curve(p: any) {
   var r = [
     naclLowLevel.gf(),
     naclLowLevel.gf(),
@@ -213,7 +212,7 @@ let I = naclLowLevel.gf([
   0x2480,
   0x2b83,
 ]);
-function neq25519(a, b) {
+function neq25519(a: any, b: any) {
   var c = new Uint8Array(32),
     d = new Uint8Array(32);
   naclLowLevel.pack25519(c, a);

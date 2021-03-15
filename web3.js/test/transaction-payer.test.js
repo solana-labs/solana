@@ -1,5 +1,3 @@
-// @flow
-
 import base58 from 'bs58';
 import {expect} from 'chai';
 
