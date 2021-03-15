@@ -408,15 +408,20 @@ const SignatureStatusResult = pick({
   err: TransactionErrorResult,
 });
 
+type Version = {
+  'solana-core': string,
+  'feature-set'?: number,
+};
+
 /**
  * Version info for a node
  *
  * @typedef {Object} Version
  * @property {string} solana-core Version of solana-core
  */
-const Version = pick({
+const VersionResult = pick({
   'solana-core': string(),
-  'feature-set': optional(nullable(number())),
+  'feature-set': optional(number()),
 });
 
 type SimulatedTransactionResponse = {
@@ -777,7 +782,7 @@ const TokenAmountResult = pick({
   amount: string(),
   uiAmount: nullable(number()),
   decimals: number(),
-  uiAmountString: optional(nullable(string())),
+  uiAmountString: optional(string()),
 });
 
 /**
@@ -808,7 +813,7 @@ const GetTokenLargestAccountsResult = jsonRpcResultAndContext(
       amount: string(),
       uiAmount: nullable(number()),
       decimals: number(),
-      uiAmountString: optional(nullable(string())),
+      uiAmountString: optional(string()),
     }),
   ),
 );
@@ -2375,7 +2380,7 @@ export class Connection {
    */
   async getVersion(): Promise<Version> {
     const unsafeRes = await this._rpcRequest('getVersion', []);
-    const res = create(unsafeRes, jsonRpcResult(Version));
+    const res = create(unsafeRes, jsonRpcResult(VersionResult));
     if (res.error) {
       throw new Error('failed to get version: ' + res.error.message);
     }
