@@ -16,7 +16,11 @@
     "isolatedModules": true,
     "baseUrl": "src",
     "noFallthroughCasesInSwitch": true,
-    "noImplicitReturns": true
+    "noImplicitReturns": true,
+    "paths": {
+      // This is needed so that @solana/spl-token's @solana/web3.js doesn't conflict
+      "@solana/web3.js": ["."]
+    }
   },
   "include": ["src"]
 }

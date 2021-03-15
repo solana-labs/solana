@@ -154,7 +154,7 @@ if (process.env.TEST_LIVE) {
         const {signatures, message} = parsedTx.transaction;
         expect(signatures[0]).to.eq(signature);
         const ix = message.instructions[0];
-        if (ix.parsed) {
+        if ('parsed' in ix) {
           expect('parsed' in ix).to.eq(false);
         } else {
           expect(ix.programId).to.eql(program.publicKey);

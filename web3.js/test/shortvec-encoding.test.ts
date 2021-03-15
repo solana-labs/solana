@@ -21,7 +21,7 @@ function checkEncodedArray(
 
 describe('shortvec', () => {
   it('decodeLength', () => {
-    let array = [];
+    let array: number[] = [];
     checkDecodedArray(array, 0);
 
     array = [5];
@@ -47,7 +47,7 @@ describe('shortvec', () => {
   });
 
   it('encodeLength', () => {
-    let array = [];
+    let array: number[] = [];
     let prevLength = 1;
     checkEncodedArray(array, 0, prevLength, 1, [0]);
 
@@ -63,7 +63,7 @@ describe('shortvec', () => {
 
     checkEncodedArray(array, 0x7fff, (prevLength += 3), 3, [0xff, 0xff, 0x01]);
 
-    prevLength = checkEncodedArray(array, 0x200000, (prevLength += 4), 4, [
+    checkEncodedArray(array, 0x200000, (prevLength += 4), 4, [
       0x80,
       0x80,
       0x80,

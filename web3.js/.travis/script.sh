@@ -8,8 +8,6 @@ test -r lib/index.iife.js
 test -r lib/index.cjs.js
 test -r lib/index.esm.js
 npm run doc
-npm run defs
-npm run flow
 npm run lint
 npm run codecov
 make -C examples/bpf-c-noop/

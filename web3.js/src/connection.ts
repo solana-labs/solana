@@ -55,6 +55,12 @@ const BufferFromRawAccountData = coerce(
   value => Buffer.from(value[0], 'base64'),
 );
 
+/**
+ * Attempt to use a recent blockhash for up to 30 seconds
+ * @internal
+ */
+export const BLOCKHASH_CACHE_TIMEOUT_MS = 30 * 1000;
+
 type RpcRequest = (methodName: string, args: Array<any>) => any;
 
 export type TokenAccountsFilter =
@@ -2578,8 +2584,6 @@ export class Connection {
       while (this._pollingBlockhash) {
         await sleep(100);
       }
-      // Attempt to use a recent blockhash for up to 30 seconds
-      const BLOCKHASH_CACHE_TIMEOUT_MS = 30 * 1000;
       const timeSinceFetch = Date.now() - this._blockhashInfo.lastFetch;
       const expired = timeSinceFetch >= BLOCKHASH_CACHE_TIMEOUT_MS;
       if (this._blockhashInfo.recentBlockhash !== null && !expired) {

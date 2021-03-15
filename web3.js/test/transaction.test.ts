@@ -1,4 +1,5 @@
 import bs58 from 'bs58';
+import invariant from 'assert';
 import {Buffer} from 'buffer';
 import nacl from 'tweetnacl';
 import {expect} from 'chai';
@@ -9,6 +10,7 @@ import {Transaction} from '../src/transaction';
 import {StakeProgram} from '../src/stake-program';
 import {SystemProgram} from '../src/system-program';
 import {Message} from '../src/message';
+import {toBuffer} from '../src/util/to-buffer';
 
 describe('Transaction', () => {
   describe('compileMessage', () => {
@@ -160,22 +162,17 @@ describe('Transaction', () => {
 
     expect(partialTransaction).to.eql(transaction);
 
-    if (
-      partialTransaction.signatures[0].signature != null /* <-- pacify flow */
-    ) {
-      partialTransaction.signatures[0].signature[0] = 0;
-      expect(() =>
-        partialTransaction.serialize({requireAllSignatures: false}),
-      ).to.throw();
-      expect(() =>
-        partialTransaction.serialize({
-          verifySignatures: false,
-          requireAllSignatures: false,
-        }),
-      ).not.to.throw();
-    } else {
-      throw new Error('unreachable');
-    }
+    invariant(partialTransaction.signatures[0].signature);
+    partialTransaction.signatures[0].signature[0] = 0;
+    expect(() =>
+      partialTransaction.serialize({requireAllSignatures: false}),
+    ).to.throw();
+    expect(() =>
+      partialTransaction.serialize({
+        verifySignatures: false,
+        requireAllSignatures: false,
+      }),
+    ).not.to.throw();
   });
 
   describe('dedupe', () => {
@@ -261,7 +258,6 @@ describe('Transaction', () => {
 
     const newTransaction = new Transaction({
       recentBlockhash: orgTransaction.recentBlockhash,
-      feePayer: orgTransaction.feePayer,
       signatures: orgTransaction.signatures,
     }).add(transfer1, transfer2);
 
@@ -451,7 +447,7 @@ describe('Transaction', () => {
     // Serializing the message is allowed when signature array has null signatures
     expectedTransaction.serializeMessage();
 
-    expectedTransaction.feePayer = null;
+    expectedTransaction.feePayer = undefined;
     expectedTransaction.setSigners(sender.publicKey);
     expect(expectedTransaction.signatures).to.have.length(1);
 
@@ -510,7 +506,7 @@ describe('Transaction', () => {
     tx.setSigners(from.publicKey);
     const tx_bytes = tx.serializeMessage();
     const signature = nacl.sign.detached(tx_bytes, from.secretKey);
-    tx.addSignature(from.publicKey, signature);
+    tx.addSignature(from.publicKey, toBuffer(signature));
     expect(tx.verifySignatures()).to.be.true;
   });
 
@@ -532,7 +528,7 @@ describe('Transaction', () => {
     tx.feePayer = from.publicKey;
     const tx_bytes = tx.serializeMessage();
     const signature = nacl.sign.detached(tx_bytes, from.secretKey);
-    tx.addSignature(from.publicKey, signature);
+    tx.addSignature(from.publicKey, toBuffer(signature));
     expect(tx.verifySignatures()).to.be.true;
   });
 });

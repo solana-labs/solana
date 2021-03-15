@@ -5,15 +5,15 @@ import sinon from 'sinon';
 import {Connection} from '../../src';
 
 type RpcRequest = {
-  method: string,
-  params?: Array<any>,
+  method: string;
+  params?: Array<any>;
 };
 
 type RpcResponse = {
   context: {
-    slot: number,
-  },
-  value: any,
+    slot: number;
+  };
+  value: any;
 };
 
 const mockRpcSocket: Array<[RpcRequest, RpcResponse]> = [];
@@ -24,9 +24,9 @@ export const mockRpcMessage = ({
   params,
   result,
 }: {
-  method: string,
-  params: Array<any>,
-  result: any,
+  method: string;
+  params: Array<any>;
+  result: any;
 }) => {
   mockRpcSocket.push([
     {method, params},
@@ -46,9 +46,11 @@ export const stubRpcWebSocket = (connection: Connection) => {
   sandbox.stub(rpcWebSocket, 'close').callsFake(() => {
     mockClient.close();
   });
-  sandbox.stub(rpcWebSocket, 'call').callsFake((method, params) => {
-    return mockClient.call(method, params);
-  });
+  sandbox
+    .stub(rpcWebSocket, 'call')
+    .callsFake((method: string, params: any) => {
+      return mockClient.call(method, params);
+    });
 };
 
 export const restoreRpcWebSocket = (connection: Connection) => {
@@ -85,7 +87,10 @@ class MockClient {
 
   call(method: string, params: Array<any>): Promise<Object> {
     expect(mockRpcSocket.length).to.be.at.least(1);
-    const [mockRequest, mockResponse] = mockRpcSocket.shift();
+    const [mockRequest, mockResponse] = mockRpcSocket.shift() as [
+      RpcRequest,
+      RpcResponse,
+    ];
 
     expect(method).to.eq(mockRequest.method);
     expect(params).to.eql(mockRequest.params);

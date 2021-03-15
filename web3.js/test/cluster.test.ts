@@ -5,8 +5,7 @@ import {clusterApiUrl} from '../src/util/cluster';
 describe('Cluster Util', () => {
   it('invalid', () => {
     expect(() => {
-      // $FlowExpectedError
-      clusterApiUrl('abc123');
+      clusterApiUrl('abc123' as any);
     }).to.throw();
   });
 
