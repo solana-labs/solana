@@ -23,6 +23,7 @@ ignores=(
   .cargo
   target
   web3.js/examples
+  node_modules
 )
 
 not_paths=()
@@ -30,10 +31,10 @@ for ignore in "${ignores[@]}"; do
   not_paths+=(-not -path "*/$ignore/*")
 done
 
-# shellcheck disable=2207,SC2068 # Don't want a positional arg if `not-paths` is empty
-Cargo_tomls=($(find . -mindepth 2 -name Cargo.toml ${not_paths[@]}))
-# shellcheck disable=2207,SC2068 # Don't want a positional arg if `not-paths` is empty
-markdownFiles=($(find . -name "*.md" ${not_paths[@]}))
+# shellcheck disable=2207
+Cargo_tomls=($(find . -mindepth 2 -name Cargo.toml "${not_paths[@]}"))
+# shellcheck disable=2207
+markdownFiles=($(find . -name "*.md" "${not_paths[@]}"))
 
 # Collect the name of all the internal crates
 crates=()
