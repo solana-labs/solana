@@ -1,4 +1,3 @@
-// @flow
 import BN from 'bn.js';
 import {Buffer} from 'buffer';
 import {expect, use} from 'chai';

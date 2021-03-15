@@ -1,4 +1,3 @@
-// @flow
 import {PublicKey} from './publickey';
 
 export const SYSVAR_CLOCK_PUBKEY = new PublicKey(

@@ -1,5 +1,3 @@
-// @flow
-
 import {Buffer} from 'buffer';
 import * as BufferLayout from 'buffer-layout';
 
@@ -16,6 +14,11 @@ import {SystemProgram} from './system-program';
  * Program loader interface
  */
 export class Loader {
+  /**
+   * @internal
+   */
+  constructor() {}
+
   /**
    * Amount of program data placed in each load Transaction
    */

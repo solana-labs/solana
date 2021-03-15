@@ -1,5 +1,3 @@
-// @flow
-
 import {Buffer} from 'buffer';
 import * as BufferLayout from 'buffer-layout';
 
@@ -32,19 +30,19 @@ export const rustString = (property: string = 'string') => {
   const _decode = rsl.decode.bind(rsl);
   const _encode = rsl.encode.bind(rsl);
 
-  rsl.decode = (buffer, offset) => {
+  rsl.decode = (buffer: any, offset: any) => {
     const data = _decode(buffer, offset);
     return data.chars.toString('utf8');
   };
 
-  rsl.encode = (str, buffer, offset) => {
+  rsl.encode = (str: any, buffer: any, offset: any) => {
     const data = {
       chars: Buffer.from(str, 'utf8'),
     };
     return _encode(data, buffer, offset);
   };
 
-  rsl.alloc = str => {
+  rsl.alloc = (str: any) => {
     return (
       BufferLayout.u32().span +
       BufferLayout.u32().span +
@@ -79,9 +77,9 @@ export const lockup = (property: string = 'lockup') => {
   );
 };
 
-export function getAlloc(type: Object, fields: Object): number {
+export function getAlloc(type: any, fields: any): number {
   let alloc = 0;
-  type.layout.fields.forEach(item => {
+  type.layout.fields.forEach((item: any) => {
     if (item.span >= 0) {
       alloc += item.span;
     } else if (typeof item.alloc === 'function') {

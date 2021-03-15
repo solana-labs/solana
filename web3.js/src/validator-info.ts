@@ -1,5 +1,3 @@
-// @flow
-
 import {Buffer} from 'buffer';
 import {
   assert as assertType,
@@ -17,12 +15,12 @@ export const VALIDATOR_INFO_KEY = new PublicKey(
 );
 
 /**
- * @private
+ * @internal
  */
-type ConfigKey = {|
-  publicKey: PublicKey,
-  isSigner: boolean,
-|};
+type ConfigKey = {
+  publicKey: PublicKey;
+  isSigner: boolean;
+};
 
 /**
  * Info used to identity validators.
@@ -33,12 +31,12 @@ type ConfigKey = {|
  * @property {?string} details optional, extra information the validator chose to share
  * @property {?string} keybaseUsername optional, used to identify validators on keybase.io
  */
-export type Info = {|
-  name: string,
-  website?: string,
-  details?: string,
-  keybaseUsername?: string,
-|};
+export type Info = {
+  name: string;
+  website?: string;
+  details?: string;
+  keybaseUsername?: string;
+};
 
 const InfoString = pick({
   name: string(),

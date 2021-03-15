@@ -27,8 +27,8 @@ function generateConfig(configType, format) {
       }),
       generateTypescript
         ? typescript({
-            browserslist: false,
-          })
+          browserslist: false,
+        })
         : undefined,
       babel({
         exclude: '**/node_modules/**',

@@ -1,5 +1,3 @@
-// @flow
-
 import bs58 from 'bs58';
 import BN from 'bn.js';
 import * as mockttp from 'mockttp';

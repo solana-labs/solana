@@ -1,5 +1,3 @@
-// @flow
-
 import {Connection} from '../connection';
 import {Transaction} from '../transaction';
 import type {Account} from '../account';

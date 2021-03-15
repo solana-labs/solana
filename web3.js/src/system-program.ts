@@ -1,8 +1,6 @@
-// @flow
-
 import * as BufferLayout from 'buffer-layout';
 
-import {encodeData, decodeData} from './instruction';
+import {encodeData, decodeData, InstructionType} from './instruction';
 import * as Layout from './layout';
 import {NONCE_ACCOUNT_LENGTH} from './nonce-account';
 import {PublicKey} from './publickey';
@@ -18,13 +16,13 @@ import {Transaction, TransactionInstruction} from './transaction';
  * @property {number} space
  * @property {PublicKey} programId
  */
-export type CreateAccountParams = {|
-  fromPubkey: PublicKey,
-  newAccountPubkey: PublicKey,
-  lamports: number,
-  space: number,
-  programId: PublicKey,
-|};
+export type CreateAccountParams = {
+  fromPubkey: PublicKey;
+  newAccountPubkey: PublicKey;
+  lamports: number;
+  space: number;
+  programId: PublicKey;
+};
 
 /**
  * Transfer system transaction params
@@ -33,11 +31,11 @@ export type CreateAccountParams = {|
  * @property {PublicKey} toPubkey
  * @property {number} lamports
  */
-export type TransferParams = {|
-  fromPubkey: PublicKey,
-  toPubkey: PublicKey,
-  lamports: number,
-|};
+export type TransferParams = {
+  fromPubkey: PublicKey;
+  toPubkey: PublicKey;
+  lamports: number;
+};
 
 /**
  * Assign system transaction params
@@ -45,10 +43,10 @@ export type TransferParams = {|
  * @property {PublicKey} accountPubkey
  * @property {PublicKey} programId
  */
-export type AssignParams = {|
-  accountPubkey: PublicKey,
-  programId: PublicKey,
-|};
+export type AssignParams = {
+  accountPubkey: PublicKey;
+  programId: PublicKey;
+};
 
 /**
  * Create account with seed system transaction params
@@ -61,15 +59,15 @@ export type AssignParams = {|
  * @property {number} space
  * @property {PublicKey} programId
  */
-export type CreateAccountWithSeedParams = {|
-  fromPubkey: PublicKey,
-  newAccountPubkey: PublicKey,
-  basePubkey: PublicKey,
-  seed: string,
-  lamports: number,
-  space: number,
-  programId: PublicKey,
-|};
+export type CreateAccountWithSeedParams = {
+  fromPubkey: PublicKey;
+  newAccountPubkey: PublicKey;
+  basePubkey: PublicKey;
+  seed: string;
+  lamports: number;
+  space: number;
+  programId: PublicKey;
+};
 
 /**
  * Create nonce account system transaction params
@@ -79,12 +77,12 @@ export type CreateAccountWithSeedParams = {|
  * @property {PublicKey} authorizedPubkey
  * @property {number} lamports
  */
-export type CreateNonceAccountParams = {|
-  fromPubkey: PublicKey,
-  noncePubkey: PublicKey,
-  authorizedPubkey: PublicKey,
-  lamports: number,
-|};
+export type CreateNonceAccountParams = {
+  fromPubkey: PublicKey;
+  noncePubkey: PublicKey;
+  authorizedPubkey: PublicKey;
+  lamports: number;
+};
 
 /**
  * Create nonce account with seed system transaction params
@@ -96,14 +94,14 @@ export type CreateNonceAccountParams = {|
  * @property {string} seed
  * @property {number} lamports
  */
-export type CreateNonceAccountWithSeedParams = {|
-  fromPubkey: PublicKey,
-  noncePubkey: PublicKey,
-  authorizedPubkey: PublicKey,
-  lamports: number,
-  basePubkey: PublicKey,
-  seed: string,
-|};
+export type CreateNonceAccountWithSeedParams = {
+  fromPubkey: PublicKey;
+  noncePubkey: PublicKey;
+  authorizedPubkey: PublicKey;
+  lamports: number;
+  basePubkey: PublicKey;
+  seed: string;
+};
 
 /**
  * Initialize nonce account system instruction params
@@ -111,10 +109,10 @@ export type CreateNonceAccountWithSeedParams = {|
  * @property {PublicKey} noncePubkey
  * @property {PublicKey} authorizedPubkey
  */
-export type InitializeNonceParams = {|
-  noncePubkey: PublicKey,
-  authorizedPubkey: PublicKey,
-|};
+export type InitializeNonceParams = {
+  noncePubkey: PublicKey;
+  authorizedPubkey: PublicKey;
+};
 
 /**
  * Advance nonce account system instruction params
@@ -122,10 +120,10 @@ export type InitializeNonceParams = {|
  * @property {PublicKey} noncePubkey
  * @property {PublicKey} authorizedPubkey
  */
-export type AdvanceNonceParams = {|
-  noncePubkey: PublicKey,
-  authorizedPubkey: PublicKey,
-|};
+export type AdvanceNonceParams = {
+  noncePubkey: PublicKey;
+  authorizedPubkey: PublicKey;
+};
 
 /**
  * Withdraw nonce account system transaction params
@@ -135,12 +133,12 @@ export type AdvanceNonceParams = {|
  * @property {PublicKey} toPubkey
  * @property {number} lamports
  */
-export type WithdrawNonceParams = {|
-  noncePubkey: PublicKey,
-  authorizedPubkey: PublicKey,
-  toPubkey: PublicKey,
-  lamports: number,
-|};
+export type WithdrawNonceParams = {
+  noncePubkey: PublicKey;
+  authorizedPubkey: PublicKey;
+  toPubkey: PublicKey;
+  lamports: number;
+};
 
 /**
  * Authorize nonce account system transaction params
@@ -149,11 +147,11 @@ export type WithdrawNonceParams = {|
  * @property {PublicKey} authorizedPubkey
  * @property {PublicKey} newAuthorizedPubkey
  */
-export type AuthorizeNonceParams = {|
-  noncePubkey: PublicKey,
-  authorizedPubkey: PublicKey,
-  newAuthorizedPubkey: PublicKey,
-|};
+export type AuthorizeNonceParams = {
+  noncePubkey: PublicKey;
+  authorizedPubkey: PublicKey;
+  newAuthorizedPubkey: PublicKey;
+};
 
 /**
  * Allocate account system transaction params
@@ -161,10 +159,10 @@ export type AuthorizeNonceParams = {|
  * @property {PublicKey} accountPubkey
  * @property {number} space
  */
-export type AllocateParams = {|
-  accountPubkey: PublicKey,
-  space: number,
-|};
+export type AllocateParams = {
+  accountPubkey: PublicKey;
+  space: number;
+};
 
 /**
  * Allocate account with seed system transaction params
@@ -175,13 +173,13 @@ export type AllocateParams = {|
  * @property {number} space
  * @property {PublicKey} programId
  */
-export type AllocateWithSeedParams = {|
-  accountPubkey: PublicKey,
-  basePubkey: PublicKey,
-  seed: string,
-  space: number,
-  programId: PublicKey,
-|};
+export type AllocateWithSeedParams = {
+  accountPubkey: PublicKey;
+  basePubkey: PublicKey;
+  seed: string;
+  space: number;
+  programId: PublicKey;
+};
 
 /**
  * Assign account with seed system transaction params
@@ -191,12 +189,12 @@ export type AllocateWithSeedParams = {|
  * @property {string} seed
  * @property {PublicKey} programId
  */
-export type AssignWithSeedParams = {|
-  accountPubkey: PublicKey,
-  basePubkey: PublicKey,
-  seed: string,
-  programId: PublicKey,
-|};
+export type AssignWithSeedParams = {
+  accountPubkey: PublicKey;
+  basePubkey: PublicKey;
+  seed: string;
+  programId: PublicKey;
+};
 
 /**
  * Transfer with seed system transaction params
@@ -208,19 +206,24 @@ export type AssignWithSeedParams = {|
  * @property {string} seed
  * @property {PublicKey} programId
  */
-export type TransferWithSeedParams = {|
-  fromPubkey: PublicKey,
-  basePubkey: PublicKey,
-  toPubkey: PublicKey,
-  lamports: number,
-  seed: string,
-  programId: PublicKey,
-|};
+export type TransferWithSeedParams = {
+  fromPubkey: PublicKey;
+  basePubkey: PublicKey;
+  toPubkey: PublicKey;
+  lamports: number;
+  seed: string;
+  programId: PublicKey;
+};
 
 /**
  * System Instruction class
  */
 export class SystemInstruction {
+  /**
+   * @internal
+   */
+  constructor() {}
+
   /**
    * Decode a system instruction and retrieve the instruction type.
    */
@@ -232,10 +235,11 @@ export class SystemInstruction {
     const instructionTypeLayout = BufferLayout.u32('instruction');
     const typeIndex = instructionTypeLayout.decode(instruction.data);
 
-    let type;
-    for (const t of Object.keys(SYSTEM_INSTRUCTION_LAYOUTS)) {
-      if (SYSTEM_INSTRUCTION_LAYOUTS[t].index == typeIndex) {
-        type = t;
+    let type: SystemInstructionType | undefined;
+    for (const [ixType, layout] of Object.entries(SYSTEM_INSTRUCTION_LAYOUTS)) {
+      if (layout.index == typeIndex) {
+        type = ixType as SystemInstructionType;
+        break;
       }
     }
 
@@ -502,7 +506,7 @@ export class SystemInstruction {
   }
 
   /**
-   * @private
+   * @internal
    */
   static checkProgramId(programId: PublicKey) {
     if (!programId.equals(SystemProgram.programId)) {
@@ -511,7 +515,7 @@ export class SystemInstruction {
   }
 
   /**
-   * @private
+   * @internal
    */
   static checkKeyLength(keys: Array<any>, expectedLength: number) {
     if (keys.length < expectedLength) {
@@ -524,16 +528,27 @@ export class SystemInstruction {
 
 /**
  * An enumeration of valid SystemInstructionType's
- * @typedef {'Create' | 'Assign' | 'Transfer' | 'CreateWithSeed'
- | 'AdvanceNonceAccount' | 'WithdrawNonceAccount' | 'InitializeNonceAccount'
- | 'AuthorizeNonceAccount'} SystemInstructionType
  */
-export type SystemInstructionType = $Keys<typeof SYSTEM_INSTRUCTION_LAYOUTS>;
+export type SystemInstructionType =
+  | 'AdvanceNonceAccount'
+  | 'Allocate'
+  | 'AllocateWithSeed'
+  | 'Assign'
+  | 'AssignWithSeed'
+  | 'AuthorizeNonceAccount'
+  | 'Create'
+  | 'CreateWithSeed'
+  | 'InitializeNonceAccount'
+  | 'Transfer'
+  | 'TransferWithSeed'
+  | 'WithdrawNonceAccount';
 
 /**
  * An enumeration of valid system InstructionType's
  */
-export const SYSTEM_INSTRUCTION_LAYOUTS = Object.freeze({
+export const SYSTEM_INSTRUCTION_LAYOUTS: {
+  [type in SystemInstructionType]: InstructionType;
+} = Object.freeze({
   Create: {
     index: 0,
     layout: BufferLayout.struct([
@@ -635,6 +650,11 @@ export const SYSTEM_INSTRUCTION_LAYOUTS = Object.freeze({
  */
 export class SystemProgram {
   /**
+   * @internal
+   */
+  constructor() {}
+
+  /**
    * Public key that identifies the System program
    */
   static get programId(): PublicKey {
@@ -670,7 +690,7 @@ export class SystemProgram {
   ): TransactionInstruction {
     let data;
     let keys;
-    if (params.basePubkey) {
+    if ('basePubkey' in params) {
       const type = SYSTEM_INSTRUCTION_LAYOUTS.TransferWithSeed;
       data = encodeData(type, {
         lamports: params.lamports,
@@ -706,7 +726,7 @@ export class SystemProgram {
   ): TransactionInstruction {
     let data;
     let keys;
-    if (params.basePubkey) {
+    if ('basePubkey' in params) {
       const type = SYSTEM_INSTRUCTION_LAYOUTS.AssignWithSeed;
       data = encodeData(type, {
         base: params.basePubkey.toBuffer(),
@@ -767,7 +787,7 @@ export class SystemProgram {
     params: CreateNonceAccountParams | CreateNonceAccountWithSeedParams,
   ): Transaction {
     const transaction = new Transaction();
-    if (params.basePubkey && params.seed) {
+    if ('basePubkey' in params && 'seed' in params) {
       transaction.add(
         SystemProgram.createAccountWithSeed({
           fromPubkey: params.fromPubkey,
@@ -904,7 +924,7 @@ export class SystemProgram {
   ): TransactionInstruction {
     let data;
     let keys;
-    if (params.basePubkey) {
+    if ('basePubkey' in params) {
       const type = SYSTEM_INSTRUCTION_LAYOUTS.AllocateWithSeed;
       data = encodeData(type, {
         base: params.basePubkey.toBuffer(),

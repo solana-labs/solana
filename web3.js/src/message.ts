@@ -1,5 +1,3 @@
-// @flow
-
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
 import * as BufferLayout from 'buffer-layout';
@@ -20,9 +18,9 @@ import * as shortvec from './util/shortvec-encoding';
  * @property {number} numReadonlyUnsignedAccounts The last `numReadonlySignedAccounts` of the unsigned keys are read-only accounts
  */
 export type MessageHeader = {
-  numRequiredSignatures: number,
-  numReadonlySignedAccounts: number,
-  numReadonlyUnsignedAccounts: number,
+  numRequiredSignatures: number;
+  numReadonlySignedAccounts: number;
+  numReadonlyUnsignedAccounts: number;
 };
 
 /**
@@ -34,9 +32,9 @@ export type MessageHeader = {
  * @property {string} data The program input data encoded as base 58
  */
 export type CompiledInstruction = {
-  programIdIndex: number,
-  accounts: number[],
-  data: string,
+  programIdIndex: number;
+  accounts: number[];
+  data: string;
 };
 
 /**
@@ -48,11 +46,11 @@ export type CompiledInstruction = {
  * @property {Blockhash} recentBlockhash The hash of a recent ledger block
  * @property {CompiledInstruction[]} instructions Instructions that will be executed in sequence and committed in one atomic transaction if all succeed.
  */
-type MessageArgs = {
-  header: MessageHeader,
-  accountKeys: string[],
-  recentBlockhash: Blockhash,
-  instructions: CompiledInstruction[],
+export type MessageArgs = {
+  header: MessageHeader;
+  accountKeys: string[];
+  recentBlockhash: Blockhash;
+  instructions: CompiledInstruction[];
 };
 
 const PUBKEY_LENGTH = 32;
@@ -87,17 +85,17 @@ export class Message {
   serialize(): Buffer {
     const numKeys = this.accountKeys.length;
 
-    let keyCount = [];
+    let keyCount: number[] = [];
     shortvec.encodeLength(keyCount, numKeys);
 
     const instructions = this.instructions.map(instruction => {
       const {accounts, programIdIndex} = instruction;
       const data = bs58.decode(instruction.data);
 
-      let keyIndicesCount = [];
+      let keyIndicesCount: number[] = [];
       shortvec.encodeLength(keyIndicesCount, accounts.length);
 
-      let dataCount = [];
+      let dataCount: number[] = [];
       shortvec.encodeLength(dataCount, data.length);
 
       return {
@@ -109,7 +107,7 @@ export class Message {
       };
     });
 
-    let instructionCount = [];
+    let instructionCount: number[] = [];
     shortvec.encodeLength(instructionCount, instructions.length);
     let instructionBuffer = Buffer.alloc(PACKET_DATA_SIZE);
     Buffer.from(instructionCount).copy(instructionBuffer);
@@ -179,9 +177,9 @@ export class Message {
     // Slice up wire data
     let byteArray = [...buffer];
 
-    const numRequiredSignatures = byteArray.shift();
-    const numReadonlySignedAccounts = byteArray.shift();
-    const numReadonlyUnsignedAccounts = byteArray.shift();
+    const numRequiredSignatures = byteArray.shift() as number;
+    const numReadonlySignedAccounts = byteArray.shift() as number;
+    const numReadonlyUnsignedAccounts = byteArray.shift() as number;
 
     const accountCount = shortvec.decodeLength(byteArray);
     let accountKeys = [];
@@ -195,18 +193,21 @@ export class Message {
     byteArray = byteArray.slice(PUBKEY_LENGTH);
 
     const instructionCount = shortvec.decodeLength(byteArray);
-    let instructions = [];
+    let instructions: CompiledInstruction[] = [];
     for (let i = 0; i < instructionCount; i++) {
-      let instruction = {};
-      instruction.programIdIndex = byteArray.shift();
+      const programIdIndex = byteArray.shift() as number;
       const accountCount = shortvec.decodeLength(byteArray);
-      instruction.accounts = byteArray.slice(0, accountCount);
+      const accounts = byteArray.slice(0, accountCount);
       byteArray = byteArray.slice(accountCount);
       const dataLength = shortvec.decodeLength(byteArray);
-      const data = byteArray.slice(0, dataLength);
-      instruction.data = bs58.encode(Buffer.from(data));
+      const dataSlice = byteArray.slice(0, dataLength);
+      const data = bs58.encode(Buffer.from(dataSlice));
       byteArray = byteArray.slice(dataLength);
-      instructions.push(instruction);
+      instructions.push({
+        programIdIndex,
+        accounts,
+        data,
+      });
     }
 
     const messageArgs = {

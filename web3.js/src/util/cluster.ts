@@ -1,8 +1,3 @@
-//@flow
-
-/**
- * @private
- */
 const endpoint = {
   http: {
     devnet: 'http://devnet.solana.com',

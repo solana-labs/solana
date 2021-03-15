@@ -1,4 +1,3 @@
-// @flow
 import {Buffer} from 'buffer';
 import {expect} from 'chai';
 import nacl from 'tweetnacl';
