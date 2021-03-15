@@ -53,13 +53,13 @@ export type AccountMeta = {
  * List of TransactionInstruction object fields that may be initialized at construction
  *
  * @typedef {Object} TransactionInstructionCtorFields
- * @property {?Array<PublicKey>} keys
- * @property {?PublicKey} programId
+ * @property {Array<PublicKey>} keys
+ * @property {PublicKey} programId
  * @property {?Buffer} data
  */
 export type TransactionInstructionCtorFields = {|
-  keys?: Array<AccountMeta>,
-  programId?: PublicKey,
+  keys: Array<AccountMeta>,
+  programId: PublicKey,
   data?: Buffer,
 |};
 
@@ -83,7 +83,7 @@ export class TransactionInstruction {
    * Public keys to include in this transaction
    * Boolean represents whether this pubkey needs to sign the transaction
    */
-  keys: Array<AccountMeta> = [];
+  keys: Array<AccountMeta>;
 
   /**
    * Program Id to execute
@@ -95,8 +95,12 @@ export class TransactionInstruction {
    */
   data: Buffer = Buffer.alloc(0);
 
-  constructor(opts?: TransactionInstructionCtorFields) {
-    opts && Object.assign(this, opts);
+  constructor(opts: TransactionInstructionCtorFields) {
+    this.programId = opts.programId;
+    this.keys = opts.keys;
+    if (opts.data) {
+      this.data = opts.data;
+    }
   }
 }
 
@@ -234,6 +238,14 @@ export class Transaction {
       feePayer = this.signatures[0].publicKey;
     } else {
       throw new Error('Transaction fee payer required');
+    }
+
+    for (let i = 0; i < this.instructions.length; i++) {
+      if (this.instructions[i].programId === undefined) {
+        throw new Error(
+          `Transaction instruction index ${i} has undefined program id`,
+        );
+      }
     }
 
     const programIds: string[] = [];
