@@ -49,10 +49,12 @@ pub enum PohRecorderError {
 type Result<T> = std::result::Result<T, PohRecorderError>;
 
 pub type WorkingBankEntry = (Arc<Bank>, (Entry, u64));
+pub type BankStart = (Arc<Bank>, Arc<Instant>);
 
 #[derive(Clone)]
 pub struct WorkingBank {
     pub bank: Arc<Bank>,
+    pub start: Arc<Instant>,
     pub min_tick_height: u64,
     pub max_tick_height: u64,
 }
@@ -97,7 +99,14 @@ impl PohRecorder {
             self.grace_ticks = grace_ticks;
             self.leader_first_tick_height = leader_first_tick_height;
             self.leader_last_tick_height = leader_last_tick_height;
+
+            datapoint_info!(
+                "leader-slot-start-to-cleared-elapsed-ms",
+                ("slot", bank.slot(), i64),
+                ("elapsed", working_bank.start.elapsed().as_millis(), i64),
+            );
         }
+
         if let Some(ref signal) = self.clear_bank_signal {
             let _ = signal.try_send(true);
         }
@@ -126,7 +135,13 @@ impl PohRecorder {
     }
 
     pub fn bank(&self) -> Option<Arc<Bank>> {
-        self.working_bank.clone().map(|w| w.bank)
+        self.working_bank.as_ref().map(|w| w.bank.clone())
+    }
+
+    pub fn bank_start(&self) -> Option<BankStart> {
+        self.working_bank
+            .as_ref()
+            .map(|w| (w.bank.clone(), w.start.clone()))
     }
 
     pub fn has_bank(&self) -> bool {
@@ -273,11 +288,15 @@ impl PohRecorder {
         trace!("new working bank");
         assert_eq!(working_bank.bank.ticks_per_slot(), self.ticks_per_slot());
         self.working_bank = Some(working_bank);
+        // TODO: adjust the working_bank.start time based on number of ticks
+        // that have already elapsed based on current tick height.
         let _ = self.flush_cache(false);
     }
+
     pub fn set_bank(&mut self, bank: &Arc<Bank>) {
         let working_bank = WorkingBank {
             bank: bank.clone(),
+            start: Arc::new(Instant::now()),
             min_tick_height: bank.tick_height(),
             max_tick_height: bank.max_tick_height(),
         };
@@ -517,6 +536,18 @@ impl PohRecorder {
         )
     }
 
+    // Filters the return result of PohRecorder::bank_start(), returns the bank
+    // if it's still processing transactions
+    pub fn get_bank_still_processing_txs(bank_start: &Option<BankStart>) -> Option<&Arc<Bank>> {
+        bank_start.as_ref().and_then(|(bank, bank_creation_time)| {
+            if Bank::should_bank_still_be_processing_txs(bank_creation_time, bank.ns_per_slot) {
+                Some(bank)
+            } else {
+                None
+            }
+        })
+    }
+
     #[cfg(test)]
     pub fn schedule_dummy_max_height_reached_failure(&mut self) {
         self.reset(Hash::default(), 1, None);
@@ -635,8 +666,10 @@ mod tests {
                 &Arc::new(PohConfig::default()),
             );
 
+            let start = Arc::new(Instant::now());
             let working_bank = WorkingBank {
                 bank,
+                start,
                 min_tick_height: 2,
                 max_tick_height: 3,
             };
@@ -669,8 +702,10 @@ mod tests {
                 &Arc::new(PohConfig::default()),
             );
 
+            let start = Arc::new(Instant::now());
             let working_bank = WorkingBank {
                 bank: bank.clone(),
+                start,
                 min_tick_height: 2,
                 max_tick_height: 3,
             };
@@ -725,8 +760,10 @@ mod tests {
             assert_eq!(poh_recorder.tick_cache.last().unwrap().1, 4);
             assert_eq!(poh_recorder.tick_height, 4);
 
+            let start = Arc::new(Instant::now());
             let working_bank = WorkingBank {
                 bank,
+                start,
                 min_tick_height: 2,
                 max_tick_height: 3,
             };
@@ -765,8 +802,10 @@ mod tests {
                 &Arc::new(PohConfig::default()),
             );
 
+            let start = Arc::new(Instant::now());
             let working_bank = WorkingBank {
                 bank: bank.clone(),
+                start,
                 min_tick_height: 2,
                 max_tick_height: 3,
             };
@@ -801,8 +840,10 @@ mod tests {
                 &Arc::new(PohConfig::default()),
             );
 
+            let start = Arc::new(Instant::now());
             let working_bank = WorkingBank {
                 bank: bank.clone(),
+                start,
                 min_tick_height: 1,
                 max_tick_height: 2,
             };
@@ -841,8 +882,10 @@ mod tests {
                 &Arc::new(PohConfig::default()),
             );
 
+            let start = Arc::new(Instant::now());
             let working_bank = WorkingBank {
                 bank: bank.clone(),
+                start,
                 min_tick_height: 1,
                 max_tick_height: 2,
             };
@@ -885,8 +928,10 @@ mod tests {
                 &Arc::new(PohConfig::default()),
             );
 
+            let start = Arc::new(Instant::now());
             let working_bank = WorkingBank {
                 bank: bank.clone(),
+                start,
                 min_tick_height: 1,
                 max_tick_height: 2,
             };
@@ -927,8 +972,10 @@ mod tests {
                 &Arc::new(PohConfig::default()),
             );
 
+            let start = Arc::new(Instant::now());
             let working_bank = WorkingBank {
                 bank,
+                start,
                 min_tick_height: 2,
                 max_tick_height: 3,
             };
@@ -1049,8 +1096,10 @@ mod tests {
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
                 &Arc::new(PohConfig::default()),
             );
+            let start = Arc::new(Instant::now());
             let working_bank = WorkingBank {
                 bank,
+                start,
                 min_tick_height: 2,
                 max_tick_height: 3,
             };
@@ -1118,8 +1167,10 @@ mod tests {
 
             let end_slot = 3;
             let max_tick_height = (end_slot + 1) * ticks_per_slot;
+            let start = Arc::new(Instant::now());
             let working_bank = WorkingBank {
                 bank: bank.clone(),
+                start,
                 min_tick_height: 1,
                 max_tick_height,
             };
