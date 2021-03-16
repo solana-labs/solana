@@ -218,8 +218,6 @@ fn process_instruction_common(
                         );
                         return Err(InstructionError::InvalidArgument);
                     }
-                    // TODO [KeyedAccounts to InvokeContext refactoring]
-                    // invoke_context.set_keyed_accounts(&keyed_accounts[1..]);
                     invoke_context.pop_first_keyed_account();
                     (
                         &keyed_accounts[1..],
@@ -698,13 +696,14 @@ fn process_loader_upgradeable_instruction(
 
 fn process_loader_instruction(
     program_id: &Pubkey,
-    keyed_accounts: &[KeyedAccount],
+    _keyed_accounts: &[KeyedAccount],
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
     use_jit: bool,
 ) -> Result<(), InstructionError> {
+    let keyed_accounts = invoke_context.get_keyed_accounts();
     // TODO [KeyedAccounts to InvokeContext refactoring]
-    assert_eq!(keyed_accounts, invoke_context.get_keyed_accounts());
+    assert_eq!(_keyed_accounts, keyed_accounts);
     let program = keyed_account_at_index(keyed_accounts, 0)?;
     if program.owner()? != *program_id {
         ic_msg!(
@@ -728,11 +727,9 @@ fn process_loader_instruction(
             }
 
             let executor = create_executor(0, 0, invoke_context, use_jit)?;
-            {
-                let keyed_accounts = invoke_context.get_keyed_accounts();
-                let program = keyed_account_at_index(keyed_accounts, 0)?;
-                invoke_context.add_executor(program.unsigned_key(), executor);
-            }
+            let keyed_accounts = invoke_context.get_keyed_accounts();
+            let program = keyed_account_at_index(keyed_accounts, 0)?;
+            invoke_context.add_executor(program.unsigned_key(), executor);
             program.try_account_ref_mut()?.executable = true;
             ic_msg!(
                 invoke_context,
@@ -782,23 +779,26 @@ impl Executor for BpfExecutor {
         &self,
         loader_id: &Pubkey,
         program_id: &Pubkey,
-        keyed_accounts: &[KeyedAccount],
+        _keyed_accounts: &[KeyedAccount],
         instruction_data: &[u8],
         invoke_context: &mut dyn InvokeContext,
         use_jit: bool,
     ) -> Result<(), InstructionError> {
+        // TODO [KeyedAccounts to InvokeContext refactoring]
+        let keyed_accounts = invoke_context.get_keyed_accounts();
+        assert_eq!(_keyed_accounts, keyed_accounts);
+
         let logger = invoke_context.get_logger();
         let invoke_depth = invoke_context.invoke_depth();
-        // TODO [KeyedAccounts to InvokeContext refactoring]
-        assert_eq!(keyed_accounts, invoke_context.get_keyed_accounts());
 
-        let mut serialize_time = Measure::start("serialize");
         // TODO [KeyedAccounts to InvokeContext refactoring]
         // invoke_context.set_keyed_accounts(&keyed_accounts[1..]);
         invoke_context.pop_first_keyed_account();
-        let parameter_accounts = &keyed_accounts[1..];
+
+        let mut serialize_time = Measure::start("serialize");
+        let keyed_accounts = invoke_context.get_keyed_accounts();
         let mut parameter_bytes =
-            serialize_parameters(loader_id, program_id, parameter_accounts, &instruction_data)?;
+            serialize_parameters(loader_id, program_id, keyed_accounts, &instruction_data)?;
         serialize_time.stop();
         let mut create_vm_time = Measure::start("create_vm");
         let mut execute_time;
@@ -867,9 +867,10 @@ impl Executor for BpfExecutor {
             execute_time.stop();
         }
         let mut deserialize_time = Measure::start("deserialize");
+        let keyed_accounts = invoke_context.get_keyed_accounts();
         deserialize_parameters(
             loader_id,
-            parameter_accounts,
+            keyed_accounts,
             &parameter_bytes,
             invoke_context.is_feature_active(&skip_ro_deserialization::id()),
         )?;
