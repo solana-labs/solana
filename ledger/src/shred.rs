@@ -167,12 +167,11 @@ impl Shred {
     where
         T: Deserialize<'de>,
     {
-        let end = std::cmp::min(*index + size, buf.len());
         let ret = bincode::options()
             .with_limit(PACKET_DATA_SIZE as u64)
             .with_fixint_encoding()
             .allow_trailing_bytes()
-            .deserialize(&buf[*index..end])?;
+            .deserialize(&buf[*index..*index + size])?;
         *index += size;
         Ok(ret)
     }
@@ -271,10 +270,14 @@ impl Shred {
 
         let slot = common_header.slot;
         let expected_data_size = SHRED_PAYLOAD_SIZE;
-        // Shreds should be padded out to SHRED_PAYLOAD_SIZE
-        // so that erasure generation/recovery works correctly
-        // But only the data_header.size is stored in blockstore.
-        payload.resize(expected_data_size, 0);
+        // Safe because any payload from the network must have passed through
+        // window service,  which implies payload wll be of size
+        // PACKET_DATA_SIZE, and `expected_data_size` <= PACKET_DATA_SIZE.
+        //
+        // On the other hand, if this function is called locally, the payload size should match
+        // the `expected_data_size`.
+        assert!(payload.len() >= expected_data_size);
+        payload.truncate(expected_data_size);
         let shred = if common_header.shred_type == ShredType(CODING_SHRED) {
             let coding_header: CodingShredHeader =
                 Self::deserialize_obj(&mut start, SIZE_OF_CODING_SHRED_HEADER, &payload)?;
@@ -350,7 +353,6 @@ impl Shred {
                 &data_header,
             )
             .expect("Failed to write data header into shred buffer");
-            assert!(89 + data_header.size as usize >= start);
         } else if common_header.shred_type == ShredType(CODING_SHRED) {
             Self::serialize_obj_into(
                 &mut start,

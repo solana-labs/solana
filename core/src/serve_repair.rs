@@ -596,7 +596,9 @@ mod tests {
     use solana_ledger::{
         blockstore::make_many_slot_entries,
         blockstore_processor::fill_blockstore_slot_with_ticks,
-        shred::{max_ticks_per_n_shreds, Shred},
+        shred::{
+            max_ticks_per_n_shreds, CodingShredHeader, DataShredHeader, Shred, ShredCommonHeader,
+        },
     };
     use solana_sdk::{hash::Hash, pubkey::Pubkey, timing::timestamp};
 
@@ -706,10 +708,23 @@ mod tests {
                 nonce,
             );
             assert!(rv.is_none());
-            let shred = Shred::new_from_data(slot, 1, 1, None, false, false, 0, 2, 0);
+            let common_header = ShredCommonHeader {
+                slot,
+                index: 1,
+                ..ShredCommonHeader::default()
+            };
+            let data_header = DataShredHeader {
+                parent_offset: 1,
+                ..DataShredHeader::default()
+            };
+            let shred_info = Shred::new_empty_from_header(
+                common_header,
+                data_header,
+                CodingShredHeader::default(),
+            );
 
             blockstore
-                .insert_shreds(vec![shred], None, false)
+                .insert_shreds(vec![shred_info], None, false)
                 .expect("Expect successful ledger write");
 
             let index = 1;
@@ -912,7 +927,6 @@ mod tests {
             assert_eq!(shreds[0].slot(), 1);
             assert_eq!(shreds[0].index(), 0);
             shreds[0].payload.push(10);
-            shreds[0].data_header.size = shreds[0].payload.len() as u16;
             blockstore
                 .insert_shreds(shreds, None, false)
                 .expect("Expect successful ledger write");
