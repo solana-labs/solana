@@ -4,7 +4,7 @@ use {
     console::style,
     indicatif::{ProgressBar, ProgressStyle},
     solana_sdk::{
-        clock::UnixTimestamp, hash::Hash, native_token::lamports_to_sol,
+        clock::UnixTimestamp, hash::Hash, message::Message, native_token::lamports_to_sol,
         program_utils::limited_deserialize, transaction::Transaction,
     },
     solana_transaction_status::UiTransactionStatusMeta,
@@ -125,6 +125,31 @@ pub fn println_signers(
     println!();
 }
 
+fn format_account_mode(message: &Message, index: usize) -> String {
+    format!(
+        "{}r{}{}", // accounts are always readable...
+        if message.is_signer(index) {
+            "s" // stands for signer
+        } else {
+            "-"
+        },
+        if message.is_writable(index) {
+            "w" // comment for consistent rust fmt (no joking; lol)
+        } else {
+            "-"
+        },
+        // account may be executable on-chain while not being
+        // designated as a program-id in the message
+        if message.maybe_executable(index) {
+            "x"
+        } else {
+            // programs to be executed via CPI cannot be identified as
+            // executable from the message
+            "-"
+        },
+    )
+}
+
 pub fn write_transaction<W: io::Write>(
     w: &mut W,
     transaction: &Transaction,
@@ -167,16 +192,31 @@ pub fn write_transaction<W: io::Write>(
             prefix, signature_index, signature, sigverify_status,
         )?;
     }
-    writeln!(w, "{}{:?}", prefix, message.header)?;
+    let mut fee_payer_index = None;
     for (account_index, account) in message.account_keys.iter().enumerate() {
-        writeln!(w, "{}Account {}: {:?}", prefix, account_index, account)?;
+        if fee_payer_index.is_none() && message.is_non_loader_key(account, account_index) {
+            fee_payer_index = Some(account_index)
+        }
+        writeln!(
+            w,
+            "{}Account {}: {} {}{}",
+            prefix,
+            account_index,
+            format_account_mode(message, account_index),
+            account,
+            if Some(account_index) == fee_payer_index {
+                " (fee payer)"
+            } else {
+                ""
+            },
+        )?;
     }
     for (instruction_index, instruction) in message.instructions.iter().enumerate() {
         let program_pubkey = message.account_keys[instruction.program_id_index as usize];
         writeln!(w, "{}Instruction {}", prefix, instruction_index)?;
         writeln!(
             w,
-            "{}  Program: {} ({})",
+            "{}  Program:   {} ({})",
             prefix, program_pubkey, instruction.program_id_index
         )?;
         for (account_index, account) in instruction.accounts.iter().enumerate() {

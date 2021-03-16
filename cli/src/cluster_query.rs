@@ -993,7 +993,20 @@ pub fn process_get_epoch(rpc_client: &RpcClient, _config: &CliConfig) -> Process
 }
 
 pub fn process_get_epoch_info(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
-    let epoch_info: CliEpochInfo = rpc_client.get_epoch_info()?.into();
+    let epoch_info = rpc_client.get_epoch_info()?;
+    let average_slot_time_ms = rpc_client
+        .get_recent_performance_samples(Some(60))
+        .map(|samples| {
+            let (slots, secs) = samples.iter().fold((0, 0), |(slots, secs), sample| {
+                (slots + sample.num_slots, secs + sample.sample_period_secs)
+            });
+            (secs as u64 * 1000) / slots
+        })
+        .unwrap_or(clock::DEFAULT_MS_PER_SLOT);
+    let epoch_info = CliEpochInfo {
+        epoch_info,
+        average_slot_time_ms,
+    };
     Ok(config.output_format.formatted_string(&epoch_info))
 }
 
@@ -1008,8 +1021,8 @@ pub fn process_get_slot(rpc_client: &RpcClient, _config: &CliConfig) -> ProcessR
 }
 
 pub fn process_get_block_height(rpc_client: &RpcClient, _config: &CliConfig) -> ProcessResult {
-    let epoch_info: CliEpochInfo = rpc_client.get_epoch_info()?.into();
-    Ok(epoch_info.epoch_info.block_height.to_string())
+    let epoch_info = rpc_client.get_epoch_info()?;
+    Ok(epoch_info.block_height.to_string())
 }
 
 pub fn parse_show_block_production(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {

@@ -644,6 +644,13 @@ impl RpcClient {
         self.send(RpcRequest::GetEpochSchedule, Value::Null)
     }
 
+    pub fn get_recent_performance_samples(
+        &self,
+        limit: Option<usize>,
+    ) -> ClientResult<Vec<RpcPerfSample>> {
+        self.send(RpcRequest::GetRecentPerformanceSamples, json!([limit]))
+    }
+
     pub fn get_identity(&self) -> ClientResult<Pubkey> {
         let rpc_identity: RpcIdentity = self.send(RpcRequest::GetIdentity, Value::Null)?;
 

@@ -19,7 +19,7 @@ use {
         RpcVoteAccountInfo,
     },
     solana_sdk::{
-        clock::{self, Epoch, Slot, UnixTimestamp},
+        clock::{Epoch, Slot, UnixTimestamp},
         epoch_info::EpochInfo,
         hash::Hash,
         native_token::lamports_to_sol,
@@ -231,12 +231,8 @@ pub struct CliSlotStatus {
 pub struct CliEpochInfo {
     #[serde(flatten)]
     pub epoch_info: EpochInfo,
-}
-
-impl From<EpochInfo> for CliEpochInfo {
-    fn from(epoch_info: EpochInfo) -> Self {
-        Self { epoch_info }
-    }
+    #[serde(skip)]
+    pub average_slot_time_ms: u64,
 }
 
 impl QuietDisplay for CliEpochInfo {}
@@ -286,16 +282,16 @@ impl fmt::Display for CliEpochInfo {
             "Epoch Completed Time:",
             &format!(
                 "{}/{} ({} remaining)",
-                slot_to_human_time(self.epoch_info.slot_index),
-                slot_to_human_time(self.epoch_info.slots_in_epoch),
-                slot_to_human_time(remaining_slots_in_epoch)
+                slot_to_human_time(self.epoch_info.slot_index, self.average_slot_time_ms),
+                slot_to_human_time(self.epoch_info.slots_in_epoch, self.average_slot_time_ms),
+                slot_to_human_time(remaining_slots_in_epoch, self.average_slot_time_ms)
             ),
         )
     }
 }
 
-fn slot_to_human_time(slot: Slot) -> String {
-    humantime::format_duration(Duration::from_millis(slot * clock::DEFAULT_MS_PER_SLOT)).to_string()
+fn slot_to_human_time(slot: Slot, slot_time_ms: u64) -> String {
+    humantime::format_duration(Duration::from_secs((slot * slot_time_ms) / 1000)).to_string()
 }
 
 #[derive(Serialize, Deserialize, Default)]
