@@ -194,7 +194,8 @@ fn process_instruction_common(
     use_jit: bool,
 ) -> Result<(), InstructionError> {
     let logger = invoke_context.get_logger();
-    debug_assert_eq!(keyed_accounts, invoke_context.get_keyed_accounts());
+    // TODO [KeyedAccounts to InvokeContext refactoring]
+    assert_eq!(keyed_accounts, invoke_context.get_keyed_accounts());
 
     let first_account = keyed_account_at_index(keyed_accounts, 0)?;
     if first_account.executable()? {
@@ -288,13 +289,15 @@ fn process_instruction_common(
 
 fn process_loader_upgradeable_instruction(
     program_id: &Pubkey,
-    keyed_accounts: &[KeyedAccount],
+    _keyed_accounts: &[KeyedAccount],
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
     use_jit: bool,
 ) -> Result<(), InstructionError> {
     let logger = invoke_context.get_logger();
-    debug_assert_eq!(keyed_accounts, invoke_context.get_keyed_accounts());
+    let keyed_accounts = invoke_context.get_keyed_accounts();
+    // TODO [KeyedAccounts to InvokeContext refactoring]
+    assert_eq!(_keyed_accounts, keyed_accounts);
 
     match limited_deserialize(instruction_data)? {
         UpgradeableLoaderInstruction::InitializeBuffer => {
@@ -412,22 +415,34 @@ fn process_loader_upgradeable_instruction(
                 return Err(InstructionError::InvalidArgument);
             }
 
+            let instruction = system_instruction::create_account(
+                payer.unsigned_key(),
+                programdata.unsigned_key(),
+                1.max(rent.minimum_balance(programdata_len)),
+                programdata_len as u64,
+                program_id,
+            );
+            let caller_program_id = invoke_context.get_caller()?;
+            let signers = [&[program.unsigned_key().as_ref(), &[bump_seed]]]
+                .iter()
+                .map(|seeds| Pubkey::create_program_address(*seeds, caller_program_id))
+                .collect::<Result<Vec<Pubkey>, solana_sdk::pubkey::PubkeyError>>()?;
             MessageProcessor::native_invoke(
                 invoke_context,
-                system_instruction::create_account(
-                    payer.unsigned_key(),
-                    programdata.unsigned_key(),
-                    1.max(rent.minimum_balance(programdata_len)),
-                    programdata_len as u64,
-                    program_id,
-                ),
+                instruction,
                 &[0, 1, 6],
-                &[&[program.unsigned_key().as_ref(), &[bump_seed]]],
+                signers.as_slice(),
             )?;
 
             // Load and verify the program bits
             let executor = create_executor(3, buffer_data_offset, invoke_context, use_jit)?;
             invoke_context.add_executor(program_id, executor);
+
+            let keyed_accounts = invoke_context.get_keyed_accounts();
+            let payer = keyed_account_at_index(keyed_accounts, 0)?;
+            let programdata = keyed_account_at_index(keyed_accounts, 1)?;
+            let program = keyed_account_at_index(keyed_accounts, 2)?;
+            let buffer = keyed_account_at_index(keyed_accounts, 3)?;
 
             // Update the ProgramData account and record the program bits
             programdata.set_state(&UpgradeableLoaderState::ProgramData {
@@ -454,7 +469,6 @@ fn process_loader_upgradeable_instruction(
             let programdata = keyed_account_at_index(keyed_accounts, 0)?;
             let program = keyed_account_at_index(keyed_accounts, 1)?;
             let buffer = keyed_account_at_index(keyed_accounts, 2)?;
-            let spill = keyed_account_at_index(keyed_accounts, 3)?;
             let rent = from_keyed_account::<Rent>(keyed_account_at_index(keyed_accounts, 4)?)?;
             let clock = from_keyed_account::<Clock>(keyed_account_at_index(keyed_accounts, 5)?)?;
             let authority = keyed_account_at_index(keyed_accounts, 6)?;
@@ -547,17 +561,18 @@ fn process_loader_upgradeable_instruction(
             }
 
             // Load and verify the program bits
-
             let executor = create_executor(2, buffer_data_offset, invoke_context, use_jit)?;
-            {
-                let keyed_accounts = invoke_context.get_keyed_accounts();
-                let program = keyed_account_at_index(keyed_accounts, 1)?;
-                invoke_context.add_executor(program.unsigned_key(), executor);
-            }
+            let keyed_accounts = invoke_context.get_keyed_accounts();
+            let program = keyed_account_at_index(keyed_accounts, 1)?;
+            invoke_context.add_executor(program.unsigned_key(), executor);
+
+            let programdata = keyed_account_at_index(keyed_accounts, 0)?;
+            let buffer = keyed_account_at_index(keyed_accounts, 2)?;
+            let spill = keyed_account_at_index(keyed_accounts, 3)?;
+            let authority = keyed_account_at_index(keyed_accounts, 6)?;
 
             // Update the ProgramData account, record the upgraded data, and zero
             // the rest
-
             programdata.set_state(&UpgradeableLoaderState::ProgramData {
                 slot: clock.slot,
                 upgrade_authority_address: Some(*authority.unsigned_key()),
@@ -688,7 +703,8 @@ fn process_loader_instruction(
     invoke_context: &mut dyn InvokeContext,
     use_jit: bool,
 ) -> Result<(), InstructionError> {
-    debug_assert_eq!(keyed_accounts, invoke_context.get_keyed_accounts());
+    // TODO [KeyedAccounts to InvokeContext refactoring]
+    assert_eq!(keyed_accounts, invoke_context.get_keyed_accounts());
     let program = keyed_account_at_index(keyed_accounts, 0)?;
     if program.owner()? != *program_id {
         ic_msg!(
@@ -773,7 +789,8 @@ impl Executor for BpfExecutor {
     ) -> Result<(), InstructionError> {
         let logger = invoke_context.get_logger();
         let invoke_depth = invoke_context.invoke_depth();
-        debug_assert_eq!(keyed_accounts, invoke_context.get_keyed_accounts());
+        // TODO [KeyedAccounts to InvokeContext refactoring]
+        assert_eq!(keyed_accounts, invoke_context.get_keyed_accounts());
 
         let mut serialize_time = Measure::start("serialize");
         // TODO [KeyedAccounts to InvokeContext refactoring]

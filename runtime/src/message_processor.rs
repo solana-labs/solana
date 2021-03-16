@@ -597,7 +597,8 @@ impl MessageProcessor {
         instruction_data: &[u8],
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
-        debug_assert_eq!(keyed_accounts, invoke_context.get_keyed_accounts());
+        // TODO [KeyedAccounts to InvokeContext refactoring]
+        assert_eq!(keyed_accounts, invoke_context.get_keyed_accounts());
         if let Some(root_account) = keyed_accounts.iter().next() {
             let root_id = root_account.unsigned_key();
             if native_loader::check_id(&root_account.owner()?) {
@@ -722,7 +723,7 @@ impl MessageProcessor {
         invoke_context: &mut dyn InvokeContext,
         instruction: Instruction,
         keyed_account_indices: &[usize],
-        signers_seeds: &[&[&[u8]]],
+        signers: &[Pubkey],
     ) -> Result<(), InstructionError> {
         let invoke_context = RefCell::new(invoke_context);
 
@@ -736,14 +737,7 @@ impl MessageProcessor {
         ) = {
             let invoke_context = invoke_context.borrow();
 
-            let caller_program_id = invoke_context.get_caller()?;
-
             // Translate and verify caller's data
-
-            let signers = signers_seeds
-                .iter()
-                .map(|seeds| Pubkey::create_program_address(&seeds, caller_program_id))
-                .collect::<Result<Vec<_>, solana_sdk::pubkey::PubkeyError>>()?;
             let keyed_accounts = invoke_context.get_keyed_accounts();
             let keyed_accounts = keyed_account_indices
                 .iter()
