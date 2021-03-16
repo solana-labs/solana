@@ -290,16 +290,8 @@ impl fmt::Display for CliEpochInfo {
     }
 }
 
-<<<<<<< HEAD
-fn slot_to_human_time(slot: Slot) -> String {
-    humantime::format_duration(Duration::from_secs(
-        slot * clock::DEFAULT_TICKS_PER_SLOT / clock::DEFAULT_TICKS_PER_SECOND,
-    ))
-    .to_string()
-=======
 fn slot_to_human_time(slot: Slot, slot_time_ms: u64) -> String {
     humantime::format_duration(Duration::from_secs((slot * slot_time_ms) / 1000)).to_string()
->>>>>>> 3726358f5... Cli: better estimate of epoch time elapsed/remaining (#15893)
 }
 
 #[derive(Serialize, Deserialize, Default)]
