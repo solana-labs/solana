@@ -286,16 +286,16 @@ impl fmt::Display for CliEpochInfo {
             "Epoch Completed Time:",
             &format!(
                 "{}/{} ({} remaining)",
-                slot_to_human_time(self.epoch_info.slot_index),
-                slot_to_human_time(self.epoch_info.slots_in_epoch),
-                slot_to_human_time(remaining_slots_in_epoch)
+                slot_to_human_time(self.epoch_info.slot_index, clock::DEFAULT_MS_PER_SLOT),
+                slot_to_human_time(self.epoch_info.slots_in_epoch, clock::DEFAULT_MS_PER_SLOT),
+                slot_to_human_time(remaining_slots_in_epoch, clock::DEFAULT_MS_PER_SLOT)
             ),
         )
     }
 }
 
-fn slot_to_human_time(slot: Slot) -> String {
-    humantime::format_duration(Duration::from_millis(slot * clock::DEFAULT_MS_PER_SLOT)).to_string()
+fn slot_to_human_time(slot: Slot, slot_time_ms: u64) -> String {
+    humantime::format_duration(Duration::from_millis(slot * slot_time_ms)).to_string()
 }
 
 #[derive(Serialize, Deserialize, Default)]
