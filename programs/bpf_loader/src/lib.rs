@@ -1110,6 +1110,7 @@ mod tests {
                 stack_frame_size: 4096,
                 log_pubkey_units: 100,
                 max_cpi_instruction_size: usize::MAX,
+                cpi_bytes_per_unit: 250,
             },
             Rc::new(RefCell::new(Executors::default())),
             None,
