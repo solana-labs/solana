@@ -124,6 +124,8 @@ pub struct BpfComputeBudget {
     pub log_pubkey_units: u64,
     /// Maximum cross-program invocation instruction size
     pub max_cpi_instruction_size: usize,
+    /// Number of account data bytes per conpute unit charged during a cross-program invocation
+    pub cpi_bytes_per_unit: u64,
 }
 impl Default for BpfComputeBudget {
     fn default() -> Self {
@@ -145,6 +147,7 @@ impl BpfComputeBudget {
             sha256_byte_cost: 1,
             max_call_depth: 20,
             stack_frame_size: 4_096,
+<<<<<<< HEAD
             log_pubkey_units: 0,
             max_cpi_instruction_size: std::usize::MAX,
         };
@@ -171,6 +174,11 @@ impl BpfComputeBudget {
                 max_call_depth: 64,
                 ..bpf_compute_budget
             };
+=======
+            log_pubkey_units: 100,
+            max_cpi_instruction_size: 1280, // IPv6 Min MTU size
+            cpi_bytes_per_unit: 250,        // ~50MB at 200,000 units
+>>>>>>> ad9901d7c... Charge compute budget for bytes passed via cpi (#15874)
         }
         if feature_set.is_active(&pubkey_log_syscall_enabled::id()) {
             bpf_compute_budget = BpfComputeBudget {
