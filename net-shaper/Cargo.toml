@@ -13,8 +13,8 @@ publish = false
 clap = "2.33.1"
 serde = "1.0.118"
 serde_json = "1.0.56"
-solana-clap-utils = { path = "../clap-utils", version = "1.5.15" }
-solana-logger = { path = "../logger", version = "1.5.15" }
+solana-clap-utils = { path = "../clap-utils", version = "=1.5.15" }
+solana-logger = { path = "../logger", version = "=1.5.15" }
 rand = "0.7.0"
 
 [[bin]]

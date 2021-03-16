@@ -10,7 +10,7 @@ documentation = "https://docs.rs/solana-bpf-rust-instruction-introspection"
 edition = "2018"
 
 [dependencies]
-solana-program = { path = "../../../../sdk/program", version = "1.5.15" }
+solana-program = { path = "../../../../sdk/program", version = "=1.5.15" }
 
 [lib]
 crate-type = ["cdylib"]
