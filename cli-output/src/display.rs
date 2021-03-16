@@ -138,13 +138,13 @@ fn format_account_mode(message: &Message, index: usize) -> String {
         } else {
             "-"
         },
-        // account {may/may not} be executable on-chain while {not being/being}
-        // designated as program-id in the message...
+        // account may be executable on-chain while not being
+        // designated as a program-id in the message
         if message.maybe_executable(index) {
             "x"
         } else {
-            // programs to be executed inside CPI cannot be marked as
-            // executable...
+            // programs to be executed via CPI cannot be identified as
+            // executable from the message
             "-"
         },
     )
@@ -205,7 +205,7 @@ pub fn write_transaction<W: io::Write>(
             format_account_mode(message, account_index),
             account,
             if Some(account_index) == fee_payer_index {
-                " (Fee payer)"
+                " (fee payer)"
             } else {
                 ""
             },
