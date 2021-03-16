@@ -319,6 +319,10 @@ impl Message {
             .position(|&&pubkey| pubkey == self.account_keys[index])
     }
 
+    pub fn maybe_executable(&self, i: usize) -> bool {
+        self.program_position(i).is_some()
+    }
+
     pub fn is_writable(&self, i: usize) -> bool {
         i < (self.header.num_required_signatures - self.header.num_readonly_signed_accounts)
             as usize
