@@ -1,16 +1,20 @@
 use {
+    bzip2::bufread::BzDecoder,
     clap::{
         crate_description, crate_name, crate_version, value_t, value_t_or_exit, values_t, App, Arg,
     },
+    solana_download_utils::download_file,
     solana_sdk::signature::{write_keypair_file, Keypair},
     std::{
         env,
         ffi::OsStr,
-        fs,
+        fs::{self, File},
+        io::BufReader,
         path::{Path, PathBuf},
         process::exit,
-        process::Command,
+        process::{Command, Stdio},
     },
+    tar::Archive,
 };
 
 struct Config {
@@ -44,7 +48,7 @@ impl Default for Config {
     }
 }
 
-fn spawn<I, S>(program: &Path, args: I)
+fn spawn<I, S>(program: &Path, args: I) -> String
 where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
@@ -56,17 +60,124 @@ where
     }
     println!();
 
-    let mut child = Command::new(program)
+    let child = Command::new(program)
         .args(&args)
+        .stdout(Stdio::piped())
         .spawn()
         .unwrap_or_else(|err| {
             eprintln!("Failed to execute {}: {}", program.display(), err);
             exit(1);
         });
 
-    let exit_status = child.wait().expect("failed to wait on child");
-    if !exit_status.success() {
+    let output = child.wait_with_output().expect("failed to wait on child");
+    if !output.status.success() {
         exit(1);
+    }
+    output
+        .stdout
+        .as_slice()
+        .iter()
+        .map(|&c| c as char)
+        .collect::<String>()
+}
+
+// Check whether a package is installed and install it if missing.
+fn install_if_missing(
+    config: &Config,
+    package: &str,
+    version: &str,
+    url: &str,
+    file: &Path,
+) -> Result<(), String> {
+    // Check whether the package is already in ~/.cache/solana.
+    // Donwload it and place in the proper location if not found.
+    let home_dir = PathBuf::from(env::var("HOME").unwrap_or_else(|err| {
+        eprintln!("Can't get home directory path: {}", err);
+        exit(1);
+    }));
+    let target_path = home_dir
+        .join(".cache")
+        .join("solana")
+        .join(version)
+        .join(package);
+    if !target_path.is_dir() {
+        if target_path.exists() {
+            fs::remove_file(&target_path).map_err(|err| err.to_string())?;
+        }
+        let mut url = String::from(url);
+        url.push('/');
+        url.push_str(version);
+        url.push('/');
+        url.push_str(file.to_str().unwrap());
+        download_file(&url.as_str(), &file, false)?;
+        fs::create_dir_all(&target_path).map_err(|err| err.to_string())?;
+        let zip = File::open(&file).map_err(|err| err.to_string())?;
+        let tar = BzDecoder::new(BufReader::new(zip));
+        let mut archive = Archive::new(tar);
+        archive
+            .unpack(&target_path)
+            .map_err(|err| err.to_string())?;
+        fs::remove_file(file).map_err(|err| err.to_string())?;
+    }
+    // Make a symbolyc link source_path -> target_path in the
+    // sdk/bpf/dependencies directory if no valid link found.
+    let source_base = config.bpf_sdk.join("dependencies");
+    if !source_base.exists() {
+        fs::create_dir_all(&source_base).map_err(|err| err.to_string())?;
+    }
+    let source_path = source_base.join(package);
+    // Check whether the correct symbolic link exists.
+    let missing_source = if source_path.exists() {
+        let invalid_link = if let Ok(link_target) = source_path.read_link() {
+            link_target != target_path
+        } else {
+            true
+        };
+        if invalid_link {
+            fs::remove_file(&source_path).map_err(|err| err.to_string())?;
+        }
+        invalid_link
+    } else {
+        true
+    };
+    if missing_source {
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(target_path, source_path).map_err(|err| err.to_string())?;
+        #[cfg(windows)]
+        std::os::windows::fs::symlink_dir(target_path, source_path)
+            .map_err(|err| err.to_string())?;
+    }
+    Ok(())
+}
+
+// check whether custom BPF toolchain is linked, and link it if it is not.
+fn link_bpf_toolchain(config: &Config) {
+    let toolchain_path = config
+        .bpf_sdk
+        .join("dependencies")
+        .join("bpf-tools")
+        .join("rust");
+    let rustup = PathBuf::from("rustup");
+    let rustup_args = vec!["toolchain", "list", "-v"];
+    let rustup_output = spawn(&rustup, &rustup_args);
+    let mut do_link = true;
+    for line in rustup_output.lines() {
+        if line.starts_with("bpf") {
+            let mut it = line.split_whitespace();
+            let _ = it.next();
+            let path = it.next();
+            if path.unwrap() != toolchain_path.to_str().unwrap() {
+                let rustup_args = vec!["toolchain", "uninstall", "bpf"];
+                spawn(&rustup, &rustup_args);
+            } else {
+                do_link = false;
+            }
+            break;
+        }
+    }
+    if do_link {
+        let rustup_args = vec!["toolchain", "link", "bpf", toolchain_path.to_str().unwrap()];
+        spawn(&rustup, &rustup_args);
     }
 }
 
@@ -141,27 +252,71 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
     if legacy_program_feature_present {
         println!("Legacy program feature detected");
     }
+    let bpf_tools_filename = if cfg!(target_os = "macos") {
+        "solana-bpf-tools-osx.tar.bz2"
+    } else {
+        "solana-bpf-tools-linux.tar.bz2"
+    };
+    install_if_missing(
+        &config,
+        "bpf-tools",
+        "v1.2",
+        "https://github.com/solana-labs/bpf-tools/releases/download",
+        &PathBuf::from(bpf_tools_filename),
+    )
+    .expect("Failed to install bpf-tools");
+    link_bpf_toolchain(&config);
 
-    let xargo_build = config.bpf_sdk.join("rust").join("xargo-build.sh");
-    let mut xargo_build_args = vec![];
+    let llvm_bin = config
+        .bpf_sdk
+        .join("dependencies")
+        .join("bpf-tools")
+        .join("llvm")
+        .join("bin");
+    env::set_var("CC", llvm_bin.join("clang"));
+    env::set_var("AR", llvm_bin.join("llvm-ar"));
+    env::set_var("OBJDUMP", llvm_bin.join("llvm-objdump"));
+    env::set_var("OBJCOPY", llvm_bin.join("llvm-objcopy"));
+    let linker = llvm_bin.join("ld.lld");
+    let linker_script = config.bpf_sdk.join("rust").join("bpf.ld");
+    let mut rust_flags = String::from("-C lto=no");
+    rust_flags.push_str(" -C opt-level=2");
+    rust_flags.push_str(" -C link-arg=-z -C link-arg=notext");
+    rust_flags.push_str(" -C link-arg=-T");
+    rust_flags.push_str(linker_script.to_str().unwrap());
+    rust_flags.push_str(" -C link-arg=--Bdynamic");
+    rust_flags.push_str(" -C link-arg=-shared");
+    rust_flags.push_str(" -C link-arg=--threads=1");
+    rust_flags.push_str(" -C link-arg=--entry=entrypoint");
+    rust_flags.push_str(" -C linker=");
+    rust_flags.push_str(linker.to_str().unwrap());
+    env::set_var("RUSTFLAGS", rust_flags);
 
+    let cargo_build = PathBuf::from("cargo");
+    let mut cargo_build_args = vec![
+        "+bpf",
+        "build",
+        "--target",
+        "bpfel-unknown-unknown",
+        "--release",
+    ];
     if config.no_default_features {
-        xargo_build_args.push("--no-default-features");
+        cargo_build_args.push("--no-default-features");
     }
     for feature in &config.features {
-        xargo_build_args.push("--features");
-        xargo_build_args.push(feature);
+        cargo_build_args.push("--features");
+        cargo_build_args.push(feature);
     }
     if legacy_program_feature_present {
         if !config.no_default_features {
-            xargo_build_args.push("--no-default-features");
+            cargo_build_args.push("--no-default-features");
         }
-        xargo_build_args.push("--features=program");
+        cargo_build_args.push("--features=program");
     }
     if config.verbose {
-        xargo_build_args.push("--verbose");
+        cargo_build_args.push("--verbose");
     }
-    spawn(&config.bpf_sdk.join(xargo_build), &xargo_build_args);
+    spawn(&cargo_build, &cargo_build_args);
 
     if let Some(program_name) = program_name {
         let program_unstripped_so = target_build_directory.join(&format!("{}.so", program_name));
@@ -257,6 +412,10 @@ fn build_bpf(config: Config, manifest_path: Option<PathBuf>) {
 }
 
 fn main() {
+    if cfg!(windows) {
+        println!("Solana Rust BPF toolchain is not available on Windows");
+        exit(1);
+    }
     let default_config = Config::default();
     let default_bpf_sdk = format!("{}", default_config.bpf_sdk.display());
 
