@@ -208,8 +208,10 @@ mod tests {
             );
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
             let exit = Arc::new(AtomicBool::new(false));
+            let start = Arc::new(Instant::now());
             let working_bank = WorkingBank {
                 bank: bank.clone(),
+                start,
                 min_tick_height: bank.tick_height(),
                 max_tick_height: std::u64::MAX,
             };
