@@ -355,7 +355,7 @@ mod tests {
 
         for _i in 0..10 {
             let poh_config = Arc::new(PohConfig {
-                hashes_per_tick: Some(32445), //(hashes_per_tick / 10) * (i + 1)),
+                hashes_per_tick: Some(hashes_per_tick / 10) * (i + 1)),
                 target_tick_duration,
                 target_tick_count: None,
             });
