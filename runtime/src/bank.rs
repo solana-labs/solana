@@ -90,6 +90,7 @@ use std::{
         LockResult, RwLockWriteGuard, {Arc, RwLock, RwLockReadGuard},
     },
     time::Duration,
+    time::Instant,
 };
 
 pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
@@ -782,7 +783,7 @@ pub struct Bank {
     ticks_per_slot: u64,
 
     /// length of a slot in ns
-    ns_per_slot: u128,
+    pub ns_per_slot: u128,
 
     /// genesis time, used for computed clock
     genesis_creation_time: UnixTimestamp,
@@ -4636,6 +4637,16 @@ impl Bank {
     pub fn check_init_vote_data_enabled(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::check_init_vote_data::id())
+    }
+
+    // Check if the wallclock time from bank creation to now has exceeded the allotted
+    // time for transaction processing
+    pub fn should_bank_still_be_processing_txs(
+        bank_creation_time: &Instant,
+        max_tx_ingestion_nanos: u128,
+    ) -> bool {
+        // Do this check outside of the poh lock, hence not a method on PohRecorder
+        bank_creation_time.elapsed().as_nanos() <= max_tx_ingestion_nanos
     }
 
     pub fn deactivate_feature(&mut self, id: &Pubkey) {
