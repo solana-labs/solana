@@ -61,10 +61,7 @@ pub enum BpfError {
 }
 impl UserDefinedError for BpfError {}
 
-fn map_ebpf_error(
-    invoke_context: &mut dyn InvokeContext,
-    e: EbpfError<BpfError>,
-) -> InstructionError {
+fn map_ebpf_error(invoke_context: &dyn InvokeContext, e: EbpfError<BpfError>) -> InstructionError {
     ic_msg!(invoke_context, "{}", e);
     InstructionError::InvalidAccountData
 }
@@ -112,22 +109,26 @@ pub fn create_executor(
 }
 
 fn write_program_data(
-    data: &mut [u8],
-    offset: usize,
+    program_account_index: usize,
+    program_data_offset: usize,
     bytes: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
+    let keyed_accounts = invoke_context.get_keyed_accounts();
+    let program = keyed_account_at_index(keyed_accounts, program_account_index)?;
+    let mut account = program.try_account_ref_mut()?;
+    let data = &mut account.data_as_mut_slice();
     let len = bytes.len();
-    if data.len() < offset + len {
+    if data.len() < program_data_offset + len {
         ic_msg!(
             invoke_context,
             "Write overflow: {} < {}",
             data.len(),
-            offset + len
+            program_data_offset + len
         );
         return Err(InstructionError::AccountDataTooSmall);
     }
-    data[offset..offset + len].copy_from_slice(&bytes);
+    data[program_data_offset..program_data_offset + len].copy_from_slice(&bytes);
     Ok(())
 }
 
@@ -339,7 +340,7 @@ fn process_loader_upgradeable_instruction(
                 return Err(InstructionError::InvalidAccountData);
             }
             write_program_data(
-                buffer.try_account_ref_mut()?.data_as_mut_slice(),
+                0,
                 UpgradeableLoaderState::buffer_data_offset()? + offset as usize,
                 &bytes,
                 invoke_context,
@@ -708,12 +709,7 @@ fn process_loader_instruction(
                 ic_msg!(invoke_context, "Program account did not sign");
                 return Err(InstructionError::MissingRequiredSignature);
             }
-            write_program_data(
-                &mut program.try_account_ref_mut()?.data_as_mut_slice(),
-                offset as usize,
-                &bytes,
-                invoke_context,
-            )?;
+            write_program_data(0, offset as usize, &bytes, invoke_context)?;
         }
         LoaderInstruction::Finalize => {
             if program.signer_key().is_none() {
