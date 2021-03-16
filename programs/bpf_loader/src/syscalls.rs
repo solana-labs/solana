@@ -16,16 +16,12 @@ use solana_sdk::{
     bpf_loader, bpf_loader_deprecated,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
-<<<<<<< HEAD
     feature_set::{
-        abort_on_all_cpi_failures, limit_cpi_loader_invoke, per_byte_logging_cost,
+        abort_on_all_cpi_failures, cpi_data_cost, limit_cpi_loader_invoke, per_byte_logging_cost,
         pubkey_log_syscall_enabled, ristretto_mul_syscall_enabled, sha256_syscall_enabled,
         sol_log_compute_units_syscall, try_find_program_address_syscall_enabled,
         use_loaded_executables, use_loaded_program_accounts,
     },
-=======
-    feature_set::{cpi_data_cost, cpi_share_ro_and_exec_accounts, ristretto_mul_syscall_enabled},
->>>>>>> ad9901d7c... Charge compute budget for bytes passed via cpi (#15874)
     hash::{Hasher, HASH_BYTES},
     ic_msg,
     instruction::{AccountMeta, Instruction, InstructionError},
