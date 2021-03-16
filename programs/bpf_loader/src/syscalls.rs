@@ -17,7 +17,7 @@ use solana_sdk::{
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     feature_set::{
-        abort_on_all_cpi_failures, limit_cpi_loader_invoke, per_byte_logging_cost,
+        abort_on_all_cpi_failures, cpi_data_cost, limit_cpi_loader_invoke, per_byte_logging_cost,
         pubkey_log_syscall_enabled, ristretto_mul_syscall_enabled, sha256_syscall_enabled,
         sol_log_compute_units_syscall, try_find_program_address_syscall_enabled,
         use_loaded_executables, use_loaded_program_accounts,
@@ -989,7 +989,8 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
             })
             .collect::<Result<Vec<_>, EbpfError<BpfError>>>()?;
 
-        let translate = |account_info: &AccountInfo| {
+        let translate = |account_info: &AccountInfo,
+                         invoke_context: &Ref<&mut dyn InvokeContext>| {
             // Translate the account from user space
 
             let lamports = {
@@ -1006,6 +1007,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
                 account_info.owner as *const _ as u64,
                 self.loader_id,
             )?;
+
             let (data, vm_data_addr, ref_to_len_in_vm, serialized_len_ptr) = {
                 // Double translate data out of RefCell
                 let data = *translate_type::<&[u8]>(
@@ -1013,6 +1015,14 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
                     account_info.data.as_ptr() as *const _ as u64,
                     self.loader_id,
                 )?;
+
+                if invoke_context.is_feature_active(&cpi_data_cost::id()) {
+                    invoke_context.get_compute_meter().consume(
+                        data.len() as u64
+                            / invoke_context.get_bpf_compute_budget().cpi_bytes_per_unit,
+                    )?;
+                }
+
                 let translated = translate(
                     memory_mapping,
                     AccessType::Store,
@@ -1283,7 +1293,8 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
             })
             .collect::<Result<Vec<_>, EbpfError<BpfError>>>()?;
 
-        let translate = |account_info: &SolAccountInfo| {
+        let translate = |account_info: &SolAccountInfo,
+                         invoke_context: &Ref<&mut dyn InvokeContext>| {
             // Translate the account from user space
 
             let lamports = translate_type_mut::<u64>(
@@ -1297,6 +1308,14 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
                 self.loader_id,
             )?;
             let vm_data_addr = account_info.data_addr;
+
+            if invoke_context.is_feature_active(&cpi_data_cost::id()) {
+                invoke_context.get_compute_meter().consume(
+                    account_info.data_len
+                        / invoke_context.get_bpf_compute_budget().cpi_bytes_per_unit,
+                )?;
+            }
+
             let data = translate_slice_mut::<u8>(
                 memory_mapping,
                 vm_data_addr,
@@ -1436,7 +1455,7 @@ fn get_translated_accounts<'a, T, F>(
     do_translate: F,
 ) -> Result<TranslatedAccounts<'a>, EbpfError<BpfError>>
 where
-    F: Fn(&T) -> Result<TranslatedAccount<'a>, EbpfError<BpfError>>,
+    F: Fn(&T, &Ref<&mut dyn InvokeContext>) -> Result<TranslatedAccount<'a>, EbpfError<BpfError>>,
 {
     let mut accounts = Vec::with_capacity(account_keys.len());
     let mut refs = Vec::with_capacity(account_keys.len());
@@ -1470,7 +1489,7 @@ where
                     }
                 })
         {
-            let (account, account_ref) = do_translate(account_info)?;
+            let (account, account_ref) = do_translate(account_info, invoke_context)?;
             accounts.push(account);
             refs.push(account_ref);
         } else {

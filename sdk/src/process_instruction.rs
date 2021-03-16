@@ -124,6 +124,8 @@ pub struct BpfComputeBudget {
     pub log_pubkey_units: u64,
     /// Maximum cross-program invocation instruction size
     pub max_cpi_instruction_size: usize,
+    /// Number of account data bytes per conpute unit charged during a cross-program invocation
+    pub cpi_bytes_per_unit: u64,
 }
 impl Default for BpfComputeBudget {
     fn default() -> Self {
@@ -147,6 +149,7 @@ impl BpfComputeBudget {
             stack_frame_size: 4_096,
             log_pubkey_units: 0,
             max_cpi_instruction_size: std::usize::MAX,
+            cpi_bytes_per_unit: 250,
         };
 
         if feature_set.is_active(&bpf_compute_budget_balancing::id()) {
