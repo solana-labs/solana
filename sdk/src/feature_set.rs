@@ -144,6 +144,10 @@ lazy_static! {
         (cpi_share_ro_and_exec_accounts::id(), "Share RO and Executable accounts during cross-program invocations"),
         (skip_ro_deserialization::id(), "Skip deserialization of read-only accounts"),
         (require_stake_for_gossip::id(), "require stakes for propagating crds values through gossip #15561"),
+<<<<<<< HEAD
+=======
+        (cpi_data_cost::id(), "charge the compute budget for data passed via CPI"),
+>>>>>>> 5760cf0f4... nit: fix spelling (#15908)
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
