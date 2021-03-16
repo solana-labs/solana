@@ -40,24 +40,6 @@ download() {
   return 1
 }
 
-clone() {
-  declare url=$1
-  declare version=$2
-
-  rm -rf temp
-  if (
-    set -x
-    git clone --recursive --depth 1 --single-branch --branch "$version" "$url" temp
-  ); then
-    (
-      shopt -s dotglob nullglob
-      mv temp/* .
-    )
-    return 0
-  fi
-  return 1
-}
-
 get() {
   declare version=$1
   declare dirname=$2
@@ -85,26 +67,6 @@ get() {
   return 1
 }
 
-# Install xargo
-version=0.3.22
-if [[ ! -e xargo-$version.md ]] || [[ ! -x bin/xargo ]]; then
-  (
-    args=()
-    # shellcheck disable=SC2154
-    if [[ -n $rust_stable ]]; then
-      args+=(+"$rust_stable")
-    fi
-    args+=(install xargo --version "$version" --root .)
-    set -ex
-    cargo "${args[@]}"
-  )
-  exitcode=$?
-  if [[ $exitcode -ne 0 ]]; then
-    exit 1
-  fi
-  ./bin/xargo --version >xargo-$version.md 2>&1
-fi
-
 # Install Criterion
 if [[ $machine == "linux" ]]; then
   version=v2.3.3
@@ -130,7 +92,7 @@ if [[ ! -e criterion-$version.md || ! -e criterion ]]; then
 fi
 
 # Install Rust-BPF
-version=v1.1
+version=v1.2
 if [[ ! -e bpf-tools-$version.md || ! -e bpf-tools ]]; then
   (
     set -e
@@ -148,31 +110,12 @@ if [[ ! -e bpf-tools-$version.md || ! -e bpf-tools ]]; then
     exit 1
   fi
   touch bpf-tools-$version.md
-fi
-set -ex
-./bpf-tools/rust/bin/rustc --print sysroot
-set +e
-rustup toolchain uninstall bpf
-set -e
-rustup toolchain link bpf bpf-tools/rust
-
-# Install Rust-BPF Sysroot sources
-version=v1.1
-if [[ ! -e rust-bpf-sysroot-$version.md || ! -e rust-bpf-sysroot ]]; then
-  (
-    set -e
-    rm -rf rust-bpf-sysroot*
-    rm -rf xargo
-    job="clone \
-           https://github.com/solana-labs/rust-bpf-sysroot.git \
-           $version"
-    get $version rust-bpf-sysroot "$job"
-  )
-  exitcode=$?
-  if [[ $exitcode -ne 0 ]]; then
-    exit 1
-  fi
-  touch rust-bpf-sysroot-$version.md
+  set -ex
+  ./bpf-tools/rust/bin/rustc --print sysroot
+  set +e
+  rustup toolchain uninstall bpf
+  set -e
+  rustup toolchain link bpf bpf-tools/rust
 fi
 
 exit 0
