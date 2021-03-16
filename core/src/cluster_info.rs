@@ -4749,7 +4749,7 @@ mod tests {
         let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(node.info));
         let entrypoint_pubkey = solana_sdk::pubkey::new_rand();
         let entrypoint = ContactInfo::new_localhost(&entrypoint_pubkey, timestamp());
-        cluster_info.set_entrypoint(entrypoint.clone());
+        cluster_info.set_entrypoint(entrypoint);
 
         let mut rng = rand::thread_rng();
         let shred_version = cluster_info.my_shred_version();
