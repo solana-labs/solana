@@ -40,11 +40,11 @@ solana config set --url https://devnet.solana.com
 
 ```bash
 $ solana-validator \
-    --identity ~/validator-keypair.json \
-    --vote-account ~/vote-account-keypair.json \
+    --identity validator-keypair.json \
+    --vote-account vote-account-keypair.json \
     --trusted-validator dv1LfzJvDF7S1fBKpFgKoKXK5yoSosmkAdfbxBo1GqJ \
     --no-untrusted-rpc \
-    --ledger ~/validator-ledger \
+    --ledger ledger \
     --rpc-port 8899 \
     --dynamic-port-range 8000-8010 \
     --entrypoint entrypoint.devnet.solana.com:8001 \
@@ -85,14 +85,14 @@ solana config set --url https://testnet.solana.com
 
 ```bash
 $ solana-validator \
-    --identity ~/validator-keypair.json \
-    --vote-account ~/vote-account-keypair.json \
+    --identity validator-keypair.json \
+    --vote-account vote-account-keypair.json \
     --trusted-validator 5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on \
     --trusted-validator 7XSY3MrYnK8vq693Rju17bbPkCN3Z7KvvfvJx4kdrsSY \
     --trusted-validator Ft5fbkqNa76vnsjYNwjDZUXoTWpP7VYm3mtsaQckQADN \
     --trusted-validator 9QxCLckBiJc783jnMvXZubK4wH86Eqqvashtrwvcsgkv \
     --no-untrusted-rpc \
-    --ledger ~/validator-ledger \
+    --ledger ledger \
     --rpc-port 8899 \
     --dynamic-port-range 8000-8010 \
     --entrypoint entrypoint.testnet.solana.com:8001 \
@@ -143,7 +143,7 @@ $ solana-validator \
     --trusted-validator DE1bawNcRJB9rVm3buyMVfr8mBEoyyu73NBovf2oXJsJ \
     --trusted-validator CakcnaRDHka2gXyfbEd2d3xsvkJkqsLw2akB3zsN1D2S \
     --no-untrusted-rpc \
-    --ledger ~/validator-ledger \
+    --ledger ledger \
     --rpc-port 8899 \
     --private-rpc \
     --dynamic-port-range 8000-8010 \
