@@ -12,7 +12,7 @@ edition = "2018"
 [dependencies]
 num-derive = "0.2"
 num-traits = "0.2"
-solana-program = { path = "../../../../sdk/program", version = "1.7.0" }
+solana-program = { path = "../../../../sdk/program", version = "=1.7.0" }
 thiserror = "1.0"
 
 [lib]

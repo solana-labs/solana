@@ -28,29 +28,29 @@ reqwest = { version = "0.10.8", default-features = false, features = ["blocking"
 serde = "1.0.122"
 serde_derive = "1.0.103"
 serde_json = "1.0.56"
-solana-account-decoder = { path = "../account-decoder", version = "1.7.0" }
-solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "1.7.0" }
-solana-clap-utils = { path = "../clap-utils", version = "1.7.0" }
-solana-cli-config = { path = "../cli-config", version = "1.7.0" }
-solana-cli-output = { path = "../cli-output", version = "1.7.0" }
-solana-client = { path = "../client", version = "1.7.0" }
-solana-config-program = { path = "../programs/config", version = "1.7.0" }
-solana-faucet = { path = "../faucet", version = "1.7.0" }
-solana-logger = { path = "../logger", version = "1.7.0" }
-solana-net-utils = { path = "../net-utils", version = "1.7.0" }
+solana-account-decoder = { path = "../account-decoder", version = "=1.7.0" }
+solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "=1.7.0" }
+solana-clap-utils = { path = "../clap-utils", version = "=1.7.0" }
+solana-cli-config = { path = "../cli-config", version = "=1.7.0" }
+solana-cli-output = { path = "../cli-output", version = "=1.7.0" }
+solana-client = { path = "../client", version = "=1.7.0" }
+solana-config-program = { path = "../programs/config", version = "=1.7.0" }
+solana-faucet = { path = "../faucet", version = "=1.7.0" }
+solana-logger = { path = "../logger", version = "=1.7.0" }
+solana-net-utils = { path = "../net-utils", version = "=1.7.0" }
 solana_rbpf = "=0.2.5"
-solana-remote-wallet = { path = "../remote-wallet", version = "1.7.0" }
-solana-sdk = { path = "../sdk", version = "1.7.0" }
-solana-stake-program = { path = "../programs/stake", version = "1.7.0" }
-solana-transaction-status = { path = "../transaction-status", version = "1.7.0" }
-solana-version = { path = "../version", version = "1.7.0" }
-solana-vote-program = { path = "../programs/vote", version = "1.7.0" }
+solana-remote-wallet = { path = "../remote-wallet", version = "=1.7.0" }
+solana-sdk = { path = "../sdk", version = "=1.7.0" }
+solana-stake-program = { path = "../programs/stake", version = "=1.7.0" }
+solana-transaction-status = { path = "../transaction-status", version = "=1.7.0" }
+solana-version = { path = "../version", version = "=1.7.0" }
+solana-vote-program = { path = "../programs/vote", version = "=1.7.0" }
 thiserror = "1.0.21"
 tiny-bip39 = "0.7.0"
 url = "2.1.1"
 
 [dev-dependencies]
-solana-core = { path = "../core", version = "1.7.0" }
+solana-core = { path = "../core", version = "=1.7.0" }
 tempfile = "3.1.0"
 
 [[bin]]
