@@ -142,9 +142,46 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
         println!("Legacy program feature detected");
     }
 
-    let xargo_build = config.bpf_sdk.join("rust").join("xargo-build.sh");
-    let mut xargo_build_args = vec![];
+    // instal the BPF toolchain
+    let install = config.bpf_sdk.join("scripts").join("install.sh");
+    let install_args: Vec<String> = vec![];
+    spawn(&install, &install_args);
 
+    let llvm_bin = config
+        .bpf_sdk
+        .join("dependencies")
+        .join("bpf-tools")
+        .join("llvm")
+        .join("bin");
+    env::set_var("CC", llvm_bin.join("clang"));
+    env::set_var("AR", llvm_bin.join("llvm-ar"));
+    env::set_var("OBJDUMP", llvm_bin.join("llvm-objdump"));
+    env::set_var("OBJCOPY", llvm_bin.join("llvm-objcopy"));
+    // Use the SDK's version of Rust to build for BPF
+    env::set_var("RUSTUP_TOOLCHAIN", "bpf");
+    let linker = llvm_bin.join("ld.lld");
+    let linker_script = config.bpf_sdk.join("rust").join("bpf.ld");
+    let mut rust_flags = String::from("-C lto=no");
+    rust_flags.push_str(" -C opt-level=2");
+    rust_flags.push_str(" -C link-arg=-z -C link-arg=notext");
+    rust_flags.push_str(" -C link-arg=-T");
+    rust_flags.push_str(linker_script.to_str().unwrap());
+    rust_flags.push_str(" -C link-arg=--Bdynamic");
+    rust_flags.push_str(" -C link-arg=-shared");
+    rust_flags.push_str(" -C link-arg=--threads=1");
+    rust_flags.push_str(" -C link-arg=--entry=entrypoint");
+    rust_flags.push_str(" -C linker=");
+    rust_flags.push_str(linker.to_str().unwrap());
+    env::set_var("RUSTFLAGS", rust_flags);
+
+    let xargo_build = PathBuf::from("cargo");
+    let mut xargo_build_args = vec![
+        "+bpf",
+        "build",
+        "--target",
+        "bpfel-unknown-unknown",
+        "--release",
+    ];
     if config.no_default_features {
         xargo_build_args.push("--no-default-features");
     }
@@ -161,7 +198,7 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
     if config.verbose {
         xargo_build_args.push("--verbose");
     }
-    spawn(&config.bpf_sdk.join(xargo_build), &xargo_build_args);
+    spawn(&xargo_build, &xargo_build_args);
 
     if let Some(program_name) = program_name {
         let program_unstripped_so = target_build_directory.join(&format!("{}.so", program_name));
