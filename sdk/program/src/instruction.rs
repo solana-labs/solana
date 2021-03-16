@@ -218,6 +218,14 @@ impl Instruction {
         }
     }
 
+    pub fn new_with_bincode<T: Serialize>(
+        program_id: Pubkey,
+        data: &T,
+        accounts: Vec<AccountMeta>,
+    ) -> Self {
+        Self::new(program_id, data, accounts)
+    }
+
     pub fn new_with_borsh<T: BorshSerialize>(
         program_id: Pubkey,
         data: &T,
