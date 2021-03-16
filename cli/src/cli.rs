@@ -1996,7 +1996,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                   \n    s: signed\
                   \n    r: readable (always true)\
                   \n    w: writable\
-                  \n    x: executable, according to message program-ids (CPI program-ids cannot be marked)\
+                  \n    x: program account (inner instructions excluded)\
                    "
                 ),
         )
