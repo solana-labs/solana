@@ -15,9 +15,9 @@ bs58 = "0.3.1"
 prost = "0.6.1"
 serde = "1.0.118"
 serde_derive = "1.0.103"
-solana-account-decoder = { path = "../account-decoder", version = "1.5.15" }
-solana-sdk = { path = "../sdk", version = "1.5.15" }
-solana-transaction-status = { path = "../transaction-status", version = "1.5.15" }
+solana-account-decoder = { path = "../account-decoder", version = "=1.5.15" }
+solana-sdk = { path = "../sdk", version = "=1.5.15" }
+solana-transaction-status = { path = "../transaction-status", version = "=1.5.15" }
 
 [lib]
 crate-type = ["lib"]
