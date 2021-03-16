@@ -4118,9 +4118,12 @@ dependencies = [
 name = "solana-cargo-build-bpf"
 version = "1.7.0"
 dependencies = [
+ "bzip2",
  "cargo_metadata",
  "clap",
+ "solana-download-utils",
  "solana-sdk",
+ "tar",
 ]
 
 [[package]]
