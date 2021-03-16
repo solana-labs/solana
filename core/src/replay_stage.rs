@@ -743,8 +743,10 @@ impl ReplayStage {
             );
         }
         let root = root_bank.slot();
-        let heaviest_subtree_fork_choice =
-            HeaviestSubtreeForkChoice::new_from_frozen_banks(root, &frozen_banks);
+        let heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new_from_frozen_banks(
+            (root, root_bank.hash()),
+            &frozen_banks,
+        );
 
         (progress, heaviest_subtree_fork_choice)
     }
@@ -1593,8 +1595,12 @@ impl ReplayStage {
                     transaction_status_sender.send_transaction_status_freeze_message(&bank);
                 }
                 bank.freeze();
-                heaviest_subtree_fork_choice
-                    .add_new_leaf_slot(bank.slot(), Some(bank.parent_slot()));
+                let bank_hash = bank.hash();
+                assert_ne!(bank_hash, Hash::default());
+                heaviest_subtree_fork_choice.add_new_leaf_slot(
+                    (bank.slot(), bank.hash()),
+                    Some((bank.parent_slot(), bank.parent_hash())),
+                );
                 check_slot_agrees_with_cluster(
                     bank.slot(),
                     bank_forks.read().unwrap().root(),
@@ -1636,7 +1642,7 @@ impl ReplayStage {
         vote_tracker: &VoteTracker,
         cluster_slots: &ClusterSlots,
         bank_forks: &RwLock<BankForks>,
-        heaviest_subtree_fork_choice: &mut dyn ForkChoice,
+        heaviest_subtree_fork_choice: &mut HeaviestSubtreeForkChoice,
     ) -> Vec<Slot> {
         frozen_banks.sort_by_key(|bank| bank.slot());
         let mut new_stats = vec![];
@@ -1678,6 +1684,7 @@ impl ReplayStage {
                     stats.voted_stakes = voted_stakes;
                     stats.lockout_intervals = lockout_intervals;
                     stats.block_height = bank.block_height();
+                    stats.bank_hash = Some(bank.hash());
                     stats.computed = true;
                     new_stats.push(bank_slot);
                     datapoint_info!(
@@ -2182,9 +2189,9 @@ impl ReplayStage {
             }
         }
         progress.handle_new_root(&r_bank_forks);
-        heaviest_subtree_fork_choice.set_root(new_root);
+        heaviest_subtree_fork_choice.set_root((new_root, r_bank_forks.root_bank().hash()));
         let mut slots_ge_root = gossip_duplicate_confirmed_slots.split_off(&new_root);
-        // gossip_duplicate_confirmed_slots now only contains entries >= `new_root`
+        // gossip_confirmed_slots now only contains entries >= `new_root`
         std::mem::swap(gossip_duplicate_confirmed_slots, &mut slots_ge_root);
     }
 
@@ -2575,7 +2582,8 @@ pub(crate) mod tests {
         let bank0 = Bank::new(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank0)));
         let root = 3;
-        let mut heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new(root);
+        let mut heaviest_subtree_fork_choice =
+            HeaviestSubtreeForkChoice::new((root, Hash::default()));
         let root_bank = Bank::new_from_parent(
             bank_forks.read().unwrap().get(0).unwrap(),
             &Pubkey::default(),
@@ -2644,7 +2652,8 @@ pub(crate) mod tests {
             root,
         );
         bank_forks.write().unwrap().insert(root_bank);
-        let mut heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new(root);
+        let mut heaviest_subtree_fork_choice =
+            HeaviestSubtreeForkChoice::new((root, Hash::default()));
         let mut progress = ProgressMap::default();
         for i in 0..=root {
             progress.insert(
@@ -2937,7 +2946,7 @@ pub(crate) mod tests {
                     &HashMap::new(),
                     &HashMap::new(),
                     &mut progress,
-                    &mut HeaviestSubtreeForkChoice::new(0),
+                    &mut HeaviestSubtreeForkChoice::new((0, Hash::default())),
                 );
             }
 
@@ -3362,9 +3371,27 @@ pub(crate) mod tests {
             &mut heaviest_subtree_fork_choice,
         );
 
+        let bank1 = vote_simulator
+            .bank_forks
+            .read()
+            .unwrap()
+            .get(1)
+            .unwrap()
+            .clone();
+        let bank2 = vote_simulator
+            .bank_forks
+            .read()
+            .unwrap()
+            .get(2)
+            .unwrap()
+            .clone();
         assert_eq!(
-            heaviest_subtree_fork_choice.stake_voted_subtree(1).unwrap(),
-            heaviest_subtree_fork_choice.stake_voted_subtree(2).unwrap()
+            heaviest_subtree_fork_choice
+                .stake_voted_subtree(&(1, bank1.hash()))
+                .unwrap(),
+            heaviest_subtree_fork_choice
+                .stake_voted_subtree(&(2, bank2.hash()))
+                .unwrap()
         );
 
         let (heaviest_bank, _) = heaviest_subtree_fork_choice.select_forks(
@@ -3442,8 +3469,9 @@ pub(crate) mod tests {
             assert_eq!(
                 vote_simulator
                     .heaviest_subtree_fork_choice
-                    .best_slot(bank.slot())
-                    .unwrap(),
+                    .best_slot(&(bank.slot(), bank.hash()))
+                    .unwrap()
+                    .0,
                 3
             );
         }

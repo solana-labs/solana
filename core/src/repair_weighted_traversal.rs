@@ -4,7 +4,7 @@ use crate::{
 };
 use solana_ledger::blockstore::Blockstore;
 use solana_runtime::contains::Contains;
-use solana_sdk::clock::Slot;
+use solana_sdk::{clock::Slot, hash::Hash};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, PartialEq)]
@@ -32,7 +32,7 @@ impl<'a> RepairWeightTraversal<'a> {
     pub fn new(tree: &'a HeaviestSubtreeForkChoice) -> Self {
         Self {
             tree,
-            pending: vec![Visit::Unvisited(tree.root())],
+            pending: vec![Visit::Unvisited(tree.root().0)],
         }
     }
 }
@@ -48,16 +48,20 @@ impl<'a> Iterator for RepairWeightTraversal<'a> {
                 self.pending.push(Visit::Visited(slot));
                 let mut children: Vec<_> = self
                     .tree
-                    .children(slot)
+                    .children(&(slot, Hash::default()))
                     .unwrap()
                     .iter()
-                    .map(|child_slot| Visit::Unvisited(*child_slot))
+                    .map(|(child_slot, _)| Visit::Unvisited(*child_slot))
                     .collect();
 
                 // Sort children by weight to prioritize visiting the heaviest
                 // ones first
-                children
-                    .sort_by(|slot1, slot2| self.tree.max_by_weight(slot1.slot(), slot2.slot()));
+                children.sort_by(|slot1, slot2| {
+                    self.tree.max_by_weight(
+                        (slot1.slot(), Hash::default()),
+                        (slot2.slot(), Hash::default()),
+                    )
+                });
                 self.pending.extend(children);
             }
             next
@@ -87,6 +91,9 @@ pub fn get_best_repair_shreds<'a>(
             .entry(next.slot())
             .or_insert_with(|| blockstore.meta(next.slot()).unwrap());
 
+        // May not exist if blockstore purged the SlotMeta due to something
+        // like duplicate slots. TODO: Account for duplicate slot may be in orphans, especially
+        // if earlier duplicate was already removed
         if let Some(slot_meta) = slot_meta {
             match next {
                 Visit::Unvisited(slot) => {
@@ -137,7 +144,7 @@ pub mod test {
 
     #[test]
     fn test_weighted_repair_traversal_single() {
-        let heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new(42);
+        let heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new((42, Hash::default()));
         let weighted_traversal = RepairWeightTraversal::new(&heaviest_subtree_fork_choice);
         let steps: Vec<_> = weighted_traversal.collect();
         assert_eq!(steps, vec![Visit::Unvisited(42), Visit::Visited(42)]);
@@ -174,7 +181,7 @@ pub mod test {
         // Add a vote to branch with slot 5,
         // should prioritize that branch
         heaviest_subtree_fork_choice.add_votes(
-            &[(vote_pubkeys[0], 5)],
+            [(vote_pubkeys[0], (5, Hash::default()))].iter(),
             bank.epoch_stakes_map(),
             bank.epoch_schedule(),
         );
@@ -227,8 +234,8 @@ pub mod test {
         // Add some leaves to blockstore, attached to the current best leaf, should prioritize
         // repairing those new leaves before trying other branches
         repairs = vec![];
-        let best_overall_slot = heaviest_subtree_fork_choice.best_overall_slot();
-        assert_eq!(heaviest_subtree_fork_choice.best_overall_slot(), 4);
+        let best_overall_slot = heaviest_subtree_fork_choice.best_overall_slot().0;
+        assert_eq!(best_overall_slot, 4);
         blockstore.add_tree(
             tr(best_overall_slot) / (tr(6) / tr(7)),
             true,
@@ -406,6 +413,7 @@ pub mod test {
             slot 4    |
                     slot 5
         */
+
         let forks = tr(0) / (tr(1) / (tr(2) / (tr(4))) / (tr(3) / (tr(5))));
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Blockstore::open(&ledger_path).unwrap();

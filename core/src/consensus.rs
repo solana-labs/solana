@@ -197,13 +197,15 @@ impl Tower {
             );
         let root = root_bank.slot();
 
+        let (best_slot, best_hash) = heaviest_subtree_fork_choice.best_overall_slot();
         let heaviest_bank = bank_forks
-            .get(heaviest_subtree_fork_choice.best_overall_slot())
+            .get(best_slot)
             .expect(
                 "The best overall slot must be one of `frozen_banks` which all exist in bank_forks",
             )
             .clone();
 
+        assert_eq!(heaviest_bank.hash(), best_hash);
         Self::new(
             &my_pubkey,
             &vote_account,
@@ -434,6 +436,10 @@ impl Tower {
 
     pub fn last_voted_slot(&self) -> Option<Slot> {
         self.last_vote.last_voted_slot()
+    }
+
+    pub fn last_voted_slot_hash(&self) -> Option<(Slot, Hash)> {
+        self.last_vote.last_voted_slot_hash()
     }
 
     pub fn stray_restored_slot(&self) -> Option<Slot> {
@@ -1372,8 +1378,10 @@ pub mod test {
                     }
                 }
                 new_bank.freeze();
-                self.heaviest_subtree_fork_choice
-                    .add_new_leaf_slot(new_bank.slot(), Some(new_bank.parent_slot()));
+                self.heaviest_subtree_fork_choice.add_new_leaf_slot(
+                    (new_bank.slot(), new_bank.hash()),
+                    Some((new_bank.parent_slot(), new_bank.parent_hash())),
+                );
                 self.bank_forks.write().unwrap().insert(new_bank);
                 walk.forward();
             }

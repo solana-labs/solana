@@ -6,7 +6,7 @@ use crate::{
 };
 use log::*;
 use solana_metrics::inc_new_counter_info;
-use solana_sdk::{clock::Slot, timing};
+use solana_sdk::{clock::Slot, hash::Hash, timing};
 use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
     ops::Index,
@@ -104,6 +104,17 @@ impl BankForks {
 
     pub fn get(&self, bank_slot: Slot) -> Option<&Arc<Bank>> {
         self.banks.get(&bank_slot)
+    }
+
+    pub fn get_with_checked_hash(
+        &self,
+        (bank_slot, expected_hash): (Slot, Hash),
+    ) -> Option<&Arc<Bank>> {
+        let maybe_bank = self.banks.get(&bank_slot);
+        if let Some(bank) = maybe_bank {
+            assert_eq!(bank.hash(), expected_hash);
+        }
+        maybe_bank
     }
 
     pub fn root_bank(&self) -> Arc<Bank> {

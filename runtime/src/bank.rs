@@ -2127,6 +2127,10 @@ impl Bank {
         self.parent_slot
     }
 
+    pub fn parent_hash(&self) -> Hash {
+        self.parent_hash
+    }
+
     fn process_genesis_config(&mut self, genesis_config: &GenesisConfig) {
         // Bootstrap validator collects fees until `new_from_parent` is called.
         self.fee_rate_governor = genesis_config.fee_rate_governor.clone();
