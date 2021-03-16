@@ -232,7 +232,7 @@ pub struct CliEpochInfo {
     #[serde(flatten)]
     pub epoch_info: EpochInfo,
     #[serde(skip)]
-    pub avg_slot_time_ms: u64,
+    pub average_slot_time_ms: u64,
 }
 
 impl QuietDisplay for CliEpochInfo {}
@@ -282,9 +282,9 @@ impl fmt::Display for CliEpochInfo {
             "Epoch Completed Time:",
             &format!(
                 "{}/{} ({} remaining)",
-                slot_to_human_time(self.epoch_info.slot_index, self.avg_slot_time_ms),
-                slot_to_human_time(self.epoch_info.slots_in_epoch, self.avg_slot_time_ms),
-                slot_to_human_time(remaining_slots_in_epoch, self.avg_slot_time_ms)
+                slot_to_human_time(self.epoch_info.slot_index, self.average_slot_time_ms),
+                slot_to_human_time(self.epoch_info.slots_in_epoch, self.average_slot_time_ms),
+                slot_to_human_time(remaining_slots_in_epoch, self.average_slot_time_ms)
             ),
         )
     }

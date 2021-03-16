@@ -994,7 +994,7 @@ pub fn process_get_epoch(rpc_client: &RpcClient, _config: &CliConfig) -> Process
 
 pub fn process_get_epoch_info(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
     let epoch_info = rpc_client.get_epoch_info()?;
-    let avg_slot_time_ms = rpc_client
+    let average_slot_time_ms = rpc_client
         .get_recent_performance_samples(Some(60))
         .map(|samples| {
             let (slots, secs) = samples.iter().fold((0, 0), |(slots, secs), sample| {
@@ -1005,7 +1005,7 @@ pub fn process_get_epoch_info(rpc_client: &RpcClient, config: &CliConfig) -> Pro
         .unwrap_or(clock::DEFAULT_MS_PER_SLOT);
     let epoch_info = CliEpochInfo {
         epoch_info,
-        avg_slot_time_ms,
+        average_slot_time_ms,
     };
     Ok(config.output_format.formatted_string(&epoch_info))
 }
