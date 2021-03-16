@@ -64,6 +64,10 @@ pub fn collect_token_balances(
         let mut transaction_balances: Vec<TransactionTokenBalance> = vec![];
         if has_token_program {
             for (index, account_id) in account_keys.iter().enumerate() {
+                if is_token_program(account_id) {
+                    continue;
+                }
+
                 if let Some((mint, ui_token_amount)) =
                     collect_token_balance_from_account(&bank, account_id, &mut mint_decimals)
                 {
