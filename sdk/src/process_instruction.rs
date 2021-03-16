@@ -41,6 +41,8 @@ pub trait InvokeContext {
     ) -> Result<(), InstructionError>;
     /// Get the program ID of the currently executing program
     fn get_caller(&self) -> Result<&Pubkey, InstructionError>;
+    /// Get the list of keyed accounts
+    fn get_keyed_accounts(&self) -> &[KeyedAccount];
     /// Get a list of built-in programs
     fn get_programs(&self) -> &[(Pubkey, ProcessInstructionWithContext)];
     /// Get this invocation's logger
@@ -276,17 +278,18 @@ impl Logger for MockLogger {
     }
 }
 
-pub struct MockInvokeContext {
+pub struct MockInvokeContext<'a> {
     pub key: Pubkey,
     pub logger: MockLogger,
     pub bpf_compute_budget: BpfComputeBudget,
     pub compute_meter: MockComputeMeter,
+    pub keyed_accounts: &'a [KeyedAccount<'a>],
     pub programs: Vec<(Pubkey, ProcessInstructionWithContext)>,
     pub accounts: Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>,
     pub invoke_depth: usize,
     pub sysvars: Vec<(Pubkey, Option<Rc<Vec<u8>>>)>,
 }
-impl Default for MockInvokeContext {
+impl<'a> Default for MockInvokeContext<'a> {
     fn default() -> Self {
         MockInvokeContext {
             key: Pubkey::default(),
@@ -295,6 +298,7 @@ impl Default for MockInvokeContext {
             compute_meter: MockComputeMeter {
                 remaining: std::i64::MAX as u64,
             },
+            keyed_accounts: &[], // TODO [KeyedAccounts to InvokeContext refactoring]
             programs: vec![],
             accounts: vec![],
             invoke_depth: 0,
@@ -302,7 +306,7 @@ impl Default for MockInvokeContext {
         }
     }
 }
-impl InvokeContext for MockInvokeContext {
+impl<'a> InvokeContext for MockInvokeContext<'a> {
     fn push(&mut self, _key: &Pubkey) -> Result<(), InstructionError> {
         self.invoke_depth = self.invoke_depth.saturating_add(1);
         Ok(())
@@ -324,6 +328,9 @@ impl InvokeContext for MockInvokeContext {
     }
     fn get_caller(&self) -> Result<&Pubkey, InstructionError> {
         Ok(&self.key)
+    }
+    fn get_keyed_accounts(&self) -> &[KeyedAccount] {
+        self.keyed_accounts
     }
     fn get_programs(&self) -> &[(Pubkey, ProcessInstructionWithContext)] {
         &self.programs

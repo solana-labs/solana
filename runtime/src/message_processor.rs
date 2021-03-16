@@ -255,6 +255,7 @@ pub struct ThisInvokeContext<'a> {
     pre_accounts: Vec<PreAccount>,
     executables: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
     account_deps: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
+    keyed_accounts: &'a [KeyedAccount<'a>],
     programs: &'a [(Pubkey, ProcessInstructionWithContext)],
     logger: Rc<RefCell<dyn Logger>>,
     bpf_compute_budget: BpfComputeBudget,
@@ -292,6 +293,7 @@ impl<'a> ThisInvokeContext<'a> {
             pre_accounts,
             executables,
             account_deps,
+            keyed_accounts: &[], // TODO [KeyedAccounts to InvokeContext refactoring]
             programs,
             logger: Rc::new(RefCell::new(ThisLogger { log_collector })),
             bpf_compute_budget,
@@ -352,6 +354,9 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         self.program_ids
             .last()
             .ok_or(InstructionError::GenericError)
+    }
+    fn get_keyed_accounts(&self) -> &[KeyedAccount] {
+        self.keyed_accounts
     }
     fn get_programs(&self) -> &[(Pubkey, ProcessInstructionWithContext)] {
         self.programs
