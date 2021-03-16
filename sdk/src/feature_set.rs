@@ -218,7 +218,7 @@ lazy_static! {
         (per_byte_logging_cost::id(), "charge the compute budget per byte for logging"),
         (check_init_vote_data::id(), "check initialized Vote data"),
         (check_program_owner::id(), "limit programs to operating on accounts owned by itself"),
-        (cpi_data_cost::id(), "charge the compute budger for data passed via CPI"),
+        (cpi_data_cost::id(), "charge the compute budget for data passed via CPI"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
