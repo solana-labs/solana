@@ -1,10 +1,14 @@
 //! The `poh_service` module implements a service that records the passing of
 //! "ticks", a measure of time in the PoH stream
-use crate::poh_recorder::PohRecorder;
+use crate::poh_recorder::{PohRecorder, PohRecorderError, Record};
+use solana_ledger::poh::PohEntry;
 use solana_measure::measure::Measure;
-use solana_sdk::poh_config::PohConfig;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use solana_sdk::{clock::Slot, hash::Hash, poh_config::PohConfig, transaction::Transaction};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
+use std::sync::{
+    mpsc::{channel, Receiver, RecvError, Sender, TryRecvError},
+    Arc, Mutex,
+};
 use std::thread::{self, sleep, Builder, JoinHandle};
 use std::time::Instant;
 
@@ -32,6 +36,7 @@ impl PohService {
         ticks_per_slot: u64,
         pinned_cpu_core: usize,
         hashes_per_batch: u64,
+        record_receiver: Receiver<Record>,
     ) -> Self {
         let poh_exit_ = poh_exit.clone();
         let poh_config = poh_config.clone();
@@ -69,6 +74,7 @@ impl PohService {
                         poh_config.target_tick_duration.as_nanos() as u64 - adjustment_per_tick,
                         ticks_per_slot,
                         hashes_per_batch,
+                        record_receiver,
                     );
                 }
                 poh_exit_.store(true, Ordering::Relaxed);
@@ -83,6 +89,7 @@ impl PohService {
         poh_config: &PohConfig,
         poh_exit: &AtomicBool,
     ) {
+        error!("sleepy_tick_producer");
         while !poh_exit.load(Ordering::Relaxed) {
             sleep(poh_config.target_tick_duration);
             poh_recorder.lock().unwrap().tick();
@@ -94,6 +101,8 @@ impl PohService {
         poh_config: &PohConfig,
         poh_exit: &AtomicBool,
     ) {
+        error!("short_lived_sleepy_tick_producer");
+
         let mut warned = false;
         for _ in 0..poh_config.target_tick_count.unwrap() {
             sleep(poh_config.target_tick_duration);
@@ -111,31 +120,96 @@ impl PohService {
         target_tick_ns: u64,
         ticks_per_slot: u64,
         hashes_per_batch: u64,
+        record_receiver: Receiver<Record>,
     ) {
-        let poh = poh_recorder.lock().unwrap().poh.clone();
+        //error!("tick_producer");
+        let poh;
+        let mut tick_height;
+        {
+            let recorder = poh_recorder.lock().unwrap();
+            poh = recorder.poh.clone();
+            tick_height = recorder.tick_height();
+        }
         let mut now = Instant::now();
         let mut last_metric = Instant::now();
         let mut num_ticks = 0;
         let mut num_hashes = 0;
         let mut total_sleep_us = 0;
         let mut total_lock_time_ns = 0;
+        let mut total_lock_time_record_ns = 0;
+        let mut total_lock_time_poh_ns = 0;
         let mut total_hash_time_ns = 0;
         let mut total_tick_time_ns = 0;
         let mut sleep_deficit_ns = 0;
+        let mut ct = 0;
+        let mut try_again_mixin = None;
         loop {
-            num_hashes += hashes_per_batch;
             let should_tick = {
-                let mut lock_time = Measure::start("lock");
-                let mut poh_l = poh.lock().unwrap();
-                lock_time.stop();
-                total_lock_time_ns += lock_time.as_ns();
-                let mut hash_time = Measure::start("hash");
-                let r = poh_l.hash(hashes_per_batch);
-                hash_time.stop();
-                total_hash_time_ns += hash_time.as_ns();
-                r
+                let mixin = if let Some(record) = try_again_mixin {
+                    try_again_mixin = None;
+                    Ok(record)
+                } else {
+                    record_receiver.try_recv()
+                };
+                if let Ok(mut record) = mixin {
+                    //error!("jwash:Received mixin");
+                    let mut lock_time = Measure::start("lock");
+                    let mut poh_recorder_l = poh_recorder.lock().unwrap();
+                    lock_time.stop();
+                    total_lock_time_record_ns += lock_time.as_ns();
+                    loop {
+                        let mut temp = Vec::new();
+                        std::mem::swap(&mut temp, &mut record.transactions);
+                        let res = poh_recorder_l.record(record.slot, record.mixin, temp);
+                        let _ = record.sender.send(res); // TODO what do we do on failure here?
+                        num_hashes += 1;
+
+                        let get_again = record_receiver.try_recv();
+                        match get_again {
+                            Ok(mut record2) => {
+                                std::mem::swap(&mut record2, &mut record);
+                            }
+                            Err(_) => {
+                                break;
+                            }
+                        }
+                    }
+                    false // record will tick if it needs to
+                } else {
+                    let mut lock_time = Measure::start("lock");
+                    let mut poh_l = poh.lock().unwrap(); // keep locked?
+                    lock_time.stop();
+                    total_lock_time_poh_ns += lock_time.as_ns();
+                    let mut r;
+                    loop {
+                        let mut hash_time = Measure::start("hash");
+                        num_hashes += hashes_per_batch;
+                        r = poh_l.hash(hashes_per_batch);
+                        hash_time.stop();
+                        total_hash_time_ns += hash_time.as_ns();
+                        if r {
+                            break;
+                        }
+                        let get_again = record_receiver.try_recv();
+                        match get_again {
+                            Ok(inside) => {
+                                try_again_mixin = Some(inside);
+                                break;
+                            }
+                            Err(_) => {
+                                continue;
+                            }
+                        }
+                    }
+                    r
+                }
             };
+            ct += 1;
+            if ct % 1000000 == 0 {
+                //error!("count: {}", ct);
+            }
             if should_tick {
+                //error!("tick count: {}", ct);
                 // Lock PohRecorder only for the final hash...
                 {
                     let mut lock_time = Measure::start("lock");
@@ -144,9 +218,11 @@ impl PohService {
                     total_lock_time_ns += lock_time.as_ns();
                     let mut tick_time = Measure::start("tick");
                     poh_recorder_l.tick();
+                    tick_height = poh_recorder_l.tick_height();
                     tick_time.stop();
                     total_tick_time_ns += tick_time.as_ns();
                 }
+                //error!("after tick count: {}", ct);
                 num_ticks += 1;
                 let elapsed_ns = now.elapsed().as_nanos() as u64;
 
@@ -157,9 +233,10 @@ impl PohService {
 
                 // sleep is not accurate enough to get a predictable time.
                 // Kernel can not schedule the thread for a while.
+                /*
                 while (now.elapsed().as_nanos() as u64) < target_tick_ns {
                     std::hint::spin_loop();
-                }
+                }*/
                 total_sleep_us += (now.elapsed().as_nanos() as u64 - elapsed_ns) / 1000;
                 now = Instant::now();
 
@@ -173,7 +250,13 @@ impl PohService {
                         ("elapsed_us", us_per_slot, i64),
                         ("total_sleep_us", total_sleep_us, i64),
                         ("total_tick_time_us", total_tick_time_ns / 1000, i64),
-                        ("total_lock_time_us", total_lock_time_ns / 1000, i64),
+                        ("total_lock_time_tick_us", total_lock_time_ns / 1000, i64),
+                        (
+                            "total_lock_time_record_us",
+                            total_lock_time_record_ns / 1000,
+                            i64
+                        ),
+                        ("total_lock_time_poh_us", total_lock_time_poh_ns / 1000, i64),
                         ("total_hash_time_us", total_hash_time_ns / 1000, i64),
                     );
                     total_sleep_us = 0;
@@ -181,7 +264,9 @@ impl PohService {
                     num_hashes = 0;
                     total_tick_time_ns = 0;
                     total_lock_time_ns = 0;
-                    total_hash_time_ns = 0;
+                    total_lock_time_record_ns = 0;
+                    total_lock_time_ns = 0;
+                    total_lock_time_poh_ns = 0;
                     last_metric = Instant::now();
                 }
                 if poh_exit.load(Ordering::Relaxed) {
@@ -189,6 +274,13 @@ impl PohService {
                 }
             }
         }
+        let mut dct = 0;
+        while record_receiver.try_recv().is_ok() {
+            dct += 1;
+        }
+
+        drop(record_receiver);
+        error!("tick producer break, count: {}, dropped: {}", ct, dct);
     }
 
     pub fn join(self) -> thread::Result<()> {
@@ -200,7 +292,6 @@ impl PohService {
 mod tests {
     use super::*;
     use crate::poh_recorder::WorkingBank;
-    use num_format::{Buffer, Locale};
     use rand::{thread_rng, Rng};
     use rayon::iter::{IntoParallelIterator, ParallelIterator};
     use rayon::ThreadPoolBuilder;
@@ -273,12 +364,13 @@ mod tests {
         );
 
         for i in 0..10 {
+            let mut waiting = Arc::new(Mutex::new(0));
             let poh_config = Arc::new(PohConfig {
-                hashes_per_tick: Some((hashes_per_tick / 10) * (i + 1)),
+                hashes_per_tick: Some(32445), //(hashes_per_tick / 10) * (i + 1)),
                 target_tick_duration,
                 target_tick_count: None,
             });
-            let (poh_recorder, entry_receiver) = PohRecorder::new(
+            let (poh_recorder, entry_receiver, record_receiver) = PohRecorder::new(
                 bank.tick_height(),
                 prev_hash,
                 bank.slot(),
@@ -289,6 +381,7 @@ mod tests {
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
                 &poh_config,
             );
+            let record_sender = poh_recorder.record_sender();
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
             let exit = Arc::new(AtomicBool::new(false));
             let working_bank = WorkingBank {
@@ -297,7 +390,7 @@ mod tests {
                 max_tick_height: std::u64::MAX,
             };
             let ticks_per_slot = bank.ticks_per_slot();
-
+            let waiting2 = waiting.clone();
             let entry_producer = {
                 let poh_recorder = poh_recorder.clone();
                 let exit = exit.clone();
@@ -320,24 +413,88 @@ mod tests {
                         let now = Instant::now();
                         let mut total_us = 0;
                         let mut total_times = 0;
+                        //error!("ln: {}", line!());
                         let h1 = hash(b"hello world!");
                         let tx = test_tx();
+                        //error!("ln: {}", line!());
                         loop {
+                            //error!("ln: {}", line!());
                             // send some data
                             let mut time = Measure::start("record");
-                            let record_lock = |_i: usize| {
-                                let _ = poh_recorder.lock().unwrap().record(
-                                    bank.slot(),
-                                    h1,
-                                    vec![tx.clone()],
-                                );
-                            };
+                            let record_lock =
+                                |sender_result: Sender<
+                                    std::result::Result<(), PohRecorderError>,
+                                >,
+                                 receiver_result: &Receiver<
+                                    std::result::Result<(), PohRecorderError>,
+                                >,
+                                 record_sender: &Sender<Record>| {
+                                    //error!("Sending mixin");
+                                    let res = record_sender.send(Record::new(
+                                        h1,
+                                        vec![tx.clone()],
+                                        bank.slot(),
+                                        sender_result,
+                                    ));
+                                    if res.is_err() {
+                                        error!(
+                                            "Failed to send record, current waits: {}",
+                                            *waiting.lock().unwrap()
+                                        );
+                                        return ();
+                                    }
+                                    *waiting.lock().unwrap() += 1;
+                                    let res = receiver_result.recv(); //_timeout(Duration::from_millis(4000));
+                                    *waiting.lock().unwrap() -= 1;
+                                    if res.is_err() {
+                                        match res {
+                                            Err(err) => {
+                                                error!("Error in recv_timeout");
+                                                return (); /* Err(
+                                                               PohRecorderError::InvalidCallingObject,
+                                                           );*/
+                                            }
+                                            Ok(_) => {}
+                                        }
+                                    }
+                                    ()
+                                };
+                            //error!("ln: {}", line!());
                             if use_rayon {
+                                let chunks = rayon_threads;
+                                let chunk_size = par_batch_size / chunks;
+                                let record_senders = (0..chunks)
+                                    .into_iter()
+                                    .map(|chunk| (record_sender.clone(), chunk))
+                                    .collect::<Vec<_>>();
+                                //error!("this many parallel: {}", record_senders.len());
                                 thread_pool.install(|| {
+                                    record_senders.into_par_iter().for_each(
+                                        |(record_sender, chunk)| {
+                                            //let record_sender = record_sender.clone();
+                                            let (sender_result, receiver_result) = channel();
+                                            let mut chunk_size = chunk_size;
+                                            if chunk == chunks - 1 {
+                                                let chunk_size_new =
+                                                    par_batch_size - chunk_size * (chunks - 1);
+                                                assert!(chunk_size_new < chunk_size + chunks);
+                                                chunk_size = chunk_size_new;
+                                            }
+                                            for _i in 0..chunk_size {
+                                                record_lock(
+                                                    sender_result.clone(),
+                                                    &receiver_result,
+                                                    &record_sender,
+                                                );
+                                            }
+                                        },
+                                    )
+                                    /*
                                     (0..par_batch_size).into_par_iter().for_each(record_lock);
+                                    */
                                 });
                             } else {
-                                (0..par_batch_size).into_iter().for_each(record_lock);
+                                panic!("unsupported"); //(0..par_batch_size).into_iter().for_each(record_lock);
                             }
                             time.stop();
                             total_us += time.as_us();
@@ -347,13 +504,11 @@ mod tests {
                             }
 
                             if exit.load(Ordering::Relaxed) {
-                                let mut buf = Buffer::default();
-                                buf.write_formatted(&(total_times * par_batch_size), &Locale::en);
                                 info!(
                                     "spent:{}ms record: {}ms entries recorded: {}",
                                     now.elapsed().as_millis(),
                                     total_us / 1000,
-                                    buf.as_str(),
+                                    &(total_times * par_batch_size),
                                 );
                                 break;
                             }
@@ -372,6 +527,7 @@ mod tests {
                 0,
                 DEFAULT_PINNED_CPU_CORE,
                 hashes_per_batch,
+                record_receiver,
             );
             poh_recorder.lock().unwrap().set_working_bank(working_bank);
 
@@ -383,19 +539,14 @@ mod tests {
             let mut num_ticks = 0;
 
             let time = Instant::now();
+            let hashes_per_tick = poh_config.hashes_per_tick.unwrap();
             while run_time != 0 || need_tick || need_entry || need_partial {
                 let (_bank, (entry, _tick_height)) = entry_receiver.recv().unwrap();
-
                 if entry.is_tick() {
                     num_ticks += 1;
-                    assert!(
-                        entry.num_hashes <= poh_config.hashes_per_tick.unwrap(),
-                        "{} <= {}",
-                        entry.num_hashes,
-                        poh_config.hashes_per_tick.unwrap()
-                    );
+                    assert!(entry.num_hashes <= hashes_per_tick);
 
-                    if entry.num_hashes == poh_config.hashes_per_tick.unwrap() {
+                    if entry.num_hashes == hashes_per_tick {
                         need_tick = false;
                     } else {
                         need_partial = false;
@@ -403,7 +554,8 @@ mod tests {
 
                     hashes += entry.num_hashes;
 
-                    assert_eq!(hashes, poh_config.hashes_per_tick.unwrap());
+                    //error!("hashes: {}, hashes_per_tick expected: {}, num hashes: {}, num_ticks: {}, iteration: {}", hashes, hashes_per_tick, entry.num_hashes, num_ticks, i);
+                    assert_eq!(hashes, hashes_per_tick);
 
                     hashes = 0;
                 } else {
@@ -441,9 +593,25 @@ mod tests {
                 elapsed.as_micros() / num_ticks
             );
 
+            error!(
+                "Trying to exit, active waits: {}",
+                *waiting2.lock().unwrap()
+            );
             exit.store(true, Ordering::Relaxed);
+            error!("poh_service.join");
             poh_service.join().unwrap();
+            drop(poh_recorder);
+            //drop(poh_service);
+            error!("entry_producer.join: {}", *waiting2.lock().unwrap());
             entry_producer.join().unwrap();
+            let mut extra = 0;
+            loop {
+                if let Ok(res) = entry_receiver.try_recv() {
+                    extra += 1;
+                }
+                break;
+            }
+            error!("Extra recorded entries not processed: {}", extra);
         }
         drop(blockstore);
         Blockstore::destroy(&ledger_path).unwrap();
