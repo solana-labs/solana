@@ -4763,18 +4763,32 @@ mod tests {
             rand_ci.shred_version = shred_version;
             rand_ci.wallclock = timestamp();
             CrdsValue::new_signed(CrdsData::ContactInfo(rand_ci), &keypair)
-        }).take(NO_ENTRIES).collect();
+        })
+        .take(NO_ENTRIES)
+        .collect();
         let timeouts = cluster_info.gossip.read().unwrap().make_timeouts_test();
-        assert_eq!((0, 0, NO_ENTRIES), cluster_info.handle_pull_response(
-            &entrypoint_pubkey,
-            data,
-            &timeouts
-        ));
+        assert_eq!(
+            (0, 0, NO_ENTRIES),
+            cluster_info.handle_pull_response(&entrypoint_pubkey, data, &timeouts)
+        );
 
         let now = timestamp();
         for peer in peers {
-            cluster_info.gossip.write().unwrap().mark_pull_request_creation_time(&peer, now);
+            cluster_info
+                .gossip
+                .write()
+                .unwrap()
+                .mark_pull_request_creation_time(&peer, now);
         }
-        assert_eq!(cluster_info.gossip.read().unwrap().pull.pull_request_time.len(), CRDS_UNIQUE_PUBKEY_CAPACITY);
+        assert_eq!(
+            cluster_info
+                .gossip
+                .read()
+                .unwrap()
+                .pull
+                .pull_request_time
+                .len(),
+            CRDS_UNIQUE_PUBKEY_CAPACITY
+        );
     }
 }
