@@ -11,11 +11,11 @@ publish = false
 
 [dependencies]
 log = { version = "0.4.11" }
-solana-logger = { path = "../../logger", version = "1.7.0" }
-solana-version = { path = "../../version", version = "1.7.0" }
-solana-measure = { path = "../../measure", version = "1.7.0" }
-solana-runtime = { path = "..", version = "1.7.0" }
-solana-sdk = { path = "../../sdk", version = "1.7.0" }
+solana-logger = { path = "../../logger", version = "=1.7.0" }
+solana-version = { path = "../../version", version = "=1.7.0" }
+solana-measure = { path = "../../measure", version = "=1.7.0" }
+solana-runtime = { path = "..", version = "=1.7.0" }
+solana-sdk = { path = "../../sdk", version = "=1.7.0" }
 clap = "2.33.1"
 
 [package.metadata.docs.rs]

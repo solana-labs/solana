@@ -10,7 +10,7 @@ documentation = "https://docs.rs/solana-bpf-rust-param-passing-dep"
 edition = "2018"
 
 [dependencies]
-solana-program = { path = "../../../../sdk/program", version = "1.7.0" }
+solana-program = { path = "../../../../sdk/program", version = "=1.7.0" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

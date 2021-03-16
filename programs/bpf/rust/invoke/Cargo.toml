@@ -11,7 +11,7 @@ edition = "2018"
 
 [dependencies]
 solana-bpf-rust-invoked = { path = "../invoked", default-features = false }
-solana-program = { path = "../../../../sdk/program", version = "1.7.0" }
+solana-program = { path = "../../../../sdk/program", version = "=1.7.0" }
 
 [lib]
 crate-type = ["cdylib"]

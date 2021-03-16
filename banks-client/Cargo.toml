@@ -15,16 +15,16 @@ borsh = "0.8.1"
 borsh-derive = "0.8.1"
 futures = "0.3"
 mio = "0.7.6"
-solana-banks-interface = { path = "../banks-interface", version = "1.7.0" }
-solana-program = { path = "../sdk/program", version = "1.7.0" }
-solana-sdk = { path = "../sdk", version = "1.7.0" }
+solana-banks-interface = { path = "../banks-interface", version = "=1.7.0" }
+solana-program = { path = "../sdk/program", version = "=1.7.0" }
+solana-sdk = { path = "../sdk", version = "=1.7.0" }
 tarpc = { version = "0.24.1", features = ["full"] }
 tokio = { version = "1.1", features = ["full"] }
 tokio-serde = { version = "0.8", features = ["bincode"] }
 
 [dev-dependencies]
-solana-runtime = { path = "../runtime", version = "1.7.0" }
-solana-banks-server = { path = "../banks-server", version = "1.7.0" }
+solana-runtime = { path = "../runtime", version = "=1.7.0" }
+solana-banks-server = { path = "../banks-server", version = "=1.7.0" }
 
 [lib]
 crate-type = ["lib"]
