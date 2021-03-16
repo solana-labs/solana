@@ -16,6 +16,7 @@ import { addressLabel } from "utils/tx";
 import { reportError } from "utils/sentry";
 import { useTokenRegistry } from "providers/mints/token-registry";
 import { BigNumber } from "bignumber.js";
+import { Copyable } from "components/common/Copyable";
 
 export function TokenAccountSection({
   account,
@@ -61,9 +62,9 @@ function MintAccountCard({
 
   const tokenInfo = tokenRegistry.get(mintAddress);
 
-  let bridgeContractAddress;
-  if (tokenInfo?.extensions?.bridgeContract && !tokenInfo.extensions.address) {
-    const extractEth = tokenInfo?.extensions?.bridgeContract.match(
+  let bridgeContractAddress = tokenInfo?.extensions?.address;
+  if (tokenInfo?.extensions?.bridgeContract && !bridgeContractAddress) {
+    const extractEth = tokenInfo.extensions.bridgeContract.match(
       /0x[a-fA-F0-9]{40,64}/
     );
 
@@ -142,17 +143,19 @@ function MintAccountCard({
             <td className="text-lg-right">Uninitialized</td>
           </tr>
         )}
-        {tokenInfo?.extensions?.bridgeContract && (
+        {tokenInfo?.extensions?.bridgeContract && bridgeContractAddress && (
           <tr>
             <td>Wormhole Bridge Contract</td>
             <td className="text-lg-right">
-              <a
-                href={tokenInfo?.extensions?.bridgeContract}
-                target="_blank"
-                rel="noreferrer"
-              >
-                {tokenInfo?.extensions?.address || bridgeContractAddress}
-              </a>
+              <Copyable text={bridgeContractAddress}>
+                <a
+                  href={tokenInfo.extensions.bridgeContract}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {bridgeContractAddress}
+                </a>
+              </Copyable>
             </td>
           </tr>
         )}
