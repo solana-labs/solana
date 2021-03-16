@@ -14,7 +14,6 @@ use solana_ledger::blockstore::Blockstore;
 use solana_ledger::entry::Entry;
 use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
 use solana_ledger::poh::Poh;
-use solana_ledger::poh::PohEntry;
 use solana_runtime::bank::Bank;
 
 pub use solana_sdk::clock::Slot;
@@ -25,7 +24,7 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing;
 use solana_sdk::transaction::Transaction;
 use std::cmp;
-use std::sync::mpsc::{channel, Receiver, SendError, Sender, SyncSender, TryRecvError};
+use std::sync::mpsc::{channel, Receiver, SendError, Sender, SyncSender};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use thiserror::Error;
@@ -74,6 +73,61 @@ impl Record {
     }
 }
 
+pub struct Recorder {
+    // shared by all users of PohRecorder
+    pub record_sender: Sender<Record>,
+    // unique to this caller
+    pub result_sender: Sender<Result<()>>,
+    pub result_receiver: Receiver<Result<()>>,
+}
+
+impl Clone for Recorder {
+    fn clone(&self) -> Self {
+        Recorder::new(self.record_sender.clone())
+    }
+}
+
+impl Recorder {
+    pub fn new(record_sender: Sender<Record>) -> Self {
+        let (result_sender, result_receiver) = channel();
+        Recorder {
+            // shared
+            record_sender,
+            // unique to this caller
+            result_sender,
+            result_receiver,
+        }
+    }
+    pub fn record(
+        &self,
+        bank_slot: Slot,
+        mixin: Hash,
+        transactions: Vec<Transaction>,
+    ) -> Result<()> {
+        let res = self.record_sender.send(Record::new(
+            mixin,
+            transactions,
+            bank_slot,
+            self.result_sender.clone(),
+        ));
+        if res.is_err() {
+            return Ok(()); // TODO what error here
+        }
+        let res = self.result_receiver.recv(); //TODO: consider timeout? _timeout(Duration::from_millis(4000));
+        match res {
+            Err(_err) => {
+                error!("Error in recv_timeout"); // TODO
+                return Ok(()); /* Err(
+                                   PohRecorderError::InvalidCallingObject,
+                               );*/
+            }
+            Ok(result) => {
+                return result;
+            }
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct WorkingBank {
     pub bank: Arc<Bank>,
@@ -109,7 +163,6 @@ pub struct PohRecorder {
     record_us: u64,
     last_metric: Instant,
     record_sender: Sender<Record>,
-    waits: u64,
 }
 
 impl PohRecorder {
@@ -173,8 +226,8 @@ impl PohRecorder {
         self.ticks_per_slot
     }
 
-    pub fn record_sender(&self) -> Sender<Record> {
-        self.record_sender.clone()
+    pub fn recorder(&self) -> Recorder {
+        Recorder::new(self.record_sender.clone())
     }
 
     fn is_same_fork_as_previous_leader(&self, slot: Slot) -> bool {
@@ -554,7 +607,6 @@ impl PohRecorder {
                 tick_overhead_us: 0,
                 last_metric: Instant::now(),
                 record_sender,
-                waits: 0,
             },
             receiver,
             record_receiver,
@@ -601,74 +653,75 @@ mod tests {
     use bincode::serialize;
     use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use solana_ledger::{blockstore::Blockstore, blockstore_meta::SlotMeta, get_tmp_ledger_path};
-    use solana_measure::measure::Measure;
     use solana_perf::test_tx::test_tx;
     use solana_sdk::clock::DEFAULT_TICKS_PER_SLOT;
     use solana_sdk::hash::hash;
     use std::sync::mpsc::sync_channel;
 
-    #[test]
-    fn test_performance() {
-        solana_logger::setup();
-        let a = Mutex::new(5u32);
-        let mut time = Measure::start("");
-        let count = 2500000 * 10;
-        for i in 0..count {
-            *a.lock().unwrap() += 1;
-        }
-        time.stop();
-        let a = *a.lock().unwrap();
-
-        let (record_sender, record_receiver) = channel();
-        let mut b = 0;
-        let mut time2 = Measure::start("");
-        for i in 0..count {
-            if let Ok(mixin) = record_receiver.try_recv() {
-                b += 2;
-            } else {
-                b += 1;
+    /*
+        use solana_measure::measure::Measure;
+        #[test]
+        fn test_performance() {
+            solana_logger::setup();
+            let a = Mutex::new(5u32);
+            let mut time = Measure::start("");
+            let count = 2500000 * 10;
+            for _i in 0..count {
+                *a.lock().unwrap() += 1;
             }
-        }
-        time2.stop();
+            time.stop();
+            let a = *a.lock().unwrap();
 
-        for i in 0..count {
-            record_sender.send(1u32);
-        }
-
-        let mut time3 = Measure::start("");
-        for i in 0..count {
-            if let Ok(mixin) = record_receiver.try_recv() {
-                b += mixin;
-            } else {
-                b += 1;
+            let (record_sender, record_receiver) = channel();
+            let mut b = 0;
+            let mut time2 = Measure::start("");
+            for _i in 0..count {
+                if let Ok(_mixin) = record_receiver.try_recv() {
+                    b += 2;
+                } else {
+                    b += 1;
+                }
             }
-        }
-        time3.stop();
+            time2.stop();
 
-        for i in 0..1 {
-            record_sender.send(1u32);
-        }
-
-        let mut time4 = Measure::start("");
-        for i in 0..count {
-            if let Ok(mixin) = record_receiver.try_recv() {
-                b += mixin;
-            } else {
-                b += 1;
+            for i in 0..count {
+                record_sender.send(1u32);
             }
+
+            let mut time3 = Measure::start("");
+            for i in 0..count {
+                if let Ok(mixin) = record_receiver.try_recv() {
+                    b += mixin;
+                } else {
+                    b += 1;
+                }
+            }
+            time3.stop();
+
+            for i in 0..1 {
+                record_sender.send(1u32);
+            }
+
+            let mut time4 = Measure::start("");
+            for i in 0..count {
+                if let Ok(mixin) = record_receiver.try_recv() {
+                    b += mixin;
+                } else {
+                    b += 1;
+                }
+            }
+            time4.stop();
+
+            error!(
+                "{}, {}, {}, {}, {}",
+                time.as_ms(),
+                time2.as_ms(),
+                time3.as_ms(),
+                time4.as_ms(),
+                a + b
+            );
         }
-        time4.stop();
-
-        error!(
-            "{}, {}, {}, {}, {}",
-            time.as_ms(),
-            time2.as_ms(),
-            time3.as_ms(),
-            time4.as_ms(),
-            a + b
-        );
-    }
-
+    */
     #[test]
     fn test_poh_recorder_no_zero_tick() {
         let prev_hash = Hash::default();

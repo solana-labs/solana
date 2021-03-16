@@ -4,7 +4,7 @@
 use crate::{
     cluster_info::ClusterInfo,
     packet_hasher::PacketHasher,
-    poh_recorder::{PohRecorder, PohRecorderError, WorkingBankEntry},
+    poh_recorder::{PohRecorder, PohRecorderError, Recorder, WorkingBankEntry},
     poh_service::{self, PohService},
 };
 use crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError};
@@ -298,6 +298,7 @@ impl BankingStage {
         gossip_vote_sender: &ReplayVoteSender,
         test_fn: Option<impl Fn()>,
         banking_stage_stats: Option<&BankingStageStats>,
+        recorder: &Recorder,
     ) {
         let mut rebuffered_packets_len = 0;
         let mut new_tx_count = 0;
@@ -320,12 +321,16 @@ impl BankingStage {
                     new_unprocessed_indexes,
                 )
             } else {
-                let bank = poh_recorder.lock().unwrap().bank();
+                let bank;
+                {
+                    let lock = poh_recorder.lock().unwrap();
+                    bank = lock.bank();
+                }
                 if let Some(bank) = bank {
                     let (processed, verified_txs_len, new_unprocessed_indexes) =
                         Self::process_received_packets(
                             &bank,
-                            &poh_recorder,
+                            &recorder,
                             &msgs,
                             original_unprocessed_indexes.to_owned(),
                             transaction_status_sender.clone(),
@@ -425,6 +430,7 @@ impl BankingStage {
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
         banking_stage_stats: &BankingStageStats,
+        recorder: &Recorder,
     ) -> BufferedPacketsDecision {
         let (leader_at_slot_offset, poh_has_bank, would_be_leader, would_be_leader_shortly) = {
             let poh = poh_recorder.lock().unwrap();
@@ -456,6 +462,7 @@ impl BankingStage {
                     gossip_vote_sender,
                     None::<Box<dyn Fn()>>,
                     Some(banking_stage_stats),
+                    recorder,
                 );
             }
             BufferedPacketsDecision::Forward => {
@@ -533,6 +540,7 @@ impl BankingStage {
         gossip_vote_sender: ReplayVoteSender,
         duplicates: &Arc<Mutex<(LruCache<u64, ()>, PacketHasher)>>,
     ) {
+        let recorder = poh_recorder.lock().unwrap().recorder();
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut buffered_packets = VecDeque::with_capacity(batch_limit);
         let banking_stage_stats = BankingStageStats::new(id);
@@ -541,13 +549,14 @@ impl BankingStage {
                 let decision = Self::process_buffered_packets(
                     &my_pubkey,
                     &socket,
-                    poh_recorder,
+                    &poh_recorder,
                     cluster_info,
                     &mut buffered_packets,
                     enable_forwarding,
                     transaction_status_sender.clone(),
                     &gossip_vote_sender,
                     &banking_stage_stats,
+                    &recorder,
                 );
                 if decision == BufferedPacketsDecision::Hold
                     || decision == BufferedPacketsDecision::ForwardAndHold
@@ -581,6 +590,7 @@ impl BankingStage {
                 &mut buffered_packets,
                 &banking_stage_stats,
                 duplicates,
+                &recorder,
             ) {
                 Ok(()) | Err(RecvTimeoutError::Timeout) => (),
                 Err(RecvTimeoutError::Disconnected) => break,
@@ -614,7 +624,7 @@ impl BankingStage {
         bank_slot: Slot,
         txs: &[Transaction],
         results: &[TransactionExecutionResult],
-        poh: &Arc<Mutex<PohRecorder>>,
+        recorder: &Recorder,
     ) -> (Result<usize, PohRecorderError>, Vec<usize>) {
         let mut processed_generation = Measure::start("record::process_generation");
         let (processed_transactions, processed_transactions_indexes): (Vec<_>, Vec<_>) = results
@@ -644,10 +654,7 @@ impl BankingStage {
 
             let mut poh_record = Measure::start("record::poh_record");
             // record and unlock will unlock all the successful transactions
-            let res = poh
-                .lock()
-                .unwrap()
-                .record(bank_slot, hash, processed_transactions);
+            let res = recorder.record(bank_slot, hash, processed_transactions);
             match res {
                 Ok(()) => (),
                 Err(PohRecorderError::MaxHeightReached) => {
@@ -672,7 +679,7 @@ impl BankingStage {
 
     fn process_and_record_transactions_locked(
         bank: &Arc<Bank>,
-        poh: &Arc<Mutex<PohRecorder>>,
+        poh: &Recorder,
         batch: &TransactionBatch,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
@@ -791,7 +798,7 @@ impl BankingStage {
     pub fn process_and_record_transactions(
         bank: &Arc<Bank>,
         txs: &[Transaction],
-        poh: &Arc<Mutex<PohRecorder>>,
+        poh: &Recorder,
         chunk_offset: usize,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
@@ -834,7 +841,7 @@ impl BankingStage {
     fn process_transactions(
         bank: &Arc<Bank>,
         transactions: &[Transaction],
-        poh: &Arc<Mutex<PohRecorder>>,
+        poh: &Recorder,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
     ) -> (usize, Vec<usize>) {
@@ -996,7 +1003,7 @@ impl BankingStage {
 
     fn process_received_packets(
         bank: &Arc<Bank>,
-        poh: &Arc<Mutex<PohRecorder>>,
+        poh: &Recorder,
         msgs: &Packets,
         packet_indexes: Vec<usize>,
         transaction_status_sender: Option<TransactionStatusSender>,
@@ -1109,6 +1116,7 @@ impl BankingStage {
         buffered_packets: &mut UnprocessedPackets,
         banking_stage_stats: &BankingStageStats,
         duplicates: &Arc<Mutex<(LruCache<u64, ()>, PacketHasher)>>,
+        recorder: &Recorder,
     ) -> Result<(), RecvTimeoutError> {
         let mut recv_time = Measure::start("process_packets_recv");
         let mms = verified_receiver.recv_timeout(recv_timeout)?;
@@ -1149,7 +1157,7 @@ impl BankingStage {
 
             let (processed, verified_txs_len, unprocessed_indexes) = Self::process_received_packets(
                 &bank,
-                &poh,
+                recorder,
                 &msgs,
                 packet_indexes,
                 transaction_status_sender.clone(),
@@ -1658,31 +1666,6 @@ mod tests {
         Blockstore::destroy(&ledger_path).unwrap();
     }
 
-    use solana_ledger::poh::Poh;
-    use solana_ledger::poh::PohEntry;
-    use solana_sdk::hash::Hash;
-    use std::sync::mpsc::{Receiver, Sender};
-
-    fn start_mixin(
-        record_receiver: Receiver<Hash>,
-        poh_recorder: &Arc<Mutex<PohRecorder>>,
-    ) {
-        let recorder = poh_recorder.lock().unwrap();
-        let poh = recorder.poh.clone();
-        let tick_producer = Builder::new()
-            .name("solana-poh-service-tick_producer".to_string())
-            .spawn(move || {
-                loop {
-                    let mixin = record_receiver.recv();
-                    if let Ok(mixin) = mixin {
-                        let mut poh_l = poh.lock().unwrap(); // keep locked?
-                        let res = poh_l.record(mixin);
-                        let should_tick = res.is_none();
-                    }
-                }
-            });
-    }
-
     #[test]
     fn test_bank_record_transactions() {
         solana_logger::setup();
@@ -1702,20 +1685,20 @@ mod tests {
         {
             let blockstore = Blockstore::open(&ledger_path)
                 .expect("Expected to be able to open database ledger");
-            let (poh_recorder, entry_receiver, record_receiver) =
-                PohRecorder::new(
-                    bank.tick_height(),
-                    bank.last_blockhash(),
-                    bank.slot(),
-                    None,
-                    bank.ticks_per_slot(),
-                    &Pubkey::default(),
-                    &Arc::new(blockstore),
-                    &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                    &Arc::new(PohConfig::default()),
-                );
+            let (poh_recorder, entry_receiver, _record_receiver) = PohRecorder::new(
+                // TODO use record_receiver
+                bank.tick_height(),
+                bank.last_blockhash(),
+                bank.slot(),
+                None,
+                bank.ticks_per_slot(),
+                &Pubkey::default(),
+                &Arc::new(blockstore),
+                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+                &Arc::new(PohConfig::default()),
+            );
+            let recorder = poh_recorder.recorder();
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
-            //start_mixin(record_receiver, &poh_recorder);
 
             poh_recorder.lock().unwrap().set_working_bank(working_bank);
             let pubkey = solana_sdk::pubkey::new_rand();
@@ -1728,12 +1711,8 @@ mod tests {
             ];
 
             let mut results = vec![(Ok(()), None), (Ok(()), None)];
-            let _ = BankingStage::record_transactions(
-                bank.slot(),
-                &transactions,
-                &results,
-                &poh_recorder,
-            );
+            let _ =
+                BankingStage::record_transactions(bank.slot(), &transactions, &results, &recorder);
             let (_bank, (entry, _tick_height)) = entry_receiver.recv().unwrap();
             assert_eq!(entry.transactions.len(), transactions.len());
 
@@ -1745,12 +1724,8 @@ mod tests {
                 )),
                 None,
             );
-            let (res, retryable) = BankingStage::record_transactions(
-                bank.slot(),
-                &transactions,
-                &results,
-                &poh_recorder,
-            );
+            let (res, retryable) =
+                BankingStage::record_transactions(bank.slot(), &transactions, &results, &recorder);
             res.unwrap();
             assert!(retryable.is_empty());
             let (_bank, (entry, _tick_height)) = entry_receiver.recv().unwrap();
@@ -1758,12 +1733,8 @@ mod tests {
 
             // Other TransactionErrors should not be recorded
             results[0] = (Err(TransactionError::AccountNotFound), None);
-            let (res, retryable) = BankingStage::record_transactions(
-                bank.slot(),
-                &transactions,
-                &results,
-                &poh_recorder,
-            );
+            let (res, retryable) =
+                BankingStage::record_transactions(bank.slot(), &transactions, &results, &recorder);
             res.unwrap();
             assert!(retryable.is_empty());
             let (_bank, (entry, _tick_height)) = entry_receiver.recv().unwrap();
@@ -1776,7 +1747,7 @@ mod tests {
                 bank.slot() + 1,
                 &transactions,
                 &results,
-                &poh_recorder,
+                &recorder,
             );
             assert_matches!(res, Err(PohRecorderError::MaxHeightReached));
             // The first result was an error so it's filtered out. The second result was Ok(),
@@ -2053,18 +2024,18 @@ mod tests {
         {
             let blockstore = Blockstore::open(&ledger_path)
                 .expect("Expected to be able to open database ledger");
-            let (poh_recorder, entry_receiver, _record_receiver) =
-                PohRecorder::new(
-                    bank.tick_height(),
-                    bank.last_blockhash(),
-                    bank.slot(),
-                    Some((4, 4)),
-                    bank.ticks_per_slot(),
-                    &pubkey,
-                    &Arc::new(blockstore),
-                    &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                    &Arc::new(PohConfig::default()),
-                );
+            let (poh_recorder, entry_receiver, _record_receiver) = PohRecorder::new(
+                bank.tick_height(),
+                bank.last_blockhash(),
+                bank.slot(),
+                Some((4, 4)),
+                bank.ticks_per_slot(),
+                &pubkey,
+                &Arc::new(blockstore),
+                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+                &Arc::new(PohConfig::default()),
+            );
+            let recorder = poh_recorder.recorder();
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
             poh_recorder.lock().unwrap().set_working_bank(working_bank);
@@ -2073,7 +2044,7 @@ mod tests {
             BankingStage::process_and_record_transactions(
                 &bank,
                 &transactions,
-                &poh_recorder,
+                &recorder,
                 0,
                 None,
                 &gossip_vote_sender,
@@ -2110,7 +2081,7 @@ mod tests {
                 BankingStage::process_and_record_transactions(
                     &bank,
                     &transactions,
-                    &poh_recorder,
+                    &recorder,
                     0,
                     None,
                     &gossip_vote_sender,
@@ -2150,18 +2121,18 @@ mod tests {
         {
             let blockstore = Blockstore::open(&ledger_path)
                 .expect("Expected to be able to open database ledger");
-            let (poh_recorder, _entry_receiver, _record_receiver) =
-                PohRecorder::new(
-                    bank.tick_height(),
-                    bank.last_blockhash(),
-                    bank.slot(),
-                    Some((4, 4)),
-                    bank.ticks_per_slot(),
-                    &pubkey,
-                    &Arc::new(blockstore),
-                    &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                    &Arc::new(PohConfig::default()),
-                );
+            let (poh_recorder, _entry_receiver, _record_receiver) = PohRecorder::new(
+                bank.tick_height(),
+                bank.last_blockhash(),
+                bank.slot(),
+                Some((4, 4)),
+                bank.ticks_per_slot(),
+                &pubkey,
+                &Arc::new(blockstore),
+                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+                &Arc::new(PohConfig::default()),
+            );
+            let recorder = poh_recorder.recorder();
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
             poh_recorder.lock().unwrap().set_working_bank(working_bank);
@@ -2171,7 +2142,7 @@ mod tests {
             let (result, unprocessed) = BankingStage::process_and_record_transactions(
                 &bank,
                 &transactions,
-                &poh_recorder,
+                &recorder,
                 0,
                 None,
                 &gossip_vote_sender,
@@ -2246,22 +2217,21 @@ mod tests {
         {
             let blockstore = Blockstore::open(&ledger_path)
                 .expect("Expected to be able to open database ledger");
-            let (poh_recorder, _entry_receiver, _record_receiver) =
-                PohRecorder::new(
-                    bank.tick_height(),
-                    bank.last_blockhash(),
-                    bank.slot(),
-                    Some((4, 4)),
-                    bank.ticks_per_slot(),
-                    &solana_sdk::pubkey::new_rand(),
-                    &Arc::new(blockstore),
-                    &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                    &Arc::new(PohConfig::default()),
-                );
+            let (poh_recorder, _entry_receiver, _record_receiver) = PohRecorder::new(
+                bank.tick_height(),
+                bank.last_blockhash(),
+                bank.slot(),
+                Some((4, 4)),
+                bank.ticks_per_slot(),
+                &solana_sdk::pubkey::new_rand(),
+                &Arc::new(blockstore),
+                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+                &Arc::new(PohConfig::default()),
+            );
 
-            // Poh Recorder has not working bank, so should throw MaxHeightReached error on
+            // Poh Recorder has no working bank, so should throw MaxHeightReached error on
             // record
-            let poh_recorder = Arc::new(Mutex::new(poh_recorder));
+            let recorder = poh_recorder.recorder();
 
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
 
@@ -2269,7 +2239,7 @@ mod tests {
                 BankingStage::process_transactions(
                     &bank,
                     &transactions,
-                    &poh_recorder,
+                    &recorder,
                     None,
                     &gossip_vote_sender,
                 );
@@ -2323,18 +2293,18 @@ mod tests {
             let blockstore = Blockstore::open(&ledger_path)
                 .expect("Expected to be able to open database ledger");
             let blockstore = Arc::new(blockstore);
-            let (poh_recorder, _entry_receiver, _record_receiver) =
-                PohRecorder::new(
-                    bank.tick_height(),
-                    bank.last_blockhash(),
-                    bank.slot(),
-                    Some((4, 4)),
-                    bank.ticks_per_slot(),
-                    &pubkey,
-                    &blockstore,
-                    &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                    &Arc::new(PohConfig::default()),
-                );
+            let (poh_recorder, _entry_receiver, _record_receiver) = PohRecorder::new(
+                bank.tick_height(),
+                bank.last_blockhash(),
+                bank.slot(),
+                Some((4, 4)),
+                bank.ticks_per_slot(),
+                &pubkey,
+                &blockstore,
+                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+                &Arc::new(PohConfig::default()),
+            );
+            let recorder = poh_recorder.recorder();
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
             poh_recorder.lock().unwrap().set_working_bank(working_bank);
@@ -2355,7 +2325,7 @@ mod tests {
             let _ = BankingStage::process_and_record_transactions(
                 &bank,
                 &transactions,
-                &poh_recorder,
+                &recorder,
                 0,
                 Some(TransactionStatusSender {
                     sender: transaction_status_sender,
@@ -2410,18 +2380,17 @@ mod tests {
         let blockstore =
             Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger");
         let bank = Arc::new(Bank::new(&genesis_config));
-        let (poh_recorder, entry_receiver, _record_receiver) =
-            PohRecorder::new(
-                bank.tick_height(),
-                bank.last_blockhash(),
-                bank.slot(),
-                Some((4, 4)),
-                bank.ticks_per_slot(),
-                &solana_sdk::pubkey::new_rand(),
-                &Arc::new(blockstore),
-                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                &Arc::new(PohConfig::default()),
-            );
+        let (poh_recorder, entry_receiver, _record_receiver) = PohRecorder::new(
+            bank.tick_height(),
+            bank.last_blockhash(),
+            bank.slot(),
+            Some((4, 4)),
+            bank.ticks_per_slot(),
+            &solana_sdk::pubkey::new_rand(),
+            &Arc::new(blockstore),
+            &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+            &Arc::new(PohConfig::default()),
+        );
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
         // Set up unparallelizable conflicting transactions
@@ -2442,6 +2411,7 @@ mod tests {
         {
             let (transactions, bank, poh_recorder, _entry_receiver) =
                 setup_conflicting_transactions(&ledger_path);
+            let recorder = poh_recorder.lock().unwrap().recorder();
             let num_conflicting_transactions = transactions.len();
             let mut packets_vec = to_packets_chunked(&transactions, num_conflicting_transactions);
             assert_eq!(packets_vec.len(), 1);
@@ -2467,6 +2437,7 @@ mod tests {
                 &gossip_vote_sender,
                 None::<Box<dyn Fn()>>,
                 None,
+                &recorder,
             );
             assert_eq!(buffered_packets[0].1.len(), num_conflicting_transactions);
             // When the poh recorder has a bank, should process all non conflicting buffered packets.
@@ -2481,6 +2452,7 @@ mod tests {
                     &gossip_vote_sender,
                     None::<Box<dyn Fn()>>,
                     None,
+                    &recorder,
                 );
                 if num_expected_unprocessed == 0 {
                     assert!(buffered_packets.is_empty())
@@ -2524,6 +2496,7 @@ mod tests {
             let interrupted_iteration = 1;
             poh_recorder.lock().unwrap().set_bank(&bank);
             let poh_recorder_ = poh_recorder.clone();
+            let recorder = poh_recorder_.lock().unwrap().recorder();
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
             // Start up thread to process the banks
             let t_consume = Builder::new()
@@ -2537,6 +2510,7 @@ mod tests {
                         &gossip_vote_sender,
                         test_fn,
                         None,
+                        &recorder,
                     );
 
                     // Check everything is correct. All indexes after `interrupted_iteration`
