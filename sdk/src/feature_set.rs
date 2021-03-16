@@ -115,6 +115,10 @@ pub mod require_stake_for_gossip {
     solana_sdk::declare_id!("6oNzd5Z3M2L1xo4Q5hoox7CR2DuW7m1ETLWH5jHJthwa");
 }
 
+pub mod cpi_data_cost {
+    solana_sdk::declare_id!("Hrg5bXePPGiAVWZfDHbvjqytSeyBDPAGAQ7v6N5i4gCX");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -141,9 +145,10 @@ lazy_static! {
         (warp_timestamp_again::id(), "warp timestamp again, adjust bounding to 25% fast 80% slow #15204"),
         (check_init_vote_data::id(), "check initialized Vote data"),
         (check_program_owner::id(), "limit programs to operating on accounts owned by itself"),
-        (cpi_share_ro_and_exec_accounts::id(), "Share RO and Executable accounts during cross-program invocations"),
-        (skip_ro_deserialization::id(), "Skip deserialization of read-only accounts"),
+        (cpi_share_ro_and_exec_accounts::id(), "share RO and Executable accounts during cross-program invocations"),
+        (skip_ro_deserialization::id(), "skip deserialization of read-only accounts"),
         (require_stake_for_gossip::id(), "require stakes for propagating crds values through gossip #15561"),
+        (cpi_data_cost::id(), "charge the compute budger for data passed via CPI"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
