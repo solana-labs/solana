@@ -64,7 +64,9 @@ pub fn collect_token_balances(
         let mut transaction_balances: Vec<TransactionTokenBalance> = vec![];
         if has_token_program {
             for (index, account_id) in account_keys.iter().enumerate() {
-                if is_token_program(account_id) {
+                if is_token_program(account_id)
+                    || transaction.message.program_ids().contains(&account_id)
+                {
                     continue;
                 }
 
