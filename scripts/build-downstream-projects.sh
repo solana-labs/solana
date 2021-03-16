@@ -67,15 +67,8 @@ spl() {
     ./patch.crates-io.sh "$solana_dir"
 
     $cargo build
-
-    # Generic `cargo test`/`cargo test-bpf` disabled due to BPF VM interface changes between Solana 1.4
-    # and 1.5...
-    #$cargo test
-    #$cargo_test_bpf
-
-    $cargo_test_bpf --manifest-path token/program/Cargo.toml
-    $cargo_test_bpf --manifest-path associated-token-account/program/Cargo.toml
-    $cargo_test_bpf --manifest-path feature-proposal/program/Cargo.toml
+    $cargo test
+    $cargo_test_bpf
   )
 }
 
