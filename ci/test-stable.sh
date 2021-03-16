@@ -25,9 +25,6 @@ source scripts/ulimit-n.sh
 test -d target/debug/bpf && find target/debug/bpf -name '*.d' -delete
 test -d target/release/bpf && find target/release/bpf -name '*.d' -delete
 
-# Clear the BPF sysroot files, they are not automatically rebuilt
-rm -rf target/xargo # Issue #3105
-
 # Limit compiler jobs to reduce memory usage
 # on machines with 2gb/thread of memory
 NPROC=$(nproc)
