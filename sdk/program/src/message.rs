@@ -439,6 +439,15 @@ impl Message {
             accounts,
         })
     }
+
+    pub fn signer_keys(&self) -> Vec<&Pubkey> {
+        // Clamp in case we're working on un-`sanitize()`ed input
+        let last_key = self
+            .account_keys
+            .len()
+            .max(self.header.num_required_signatures as usize);
+        self.account_keys[..last_key].iter().collect()
+    }
 }
 
 #[cfg(test)]
