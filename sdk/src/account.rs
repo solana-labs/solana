@@ -395,7 +395,7 @@ impl Account {
 
 impl AccountSharedData {
     /// make account's data equal to 'data'. This may require resizing and copying data.
-    pub fn data_ensure_equal_to_slice(&mut self, data: &[u8]) {
+    pub fn set_data_from_slice(&mut self, data: &[u8]) {
         let len = self.data.len();
         let len_different = len != data.len();
         if len_different {
@@ -406,7 +406,7 @@ impl AccountSharedData {
         }
         // we could compare here to determine whether we need to modify the original data or not. In the current implementation, that would
         //  not make a positive difference.
-        self.data.clone_from_slice(data);
+        self.data.copy_from_slice(data);
     }
     pub fn set_data(&mut self, data: Vec<u8>) {
         self.data = data;
@@ -548,23 +548,23 @@ pub mod tests {
     }
 
     #[test]
-    fn test_account_data_ensure_equal_to_slice() {
+    fn test_account_set_data_from_slice() {
         let key = Pubkey::new_unique();
         let (_, mut account) = make_two_accounts(&key);
         assert_eq!(account.data(), &vec![0, 0]);
-        account.data_ensure_equal_to_slice(&[1, 2]);
+        account.set_data_from_slice(&[1, 2]);
         assert_eq!(account.data(), &vec![1, 2]);
-        account.data_ensure_equal_to_slice(&[1, 2, 3]);
+        account.set_data_from_slice(&[1, 2, 3]);
         assert_eq!(account.data(), &vec![1, 2, 3]);
-        account.data_ensure_equal_to_slice(&[4, 5, 6]);
+        account.set_data_from_slice(&[4, 5, 6]);
         assert_eq!(account.data(), &vec![4, 5, 6]);
-        account.data_ensure_equal_to_slice(&[4, 5, 6, 0]);
+        account.set_data_from_slice(&[4, 5, 6, 0]);
         assert_eq!(account.data(), &vec![4, 5, 6, 0]);
-        account.data_ensure_equal_to_slice(&[]);
+        account.set_data_from_slice(&[]);
         assert_eq!(account.data().len(), 0);
-        account.data_ensure_equal_to_slice(&[44]);
+        account.set_data_from_slice(&[44]);
         assert_eq!(account.data(), &vec![44]);
-        account.data_ensure_equal_to_slice(&[44]);
+        account.set_data_from_slice(&[44]);
         assert_eq!(account.data(), &vec![44]);
     }
 
