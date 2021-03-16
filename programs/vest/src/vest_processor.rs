@@ -63,6 +63,9 @@ pub fn process_instruction(
     data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
+    // TODO [KeyedAccounts to InvokeContext refactoring]
+    assert_eq!(keyed_accounts, invoke_context.get_keyed_accounts());
+
     let contract_account = &mut keyed_account_at_index(keyed_accounts, 0)?.try_account_ref_mut()?;
     if invoke_context.is_feature_active(&feature_set::check_program_owner::id())
         && contract_account.owner != crate::id()

@@ -5432,8 +5432,10 @@ pub(crate) mod tests {
         _program_id: &Pubkey,
         keyed_accounts: &[KeyedAccount],
         data: &[u8],
-        _invoke_context: &mut dyn InvokeContext,
+        invoke_context: &mut dyn InvokeContext,
     ) -> result::Result<(), InstructionError> {
+        // TODO [KeyedAccounts to InvokeContext refactoring]
+        assert_eq!(invoke_context.get_keyed_accounts(), keyed_accounts);
         if let Ok(instruction) = bincode::deserialize(data) {
             match instruction {
                 MockInstruction::Deduction => {
@@ -9007,10 +9009,12 @@ pub(crate) mod tests {
         }
         fn mock_vote_processor(
             program_id: &Pubkey,
-            _keyed_accounts: &[KeyedAccount],
+            keyed_accounts: &[KeyedAccount],
             _instruction_data: &[u8],
-            _invoke_context: &mut dyn InvokeContext,
+            invoke_context: &mut dyn InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
+            // TODO [KeyedAccounts to InvokeContext refactoring]
+            assert_eq!(invoke_context.get_keyed_accounts(), keyed_accounts);
             if mock_vote_program_id() != *program_id {
                 return Err(InstructionError::IncorrectProgramId);
             }
@@ -9852,8 +9856,10 @@ pub(crate) mod tests {
             _program_id: &Pubkey,
             keyed_accounts: &[KeyedAccount],
             data: &[u8],
-            _invoke_context: &mut dyn InvokeContext,
+            invoke_context: &mut dyn InvokeContext,
         ) -> result::Result<(), InstructionError> {
+            // TODO [KeyedAccounts to InvokeContext refactoring]
+            assert_eq!(invoke_context.get_keyed_accounts(), keyed_accounts);
             let lamports = data[0] as u64;
             {
                 let mut to_account = keyed_accounts[1].try_account_ref_mut()?;
@@ -9904,10 +9910,12 @@ pub(crate) mod tests {
         #[allow(clippy::unnecessary_wraps)]
         fn mock_process_instruction(
             _program_id: &Pubkey,
-            _keyed_accounts: &[KeyedAccount],
+            keyed_accounts: &[KeyedAccount],
             _data: &[u8],
-            _invoke_context: &mut dyn InvokeContext,
+            invoke_context: &mut dyn InvokeContext,
         ) -> result::Result<(), InstructionError> {
+            // TODO [KeyedAccounts to InvokeContext refactoring]
+            assert_eq!(invoke_context.get_keyed_accounts(), keyed_accounts);
             Ok(())
         }
 
@@ -10344,8 +10352,10 @@ pub(crate) mod tests {
             _program_id: &Pubkey,
             keyed_accounts: &[KeyedAccount],
             _data: &[u8],
-            _invoke_context: &mut dyn InvokeContext,
+            invoke_context: &mut dyn InvokeContext,
         ) -> result::Result<(), InstructionError> {
+            // TODO [KeyedAccounts to InvokeContext refactoring]
+            assert_eq!(invoke_context.get_keyed_accounts(), keyed_accounts);
             assert_eq!(42, keyed_accounts[0].lamports().unwrap());
             let mut account = keyed_accounts[0].try_account_ref_mut()?;
             account.lamports += 1;

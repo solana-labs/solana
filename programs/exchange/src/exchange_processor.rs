@@ -489,9 +489,12 @@ pub fn process_instruction(
     _program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
     data: &[u8],
-    _invoke_context: &mut dyn InvokeContext,
+    invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     solana_logger::setup();
+
+    // TODO [KeyedAccounts to InvokeContext refactoring]
+    assert_eq!(keyed_accounts, invoke_context.get_keyed_accounts());
 
     match limited_deserialize::<ExchangeInstruction>(data)? {
         ExchangeInstruction::AccountRequest => {

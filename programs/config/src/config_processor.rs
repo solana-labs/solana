@@ -18,6 +18,9 @@ pub fn process_instruction(
     data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
+    // TODO [KeyedAccounts to InvokeContext refactoring]
+    assert_eq!(keyed_accounts, invoke_context.get_keyed_accounts());
+
     let key_list: ConfigKeys = limited_deserialize(data)?;
     let config_keyed_account = &mut keyed_account_at_index(keyed_accounts, 0)?;
     let current_data: ConfigKeys = {

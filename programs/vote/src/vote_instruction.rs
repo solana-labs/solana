@@ -281,6 +281,9 @@ pub fn process_instruction(
     data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
+    // TODO [KeyedAccounts to InvokeContext refactoring]
+    assert_eq!(keyed_accounts, invoke_context.get_keyed_accounts());
+
     trace!("process_instruction: {:?}", data);
     trace!("keyed_accounts: {:?}", keyed_accounts);
 

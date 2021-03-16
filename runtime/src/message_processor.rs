@@ -1789,8 +1789,10 @@ mod tests {
             _program_id: &Pubkey,
             keyed_accounts: &[KeyedAccount],
             data: &[u8],
-            _invoke_context: &mut dyn InvokeContext,
+            invoke_context: &mut dyn InvokeContext,
         ) -> Result<(), InstructionError> {
+            // TODO [KeyedAccounts to InvokeContext refactoring]
+            assert_eq!(keyed_accounts, invoke_context.get_keyed_accounts());
             if let Ok(instruction) = bincode::deserialize(data) {
                 match instruction {
                     MockSystemInstruction::Correct => Ok(()),
@@ -1942,8 +1944,10 @@ mod tests {
             _program_id: &Pubkey,
             keyed_accounts: &[KeyedAccount],
             data: &[u8],
-            _invoke_context: &mut dyn InvokeContext,
+            invoke_context: &mut dyn InvokeContext,
         ) -> Result<(), InstructionError> {
+            // TODO [KeyedAccounts to InvokeContext refactoring]
+            assert_eq!(keyed_accounts, invoke_context.get_keyed_accounts());
             if let Ok(instruction) = bincode::deserialize(data) {
                 match instruction {
                     MockSystemInstruction::BorrowFail => {
@@ -2121,8 +2125,10 @@ mod tests {
             program_id: &Pubkey,
             keyed_accounts: &[KeyedAccount],
             data: &[u8],
-            _invoke_context: &mut dyn InvokeContext,
+            invoke_context: &mut dyn InvokeContext,
         ) -> Result<(), InstructionError> {
+            // TODO [KeyedAccounts to InvokeContext refactoring]
+            assert_eq!(keyed_accounts, invoke_context.get_keyed_accounts());
             assert_eq!(*program_id, keyed_accounts[0].owner()?);
             assert_ne!(
                 keyed_accounts[1].owner()?,
@@ -2268,10 +2274,12 @@ mod tests {
         #[allow(clippy::unnecessary_wraps)]
         fn mock_process_instruction(
             _program_id: &Pubkey,
-            _keyed_accounts: &[KeyedAccount],
+            keyed_accounts: &[KeyedAccount],
             _data: &[u8],
-            _invoke_context: &mut dyn InvokeContext,
+            invoke_context: &mut dyn InvokeContext,
         ) -> Result<(), InstructionError> {
+            // TODO [KeyedAccounts to InvokeContext refactoring]
+            assert_eq!(keyed_accounts, invoke_context.get_keyed_accounts());
             Ok(())
         }
         #[allow(clippy::unnecessary_wraps)]

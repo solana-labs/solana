@@ -18,6 +18,9 @@ fn process_instruction_with_program_logging(
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
+    // TODO [KeyedAccounts to InvokeContext refactoring]
+    assert_eq!(keyed_accounts, invoke_context.get_keyed_accounts());
+
     let logger = invoke_context.get_logger();
     stable_log::program_invoke(&logger, program_id, invoke_context.invoke_depth());
 

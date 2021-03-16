@@ -32,8 +32,10 @@ pub fn process_instruction(
     _program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
     data: &[u8],
-    _invoke_context: &mut dyn InvokeContext,
+    invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
+    // TODO [KeyedAccounts to InvokeContext refactoring]
+    assert_eq!(keyed_accounts, invoke_context.get_keyed_accounts());
     let new_owner_pubkey: Pubkey = limited_deserialize(data)?;
     let account_keyed_account = &mut keyed_account_at_index(keyed_accounts, 0)?;
     let mut account_owner_pubkey: Pubkey =

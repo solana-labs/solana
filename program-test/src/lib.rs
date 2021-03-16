@@ -105,6 +105,9 @@ pub fn builtin_process_instruction(
 ) -> Result<(), InstructionError> {
     set_invoke_context(invoke_context);
 
+    // TODO [KeyedAccounts to InvokeContext refactoring]
+    assert_eq!(invoke_context.get_keyed_accounts(), keyed_accounts);
+
     // Copy all the accounts into a HashMap to ensure there are no duplicates
     let mut accounts: HashMap<Pubkey, Account> = keyed_accounts
         .iter()
