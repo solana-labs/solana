@@ -254,7 +254,6 @@ Connect to the cluster by running:
 solana-validator \
   --identity ~/validator-keypair.json \
   --vote-account ~/vote-account-keypair.json \
-  --ledger ~/validator-ledger \
   --rpc-port 8899 \
   --entrypoint devnet.solana.com:8001 \
   --limit-ledger-size \
@@ -263,6 +262,9 @@ solana-validator \
 
 To force validator logging to the console add a `--log -` argument, otherwise
 the validator will automatically log to a file.
+
+The ledger will be placed in the `ledger/` directory by default, use the
+`--ledger` argument to specify a different location.
 
 > Note: You can use a
 > [paper wallet seed phrase](../wallet-guide/paper-wallet.md)
