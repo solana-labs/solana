@@ -1,0 +1,284 @@
+---
+title: Interest-Bearing Tokens
+---
+
+This document describes a solution for interest-bearing tokens as an on-chain
+program. Interest-bearing tokens continuously accrue interest as time passes.
+
+## Problem
+
+Yield on blockchain assets is a crucial feature of many decentralized finance
+applications, as token holders want to be compensated for providing their tokens
+as liquidity to applications. The concept of "yield farming" on tokens has even
+spawned very successful tongue-in-cheek projects, such as
+[$MEME farming](https://dontbuymeme.com/).
+
+Tokens that accrue interest are an attractive and popular version of yield farming,
+as seen most prominently with Aave's [aTokens](https://aave.com/atokens). For
+simplicity, we'll refer to interest-bearing tokens as i-tokens.
+
+### How do these work?
+
+Let's explain through an example: assume there's an i-token mint with a total
+supply of 1,000 tokens
+and a 10% annual interest rate. This means that one year later, the total supply
+will be 1,100 tokens, and all token holders will have 10% more tokens in their
+holding account.
+
+Since interest is accrued continuously, however, just 1 second later, the total
+supply has again increased. A 10% annualized rate gives us a continuous interest
+rate of ~9.5% (`ln(1.1)`), which allows us to calculate the new instantaneous supply.
+
+```
+new_supply = previous_supply * exp(continuous_rate / seconds_per_year)
+new_supply = 1100 * exp(0.095 / 31536000)
+new_supply = 1100.0000033...
+```
+
+Since i-tokens are constantly accruing interest, they do not have the same
+properties as normal tokens. Most importantly, i-tokens held in two different
+accounts are only fungible if they have been updated to the same time. For example,
+10 i-tokens in the year 1999 are worth much more than 10 i-tokens in the year 3000, since
+those tokens from 1999 have over 1,000 years of interest (see Futurama). Because
+of this, we have to compound interest before any minting, burning, and
+transferring.
+
+### Initial Attempt
+
+The concept seems simple to implement. We can create an SPL token, allow
+tokens to be minted by a new "interest accruing" program, and then make sure to
+call it regularly.
+
+This solution has a few problems. First, how do we compound interest regularly?
+We can create a separate service which periodically sends transactions to update
+all of the accounts. Unfortunately, this will cost the service a lot, especially if
+there are thousands of accounts to update.
+
+We can enforce compounding before any transfer / mint / burn, but then all programs
+and web consumers need to change to make these update calls. How do we change programs
+and wallets to properly update accounts without creating a big `if is_i_token` case
+all over the code?
+
+This solution creates friction for almost all SPL token users: on-chain programs,
+wallets, applications, and end-users.
+
+## Proposed Solution
+
+Following the approach taken by Aave, we can lean on a crucial feature of i-tokens:
+although the token holding amounts are constantly changing, each token holder's
+proportion of total supply stays the same. Therefore, we can satisfy the
+fungibility requirement for tokens on proportional ownership. The actual token
+amounts used for token transfers / mints / burns are just an interface, and
+everything is converted to proportional shares inside the program.
+
+Let's go through an example. Imagine we have an i-token mint with a total of
+10,000 proportional shares, a 20% annual interest rate, and 1 share is currently
+worth 100 tokens. If I transfer 1,000 tokens today, the program converts that and moves
+10 shares. One year later, 1 share is worth 120 tokens, so if I transfer
+1,000 tokens, the program converts and only moves 8.33 shares. The same concept
+applies to mints and burns.
+
+Following this model, we never have to worry about compounding interest. We
+simply need to call the right program to perform instructions.
+
+## Required Changes
+
+A new interest-bearing token program is only one component of the overall solution,
+since i-tokens need to be easily integrated in on-chain programs, web apps,
+and wallets.
+
+### Token Program Conformance
+
+Since our solution entails the creation of a new token program, we're opening the
+floodgates for other app developers to do the same. To ensure safe and easy integration
+of new token programs, we need a set of conformance tests based on the current
+SPL token test suite.
+
+A new token program must include all of the same instructions as SPL token,
+but the "unchecked" variants should return errors. Concretely, this means the
+program must implement:
+
+* `InitializeMint`
+* `InitializeAccount`
+* `InitializeMultisig` -- TODO deprecate this and use a more general multisig?
+* `Revoke`
+* `SetAuthority`
+* `CloseAccount`
+* `FreezeAccount`
+* `ThawAccount`
+* `TransferChecked`
+* `ApproveChecked`
+* `MintToChecked`
+* `BurnChecked`
+* `InitializeAccount2`
+
+And the program should throw errors for:
+
+* `Transfer`
+* `Approve`
+* `MintTo`
+* `Burn`
+
+New instructions required:
+
+* `CreateHolding` (TODO name): only performs `Allocate` and `Assign` to self,
+useful for creating a holding when you don't know the program that you're
+interacting with. See the Associated Token Account section for how to use this.
+
+There are also new read-only instructions, which write data to a provided account
+buffer:
+
+* `GetHoldingBalance`: balance of the holding
+* `GetHoldingOwner`: owner's public key
+* `GetMintSupply`: mint supply
+* `GetMintAuthority`: mint authority's public key
+* `GetMintDecimals`: mint decimals
+
+See the Runtime section for more information on how these are used.
+
+Programs and wallets that wish to support i-tokens must update the instructions
+to use all `Checked` variants and use the new read-only instructions to fetch
+information.
+
+The SPL token library provides wrappers compatible with any conforming program.
+For the base SPL token program, the wrapper simply deserializes the account data
+and returns the relevant data. For other programs, it calls the appropriate
+read-only instruction using an ephemeral account input.
+
+The structure for new holding and mint accounts must follow the layout of the
+existing SPL token accounts to ensure compatibility in RPC when fetching pre and
+post token balances.
+
+For a holding, the first 165 bytes must contain the same information
+as a normal SPL token holding. The following byte must be the type of
+account (ie. `Holding`), and after that, any data is allowed as required by the
+new token program.
+
+The same applies for mints, but only for the first 82 bytes.
+
+The `amount` field in an SPL token holding should contain a balance in order
+to properly integrate with RPC's `preTokenBalances` and `postTokenBalances`.
+
+### Token Program Registry
+
+We need the [token-list](https://github.com/solana-labs/token-list) to include
+vetted SPL token-conforming programs.
+
+TODO consider adding Rust and C versions of the registry for on-chain programs and RPC
+
+TODO consider detailing the process of including a new program
+
+### Runtime
+
+#### Ephemeral Accounts
+
+In order to reduce friction when using read-only instructions on other programs,
+we need the ability for on-chain programs to dynamically create "ephemeral
+accounts", which only contain data, can be passed through CPI to other programs,
+and disappear after the instruction.
+
+For a program using i-tokens, to get the balance of a holding, the program creates
+an ephemeral account with 8 bytes of data, passes it to the i-token program's
+`GetHoldingBalance` instruction, then reads the information back as a `u64`. At the
+end of the instruction, the account disappears.
+
+TODO What's the best approach to implement this?  For example, does an ephemeral
+account even need a public key?
+
+This solution avoids the need to pass additional scratch accounts to almost all
+programs that use tokens.
+
+TODO what limits do we consider for these? A certain number of accounts?
+A total amount of bytes? Regarding security, this breaks the previous
+check that a CPI must use a subset of accounts provided to the calling program.
+
+#### Dynamic sysvars
+
+The i-token program also requires the use of dynamic sysvars. For example,
+during the `GetHoldingBalance` instruction, the program needs to know the current
+time in order to properly convert from token amount to share amount.
+
+Without dynamic sysvars, we need to create a system to tell what sysvars are
+needed for different instructions on each program, which creates complications
+for all users.
+
+### RPC
+
+The validator's RPC server needs to properly handle new token program accounts
+for read-only instructions and pre / post balances.
+
+#### `getBalance` and `getSupply`
+
+Instead of deserializing SPL token accounts and returning the data, the
+RPC server runs read-only transactions on the i-token program.
+
+RPC simply uses the same flow as on-chain programs: create an ephemeral account
+then runs the read-only transaction onto the bank requested.
+
+TODO how do we set the cost of read-only transactions? Do we lower it specially
+for read-only RPC calls? The i-token program will probably be one of the more
+cost-intensive computations possible since it is performing present value
+discounting.
+
+#### `preTokenBalances` and `postTokenBalances`
+
+As mentioned earlier in the Token Program Conformance section, the i-token
+program caches balances in the `amount` field of the SPL token holding. This
+should only be used by RPC, and not by programs to get the balance of a non-SPL
+holding.
+
+### Associated Token Program
+
+The Associated Token Program needs to support all token programs seamlessly.
+Currently, it performs the following sequence:
+
+* `transfer` required lamports
+* `allocate` space
+* `assign` to the SPL token program
+* call `InitializeAccount` on SPL token
+
+This does not work for an opaque token program, because we do not know the size required
+from the outside. Conversely, if we allow a token program to take the lamports it wants,
+a malicious token program could take too much from users.
+
+To get around this, the Token Program interface has a new `CreateHolding`
+instruction, which only allocates space and assigns the account to the program.
+Once the space is allocated, the Associated Token Program can transfer the
+required lamports, and return an error if that number is too large. The process
+becomes:
+
+* call `CreateHolding` on the token program (allocate and assign)
+* calculate rent requirement based on the data size of holding account
+* `transfer` required lamports
+* call `InitializeAccount` on the token program
+
+### Web3 / Wallets
+
+To properly support i-tokens, wallets and applications will need to make the
+following changes:
+
+* get holdings: query for holdings owned by the public key, for all official
+token programs listed in the registry (not just `Tokenkeg...`)
+* get balances: avoid deserializing holding data, and instead use
+`getBalance` from RPC
+* transfer tokens: only use `ApproveChecked` and `TransferChecked` on the token
+program
+* create holding: avoid directly creating an account and initializing,
+and use the associated token account program instead
+
+### On-chain Programs
+
+To properly support i-tokens on-chain, programs will need to make these changes:
+
+* multiple token programs: if the program transacts between multiple token
+types, it may require more than one token program input. For example, token-swap
+needs to accept separate token programs for token A and B
+* hard-coded token program: avoid using `Tokenkeg...` directly
+* get balance: instead of deserializing the account data into an SPL holding, use
+the new wrapper to deserialize or call `GetHoldingBalance` instruction with the
+appropriate token program
+* get owner: same as above, but using the `GetHoldingOwner`
+* get supply: same as above, but using the `GetMintSupply`
+* get mint authority: same as above, but using the `GetMintAuthority`
+* get mint decimals: same as above, but using the `GetMintDecimals`
+* transfer: only use `TransferChecked`, which requires passing mints
