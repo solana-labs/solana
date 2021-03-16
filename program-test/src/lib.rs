@@ -481,8 +481,9 @@ impl ProgramTest {
     }
 
     /// Add an account to the test environment
-    pub fn add_account(&mut self, address: Pubkey, account: AccountSharedData) {
-        self.accounts.push((address, account));
+    pub fn add_account(&mut self, address: Pubkey, account: Account) {
+        self.accounts
+            .push((address, AccountSharedData::from(account)));
     }
 
     /// Add an account to the test environment with the account data in the provided `filename`
@@ -495,7 +496,7 @@ impl ProgramTest {
     ) {
         self.add_account(
             address,
-            AccountSharedData::from(Account {
+            Account {
                 lamports,
                 data: read_file(find_file(filename).unwrap_or_else(|| {
                     panic!("Unable to locate {}", filename);
@@ -503,7 +504,7 @@ impl ProgramTest {
                 owner,
                 executable: false,
                 rent_epoch: 0,
-            }),
+            },
         );
     }
 
@@ -518,14 +519,14 @@ impl ProgramTest {
     ) {
         self.add_account(
             address,
-            AccountSharedData::from(Account {
+            Account {
                 lamports,
                 data: base64::decode(data_base64)
                     .unwrap_or_else(|err| panic!("Failed to base64 decode: {}", err)),
                 owner,
                 executable: false,
                 rent_epoch: 0,
-            }),
+            },
         );
     }
 
@@ -581,13 +582,13 @@ impl ProgramTest {
 
             self.add_account(
                 program_id,
-                AccountSharedData::from(Account {
+                Account {
                     lamports: Rent::default().minimum_balance(data.len()).min(1),
                     data,
                     owner: loader,
                     executable: true,
                     rent_epoch: 0,
-                }),
+                },
             );
         } else {
             info!("\"{}\" program loaded as native code", program_name);
