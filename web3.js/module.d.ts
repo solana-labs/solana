@@ -285,16 +285,18 @@ declare module '@solana/web3.js' {
   };
 
   export type TokenAmount = {
-    uiAmount: number;
+    uiAmount: number | null;
     decimals: number;
     amount: string;
+    uiAmountString?: string;
   };
 
   export type TokenAccountBalancePair = {
     address: PublicKey;
     amount: string;
     decimals: number;
-    uiAmount: number;
+    uiAmount: number | null;
+    uiAmountString?: string;
   };
 
   export type AccountChangeCallback = (
@@ -527,7 +529,6 @@ declare module '@solana/web3.js' {
     removeSignatureListener(id: number): Promise<void>;
     onRootChange(callback: RootChangeCallback): number;
     removeRootChangeListener(id: number): Promise<void>;
-    validatorExit(): Promise<boolean>;
     getMinimumBalanceForRentExemption(
       dataLength: number,
       commitment?: Commitment,
@@ -1039,6 +1040,13 @@ declare module '@solana/web3.js' {
   }
 
   // === src/secp256k1-program.js ===
+  export type CreateSecp256k1InstructionWithEthAddressParams = {
+    ethAddress: Buffer | Uint8Array | Array<number> | string;
+    message: Buffer | Uint8Array | Array<number>;
+    signature: Buffer | Uint8Array | Array<number>;
+    recoveryId: number;
+  };
+
   export type CreateSecp256k1InstructionWithPublicKeyParams = {
     publicKey: Buffer | Uint8Array | Array<number>;
     message: Buffer | Uint8Array | Array<number>;
@@ -1053,6 +1061,14 @@ declare module '@solana/web3.js' {
 
   export class Secp256k1Program {
     static get programId(): PublicKey;
+
+    static publicKeyToEthAddress(
+      publicKey: Buffer | Uint8Array | Array<number>,
+    ): Buffer;
+
+    static createInstructionWithEthAddress(
+      params: CreateSecp256k1InstructionWithEthAddressParams,
+    ): TransactionInstruction;
 
     static createInstructionWithPublicKey(
       params: CreateSecp256k1InstructionWithPublicKeyParams,

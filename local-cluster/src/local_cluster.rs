@@ -1,6 +1,7 @@
 use crate::{
     cluster::{Cluster, ClusterValidatorInfo, ValidatorInfo},
     cluster_tests,
+    validator_configs::*,
 };
 use itertools::izip;
 use log::*;
@@ -9,7 +10,7 @@ use solana_core::{
     cluster_info::{Node, VALIDATOR_PORT_RANGE},
     contact_info::ContactInfo,
     gossip_service::discover_cluster,
-    validator::{Validator, ValidatorConfig},
+    validator::{Validator, ValidatorConfig, ValidatorStartProgress},
 };
 use solana_ledger::create_new_tmp_ledger;
 use solana_runtime::genesis_utils::{
@@ -18,6 +19,7 @@ use solana_runtime::genesis_utils::{
 };
 use solana_sdk::{
     account::Account,
+    account::AccountSharedData,
     client::SyncClient,
     clock::{DEFAULT_DEV_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
     commitment_config::CommitmentConfig,
@@ -42,10 +44,10 @@ use std::{
     collections::HashMap,
     io::{Error, ErrorKind, Result},
     iter,
-    sync::Arc,
+    sync::{Arc, RwLock},
 };
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct ClusterConfig {
     /// The validator config that should be applied to every node in the cluster
     pub validator_configs: Vec<ValidatorConfig>,
@@ -68,7 +70,7 @@ pub struct ClusterConfig {
     pub native_instruction_processors: Vec<(String, Pubkey)>,
     pub cluster_type: ClusterType,
     pub poh_config: PohConfig,
-    pub additional_accounts: Vec<(Pubkey, Account)>,
+    pub additional_accounts: Vec<(Pubkey, AccountSharedData)>,
 }
 
 impl Default for ClusterConfig {
@@ -110,7 +112,10 @@ impl LocalCluster {
         let mut config = ClusterConfig {
             node_stakes: stakes,
             cluster_lamports,
-            validator_configs: vec![ValidatorConfig::default(); num_nodes],
+            validator_configs: make_identical_validator_configs(
+                &ValidatorConfig::default(),
+                num_nodes,
+            ),
             ..ClusterConfig::default()
         };
         Self::new(&mut config)
@@ -165,9 +170,12 @@ impl LocalCluster {
             stakes_in_genesis,
             config.cluster_type,
         );
-        genesis_config
-            .accounts
-            .extend(config.additional_accounts.drain(..));
+        genesis_config.accounts.extend(
+            config
+                .additional_accounts
+                .drain(..)
+                .map(|(key, account)| (key, Account::from(account))),
+        );
         genesis_config.ticks_per_slot = config.ticks_per_slot;
         genesis_config.epoch_schedule = EpochSchedule::custom(
             config.slots_per_epoch,
@@ -193,12 +201,13 @@ impl LocalCluster {
 
         let (leader_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
         let leader_contact_info = leader_node.info.clone();
-        let mut leader_config = config.validator_configs[0].clone();
+        let mut leader_config = safe_clone_config(&config.validator_configs[0]);
         leader_config.rpc_addrs = Some((leader_node.info.rpc, leader_node.info.rpc_pubsub));
         leader_config.account_paths = vec![leader_ledger_path.join("accounts")];
         let leader_keypair = Arc::new(Keypair::from_bytes(&leader_keypair.to_bytes()).unwrap());
         let leader_vote_keypair =
             Arc::new(Keypair::from_bytes(&leader_vote_keypair.to_bytes()).unwrap());
+
         let leader_server = Validator::new(
             leader_node,
             &leader_keypair,
@@ -208,6 +217,7 @@ impl LocalCluster {
             vec![],
             &leader_config,
             true, // should_check_duplicate_instance
+            Arc::new(RwLock::new(ValidatorStartProgress::default())),
         );
 
         let mut validators = HashMap::new();
@@ -217,10 +227,9 @@ impl LocalCluster {
             ledger_path: leader_ledger_path,
             contact_info: leader_contact_info.clone(),
         };
-
         let cluster_leader = ClusterValidatorInfo::new(
             leader_info,
-            config.validator_configs[0].clone(),
+            safe_clone_config(&config.validator_configs[0]),
             leader_server,
         );
 
@@ -255,10 +264,8 @@ impl LocalCluster {
             );
         }
 
-        let listener_config = ValidatorConfig {
-            voting_disabled: true,
-            ..config.validator_configs[0].clone()
-        };
+        let mut listener_config = safe_clone_config(&config.validator_configs[0]);
+        listener_config.voting_disabled = true;
         (0..config.num_listeners).for_each(|_| {
             cluster.add_validator(&listener_config, 0, Arc::new(Keypair::new()), None);
         });
@@ -339,7 +346,7 @@ impl LocalCluster {
             }
         }
 
-        let mut config = validator_config.clone();
+        let mut config = safe_clone_config(validator_config);
         config.rpc_addrs = Some((validator_node.info.rpc, validator_node.info.rpc_pubsub));
         config.account_paths = vec![ledger_path.join("accounts")];
         let voting_keypair = voting_keypair.unwrap();
@@ -352,6 +359,7 @@ impl LocalCluster {
             vec![self.entry_point_info.clone()],
             &config,
             true, // should_check_duplicate_instance
+            Arc::new(RwLock::new(ValidatorStartProgress::default())),
         );
 
         let validator_pubkey = validator_keypair.pubkey();
@@ -362,7 +370,7 @@ impl LocalCluster {
                 ledger_path,
                 contact_info,
             },
-            validator_config.clone(),
+            safe_clone_config(validator_config),
             validator_server,
         );
 
@@ -666,8 +674,9 @@ impl Cluster for LocalCluster {
             entry_point_info
                 .map(|entry_point_info| vec![entry_point_info])
                 .unwrap_or_default(),
-            &cluster_validator_info.config,
+            &safe_clone_config(&cluster_validator_info.config),
             true, // should_check_duplicate_instance
+            Arc::new(RwLock::new(ValidatorStartProgress::default())),
         );
         cluster_validator_info.validator = Some(restarted_node);
         cluster_validator_info
@@ -706,11 +715,12 @@ mod test {
     #[test]
     fn test_local_cluster_start_and_exit_with_config() {
         solana_logger::setup();
-        let mut validator_config = ValidatorConfig::default();
-        validator_config.rpc_config.enable_validator_exit = true;
         const NUM_NODES: usize = 1;
         let mut config = ClusterConfig {
-            validator_configs: vec![ValidatorConfig::default(); NUM_NODES],
+            validator_configs: make_identical_validator_configs(
+                &ValidatorConfig::default(),
+                NUM_NODES,
+            ),
             node_stakes: vec![3; NUM_NODES],
             cluster_lamports: 100,
             ticks_per_slot: 8,

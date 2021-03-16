@@ -22,7 +22,7 @@ fn invoker_process_instruction(
     let account_info_iter = &mut accounts.iter();
     let invoked_program_info = next_account_info(account_info_iter)?;
     invoke(
-        &Instruction::new(*invoked_program_info.key, &[0], vec![]),
+        &Instruction::new_with_bincode(*invoked_program_info.key, &[0], vec![]),
         &[invoked_program_info.clone()],
     )?;
     msg!("Processing invoker instruction after CPI");
@@ -58,7 +58,7 @@ async fn cpi() {
     );
 
     let mut test_state = program_test.start_with_context().await;
-    let instructions = vec![Instruction::new(
+    let instructions = vec![Instruction::new_with_bincode(
         invoker_program_id,
         &[0],
         vec![AccountMeta::new_readonly(invoked_program_id, false)],

@@ -4,7 +4,9 @@ use bincode::{deserialize, serialized_size};
 use serde_derive::{Deserialize, Serialize};
 use solana_config_program::{create_config_account, get_config_data, ConfigState};
 use solana_sdk::{
-    account::Account, genesis_config::GenesisConfig, instruction::InstructionError,
+    account::{AccountSharedData, ReadableAccount},
+    genesis_config::GenesisConfig,
+    instruction::InstructionError,
     keyed_account::KeyedAccount,
 };
 
@@ -25,8 +27,8 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn from(account: &Account) -> Option<Self> {
-        get_config_data(&account.data)
+    pub fn from<T: ReadableAccount>(account: &T) -> Option<Self> {
+        get_config_data(&account.data())
             .ok()
             .and_then(|data| deserialize(data).ok())
     }
@@ -49,7 +51,7 @@ impl ConfigState for Config {
 
 pub fn add_genesis_account(genesis_config: &mut GenesisConfig) -> u64 {
     let mut account = create_config_account(vec![], &Config::default(), 0);
-    let lamports = genesis_config.rent.minimum_balance(account.data.len());
+    let lamports = genesis_config.rent.minimum_balance(account.data().len());
 
     account.lamports = lamports.max(1);
 
@@ -58,7 +60,7 @@ pub fn add_genesis_account(genesis_config: &mut GenesisConfig) -> u64 {
     lamports
 }
 
-pub fn create_account(lamports: u64, config: &Config) -> Account {
+pub fn create_account(lamports: u64, config: &Config) -> AccountSharedData {
     create_config_account(vec![], config, lamports)
 }
 

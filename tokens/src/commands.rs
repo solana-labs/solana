@@ -109,8 +109,6 @@ pub enum Error {
     ProgramError(#[from] ProgramError),
     #[error("Exit signal received")]
     ExitSignal,
-    #[error("Cannot support mint decimals that would overflow")]
-    InvalidMintDecimals,
 }
 
 fn merge_allocations(allocations: &[Allocation]) -> Vec<Allocation> {

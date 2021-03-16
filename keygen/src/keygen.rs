@@ -645,7 +645,7 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
         ("verify", Some(matches)) => {
             let keypair = get_keypair_from_matches(matches, config, &mut wallet_manager)?;
             let simple_message = Message::new(
-                &[Instruction::new(
+                &[Instruction::new_with_bincode(
                     Pubkey::default(),
                     &0,
                     vec![AccountMeta::new(keypair.pubkey(), true)],

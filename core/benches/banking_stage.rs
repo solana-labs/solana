@@ -73,7 +73,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
         let mut packets = VecDeque::new();
         for batch in batches {
             let batch_len = batch.packets.len();
-            packets.push_back((batch, vec![0usize; batch_len]));
+            packets.push_back((batch, vec![0usize; batch_len], false));
         }
         let (s, _r) = unbounded();
         // This tests the performance of buffering packets.
@@ -81,6 +81,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
         bencher.iter(move || {
             let _ignored = BankingStage::consume_buffered_packets(
                 &my_pubkey,
+                std::u128::MAX,
                 &poh_recorder,
                 &mut packets,
                 None,
@@ -154,6 +155,9 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
 
     let (verified_sender, verified_receiver) = unbounded();
     let (vote_sender, vote_receiver) = unbounded();
+    let mut bank = Bank::new(&genesis_config);
+    // Allow arbitrary transaction processing time for the purposes of this bench
+    bank.ns_per_slot = std::u128::MAX;
     let bank = Arc::new(Bank::new(&genesis_config));
 
     debug!("threads: {} txs: {}", num_threads, txes);

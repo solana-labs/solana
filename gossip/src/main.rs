@@ -8,7 +8,6 @@ use solana_clap_utils::{
     input_parsers::keypair_of,
     input_validators::{is_keypair_or_ask_keyword, is_port, is_pubkey},
 };
-use solana_client::rpc_client::RpcClient;
 use solana_core::{contact_info::ContactInfo, gossip_service::discover};
 use solana_sdk::pubkey::Pubkey;
 use std::{
@@ -139,29 +138,6 @@ fn parse_matches() -> ArgMatches<'static> {
                         .value_name("SECONDS")
                         .takes_value(true)
                         .help("Maximum time to wait in seconds [default: wait forever]"),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("stop")
-                .about("Send stop request to a node")
-                .setting(AppSettings::DisableVersion)
-                .arg(
-                    Arg::with_name("entrypoint")
-                        .short("n")
-                        .long("entrypoint")
-                        .value_name("HOST:PORT")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(solana_net_utils::is_host_port)
-                        .help("Rendezvous with the cluster at this entry point"),
-                )
-                .arg(
-                    Arg::with_name("node_pubkey")
-                        .index(1)
-                        .required(true)
-                        .value_name("PUBKEY")
-                        .validator(is_pubkey)
-                        .help("Public key of a specific node to stop"),
                 ),
         )
         .get_matches()
@@ -332,44 +308,6 @@ fn process_rpc_url(matches: &ArgMatches) -> std::io::Result<()> {
     Ok(())
 }
 
-fn process_stop(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
-    let entrypoint_addr = parse_entrypoint(&matches);
-    let pubkey = matches
-        .value_of("node_pubkey")
-        .unwrap()
-        .parse::<Pubkey>()
-        .unwrap();
-    let (_all_peers, validators) = discover(
-        None,
-        entrypoint_addr.as_ref(),
-        None,
-        None,
-        Some(pubkey),
-        None,
-        None,
-        0,
-    )?;
-    let validator = validators.iter().find(|x| x.id == pubkey).unwrap();
-
-    if !ContactInfo::is_valid_address(&validator.rpc) {
-        eprintln!(
-            "Error: RPC service is not enabled on validator {:?}",
-            pubkey
-        );
-        exit(1);
-    }
-    println!("\nSending stop request to validator {:?}", pubkey);
-
-    let result = RpcClient::new_socket(validator.rpc).validator_exit()?;
-    if result {
-        println!("Stop signal accepted");
-    } else {
-        eprintln!("Error: Stop signal ignored");
-    }
-
-    Ok(())
-}
-
 fn main() -> Result<(), Box<dyn error::Error>> {
     solana_logger::setup_with_default("solana=info");
 
@@ -381,9 +319,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         }
         ("rpc-url", Some(matches)) => {
             process_rpc_url(matches)?;
-        }
-        ("stop", Some(matches)) => {
-            process_stop(matches)?;
         }
         _ => unreachable!(),
     }

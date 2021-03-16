@@ -54,6 +54,11 @@ gives a convenient interface for the RPC methods.
 - [getSlotLeader](jsonrpc-api.md#getslotleader)
 - [getStakeActivation](jsonrpc-api.md#getstakeactivation)
 - [getSupply](jsonrpc-api.md#getsupply)
+- [getTokenAccountBalance](jsonrpc-api.md#gettokenaccountbalance)
+- [getTokenAccountsByDelegate](jsonrpc-api.md#gettokenaccountsbydelegate)
+- [getTokenAccountsByOwner](jsonrpc-api.md#gettokenaccountsbyowner)
+- [getTokenLargestAccounts](jsonrpc-api.md#gettokenlargestaccounts)
+- [getTokenSupply](jsonrpc-api.md#gettokensupply)
 - [getTransactionCount](jsonrpc-api.md#gettransactioncount)
 - [getVersion](jsonrpc-api.md#getversion)
 - [getVoteAccounts](jsonrpc-api.md#getvoteaccounts)
@@ -61,8 +66,6 @@ gives a convenient interface for the RPC methods.
 - [requestAirdrop](jsonrpc-api.md#requestairdrop)
 - [sendTransaction](jsonrpc-api.md#sendtransaction)
 - [simulateTransaction](jsonrpc-api.md#simulatetransaction)
-- [setLogFilter](jsonrpc-api.md#setlogfilter)
-- [validatorExit](jsonrpc-api.md#validatorexit)
 - [Subscription Websocket](jsonrpc-api.md#subscription-websocket)
   - [accountSubscribe](jsonrpc-api.md#accountsubscribe)
   - [accountUnsubscribe](jsonrpc-api.md#accountunsubscribe)
@@ -74,16 +77,6 @@ gives a convenient interface for the RPC methods.
   - [signatureUnsubscribe](jsonrpc-api.md#signatureunsubscribe)
   - [slotSubscribe](jsonrpc-api.md#slotsubscribe)
   - [slotUnsubscribe](jsonrpc-api.md#slotunsubscribe)
-
-## Unstable Methods
-
-Unstable methods may see breaking changes in patch releases and may not be supported in perpetuity.
-
-- [getTokenAccountBalance](jsonrpc-api.md#gettokenaccountbalance)
-- [getTokenAccountsByDelegate](jsonrpc-api.md#gettokenaccountsbydelegate)
-- [getTokenAccountsByOwner](jsonrpc-api.md#gettokenaccountsbyowner)
-- [getTokenLargestAccounts](jsonrpc-api.md#gettokenlargestaccounts)
-- [getTokenSupply](jsonrpc-api.md#gettokensupply)
 
 ## Request Formatting
 
@@ -189,11 +182,12 @@ Many methods that take a commitment parameter return an RpcResponse JSON object 
 Although not a JSON RPC API, a `GET /health` at the RPC HTTP Endpoint provides a
 health-check mechanism for use by load balancers or other network
 infrastructure. This request will always return a HTTP 200 OK response with a body of
-"ok" or "behind" based on the following conditions:
+"ok", "behind" or "unknown" based on the following conditions:
 
 1. If one or more `--trusted-validator` arguments are provided to `solana-validator`, "ok" is returned
-   when the node has within `HEALTH_CHECK_SLOT_DISTANCE` slots of the highest trusted validator,
-   otherwise "behind" is returned.
+   when the node has within `HEALTH_CHECK_SLOT_DISTANCE` slots of the highest
+   trusted validator, otherwise "behind". "unknown" is returned when no slot
+   information from trusted validators is not yet available.
 2. "ok" is always returned if no trusted validators are provided.
 
 ## JSON RPC API Reference
@@ -463,7 +457,8 @@ Returns identity and transaction information about a confirmed block in the ledg
 #### Parameters:
 
 - `<u64>` - slot, as u64 integer
-- `<string>` - encoding for each returned Transaction, either "json", "jsonParsed", "base58" (*slow*), "base64". If parameter not provided, the default encoding is "json".
+- `<object>` - (optional) Configuration object containing the following optional fields:
+  - (optional) `encoding: <string>` - encoding for each returned Transaction, either "json", "jsonParsed", "base58" (*slow*), "base64". If parameter not provided, the default encoding is "json".
   "jsonParsed" encoding attempts to use program-specific instruction parsers to return more human-readable and explicit data in the `transaction.message.instructions` list. If "jsonParsed" is requested but a parser cannot be found, the instruction falls back to regular JSON encoding (`accounts`, `data`, and `programIdIndex` fields).
 
 #### Results:
@@ -501,7 +496,7 @@ The result field will be an object with the following fields:
 Request:
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
-  {"jsonrpc": "2.0","id":1,"method":"getConfirmedBlock","params":[430, "json"]}
+  {"jsonrpc": "2.0","id":1,"method":"getConfirmedBlock","params":[430, {"encoding": "json"}]}
 '
 ```
 
@@ -677,7 +672,8 @@ The JSON structure of token balances is defined as a list of objects in the foll
 - `uiTokenAmount: <object>` -
   - `amount: <string>` - Raw amount of tokens as a string, ignoring decimals.
   - `decimals: <number>` - Number of decimals configured for token's mint.
-  - `uiAmount: <string>` - Token amount as a float, accounting for decimals.
+  - `uiAmount: <number | null>` - Token amount as a float, accounting for decimals. **DEPRECATED**
+  - `uiAmountString: <string>` - Token amount as a string, accounting for decimals.
 
 ### getConfirmedBlocks
 
@@ -854,9 +850,9 @@ Returns transaction details for a confirmed transaction
 #### Parameters:
 
 - `<string>` - transaction signature as base-58 encoded string
-- `<string>` - encoding for each returned Transaction, either "json", "jsonParsed", "base58" (*slow*), "base64". If parameter not provided, the default encoding is "json".
+- `<object>` - (optional) Configuration object containing the following optional fields:
+  - (optional) `encoding: <string>` - encoding for each returned Transaction, either "json", "jsonParsed", "base58" (*slow*), "base64". If parameter not provided, the default encoding is "json".
   "jsonParsed" encoding attempts to use program-specific instruction parsers to return more human-readable and explicit data in the `transaction.message.instructions` list. If "jsonParsed" is requested but a parser cannot be found, the instruction falls back to regular JSON encoding (`accounts`, `data`, and `programIdIndex` fields).
-- `<string>` - (optional) encoding for the returned Transaction, either "json", "jsonParsed", "base58" (*slow*), or "base64". If parameter not provided, the default encoding is JSON.
 
 #### Results:
 
@@ -1217,7 +1213,7 @@ The result will be an RpcResponse JSON object with `value` set to a JSON object 
 
 - `blockhash: <string>` - a Hash as base-58 encoded string
 - `feeCalculator: <object>` - FeeCalculator object, the fee schedule for this block hash
-- `lastValidSlot: <u64>` - last slot in which a blockhash will be valid (NOTE: this can be inaccurate when there are [skipped slots](../../terminology.md#skipped-slot))
+- `lastValidSlot: <u64>` - DEPRECATED - this value is inaccurate and should not be relied upon
 
 #### Example:
 
@@ -2369,7 +2365,7 @@ Result:
 
 ### getTokenAccountBalance
 
-Returns the token balance of an SPL Token account. **UNSTABLE**
+Returns the token balance of an SPL Token account.
 
 #### Parameters:
 
@@ -2380,9 +2376,10 @@ Returns the token balance of an SPL Token account. **UNSTABLE**
 
 The result will be an RpcResponse JSON object with `value` equal to a JSON object containing:
 
-- `uiAmount: <string>` - the balance, using mint-prescribed decimals
 - `amount: <string>` - the raw balance without decimals, a string representation of u64
 - `decimals: <u8>` - number of base 10 digits to the right of the decimal place
+- `uiAmount: <number | null>` - the balance, using mint-prescribed decimals **DEPRECATED**
+- `uiAmountString: <string>` - the balance as a string, using mint-prescribed decimals
 
 #### Example:
 
@@ -2402,9 +2399,10 @@ Result:
       "slot": 1114
     },
     "value": {
-      "uiAmount": "98.64",
       "amount": "9864",
-      "decimals": 2
+      "decimals": 2,
+      "uiAmount": 98.64,
+      "uiAmountString": "98.64",
     },
     "id": 1
   }
@@ -2413,7 +2411,7 @@ Result:
 
 ### getTokenAccountsByDelegate
 
-Returns all SPL Token accounts by approved Delegate. **UNSTABLE**
+Returns all SPL Token accounts by approved Delegate.
 
 #### Parameters:
 
@@ -2477,8 +2475,9 @@ Result:
             "info": {
               "tokenAmount": {
                 "amount": "1",
-                "uiAmount": "0.1",
-                "decimals": 1
+                "decimals": 1,
+                "uiAmount": 0.1,
+                "uiAmountString": "0.1",
               },
               "delegate": "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T",
               "delegatedAmount": 1,
@@ -2502,7 +2501,7 @@ Result:
 
 ### getTokenAccountsByOwner
 
-Returns all SPL Token accounts by token owner. **UNSTABLE**
+Returns all SPL Token accounts by token owner.
 
 #### Parameters:
 
@@ -2566,8 +2565,9 @@ Result:
             "info": {
               "tokenAmount": {
                 "amount": "1",
-                "uiAmount": "0.1",
-                "decimals": 1
+                "decimals": 1,
+                "uiAmount": 0.1,
+                "uiAmountString": "0.1",
               },
               "delegate": null,
               "delegatedAmount": 1,
@@ -2591,7 +2591,7 @@ Result:
 
 ### getTokenLargestAccounts
 
-Returns the 20 largest accounts of a particular SPL Token type. **UNSTABLE**
+Returns the 20 largest accounts of a particular SPL Token type.
 
 #### Parameters:
 
@@ -2603,9 +2603,10 @@ Returns the 20 largest accounts of a particular SPL Token type. **UNSTABLE**
 The result will be an RpcResponse JSON object with `value` equal to an array of JSON objects containing:
 
 - `address: <string>` - the address of the token account
-- `uiAmount: <string>` - the token account balance, using mint-prescribed decimals
 - `amount: <string>` - the raw token account balance without decimals, a string representation of u64
 - `decimals: <u8>` - number of base 10 digits to the right of the decimal place
+- `uiAmount: <number | null>` - the token account balance, using mint-prescribed decimals **DEPRECATED**
+- `uiAmountString: <string>` - the token account balance as a string, using mint-prescribed decimals
 
 #### Example:
 
@@ -2628,13 +2629,15 @@ Result:
         "address": "FYjHNoFtSQ5uijKrZFyYAxvEr87hsKXkXcxkcmkBAf4r",
         "amount": "771",
         "decimals": 2,
-        "uiAmount": "7.71"
+        "uiAmount": 7.71,
+        "uiAmountString": "7.71"
       },
       {
         "address": "BnsywxTcaYeNUtzrPxQUvzAWxfzZe3ZLUJ4wMMuLESnu",
         "amount": "229",
         "decimals": 2,
-        "uiAmount": "2.29"
+        "uiAmount": 2.29,
+        "uiAmountString": "2.29"
       }
     ]
   },
@@ -2644,7 +2647,7 @@ Result:
 
 ### getTokenSupply
 
-Returns the total supply of an SPL Token type. **UNSTABLE**
+Returns the total supply of an SPL Token type.
 
 #### Parameters:
 
@@ -2655,9 +2658,10 @@ Returns the total supply of an SPL Token type. **UNSTABLE**
 
 The result will be an RpcResponse JSON object with `value` equal to a JSON object containing:
 
-- `uiAmount: <string>` - the total token supply, using mint-prescribed decimals
 - `amount: <string>` - the raw total token supply without decimals, a string representation of u64
 - `decimals: <u8>` - number of base 10 digits to the right of the decimal place
+- `uiAmount: <number | null>` - the total token supply, using mint-prescribed decimals **DEPRECATED**
+- `uiAmountString: <string>` - the total token supply as a string, using mint-prescribed decimals
 
 #### Example:
 
@@ -2676,9 +2680,10 @@ Result:
       "slot": 1114
     },
     "value": {
-      "uiAmount": "1000",
       "amount": "100000",
-      "decimals": 2
+      "decimals": 2,
+      "uiAmount": 1000,
+      "uiAmountString": "1000",
     }
   },
   "id": 1
@@ -2737,7 +2742,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 Result:
 ```json
-{"jsonrpc":"2.0","result":{"solana-core": "1.6.0"},"id":1}
+{"jsonrpc":"2.0","result":{"solana-core": "1.7.0"},"id":1}
 ```
 
 ### getVoteAccounts
@@ -2974,57 +2979,6 @@ Result:
   },
   "id": 1
 }
-```
-
-### setLogFilter
-
-Sets the log filter on the validator
-
-#### Parameters:
-
-- `<string>` - the new log filter to use
-
-#### Results:
-
-- `<null>`
-
-#### Example:
-
-```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
-  {"jsonrpc":"2.0","id":1, "method":"setLogFilter", "params":["solana_core=debug"]}
-'
-```
-
-Result:
-```json
-{"jsonrpc":"2.0","result":null,"id":1}
-```
-
-### validatorExit
-
-If a validator boots with RPC exit enabled (`--enable-rpc-exit` parameter), this request causes the validator to exit.
-
-#### Parameters:
-
-None
-
-#### Results:
-
-- `<bool>` - Whether the validator exit operation was successful
-
-#### Example:
-
-```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
-  {"jsonrpc":"2.0","id":1, "method":"validatorExit"}
-'
-
-```
-
-Result:
-```json
-{"jsonrpc":"2.0","result":true,"id":1}
 ```
 
 ## Subscription Websocket

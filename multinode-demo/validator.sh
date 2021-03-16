@@ -8,6 +8,7 @@ source "$here"/common.sh
 
 args=(
   --max-genesis-archive-unpacked-size 1073741824
+  --no-poh-speed-test
 )
 airdrops_enabled=1
 node_sol=500 # 500 SOL: number of SOL to airdrop the node for transaction fees and vote account rent exemption (ignored if airdrops_enabled=0)
@@ -103,9 +104,6 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --rpc-port ]]; then
       args+=("$1" "$2")
       shift 2
-    elif [[ $1 = --enable-rpc-exit ]]; then
-      args+=("$1")
-      shift
     elif [[ $1 = --rpc-faucet-address ]]; then
       args+=("$1" "$2")
       shift 2
@@ -226,8 +224,6 @@ default_arg --identity "$identity"
 default_arg --vote-account "$vote_account"
 default_arg --ledger "$ledger_dir"
 default_arg --log -
-default_arg --enable-rpc-exit
-default_arg --enable-rpc-set-log-filter
 default_arg --require-tower
 
 if [[ -n $SOLANA_CUDA ]]; then

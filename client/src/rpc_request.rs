@@ -7,7 +7,6 @@ use thiserror::Error;
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum RpcRequest {
     DeregisterNode,
-    ValidatorExit,
     GetAccountInfo,
     GetBalance,
     GetBlockTime,
@@ -35,6 +34,7 @@ pub enum RpcRequest {
     GetMultipleAccounts,
     GetProgramAccounts,
     GetRecentBlockhash,
+    GetRecentPerformanceSamples,
     GetSnapshotSlot,
     GetSignatureStatuses,
     GetSlot,
@@ -64,7 +64,6 @@ impl fmt::Display for RpcRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let method = match self {
             RpcRequest::DeregisterNode => "deregisterNode",
-            RpcRequest::ValidatorExit => "validatorExit",
             RpcRequest::GetAccountInfo => "getAccountInfo",
             RpcRequest::GetBalance => "getBalance",
             RpcRequest::GetBlockTime => "getBlockTime",
@@ -92,6 +91,7 @@ impl fmt::Display for RpcRequest {
             RpcRequest::GetMultipleAccounts => "getMultipleAccounts",
             RpcRequest::GetProgramAccounts => "getProgramAccounts",
             RpcRequest::GetRecentBlockhash => "getRecentBlockhash",
+            RpcRequest::GetRecentPerformanceSamples => "getRecentPerformanceSamples",
             RpcRequest::GetSnapshotSlot => "getSnapshotSlot",
             RpcRequest::GetSignatureStatuses => "getSignatureStatuses",
             RpcRequest::GetSlot => "getSlot",

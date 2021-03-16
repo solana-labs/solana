@@ -21,7 +21,7 @@ use std::{
         Arc, RwLock,
     },
     thread::{self, sleep, Builder, JoinHandle},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 const INTERVAL_MS: u64 = 100;
@@ -29,6 +29,13 @@ const SHRUNKEN_ACCOUNT_PER_SEC: usize = 250;
 const SHRUNKEN_ACCOUNT_PER_INTERVAL: usize =
     SHRUNKEN_ACCOUNT_PER_SEC / (1000 / INTERVAL_MS as usize);
 const CLEAN_INTERVAL_BLOCKS: u64 = 100;
+
+// This value is chosen to spread the dropping cost over 3 expiration checks
+// RecycleStores are fully populated almost all of its lifetime. So, otherwise
+// this would drop MAX_RECYCLE_STORES mmaps at once in the worst case...
+// (Anyway, the dropping part is outside the AccountsDb::recycle_stores lock
+// and dropped in this AccountsBackgroundServe, so this shouldn't matter much)
+const RECYCLE_STORE_EXPIRATION_INTERVAL_SECS: u64 = crate::accounts_db::EXPIRATION_TTL_SECONDS / 3;
 
 pub type SnapshotRequestSender = Sender<SnapshotRequest>;
 pub type SnapshotRequestReceiver = Receiver<SnapshotRequest>;
@@ -286,6 +293,7 @@ impl AccountsBackgroundService {
         let mut last_cleaned_block_height = 0;
         let mut removed_slots_count = 0;
         let mut total_remove_slots_time = 0;
+        let mut last_expiration_check_time = Instant::now();
         let t_background = Builder::new()
             .name("solana-accounts-background".to_string())
             .spawn(move || loop {
@@ -303,6 +311,8 @@ impl AccountsBackgroundService {
                     &mut removed_slots_count,
                     &mut total_remove_slots_time,
                 );
+
+                Self::expire_old_recycle_stores(&bank, &mut last_expiration_check_time);
 
                 // Check to see if there were any requests for snapshotting banks
                 // < the current root bank `bank` above.
@@ -344,7 +354,7 @@ impl AccountsBackgroundService {
                     } else {
                         // under sustained writes, shrink can lag behind so cap to
                         // SHRUNKEN_ACCOUNT_PER_INTERVAL (which is based on INTERVAL_MS,
-                        // which in turn roughly asscociated block time)
+                        // which in turn roughly associated block time)
                         consumed_budget = bank
                             .process_stale_slot_with_budget(
                                 consumed_budget,
@@ -397,6 +407,16 @@ impl AccountsBackgroundService {
             *removed_slots_count = 0;
         }
     }
+
+    fn expire_old_recycle_stores(bank: &Bank, last_expiration_check_time: &mut Instant) {
+        let now = Instant::now();
+        if now.duration_since(*last_expiration_check_time).as_secs()
+            > RECYCLE_STORE_EXPIRATION_INTERVAL_SECS
+        {
+            bank.expire_old_recycle_stores();
+            *last_expiration_check_time = now;
+        }
+    }
 }
 
 #[cfg(test)]
@@ -404,7 +424,7 @@ mod test {
     use super::*;
     use crate::genesis_utils::create_genesis_config;
     use crossbeam_channel::unbounded;
-    use solana_sdk::{account::Account, pubkey::Pubkey};
+    use solana_sdk::{account::AccountSharedData, pubkey::Pubkey};
 
     #[test]
     fn test_accounts_background_service_remove_dead_slots() {
@@ -418,7 +438,10 @@ mod test {
 
         // Store an account in slot 0
         let account_key = Pubkey::new_unique();
-        bank0.store_account(&account_key, &Account::new(264, 0, &Pubkey::default()));
+        bank0.store_account(
+            &account_key,
+            &AccountSharedData::new(264, 0, &Pubkey::default()),
+        );
         assert!(bank0.get_account(&account_key).is_some());
         pruned_banks_sender.send(0).unwrap();
         AccountsBackgroundService::remove_dead_slots(&bank0, &request_handler, &mut 0, &mut 0);

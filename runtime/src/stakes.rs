@@ -2,7 +2,10 @@
 //! node stakes
 use crate::vote_account::{ArcVoteAccount, VoteAccounts};
 use solana_sdk::{
-    account::Account, clock::Epoch, pubkey::Pubkey, sysvar::stake_history::StakeHistory,
+    account::{AccountSharedData, ReadableAccount},
+    clock::Epoch,
+    pubkey::Pubkey,
+    sysvar::stake_history::StakeHistory,
 };
 use solana_stake_program::stake_state::{new_stake_history_entry, Delegation, StakeState};
 use solana_vote_program::vote_state::VoteState;
@@ -106,16 +109,16 @@ impl Stakes {
                 .sum::<u64>()
     }
 
-    pub fn is_stake(account: &Account) -> bool {
+    pub fn is_stake(account: &AccountSharedData) -> bool {
         solana_vote_program::check_id(&account.owner)
             || solana_stake_program::check_id(&account.owner)
-                && account.data.len() >= std::mem::size_of::<StakeState>()
+                && account.data().len() >= std::mem::size_of::<StakeState>()
     }
 
     pub fn store(
         &mut self,
         pubkey: &Pubkey,
-        account: &Account,
+        account: &AccountSharedData,
         fix_stake_deactivate: bool,
         check_vote_init: bool,
     ) -> Option<ArcVoteAccount> {
@@ -127,7 +130,7 @@ impl Stakes {
             // when account is removed (lamports == 0 or data uninitialized), don't read so that
             // given `pubkey` can be used for any owner in the future, while not affecting Stakes.
             if account.lamports != 0
-                && !(check_vote_init && VoteState::is_uninitialized_no_deser(&account.data))
+                && !(check_vote_init && VoteState::is_uninitialized_no_deser(&account.data()))
             {
                 let stake = old.as_ref().map_or_else(
                     || {
@@ -232,7 +235,9 @@ pub mod tests {
     use solana_vote_program::vote_state::{self, VoteState, VoteStateVersions};
 
     //  set up some dummies for a staked node     ((     vote      )  (     stake     ))
-    pub fn create_staked_node_accounts(stake: u64) -> ((Pubkey, Account), (Pubkey, Account)) {
+    pub fn create_staked_node_accounts(
+        stake: u64,
+    ) -> ((Pubkey, AccountSharedData), (Pubkey, AccountSharedData)) {
         let vote_pubkey = solana_sdk::pubkey::new_rand();
         let vote_account =
             vote_state::create_account(&vote_pubkey, &solana_sdk::pubkey::new_rand(), 0, 1);
@@ -243,7 +248,7 @@ pub mod tests {
     }
 
     //   add stake to a vote_pubkey                               (   stake    )
-    pub fn create_stake_account(stake: u64, vote_pubkey: &Pubkey) -> (Pubkey, Account) {
+    pub fn create_stake_account(stake: u64, vote_pubkey: &Pubkey) -> (Pubkey, AccountSharedData) {
         let stake_pubkey = solana_sdk::pubkey::new_rand();
         (
             stake_pubkey,
@@ -260,7 +265,7 @@ pub mod tests {
     pub fn create_warming_staked_node_accounts(
         stake: u64,
         epoch: Epoch,
-    ) -> ((Pubkey, Account), (Pubkey, Account)) {
+    ) -> ((Pubkey, AccountSharedData), (Pubkey, AccountSharedData)) {
         let vote_pubkey = solana_sdk::pubkey::new_rand();
         let vote_account =
             vote_state::create_account(&vote_pubkey, &solana_sdk::pubkey::new_rand(), 0, 1);
@@ -275,7 +280,7 @@ pub mod tests {
         stake: u64,
         epoch: Epoch,
         vote_pubkey: &Pubkey,
-    ) -> (Pubkey, Account) {
+    ) -> (Pubkey, AccountSharedData) {
         let stake_pubkey = solana_sdk::pubkey::new_rand();
         (
             stake_pubkey,
@@ -407,7 +412,7 @@ pub mod tests {
         }
 
         // Vote account too big
-        let cache_data = vote_account.data.clone();
+        let cache_data = vote_account.data().to_vec();
         vote_account.data.push(0);
         stakes.store(&vote_pubkey, &vote_account, true, true);
 
@@ -427,7 +432,7 @@ pub mod tests {
             assert!(vote_accounts.get(&vote_pubkey).is_none());
         }
 
-        vote_account.data = cache_data;
+        vote_account.set_data(cache_data);
         stakes.store(&vote_pubkey, &vote_account, true, true);
 
         {
@@ -557,7 +562,7 @@ pub mod tests {
         // not a stake account, and whacks above entry
         stakes.store(
             &stake_pubkey,
-            &Account::new(1, 0, &solana_stake_program::id()),
+            &AccountSharedData::new(1, 0, &solana_stake_program::id()),
             true,
             true,
         );

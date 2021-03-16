@@ -24,8 +24,8 @@ export RUSTFLAGS="
     -C link-arg=-T$bpf_sdk/rust/bpf.ld \
     -C link-arg=--Bdynamic \
     -C link-arg=-shared \
+    -C link-arg=--threads=1 \
     -C link-arg=--entry=entrypoint \
-    -C link-arg=-no-threads \
     -C linker=$bpf_sdk/dependencies/bpf-tools/llvm/bin/ld.lld"
 
 # CARGO may be set if run from within cargo, causing

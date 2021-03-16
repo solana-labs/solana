@@ -92,6 +92,7 @@ describe('Nonce', () => {
         lamports: minimumAmount,
         data: expectedData(from.publicKey),
         executable: false,
+        rentEpoch: 20,
       },
       withContext: true,
     });
@@ -162,6 +163,7 @@ describe('Nonce', () => {
         lamports: minimumAmount,
         data: expectedData(from.publicKey),
         executable: false,
+        rentEpoch: 20,
       },
       withContext: true,
     });

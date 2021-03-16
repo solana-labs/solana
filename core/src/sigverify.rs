@@ -31,34 +31,7 @@ impl Default for TransactionSigVerifier {
 
 impl SigVerifier for TransactionSigVerifier {
     fn verify_batch(&self, mut batch: Vec<Packets>) -> Vec<Packets> {
-        let r = sigverify::ed25519_verify(&batch, &self.recycler, &self.recycler_out);
-        mark_disabled(&mut batch, &r);
+        sigverify::ed25519_verify(&mut batch, &self.recycler, &self.recycler_out);
         batch
-    }
-}
-
-pub fn mark_disabled(batches: &mut Vec<Packets>, r: &[Vec<u8>]) {
-    batches.iter_mut().zip(r).for_each(|(b, v)| {
-        b.packets
-            .iter_mut()
-            .zip(v)
-            .for_each(|(p, f)| p.meta.discard = *f == 0)
-    });
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use solana_perf::packet::Packet;
-
-    #[test]
-    fn test_mark_disabled() {
-        let mut batch = Packets::default();
-        batch.packets.push(Packet::default());
-        let mut batches: Vec<Packets> = vec![batch];
-        mark_disabled(&mut batches, &[vec![0]]);
-        assert_eq!(batches[0].packets[0].meta.discard, true);
-        mark_disabled(&mut batches, &[vec![1]]);
-        assert_eq!(batches[0].packets[0].meta.discard, false);
     }
 }

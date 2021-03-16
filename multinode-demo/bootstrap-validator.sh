@@ -97,8 +97,6 @@ ledger_dir="$SOLANA_CONFIG_DIR"/bootstrap-validator
 }
 
 args+=(
-  --enable-rpc-exit
-  --enable-rpc-set-log-filter
   --require-tower
   --ledger "$ledger_dir"
   --rpc-port 8899
@@ -106,6 +104,7 @@ args+=(
   --identity "$identity"
   --vote-account "$vote_account"
   --rpc-faucet-address 127.0.0.1:9900
+  --no-poh-speed-test
 )
 default_arg --gossip-port 8001
 default_arg --log -

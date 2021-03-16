@@ -7,7 +7,8 @@ use chrono::prelude::*;
 use solana_config_program::date_instruction::DateConfig;
 use solana_config_program::get_config_data;
 use solana_sdk::{
-    account::Account,
+    account::{AccountSharedData, ReadableAccount, WritableAccount},
+    feature_set,
     instruction::InstructionError,
     keyed_account::{next_keyed_account, KeyedAccount},
     process_instruction::InvokeContext,
@@ -27,7 +28,7 @@ fn verify_date_account(
     let account = verify_account(keyed_account, expected_pubkey)?;
 
     let config_data =
-        get_config_data(&account.data).map_err(|_| InstructionError::InvalidAccountData)?;
+        get_config_data(&account.data()).map_err(|_| InstructionError::InvalidAccountData)?;
     let date_config =
         DateConfig::deserialize(config_data).ok_or(InstructionError::InvalidAccountData)?;
 
@@ -37,7 +38,7 @@ fn verify_date_account(
 fn verify_account<'a>(
     keyed_account: &'a KeyedAccount,
     expected_pubkey: &Pubkey,
-) -> Result<RefMut<'a, Account>, InstructionError> {
+) -> Result<RefMut<'a, AccountSharedData>, InstructionError> {
     if keyed_account.unsigned_key() != expected_pubkey {
         return Err(VestError::Unauthorized.into());
     }
@@ -48,7 +49,7 @@ fn verify_account<'a>(
 fn verify_signed_account<'a>(
     keyed_account: &'a KeyedAccount,
     expected_pubkey: &Pubkey,
-) -> Result<RefMut<'a, Account>, InstructionError> {
+) -> Result<RefMut<'a, AccountSharedData>, InstructionError> {
     if keyed_account.signer_key().is_none() {
         return Err(InstructionError::MissingRequiredSignature);
     }
@@ -60,10 +61,15 @@ pub fn process_instruction(
     _program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
     data: &[u8],
-    _invoke_context: &mut dyn InvokeContext,
+    invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     let keyed_accounts_iter = &mut keyed_accounts.iter();
     let contract_account = &mut next_keyed_account(keyed_accounts_iter)?.try_account_ref_mut()?;
+    if invoke_context.is_feature_active(&feature_set::check_program_owner::id())
+        && contract_account.owner != crate::id()
+    {
+        return Err(InstructionError::InvalidAccountOwner);
+    }
 
     let instruction = limited_deserialize(data)?;
 
@@ -84,7 +90,7 @@ pub fn process_instruction(
             ..VestState::default()
         }
     } else {
-        VestState::deserialize(&contract_account.data)?
+        VestState::deserialize(&contract_account.data())?
     };
 
     match instruction {
@@ -141,7 +147,7 @@ pub fn process_instruction(
         }
     }
 
-    vest_state.serialize(&mut contract_account.data)
+    vest_state.serialize(contract_account.data_as_mut_slice())
 }
 
 #[cfg(test)]
@@ -264,7 +270,7 @@ mod tests {
     fn test_verify_account_unauthorized() {
         // Ensure client can't sneak in with an untrusted date account.
         let date_pubkey = solana_sdk::pubkey::new_rand();
-        let account = Account::new_ref(1, 0, &solana_config_program::id());
+        let account = AccountSharedData::new_ref(1, 0, &solana_config_program::id());
         let keyed_account = KeyedAccount::new(&date_pubkey, false, &account);
 
         let mallory_pubkey = solana_sdk::pubkey::new_rand(); // <-- Attack! Not the expected account.
@@ -278,7 +284,7 @@ mod tests {
     fn test_verify_signed_account_missing_signature() {
         // Ensure client can't sneak in with an unsigned account.
         let date_pubkey = solana_sdk::pubkey::new_rand();
-        let account = Account::new_ref(1, 0, &solana_config_program::id());
+        let account = AccountSharedData::new_ref(1, 0, &solana_config_program::id());
         let keyed_account = KeyedAccount::new(&date_pubkey, false, &account); // <-- Attack! Unsigned transaction.
 
         assert_eq!(
@@ -291,7 +297,7 @@ mod tests {
     fn test_verify_date_account_incorrect_program_id() {
         // Ensure client can't sneak in with a non-Config account.
         let date_pubkey = solana_sdk::pubkey::new_rand();
-        let account = Account::new_ref(1, 0, &id()); // <-- Attack! Pass Vest account where Config account is expected.
+        let account = AccountSharedData::new_ref(1, 0, &id()); // <-- Attack! Pass Vest account where Config account is expected.
         let keyed_account = KeyedAccount::new(&date_pubkey, false, &account);
         assert_eq!(
             verify_date_account(&keyed_account, &date_pubkey).unwrap_err(),
@@ -303,7 +309,7 @@ mod tests {
     fn test_verify_date_account_uninitialized_config() {
         // Ensure no panic when `get_config_data()` returns an error.
         let date_pubkey = solana_sdk::pubkey::new_rand();
-        let account = Account::new_ref(1, 0, &solana_config_program::id()); // <-- Attack! Zero space.
+        let account = AccountSharedData::new_ref(1, 0, &solana_config_program::id()); // <-- Attack! Zero space.
         let keyed_account = KeyedAccount::new(&date_pubkey, false, &account);
         assert_eq!(
             verify_date_account(&keyed_account, &date_pubkey).unwrap_err(),
@@ -315,7 +321,7 @@ mod tests {
     fn test_verify_date_account_invalid_date_config() {
         // Ensure no panic when `deserialize::<DateConfig>()` returns an error.
         let date_pubkey = solana_sdk::pubkey::new_rand();
-        let account = Account::new_ref(1, 1, &solana_config_program::id()); // Attack! 1 byte, enough to sneak by `get_config_data()`, but not DateConfig deserialize.
+        let account = AccountSharedData::new_ref(1, 1, &solana_config_program::id()); // Attack! 1 byte, enough to sneak by `get_config_data()`, but not DateConfig deserialize.
         let keyed_account = KeyedAccount::new(&date_pubkey, false, &account);
         assert_eq!(
             verify_date_account(&keyed_account, &date_pubkey).unwrap_err(),
@@ -327,7 +333,7 @@ mod tests {
     fn test_verify_date_account_deserialize() {
         // Ensure no panic when `deserialize::<DateConfig>()` returns an error.
         let date_pubkey = solana_sdk::pubkey::new_rand();
-        let account = Account::new_ref(1, 1, &solana_config_program::id()); // Attack! 1 byte, enough to sneak by `get_config_data()`, but not DateConfig deserialize.
+        let account = AccountSharedData::new_ref(1, 1, &solana_config_program::id()); // Attack! 1 byte, enough to sneak by `get_config_data()`, but not DateConfig deserialize.
         let keyed_account = KeyedAccount::new(&date_pubkey, false, &account);
         assert_eq!(
             verify_date_account(&keyed_account, &date_pubkey).unwrap_err(),

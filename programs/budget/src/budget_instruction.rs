@@ -47,7 +47,7 @@ fn initialize_account(contract: &Pubkey, expr: BudgetExpr) -> Instruction {
         keys.push(AccountMeta::new(payment.to, false));
     }
     keys.push(AccountMeta::new(*contract, false));
-    Instruction::new(
+    Instruction::new_with_bincode(
         id(),
         &BudgetInstruction::InitializeAccount(Box::new(expr)),
         keys,
@@ -136,7 +136,7 @@ pub fn apply_timestamp(
     if from != to {
         account_metas.push(AccountMeta::new(*to, false));
     }
-    Instruction::new(id(), &BudgetInstruction::ApplyTimestamp(dt), account_metas)
+    Instruction::new_with_bincode(id(), &BudgetInstruction::ApplyTimestamp(dt), account_metas)
 }
 
 pub fn apply_signature(from: &Pubkey, contract: &Pubkey, to: &Pubkey) -> Instruction {
@@ -147,7 +147,7 @@ pub fn apply_signature(from: &Pubkey, contract: &Pubkey, to: &Pubkey) -> Instruc
     if from != to {
         account_metas.push(AccountMeta::new(*to, false));
     }
-    Instruction::new(id(), &BudgetInstruction::ApplySignature, account_metas)
+    Instruction::new_with_bincode(id(), &BudgetInstruction::ApplySignature, account_metas)
 }
 
 /// Apply account data to a contract waiting on an AccountData witness.
@@ -157,7 +157,7 @@ pub fn apply_account_data(witness_pubkey: &Pubkey, contract: &Pubkey, to: &Pubke
         AccountMeta::new(*contract, false),
         AccountMeta::new(*to, false),
     ];
-    Instruction::new(id(), &BudgetInstruction::ApplyAccountData, account_metas)
+    Instruction::new_with_bincode(id(), &BudgetInstruction::ApplyAccountData, account_metas)
 }
 
 #[cfg(test)]

@@ -94,6 +94,7 @@ fn bench_retransmitter(bencher: &mut Bencher) {
         cluster_info,
         packet_receiver,
         &Arc::new(MaxSlots::default()),
+        None,
     );
 
     let mut index = 0;

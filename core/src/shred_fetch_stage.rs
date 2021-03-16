@@ -149,6 +149,7 @@ impl ShredFetchStage {
                     packet_sender.clone(),
                     recycler.clone(),
                     "packet_modifier",
+                    1,
                 )
             })
             .collect();

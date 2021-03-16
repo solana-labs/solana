@@ -86,9 +86,13 @@ pub fn check_account_for_spend_multiple_fees_with_commitment(
             return Err(CliError::InsufficientFundsForSpendAndFee(
                 lamports_to_sol(balance),
                 lamports_to_sol(fee),
+                *account_pubkey,
             ));
         } else {
-            return Err(CliError::InsufficientFundsForFee(lamports_to_sol(fee)));
+            return Err(CliError::InsufficientFundsForFee(
+                lamports_to_sol(fee),
+                *account_pubkey,
+            ));
         }
     }
     Ok(())

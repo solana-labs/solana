@@ -9,9 +9,8 @@ import { BigNumber } from "bignumber.js";
 import { Address } from "components/common/Address";
 import { BalanceDelta } from "components/common/BalanceDelta";
 import { SignatureProps } from "pages/TransactionDetailsPage";
-import { useCluster } from "providers/cluster";
 import { useTransactionDetails } from "providers/transactions";
-import { TokenRegistry } from "tokenRegistry";
+import { useTokenRegistry } from "providers/mints/token-registry";
 
 type TokenBalanceRow = {
   account: PublicKey;
@@ -23,7 +22,7 @@ type TokenBalanceRow = {
 
 export function TokenBalancesCard({ signature }: SignatureProps) {
   const details = useTransactionDetails(signature);
-  const { cluster } = useCluster();
+  const { tokenRegistry } = useTokenRegistry();
 
   if (!details) {
     return null;
@@ -51,7 +50,7 @@ export function TokenBalancesCard({ signature }: SignatureProps) {
 
   const accountRows = rows.map(({ account, delta, balance, mint }) => {
     const key = account.toBase58() + mint;
-    const units = TokenRegistry.get(mint, cluster)?.symbol || "tokens";
+    const units = tokenRegistry.get(mint)?.symbol || "tokens";
 
     return (
       <tr key={key}>
@@ -65,7 +64,7 @@ export function TokenBalancesCard({ signature }: SignatureProps) {
           <BalanceDelta delta={delta} />
         </td>
         <td>
-          {balance.uiAmount} {units}
+          {balance.uiAmountString} {units}
         </td>
       </tr>
     );
@@ -110,8 +109,18 @@ function generateTokenBalanceRows(
     const preBalance = preBalanceMap[accountIndex];
     const account = accounts[accountIndex].pubkey;
 
+    if (!uiTokenAmount.uiAmountString) {
+      // uiAmount deprecation
+      return;
+    }
+
     // case where mint changes
     if (preBalance && preBalance.mint !== mint) {
+      if (!preBalance.uiTokenAmount.uiAmountString) {
+        // uiAmount deprecation
+        return;
+      }
+
       rows.push({
         account: accounts[accountIndex].pubkey,
         accountIndex,
@@ -120,7 +129,7 @@ function generateTokenBalanceRows(
           amount: "0",
           uiAmount: 0,
         },
-        delta: new BigNumber(-preBalance.uiTokenAmount.uiAmount),
+        delta: new BigNumber(-preBalance.uiTokenAmount.uiAmountString),
         mint: preBalance.mint,
       });
 
@@ -128,7 +137,7 @@ function generateTokenBalanceRows(
         account: accounts[accountIndex].pubkey,
         accountIndex,
         balance: uiTokenAmount,
-        delta: new BigNumber(uiTokenAmount.uiAmount),
+        delta: new BigNumber(uiTokenAmount.uiAmountString),
         mint: mint,
       });
       return;
@@ -137,11 +146,16 @@ function generateTokenBalanceRows(
     let delta;
 
     if (preBalance) {
-      delta = new BigNumber(uiTokenAmount.uiAmount).minus(
-        preBalance.uiTokenAmount.uiAmount
+      if (!preBalance.uiTokenAmount.uiAmountString) {
+        // uiAmount deprecation
+        return;
+      }
+
+      delta = new BigNumber(uiTokenAmount.uiAmountString).minus(
+        preBalance.uiTokenAmount.uiAmountString
       );
     } else {
-      delta = new BigNumber(uiTokenAmount.uiAmount);
+      delta = new BigNumber(uiTokenAmount.uiAmountString);
     }
 
     rows.push({

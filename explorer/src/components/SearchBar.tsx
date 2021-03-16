@@ -8,16 +8,18 @@ import {
   PROGRAM_NAME_BY_ID,
   SYSVAR_IDS,
   LoaderName,
-  SEARCHABLE_PROGRAMS,
+  programLabel,
 } from "utils/tx";
-import { TokenRegistry } from "tokenRegistry";
 import { Cluster, useCluster } from "providers/cluster";
+import { useTokenRegistry } from "providers/mints/token-registry";
+import { TokenInfoMap } from "@solana/spl-token-registry";
 
 export function SearchBar() {
   const [search, setSearch] = React.useState("");
   const selectRef = React.useRef<StateManager<any> | null>(null);
   const history = useHistory();
   const location = useLocation();
+  const { tokenRegistry } = useTokenRegistry();
   const { cluster } = useCluster();
 
   const onChange = (
@@ -41,7 +43,7 @@ export function SearchBar() {
         <div className="col">
           <Select
             ref={(ref) => (selectRef.current = ref)}
-            options={buildOptions(search, cluster)}
+            options={buildOptions(search, cluster, tokenRegistry)}
             noOptionsMessage={() => "No Results"}
             placeholder="Search for blocks, accounts, transactions, programs, and tokens"
             value={resetValue}
@@ -64,13 +66,14 @@ export function SearchBar() {
   );
 }
 
-function buildProgramOptions(search: string) {
+function buildProgramOptions(search: string, cluster: Cluster) {
   const matchedPrograms = Object.entries(PROGRAM_NAME_BY_ID).filter(
-    ([address, name]) => {
+    ([address]) => {
+      const name = programLabel(address, cluster);
+      if (!name) return false;
       return (
-        SEARCHABLE_PROGRAMS.includes(name) &&
-        (name.toLowerCase().includes(search.toLowerCase()) ||
-          address.includes(search))
+        name.toLowerCase().includes(search.toLowerCase()) ||
+        address.includes(search)
       );
     }
   );
@@ -138,8 +141,12 @@ function buildSysvarOptions(search: string) {
   }
 }
 
-function buildTokenOptions(search: string, cluster: Cluster) {
-  const matchedTokens = Object.entries(TokenRegistry.all(cluster)).filter(
+function buildTokenOptions(
+  search: string,
+  cluster: Cluster,
+  tokenRegistry: TokenInfoMap
+) {
+  const matchedTokens = Array.from(tokenRegistry.entries()).filter(
     ([address, details]) => {
       const searchLower = search.toLowerCase();
       return (
@@ -162,13 +169,17 @@ function buildTokenOptions(search: string, cluster: Cluster) {
   }
 }
 
-function buildOptions(rawSearch: string, cluster: Cluster) {
+function buildOptions(
+  rawSearch: string,
+  cluster: Cluster,
+  tokenRegistry: TokenInfoMap
+) {
   const search = rawSearch.trim();
   if (search.length === 0) return [];
 
   const options = [];
 
-  const programOptions = buildProgramOptions(search);
+  const programOptions = buildProgramOptions(search, cluster);
   if (programOptions) {
     options.push(programOptions);
   }
@@ -183,7 +194,7 @@ function buildOptions(rawSearch: string, cluster: Cluster) {
     options.push(sysvarOptions);
   }
 
-  const tokenOptions = buildTokenOptions(search, cluster);
+  const tokenOptions = buildTokenOptions(search, cluster, tokenRegistry);
   if (tokenOptions) {
     options.push(tokenOptions);
   }

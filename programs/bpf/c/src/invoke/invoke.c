@@ -17,7 +17,6 @@ static const uint8_t TEST_INSTRUCTION_META_TOO_LARGE = 10;
 static const uint8_t TEST_RETURN_ERROR = 11;
 static const uint8_t TEST_PRIVILEGE_DEESCALATION_ESCALATION_SIGNER = 12;
 static const uint8_t TEST_PRIVILEGE_DEESCALATION_ESCALATION_WRITABLE = 13;
-static const uint8_t TEST_WRITE_DEESCALATION = 14;
 
 static const int MINT_INDEX = 0;
 static const int ARGUMENT_INDEX = 1;
@@ -272,6 +271,24 @@ extern uint64_t entrypoint(const uint8_t *input) {
         sol_assert(accounts[ARGUMENT_INDEX].data[i] == 0);
       }
     }
+    sol_log("Test writable deescalation");
+    {
+      uint8_t buffer[10];
+      for (int i = 0; i < 10; i++) {
+        buffer[i] = accounts[INVOKED_ARGUMENT_INDEX].data[i];
+      }
+      SolAccountMeta arguments[] = {
+          {accounts[INVOKED_ARGUMENT_INDEX].key, false, false}};
+      uint8_t data[] = {WRITE_ACCOUNT, 10};
+      const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
+                                          arguments, SOL_ARRAY_SIZE(arguments),
+                                          data, SOL_ARRAY_SIZE(data)};
+      sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts));
+
+      for (int i = 0; i < 10; i++) {
+        sol_assert(buffer[i] == accounts[INVOKED_ARGUMENT_INDEX].data[i]);
+      }
+    }
     break;
   }
   case TEST_PRIVILEGE_ESCALATION_SIGNER: {
@@ -474,7 +491,6 @@ extern uint64_t entrypoint(const uint8_t *input) {
     sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts));
     break;
   }
-
   case TEST_PRIVILEGE_DEESCALATION_ESCALATION_SIGNER: {
     sol_log("Test privilege deescalation escalation signer");
     sol_assert(true == accounts[INVOKED_ARGUMENT_INDEX].is_signer);
@@ -503,19 +519,6 @@ extern uint64_t entrypoint(const uint8_t *input) {
                                         data, SOL_ARRAY_SIZE(data)};
     sol_assert(SUCCESS ==
                sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts)));
-    break;
-  }
-
-  case TEST_WRITE_DEESCALATION: {
-    sol_log("Test writable deescalation");
-
-    SolAccountMeta arguments[] = {
-        {accounts[INVOKED_ARGUMENT_INDEX].key, false, false}};
-    uint8_t data[] = {WRITE_ACCOUNT, 10};
-    const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
-                                        arguments, SOL_ARRAY_SIZE(arguments),
-                                        data, SOL_ARRAY_SIZE(data)};
-    sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts));
     break;
   }
   default:

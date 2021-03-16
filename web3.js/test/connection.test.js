@@ -258,19 +258,6 @@ describe('Connection', () => {
     }
   });
 
-  if (!process.env.TEST_LIVE) {
-    it('validatorExit', async () => {
-      await mockRpcResponse({
-        method: 'validatorExit',
-        params: [],
-        value: false,
-      });
-
-      const result = await connection.validatorExit();
-      expect(result).to.eq(false);
-    });
-  }
-
   it('get balance', async () => {
     const account = new Account();
 
@@ -1542,6 +1529,7 @@ describe('Connection', () => {
         lamports: LAMPORTS_PER_SOL,
         data: ['', 'base64'],
         executable: false,
+        rentEpoch: 20,
       },
       withContext: true,
     });
@@ -1569,6 +1557,7 @@ describe('Connection', () => {
         lamports: LAMPORTS_PER_SOL,
         data: ['', 'base64'],
         executable: false,
+        rentEpoch: 20,
       },
       withContext: true,
     });
@@ -1903,10 +1892,7 @@ describe('Connection', () => {
       const subscriptionId = connection.onProgramAccountChange(
         SystemProgram.programId,
         (keyedAccountInfo: KeyedAccountInfo) => {
-          // FIX: accountId should be `PublicKey` not `string`
-          if (
-            keyedAccountInfo.accountId === programAccount.publicKey.toBase58()
-          ) {
+          if (keyedAccountInfo.accountId.equals(programAccount.publicKey)) {
             expect(keyedAccountInfo.accountInfo.lamports).to.eq(balanceNeeded);
             expect(
               keyedAccountInfo.accountInfo.owner.equals(

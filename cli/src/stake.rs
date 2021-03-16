@@ -1747,9 +1747,10 @@ pub fn process_show_stake_history(
     use_lamports_unit: bool,
 ) -> ProcessResult {
     let stake_history_account = rpc_client.get_account(&stake_history::id())?;
-    let stake_history = from_account::<StakeHistory>(&stake_history_account).ok_or_else(|| {
-        CliError::RpcRequestError("Failed to deserialize stake history".to_string())
-    })?;
+    let stake_history =
+        from_account::<StakeHistory, _>(&stake_history_account).ok_or_else(|| {
+            CliError::RpcRequestError("Failed to deserialize stake history".to_string())
+        })?;
 
     let mut entries: Vec<CliStakeHistoryEntry> = vec![];
     for entry in stake_history.deref() {

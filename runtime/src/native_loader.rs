@@ -6,6 +6,7 @@ use libloading::os::windows::*;
 use log::*;
 use num_derive::{FromPrimitive, ToPrimitive};
 use solana_sdk::{
+    account::ReadableAccount,
     decode_error::DecodeError,
     entrypoint_native::ProgramEntrypoint,
     instruction::InstructionError,
@@ -150,8 +151,8 @@ impl NativeLoader {
         }
 
         let params = keyed_accounts_iter.as_slice();
-        let name_vec = &program.try_account_ref()?.data;
-        let name = match str::from_utf8(name_vec) {
+        let account = program.try_account_ref()?;
+        let name = match str::from_utf8(account.data()) {
             Ok(v) => v,
             Err(e) => {
                 error!("Invalid UTF-8 sequence: {}", e);

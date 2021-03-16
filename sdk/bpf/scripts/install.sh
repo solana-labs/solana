@@ -130,7 +130,7 @@ if [[ ! -e criterion-$version.md || ! -e criterion ]]; then
 fi
 
 # Install Rust-BPF
-version=v1.0
+version=v1.1
 if [[ ! -e bpf-tools-$version.md || ! -e bpf-tools ]]; then
   (
     set -e
@@ -142,13 +142,6 @@ if [[ ! -e bpf-tools-$version.md || ! -e bpf-tools ]]; then
            solana-bpf-tools-$machine.tar.bz2 \
            bpf-tools"
     get $version bpf-tools "$job"
-
-    set -ex
-    ./bpf-tools/rust/bin/rustc --print sysroot
-    set +e
-    rustup toolchain uninstall bpf
-    set -e
-    rustup toolchain link bpf bpf-tools/rust
   )
   exitcode=$?
   if [[ $exitcode -ne 0 ]]; then
@@ -156,9 +149,15 @@ if [[ ! -e bpf-tools-$version.md || ! -e bpf-tools ]]; then
   fi
   touch bpf-tools-$version.md
 fi
+set -ex
+./bpf-tools/rust/bin/rustc --print sysroot
+set +e
+rustup toolchain uninstall bpf
+set -e
+rustup toolchain link bpf bpf-tools/rust
 
 # Install Rust-BPF Sysroot sources
-version=v1.0
+version=v1.1
 if [[ ! -e rust-bpf-sysroot-$version.md || ! -e rust-bpf-sysroot ]]; then
   (
     set -e

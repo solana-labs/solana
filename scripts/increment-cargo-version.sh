@@ -23,6 +23,7 @@ ignores=(
   .cargo
   target
   web3.js/examples
+  node_modules
 )
 
 not_paths=()
@@ -30,10 +31,10 @@ for ignore in "${ignores[@]}"; do
   not_paths+=(-not -path "*/$ignore/*")
 done
 
-# shellcheck disable=2207,SC2068 # Don't want a positional arg if `not-paths` is empty
-Cargo_tomls=($(find . -mindepth 2 -name Cargo.toml ${not_paths[@]}))
 # shellcheck disable=2207
-markdownFiles=($(find . -name "*.md"))
+Cargo_tomls=($(find . -mindepth 2 -name Cargo.toml "${not_paths[@]}"))
+# shellcheck disable=2207
+markdownFiles=($(find . -name "*.md" "${not_paths[@]}"))
 
 # Collect the name of all the internal crates
 crates=()
@@ -105,6 +106,17 @@ check)
   ;;
 esac
 
+# Version bumps should occur in their own commit. Disallow bumping version
+# in dirty working trees. Gate after arg parsing to prevent breaking the
+# `check` subcommand.
+(
+  set +e
+  if ! git diff --exit-code; then
+    echo -e "\nError: Working tree is dirty. Commit or discard changes before bumping version." 1>&2
+    exit 1
+  fi
+)
+
 newVersion="$MAJOR.$MINOR.$PATCH$SPECIAL"
 
 # Update all the Cargo.toml files
@@ -120,7 +132,7 @@ for Cargo_toml in "${Cargo_tomls[@]}"; do
     (
       set -x
       sed -i "$Cargo_toml" -e "
-        s/^$crate = { *path *= *\"\([^\"]*\)\" *, *version *= *\"[^\"]*\"\(.*\)} *\$/$crate = \{ path = \"\1\", version = \"$newVersion\"\2\}/
+        s/^$crate = { *path *= *\"\([^\"]*\)\" *, *version *= *\"[^\"]*\"\(.*\)} *\$/$crate = \{ path = \"\1\", version = \"=$newVersion\"\2\}/
       "
     )
   done
@@ -134,6 +146,9 @@ for file in "${markdownFiles[@]}"; do
     sed -i "$file" -e "s/$currentVersion/$newVersion/g"
   )
 done
+
+# Update cargo lock files
+scripts/cargo-for-all-lock-files.sh tree
 
 echo "$currentVersion -> $newVersion"
 

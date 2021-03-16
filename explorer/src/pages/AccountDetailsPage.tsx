@@ -19,7 +19,6 @@ import { OwnedTokensCard } from "components/account/OwnedTokensCard";
 import { TransactionHistoryCard } from "components/account/TransactionHistoryCard";
 import { TokenHistoryCard } from "components/account/TokenHistoryCard";
 import { TokenLargestAccountsCard } from "components/account/TokenLargestAccountsCard";
-import { TokenRegistry } from "tokenRegistry";
 import { VoteAccountSection } from "components/account/VoteAccountSection";
 import { NonceAccountSection } from "components/account/NonceAccountSection";
 import { VotesCard } from "components/account/VotesCard";
@@ -29,7 +28,8 @@ import { StakeHistoryCard } from "components/account/StakeHistoryCard";
 import { BlockhashesCard } from "components/account/BlockhashesCard";
 import { ConfigAccountSection } from "components/account/ConfigAccountSection";
 import { useFlaggedAccounts } from "providers/accounts/flagged-accounts";
-import { UpgradeableProgramSection } from "components/account/UpgradeableProgramSection";
+import { UpgradeableLoaderAccountSection } from "components/account/UpgradeableLoaderAccountSection";
+import { useTokenRegistry } from "providers/mints/token-registry";
 
 const TABS_LOOKUP: { [id: string]: Tab } = {
   "spl-token:mint": {
@@ -92,16 +92,16 @@ export function AccountDetailsPage({ address, tab }: Props) {
 }
 
 export function AccountHeader({ address }: { address: string }) {
-  const { cluster } = useCluster();
-  const tokenDetails = TokenRegistry.get(address, cluster);
+  const { tokenRegistry } = useTokenRegistry();
+  const tokenDetails = tokenRegistry.get(address);
   if (tokenDetails) {
     return (
       <div className="row align-items-end">
-        {tokenDetails.logo && (
+        {tokenDetails.logoURI && (
           <div className="col-auto">
             <div className="avatar avatar-lg header-avatar-top">
               <img
-                src={tokenDetails.logo}
+                src={tokenDetails.logoURI}
                 alt="token logo"
                 className="avatar-img rounded-circle border border-4 border-body"
               />
@@ -177,9 +177,9 @@ function InfoSection({ account }: { account: Account }) {
 
   if (data && data.program === "bpf-upgradeable-loader") {
     return (
-      <UpgradeableProgramSection
+      <UpgradeableLoaderAccountSection
         account={account}
-        programAccount={data.programAccount}
+        parsedData={data.parsed}
         programData={data.programData}
       />
     );

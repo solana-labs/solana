@@ -32,7 +32,7 @@ dump_mangled=$dump.mangled
   set -ex
   ls -la "$so" > "$dump_mangled"
   "$bpf_sdk"/dependencies/bpf-tools/llvm/bin/llvm-readelf -aW "$so" >>"$dump_mangled"
-  "$OBJDUMP" -print-imm-hex --source --disassemble "$so" >> "$dump_mangled"
+  "$OBJDUMP" --print-imm-hex --source --disassemble "$so" >> "$dump_mangled"
   sed s/://g < "$dump_mangled" | rustfilt > "$dump"
 )
 rm -f "$dump_mangled"

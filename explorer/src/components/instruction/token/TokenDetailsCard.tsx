@@ -1,5 +1,5 @@
 import React from "react";
-import { coerce } from "superstruct";
+import { create } from "superstruct";
 import {
   SignatureResult,
   ParsedTransaction,
@@ -24,8 +24,7 @@ import {
 } from "providers/accounts";
 import { normalizeTokenAmount } from "utils";
 import { reportError } from "utils/sentry";
-import { useCluster } from "providers/cluster";
-import { TokenRegistry } from "tokenRegistry";
+import { useTokenRegistry } from "providers/mints/token-registry";
 
 type DetailsProps = {
   tx: ParsedTransaction;
@@ -38,12 +37,12 @@ type DetailsProps = {
 
 export function TokenDetailsCard(props: DetailsProps) {
   try {
-    const parsed = coerce(props.ix.parsed, ParsedInfo);
+    const parsed = create(props.ix.parsed, ParsedInfo);
     const { type: rawType, info } = parsed;
-    const type = coerce(rawType, TokenInstructionType);
+    const type = create(rawType, TokenInstructionType);
     const title = `Token: ${IX_TITLES[type]}`;
-    const coerced = coerce(info, IX_STRUCTS[type] as any);
-    return <TokenInstruction title={title} info={coerced} {...props} />;
+    const created = create(info, IX_STRUCTS[type] as any);
+    return <TokenInstruction title={title} info={created} {...props} />;
   } catch (err) {
     reportError(err, {
       signature: props.tx.signatures[0],
@@ -92,7 +91,7 @@ function TokenInstruction(props: InfoProps) {
   const tokenInfo = useTokenAccountInfo(tokenAddress);
   const mintAddress = infoMintAddress || tokenInfo?.mint.toBase58();
   const mintInfo = useMintAccountInfo(mintAddress);
-  const { cluster } = useCluster();
+  const { tokenRegistry } = useTokenRegistry();
   const fetchAccountInfo = useFetchAccountInfo();
 
   React.useEffect(() => {
@@ -116,9 +115,9 @@ function TokenInstruction(props: InfoProps) {
   }
 
   if (mintAddress) {
-    const tokenDetails = TokenRegistry.get(mintAddress, cluster);
+    const tokenDetails = tokenRegistry.get(mintAddress);
 
-    if (tokenDetails && "symbol" in tokenDetails) {
+    if (tokenDetails) {
       tokenSymbol = tokenDetails.symbol;
     }
 

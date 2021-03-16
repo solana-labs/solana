@@ -13,7 +13,7 @@ fn bench_to_from_account(b: &mut Bencher) {
 
     b.iter(|| {
         let account = create_account(&slot_history, 0);
-        slot_history = from_account::<SlotHistory>(&account).unwrap();
+        slot_history = from_account::<SlotHistory, _>(&account).unwrap();
     });
 }
 

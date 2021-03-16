@@ -18,6 +18,7 @@ use crate::{
     rewards_recorder_service::RewardsRecorderSender,
     rpc_subscriptions::RpcSubscriptions,
 };
+use solana_client::rpc_response::SlotUpdate;
 use solana_ledger::{
     block_error::BlockError,
     blockstore::Blockstore,
@@ -331,6 +332,7 @@ impl ReplayStage {
                         &replay_vote_sender,
                         &bank_notification_sender,
                         &rewards_recorder_sender,
+                        &subscriptions,
                     );
                     replay_active_banks_time.stop();
                     Self::report_memory(&allocated, "replay_active_banks", start);
@@ -997,6 +999,7 @@ impl ReplayStage {
         transaction_status_sender: Option<TransactionStatusSender>,
         replay_vote_sender: &ReplayVoteSender,
         verify_recyclers: &VerifyRecyclers,
+        subscriptions: &Arc<RpcSubscriptions>,
     ) -> result::Result<usize, BlockstoreProcessorError> {
         let tx_count_before = bank_progress.replay_progress.num_txs;
         let confirm_result = blockstore_processor::confirm_slot(
@@ -1019,12 +1022,28 @@ impl ReplayStage {
             // that comes after the root, so we should not see any
             // errors related to the slot being purged
             let slot = bank.slot();
-            warn!("Fatal replay error in slot: {}, err: {:?}", slot, err);
-            let is_serious = matches!(
+
+            // Block producer can abandon the block if it detects a better one
+            // while producing. Somewhat common and expected in a
+            // network with variable network/machine configuration.
+            let is_serious = !matches!(
                 err,
-                BlockstoreProcessorError::InvalidBlock(BlockError::InvalidTickCount)
+                BlockstoreProcessorError::InvalidBlock(BlockError::TooFewTicks)
             );
-            Self::mark_dead_slot(blockstore, bank_progress, slot, &err, is_serious);
+            if is_serious {
+                warn!("Fatal replay error in slot: {}, err: {:?}", slot, err);
+            } else {
+                info!("Slot had too few ticks: {}", slot);
+            }
+            Self::mark_dead_slot(
+                blockstore,
+                bank_progress,
+                slot,
+                &err,
+                is_serious,
+                subscriptions,
+            );
+
             err
         })?;
 
@@ -1037,6 +1056,7 @@ impl ReplayStage {
         slot: Slot,
         err: &BlockstoreProcessorError,
         is_serious: bool,
+        subscriptions: &Arc<RpcSubscriptions>,
     ) {
         if is_serious {
             datapoint_error!(
@@ -1055,6 +1075,11 @@ impl ReplayStage {
         blockstore
             .set_dead_slot(slot)
             .expect("Failed to mark slot as dead in blockstore");
+        subscriptions.notify_slot_update(SlotUpdate::Dead {
+            slot,
+            err: format!("error: {:?}", err),
+            timestamp: timestamp(),
+        });
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1305,6 +1330,7 @@ impl ReplayStage {
         replay_vote_sender: &ReplayVoteSender,
         bank_notification_sender: &Option<BankNotificationSender>,
         rewards_recorder_sender: &Option<RewardsRecorderSender>,
+        subscriptions: &Arc<RpcSubscriptions>,
     ) -> bool {
         let mut did_complete_bank = false;
         let mut tx_count = 0;
@@ -1352,6 +1378,7 @@ impl ReplayStage {
                     transaction_status_sender.clone(),
                     replay_vote_sender,
                     verify_recyclers,
+                    subscriptions,
                 );
                 match replay_result {
                     Ok(replay_tx_count) => tx_count += replay_tx_count,
@@ -1392,6 +1419,7 @@ impl ReplayStage {
                         bank.slot(),
                         &BlockstoreProcessorError::InvalidBlock(BlockError::DuplicateBlock),
                         true,
+                        subscriptions,
                     );
                     warn!(
                         "{} duplicate shreds detected, not freezing bank {}",
@@ -2397,6 +2425,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_dead_fork_invalid_slot_tick_count() {
+        solana_logger::setup();
         // Too many ticks per slot
         let res = check_dead_fork(|_keypair, bank| {
             let blockhash = bank.last_blockhash();
@@ -2412,7 +2441,7 @@ pub(crate) mod tests {
         });
 
         if let Err(BlockstoreProcessorError::InvalidBlock(block_error)) = res {
-            assert_eq!(block_error, BlockError::InvalidTickCount);
+            assert_eq!(block_error, BlockError::TooManyTicks);
         } else {
             panic!();
         }
@@ -2432,7 +2461,7 @@ pub(crate) mod tests {
         });
 
         if let Err(BlockstoreProcessorError::InvalidBlock(block_error)) = res {
-            assert_eq!(block_error, BlockError::InvalidTickCount);
+            assert_eq!(block_error, BlockError::TooFewTicks);
         } else {
             panic!();
         }
@@ -2532,7 +2561,8 @@ pub(crate) mod tests {
                 ..
             } = create_genesis_config(1000);
             genesis_config.poh_config.hashes_per_tick = Some(2);
-            let bank0 = Arc::new(Bank::new(&genesis_config));
+            let bank_forks = BankForks::new(Bank::new(&genesis_config));
+            let bank0 = bank_forks.working_bank();
             let mut progress = ProgressMap::default();
             let last_blockhash = bank0.last_blockhash();
             let mut bank0_progress = progress
@@ -2540,6 +2570,9 @@ pub(crate) mod tests {
                 .or_insert_with(|| ForkProgress::new(last_blockhash, None, None, 0, 0));
             let shreds = shred_to_insert(&mint_keypair, bank0.clone());
             blockstore.insert_shreds(shreds, None, false).unwrap();
+            let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
+            let bank_forks = Arc::new(RwLock::new(bank_forks));
+            let exit = Arc::new(AtomicBool::new(false));
             let res = ReplayStage::replay_blockstore_into_bank(
                 &bank0,
                 &blockstore,
@@ -2547,6 +2580,12 @@ pub(crate) mod tests {
                 None,
                 &replay_vote_sender,
                 &&VerifyRecyclers::default(),
+                &Arc::new(RpcSubscriptions::new(
+                    &exit,
+                    bank_forks.clone(),
+                    block_commitment_cache,
+                    OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
+                )),
             );
 
             // Check that the erroring bank was marked as dead in the progress map

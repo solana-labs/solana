@@ -123,6 +123,13 @@ impl RpcClient {
         Self::new(get_rpc_request_str(addr, false))
     }
 
+    pub fn new_socket_with_commitment(
+        addr: SocketAddr,
+        commitment_config: CommitmentConfig,
+    ) -> Self {
+        Self::new_with_commitment(get_rpc_request_str(addr, false), commitment_config)
+    }
+
     pub fn new_socket_with_timeout(addr: SocketAddr, timeout: Duration) -> Self {
         let url = get_rpc_request_str(addr, false);
         Self::new_with_timeout(url, timeout)
@@ -635,6 +642,13 @@ impl RpcClient {
 
     pub fn get_epoch_schedule(&self) -> ClientResult<EpochSchedule> {
         self.send(RpcRequest::GetEpochSchedule, Value::Null)
+    }
+
+    pub fn get_recent_performance_samples(
+        &self,
+        limit: Option<usize>,
+    ) -> ClientResult<Vec<RpcPerfSample>> {
+        self.send(RpcRequest::GetRecentPerformanceSamples, json!([limit]))
     }
 
     pub fn get_identity(&self) -> ClientResult<Pubkey> {
@@ -1496,10 +1510,6 @@ impl RpcClient {
                 );
             }
         }
-    }
-
-    pub fn validator_exit(&self) -> ClientResult<bool> {
-        self.send(RpcRequest::ValidatorExit, Value::Null)
     }
 
     pub fn send<T>(&self, request: RpcRequest, params: Value) -> ClientResult<T>

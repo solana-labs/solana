@@ -172,25 +172,52 @@ pub fn real_number_string(amount: u64, decimals: u8) -> StringDecimals {
 }
 
 pub fn real_number_string_trimmed(amount: u64, decimals: u8) -> StringDecimals {
-    let s = real_number_string(amount, decimals);
-    let zeros_trimmed = s.trim_end_matches('0');
-    let decimal_trimmed = zeros_trimmed.trim_end_matches('.');
-    decimal_trimmed.to_string()
+    let mut s = real_number_string(amount, decimals);
+    if decimals > 0 {
+        let zeros_trimmed = s.trim_end_matches('0');
+        s = zeros_trimmed.trim_end_matches('.').to_string();
+    }
+    s
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct UiTokenAmount {
-    pub ui_amount: StringDecimals,
+    pub ui_amount: Option<f64>,
     pub decimals: u8,
     pub amount: StringAmount,
+    pub ui_amount_string: StringDecimals,
+}
+
+impl UiTokenAmount {
+    pub fn real_number_string(&self) -> String {
+        real_number_string(
+            u64::from_str(&self.amount).unwrap_or_default(),
+            self.decimals as u8,
+        )
+    }
+
+    pub fn real_number_string_trimmed(&self) -> String {
+        if !self.ui_amount_string.is_empty() {
+            self.ui_amount_string.clone()
+        } else {
+            real_number_string_trimmed(
+                u64::from_str(&self.amount).unwrap_or_default(),
+                self.decimals as u8,
+            )
+        }
+    }
 }
 
 pub fn token_amount_to_ui_amount(amount: u64, decimals: u8) -> UiTokenAmount {
+    let amount_decimals = 10_usize
+        .checked_pow(decimals as u32)
+        .map(|dividend| amount as f64 / dividend as f64);
     UiTokenAmount {
-        ui_amount: real_number_string_trimmed(amount, decimals),
+        ui_amount: amount_decimals,
         decimals,
         amount: amount.to_string(),
+        ui_amount_string: real_number_string_trimmed(amount, decimals),
     }
 }
 
@@ -246,9 +273,10 @@ mod test {
                 mint: mint_pubkey.to_string(),
                 owner: owner_pubkey.to_string(),
                 token_amount: UiTokenAmount {
-                    ui_amount: "0.42".to_string(),
+                    ui_amount: Some(0.42),
                     decimals: 2,
-                    amount: "42".to_string()
+                    amount: "42".to_string(),
+                    ui_amount_string: "0.42".to_string()
                 },
                 delegate: None,
                 state: UiAccountState::Initialized,
@@ -332,25 +360,43 @@ mod test {
         assert_eq!(&real_number_string(1, 0), "1");
         assert_eq!(&real_number_string_trimmed(1, 0), "1");
         let token_amount = token_amount_to_ui_amount(1, 0);
-        assert_eq!(token_amount.ui_amount, real_number_string_trimmed(1, 0));
+        assert_eq!(
+            token_amount.ui_amount_string,
+            real_number_string_trimmed(1, 0)
+        );
+        assert_eq!(token_amount.ui_amount, Some(1.0));
+        assert_eq!(&real_number_string(10, 0), "10");
+        assert_eq!(&real_number_string_trimmed(10, 0), "10");
+        let token_amount = token_amount_to_ui_amount(10, 0);
+        assert_eq!(
+            token_amount.ui_amount_string,
+            real_number_string_trimmed(10, 0)
+        );
+        assert_eq!(token_amount.ui_amount, Some(10.0));
         assert_eq!(&real_number_string(1, 9), "0.000000001");
         assert_eq!(&real_number_string_trimmed(1, 9), "0.000000001");
         let token_amount = token_amount_to_ui_amount(1, 9);
-        assert_eq!(token_amount.ui_amount, real_number_string_trimmed(1, 9));
+        assert_eq!(
+            token_amount.ui_amount_string,
+            real_number_string_trimmed(1, 9)
+        );
+        assert_eq!(token_amount.ui_amount, Some(0.000000001));
         assert_eq!(&real_number_string(1_000_000_000, 9), "1.000000000");
         assert_eq!(&real_number_string_trimmed(1_000_000_000, 9), "1");
         let token_amount = token_amount_to_ui_amount(1_000_000_000, 9);
         assert_eq!(
-            token_amount.ui_amount,
+            token_amount.ui_amount_string,
             real_number_string_trimmed(1_000_000_000, 9)
         );
+        assert_eq!(token_amount.ui_amount, Some(1.0));
         assert_eq!(&real_number_string(1_234_567_890, 3), "1234567.890");
         assert_eq!(&real_number_string_trimmed(1_234_567_890, 3), "1234567.89");
         let token_amount = token_amount_to_ui_amount(1_234_567_890, 3);
         assert_eq!(
-            token_amount.ui_amount,
+            token_amount.ui_amount_string,
             real_number_string_trimmed(1_234_567_890, 3)
         );
+        assert_eq!(token_amount.ui_amount, Some(1234567.89));
         assert_eq!(
             &real_number_string(1_234_567_890, 25),
             "0.0000000000000001234567890"
@@ -361,8 +407,37 @@ mod test {
         );
         let token_amount = token_amount_to_ui_amount(1_234_567_890, 20);
         assert_eq!(
-            token_amount.ui_amount,
+            token_amount.ui_amount_string,
             real_number_string_trimmed(1_234_567_890, 20)
         );
+        assert_eq!(token_amount.ui_amount, None);
+    }
+
+    #[test]
+    fn test_ui_token_amount_real_string_zero() {
+        assert_eq!(&real_number_string(0, 0), "0");
+        assert_eq!(&real_number_string_trimmed(0, 0), "0");
+        let token_amount = token_amount_to_ui_amount(0, 0);
+        assert_eq!(
+            token_amount.ui_amount_string,
+            real_number_string_trimmed(0, 0)
+        );
+        assert_eq!(token_amount.ui_amount, Some(0.0));
+        assert_eq!(&real_number_string(0, 9), "0.000000000");
+        assert_eq!(&real_number_string_trimmed(0, 9), "0");
+        let token_amount = token_amount_to_ui_amount(0, 9);
+        assert_eq!(
+            token_amount.ui_amount_string,
+            real_number_string_trimmed(0, 9)
+        );
+        assert_eq!(token_amount.ui_amount, Some(0.0));
+        assert_eq!(&real_number_string(0, 25), "0.0000000000000000000000000");
+        assert_eq!(&real_number_string_trimmed(0, 25), "0");
+        let token_amount = token_amount_to_ui_amount(0, 20);
+        assert_eq!(
+            token_amount.ui_amount_string,
+            real_number_string_trimmed(0, 20)
+        );
+        assert_eq!(token_amount.ui_amount, None);
     }
 }

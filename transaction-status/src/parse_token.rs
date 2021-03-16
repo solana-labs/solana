@@ -888,9 +888,10 @@ mod test {
                    "mint": keys[3].to_string(),
                    "authority": keys[0].to_string(),
                    "tokenAmount": {
-                       "uiAmount": "0.42",
+                       "uiAmount": 0.42,
                        "decimals": 2,
-                       "amount": "42"
+                       "amount": "42",
+                       "uiAmountString": "0.42",
                    }
                 })
             }
@@ -920,9 +921,10 @@ mod test {
                    "multisigAuthority": keys[5].to_string(),
                    "signers": keys[0..2].iter().map(|key| key.to_string()).collect::<Vec<String>>(),
                    "tokenAmount": {
-                       "uiAmount": "0.42",
+                       "uiAmount": 0.42,
                        "decimals": 2,
-                       "amount": "42"
+                       "amount": "42",
+                       "uiAmountString": "0.42",
                    }
                 })
             }
@@ -952,9 +954,10 @@ mod test {
                    "delegate": keys[3].to_string(),
                    "owner": keys[0].to_string(),
                    "tokenAmount": {
-                       "uiAmount": "0.42",
+                       "uiAmount": 0.42,
                        "decimals": 2,
-                       "amount": "42"
+                       "amount": "42",
+                       "uiAmountString": "0.42",
                    }
                 })
             }
@@ -984,9 +987,10 @@ mod test {
                     "multisigOwner": keys[5].to_string(),
                     "signers": keys[0..2].iter().map(|key| key.to_string()).collect::<Vec<String>>(),
                     "tokenAmount": {
-                        "uiAmount": "0.42",
+                        "uiAmount": 0.42,
                         "decimals": 2,
-                        "amount": "42"
+                        "amount": "42",
+                        "uiAmountString": "0.42",
                     }
                 })
             }
@@ -1014,9 +1018,10 @@ mod test {
                    "account": keys[2].to_string(),
                    "mintAuthority": keys[0].to_string(),
                    "tokenAmount": {
-                       "uiAmount": "0.42",
+                       "uiAmount": 0.42,
                        "decimals": 2,
-                       "amount": "42"
+                       "amount": "42",
+                       "uiAmountString": "0.42",
                    }
                 })
             }
@@ -1044,9 +1049,10 @@ mod test {
                    "mint": keys[2].to_string(),
                    "authority": keys[0].to_string(),
                    "tokenAmount": {
-                       "uiAmount": "0.42",
+                       "uiAmount": 0.42,
                        "decimals": 2,
-                       "amount": "42"
+                       "amount": "42",
+                       "uiAmountString": "0.42",
                    }
                 })
             }

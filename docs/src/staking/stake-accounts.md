@@ -41,7 +41,7 @@ The *stake authority* is used to sign transactions for the following operations:
  - Deactivating the stake delegation
  - Splitting the stake account, creating a new stake account with a portion of the
  funds in the first account
- - Merging two undelegated stake accounts into one
+ - Merging two stake accounts into one
  - Setting a new stake authority
 
 The *withdraw authority* signs transactions for the following:
@@ -76,8 +76,21 @@ with token balances of your choosing.
 The same stake and withdraw authorities can be assigned to multiple
 stake accounts.
 
-Two stake accounts that are not delegated and that have the same authorities
-and lockup can be merged into a single resulting stake account.
+#### Merging stake accounts
+Two stake accounts that have the same authorities and lockup can be merged into
+a single resulting stake account. A merge is possible between two stakes in the
+following states with no additional conditions:
+
+* two deactivated stakes
+* an inactive stake into an activating stake during its activation epoch
+
+For the following cases, the voter pubkey and vote credits observed must match:
+
+* two activated stakes
+* two activating accounts that share an activation epoch, during the activation epoch
+
+All other combinations of stake states will fail to merge, including all "transient"
+states, where a stake is activating or deactivating with a non-zero effective stake.
 
 #### Delegation Warmup and Cooldown
 When a stake account is delegated, or a delegation is deactivated, the operation

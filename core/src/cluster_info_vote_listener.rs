@@ -44,8 +44,8 @@ use std::{
 };
 
 // Map from a vote account to the authorized voter for an epoch
-pub type VerifiedLabelVotePacketsSender = CrossbeamSender<Vec<(CrdsValueLabel, Packets)>>;
-pub type VerifiedLabelVotePacketsReceiver = CrossbeamReceiver<Vec<(CrdsValueLabel, Packets)>>;
+pub type VerifiedLabelVotePacketsSender = CrossbeamSender<Vec<(CrdsValueLabel, Slot, Packets)>>;
+pub type VerifiedLabelVotePacketsReceiver = CrossbeamReceiver<Vec<(CrdsValueLabel, Slot, Packets)>>;
 pub type VerifiedVoteTransactionsSender = CrossbeamSender<Vec<Transaction>>;
 pub type VerifiedVoteTransactionsReceiver = CrossbeamReceiver<Vec<Transaction>>;
 pub type VerifiedVoteSender = CrossbeamSender<(Pubkey, Vec<Slot>)>;
@@ -332,34 +332,28 @@ impl ClusterInfoVoteListener {
         }
     }
 
+    #[allow(clippy::type_complexity)]
     fn verify_votes(
         votes: Vec<Transaction>,
         labels: Vec<CrdsValueLabel>,
-    ) -> (Vec<Transaction>, Vec<(CrdsValueLabel, Packets)>) {
-        let msgs = packet::to_packets_chunked(&votes, 1);
-        let r = sigverify::ed25519_verify_cpu(&msgs);
+    ) -> (Vec<Transaction>, Vec<(CrdsValueLabel, Slot, Packets)>) {
+        let mut msgs = packet::to_packets_chunked(&votes, 1);
+        sigverify::ed25519_verify_cpu(&mut msgs);
 
-        assert_eq!(
-            r.iter()
-                .map(|packets_results| packets_results.len())
-                .sum::<usize>(),
-            votes.len()
-        );
+        let (vote_txs, packets) = izip!(labels.into_iter(), votes.into_iter(), msgs,)
+            .filter_map(|(label, vote, packet)| {
+                let slot = vote_transaction::parse_vote_transaction(&vote)
+                    .and_then(|(_, vote, _)| vote.slots.last().copied())?;
 
-        let (vote_txs, packets) = izip!(
-            labels.into_iter(),
-            votes.into_iter(),
-            r.iter().flatten(),
-            msgs,
-        )
-        .filter_map(|(label, vote, verify_result, packet)| {
-            if *verify_result != 0 {
-                Some((vote, (label, packet)))
-            } else {
-                None
-            }
-        })
-        .unzip();
+                // to_packets_chunked() above split into 1 packet long chunks
+                assert_eq!(packet.packets.len(), 1);
+                if !packet.packets[0].meta.discard {
+                    Some((vote, (label, slot, packet)))
+                } else {
+                    None
+                }
+            })
+            .unzip();
         (vote_txs, packets)
     }
 
@@ -397,7 +391,9 @@ impl ClusterInfoVoteListener {
                 if let Some(bank) = bank {
                     let last_version = bank.last_vote_sync.load(Ordering::Relaxed);
                     let (new_version, msgs) = verified_vote_packets.get_latest_votes(last_version);
-                    verified_packets_sender.send(msgs)?;
+                    inc_new_counter_info!("bank_send_loop_batch_size", msgs.packets.len());
+                    inc_new_counter_info!("bank_send_loop_num_batches", 1);
+                    verified_packets_sender.send(vec![msgs])?;
                     #[allow(deprecated)]
                     bank.last_vote_sync.compare_and_swap(
                         last_version,
@@ -1600,8 +1596,8 @@ mod tests {
         assert!(packets.is_empty());
     }
 
-    fn verify_packets_len(packets: &[(CrdsValueLabel, Packets)], ref_value: usize) {
-        let num_packets: usize = packets.iter().map(|p| p.1.packets.len()).sum();
+    fn verify_packets_len(packets: &[(CrdsValueLabel, Slot, Packets)], ref_value: usize) {
+        let num_packets: usize = packets.iter().map(|(_, _, p)| p.packets.len()).sum();
         assert_eq!(num_packets, ref_value);
     }
 

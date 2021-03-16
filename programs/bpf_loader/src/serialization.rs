@@ -1,7 +1,11 @@
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use solana_sdk::{
-    bpf_loader_deprecated, entrypoint::MAX_PERMITTED_DATA_INCREASE, instruction::InstructionError,
-    keyed_account::KeyedAccount, pubkey::Pubkey,
+    account::{ReadableAccount, WritableAccount},
+    bpf_loader_deprecated,
+    entrypoint::MAX_PERMITTED_DATA_INCREASE,
+    instruction::InstructionError,
+    keyed_account::KeyedAccount,
+    pubkey::Pubkey,
 };
 use std::{
     io::prelude::*,
@@ -35,12 +39,30 @@ pub fn deserialize_parameters(
     loader_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
     buffer: &[u8],
+    skip_ro_deserialization: bool,
 ) -> Result<(), InstructionError> {
     if *loader_id == bpf_loader_deprecated::id() {
-        deserialize_parameters_unaligned(keyed_accounts, buffer)
+        deserialize_parameters_unaligned(keyed_accounts, buffer, skip_ro_deserialization)
     } else {
-        deserialize_parameters_aligned(keyed_accounts, buffer)
+        deserialize_parameters_aligned(keyed_accounts, buffer, skip_ro_deserialization)
     }
+}
+
+pub fn get_serialized_account_size_unaligned(
+    keyed_account: &KeyedAccount,
+) -> Result<usize, InstructionError> {
+    let data_len = keyed_account.data_len()?;
+    Ok(
+        size_of::<u8>() // is_signer
+            + size_of::<u8>() // is_writable
+            + size_of::<Pubkey>() // key
+            + size_of::<u64>()  // lamports
+            + size_of::<u64>()  // data len
+            + data_len // data
+            + size_of::<Pubkey>() // owner
+            + size_of::<u8>() // executable
+            + size_of::<u64>(), // rent_epoch
+    )
 }
 
 pub fn serialize_parameters_unaligned(
@@ -52,22 +74,14 @@ pub fn serialize_parameters_unaligned(
     let mut size = size_of::<u64>();
     for (i, keyed_account) in keyed_accounts.iter().enumerate() {
         let (is_dup, _) = is_dup(&keyed_accounts[..i], keyed_account);
-        size += 1; // dup, signer, writable, executable
+        size += 1; // dup
         if !is_dup {
-            let data_len = keyed_account.data_len()?;
-            size += size_of::<Pubkey>()  // key
-                    + size_of::<Pubkey>() // owner
-                    + size_of::<u64>()  // lamports
-                    + size_of::<u64>()  // data len
-                    + data_len
-                    + MAX_PERMITTED_DATA_INCREASE
-                    + (data_len as *const u8).align_offset(align_of::<u128>())
-                    + size_of::<u64>(); // rent epoch;
+            size += get_serialized_account_size_unaligned(keyed_account)?;
         }
     }
-    size += size_of::<u64>() // data len
-        + instruction_data.len()
-        + size_of::<Pubkey>(); // program id;
+    size += size_of::<u64>() // instruction data len
+         + instruction_data.len() // instruction data
+         + size_of::<Pubkey>(); // program id
     let mut v: Vec<u8> = Vec::with_capacity(size);
 
     v.write_u64::<LittleEndian>(keyed_accounts.len() as u64)
@@ -86,7 +100,8 @@ pub fn serialize_parameters_unaligned(
                 .unwrap();
             v.write_u64::<LittleEndian>(keyed_account.data_len()? as u64)
                 .unwrap();
-            v.write_all(&keyed_account.try_account_ref()?.data).unwrap();
+            v.write_all(&keyed_account.try_account_ref()?.data())
+                .unwrap();
             v.write_all(keyed_account.owner()?.as_ref()).unwrap();
             v.write_u8(keyed_account.executable()? as u8).unwrap();
             v.write_u64::<LittleEndian>(keyed_account.rent_epoch()? as u64)
@@ -103,31 +118,56 @@ pub fn serialize_parameters_unaligned(
 pub fn deserialize_parameters_unaligned(
     keyed_accounts: &[KeyedAccount],
     buffer: &[u8],
+    skip_ro_deserialization: bool,
 ) -> Result<(), InstructionError> {
     let mut start = size_of::<u64>(); // number of accounts
     for (i, keyed_account) in keyed_accounts.iter().enumerate() {
         let (is_dup, _) = is_dup(&keyed_accounts[..i], keyed_account);
         start += 1; // is_dup
         if !is_dup {
-            start += size_of::<u8>(); // is_signer
-            start += size_of::<u8>(); // is_writable
-            start += size_of::<Pubkey>(); // pubkey
-            keyed_account.try_account_ref_mut()?.lamports =
-                LittleEndian::read_u64(&buffer[start..]);
-            start += size_of::<u64>() // lamports
+            if keyed_account.is_writable() || !skip_ro_deserialization {
+                start += size_of::<u8>(); // is_signer
+                start += size_of::<u8>(); // is_writable
+                start += size_of::<Pubkey>(); // key
+                keyed_account.try_account_ref_mut()?.lamports =
+                    LittleEndian::read_u64(&buffer[start..]);
+                start += size_of::<u64>() // lamports
                 + size_of::<u64>(); // data length
-            let end = start + keyed_account.data_len()?;
-            keyed_account
-                .try_account_ref_mut()?
-                .data
-                .clone_from_slice(&buffer[start..end]);
-            start += keyed_account.data_len()? // data
+                let end = start + keyed_account.data_len()?;
+                keyed_account
+                    .try_account_ref_mut()?
+                    .data_as_mut_slice()
+                    .clone_from_slice(&buffer[start..end]);
+                start += keyed_account.data_len()? // data
                 + size_of::<Pubkey>() // owner
                 + size_of::<u8>() // executable
                 + size_of::<u64>(); // rent_epoch
+            } else {
+                start += get_serialized_account_size_unaligned(keyed_account)?;
+            }
         }
     }
     Ok(())
+}
+
+pub fn get_serialized_account_size_aligned(
+    keyed_account: &KeyedAccount,
+) -> Result<usize, InstructionError> {
+    let data_len = keyed_account.data_len()?;
+    Ok(
+        size_of::<u8>() // is_signer
+            + size_of::<u8>() // is_writable
+            + size_of::<u8>() // executable
+            + 4 // padding to 128-bit aligned
+            + size_of::<Pubkey>()  // key
+            + size_of::<Pubkey>() // owner
+            + size_of::<u64>()  // lamports
+            + size_of::<u64>()  // data len
+            + data_len
+            + MAX_PERMITTED_DATA_INCREASE
+            + (data_len as *const u8).align_offset(align_of::<u128>())
+            + size_of::<u64>(), // rent epoch
+    )
 }
 
 pub fn serialize_parameters_aligned(
@@ -139,17 +179,11 @@ pub fn serialize_parameters_aligned(
     let mut size = size_of::<u64>();
     for (i, keyed_account) in keyed_accounts.iter().enumerate() {
         let (is_dup, _) = is_dup(&keyed_accounts[..i], keyed_account);
-        size += 8; // dup, signer, writable, executable
-        if !is_dup {
-            let data_len = keyed_account.data_len()?;
-            size += size_of::<Pubkey>()  // key
-                + size_of::<Pubkey>() // owner
-                + size_of::<u64>()  // lamports
-                + size_of::<u64>()  // data len
-                + data_len
-                + MAX_PERMITTED_DATA_INCREASE
-                + (data_len as *const u8).align_offset(align_of::<u128>())
-                + size_of::<u64>(); // rent epoch;
+        size += 1; // dup
+        if is_dup {
+            size += 7; // padding to 64-bit aligned
+        } else {
+            size += get_serialized_account_size_aligned(keyed_account)?;
         }
     }
     size += size_of::<u64>() // data len
@@ -181,7 +215,8 @@ pub fn serialize_parameters_aligned(
                 .unwrap();
             v.write_u64::<LittleEndian>(keyed_account.data_len()? as u64)
                 .unwrap();
-            v.write_all(&keyed_account.try_account_ref()?.data).unwrap();
+            v.write_all(&keyed_account.try_account_ref()?.data())
+                .unwrap();
             v.resize(
                 v.len()
                     + MAX_PERMITTED_DATA_INCREASE
@@ -202,6 +237,7 @@ pub fn serialize_parameters_aligned(
 pub fn deserialize_parameters_aligned(
     keyed_accounts: &[KeyedAccount],
     buffer: &[u8],
+    skip_ro_deserialization: bool,
 ) -> Result<(), InstructionError> {
     let mut start = size_of::<u64>(); // number of accounts
     for (i, keyed_account) in keyed_accounts.iter().enumerate() {
@@ -209,7 +245,7 @@ pub fn deserialize_parameters_aligned(
         start += size_of::<u8>(); // position
         if is_dup {
             start += 7; // padding to 64-bit aligned
-        } else {
+        } else if keyed_account.is_writable() || !skip_ro_deserialization {
             let mut account = keyed_account.try_account_ref_mut()?;
             start += size_of::<u8>() // is_signer
                 + size_of::<u8>() // is_writable
@@ -220,7 +256,7 @@ pub fn deserialize_parameters_aligned(
             start += size_of::<Pubkey>(); // owner
             account.lamports = LittleEndian::read_u64(&buffer[start..]);
             start += size_of::<u64>(); // lamports
-            let pre_len = account.data.len();
+            let pre_len = account.data_as_mut_slice().len();
             let post_len = LittleEndian::read_u64(&buffer[start..]) as usize;
             start += size_of::<u64>(); // data length
             let mut data_end = start + pre_len;
@@ -230,10 +266,14 @@ pub fn deserialize_parameters_aligned(
                 account.data.resize(post_len, 0);
                 data_end = start + post_len;
             }
-            account.data.clone_from_slice(&buffer[start..data_end]);
+            account
+                .data_as_mut_slice()
+                .clone_from_slice(&buffer[start..data_end]);
             start += pre_len + MAX_PERMITTED_DATA_INCREASE; // data
             start += (start as *const u8).align_offset(align_of::<u128>());
             start += size_of::<u64>(); // rent_epoch
+        } else {
+            start += get_serialized_account_size_aligned(keyed_account)?;
         }
     }
     Ok(())
@@ -243,7 +283,10 @@ pub fn deserialize_parameters_aligned(
 mod tests {
     use super::*;
     use solana_sdk::{
-        account::Account, account_info::AccountInfo, bpf_loader, entrypoint::deserialize,
+        account::{Account, AccountSharedData},
+        account_info::AccountInfo,
+        bpf_loader,
+        entrypoint::deserialize,
     };
     use std::{
         cell::RefCell,
@@ -256,48 +299,89 @@ mod tests {
     fn test_serialize_parameters() {
         let program_id = solana_sdk::pubkey::new_rand();
         let dup_key = solana_sdk::pubkey::new_rand();
+        let dup_key2 = solana_sdk::pubkey::new_rand();
         let keys = vec![
             dup_key,
             dup_key,
             solana_sdk::pubkey::new_rand(),
             solana_sdk::pubkey::new_rand(),
+            dup_key2,
+            dup_key2,
+            solana_sdk::pubkey::new_rand(),
+            solana_sdk::pubkey::new_rand(),
         ];
         let accounts = [
-            RefCell::new(Account {
+            RefCell::new(AccountSharedData::from(Account {
                 lamports: 1,
                 data: vec![1u8, 2, 3, 4, 5],
                 owner: bpf_loader::id(),
                 executable: false,
                 rent_epoch: 100,
-            }),
-            // dup of first
-            RefCell::new(Account {
+            })),
+            // dup
+            RefCell::new(AccountSharedData::from(Account {
                 lamports: 1,
                 data: vec![1u8, 2, 3, 4, 5],
                 owner: bpf_loader::id(),
                 executable: false,
                 rent_epoch: 100,
-            }),
-            RefCell::new(Account {
+            })),
+            RefCell::new(AccountSharedData::from(Account {
                 lamports: 2,
                 data: vec![11u8, 12, 13, 14, 15, 16, 17, 18, 19],
                 owner: bpf_loader::id(),
                 executable: true,
                 rent_epoch: 200,
-            }),
-            RefCell::new(Account {
+            })),
+            RefCell::new(AccountSharedData::from(Account {
                 lamports: 3,
                 data: vec![],
                 owner: bpf_loader::id(),
                 executable: false,
                 rent_epoch: 3100,
-            }),
+            })),
+            RefCell::new(AccountSharedData::from(Account {
+                lamports: 4,
+                data: vec![1u8, 2, 3, 4, 5],
+                owner: bpf_loader::id(),
+                executable: false,
+                rent_epoch: 100,
+            })),
+            // dup
+            RefCell::new(AccountSharedData::from(Account {
+                lamports: 4,
+                data: vec![1u8, 2, 3, 4, 5],
+                owner: bpf_loader::id(),
+                executable: false,
+                rent_epoch: 100,
+            })),
+            RefCell::new(AccountSharedData::from(Account {
+                lamports: 5,
+                data: vec![11u8, 12, 13, 14, 15, 16, 17, 18, 19],
+                owner: bpf_loader::id(),
+                executable: true,
+                rent_epoch: 200,
+            })),
+            RefCell::new(AccountSharedData::from(Account {
+                lamports: 6,
+                data: vec![],
+                owner: bpf_loader::id(),
+                executable: false,
+                rent_epoch: 3100,
+            })),
         ];
 
         let keyed_accounts: Vec<_> = keys
             .iter()
             .zip(&accounts)
-            .map(|(key, account)| KeyedAccount::new(&key, false, &account))
+            .enumerate()
+            .map(|(i, (key, account))| {
+                if i <= accounts.len() / 2 {
+                    KeyedAccount::new_readonly(&key, false, &account)
+                } else {
+                    KeyedAccount::new(&key, false, &account)
+                }
+            })
             .collect();
         let instruction_data = vec![1u8, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
 
@@ -310,9 +394,9 @@ mod tests {
             &instruction_data,
         )
         .unwrap();
+
         let (de_program_id, de_accounts, de_instruction_data) =
             unsafe { deserialize(&mut serialized[0] as *mut u8) };
-
         assert_eq!(&program_id, de_program_id);
         assert_eq!(instruction_data, de_instruction_data);
         assert_eq!(
@@ -323,7 +407,7 @@ mod tests {
             assert_eq!(key, *account_info.key);
             let account = account.borrow();
             assert_eq!(account.lamports, account_info.lamports());
-            assert_eq!(&account.data[..], &account_info.data.borrow()[..]);
+            assert_eq!(&account.data()[..], &account_info.data.borrow()[..]);
             assert_eq!(&account.owner, account_info.owner);
             assert_eq!(account.executable, account_info.executable);
             assert_eq!(account.rent_epoch, account_info.rent_epoch);
@@ -342,6 +426,35 @@ mod tests {
             );
         }
 
+        let de_accounts = accounts.clone();
+        let de_keyed_accounts: Vec<_> = keys
+            .iter()
+            .zip(&de_accounts)
+            .enumerate()
+            .map(|(i, (key, account))| {
+                if i <= accounts.len() / 2 {
+                    KeyedAccount::new_readonly(&key, false, &account)
+                } else {
+                    KeyedAccount::new(&key, false, &account)
+                }
+            })
+            .collect();
+        deserialize_parameters(&bpf_loader::id(), &de_keyed_accounts, &serialized, true).unwrap();
+        for ((account, de_keyed_account), key) in
+            accounts.iter().zip(de_keyed_accounts).zip(keys.clone())
+        {
+            assert_eq!(key, *de_keyed_account.unsigned_key());
+            let account = account.borrow();
+            assert_eq!(account.lamports, de_keyed_account.lamports().unwrap());
+            assert_eq!(
+                &account.data()[..],
+                &de_keyed_account.try_account_ref().unwrap().data[..]
+            );
+            assert_eq!(account.owner, de_keyed_account.owner().unwrap());
+            assert_eq!(account.executable, de_keyed_account.executable().unwrap());
+            assert_eq!(account.rent_epoch, de_keyed_account.rent_epoch().unwrap());
+        }
+
         // check serialize_parameters_unaligned
 
         let mut serialized = serialize_parameters(
@@ -351,19 +464,54 @@ mod tests {
             &instruction_data,
         )
         .unwrap();
+
         let (de_program_id, de_accounts, de_instruction_data) =
             unsafe { deserialize_unaligned(&mut serialized[0] as *mut u8) };
-
         assert_eq!(&program_id, de_program_id);
         assert_eq!(instruction_data, de_instruction_data);
-        for ((account, account_info), key) in accounts.iter().zip(de_accounts).zip(keys) {
+        for ((account, account_info), key) in accounts.iter().zip(de_accounts).zip(keys.clone()) {
             assert_eq!(key, *account_info.key);
             let account = account.borrow();
             assert_eq!(account.lamports, account_info.lamports());
-            assert_eq!(&account.data[..], &account_info.data.borrow()[..]);
+            assert_eq!(&account.data()[..], &account_info.data.borrow()[..]);
             assert_eq!(&account.owner, account_info.owner);
             assert_eq!(account.executable, account_info.executable);
             assert_eq!(account.rent_epoch, account_info.rent_epoch);
+        }
+
+        let de_accounts = accounts.clone();
+        let de_keyed_accounts: Vec<_> = keys
+            .iter()
+            .zip(&de_accounts)
+            .enumerate()
+            .map(|(i, (key, account))| {
+                if i < accounts.len() / 2 {
+                    KeyedAccount::new_readonly(&key, false, &account)
+                } else {
+                    KeyedAccount::new(&key, false, &account)
+                }
+            })
+            .collect();
+        deserialize_parameters(
+            &bpf_loader_deprecated::id(),
+            &de_keyed_accounts,
+            &serialized,
+            true,
+        )
+        .unwrap();
+        for ((account, de_keyed_account), key) in
+            accounts.iter().zip(de_keyed_accounts).zip(keys.clone())
+        {
+            assert_eq!(key, *de_keyed_account.unsigned_key());
+            let account = account.borrow();
+            assert_eq!(account.lamports, de_keyed_account.lamports().unwrap());
+            assert_eq!(
+                &account.data()[..],
+                &de_keyed_account.try_account_ref().unwrap().data[..]
+            );
+            assert_eq!(account.owner, de_keyed_account.owner().unwrap());
+            assert_eq!(account.executable, de_keyed_account.executable().unwrap());
+            assert_eq!(account.rent_epoch, de_keyed_account.rent_epoch().unwrap());
         }
     }
 

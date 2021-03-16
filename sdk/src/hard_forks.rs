@@ -18,7 +18,7 @@ impl HardForks {
             .iter()
             .position(|(slot, _)| *slot == new_slot)
         {
-            self.hard_forks[i] = (new_slot, self.hard_forks[i].1 + 1);
+            self.hard_forks[i] = (new_slot, self.hard_forks[i].1.saturating_add(1));
         } else {
             self.hard_forks.push((new_slot, 1));
         }

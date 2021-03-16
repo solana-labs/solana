@@ -103,7 +103,7 @@ impl<T: Serialize + Clone> StatusCache<T> {
                             }
                         } else {
                             panic!(
-                                "Map for signature must exist if siganture exists in self.slot_deltas, slot: {}",
+                                "Map for signature must exist if signature exists in self.slot_deltas, slot: {}",
                                 slot
                             )
                         }

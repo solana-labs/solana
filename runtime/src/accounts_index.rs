@@ -306,7 +306,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
 
         // First we show that for any bank `B` that is a descendant of
         // the current `max_root`, it must be true that and `B.ancestors.contains(max_root)`,
-        // regardless of the pattern of `squash()` behavior, `where` `ancestors` is the set
+        // regardless of the pattern of `squash()` behavior, where `ancestors` is the set
         // of ancestors that is tracked in each bank.
         //
         // Proof: At startup, if starting from a snapshot, generate_index() adds all banks
@@ -338,7 +338,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         // BankForks before the `set_root`.
         //
         // This means by the guarantees of `R_descendants` described above, because
-        // `R_new` is an ancestor of `B`, and `R < R_new < B`, then B.ancestors.contains(R_new)`.
+        // `R_new` is an ancestor of `B`, and `R < R_new < B`, then `B.ancestors.contains(R_new)`.
         //
         // Now until the next `set_root`, any new banks constructed from `new_from_parent` will
         // also have `max_root == R_new` in their ancestor set, so the claim holds for those descendants
@@ -548,7 +548,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         F: FnMut(&Pubkey, (&T, Slot)),
     {
         for pubkey in index.get(index_key) {
-            // Maybe these reads from the AccountsIndex can be batched everytime it
+            // Maybe these reads from the AccountsIndex can be batched every time it
             // grabs the read lock as well...
             if let Some((list_r, index)) = self.get(&pubkey, Some(ancestors), max_root) {
                 func(
@@ -828,7 +828,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
             self.program_id_index.insert(account_owner, pubkey, slot);
         }
         // Note because of the below check below on the account data length, when an
-        // account hits zero lamports and is reset to Account::Default, then we skip
+        // account hits zero lamports and is reset to AccountSharedData::Default, then we skip
         // the below updates to the secondary indexes.
         //
         // Skipping means not updating secondary index to mark the account as missing.
@@ -837,7 +837,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         // removed from the secondary index, the scan function will:
         // 1) consult the primary index via `get(&pubkey, Some(ancestors), max_root)`
         // and find the zero-lamport version
-        // 2) When the fetch from storage occurs, it will return Account::Default
+        // 2) When the fetch from storage occurs, it will return AccountSharedData::Default
         // (as persisted tombstone for snapshots). This will then ultimately be
         // filtered out by post-scan filters, like in `get_filtered_spl_token_accounts_by_owner()`.
         if *account_owner == inline_spl_token_v2_0::id()
@@ -975,8 +975,8 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         max_clean_root: Option<Slot>,
         account_indexes: &HashSet<AccountIndex>,
     ) {
-        let roots_traker = &self.roots_tracker.read().unwrap();
-        let max_root = Self::get_max_root(&roots_traker.roots, &list, max_clean_root);
+        let roots_tracker = &self.roots_tracker.read().unwrap();
+        let max_root = Self::get_max_root(&roots_tracker.roots, &list, max_clean_root);
 
         let mut purged_slots: HashSet<Slot> = HashSet::new();
         list.retain(|(slot, value)| {

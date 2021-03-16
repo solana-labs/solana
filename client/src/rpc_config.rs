@@ -108,3 +108,51 @@ pub struct RpcGetConfirmedSignaturesForAddress2Config {
     pub until: Option<String>,  // Signature as base-58 string
     pub limit: Option<usize>,
 }
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum RpcEncodingConfigWrapper<T> {
+    Deprecated(Option<UiTransactionEncoding>),
+    Current(Option<T>),
+}
+
+impl<T: EncodingConfig + Default + Copy> RpcEncodingConfigWrapper<T> {
+    pub fn convert_to_current(&self) -> T {
+        match self {
+            RpcEncodingConfigWrapper::Deprecated(encoding) => T::new_with_encoding(encoding),
+            RpcEncodingConfigWrapper::Current(config) => config.unwrap_or_default(),
+        }
+    }
+}
+
+pub trait EncodingConfig {
+    fn new_with_encoding(encoding: &Option<UiTransactionEncoding>) -> Self;
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcConfirmedBlockConfig {
+    pub encoding: Option<UiTransactionEncoding>,
+}
+
+impl EncodingConfig for RpcConfirmedBlockConfig {
+    fn new_with_encoding(encoding: &Option<UiTransactionEncoding>) -> Self {
+        Self {
+            encoding: *encoding,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcConfirmedTransactionConfig {
+    pub encoding: Option<UiTransactionEncoding>,
+}
+
+impl EncodingConfig for RpcConfirmedTransactionConfig {
+    fn new_with_encoding(encoding: &Option<UiTransactionEncoding>) -> Self {
+        Self {
+            encoding: *encoding,
+        }
+    }
+}

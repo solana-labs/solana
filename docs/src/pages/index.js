@@ -105,22 +105,6 @@ function Home() {
         {features && features.length > 0 && (
           <section className={styles.features}>
             <div className="container">
-              <div class="alert alert--primary" role="alert">
-                <b>Announcing the Solana x Serum Hackathon</b>
-                <br />
-                Register today and join leaders from Circle, Aave, SushiSwap,
-                and more!
-                <br />
-                <a
-                  href="https://solana.com/defi"
-                  rel="noopener noreferrer"
-                  target="_blank"
-                >
-                  <button class="button button--outline button--secondary">
-                    Register Now
-                  </button>
-                </a>
-              </div>
               <div className="row cards__container">
                 {features.map((props, idx) => (
                   <Feature key={idx} {...props} />

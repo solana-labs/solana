@@ -121,7 +121,7 @@ fn initialize_account(vote_pubkey: &Pubkey, vote_init: &VoteInit) -> Instruction
         AccountMeta::new_readonly(vote_init.node_pubkey, true),
     ];
 
-    Instruction::new(
+    Instruction::new_with_bincode(
         id(),
         &VoteInstruction::InitializeAccount(*vote_init),
         account_metas,
@@ -175,7 +175,7 @@ pub fn authorize(
         AccountMeta::new_readonly(*authorized_pubkey, true),
     ];
 
-    Instruction::new(
+    Instruction::new_with_bincode(
         id(),
         &VoteInstruction::Authorize(*new_authorized_pubkey, vote_authorize),
         account_metas,
@@ -193,7 +193,7 @@ pub fn update_validator_identity(
         AccountMeta::new_readonly(*authorized_withdrawer_pubkey, true),
     ];
 
-    Instruction::new(
+    Instruction::new_with_bincode(
         id(),
         &VoteInstruction::UpdateValidatorIdentity,
         account_metas,
@@ -210,7 +210,7 @@ pub fn update_commission(
         AccountMeta::new_readonly(*authorized_withdrawer_pubkey, true),
     ];
 
-    Instruction::new(
+    Instruction::new_with_bincode(
         id(),
         &VoteInstruction::UpdateCommission(commission),
         account_metas,
@@ -225,7 +225,7 @@ pub fn vote(vote_pubkey: &Pubkey, authorized_voter_pubkey: &Pubkey, vote: Vote) 
         AccountMeta::new_readonly(*authorized_voter_pubkey, true),
     ];
 
-    Instruction::new(id(), &VoteInstruction::Vote(vote), account_metas)
+    Instruction::new_with_bincode(id(), &VoteInstruction::Vote(vote), account_metas)
 }
 
 pub fn vote_switch(
@@ -241,7 +241,7 @@ pub fn vote_switch(
         AccountMeta::new_readonly(*authorized_voter_pubkey, true),
     ];
 
-    Instruction::new(
+    Instruction::new_with_bincode(
         id(),
         &VoteInstruction::VoteSwitch(vote, proof_hash),
         account_metas,
@@ -260,7 +260,7 @@ pub fn withdraw(
         AccountMeta::new_readonly(*authorized_withdrawer_pubkey, true),
     ];
 
-    Instruction::new(id(), &VoteInstruction::Withdraw(lamports), account_metas)
+    Instruction::new_with_bincode(id(), &VoteInstruction::Withdraw(lamports), account_metas)
 }
 
 fn verify_rent_exemption(
@@ -288,6 +288,12 @@ pub fn process_instruction(
 
     let keyed_accounts = &mut keyed_accounts.iter();
     let me = &mut next_keyed_account(keyed_accounts)?;
+
+    if invoke_context.is_feature_active(&feature_set::check_program_owner::id())
+        && me.owner()? != id()
+    {
+        return Err(InstructionError::InvalidAccountOwner);
+    }
 
     match limited_deserialize(data)? {
         VoteInstruction::InitializeAccount(vote_init) => {
@@ -336,11 +342,12 @@ pub fn process_instruction(
 mod tests {
     use super::*;
     use solana_sdk::{
-        account::{self, Account},
+        account::{self, Account, AccountSharedData},
         process_instruction::MockInvokeContext,
         rent::Rent,
     };
     use std::cell::RefCell;
+    use std::str::FromStr;
 
     // these are for 100% coverage in this file
     #[test]
@@ -363,19 +370,27 @@ mod tests {
             .iter()
             .map(|meta| {
                 RefCell::new(if sysvar::clock::check_id(&meta.pubkey) {
-                    account::create_account(&Clock::default(), 1)
+                    account::create_account_shared_data(&Clock::default(), 1)
                 } else if sysvar::slot_hashes::check_id(&meta.pubkey) {
-                    account::create_account(&SlotHashes::default(), 1)
+                    account::create_account_shared_data(&SlotHashes::default(), 1)
                 } else if sysvar::rent::check_id(&meta.pubkey) {
-                    account::create_account(&Rent::free(), 1)
+                    account::create_account_shared_data(&Rent::free(), 1)
+                } else if meta.pubkey == invalid_vote_state_pubkey() {
+                    AccountSharedData::from(Account {
+                        owner: invalid_vote_state_pubkey(),
+                        ..Account::default()
+                    })
                 } else {
-                    Account::default()
+                    AccountSharedData::from(Account {
+                        owner: id(),
+                        ..Account::default()
+                    })
                 })
             })
             .collect();
 
         for _ in 0..instruction.accounts.len() {
-            accounts.push(RefCell::new(Account::default()));
+            accounts.push(RefCell::new(AccountSharedData::default()));
         }
         {
             let keyed_accounts: Vec<_> = instruction
@@ -393,8 +408,25 @@ mod tests {
         }
     }
 
+    fn invalid_vote_state_pubkey() -> Pubkey {
+        Pubkey::from_str("BadVote111111111111111111111111111111111111").unwrap()
+    }
+
+    #[test]
+    fn test_spoofed_vote() {
+        assert_eq!(
+            process_instruction(&vote(
+                &invalid_vote_state_pubkey(),
+                &Pubkey::default(),
+                Vote::default(),
+            )),
+            Err(InstructionError::InvalidAccountOwner),
+        );
+    }
+
     #[test]
     fn test_vote_process_instruction() {
+        solana_logger::setup();
         let instructions = create_account(
             &Pubkey::default(),
             &Pubkey::default(),

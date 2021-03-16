@@ -49,6 +49,7 @@ impl GossipService {
             request_sender,
             Recycler::new_without_limit("gossip-receiver-recycler-shrink-stats"),
             "gossip_receiver",
+            1,
         );
         let (response_sender, response_receiver) = channel();
         let t_responder = streamer::responder("gossip", gossip_socket, response_receiver);

@@ -475,6 +475,42 @@ describe('SystemProgram', () => {
       );
       expect(createAccountWithSeedBalance).to.eq(minimumAmount);
 
+      // Test CreateAccountWithSeed where fromPubkey != basePubkey
+      const uniqueFromAccount = new Account();
+      const newBaseAccount = new Account();
+      const createAccountWithSeedAddress2 = await PublicKey.createWithSeed(
+        newBaseAccount.publicKey,
+        seed,
+        programId,
+      );
+      await helpers.airdrop({
+        connection,
+        address: uniqueFromAccount.publicKey,
+        amount: 2 * LAMPORTS_PER_SOL,
+      });
+      const createAccountWithSeedParams2 = {
+        fromPubkey: uniqueFromAccount.publicKey,
+        newAccountPubkey: createAccountWithSeedAddress2,
+        basePubkey: newBaseAccount.publicKey,
+        seed,
+        lamports: minimumAmount,
+        space,
+        programId,
+      };
+      const createAccountWithSeedTransaction2 = new Transaction().add(
+        SystemProgram.createAccountWithSeed(createAccountWithSeedParams2),
+      );
+      await sendAndConfirmTransaction(
+        connection,
+        createAccountWithSeedTransaction2,
+        [uniqueFromAccount, newBaseAccount],
+        {preflightCommitment: 'confirmed'},
+      );
+      const createAccountWithSeedBalance2 = await connection.getBalance(
+        createAccountWithSeedAddress2,
+      );
+      expect(createAccountWithSeedBalance2).to.eq(minimumAmount);
+
       // Transfer to a derived address to prep for TransferWithSeed
       const programId2 = new Account().publicKey;
       const transferWithSeedAddress = await PublicKey.createWithSeed(

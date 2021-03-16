@@ -7,7 +7,7 @@ use chrono::{
     serde::ts_seconds,
 };
 use serde_derive::{Deserialize, Serialize};
-use solana_sdk::{account::Account, instruction::InstructionError, pubkey::Pubkey};
+use solana_sdk::{account::AccountSharedData, instruction::InstructionError, pubkey::Pubkey};
 use std::cmp::min;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -82,9 +82,9 @@ impl VestState {
     /// Redeem vested tokens.
     pub fn redeem_tokens(
         &mut self,
-        contract_account: &mut Account,
+        contract_account: &mut AccountSharedData,
         current_date: Date<Utc>,
-        payee_account: &mut Account,
+        payee_account: &mut AccountSharedData,
     ) {
         let vested_lamports = self.calc_vested_lamports(current_date);
         let redeemable_lamports = vested_lamports.saturating_sub(self.redeemed_lamports);
@@ -98,8 +98,8 @@ impl VestState {
     /// Renege on the given number of tokens and send them to the given payee.
     pub fn renege(
         &mut self,
-        contract_account: &mut Account,
-        payee_account: &mut Account,
+        contract_account: &mut AccountSharedData,
+        payee_account: &mut AccountSharedData,
         lamports: u64,
     ) {
         let reneged_lamports = min(contract_account.lamports, lamports);
@@ -119,24 +119,24 @@ impl VestState {
 mod test {
     use super::*;
     use crate::id;
-    use solana_sdk::account::Account;
+    use solana_sdk::account::{AccountSharedData, ReadableAccount, WritableAccount};
     use solana_sdk::system_program;
 
     #[test]
     fn test_serializer() {
-        let mut a = Account::new(0, 512, &id());
+        let mut a = AccountSharedData::new(0, 512, &id());
         let b = VestState::default();
-        b.serialize(&mut a.data).unwrap();
-        let c = VestState::deserialize(&a.data).unwrap();
+        b.serialize(a.data_as_mut_slice()).unwrap();
+        let c = VestState::deserialize(&a.data()).unwrap();
         assert_eq!(b, c);
     }
 
     #[test]
     fn test_serializer_data_too_small() {
-        let mut a = Account::new(0, 1, &id());
+        let mut a = AccountSharedData::new(0, 1, &id());
         let b = VestState::default();
         assert_eq!(
-            b.serialize(&mut a.data),
+            b.serialize(a.data_as_mut_slice()),
             Err(InstructionError::AccountDataTooSmall)
         );
     }
@@ -144,14 +144,16 @@ mod test {
     #[test]
     fn test_schedule_after_renege() {
         let total_lamports = 3;
-        let mut contract_account = Account::new(total_lamports, 512, &id());
-        let mut payee_account = Account::new(0, 0, &system_program::id());
+        let mut contract_account = AccountSharedData::new(total_lamports, 512, &id());
+        let mut payee_account = AccountSharedData::new(0, 0, &system_program::id());
         let mut vest_state = VestState {
             total_lamports,
             start_date_time: Utc.ymd(2019, 1, 1).and_hms(0, 0, 0),
             ..VestState::default()
         };
-        vest_state.serialize(&mut contract_account.data).unwrap();
+        vest_state
+            .serialize(contract_account.data_as_mut_slice())
+            .unwrap();
         let current_date = Utc.ymd(2020, 1, 1);
         assert_eq!(vest_state.calc_vested_lamports(current_date), 1);
 
@@ -171,13 +173,15 @@ mod test {
     #[test]
     fn test_vest_all() {
         let total_lamports = 3;
-        let mut contract_account = Account::new(total_lamports, 512, &id());
+        let mut contract_account = AccountSharedData::new(total_lamports, 512, &id());
         let mut vest_state = VestState {
             total_lamports,
             start_date_time: Utc.ymd(2019, 1, 1).and_hms(0, 0, 0),
             ..VestState::default()
         };
-        vest_state.serialize(&mut contract_account.data).unwrap();
+        vest_state
+            .serialize(contract_account.data_as_mut_slice())
+            .unwrap();
         let current_date = Utc.ymd(2020, 1, 1);
         assert_eq!(vest_state.calc_vested_lamports(current_date), 1);
 

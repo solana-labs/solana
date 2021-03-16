@@ -3,7 +3,6 @@ use crate::{
     spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
     stake::is_stake_program_v2_enabled,
 };
-use chrono::{Local, TimeZone};
 use clap::{value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
 use console::{style, Emoji};
 use serde::{Deserialize, Serialize};
@@ -135,7 +134,17 @@ impl ClusterQuerySubCommands for App<'_, '_> {
             SubCommand::with_name("cluster-version")
                 .about("Get the version of the cluster entrypoint"),
         )
-        .subcommand(SubCommand::with_name("fees").about("Display current cluster fees"),
+        .subcommand(
+            SubCommand::with_name("fees")
+            .about("Display current cluster fees")
+            .arg(
+                Arg::with_name("blockhash")
+                    .long("blockhash")
+                    .takes_value(true)
+                    .value_name("BLOCKHASH")
+                    .validator(is_hash)
+                    .help("Query fees for BLOCKHASH instead of the the most recent blockhash")
+            ),
         )
         .subcommand(
             SubCommand::with_name("first-available-block")
@@ -733,6 +742,10 @@ pub fn process_catchup(
         }
     };
 
+    let start_node_slot = get_slot_while_retrying(&node_client)?;
+    let start_rpc_slot = get_slot_while_retrying(rpc_client)?;
+    let start_slot_distance = start_rpc_slot as i64 - start_node_slot as i64;
+    let mut total_sleep_interval = 0;
     loop {
         // humbly retry; the reference node (rpc_client) could be spotty,
         // especially if pointing to api.meinnet-beta.solana.com at times
@@ -749,14 +762,37 @@ pub fn process_catchup(
         let slot_distance = rpc_slot as i64 - node_slot as i64;
         let slots_per_second =
             (previous_slot_distance - slot_distance) as f64 / f64::from(sleep_interval);
-        let time_remaining = (slot_distance as f64 / slots_per_second).round();
-        let time_remaining = if !time_remaining.is_normal() || time_remaining <= 0.0 {
+
+        let average_time_remaining = if slot_distance == 0 || total_sleep_interval == 0 {
             "".to_string()
         } else {
-            format!(
-                ". Time remaining: {}",
-                humantime::format_duration(Duration::from_secs_f64(time_remaining))
-            )
+            let distance_delta = start_slot_distance as i64 - slot_distance as i64;
+            let average_catchup_slots_per_second =
+                distance_delta as f64 / f64::from(total_sleep_interval);
+            let average_time_remaining =
+                (slot_distance as f64 / average_catchup_slots_per_second).round();
+            if !average_time_remaining.is_normal() {
+                "".to_string()
+            } else if average_time_remaining < 0.0 {
+                format!(
+                    " (AVG: {:.1} slots/second (falling))",
+                    average_catchup_slots_per_second
+                )
+            } else {
+                // important not to miss next scheduled lead slots
+                let total_node_slot_delta = node_slot as i64 - start_node_slot as i64;
+                let average_node_slots_per_second =
+                    total_node_slot_delta as f64 / f64::from(total_sleep_interval);
+                let expected_finish_slot = (node_slot as f64
+                    + average_time_remaining as f64 * average_node_slots_per_second as f64)
+                    .round();
+                format!(
+                    " (AVG: {:.1} slots/second, ETA: slot {} in {})",
+                    average_catchup_slots_per_second,
+                    expected_finish_slot,
+                    humantime::format_duration(Duration::from_secs_f64(average_time_remaining))
+                )
+            }
         };
 
         progress_bar.set_message(&format!(
@@ -781,7 +817,7 @@ pub fn process_catchup(
                         "gaining"
                     },
                     slots_per_second,
-                    time_remaining
+                    average_time_remaining
                 )
             },
         ));
@@ -792,6 +828,7 @@ pub fn process_catchup(
         sleep(Duration::from_secs(sleep_interval as u64));
         previous_rpc_slot = rpc_slot;
         previous_slot_distance = slot_distance;
+        total_sleep_interval += sleep_interval;
     }
 }
 
@@ -821,14 +858,35 @@ pub fn process_cluster_version(rpc_client: &RpcClient, config: &CliConfig) -> Pr
     }
 }
 
-pub fn process_fees(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
-    let result = rpc_client.get_recent_blockhash_with_commitment(config.commitment)?;
-    let (recent_blockhash, fee_calculator, last_valid_slot) = result.value;
-    let fees = CliFees {
-        slot: result.context.slot,
-        blockhash: recent_blockhash.to_string(),
-        lamports_per_signature: fee_calculator.lamports_per_signature,
-        last_valid_slot,
+pub fn process_fees(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    blockhash: Option<&Hash>,
+) -> ProcessResult {
+    let fees = if let Some(recent_blockhash) = blockhash {
+        let result = rpc_client.get_fee_calculator_for_blockhash_with_commitment(
+            recent_blockhash,
+            config.commitment,
+        )?;
+        if let Some(fee_calculator) = result.value {
+            CliFees::some(
+                result.context.slot,
+                *recent_blockhash,
+                fee_calculator.lamports_per_signature,
+                None,
+            )
+        } else {
+            CliFees::none()
+        }
+    } else {
+        let result = rpc_client.get_recent_blockhash_with_commitment(config.commitment)?;
+        let (recent_blockhash, fee_calculator, last_valid_slot) = result.value;
+        CliFees::some(
+            result.context.slot,
+            recent_blockhash,
+            fee_calculator.lamports_per_signature,
+            Some(last_valid_slot),
+        )
     };
     Ok(config.output_format.formatted_string(&fees))
 }
@@ -896,7 +954,7 @@ pub fn process_leader_schedule(
 
 pub fn process_get_block(
     rpc_client: &RpcClient,
-    _config: &CliConfig,
+    config: &CliConfig,
     slot: Option<Slot>,
 ) -> ProcessResult {
     let slot = if let Some(slot) = slot {
@@ -905,72 +963,13 @@ pub fn process_get_block(
         rpc_client.get_slot_with_commitment(CommitmentConfig::finalized())?
     };
 
-    let mut block =
+    let encoded_confirmed_block =
         rpc_client.get_confirmed_block_with_encoding(slot, UiTransactionEncoding::Base64)?;
-
-    println!("Slot: {}", slot);
-    println!("Parent Slot: {}", block.parent_slot);
-    println!("Blockhash: {}", block.blockhash);
-    println!("Previous Blockhash: {}", block.previous_blockhash);
-    if let Some(block_time) = block.block_time {
-        println!("Block Time: {:?}", Local.timestamp(block_time, 0));
-    }
-    if !block.rewards.is_empty() {
-        block.rewards.sort_by(|a, b| a.pubkey.cmp(&b.pubkey));
-        let mut total_rewards = 0;
-        println!("Rewards:",);
-        println!(
-            "  {:<44}  {:^15}  {:<15}  {:<20}  {:>14}",
-            "Address", "Type", "Amount", "New Balance", "Percent Change"
-        );
-        for reward in block.rewards {
-            let sign = if reward.lamports < 0 { "-" } else { "" };
-
-            total_rewards += reward.lamports;
-            println!(
-                "  {:<44}  {:^15}  {:>15}  {}",
-                reward.pubkey,
-                if let Some(reward_type) = reward.reward_type {
-                    format!("{}", reward_type)
-                } else {
-                    "-".to_string()
-                },
-                format!(
-                    "{}◎{:<14.9}",
-                    sign,
-                    lamports_to_sol(reward.lamports.abs() as u64)
-                ),
-                if reward.post_balance == 0 {
-                    "          -                 -".to_string()
-                } else {
-                    format!(
-                        "◎{:<19.9}  {:>13.9}%",
-                        lamports_to_sol(reward.post_balance),
-                        (reward.lamports.abs() as f64
-                            / (reward.post_balance as f64 - reward.lamports as f64))
-                            * 100.0
-                    )
-                }
-            );
-        }
-
-        let sign = if total_rewards < 0 { "-" } else { "" };
-        println!(
-            "Total Rewards: {}◎{:<12.9}",
-            sign,
-            lamports_to_sol(total_rewards.abs() as u64)
-        );
-    }
-    for (index, transaction_with_meta) in block.transactions.iter().enumerate() {
-        println!("Transaction {}:", index);
-        println_transaction(
-            &transaction_with_meta.transaction.decode().unwrap(),
-            &transaction_with_meta.meta,
-            "  ",
-            None,
-        );
-    }
-    Ok("".to_string())
+    let cli_block = CliBlock {
+        encoded_confirmed_block,
+        slot,
+    };
+    Ok(config.output_format.formatted_string(&cli_block))
 }
 
 pub fn process_get_block_time(
@@ -994,7 +993,20 @@ pub fn process_get_epoch(rpc_client: &RpcClient, _config: &CliConfig) -> Process
 }
 
 pub fn process_get_epoch_info(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
-    let epoch_info: CliEpochInfo = rpc_client.get_epoch_info()?.into();
+    let epoch_info = rpc_client.get_epoch_info()?;
+    let average_slot_time_ms = rpc_client
+        .get_recent_performance_samples(Some(60))
+        .map(|samples| {
+            let (slots, secs) = samples.iter().fold((0, 0), |(slots, secs), sample| {
+                (slots + sample.num_slots, secs + sample.sample_period_secs)
+            });
+            (secs as u64 * 1000) / slots
+        })
+        .unwrap_or(clock::DEFAULT_MS_PER_SLOT);
+    let epoch_info = CliEpochInfo {
+        epoch_info,
+        average_slot_time_ms,
+    };
     Ok(config.output_format.formatted_string(&epoch_info))
 }
 
@@ -1009,8 +1021,8 @@ pub fn process_get_slot(rpc_client: &RpcClient, _config: &CliConfig) -> ProcessR
 }
 
 pub fn process_get_block_height(rpc_client: &RpcClient, _config: &CliConfig) -> ProcessResult {
-    let epoch_info: CliEpochInfo = rpc_client.get_epoch_info()?.into();
-    Ok(epoch_info.epoch_info.block_height.to_string())
+    let epoch_info = rpc_client.get_epoch_info()?;
+    Ok(epoch_info.block_height.to_string())
 }
 
 pub fn parse_show_block_production(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
@@ -1845,6 +1857,7 @@ pub fn process_transaction_history(
                             &confirmed_transaction.transaction.meta,
                             "  ",
                             None,
+                            None,
                         );
                     }
                     Err(err) => println!("  Unable to get confirmed transaction details: {}", err),
@@ -1962,7 +1975,24 @@ mod tests {
         assert_eq!(
             parse_command(&test_fees, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
-                command: CliCommand::Fees,
+                command: CliCommand::Fees { blockhash: None },
+                signers: vec![],
+            }
+        );
+
+        let blockhash = Hash::new_unique();
+        let test_fees = test_commands.clone().get_matches_from(vec![
+            "test",
+            "fees",
+            "--blockhash",
+            &blockhash.to_string(),
+        ]);
+        assert_eq!(
+            parse_command(&test_fees, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Fees {
+                    blockhash: Some(blockhash)
+                },
                 signers: vec![],
             }
         );

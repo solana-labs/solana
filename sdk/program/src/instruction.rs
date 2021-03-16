@@ -195,6 +195,12 @@ pub enum InstructionError {
 
     #[error("An account does not have enough lamports to be rent-exempt")]
     AccountNotRentExempt,
+
+    #[error("Invalid account owner")]
+    InvalidAccountOwner,
+
+    #[error("Program arithmetic overflowed")]
+    ArithmeticOverflow,
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
@@ -208,7 +214,19 @@ pub struct Instruction {
 }
 
 impl Instruction {
+    #[deprecated(
+        since = "1.6.0",
+        note = "Please use another Instruction constructor instead, such as `Instruction::new_with_bincode`"
+    )]
     pub fn new<T: Serialize>(program_id: Pubkey, data: &T, accounts: Vec<AccountMeta>) -> Self {
+        Self::new_with_bincode(program_id, data, accounts)
+    }
+
+    pub fn new_with_bincode<T: Serialize>(
+        program_id: Pubkey,
+        data: &T,
+        accounts: Vec<AccountMeta>,
+    ) -> Self {
         let data = serialize(data).unwrap();
         Self {
             program_id,
@@ -226,6 +244,14 @@ impl Instruction {
         Self {
             program_id,
             data,
+            accounts,
+        }
+    }
+
+    pub fn new_with_bytes(program_id: Pubkey, data: &[u8], accounts: Vec<AccountMeta>) -> Self {
+        Self {
+            program_id,
+            data: data.to_vec(),
             accounts,
         }
     }

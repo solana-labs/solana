@@ -1,5 +1,5 @@
 use solana_sdk::{
-    account::Account,
+    account::AccountSharedData,
     instruction::{CompiledInstruction, Instruction, InstructionError},
     keyed_account::KeyedAccount,
     message::Message,
@@ -36,7 +36,7 @@ pub trait InvokeContext {
         &mut self,
         message: &Message,
         instruction: &CompiledInstruction,
-        accounts: &[Rc<RefCell<Account>>],
+        accounts: &[Rc<RefCell<AccountSharedData>>],
         caller_pivileges: Option<&[bool]>,
     ) -> Result<(), InstructionError>;
     /// Get the program ID of the currently executing program
@@ -59,7 +59,15 @@ pub trait InvokeContext {
     /// Get the bank's active feature set
     fn is_feature_active(&self, feature_id: &Pubkey) -> bool;
     /// Get an account from a pre-account
-    fn get_account(&self, pubkey: &Pubkey) -> Option<RefCell<Account>>;
+    fn get_account(&self, pubkey: &Pubkey) -> Option<Rc<RefCell<AccountSharedData>>>;
+    /// Update timing
+    fn update_timing(
+        &mut self,
+        serialize_us: u64,
+        create_vm_us: u64,
+        execute_us: u64,
+        deserialize_us: u64,
+    );
 }
 
 /// Convenience macro to log a message with an `Rc<RefCell<dyn Logger>>`
@@ -120,6 +128,8 @@ pub struct BpfComputeBudget {
     pub log_pubkey_units: u64,
     /// Maximum cross-program invocation instruction size
     pub max_cpi_instruction_size: usize,
+    /// Number of account data bytes per conpute unit charged during a cross-program invocation
+    pub cpi_bytes_per_unit: u64,
 }
 impl Default for BpfComputeBudget {
     fn default() -> Self {
@@ -141,6 +151,7 @@ impl BpfComputeBudget {
             stack_frame_size: 4_096,
             log_pubkey_units: 100,
             max_cpi_instruction_size: 1280, // IPv6 Min MTU size
+            cpi_bytes_per_unit: 250,        // ~50MB at 200,000 units
         }
     }
 }
@@ -284,11 +295,11 @@ impl Default for MockInvokeContext {
 }
 impl InvokeContext for MockInvokeContext {
     fn push(&mut self, _key: &Pubkey) -> Result<(), InstructionError> {
-        self.invoke_depth += 1;
+        self.invoke_depth = self.invoke_depth.saturating_add(1);
         Ok(())
     }
     fn pop(&mut self) {
-        self.invoke_depth -= 1;
+        self.invoke_depth = self.invoke_depth.saturating_sub(1);
     }
     fn invoke_depth(&self) -> usize {
         self.invoke_depth
@@ -297,7 +308,7 @@ impl InvokeContext for MockInvokeContext {
         &mut self,
         _message: &Message,
         _instruction: &CompiledInstruction,
-        _accounts: &[Rc<RefCell<Account>>],
+        _accounts: &[Rc<RefCell<AccountSharedData>>],
         _caller_pivileges: Option<&[bool]>,
     ) -> Result<(), InstructionError> {
         Ok(())
@@ -325,7 +336,15 @@ impl InvokeContext for MockInvokeContext {
     fn is_feature_active(&self, _feature_id: &Pubkey) -> bool {
         true
     }
-    fn get_account(&self, _pubkey: &Pubkey) -> Option<RefCell<Account>> {
+    fn get_account(&self, _pubkey: &Pubkey) -> Option<Rc<RefCell<AccountSharedData>>> {
         None
+    }
+    fn update_timing(
+        &mut self,
+        _serialize_us: u64,
+        _create_vm_us: u64,
+        _execute_us: u64,
+        _deserialize_us: u64,
+    ) {
     }
 }

@@ -745,12 +745,16 @@ export class SystemProgram {
       space: params.space,
       programId: params.programId.toBuffer(),
     });
+    let keys = [
+      {pubkey: params.fromPubkey, isSigner: true, isWritable: true},
+      {pubkey: params.newAccountPubkey, isSigner: false, isWritable: true},
+    ];
+    if (params.basePubkey != params.fromPubkey) {
+      keys.push({pubkey: params.basePubkey, isSigner: true, isWritable: false});
+    }
 
     return new TransactionInstruction({
-      keys: [
-        {pubkey: params.fromPubkey, isSigner: true, isWritable: true},
-        {pubkey: params.newAccountPubkey, isSigner: false, isWritable: true},
-      ],
+      keys,
       programId: this.programId,
       data,
     });

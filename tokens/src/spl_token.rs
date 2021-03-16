@@ -4,8 +4,8 @@ use crate::{
 };
 use console::style;
 use solana_account_decoder::parse_token::{
-    pubkey_from_spl_token_v2_0, real_number_string, spl_token_v2_0_pubkey,
-    token_amount_to_ui_amount,
+    pubkey_from_spl_token_v2_0, real_number_string, real_number_string_trimmed,
+    spl_token_v2_0_pubkey,
 };
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::{instruction::Instruction, native_token::lamports_to_sol};
@@ -120,7 +120,7 @@ pub fn check_spl_token_balances(
     if source_token.amount < allocation_amount {
         return Err(Error::InsufficientFunds(
             vec![FundingSource::SplTokenAccount].into(),
-            token_amount_to_ui_amount(allocation_amount, spl_token_args.decimals).ui_amount,
+            real_number_string_trimmed(allocation_amount, spl_token_args.decimals),
         ));
     }
     Ok(())

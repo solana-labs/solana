@@ -310,7 +310,7 @@ impl RepairWeight {
 
     // Attempts to chain the orphan subtree rooted at `orphan_tree_root`
     // to any earlier subtree with new any ancestry information in `blockstore`.
-    // Returns the earliest known ancestor of `heavest_tree_root`.
+    // Returns the earliest known ancestor of `heaviest_tree_root`.
     fn update_orphan_ancestors(
         &mut self,
         blockstore: &Blockstore,

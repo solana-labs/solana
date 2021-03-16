@@ -201,7 +201,7 @@ impl Shred {
         index: u32,
         parent_offset: u16,
         data: Option<&[u8]>,
-        is_last_in_fec_set: bool,
+        is_last_data: bool,
         is_last_in_slot: bool,
         reference_tick: u8,
         version: u16,
@@ -226,7 +226,7 @@ impl Shred {
             size,
         };
 
-        if is_last_in_fec_set {
+        if is_last_data {
             data_header.flags |= DATA_COMPLETE_SHRED
         }
 
@@ -489,6 +489,18 @@ impl Shred {
         }
     }
 
+    // Get slot from a shred packet with partial deserialize
+    pub fn get_slot_from_packet(p: &Packet) -> Option<Slot> {
+        let slot_start = OFFSET_OF_SHRED_SLOT;
+        let slot_end = slot_start + SIZE_OF_SHRED_SLOT;
+
+        if slot_end > p.meta.size {
+            return None;
+        }
+
+        limited_deserialize::<Slot>(&p.data[slot_start..slot_end]).ok()
+    }
+
     pub fn reference_tick_from_data(data: &[u8]) -> u8 {
         let flags = data[SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_DATA_SHRED_HEADER
             - size_of::<u8>()
@@ -584,7 +596,7 @@ impl Shredder {
                         let fec_set_index =
                             shred_index - (i % MAX_DATA_SHREDS_PER_FEC_BLOCK as usize) as u32;
 
-                        let (is_last_in_fec_set, is_last_in_slot) = {
+                        let (is_last_data, is_last_in_slot) = {
                             if shred_index == last_shred_index {
                                 (true, is_last_in_slot)
                             } else {
@@ -597,7 +609,7 @@ impl Shredder {
                             shred_index,
                             (self.slot - self.parent_slot) as u16,
                             Some(shred_data),
-                            is_last_in_fec_set,
+                            is_last_data,
                             is_last_in_slot,
                             self.reference_tick,
                             self.version,
@@ -1070,7 +1082,7 @@ pub fn verify_test_data_shred(
     pk: &Pubkey,
     verify: bool,
     is_last_in_slot: bool,
-    is_last_in_fec_set: bool,
+    is_last_data: bool,
 ) {
     assert_eq!(shred.payload.len(), SHRED_PAYLOAD_SIZE);
     assert!(shred.is_data());
@@ -1083,7 +1095,7 @@ pub fn verify_test_data_shred(
     } else {
         assert!(!shred.last_in_slot());
     }
-    if is_last_in_fec_set {
+    if is_last_data {
         assert!(shred.data_complete());
     } else {
         assert!(!shred.data_complete());

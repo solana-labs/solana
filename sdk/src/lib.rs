@@ -1,6 +1,5 @@
 #![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(specialization))]
 #![cfg_attr(RUSTC_NEEDS_PROC_MACRO_HYGIENE, feature(proc_macro_hygiene))]
-#![allow(clippy::integer_arithmetic)]
 
 // Allows macro expansion of `use ::solana_sdk::*` to work within this crate
 extern crate self as solana_sdk;
@@ -9,6 +8,7 @@ pub use solana_program::*;
 
 pub mod account;
 pub mod account_utils;
+pub mod arithmetic;
 pub mod builtins;
 pub mod client;
 pub mod commitment_config;

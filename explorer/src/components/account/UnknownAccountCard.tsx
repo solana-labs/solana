@@ -5,13 +5,15 @@ import { TableCardBody } from "components/common/TableCardBody";
 import { Address } from "components/common/Address";
 import { addressLabel } from "utils/tx";
 import { useCluster } from "providers/cluster";
+import { useTokenRegistry } from "providers/mints/token-registry";
 
 export function UnknownAccountCard({ account }: { account: Account }) {
   const { details, lamports } = account;
   const { cluster } = useCluster();
+  const { tokenRegistry } = useTokenRegistry();
   if (lamports === undefined) return null;
 
-  const label = addressLabel(account.pubkey.toBase58(), cluster);
+  const label = addressLabel(account.pubkey.toBase58(), cluster, tokenRegistry);
   return (
     <div className="card">
       <div className="card-header align-items-center">

@@ -7,7 +7,7 @@ type Tags =
   | undefined;
 
 export function reportError(err: Error, tags: Tags) {
-  console.error(err);
+  console.error(err, err.message);
   try {
     Sentry.captureException(err, {
       tags,

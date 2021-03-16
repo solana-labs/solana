@@ -1,7 +1,13 @@
 //! calculate and collect rent from Accounts
 use solana_sdk::{
-    account::Account, clock::Epoch, epoch_schedule::EpochSchedule, genesis_config::GenesisConfig,
-    incinerator, pubkey::Pubkey, rent::Rent, sysvar,
+    account::{AccountSharedData, ReadableAccount},
+    clock::Epoch,
+    epoch_schedule::EpochSchedule,
+    genesis_config::GenesisConfig,
+    incinerator,
+    pubkey::Pubkey,
+    rent::Rent,
+    sysvar,
 };
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug, AbiExample)]
@@ -53,8 +59,7 @@ impl RentCollector {
     pub fn collect_from_existing_account(
         &self,
         address: &Pubkey,
-        account: &mut Account,
-        rent_fix_enabled: bool,
+        account: &mut AccountSharedData,
     ) -> u64 {
         if account.executable
             || account.rent_epoch > self.epoch
@@ -76,14 +81,14 @@ impl RentCollector {
 
             let (rent_due, exempt) =
                 self.rent
-                    .due(account.lamports, account.data.len(), years_elapsed);
+                    .due(account.lamports, account.data().len(), years_elapsed);
 
             if exempt || rent_due != 0 {
                 if account.lamports > rent_due {
                     account.rent_epoch = self.epoch
-                        + if rent_fix_enabled && exempt {
+                        + if exempt {
                             // Rent isn't collected for the next epoch
-                            // Make sure to check exempt status later in curent epoch again
+                            // Make sure to check exempt status later in current epoch again
                             0
                         } else {
                             // Rent is collected for next epoch
@@ -93,7 +98,7 @@ impl RentCollector {
                     rent_due
                 } else {
                     let rent_charged = account.lamports;
-                    *account = Account::default();
+                    *account = AccountSharedData::default();
                     rent_charged
                 }
             } else {
@@ -107,18 +112,18 @@ impl RentCollector {
     pub fn collect_from_created_account(
         &self,
         address: &Pubkey,
-        account: &mut Account,
-        enable_new_behavior: bool,
+        account: &mut AccountSharedData,
     ) -> u64 {
         // initialize rent_epoch as created at this epoch
         account.rent_epoch = self.epoch;
-        self.collect_from_existing_account(address, account, enable_new_behavior)
+        self.collect_from_existing_account(address, account)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use solana_sdk::account::Account;
 
     #[test]
     fn test_collect_from_account_created_and_existing() {
@@ -127,11 +132,11 @@ mod tests {
         let new_epoch = 3;
 
         let (mut created_account, mut existing_account) = {
-            let account = Account {
+            let account = AccountSharedData::from(Account {
                 lamports: old_lamports,
                 rent_epoch: old_epoch,
                 ..Account::default()
-            };
+            });
 
             (account.clone(), account)
         };
@@ -139,21 +144,15 @@ mod tests {
         let rent_collector = RentCollector::default().clone_with_epoch(new_epoch);
 
         // collect rent on a newly-created account
-        let collected = rent_collector.collect_from_created_account(
-            &solana_sdk::pubkey::new_rand(),
-            &mut created_account,
-            true,
-        );
+        let collected = rent_collector
+            .collect_from_created_account(&solana_sdk::pubkey::new_rand(), &mut created_account);
         assert!(created_account.lamports < old_lamports);
         assert_eq!(created_account.lamports + collected, old_lamports);
         assert_ne!(created_account.rent_epoch, old_epoch);
 
         // collect rent on a already-existing account
-        let collected = rent_collector.collect_from_existing_account(
-            &solana_sdk::pubkey::new_rand(),
-            &mut existing_account,
-            true,
-        );
+        let collected = rent_collector
+            .collect_from_existing_account(&solana_sdk::pubkey::new_rand(), &mut existing_account);
         assert!(existing_account.lamports < old_lamports);
         assert_eq!(existing_account.lamports + collected, old_lamports);
         assert_ne!(existing_account.rent_epoch, old_epoch);
@@ -165,7 +164,7 @@ mod tests {
 
     #[test]
     fn test_rent_exempt_temporal_escape() {
-        let mut account = Account::default();
+        let mut account = AccountSharedData::default();
         let epoch = 3;
         let huge_lamports = 123_456_789_012;
         let tiny_lamports = 789_012;
@@ -179,7 +178,7 @@ mod tests {
         let rent_collector = RentCollector::default().clone_with_epoch(epoch);
 
         // first mark account as being collected while being rent-exempt
-        collected = rent_collector.collect_from_existing_account(&pubkey, &mut account, true);
+        collected = rent_collector.collect_from_existing_account(&pubkey, &mut account);
         assert_eq!(account.lamports, huge_lamports);
         assert_eq!(collected, 0);
 
@@ -187,7 +186,7 @@ mod tests {
         account.lamports = tiny_lamports;
 
         // ... and trigger another rent collection on the same epoch and check that rent is working
-        collected = rent_collector.collect_from_existing_account(&pubkey, &mut account, true);
+        collected = rent_collector.collect_from_existing_account(&pubkey, &mut account);
         assert_eq!(account.lamports, tiny_lamports - collected);
         assert_ne!(collected, 0);
     }

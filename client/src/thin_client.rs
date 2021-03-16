@@ -309,10 +309,6 @@ impl ThinClient {
             .map_err(|e| e.into())
     }
 
-    pub fn validator_exit(&self) -> TransportResult<bool> {
-        self.rpc_client().validator_exit().map_err(|e| e.into())
-    }
-
     pub fn get_num_blocks_since_signature_confirmation(
         &mut self,
         sig: &Signature,

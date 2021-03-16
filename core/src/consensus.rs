@@ -1253,7 +1253,11 @@ pub mod test {
         },
     };
     use solana_sdk::{
-        account::Account, clock::Slot, hash::Hash, pubkey::Pubkey, signature::Signer,
+        account::{Account, AccountSharedData, WritableAccount},
+        clock::Slot,
+        hash::Hash,
+        pubkey::Pubkey,
+        signature::Signer,
         slot_history::SlotHistory,
     };
     use solana_vote_program::{
@@ -1571,18 +1575,18 @@ pub mod test {
     fn gen_stakes(stake_votes: &[(u64, &[u64])]) -> Vec<(Pubkey, (u64, ArcVoteAccount))> {
         let mut stakes = vec![];
         for (lamports, votes) in stake_votes {
-            let mut account = Account {
+            let mut account = AccountSharedData::from(Account {
                 data: vec![0; VoteState::size_of()],
                 lamports: *lamports,
                 ..Account::default()
-            };
+            });
             let mut vote_state = VoteState::default();
             for slot in *votes {
                 vote_state.process_slot_vote_unchecked(*slot);
             }
             VoteState::serialize(
                 &VoteStateVersions::new_current(vote_state),
-                &mut account.data,
+                &mut account.data_as_mut_slice(),
             )
             .expect("serialize state");
             stakes.push((
@@ -2251,10 +2255,10 @@ pub mod test {
     #[test]
     fn test_stake_is_updated_for_entire_branch() {
         let mut voted_stakes = HashMap::new();
-        let account = Account {
+        let account = AccountSharedData::from(Account {
             lamports: 1,
             ..Account::default()
-        };
+        });
         let set: HashSet<u64> = vec![0u64, 1u64].into_iter().collect();
         let ancestors: HashMap<u64, HashSet<u64>> = [(2u64, set)].iter().cloned().collect();
         Tower::update_ancestor_voted_stakes(&mut voted_stakes, 2, account.lamports, &ancestors);

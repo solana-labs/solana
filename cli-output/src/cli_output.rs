@@ -2,10 +2,12 @@ use {
     crate::{
         display::{
             build_balance_message, build_balance_message_with_config, format_labeled_address,
-            unix_timestamp_to_string, writeln_name_value, BuildBalanceMessageConfig,
+            unix_timestamp_to_string, writeln_name_value, writeln_transaction,
+            BuildBalanceMessageConfig,
         },
         QuietDisplay, VerboseDisplay,
     },
+    chrono::{Local, TimeZone},
     console::{style, Emoji},
     inflector::cases::titlecase::to_title_case,
     serde::{Deserialize, Serialize},
@@ -17,16 +19,20 @@ use {
         RpcVoteAccountInfo,
     },
     solana_sdk::{
-        clock::{self, Epoch, Slot, UnixTimestamp},
+        clock::{Epoch, Slot, UnixTimestamp},
         epoch_info::EpochInfo,
         hash::Hash,
         native_token::lamports_to_sol,
         pubkey::Pubkey,
         signature::Signature,
         stake_history::StakeHistoryEntry,
-        transaction::Transaction,
+        transaction::{Transaction, TransactionError},
     },
     solana_stake_program::stake_state::{Authorized, Lockup},
+    solana_transaction_status::{
+        EncodedConfirmedBlock, EncodedTransaction, TransactionConfirmationStatus,
+        UiTransactionStatusMeta,
+    },
     solana_vote_program::{
         authorized_voters::AuthorizedVoters,
         vote_state::{BlockTimestamp, Lockout, MAX_EPOCH_CREDITS_HISTORY, MAX_LOCKOUT_HISTORY},
@@ -225,12 +231,8 @@ pub struct CliSlotStatus {
 pub struct CliEpochInfo {
     #[serde(flatten)]
     pub epoch_info: EpochInfo,
-}
-
-impl From<EpochInfo> for CliEpochInfo {
-    fn from(epoch_info: EpochInfo) -> Self {
-        Self { epoch_info }
-    }
+    #[serde(skip)]
+    pub average_slot_time_ms: u64,
 }
 
 impl QuietDisplay for CliEpochInfo {}
@@ -280,16 +282,16 @@ impl fmt::Display for CliEpochInfo {
             "Epoch Completed Time:",
             &format!(
                 "{}/{} ({} remaining)",
-                slot_to_human_time(self.epoch_info.slot_index),
-                slot_to_human_time(self.epoch_info.slots_in_epoch),
-                slot_to_human_time(remaining_slots_in_epoch)
+                slot_to_human_time(self.epoch_info.slot_index, self.average_slot_time_ms),
+                slot_to_human_time(self.epoch_info.slots_in_epoch, self.average_slot_time_ms),
+                slot_to_human_time(remaining_slots_in_epoch, self.average_slot_time_ms)
             ),
         )
     }
 }
 
-fn slot_to_human_time(slot: Slot) -> String {
-    humantime::format_duration(Duration::from_millis(slot * clock::DEFAULT_MS_PER_SLOT)).to_string()
+fn slot_to_human_time(slot: Slot, slot_time_ms: u64) -> String {
+    humantime::format_duration(Duration::from_secs((slot * slot_time_ms) / 1000)).to_string()
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -1451,17 +1453,17 @@ impl fmt::Display for CliSupply {
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CliFees {
+pub struct CliFeesInner {
     pub slot: Slot,
     pub blockhash: String,
     pub lamports_per_signature: u64,
-    pub last_valid_slot: Slot,
+    pub last_valid_slot: Option<Slot>,
 }
 
-impl QuietDisplay for CliFees {}
-impl VerboseDisplay for CliFees {}
+impl QuietDisplay for CliFeesInner {}
+impl VerboseDisplay for CliFeesInner {}
 
-impl fmt::Display for CliFees {
+impl fmt::Display for CliFeesInner {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln_name_value(f, "Blockhash:", &self.blockhash)?;
         writeln_name_value(
@@ -1469,8 +1471,51 @@ impl fmt::Display for CliFees {
             "Lamports per signature:",
             &self.lamports_per_signature.to_string(),
         )?;
-        writeln_name_value(f, "Last valid slot:", &self.last_valid_slot.to_string())?;
-        Ok(())
+        let last_valid_slot = self
+            .last_valid_slot
+            .map(|s| s.to_string())
+            .unwrap_or_default();
+        writeln_name_value(f, "Last valid slot:", &last_valid_slot)
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliFees {
+    #[serde(flatten, skip_serializing_if = "Option::is_none")]
+    pub inner: Option<CliFeesInner>,
+}
+
+impl QuietDisplay for CliFees {}
+impl VerboseDisplay for CliFees {}
+
+impl fmt::Display for CliFees {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.inner.as_ref() {
+            Some(inner) => write!(f, "{}", inner),
+            None => write!(f, "Fees unavailable"),
+        }
+    }
+}
+
+impl CliFees {
+    pub fn some(
+        slot: Slot,
+        blockhash: Hash,
+        lamports_per_signature: u64,
+        last_valid_slot: Option<Slot>,
+    ) -> Self {
+        Self {
+            inner: Some(CliFeesInner {
+                slot,
+                blockhash: blockhash.to_string(),
+                lamports_per_signature,
+                last_valid_slot,
+            }),
+        }
+    }
+    pub fn none() -> Self {
+        Self { inner: None }
     }
 }
 
@@ -1490,7 +1535,11 @@ impl fmt::Display for CliTokenAccount {
         writeln!(f)?;
         writeln_name_value(f, "Address:", &self.address)?;
         let account = &self.token_account;
-        writeln_name_value(f, "Balance:", &account.token_amount.ui_amount)?;
+        writeln_name_value(
+            f,
+            "Balance:",
+            &account.token_amount.real_number_string_trimmed(),
+        )?;
         let mint = format!(
             "{}{}",
             account.mint,
@@ -1503,7 +1552,7 @@ impl fmt::Display for CliTokenAccount {
             writeln!(f, "Delegation:")?;
             writeln_name_value(f, "  Delegate:", delegate)?;
             let allowance = account.delegated_amount.as_ref().unwrap();
-            writeln_name_value(f, "  Allowance:", &allowance.ui_amount)?;
+            writeln_name_value(f, "  Allowance:", &allowance.real_number_string_trimmed())?;
         }
         writeln_name_value(
             f,
@@ -1570,8 +1619,32 @@ impl fmt::Display for CliProgramAuthority {
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct CliProgram {
+    pub program_id: String,
+    pub owner: String,
+    pub data_len: usize,
+}
+impl QuietDisplay for CliProgram {}
+impl VerboseDisplay for CliProgram {}
+impl fmt::Display for CliProgram {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f)?;
+        writeln_name_value(f, "Program Id:", &self.program_id)?;
+        writeln_name_value(f, "Owner:", &self.owner)?;
+        writeln_name_value(
+            f,
+            "Data Length:",
+            &format!("{:?} ({:#x?}) bytes", self.data_len, self.data_len),
+        )?;
+        Ok(())
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CliUpgradeableProgram {
     pub program_id: String,
+    pub owner: String,
     pub programdata_address: String,
     pub authority: String,
     pub last_deploy_slot: u64,
@@ -1583,6 +1656,7 @@ impl fmt::Display for CliUpgradeableProgram {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f)?;
         writeln_name_value(f, "Program Id:", &self.program_id)?;
+        writeln_name_value(f, "Owner:", &self.owner)?;
         writeln_name_value(f, "ProgramData Address:", &self.programdata_address)?;
         writeln_name_value(f, "Authority:", &self.authority)?;
         writeln_name_value(
@@ -1708,7 +1782,8 @@ pub fn parse_sign_only_reply_string(reply: &str) -> SignOnly {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum CliSignatureVerificationStatus {
     None,
     Pass,
@@ -1735,6 +1810,192 @@ impl fmt::Display for CliSignatureVerificationStatus {
             Self::None => write!(f, "none"),
             Self::Pass => write!(f, "pass"),
             Self::Fail => write!(f, "fail"),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliBlock {
+    #[serde(flatten)]
+    pub encoded_confirmed_block: EncodedConfirmedBlock,
+    #[serde(skip_serializing)]
+    pub slot: Slot,
+}
+
+impl QuietDisplay for CliBlock {}
+impl VerboseDisplay for CliBlock {}
+
+impl fmt::Display for CliBlock {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "Slot: {}", self.slot)?;
+        writeln!(
+            f,
+            "Parent Slot: {}",
+            self.encoded_confirmed_block.parent_slot
+        )?;
+        writeln!(f, "Blockhash: {}", self.encoded_confirmed_block.blockhash)?;
+        writeln!(
+            f,
+            "Previous Blockhash: {}",
+            self.encoded_confirmed_block.previous_blockhash
+        )?;
+        if let Some(block_time) = self.encoded_confirmed_block.block_time {
+            writeln!(f, "Block Time: {:?}", Local.timestamp(block_time, 0))?;
+        }
+        if !self.encoded_confirmed_block.rewards.is_empty() {
+            let mut rewards = self.encoded_confirmed_block.rewards.clone();
+            rewards.sort_by(|a, b| a.pubkey.cmp(&b.pubkey));
+            let mut total_rewards = 0;
+            writeln!(f, "Rewards:")?;
+            writeln!(
+                f,
+                "  {:<44}  {:^15}  {:<15}  {:<20}  {:>14}",
+                "Address", "Type", "Amount", "New Balance", "Percent Change"
+            )?;
+            for reward in rewards {
+                let sign = if reward.lamports < 0 { "-" } else { "" };
+
+                total_rewards += reward.lamports;
+                writeln!(
+                    f,
+                    "  {:<44}  {:^15}  {:>15}  {}",
+                    reward.pubkey,
+                    if let Some(reward_type) = reward.reward_type {
+                        format!("{}", reward_type)
+                    } else {
+                        "-".to_string()
+                    },
+                    format!(
+                        "{}◎{:<14.9}",
+                        sign,
+                        lamports_to_sol(reward.lamports.abs() as u64)
+                    ),
+                    if reward.post_balance == 0 {
+                        "          -                 -".to_string()
+                    } else {
+                        format!(
+                            "◎{:<19.9}  {:>13.9}%",
+                            lamports_to_sol(reward.post_balance),
+                            (reward.lamports.abs() as f64
+                                / (reward.post_balance as f64 - reward.lamports as f64))
+                                * 100.0
+                        )
+                    }
+                )?;
+            }
+
+            let sign = if total_rewards < 0 { "-" } else { "" };
+            writeln!(
+                f,
+                "Total Rewards: {}◎{:<12.9}",
+                sign,
+                lamports_to_sol(total_rewards.abs() as u64)
+            )?;
+        }
+        for (index, transaction_with_meta) in
+            self.encoded_confirmed_block.transactions.iter().enumerate()
+        {
+            writeln!(f, "Transaction {}:", index)?;
+            writeln_transaction(
+                f,
+                &transaction_with_meta.transaction.decode().unwrap(),
+                &transaction_with_meta.meta,
+                "  ",
+                None,
+                None,
+            )?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliTransaction {
+    pub transaction: EncodedTransaction,
+    pub meta: Option<UiTransactionStatusMeta>,
+    pub block_time: Option<UnixTimestamp>,
+    #[serde(skip_serializing)]
+    pub slot: Option<Slot>,
+    #[serde(skip_serializing)]
+    pub decoded_transaction: Transaction,
+    #[serde(skip_serializing)]
+    pub prefix: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub sigverify_status: Vec<CliSignatureVerificationStatus>,
+}
+
+impl QuietDisplay for CliTransaction {}
+impl VerboseDisplay for CliTransaction {}
+
+impl fmt::Display for CliTransaction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln_transaction(
+            f,
+            &self.decoded_transaction,
+            &self.meta,
+            &self.prefix,
+            if !self.sigverify_status.is_empty() {
+                Some(&self.sigverify_status)
+            } else {
+                None
+            },
+            self.block_time,
+        )
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliTransactionConfirmation {
+    pub confirmation_status: Option<TransactionConfirmationStatus>,
+    #[serde(flatten, skip_serializing_if = "Option::is_none")]
+    pub transaction: Option<CliTransaction>,
+    #[serde(skip_serializing)]
+    pub get_transaction_error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub err: Option<TransactionError>,
+}
+
+impl QuietDisplay for CliTransactionConfirmation {}
+impl VerboseDisplay for CliTransactionConfirmation {
+    fn write_str(&self, w: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        if let Some(transaction) = &self.transaction {
+            writeln!(
+                w,
+                "\nTransaction executed in slot {}:",
+                transaction.slot.expect("slot should exist")
+            )?;
+            write!(w, "{}", transaction)?;
+        } else if let Some(confirmation_status) = &self.confirmation_status {
+            if confirmation_status != &TransactionConfirmationStatus::Finalized {
+                writeln!(w)?;
+                writeln!(
+                    w,
+                    "Unable to get finalized transaction details: not yet finalized"
+                )?;
+            } else if let Some(err) = &self.get_transaction_error {
+                writeln!(w)?;
+                writeln!(w, "Unable to get finalized transaction details: {}", err)?;
+            }
+        }
+        writeln!(w)?;
+        write!(w, "{}", self)
+    }
+}
+
+impl fmt::Display for CliTransactionConfirmation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match &self.confirmation_status {
+            None => write!(f, "Not found"),
+            Some(confirmation_status) => {
+                if let Some(err) = &self.err {
+                    write!(f, "Transaction failed: {}", err)
+                } else {
+                    write!(f, "{:?}", confirmation_status)
+                }
+            }
         }
     }
 }

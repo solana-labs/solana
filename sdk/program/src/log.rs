@@ -3,7 +3,7 @@
 use crate::account_info::AccountInfo;
 
 #[macro_export]
-#[deprecated(since = "1.4.14", note = "use `msg` macro instead")]
+#[deprecated(since = "1.4.14", note = "Please use `msg` macro instead")]
 macro_rules! info {
     ($msg:expr) => {
         $crate::log::sol_log($msg)

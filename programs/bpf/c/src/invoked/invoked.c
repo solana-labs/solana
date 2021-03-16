@@ -160,7 +160,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
   }
 
   case VERIFY_PRIVILEGE_ESCALATION: {
-    sol_log("Should never get here!");
+    sol_log("Verify privilege escalation");
     break;
   }
 

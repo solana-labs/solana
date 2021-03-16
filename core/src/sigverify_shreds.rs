@@ -2,10 +2,9 @@
 use crate::sigverify;
 use crate::sigverify_stage::SigVerifier;
 use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
-use solana_ledger::shred::{OFFSET_OF_SHRED_SLOT, SIZE_OF_SHRED_SLOT};
+use solana_ledger::shred::Shred;
 use solana_ledger::sigverify_shreds::verify_shreds_gpu;
-use solana_perf::packet::{limited_deserialize, Packets};
-use solana_perf::recycler_cache::RecyclerCache;
+use solana_perf::{self, packet::Packets, recycler_cache::RecyclerCache};
 use solana_runtime::bank_forks::BankForks;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, RwLock};
@@ -35,18 +34,7 @@ impl ShredSigVerifier {
     fn read_slots(batches: &[Packets]) -> HashSet<u64> {
         batches
             .iter()
-            .flat_map(|batch| {
-                batch.packets.iter().filter_map(|packet| {
-                    let slot_start = OFFSET_OF_SHRED_SLOT;
-                    let slot_end = slot_start + SIZE_OF_SHRED_SLOT;
-                    trace!("slot {} {}", slot_start, slot_end,);
-                    if slot_end <= packet.meta.size {
-                        limited_deserialize(&packet.data[slot_start..slot_end]).ok()
-                    } else {
-                        None
-                    }
-                })
-            })
+            .flat_map(|batch| batch.packets.iter().filter_map(Shred::get_slot_from_packet))
             .collect()
     }
 }
@@ -67,7 +55,7 @@ impl SigVerifier for ShredSigVerifier {
         leader_slots.insert(std::u64::MAX, [0u8; 32]);
 
         let r = verify_shreds_gpu(&batches, &leader_slots, &self.recycler_cache);
-        sigverify::mark_disabled(&mut batches, &r);
+        solana_perf::sigverify::mark_disabled(&mut batches, &r);
         batches
     }
 }
