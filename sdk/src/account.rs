@@ -111,6 +111,14 @@ impl Account {
     }
 }
 
+// AccountSharedData stub for forwards compatibility with the v1.6 release line
+pub struct AccountSharedData {}
+impl AccountSharedData {
+    pub fn new_ref(lamports: u64, space: usize, owner: &Pubkey) -> Rc<RefCell<Account>> {
+        Rc::new(RefCell::new(Account::new(lamports, space, owner)))
+    }
+}
+
 /// Create an `Account` from a `Sysvar`.
 pub fn create_account<S: Sysvar>(sysvar: &S, lamports: u64) -> Account {
     let data_len = S::size_of().max(bincode::serialized_size(sysvar).unwrap() as usize);
