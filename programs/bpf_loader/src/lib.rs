@@ -1521,6 +1521,11 @@ mod tests {
         );
     }
 
+    fn truncate_data(account: &mut AccountSharedData, len: usize) {
+        // when account data becomes copy on write, this operation will be more complicated
+        account.data.truncate(len);
+    }
+
     #[test]
     fn test_bpf_loader_upgradeable_deploy_with_max_len() {
         let (genesis_config, mint_keypair) = create_genesis_config(1_000_000_000);
@@ -2006,9 +2011,10 @@ mod tests {
         // Test Bad ELF data
         bank.clear_signatures();
         let mut modified_buffer_account = buffer_account;
-        modified_buffer_account
-            .data
-            .truncate(UpgradeableLoaderState::buffer_len(1).unwrap());
+        truncate_data(
+            &mut modified_buffer_account,
+            UpgradeableLoaderState::buffer_len(1).unwrap(),
+        );
         bank.store_account(&buffer_address, &modified_buffer_account);
         bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
         bank.store_account(&programdata_address, &AccountSharedData::default());
@@ -2050,7 +2056,7 @@ mod tests {
         modified_buffer_account.data_as_mut_slice()
             [UpgradeableLoaderState::buffer_data_offset().unwrap()..]
             .copy_from_slice(&elf);
-        modified_buffer_account.data.truncate(5);
+        truncate_data(&mut modified_buffer_account, 5);
         bank.store_account(&buffer_address, &modified_buffer_account);
         bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
         bank.store_account(&programdata_address, &AccountSharedData::default());
@@ -2687,7 +2693,7 @@ mod tests {
                 authority_address: Some(upgrade_authority_address),
             })
             .unwrap();
-        buffer_account.borrow_mut().data.truncate(5);
+        truncate_data(&mut buffer_account.borrow_mut(), 5);
         assert_eq!(
             Err(InstructionError::InvalidAccountData),
             process_instruction(
