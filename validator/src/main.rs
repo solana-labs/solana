@@ -1205,8 +1205,8 @@ pub fn main() {
                 .help("Path to accounts shrink path which can hold a compacted account set."),
         )
         .arg(
-            Arg::with_name("snapshot_dir")
-                .long("snapshot-dir")
+            Arg::with_name("snapshots")
+                .long("snapshots")
                 .value_name("DIR")
                 .takes_value(true)
                 .help("Use DIR as persistent snapshot [default: --ledger value]"),
