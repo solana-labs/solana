@@ -10,6 +10,7 @@ homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-cli-output"
 
 [dependencies]
+base64 = "0.13.0"
 chrono = { version = "0.4.11", features = ["serde"] }
 console = "0.11.3"
 humantime = "2.0.1"
