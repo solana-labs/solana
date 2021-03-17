@@ -12,6 +12,7 @@ use solana_remote_wallet::{
 };
 use solana_sdk::{
     hash::Hash,
+    message::Message,
     pubkey::Pubkey,
     signature::{
         keypair_from_seed, keypair_from_seed_phrase_and_passphrase, read_keypair,
@@ -67,6 +68,18 @@ impl CliSignerInfo {
         } else {
             None
         }
+    }
+    pub fn signers_for_message(&self, message: &Message) -> Vec<&dyn Signer> {
+        self.signers
+            .iter()
+            .filter_map(|k| {
+                if message.signer_keys().contains(&&k.pubkey()) {
+                    Some(k.as_ref())
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 }
 
@@ -356,6 +369,7 @@ fn sanitize_seed_phrase(seed_phrase: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use solana_sdk::system_instruction;
 
     #[test]
     fn test_sanitize_seed_phrase() {
@@ -364,5 +378,36 @@ mod tests {
             "Mary had a little lamb".to_owned(),
             sanitize_seed_phrase(seed_phrase)
         );
+    }
+
+    #[test]
+    fn test_signer_info_signers_for_message() {
+        let source = Keypair::new();
+        let fee_payer = Keypair::new();
+        let nonsigner1 = Keypair::new();
+        let nonsigner2 = Keypair::new();
+        let recipient = Pubkey::new_unique();
+        let message = Message::new(
+            &[system_instruction::transfer(
+                &source.pubkey(),
+                &recipient,
+                42,
+            )],
+            Some(&fee_payer.pubkey()),
+        );
+        let signers = vec![
+            Box::new(fee_payer) as Box<dyn Signer>,
+            Box::new(source) as Box<dyn Signer>,
+            Box::new(nonsigner1) as Box<dyn Signer>,
+            Box::new(nonsigner2) as Box<dyn Signer>,
+        ];
+        let signer_info = CliSignerInfo { signers };
+        let msg_signers = signer_info.signers_for_message(&message);
+        let signer_pubkeys = msg_signers.iter().map(|s| s.pubkey()).collect::<Vec<_>>();
+        let expect = vec![
+            signer_info.signers[0].pubkey(),
+            signer_info.signers[1].pubkey(),
+        ];
+        assert_eq!(signer_pubkeys, expect);
     }
 }
