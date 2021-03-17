@@ -168,7 +168,7 @@ export function tokenLabel(
   if (tokenInfo.name === tokenInfo.symbol) {
     return tokenInfo.name;
   }
-  return `${tokenInfo.name} (${tokenInfo.symbol})`;
+  return `${tokenInfo.symbol} - ${tokenInfo.name}`;
 }
 
 export function addressLabel(
