@@ -375,6 +375,11 @@ pub mod tests {
         assert_eq!(stakes.highest_staked_node(), Some(vote11_node_pubkey))
     }
 
+    fn data_push(account: &mut AccountSharedData, value: u8) {
+        // this will get more complicated when data is copy on write
+        account.data.push(value);
+    }
+
     #[test]
     fn test_stakes_vote_account_disappear_reappear() {
         let mut stakes = Stakes {
@@ -413,7 +418,7 @@ pub mod tests {
 
         // Vote account too big
         let cache_data = vote_account.data().to_vec();
-        vote_account.data.push(0);
+        data_push(&mut vote_account, 0);
         stakes.store(&vote_pubkey, &vote_account, true, true);
 
         {
