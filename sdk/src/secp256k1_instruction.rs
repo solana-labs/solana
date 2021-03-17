@@ -198,7 +198,7 @@ pub mod test {
     use super::*;
 
     fn test_case(num_signatures: u8, offsets: &SecpSignatureOffsets) -> Result<(), Secp256k1Error> {
-        let mut instruction_data = vec![0u8; 1 + SIGNATURE_OFFSETS_SERIALIZED_SIZE];
+        let mut instruction_data = vec![0u8; DATA_START];
         instruction_data[0] = num_signatures;
         let writer = std::io::Cursor::new(&mut instruction_data[1..]);
         bincode::serialize_into(writer, &offsets).unwrap();
@@ -210,7 +210,7 @@ pub mod test {
     fn test_invalid_offsets() {
         solana_logger::setup();
 
-        let mut instruction_data = vec![0u8; 1 + SIGNATURE_OFFSETS_SERIALIZED_SIZE];
+        let mut instruction_data = vec![0u8; DATA_START];
         let offsets = SecpSignatureOffsets::default();
         instruction_data[0] = 1;
         let writer = std::io::Cursor::new(&mut instruction_data[1..]);
