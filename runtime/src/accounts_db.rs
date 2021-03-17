@@ -5282,7 +5282,6 @@ pub mod tests {
         let bins = 2;
         let result = AccountsDb::scan_snapshot_stores(
             &storages,
-            true,
             &mut stats,
             bins,
             &Range {
@@ -5298,7 +5297,6 @@ pub mod tests {
         // just the second bin of 2
         let result = AccountsDb::scan_snapshot_stores(
             &storages,
-            true,
             &mut stats,
             bins,
             &Range {
@@ -5317,7 +5315,6 @@ pub mod tests {
         for bin in 0..bins {
             let result = AccountsDb::scan_snapshot_stores(
                 &storages,
-                true,
                 &mut stats,
                 bins,
                 &Range {
@@ -5335,7 +5332,6 @@ pub mod tests {
         for bin in 0..bins {
             let result = AccountsDb::scan_snapshot_stores(
                 &storages,
-                true,
                 &mut stats,
                 bins,
                 &Range {
@@ -5367,7 +5363,6 @@ pub mod tests {
         let mut stats = HashStats::default();
         let result = AccountsDb::scan_snapshot_stores(
             &storages,
-            true,
             &mut stats,
             bins,
             &Range {
