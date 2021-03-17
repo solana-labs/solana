@@ -18,6 +18,7 @@ import { SystemDetailsCard } from "components/instruction/system/SystemDetailsCa
 import { TokenDetailsCard } from "components/instruction/token/TokenDetailsCard";
 import { TokenLendingDetailsCard } from "components/instruction/TokenLendingDetailsCard";
 import { TokenSwapDetailsCard } from "components/instruction/TokenSwapDetailsCard";
+import { WormholeDetailsCard } from "components/instruction/WormholeDetailsCard";
 import { UnknownDetailsCard } from "components/instruction/UnknownDetailsCard";
 import {
   SignatureProps,
@@ -35,6 +36,7 @@ import {
 import { Cluster, useCluster } from "providers/cluster";
 import { BpfUpgradeableLoaderDetailsCard } from "components/instruction/bpf-upgradeable-loader/BpfUpgradeableLoaderDetailsCard";
 import { VoteDetailsCard } from "components/instruction/vote/VoteDetailsCard";
+import { isWormholeInstruction } from "components/instruction/wormhole/types";
 
 export type InstructionDetailsProps = {
   tx: ParsedTransaction;
@@ -212,6 +214,8 @@ function renderInstructionCard({
     return <TokenSwapDetailsCard key={key} {...props} />;
   } else if (isTokenLendingInstruction(transactionIx)) {
     return <TokenLendingDetailsCard key={key} {...props} />;
+  } else if (isWormholeInstruction(transactionIx)) {
+    return <WormholeDetailsCard key={key} {...props} />;
   } else {
     return <UnknownDetailsCard key={key} {...props} />;
   }
