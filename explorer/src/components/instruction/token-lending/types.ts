@@ -28,7 +28,7 @@ export function parseTokenLendingInstructionTitle(
   const code = instruction.data[0];
 
   if (!(code in INSTRUCTION_LOOKUP)) {
-    throw new Error(`Unrecognized Token Swap instruction code: ${code}`);
+    throw new Error(`Unrecognized Token Lending instruction code: ${code}`);
   }
 
   return INSTRUCTION_LOOKUP[code];
