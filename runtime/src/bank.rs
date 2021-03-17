@@ -902,6 +902,21 @@ impl Bank {
         )
     }
 
+    pub fn new_no_wallclock_throttle(genesis_config: &GenesisConfig) -> Self {
+        let mut bank = Self::new_with_paths(
+            &genesis_config,
+            Vec::new(),
+            &[],
+            None,
+            None,
+            HashSet::new(),
+            false,
+        );
+
+        bank.ns_per_slot = std::u128::MAX;
+        bank
+    }
+
     #[cfg(test)]
     pub(crate) fn new_with_config(
         genesis_config: &GenesisConfig,
