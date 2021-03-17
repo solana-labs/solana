@@ -443,6 +443,7 @@ impl PohRecorder {
                 self.record_lock_contention_us += timing::duration_as_us(&now.elapsed());
                 let now = Instant::now();
                 let res = poh_lock.record(mixin);
+                drop(poh_lock);
                 self.record_us += timing::duration_as_us(&now.elapsed());
                 if let Some(poh_entry) = res {
                     let entry = Entry {
