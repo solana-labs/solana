@@ -687,7 +687,7 @@ impl AccountsHash {
     // input:
     // vec: unordered, created by parallelism
     //   vec: [0..bins] - where bins are pubkey ranges
-    //     vec: [..] - items which fin in the containing bin, unordered within this vec
+    //     vec: [..] - items which fit in the containing bin, unordered within this vec
     // so, assumption is middle vec is bins sorted by pubkey
     pub fn rest_of_hash_calculation(
         data_sections_by_pubkey: Vec<Vec<Vec<CalculateHashIntermediate>>>,
