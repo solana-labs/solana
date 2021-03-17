@@ -19,11 +19,9 @@ import { BigNumber } from "bignumber.js";
 import { Copyable } from "components/common/Copyable";
 
 const getEthAddress = (link?: string) => {
-  let address = '';
+  let address = "";
   if (link) {
-    const extractEth = link.match(
-      /0x[a-fA-F0-9]{40,64}/
-    );
+    const extractEth = link.match(/0x[a-fA-F0-9]{40,64}/);
 
     if (extractEth) {
       address = extractEth[0];
@@ -31,7 +29,7 @@ const getEthAddress = (link?: string) => {
   }
 
   return address;
-}
+};
 
 export function TokenAccountSection({
   account,
@@ -77,9 +75,13 @@ function MintAccountCard({
 
   const tokenInfo = tokenRegistry.get(mintAddress);
 
-  const bridgeContractAddress = getEthAddress(tokenInfo?.extensions?.bridgeContract);
-  const assetContractAddress = getEthAddress(tokenInfo?.extensions?.assetContract);
-  
+  const bridgeContractAddress = getEthAddress(
+    tokenInfo?.extensions?.bridgeContract
+  );
+  const assetContractAddress = getEthAddress(
+    tokenInfo?.extensions?.assetContract
+  );
+
   return (
     <div className="card">
       <div className="card-header">

@@ -214,9 +214,9 @@ function renderInstructionCard({
     return <TokenSwapDetailsCard key={key} {...props} />;
   } else if (isTokenLendingInstruction(transactionIx)) {
     return <TokenLendingDetailsCard key={key} {...props} />;
-  } else if(isWormholeInstruction(transactionIx)) {
+  } else if (isWormholeInstruction(transactionIx)) {
     return <WormholeDetailsCard key={key} {...props} />;
-  }else {
+  } else {
     return <UnknownDetailsCard key={key} {...props} />;
   }
 }
