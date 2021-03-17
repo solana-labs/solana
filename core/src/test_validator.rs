@@ -27,7 +27,7 @@ use {
         collections::HashMap,
         fs::remove_dir_all,
         net::{IpAddr, Ipv4Addr, SocketAddr},
-        path::PathBuf,
+        path::{Path, PathBuf},
         sync::{Arc, RwLock},
         thread::sleep,
         time::Duration,
@@ -60,6 +60,11 @@ impl TestValidatorGenesis {
     pub fn ledger_path<P: Into<PathBuf>>(&mut self, ledger_path: P) -> &mut Self {
         self.ledger_path = Some(ledger_path.into());
         self
+    }
+
+    /// Check if a given TestValidator ledger has already been initialized
+    pub fn ledger_exists(ledger_path: &Path) -> bool {
+        ledger_path.join("vote-account-keypair.json").exists()
     }
 
     pub fn fee_rate_governor(&mut self, fee_rate_governor: FeeRateGovernor) -> &mut Self {
@@ -313,7 +318,7 @@ impl TestValidator {
         let ledger_path = match &config.ledger_path {
             None => create_new_tmp_ledger!(&genesis_config).0,
             Some(ledger_path) => {
-                if ledger_path.join("validator-keypair.json").exists() {
+                if TestValidatorGenesis::ledger_exists(ledger_path) {
                     return Ok(ledger_path.to_path_buf());
                 }
 
@@ -338,6 +343,10 @@ impl TestValidator {
             &validator_identity,
             ledger_path.join("validator-keypair.json").to_str().unwrap(),
         )?;
+
+        // `ledger_exists` should fail until the vote account keypair is written
+        assert!(!TestValidatorGenesis::ledger_exists(&ledger_path));
+
         write_keypair_file(
             &validator_vote_account,
             ledger_path
