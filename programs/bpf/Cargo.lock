@@ -2909,6 +2909,7 @@ name = "solana-cli-output"
 version = "1.7.0"
 dependencies = [
  "Inflector",
+ "base64 0.13.0",
  "chrono",
  "console 0.11.3",
  "humantime",
