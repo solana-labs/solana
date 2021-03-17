@@ -1463,6 +1463,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_banking_stage_entries_only() {
         solana_logger::setup();
         let GenesisConfigInfo {
@@ -1580,6 +1581,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_banking_stage_entryfication() {
         solana_logger::setup();
         // In this attack we'll demonstrate that a verifier can interpret the ledger
