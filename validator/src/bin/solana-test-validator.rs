@@ -354,6 +354,18 @@ fn main() {
         });
     }
 
+    if TestValidatorGenesis::ledger_exists(&ledger_path) {
+        for (name, long) in &[
+            ("bpf_program", "--bpf-program"),
+            ("clone_account", "--clone"),
+            ("mint_address", "--mint"),
+        ] {
+            if matches.is_present(name) {
+                println!("{} argument ignored, ledger already exists", long);
+            }
+        }
+    }
+
     let mut genesis = TestValidatorGenesis::default();
 
     admin_rpc_service::run(
