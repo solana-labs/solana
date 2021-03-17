@@ -520,7 +520,7 @@ impl AccountsHash {
         }
         flatten_time.stop();
         stats.flatten_time_total_us += flatten_time.as_us();
-        stats.unreduced_entries = raw_len;
+        stats.unreduced_entries += raw_len;
         data_by_pubkey
     }
 
@@ -742,6 +742,7 @@ impl AccountsHash {
         //   we have previously surpassed target_fanout and hashed some already to the target_fanout level. In that case, we know
         //     we need to hash whatever is left here to the target_fanout level.
         if hash_total != 0 && (!is_last_pass || !next_pass.reduced_hashes.is_empty()) {
+            let mut hash_time = Measure::start("hash");
             let partial_hashes = Self::compute_merkle_root_from_slices(
                 hash_total, // note this does not include the ones that didn't divide evenly, unless we're in the last iteration
                 MERKLE_FANOUT,
@@ -750,6 +751,8 @@ impl AccountsHash {
                 Some(TARGET_FANOUT_LEVEL),
             )
             .1;
+            hash_time.stop();
+            stats.hash_time_total_us += hash_time.as_us();
             next_pass.reduced_hashes.push(partial_hashes);
         }
 
@@ -772,6 +775,7 @@ impl AccountsHash {
                 // all the passes resulted in a single hash, that means we're done, so we had <= MERKLE_ROOT total hashes
                 cumulative.get_slice(&next_pass.reduced_hashes, 0)[0]
             } else {
+                let mut hash_time = Measure::start("hash");
                 // hash all the rest and combine and hash until we have only 1 hash left
                 let (hash, _) = Self::compute_merkle_root_from_slices(
                     cumulative.total_count,
@@ -780,6 +784,8 @@ impl AccountsHash {
                     |start| cumulative.get_slice(&next_pass.reduced_hashes, start),
                     None,
                 );
+                hash_time.stop();
+                stats.hash_time_total_us += hash_time.as_us();
                 hash
             };
             next_pass.reduced_hashes = Vec::new();
