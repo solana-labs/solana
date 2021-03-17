@@ -5,9 +5,6 @@ steps:
   - command: "ci/publish-tarball.sh"
     timeout_in_minutes: 60
     name: "publish tarball"
-  - command: "ci/publish-bpf-sdk.sh"
-    timeout_in_minutes: 5
-    name: "publish bpf sdk"
   - wait
   - command: "sdk/docker-solana/build.sh"
     timeout_in_minutes: 60
