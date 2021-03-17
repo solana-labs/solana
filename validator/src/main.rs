@@ -2066,8 +2066,8 @@ pub fn main() {
 
     let snapshot_interval_slots = value_t_or_exit!(matches, "snapshot_interval_slots", u64);
     let maximum_local_snapshot_age = value_t_or_exit!(matches, "maximum_local_snapshot_age", u64);
-    let snapshot_output_dir = if matches.is_present("snapshot_dir") {
-        PathBuf::from(matches.value_of("snapshot_dir").unwrap())
+    let snapshot_output_dir = if matches.is_present("snapshots") {
+        PathBuf::from(matches.value_of("snapshots").unwrap())
     } else {
         ledger_path.clone()
     };
