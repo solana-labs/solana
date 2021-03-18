@@ -124,20 +124,25 @@ call to `deploy`.
 Deployment failures will print an error message specifying the seed phrase
 needed to recover the generated intermediate buffer's keypair:
 
-```bash
-=======================================================================
-To resume a failed deploy, recover the ephemeral keypair file with
-`solana-keygen recover` and the following 12-word seed phrase,
-then pass it as the [BUFFER_SIGNER] argument to `solana deploy` or `solana write-buffer`
-=======================================================================
-spy axis cream equip bonus daring muffin fish noise churn broken diesel
-=======================================================================
+```
+==================================================================================
+Recover the intermediate account's ephemeral keypair file with
+`solana-keygen recover` and the following 12-word seed phrase:
+==================================================================================
+valley flat great hockey share token excess clever benefit traffic avocado athlete
+==================================================================================
+To resume a deploy, pass the recovered keypair as
+the [PROGRAM_ADDRESS_SIGNER] argument to `solana deploy` or
+as the [BUFFER_SIGNER] to `solana program deploy` or `solana write-buffer'.
+Or to recover the account's lamports, pass it as the
+[BUFFER_ACCOUNT_ADDRESS] argument to `solana program drain`.
+==================================================================================
 ```
 
 To recover the keypair:
 
 ```bash
-$ solana-keypair recover -o <KEYPAIR_PATH>
+solana-keypair recover -o <KEYPAIR_PATH>
 ```
 
 When asked, enter the 12-word seed phrase.
@@ -145,7 +150,57 @@ When asked, enter the 12-word seed phrase.
 Then issue a new `deploy` command and specify the buffer:
 
 ```bash
-$ solana program deploy --buffer <KEYPAIR_PATH> <PROGRAM_FILEPATH>
+solana program deploy --buffer <KEYPAIR_PATH> <PROGRAM_FILEPATH>
+```
+
+### Closing buffer accounts and reclaiming their lamports
+
+If deployment fails there will be a left over buffer account that holds
+lamports.  The buffer account can either be used to [resume a
+deploy](#resuming-a-failed-deploy) or closed.  When closed, the full balance of
+the buffer account will be transferred to the recipient's account.
+
+The buffer account's authority must be present to close a buffer account, to
+list all the open buffer accounts that match the default authority:
+
+```bash
+solana program show --buffers
+```
+
+To specify a different authority:
+
+```bash
+solana program show --buffers --buffer-authority <AURTHORITY_ADRESS>
+```
+
+To close a single account:
+
+```bash
+solana program close <BUFFER_ADDRESS>
+```
+
+To close a single account and specify a different authority than the default:
+
+```bash
+solana program close <BUFFER_ADDRESS> --buffer-authority <KEYPAIR_FILEPATH>
+```
+
+To close a single account and specify a different recipient than the default:
+
+```bash
+solana program close <BUFFER_ADDRESS> --recipient <RECIPIENT_ADDRESS>
+```
+
+To close all the buffer accounts associated with the current authority:
+
+```bash
+solana program close --buffers
+```
+
+To show all buffer accounts regardless of the authority
+
+```bash
+solana program show --buffers --all
 ```
 
 ### Set a program's upgrade authority

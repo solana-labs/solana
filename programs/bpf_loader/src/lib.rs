@@ -30,7 +30,7 @@ use solana_sdk::{
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     clock::Clock,
     entrypoint::SUCCESS,
-    feature_set::skip_ro_deserialization,
+    feature_set::{skip_ro_deserialization, upgradeable_close_instruction},
     ic_logger_msg, ic_msg,
     instruction::InstructionError,
     keyed_account::{from_keyed_account, next_keyed_account, KeyedAccount},
@@ -566,11 +566,9 @@ fn process_loader_upgradeable_instruction(
             programdata.try_account_ref_mut()?.data_as_mut_slice()
                 [programdata_data_offset..programdata_data_offset + buffer_data_len]
                 .copy_from_slice(&buffer.try_account_ref()?.data()[buffer_data_offset..]);
-            for i in &mut programdata.try_account_ref_mut()?.data_as_mut_slice()
+            programdata.try_account_ref_mut()?.data_as_mut_slice()
                 [programdata_data_offset + buffer_data_len..]
-            {
-                *i = 0
-            }
+                .fill(0);
 
             // Fund ProgramData to rent-exemption, spill the rest
 
@@ -634,11 +632,48 @@ fn process_loader_upgradeable_instruction(
                 }
                 _ => {
                     ic_logger_msg!(logger, "Account does not support authorities");
-                    return Err(InstructionError::InvalidAccountData);
+                    return Err(InstructionError::InvalidArgument);
                 }
             }
 
             ic_logger_msg!(logger, "New authority {:?}", new_authority);
+        }
+        UpgradeableLoaderInstruction::Close => {
+            if !invoke_context.is_feature_active(&upgradeable_close_instruction::id()) {
+                return Err(InstructionError::InvalidInstructionData);
+            }
+            let close_account = next_keyed_account(account_iter)?;
+            let recipient_account = next_keyed_account(account_iter)?;
+            let authority = next_keyed_account(account_iter)?;
+
+            if close_account.unsigned_key() == recipient_account.unsigned_key() {
+                ic_logger_msg!(logger, "Recipient is the same as the account being closed");
+                return Err(InstructionError::InvalidArgument);
+            }
+
+            if let UpgradeableLoaderState::Buffer { authority_address } = close_account.state()? {
+                if authority_address.is_none() {
+                    ic_logger_msg!(logger, "Buffer is immutable");
+                    return Err(InstructionError::Immutable);
+                }
+                if authority_address != Some(*authority.unsigned_key()) {
+                    ic_logger_msg!(logger, "Incorrect buffer authority provided");
+                    return Err(InstructionError::IncorrectAuthority);
+                }
+                if authority.signer_key().is_none() {
+                    ic_logger_msg!(logger, "Buffer authority did not sign");
+                    return Err(InstructionError::MissingRequiredSignature);
+                }
+
+                recipient_account.try_account_ref_mut()?.lamports += close_account.lamports()?;
+                close_account.try_account_ref_mut()?.lamports = 0;
+                close_account.try_account_ref_mut()?.data.fill(0);
+            } else {
+                ic_logger_msg!(logger, "Account does not support closing");
+                return Err(InstructionError::InvalidArgument);
+            }
+
+            ic_logger_msg!(logger, "Closed {}", close_account.unsigned_key());
         }
     }
 
@@ -3011,7 +3046,7 @@ mod tests {
             })
             .unwrap();
         assert_eq!(
-            Err(InstructionError::InvalidAccountData),
+            Err(InstructionError::InvalidArgument),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &[
@@ -3184,7 +3219,7 @@ mod tests {
             })
             .unwrap();
         assert_eq!(
-            Err(InstructionError::InvalidAccountData),
+            Err(InstructionError::InvalidArgument),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &[
@@ -3210,6 +3245,87 @@ mod tests {
                 &[
                     KeyedAccount::new(&buffer_address, false, &buffer_account),
                     KeyedAccount::new_readonly(&authority_address, true, &authority_account),
+                ],
+                &instruction,
+                &mut MockInvokeContext::default()
+            )
+        );
+    }
+
+    #[test]
+    fn test_bpf_loader_upgradeable_close() {
+        let instruction = bincode::serialize(&UpgradeableLoaderInstruction::Close).unwrap();
+        let authority_address = Pubkey::new_unique();
+        let authority_account = AccountSharedData::new_ref(1, 0, &Pubkey::new_unique());
+        let recipient_address = Pubkey::new_unique();
+        let recipient_account = AccountSharedData::new_ref(1, 0, &Pubkey::new_unique());
+        let buffer_address = Pubkey::new_unique();
+        let buffer_account = AccountSharedData::new_ref(
+            1,
+            UpgradeableLoaderState::buffer_len(0).unwrap(),
+            &bpf_loader_upgradeable::id(),
+        );
+
+        // Case: close a buffer account
+        buffer_account
+            .borrow_mut()
+            .set_state(&UpgradeableLoaderState::Buffer {
+                authority_address: Some(authority_address),
+            })
+            .unwrap();
+        assert_eq!(
+            Ok(()),
+            process_instruction(
+                &bpf_loader_upgradeable::id(),
+                &[
+                    KeyedAccount::new(&buffer_address, false, &buffer_account),
+                    KeyedAccount::new(&recipient_address, false, &recipient_account),
+                    KeyedAccount::new_readonly(&authority_address, true, &authority_account),
+                ],
+                &instruction,
+                &mut MockInvokeContext::default()
+            )
+        );
+        assert_eq!(0, buffer_account.borrow().lamports());
+        assert_eq!(2, recipient_account.borrow().lamports());
+        assert!(buffer_account.borrow().data.iter().all(|&value| value == 0));
+
+        // Case: close with wrong authority
+        buffer_account
+            .borrow_mut()
+            .set_state(&UpgradeableLoaderState::Buffer {
+                authority_address: Some(authority_address),
+            })
+            .unwrap();
+        assert_eq!(
+            Err(InstructionError::IncorrectAuthority),
+            process_instruction(
+                &bpf_loader_upgradeable::id(),
+                &[
+                    KeyedAccount::new(&buffer_address, false, &buffer_account),
+                    KeyedAccount::new(&recipient_address, false, &recipient_account),
+                    KeyedAccount::new_readonly(&Pubkey::new_unique(), true, &authority_account),
+                ],
+                &instruction,
+                &mut MockInvokeContext::default()
+            )
+        );
+
+        // Case: close but not a buffer account
+        buffer_account
+            .borrow_mut()
+            .set_state(&UpgradeableLoaderState::Program {
+                programdata_address: Pubkey::new_unique(),
+            })
+            .unwrap();
+        assert_eq!(
+            Err(InstructionError::InvalidArgument),
+            process_instruction(
+                &bpf_loader_upgradeable::id(),
+                &[
+                    KeyedAccount::new(&buffer_address, false, &buffer_account),
+                    KeyedAccount::new(&recipient_address, false, &recipient_account),
+                    KeyedAccount::new_readonly(&Pubkey::new_unique(), true, &authority_account),
                 ],
                 &instruction,
                 &mut MockInvokeContext::default()

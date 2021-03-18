@@ -119,6 +119,10 @@ pub mod cpi_data_cost {
     solana_sdk::declare_id!("Hrg5bXePPGiAVWZfDHbvjqytSeyBDPAGAQ7v6N5i4gCX");
 }
 
+pub mod upgradeable_close_instruction {
+    solana_sdk::declare_id!("FsPaByos3gA9bUEhp3EimQpQPCoSvCEigHod496NmABQ");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -149,6 +153,7 @@ lazy_static! {
         (skip_ro_deserialization::id(), "skip deserialization of read-only accounts"),
         (require_stake_for_gossip::id(), "require stakes for propagating crds values through gossip #15561"),
         (cpi_data_cost::id(), "charge the compute budget for data passed via CPI"),
+        (upgradeable_close_instruction::id(), "close upgradeable buffer accounts"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
