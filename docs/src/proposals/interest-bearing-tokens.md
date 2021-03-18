@@ -167,6 +167,10 @@ can properly display amounts moved.
 We need the [token-list](https://github.com/solana-labs/token-list) to include
 vetted SPL token-conforming programs and group known mints by their program id.
 
+The token list will publish a file of known program ids at
+[token-list releases](https://github.com/solana-labs/token-list/releases/latest),
+to be used by RPC and programs.
+
 TODO consider adding Rust and C versions of the registry for on-chain programs and RPC
 
 TODO consider detailing the process of including a new program
@@ -243,15 +247,21 @@ new token programs.  These include:
 
 TODO any others?
 
+#### Vetted Token Programs
+
+RPC will learn about the known program ids through a file published in the
+[token-list releases](https://github.com/solana-labs/token-list/releases/latest),
+downloaded automatically at startup.
+
 ### Associated Token Program
 
 The Associated Token Program needs to support all token programs seamlessly.
 Currently, it performs the following sequence:
 
-* `transfer` required lamports
-* `allocate` space
-* `assign` to the SPL token program
-* call `InitializeHolding` on SPL token
+* `SystemInstruction::Transfer` the required lamports to make the SPL holding account rent-exempt
+* `SystemInstruction::Allocate` space for the SPL holding account
+* `SystemInstruction::Assign` the holding account to the SPL token program
+* `InitializeHolding` on SPL token program
 
 This does not work for an opaque token program, because we do not know the size required
 from the outside. Conversely, if we allow a token program to take the lamports it wants,
@@ -259,8 +269,8 @@ a malicious token program could take too much from users.
 
 To get around this, the Token Program interface has a new `CreateHolding`
 instruction, which only allocates space and assigns the account to the program.
-Once the space is allocated, the Associated Token Program can transfer the
-required lamports, and return an error if that number is too large. The process
+Once the space is allocated, the Associated Token Program transfers the
+required lamports, and returns an error if that number is too large. The process
 becomes:
 
 * call `CreateHolding` on the token program (allocate and assign)
