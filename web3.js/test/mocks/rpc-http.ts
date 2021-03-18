@@ -5,7 +5,7 @@ import * as mockttp from 'mockttp';
 
 import {mockRpcMessage} from './rpc-websockets';
 import {Account, Connection, PublicKey, Transaction} from '../../src';
-import type {Commitment} from '../../src/connection';
+import type {Commitment, RpcParams} from '../../src/connection';
 
 export const mockServer: mockttp.Mockttp | undefined =
   process.env.TEST_LIVE === undefined ? mockttp.getLocal() : undefined;
@@ -22,6 +22,40 @@ export const mockErrorMessage = 'Invalid';
 export const mockErrorResponse = {
   code: -32602,
   message: mockErrorMessage,
+};
+
+export const mockRpcBatchResponse = async ({
+  batch,
+  result,
+  error,
+}: {
+  batch: RpcParams[];
+  result: any[];
+  error?: string;
+}) => {
+  if (!mockServer) return;
+
+  const request = batch.map((batch: RpcParams) => {
+    return {
+      jsonrpc: '2.0',
+      method: batch.methodName,
+      params: batch.args,
+    };
+  });
+
+  const response = result.map((result: any) => {
+    return {
+      jsonrpc: '2.0',
+      id: '',
+      result,
+      error,
+    };
+  });
+
+  await mockServer
+    .post('/')
+    .withJsonBodyIncluding(request)
+    .thenReply(200, JSON.stringify(response));
 };
 
 export const mockRpcResponse = async ({

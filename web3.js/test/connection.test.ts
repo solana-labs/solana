@@ -1,8 +1,8 @@
 import bs58 from 'bs58';
 import invariant from 'assert';
-import {Buffer} from 'buffer';
-import {Token, u64} from '@solana/spl-token';
-import {expect, use} from 'chai';
+import { Buffer } from 'buffer';
+import { Token, u64 } from '@solana/spl-token';
+import { expect, use } from 'chai';
 import chaiAsPromised from 'chai-as-promised';
 
 import {
@@ -17,8 +17,8 @@ import {
   StakeProgram,
   sendAndConfirmTransaction,
 } from '../src';
-import {DEFAULT_TICKS_PER_SLOT, NUM_TICKS_PER_SECOND} from '../src/timing';
-import {MOCK_PORT, url} from './url';
+import { DEFAULT_TICKS_PER_SLOT, NUM_TICKS_PER_SECOND } from '../src/timing';
+import { MOCK_PORT, url } from './url';
 import {
   BLOCKHASH_CACHE_TIMEOUT_MS,
   Commitment,
@@ -27,16 +27,17 @@ import {
   InflationGovernor,
   SlotInfo,
 } from '../src/connection';
-import {sleep} from '../src/util/sleep';
+import { sleep } from '../src/util/sleep';
 import {
   helpers,
   mockErrorMessage,
   mockErrorResponse,
+  mockRpcBatchResponse,
   mockRpcResponse,
   mockServer,
 } from './mocks/rpc-http';
-import {stubRpcWebSocket, restoreRpcWebSocket} from './mocks/rpc-websockets';
-import type {TransactionSignature} from '../src/transaction';
+import { stubRpcWebSocket, restoreRpcWebSocket } from './mocks/rpc-websockets';
+import type { TransactionSignature } from '../src/transaction';
 import type {
   SignatureStatus,
   TransactionError,
@@ -92,7 +93,7 @@ describe('Connection', () => {
 
     await mockRpcResponse({
       method: 'getAccountInfo',
-      params: [account.publicKey.toBase58(), {encoding: 'base64'}],
+      params: [account.publicKey.toBase58(), { encoding: 'base64' }],
       value: null,
       withContext: true,
     });
@@ -101,7 +102,7 @@ describe('Connection', () => {
 
     await mockRpcResponse({
       method: 'getAccountInfo',
-      params: [account.publicKey.toBase58(), {encoding: 'jsonParsed'}],
+      params: [account.publicKey.toBase58(), { encoding: 'jsonParsed' }],
       value: null,
       withContext: true,
     });
@@ -159,7 +160,7 @@ describe('Connection', () => {
       });
     }
 
-    const feeCalculator = (await helpers.recentBlockhash({connection}))
+    const feeCalculator = (await helpers.recentBlockhash({ connection }))
       .feeCalculator;
 
     {
@@ -167,7 +168,7 @@ describe('Connection', () => {
         method: 'getProgramAccounts',
         params: [
           programId.publicKey.toBase58(),
-          {commitment: 'confirmed', encoding: 'base64'},
+          { commitment: 'confirmed', encoding: 'base64' },
         ],
         value: [
           {
@@ -218,7 +219,7 @@ describe('Connection', () => {
         method: 'getProgramAccounts',
         params: [
           programId.publicKey.toBase58(),
-          {commitment: 'confirmed', encoding: 'jsonParsed'},
+          { commitment: 'confirmed', encoding: 'jsonParsed' },
         ],
         value: [
           {
@@ -315,7 +316,7 @@ describe('Connection', () => {
   it('get epoch info', async () => {
     await mockRpcResponse({
       method: 'getEpochInfo',
-      params: [{commitment: 'confirmed'}],
+      params: [{ commitment: 'confirmed' }],
       value: {
         epoch: 0,
         slotIndex: 1,
@@ -538,7 +539,7 @@ describe('Connection', () => {
               fee: 10000,
               postBalances: [499260347380, 15298080, 1, 1, 1],
               preBalances: [499260357380, 15298080, 1, 1, 1],
-              status: {Ok: null},
+              status: { Ok: null },
               err: null,
             },
             transaction: {
@@ -625,7 +626,7 @@ describe('Connection', () => {
     // getConfirmedSignaturesForAddress2 tests...
     await mockRpcResponse({
       method: 'getConfirmedSignaturesForAddress2',
-      params: [address.toBase58(), {limit: 1}],
+      params: [address.toBase58(), { limit: 1 }],
       value: [
         {
           signature: expectedSignature,
@@ -638,7 +639,7 @@ describe('Connection', () => {
 
     const confirmedSignatures2 = await connection.getConfirmedSignaturesForAddress2(
       address,
-      {limit: 1},
+      { limit: 1 },
     );
     expect(confirmedSignatures2).to.have.length(1);
     if (mockServer) {
@@ -647,6 +648,257 @@ describe('Connection', () => {
       expect(confirmedSignatures2[0].err).to.be.null;
       expect(confirmedSignatures2[0].memo).to.be.null;
     }
+  });
+
+  it.only('get parsed confirmed transactions', async () => {
+    await mockRpcResponse({
+      method: 'getSlot',
+      params: [],
+      value: 1,
+    });
+
+    while ((await connection.getSlot()) <= 0) {
+      continue;
+    }
+
+    // Find a block that has a transaction, usually Block 1
+    let slot = 0;
+    let confirmedTransactions = [];
+    while (confirmedTransactions.length < 2) {
+
+      await mockRpcResponse({
+        method: 'getConfirmedBlock',
+        params: [++slot],
+        value: {
+          blockTime: 1614281964,
+          blockhash: '57zQNBZBEiHsCZFqsaY6h176ioXy5MsSLmcvHkEyaLGy',
+          previousBlockhash: 'H5nJ91eGag3B5ZSRHZ7zG5ZwXJ6ywCt2hyR8xCsV7xMo',
+          parentSlot: 0,
+          transactions: [
+            {
+              meta: {
+                fee: 10000,
+                postBalances: [499260347380, 15298080, 1, 1, 1],
+                preBalances: [499260357380, 15298080, 1, 1, 1],
+                status: { Ok: null },
+                err: null,
+              },
+              transaction: {
+                message: {
+                  accountKeys: [
+                    'va12u4o9DipLEB2z4fuoHszroq1U9NcAB9aooFDPJSf',
+                    '57zQNBZBEiHsCZFqsaY6h176ioXy5MsSLmcvHkEyaLGy',
+                    'SysvarS1otHashes111111111111111111111111111',
+                    'SysvarC1ock11111111111111111111111111111111',
+                    'Vote111111111111111111111111111111111111111',
+                  ],
+                  header: {
+                    numReadonlySignedAccounts: 0,
+                    numReadonlyUnsignedAccounts: 3,
+                    numRequiredSignatures: 2,
+                  },
+                  instructions: [
+                    {
+                      accounts: [1, 2, 3],
+                      data:
+                        '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
+                      programIdIndex: 4,
+                    },
+                  ],
+                  recentBlockhash: 'GeyAFFRY3WGpmam2hbgrKw4rbU2RKzfVLm5QLSeZwTZE',
+                },
+                signatures: [
+                  'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt',
+                  '4oCEqwGrMdBeMxpzuWiukCYqSfV4DsSKXSiVVCh1iJ6pS772X7y219JZP3mgqBz5PhsvprpKyhzChjYc3VSBQXzG',
+                ],
+              },
+            },
+          ],
+        },
+      });
+
+      const block = await connection.getConfirmedBlock(slot);
+      for (const tx of block.transactions) {
+        if (tx.transaction.signature) {
+          confirmedTransactions.push(bs58.encode(tx.transaction.signature));
+        }
+      }
+    }
+
+    await mockRpcBatchResponse({
+      batch: [
+        {
+          methodName: 'getConfirmedTransaction',
+          args: [],
+        },
+      ],
+      result: [
+        {
+          blockTime: 1616102519,
+          meta: {
+            err: null,
+            fee: 5000,
+            innerInstructions: [],
+            logMessages: [
+              'Program Vote111111111111111111111111111111111111111 invoke [1]',
+              'Program Vote111111111111111111111111111111111111111 success',
+            ],
+            postBalances: [499999995000, 26858640, 1, 1, 1],
+            postTokenBalances: [],
+            preBalances: [500000000000, 26858640, 1, 1, 1],
+            preTokenBalances: [],
+            status: {
+              Ok: null,
+            },
+          },
+          slot: 2,
+          transaction: {
+            message: {
+              accountKeys: [
+                {
+                  pubkey: 'jcU4R7JccGEvDpe1i6bahvHpe47XahMXacG73EzE198',
+                  signer: true,
+                  writable: true,
+                },
+                {
+                  pubkey: 'GfBcnCAU7kWfAYqKRCNyWEHjdEJZmzRZvEcX5bbzEQqt',
+                  signer: false,
+                  writable: true,
+                },
+                {
+                  pubkey: 'SysvarS1otHashes111111111111111111111111111',
+                  signer: false,
+                  writable: false,
+                },
+                {
+                  pubkey: 'SysvarC1ock11111111111111111111111111111111',
+                  signer: false,
+                  writable: false,
+                },
+                {
+                  pubkey: 'Vote111111111111111111111111111111111111111',
+                  signer: false,
+                  writable: false,
+                },
+              ],
+              instructions: [
+                {
+                  parsed: {
+                    info: {
+                      clockSysvar:
+                        'SysvarC1ock11111111111111111111111111111111',
+                      slotHashesSysvar:
+                        'SysvarS1otHashes111111111111111111111111111',
+                      vote: {
+                        hash: 'GuCya3AAGxn1qhoqxqy3WEdZdZUkXKpa9pthQ3tqvbpx',
+                        slots: [1],
+                        timestamp: 1616102669,
+                      },
+                      voteAccount:
+                        'GfBcnCAU7kWfAYqKRCNyWEHjdEJZmzRZvEcX5bbzEQqt',
+                      voteAuthority:
+                        'jcU4R7JccGEvDpe1i6bahvHpe47XahMXacG73EzE198',
+                    },
+                    type: 'vote',
+                  },
+                  program: 'vote',
+                  programId: 'Vote111111111111111111111111111111111111111',
+                },
+              ],
+              recentBlockhash: 'G9ywjV5CVgMtLXruXtrE7af4QgFKYNXgDTw4jp7SWcSo',
+            },
+            signatures: [
+              '4G4rTqnUdzrmBHsdKJSiMtonpQLWSw1avJ8YxWQ95jE6iFFHFsEkBnoYycxnkBS9xHWRc6EarDsrFG9USFBbjfjx',
+            ],
+          },
+        },
+        {
+          blockTime: 1616102519,
+          meta: {
+            err: null,
+            fee: 5000,
+            innerInstructions: [],
+            logMessages: [
+              'Program Vote111111111111111111111111111111111111111 invoke [1]',
+              'Program Vote111111111111111111111111111111111111111 success',
+            ],
+            postBalances: [499999995000, 26858640, 1, 1, 1],
+            postTokenBalances: [],
+            preBalances: [500000000000, 26858640, 1, 1, 1],
+            preTokenBalances: [],
+            status: {
+              Ok: null,
+            },
+          },
+          slot: 2,
+          transaction: {
+            message: {
+              accountKeys: [
+                {
+                  pubkey: 'jcU4R7JccGEvDpe1i6bahvHpe47XahMXacG73EzE198',
+                  signer: true,
+                  writable: true,
+                },
+                {
+                  pubkey: 'GfBcnCAU7kWfAYqKRCNyWEHjdEJZmzRZvEcX5bbzEQqt',
+                  signer: false,
+                  writable: true,
+                },
+                {
+                  pubkey: 'SysvarS1otHashes111111111111111111111111111',
+                  signer: false,
+                  writable: false,
+                },
+                {
+                  pubkey: 'SysvarC1ock11111111111111111111111111111111',
+                  signer: false,
+                  writable: false,
+                },
+                {
+                  pubkey: 'Vote111111111111111111111111111111111111111',
+                  signer: false,
+                  writable: false,
+                },
+              ],
+              instructions: [
+                {
+                  parsed: {
+                    info: {
+                      clockSysvar:
+                        'SysvarC1ock11111111111111111111111111111111',
+                      slotHashesSysvar:
+                        'SysvarS1otHashes111111111111111111111111111',
+                      vote: {
+                        hash: 'GuCya3AAGxn1qhoqxqy3WEdZdZUkXKpa9pthQ3tqvbpx',
+                        slots: [1],
+                        timestamp: 1616102669,
+                      },
+                      voteAccount:
+                        'GfBcnCAU7kWfAYqKRCNyWEHjdEJZmzRZvEcX5bbzEQqt',
+                      voteAuthority:
+                        'jcU4R7JccGEvDpe1i6bahvHpe47XahMXacG73EzE198',
+                    },
+                    type: 'vote',
+                  },
+                  program: 'vote',
+                  programId: 'Vote111111111111111111111111111111111111111',
+                },
+              ],
+              recentBlockhash: 'G9ywjV5CVgMtLXruXtrE7af4QgFKYNXgDTw4jp7SWcSo',
+            },
+            signatures: [
+              '4G4rTqnUdzrmBHsdKJSiMtonpQLWSw1avJ8YxWQ95jE6iFFHFsEkBnoYycxnkBS9xHWRc6EarDsrFG9USFBbjfjx',
+            ],
+          },
+        },
+      ],
+    });
+
+    const result = await connection.getParsedConfirmedTransactions(
+      confirmedTransactions,
+    );
+
+    expect(result).to.be.length(2);
   });
 
   it('get confirmed transaction', async () => {
@@ -674,7 +926,7 @@ describe('Connection', () => {
               fee: 10000,
               postBalances: [499260347380, 15298080, 1, 1, 1],
               preBalances: [499260357380, 15298080, 1, 1, 1],
-              status: {Ok: null},
+              status: { Ok: null },
               err: null,
             },
             transaction: {
@@ -762,7 +1014,7 @@ describe('Connection', () => {
           fee: 10000,
           postBalances: [499260347380, 15298080, 1, 1, 1],
           preBalances: [499260357380, 15298080, 1, 1, 1],
-          status: {Ok: null},
+          status: { Ok: null },
           err: null,
         },
       },
@@ -847,7 +1099,7 @@ describe('Connection', () => {
                 instructions: [inner],
               },
             ],
-            status: {Ok: null},
+            status: { Ok: null },
             err: null,
           },
         };
@@ -949,7 +1201,7 @@ describe('Connection', () => {
               fee: 10000,
               postBalances: [499260347380, 15298080, 1, 1, 1],
               preBalances: [499260357380, 15298080, 1, 1, 1],
-              status: {Ok: null},
+              status: { Ok: null },
               err: null,
             },
             transaction: {
@@ -1017,7 +1269,7 @@ describe('Connection', () => {
   it('get recent blockhash', async () => {
     const commitments: Commitment[] = ['processed', 'confirmed', 'finalized'];
     for (const commitment of commitments) {
-      const {blockhash, feeCalculator} = await helpers.recentBlockhash({
+      const { blockhash, feeCalculator } = await helpers.recentBlockhash({
         connection,
         commitment,
       });
@@ -1027,10 +1279,10 @@ describe('Connection', () => {
   });
 
   it('get fee calculator', async () => {
-    const {blockhash} = await helpers.recentBlockhash({connection});
+    const { blockhash } = await helpers.recentBlockhash({ connection });
     await mockRpcResponse({
       method: 'getFeeCalculatorForBlockhash',
-      params: [blockhash, {commitment: 'confirmed'}],
+      params: [blockhash, { commitment: 'confirmed' }],
       value: {
         feeCalculator: {
           lamportsPerSignature: 5000,
@@ -1244,7 +1496,7 @@ describe('Connection', () => {
           expect(parsedTx).not.to.be.null;
           return;
         }
-        const {signatures, message} = parsedTx.transaction;
+        const { signatures, message } = parsedTx.transaction;
         expect(signatures[0]).to.eq(testSignature);
         const ix = message.instructions[0];
         if ('parsed' in ix) {
@@ -1294,7 +1546,7 @@ describe('Connection', () => {
         const tokenAccounts = await connection.getParsedProgramAccounts(
           TOKEN_PROGRAM_ID,
         );
-        tokenAccounts.forEach(({account}) => {
+        tokenAccounts.forEach(({ account }) => {
           expect(account.owner).to.eql(TOKEN_PROGRAM_ID);
           const data = account.data;
           if (data instanceof Buffer) {
@@ -1312,7 +1564,7 @@ describe('Connection', () => {
             mint: testToken.publicKey,
           })
         ).value;
-        tokenAccounts.forEach(({account}) => {
+        tokenAccounts.forEach(({ account }) => {
           expect(account.owner).to.eql(TOKEN_PROGRAM_ID);
           const data = account.data;
           if (data instanceof Buffer) {
@@ -1400,7 +1652,7 @@ describe('Connection', () => {
     await mockRpcResponse({
       method: 'getStakeActivation',
       params: [publicKey.toBase58(), {}],
-      error: {message: 'account not delegated'},
+      error: { message: 'account not delegated' },
     });
 
     await expect(connection.getStakeActivation(publicKey)).to.be.rejected;
@@ -1509,7 +1761,7 @@ describe('Connection', () => {
     await mockRpcResponse({
       method: 'getVersion',
       params: [],
-      value: {'solana-core': '0.20.4'},
+      value: { 'solana-core': '0.20.4' },
     });
 
     const version = await connection.getVersion();
@@ -1527,7 +1779,7 @@ describe('Connection', () => {
 
     await mockRpcResponse({
       method: 'getBalance',
-      params: [account.publicKey.toBase58(), {commitment: 'confirmed'}],
+      params: [account.publicKey.toBase58(), { commitment: 'confirmed' }],
       value: LAMPORTS_PER_SOL,
       withContext: true,
     });
@@ -1539,7 +1791,7 @@ describe('Connection', () => {
       method: 'getAccountInfo',
       params: [
         account.publicKey.toBase58(),
-        {commitment: 'confirmed', encoding: 'base64'},
+        { commitment: 'confirmed', encoding: 'base64' },
       ],
       value: {
         owner: '11111111111111111111111111111111',
@@ -1567,7 +1819,7 @@ describe('Connection', () => {
       method: 'getAccountInfo',
       params: [
         account.publicKey.toBase58(),
-        {commitment: 'confirmed', encoding: 'jsonParsed'},
+        { commitment: 'confirmed', encoding: 'jsonParsed' },
       ],
       value: {
         owner: '11111111111111111111111111111111',
@@ -1622,7 +1874,7 @@ describe('Connection', () => {
     });
 
     // This should fail because the account is already created
-    const expectedErr = {InstructionError: [0, {Custom: 0}]};
+    const expectedErr = { InstructionError: [0, { Custom: 0 }] };
     const confirmResult = (
       await helpers.processTransaction({
         connection,
@@ -1643,7 +1895,7 @@ describe('Connection', () => {
         {
           slot: 0,
           confirmations: 11,
-          status: {Err: expectedErr},
+          status: { Err: expectedErr },
           err: expectedErr,
         },
       ],
@@ -1687,7 +1939,7 @@ describe('Connection', () => {
         connection,
         transaction,
         [accountFrom],
-        {preflightCommitment: 'confirmed'},
+        { preflightCommitment: 'confirmed' },
       );
 
       // Send again and ensure that new blockhash is used
@@ -1704,7 +1956,7 @@ describe('Connection', () => {
         connection,
         transaction2,
         [accountFrom],
-        {preflightCommitment: 'confirmed'},
+        { preflightCommitment: 'confirmed' },
       );
 
       expect(signature).not.to.eq(signature2);
@@ -1806,7 +2058,7 @@ describe('Connection', () => {
       signature = await connection.sendTransaction(
         transaction,
         [accountFrom, accountTo],
-        {skipPreflight: true},
+        { skipPreflight: true },
       );
 
       await connection.confirmTransaction(signature);

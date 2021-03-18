@@ -65,9 +65,9 @@ type RpcRequest = (methodName: string, args: Array<any>) => any;
 
 type RpcBatchRequest = (requests: RpcParams[]) => any;
 
-type RpcParams = {
-  methodName: string,
-  args: Array<any>,
+export type RpcParams = {
+  methodName: string;
+  args: Array<any>;
 };
 
 export type TokenAccountsFilter =
@@ -731,8 +731,8 @@ function createRpcBatchRequest(client: RpcClient): RpcBatchRequest {
 
         resolve(response);
       });
-    })
-  }
+    });
+  };
 }
 
 /**
@@ -1679,7 +1679,6 @@ export class Connection {
     let url = urlParse(endpoint);
     const useHttps = url.protocol === 'https:';
 
-
     this._rpcClient = createRpcClient(url.href, useHttps);
     this._rpcRequest = createRpcRequest(this._rpcClient);
     this._rpcBatchRequest = createRpcBatchRequest(this._rpcClient);
@@ -2519,8 +2518,6 @@ export class Connection {
     return res.result;
   }
 
-
-
   /**
    * Fetch parsed transaction details for a confirmed transaction
    */
@@ -2546,16 +2543,16 @@ export class Connection {
   async getParsedConfirmedTransactions(
     signatures: TransactionSignature[],
   ): Promise<any> {
-    const batch = signatures.map((signature) => {
+    const batch = signatures.map(signature => {
       return {
         methodName: 'getConfirmedTransaction',
-        args: [signature, 'jsonParsed']
-      }
+        args: [signature, 'jsonParsed'],
+      };
     });
 
     const unsafeRes = await this._rpcBatchRequest(batch);
     const res = unsafeRes.map((unsafeRes: any) => {
-      const res = create(unsafeRes, GetParsedConfirmedTransactionRpcResult)
+      const res = create(unsafeRes, GetParsedConfirmedTransactionRpcResult);
       if ('error' in res) {
         throw new Error(
           'failed to get confirmed transactions: ' + res.error.message,
