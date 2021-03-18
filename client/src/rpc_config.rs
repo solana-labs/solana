@@ -146,6 +146,15 @@ impl EncodingConfig for RpcConfirmedBlockConfig {
     }
 }
 
+impl RpcConfirmedBlockConfig {
+    pub fn rewards_only() -> Self {
+        Self {
+            transaction_details: Some(TransactionDetails::None),
+            ..Self::default()
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcConfirmedTransactionConfig {
