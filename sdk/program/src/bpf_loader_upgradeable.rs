@@ -227,6 +227,20 @@ pub fn set_upgrade_authority(
     Instruction::new_with_bincode(id(), &UpgradeableLoaderInstruction::SetAuthority, metas)
 }
 
+/// Returns the instructions required to close an account
+pub fn close(
+    close_address: &Pubkey,
+    recipient_address: &Pubkey,
+    authority_address: &Pubkey,
+) -> Instruction {
+    let metas = vec![
+        AccountMeta::new(*close_address, false),
+        AccountMeta::new(*recipient_address, false),
+        AccountMeta::new_readonly(*authority_address, true),
+    ];
+    Instruction::new_with_bincode(id(), &UpgradeableLoaderInstruction::Close, metas)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

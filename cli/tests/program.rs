@@ -442,6 +442,9 @@ fn test_cli_program_deploy_with_authority() {
     config.signers = vec![&keypair];
     config.command = CliCommand::Program(ProgramCliCommand::Show {
         account_pubkey: Some(program_pubkey),
+        authority_pubkey: keypair.pubkey(),
+        all: false,
+        use_lamports_unit: false,
     });
     let response = process_command(&config);
     let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
@@ -530,6 +533,9 @@ fn test_cli_program_deploy_with_authority() {
     config.signers = vec![&keypair];
     config.command = CliCommand::Program(ProgramCliCommand::Show {
         account_pubkey: Some(program_pubkey),
+        authority_pubkey: keypair.pubkey(),
+        all: false,
+        use_lamports_unit: false,
     });
     let response = process_command(&config);
     let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
@@ -657,9 +663,12 @@ fn test_cli_program_write_buffer() {
     );
 
     // Get buffer authority
-    config.signers = vec![&keypair];
+    config.signers = vec![];
     config.command = CliCommand::Program(ProgramCliCommand::Show {
         account_pubkey: Some(buffer_keypair.pubkey()),
+        authority_pubkey: keypair.pubkey(),
+        all: false,
+        use_lamports_unit: false,
     });
     let response = process_command(&config);
     let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
@@ -747,9 +756,12 @@ fn test_cli_program_write_buffer() {
     );
 
     // Get buffer authority
-    config.signers = vec![&keypair];
+    config.signers = vec![];
     config.command = CliCommand::Program(ProgramCliCommand::Show {
         account_pubkey: Some(buffer_pubkey),
+        authority_pubkey: keypair.pubkey(),
+        all: false,
+        use_lamports_unit: false,
     });
     let response = process_command(&config);
     let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
@@ -763,6 +775,60 @@ fn test_cli_program_write_buffer() {
     assert_eq!(
         authority_keypair.pubkey(),
         Pubkey::from_str(&authority_pubkey_str).unwrap()
+    );
+
+    // Close buffer
+    let close_account = rpc_client.get_account(&buffer_pubkey).unwrap();
+    assert_eq!(minimum_balance_for_buffer, close_account.lamports);
+    let recipient_pubkey = Pubkey::new_unique();
+    config.signers = vec![&keypair, &authority_keypair];
+    config.command = CliCommand::Program(ProgramCliCommand::Close {
+        account_pubkey: Some(buffer_pubkey),
+        recipient_pubkey,
+        authority_index: 1,
+        use_lamports_unit: false,
+    });
+    process_command(&config).unwrap();
+    rpc_client.get_account(&buffer_pubkey).unwrap_err();
+    let recipient_account = rpc_client.get_account(&recipient_pubkey).unwrap();
+    assert_eq!(minimum_balance_for_buffer, recipient_account.lamports);
+
+    // Write a buffer with default params
+    config.signers = vec![&keypair];
+    config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
+        program_location: pathbuf.to_str().unwrap().to_string(),
+        buffer_signer_index: None,
+        buffer_pubkey: None,
+        buffer_authority_signer_index: None,
+        max_len: None,
+    });
+    config.output_format = OutputFormat::JsonCompact;
+    let response = process_command(&config);
+    let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
+    let buffer_pubkey_str = json
+        .as_object()
+        .unwrap()
+        .get("buffer")
+        .unwrap()
+        .as_str()
+        .unwrap();
+    let new_buffer_pubkey = Pubkey::from_str(&buffer_pubkey_str).unwrap();
+
+    // Close buffers and deposit default keypair
+    let pre_lamports = rpc_client.get_account(&keypair.pubkey()).unwrap().lamports;
+    config.signers = vec![&keypair];
+    config.command = CliCommand::Program(ProgramCliCommand::Close {
+        account_pubkey: Some(new_buffer_pubkey),
+        recipient_pubkey: keypair.pubkey(),
+        authority_index: 0,
+        use_lamports_unit: false,
+    });
+    process_command(&config).unwrap();
+    rpc_client.get_account(&new_buffer_pubkey).unwrap_err();
+    let recipient_account = rpc_client.get_account(&keypair.pubkey()).unwrap();
+    assert_eq!(
+        pre_lamports + minimum_balance_for_buffer,
+        recipient_account.lamports
     );
 }
 
@@ -1029,6 +1095,9 @@ fn test_cli_program_show() {
     config.signers = vec![&keypair];
     config.command = CliCommand::Program(ProgramCliCommand::Show {
         account_pubkey: Some(buffer_keypair.pubkey()),
+        authority_pubkey: keypair.pubkey(),
+        all: false,
+        use_lamports_unit: false,
     });
     let response = process_command(&config);
     let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
@@ -1086,6 +1155,9 @@ fn test_cli_program_show() {
     config.signers = vec![&keypair];
     config.command = CliCommand::Program(ProgramCliCommand::Show {
         account_pubkey: Some(program_keypair.pubkey()),
+        authority_pubkey: keypair.pubkey(),
+        all: false,
+        use_lamports_unit: false,
     });
     let response = process_command(&config);
     let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
