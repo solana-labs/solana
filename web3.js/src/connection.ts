@@ -2519,6 +2519,8 @@ export class Connection {
     return res.result;
   }
 
+
+
   /**
    * Fetch parsed transaction details for a confirmed transaction
    */
@@ -2536,6 +2538,33 @@ export class Connection {
       );
     }
     return res.result;
+  }
+
+  /**
+   * Fetch parsed transaction details for a batch of confirmed transactions
+   */
+  async getParsedConfirmedTransactions(
+    signatures: TransactionSignature[],
+  ): Promise<any> {
+    const batch = signatures.map((signature) => {
+      return {
+        methodName: 'getConfirmedTransaction',
+        args: [signature, 'jsonParsed']
+      }
+    });
+
+    const unsafeRes = await this._rpcBatchRequest(batch);
+    const res = unsafeRes.map((unsafeRes: any) => {
+      const res = create(unsafeRes, GetParsedConfirmedTransactionRpcResult)
+      if ('error' in res) {
+        throw new Error(
+          'failed to get confirmed transactions: ' + res.error.message,
+        );
+      }
+      return res.result;
+    });
+
+    return res;
   }
 
   /**
