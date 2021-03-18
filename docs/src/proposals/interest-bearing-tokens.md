@@ -99,18 +99,17 @@ but the "unchecked" variants should return errors. Concretely, this means the
 program must implement:
 
 * `InitializeMint`
-* `InitializeAccount`
-* `InitializeMultisig` -- TODO deprecate this and use a more general multisig?
+* `InitializeHolding` (previously `InitializeAccount`)
 * `Revoke`
 * `SetAuthority`
-* `CloseAccount`
-* `FreezeAccount`
-* `ThawAccount`
+* `CloseHolding` (previously `CloseAccount`)
+* `FreezeHolding` (previously `FreezeAccount`)
+* `ThawHolding` (previously `ThawAccount`)
 * `TransferChecked`
 * `ApproveChecked`
 * `MintToChecked`
 * `BurnChecked`
-* `InitializeAccount2`
+* `InitializeHolding2` (previously `InitializeAccount2`)
 
 And the program should throw errors for:
 
@@ -118,6 +117,7 @@ And the program should throw errors for:
 * `Approve`
 * `MintTo`
 * `Burn`
+* `InitializeMultisig` (use a more general multisig)
 
 New instructions required:
 
@@ -159,10 +159,13 @@ The same applies for mints, but only for the first 82 bytes.
 The `amount` field in an SPL token holding should contain a balance in order
 to properly integrate with RPC's `preTokenBalances` and `postTokenBalances`.
 
+For i-tokens, `amount` will be in terms of tokens, and not shares, so that UIs
+can properly display amounts moved.
+
 ### Token Program Registry
 
 We need the [token-list](https://github.com/solana-labs/token-list) to include
-vetted SPL token-conforming programs.
+vetted SPL token-conforming programs and group known mints by their program id.
 
 TODO consider adding Rust and C versions of the registry for on-chain programs and RPC
 
@@ -227,6 +230,19 @@ program caches balances in the `amount` field of the SPL token holding. This
 should only be used by RPC, and not by programs to get the balance of a non-SPL
 holding.
 
+#### New Secondary Indexes
+
+Token-specific RPC calls need smarter secondary indexes to pick up accounts from
+new token programs.  These include:
+
+* `getTokenAccountBalance`
+* `getTokenAccountsByDelegate`
+* `getTokenAccountsByOwner`
+* `getTokenLargestAccounts`
+* `getTokenSupply`
+
+TODO any others?
+
 ### Associated Token Program
 
 The Associated Token Program needs to support all token programs seamlessly.
@@ -235,7 +251,7 @@ Currently, it performs the following sequence:
 * `transfer` required lamports
 * `allocate` space
 * `assign` to the SPL token program
-* call `InitializeAccount` on SPL token
+* call `InitializeHolding` on SPL token
 
 This does not work for an opaque token program, because we do not know the size required
 from the outside. Conversely, if we allow a token program to take the lamports it wants,
@@ -250,7 +266,7 @@ becomes:
 * call `CreateHolding` on the token program (allocate and assign)
 * calculate rent requirement based on the data size of holding account
 * `SystemInstruction::Transfer` the required lamports to make the holding account rent-exempt
-* call `InitializeAccount` on the token program
+* call `InitializeHolding` on the token program
 
 ### Web3 / Wallets
 
@@ -270,10 +286,11 @@ and use the associated token account program instead
 
 To properly support i-tokens on-chain, programs will need to make these changes:
 
-* multiple token programs: if the program transacts between multiple token
-types, it may require more than one token program input. For example, token-swap
-needs to accept separate token programs for token A and B
-* hard-coded token program: avoid using `Tokenkeg...` directly
+* multiple token programs: all programs that support SPL Tokens must always
+include the program id of the token(s) holdings they're passing in.
+For example, token-swap needs to accept separate token programs for token A and B
+* hard-coded token program: avoid using `Tokenkeg...` directly, and delete `id()`
+the SPL token code
 * get balance: instead of deserializing the account data into an SPL holding, use
 the new wrapper to deserialize or call `GetHoldingBalance` instruction with the
 appropriate token program
@@ -282,3 +299,23 @@ appropriate token program
 * get mint authority: same as above, but using the `GetMintAuthority`
 * get mint decimals: same as above, but using the `GetMintDecimals`
 * transfer: only use `TransferChecked`, which requires passing mints
+
+## Other New Token Programs
+
+For awhile now, people have been coming up with ideas that likely require a new
+token program to implement. These include:
+
+### Voting Tokens
+
+Outlined in a [GitHub issue](https://github.com/solana-labs/solana-program-library/issues/131),
+voting tokens use additional data about how long a token has been held.
+
+### Non-Fungible Tokens
+
+It will be possible to add a lot of metadata regarding owners and traders, either
+on a new mint or NFT account.
+
+### Allow-list Tokens
+
+Only a certain list keys are allowed (or not) to transfer to tokens, controlled
+by the mint.
