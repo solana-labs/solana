@@ -480,20 +480,6 @@ pub fn to_account<S: Sysvar, T: WritableAccount>(sysvar: &S, account: &mut T) ->
 
 /// Return the information required to construct an `AccountInfo`.  Used by the
 /// `AccountInfo` conversion implementations.
-impl solana_program::account_info::Account for AccountSharedData {
-    fn get(&mut self) -> (&mut u64, &mut [u8], &Pubkey, bool, Epoch) {
-        (
-            &mut self.lamports,
-            &mut self.data,
-            &self.owner,
-            self.executable,
-            self.rent_epoch,
-        )
-    }
-}
-
-/// Return the information required to construct an `AccountInfo`.  Used by the
-/// `AccountInfo` conversion implementations.
 impl solana_program::account_info::Account for Account {
     fn get(&mut self) -> (&mut u64, &mut [u8], &Pubkey, bool, Epoch) {
         (
@@ -504,11 +490,6 @@ impl solana_program::account_info::Account for Account {
             self.rent_epoch,
         )
     }
-}
-
-/// Create `AccountInfo`s
-pub fn create_account_infos(accounts: &mut [(Pubkey, AccountSharedData)]) -> Vec<AccountInfo> {
-    accounts.iter_mut().map(Into::into).collect()
 }
 
 /// Create `AccountInfo`s
