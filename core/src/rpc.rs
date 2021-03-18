@@ -66,8 +66,8 @@ use solana_sdk::{
 };
 use solana_stake_program::stake_state::StakeState;
 use solana_transaction_status::{
-    EncodedConfirmedBlock, EncodedConfirmedTransaction, TransactionConfirmationStatus,
-    TransactionStatus, UiTransactionEncoding,
+    EncodedConfirmedTransaction, TransactionConfirmationStatus, TransactionStatus,
+    UiConfirmedBlock, UiTransactionEncoding,
 };
 use solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
 use spl_token_v2_0::{
@@ -720,7 +720,7 @@ impl JsonRpcRequestProcessor {
         &self,
         slot: Slot,
         config: Option<RpcEncodingConfigWrapper<RpcConfirmedBlockConfig>>,
-    ) -> Result<Option<EncodedConfirmedBlock>> {
+    ) -> Result<Option<UiConfirmedBlock>> {
         let config = config
             .map(|config| config.convert_to_current())
             .unwrap_or_default();
@@ -743,13 +743,13 @@ impl JsonRpcRequestProcessor {
                     self.check_bigtable_result(&bigtable_result)?;
                     return Ok(bigtable_result
                         .ok()
-                        .map(|confirmed_block| confirmed_block.encode(encoding)));
+                        .map(|confirmed_block| confirmed_block.encode(encoding).into()));
                 }
             }
             self.check_slot_cleaned_up(&result, slot)?;
             Ok(result
                 .ok()
-                .map(|confirmed_block| confirmed_block.encode(encoding)))
+                .map(|confirmed_block| confirmed_block.encode(encoding).into()))
         } else {
             Err(RpcCustomError::BlockNotAvailable { slot }.into())
         }
@@ -2185,7 +2185,7 @@ pub mod rpc_full {
             meta: Self::Metadata,
             slot: Slot,
             config: Option<RpcEncodingConfigWrapper<RpcConfirmedBlockConfig>>,
-        ) -> Result<Option<EncodedConfirmedBlock>>;
+        ) -> Result<Option<UiConfirmedBlock>>;
 
         #[rpc(meta, name = "getBlockTime")]
         fn get_block_time(&self, meta: Self::Metadata, slot: Slot)
@@ -2793,7 +2793,7 @@ pub mod rpc_full {
             meta: Self::Metadata,
             slot: Slot,
             config: Option<RpcEncodingConfigWrapper<RpcConfirmedBlockConfig>>,
-        ) -> Result<Option<EncodedConfirmedBlock>> {
+        ) -> Result<Option<UiConfirmedBlock>> {
             debug!("get_confirmed_block rpc request received: {:?}", slot);
             meta.get_confirmed_block(slot, config)
         }
@@ -3119,7 +3119,7 @@ pub mod tests {
         transaction::{self, TransactionError},
     };
     use solana_transaction_status::{
-        EncodedTransaction, EncodedTransactionWithStatusMeta, UiMessage,
+        EncodedConfirmedBlock, EncodedTransaction, EncodedTransactionWithStatusMeta, UiMessage,
     };
     use solana_vote_program::{
         vote_instruction,
