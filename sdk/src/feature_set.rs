@@ -175,6 +175,10 @@ pub mod cpi_data_cost {
     solana_sdk::declare_id!("Hrg5bXePPGiAVWZfDHbvjqytSeyBDPAGAQ7v6N5i4gCX");
 }
 
+pub mod upgradeable_close_instruction {
+    solana_sdk::declare_id!("FsPaByos3gA9bUEhp3EimQpQPCoSvCEigHod496NmABQ");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -219,6 +223,7 @@ lazy_static! {
         (check_init_vote_data::id(), "check initialized Vote data"),
         (check_program_owner::id(), "limit programs to operating on accounts owned by itself"),
         (cpi_data_cost::id(), "charge the compute budget for data passed via CPI"),
+        (upgradeable_close_instruction::id(), "close upgradeable buffer accounts"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
