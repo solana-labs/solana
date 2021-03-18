@@ -4,7 +4,7 @@ use solana_sdk::{
     clock::Epoch,
     commitment_config::{CommitmentConfig, CommitmentLevel},
 };
-use solana_transaction_status::UiTransactionEncoding;
+use solana_transaction_status::{TransactionDetails, UiTransactionEncoding};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -127,20 +127,6 @@ impl<T: EncodingConfig + Default + Copy> RpcEncodingConfigWrapper<T> {
 
 pub trait EncodingConfig {
     fn new_with_encoding(encoding: &Option<UiTransactionEncoding>) -> Self;
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum TransactionDetails {
-    All,
-    Signatures,
-    None,
-}
-
-impl Default for TransactionDetails {
-    fn default() -> Self {
-        Self::All
-    }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]

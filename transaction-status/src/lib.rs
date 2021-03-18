@@ -362,6 +362,48 @@ impl ConfirmedBlock {
             block_time: self.block_time,
         }
     }
+
+    pub fn configure(
+        self,
+        encoding: UiTransactionEncoding,
+        transaction_details: TransactionDetails,
+        show_rewards: bool,
+    ) -> UiConfirmedBlock {
+        let (transactions, signatures) = match transaction_details {
+            TransactionDetails::All => (
+                Some(
+                    self.transactions
+                        .into_iter()
+                        .map(|tx| tx.encode(encoding))
+                        .collect(),
+                ),
+                None,
+            ),
+            TransactionDetails::Signatures => (
+                None,
+                Some(
+                    self.transactions
+                        .into_iter()
+                        .map(|tx| tx.transaction.signatures[0].to_string())
+                        .collect(),
+                ),
+            ),
+            TransactionDetails::None => (None, None),
+        };
+        UiConfirmedBlock {
+            previous_blockhash: self.previous_blockhash,
+            blockhash: self.blockhash,
+            parent_slot: self.parent_slot,
+            transactions,
+            signatures,
+            rewards: if show_rewards {
+                Some(self.rewards)
+            } else {
+                None
+            },
+            block_time: self.block_time,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -401,6 +443,20 @@ impl From<EncodedConfirmedBlock> for UiConfirmedBlock {
             rewards: Some(block.rewards),
             block_time: block.block_time,
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum TransactionDetails {
+    All,
+    Signatures,
+    None,
+}
+
+impl Default for TransactionDetails {
+    fn default() -> Self {
+        Self::All
     }
 }
 
