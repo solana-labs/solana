@@ -15,20 +15,9 @@
   "editable": true,
   "gnetId": null,
   "graphTooltip": 0,
-  "id": 2194,
-  "iteration": 1610479516268,
+  "id": 2296,
+  "iteration": 1616028833304,
   "links": [
-    {
-      "asDropdown": true,
-      "icon": "dashboard",
-      "tags": [
-        "production"
-      ],
-      "title": "Stable",
-      "tooltip": "",
-      "type": "link",
-      "url": "https://metrics.solana.com:3000/d/monitor/cluster-telemetry"
-    },
     {
       "icon": "dashboard",
       "tags": [],
@@ -47,6 +36,7 @@
   "panels": [
     {
       "collapsed": false,
+      "datasource": null,
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -68,6 +58,12 @@
         "#d44a3a"
       ],
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "format": "none",
       "gauge": {
         "maxValue": 100,
@@ -116,7 +112,7 @@
         "lineColor": "rgb(31, 120, 193)",
         "show": false
       },
-      "tableColumn": "last",
+      "tableColumn": "",
       "targets": [
         {
           "groupBy": [
@@ -168,7 +164,7 @@
           "value": "null"
         }
       ],
-      "valueName": "avg"
+      "valueName": "first"
     },
     {
       "cacheTimeout": null,
@@ -181,6 +177,12 @@
       ],
       "datasource": "$datasource",
       "decimals": null,
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "format": "none",
       "gauge": {
         "maxValue": 100,
@@ -289,13 +291,21 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 5,
         "w": 10,
         "x": 14,
         "y": 1
       },
+      "hiddenSeries": false,
       "id": 4,
       "legend": {
         "alignAsTable": true,
@@ -312,7 +322,11 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -361,6 +375,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "Votes",
       "tooltip": {
@@ -410,6 +425,12 @@
       ],
       "datasource": "$datasource",
       "decimals": null,
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "format": "none",
       "gauge": {
         "maxValue": 100,
@@ -522,6 +543,12 @@
         "#d44a3a"
       ],
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "format": "none",
       "gauge": {
         "maxValue": 100,
@@ -634,6 +661,12 @@
         "#d44a3a"
       ],
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "format": "none",
       "gauge": {
         "maxValue": 100,
@@ -746,6 +779,12 @@
         "#d44a3a"
       ],
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "format": "none",
       "gauge": {
         "maxValue": 100,
@@ -794,7 +833,7 @@
         "lineColor": "rgb(31, 120, 193)",
         "show": false
       },
-      "tableColumn": "median",
+      "tableColumn": "",
       "targets": [
         {
           "groupBy": [
@@ -858,6 +897,12 @@
         "#d44a3a"
       ],
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "format": "ms",
       "gauge": {
         "maxValue": 100,
@@ -969,6 +1014,12 @@
         "#d44a3a"
       ],
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "format": "ms",
       "gauge": {
         "maxValue": 100,
@@ -1080,6 +1131,12 @@
         "#d44a3a"
       ],
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "format": "ms",
       "gauge": {
         "maxValue": 100,
@@ -1191,6 +1248,12 @@
         "#d44a3a"
       ],
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "format": "ms",
       "gauge": {
         "maxValue": 100,
@@ -1302,6 +1365,12 @@
         "#d44a3a"
       ],
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "format": "ms",
       "gauge": {
         "maxValue": 100,
@@ -1410,13 +1479,21 @@
       "dashes": false,
       "datasource": "$datasource",
       "decimals": null,
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 5,
         "w": 10,
         "x": 14,
         "y": 6
       },
+      "hiddenSeries": false,
       "id": 14,
       "legend": {
         "alignAsTable": true,
@@ -1433,7 +1510,11 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1521,6 +1602,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "Node Count",
       "tooltip": {
@@ -1566,13 +1648,21 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 9,
         "w": 14,
         "x": 0,
         "y": 7
       },
+      "hiddenSeries": false,
       "id": 15,
       "legend": {
         "avg": false,
@@ -1587,7 +1677,11 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1788,6 +1882,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "Transactions",
       "tooltip": {
@@ -1832,13 +1927,21 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 5,
         "w": 10,
         "x": 14,
         "y": 11
       },
+      "hiddenSeries": false,
       "id": 16,
       "legend": {
         "alignAsTable": false,
@@ -1854,7 +1957,11 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1904,6 +2011,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "Validator Confirmation Time ($hostid)",
       "tooltip": {
@@ -1945,6 +2053,7 @@
     },
     {
       "collapsed": false,
+      "datasource": null,
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -1962,13 +2071,21 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 3,
         "w": 8,
         "x": 0,
         "y": 17
       },
+      "hiddenSeries": false,
       "id": 18,
       "legend": {
         "alignAsTable": false,
@@ -1985,7 +2102,11 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "connected",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -2072,6 +2193,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "Metric Datapoints per node",
       "tooltip": {
@@ -2118,13 +2240,21 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 6,
         "w": 7,
         "x": 8,
         "y": 17
       },
+      "hiddenSeries": false,
       "id": 19,
       "legend": {
         "avg": false,
@@ -2139,7 +2269,11 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "connected",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -2299,6 +2433,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "Resource Usage",
       "tooltip": {
@@ -2347,6 +2482,12 @@
         "#d44a3a"
       ],
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "format": "none",
       "gauge": {
         "maxValue": 100,
@@ -2395,7 +2536,7 @@
         "lineColor": "rgb(31, 120, 193)",
         "show": false
       },
-      "tableColumn": "sum",
+      "tableColumn": "",
       "targets": [
         {
           "groupBy": [
@@ -2458,6 +2599,12 @@
         "#d44a3a"
       ],
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "format": "none",
       "gauge": {
         "maxValue": 100,
@@ -2506,7 +2653,7 @@
         "lineColor": "rgb(31, 120, 193)",
         "show": false
       },
-      "tableColumn": "sum",
+      "tableColumn": "",
       "targets": [
         {
           "groupBy": [
@@ -2569,6 +2716,12 @@
         "#d44a3a"
       ],
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "format": "none",
       "gauge": {
         "maxValue": 100,
@@ -2676,13 +2829,21 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 4,
         "w": 5,
         "x": 15,
         "y": 19
       },
+      "hiddenSeries": false,
       "id": 23,
       "legend": {
         "alignAsTable": true,
@@ -2699,7 +2860,11 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 5,
       "points": true,
       "renderer": "flot",
@@ -2749,6 +2914,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "Panics",
       "tooltip": {
@@ -2794,13 +2960,21 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 4,
         "w": 4,
         "x": 20,
         "y": 19
       },
+      "hiddenSeries": false,
       "id": 24,
       "legend": {
         "alignAsTable": true,
@@ -2817,7 +2991,11 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 5,
       "points": true,
       "renderer": "flot",
@@ -2867,6 +3045,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "OOMs",
       "tooltip": {
@@ -2912,13 +3091,21 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 3,
         "w": 8,
         "x": 0,
         "y": 20
       },
+      "hiddenSeries": false,
       "id": 25,
       "legend": {
         "alignAsTable": false,
@@ -2935,7 +3122,11 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "connected",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -3022,6 +3213,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "Open Files per node",
       "tooltip": {
@@ -3065,6 +3257,12 @@
     {
       "columns": [],
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fontSize": "100%",
       "gridPos": {
         "h": 6,
@@ -3084,12 +3282,14 @@
       "styles": [
         {
           "alias": "Time",
+          "align": "auto",
           "dateFormat": "YYYY-MM-DD HH:mm:ss",
           "pattern": "Time",
           "type": "date"
         },
         {
           "alias": "",
+          "align": "auto",
           "colorMode": null,
           "colors": [
             "rgba(245, 54, 54, 0.9)",
@@ -3145,7 +3345,7 @@
       ],
       "title": "Dead Slots",
       "transform": "table",
-      "type": "table"
+      "type": "table-old"
     },
     {
       "aliasColors": {},
@@ -3153,13 +3353,21 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 6,
         "w": 9,
         "x": 15,
         "y": 23
       },
+      "hiddenSeries": false,
       "id": 27,
       "legend": {
         "avg": false,
@@ -3174,7 +3382,11 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -3593,6 +3805,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "Bank Errors",
       "tooltip": {
@@ -3634,6 +3847,12 @@
     {
       "columns": [],
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fontSize": "100%",
       "gridPos": {
         "h": 6,
@@ -3653,12 +3872,14 @@
       "styles": [
         {
           "alias": "Time",
+          "align": "auto",
           "dateFormat": "YYYY-MM-DD HH:mm:ss",
           "pattern": "Time",
           "type": "date"
         },
         {
           "alias": "",
+          "align": "auto",
           "colorMode": null,
           "colors": [
             "rgba(245, 54, 54, 0.9)",
@@ -3714,11 +3935,17 @@
       ],
       "title": "Panic Details",
       "transform": "table",
-      "type": "table"
+      "type": "table-old"
     },
     {
       "columns": [],
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fontSize": "100%",
       "gridPos": {
         "h": 6,
@@ -3738,12 +3965,14 @@
       "styles": [
         {
           "alias": "Time",
+          "align": "auto",
           "dateFormat": "YYYY-MM-DD HH:mm:ss",
           "pattern": "Time",
           "type": "date"
         },
         {
           "alias": "",
+          "align": "auto",
           "colorMode": null,
           "colors": [
             "rgba(245, 54, 54, 0.9)",
@@ -3799,11 +4028,17 @@
       ],
       "title": "Unexpected Validator Process Entry Errors",
       "transform": "table",
-      "type": "table"
+      "type": "table-old"
     },
     {
       "columns": [],
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fontSize": "100%",
       "gridPos": {
         "h": 6,
@@ -3823,12 +4058,14 @@
       "styles": [
         {
           "alias": "Time",
+          "align": "auto",
           "dateFormat": "YYYY-MM-DD HH:mm:ss",
           "pattern": "Time",
           "type": "date"
         },
         {
           "alias": "",
+          "align": "auto",
           "colorMode": null,
           "colors": [
             "rgba(245, 54, 54, 0.9)",
@@ -3884,10 +4121,11 @@
       ],
       "title": "Unexpected Blockstore Errors",
       "transform": "table",
-      "type": "table"
+      "type": "table-old"
     },
     {
       "collapsed": false,
+      "datasource": null,
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -3905,13 +4143,21 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 6,
         "w": 8,
         "x": 0,
         "y": 36
       },
+      "hiddenSeries": false,
       "id": 32,
       "legend": {
         "alignAsTable": false,
@@ -3927,7 +4173,11 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "connected",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -4100,6 +4350,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "Broadcast Receive/Shredding Stats ($hostid)",
       "tooltip": {
@@ -4144,13 +4395,21 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 6,
         "w": 8,
         "x": 8,
         "y": 36
       },
+      "hiddenSeries": false,
       "id": 33,
       "legend": {
         "alignAsTable": false,
@@ -4166,7 +4425,11 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "connected",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -4382,6 +4645,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "Broadcast Transmit Stats ($hostid)",
       "tooltip": {
@@ -4426,13 +4690,21 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 6,
         "w": 8,
         "x": 16,
         "y": 36
       },
+      "hiddenSeries": false,
       "id": 34,
       "legend": {
         "alignAsTable": false,
@@ -4448,7 +4720,11 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "connected",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -4586,6 +4862,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "Broadcast Insert Shreds Stats ($hostid)",
       "tooltip": {
@@ -4637,13 +4914,21 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 6,
         "w": 8,
         "x": 0,
         "y": 42
       },
+      "hiddenSeries": false,
       "id": 35,
       "legend": {
         "alignAsTable": false,
@@ -4659,7 +4944,11 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "connected",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -4992,6 +5281,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "Time spent in ReplayStage ($hostid)",
       "tooltip": {
@@ -5043,13 +5333,21 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 6,
         "w": 8,
         "x": 8,
         "y": 42
       },
+      "hiddenSeries": false,
       "id": 36,
       "legend": {
         "alignAsTable": false,
@@ -5065,7 +5363,11 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "connected",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -5164,6 +5466,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "Replay Loop Time Elapsed ($hostid)",
       "tooltip": {
@@ -5215,13 +5518,21 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 6,
         "w": 8,
         "x": 16,
         "y": 42
       },
+      "hiddenSeries": false,
       "id": 37,
       "legend": {
         "alignAsTable": false,
@@ -5237,7 +5548,11 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "connected",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -5492,6 +5807,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "Repair Stats",
       "tooltip": {
@@ -5536,13 +5852,21 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 6,
         "w": 8,
         "x": 0,
         "y": 48
       },
+      "hiddenSeries": false,
       "id": 38,
       "legend": {
         "alignAsTable": false,
@@ -5559,7 +5883,11 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -5906,6 +6234,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "Channel Pressure ($hostid)",
       "tooltip": {
@@ -5966,13 +6295,21 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 6,
         "w": 8,
         "x": 8,
         "y": 48
       },
+      "hiddenSeries": false,
       "id": 39,
       "legend": {
         "alignAsTable": false,
@@ -5988,7 +6325,11 @@
       "linewidth": 2,
       "links": [],
       "nullPointMode": "null as zero",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -6148,6 +6489,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "PoH Lock Contention ($hostid)",
       "tooltip": {
@@ -6199,13 +6541,21 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 6,
         "w": 8,
         "x": 16,
         "y": 48
       },
+      "hiddenSeries": false,
       "id": 40,
       "legend": {
         "alignAsTable": false,
@@ -6221,7 +6571,11 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "connected",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -6593,6 +6947,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "Repair Timing",
       "tooltip": {
@@ -6651,13 +7006,21 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 5,
         "w": 8,
         "x": 0,
         "y": 54
       },
+      "hiddenSeries": false,
       "id": 41,
       "legend": {
         "alignAsTable": false,
@@ -6673,7 +7036,11 @@
       "linewidth": 2,
       "links": [],
       "nullPointMode": "null as zero",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -6909,6 +7276,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "Transaction Forwards ($hostid)",
       "tooltip": {
@@ -6953,13 +7321,21 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 5,
         "w": 8,
         "x": 8,
         "y": 54
       },
+      "hiddenSeries": false,
       "id": 42,
       "legend": {
         "alignAsTable": false,
@@ -6975,7 +7351,11 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -7062,6 +7442,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "Window",
       "tooltip": {
@@ -7113,13 +7494,21 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 5,
         "w": 8,
         "x": 16,
         "y": 54
       },
+      "hiddenSeries": false,
       "id": 43,
       "legend": {
         "alignAsTable": false,
@@ -7135,7 +7524,11 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "connected",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -7381,6 +7774,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "Time spent in squashing ($hostid)",
       "tooltip": {
@@ -7425,13 +7819,21 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 6,
         "w": 8,
         "x": 0,
         "y": 59
       },
+      "hiddenSeries": false,
       "id": 44,
       "legend": {
         "alignAsTable": false,
@@ -7450,7 +7852,11 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "null as zero",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 1,
       "points": false,
       "renderer": "flot",
@@ -7538,6 +7944,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "Block Production ($hostid)",
       "tooltip": {
@@ -7584,13 +7991,21 @@
       "dashes": false,
       "datasource": "$datasource",
       "description": "(Must pick a host id for this to make sense)",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 6,
         "w": 8,
         "x": 8,
         "y": 59
       },
+      "hiddenSeries": false,
       "id": 45,
       "legend": {
         "alignAsTable": false,
@@ -7606,7 +8021,11 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -7656,6 +8075,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "My Leader Slots ($hostid)",
       "tooltip": {
@@ -7700,13 +8120,21 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 6,
         "w": 8,
         "x": 16,
         "y": 59
       },
+      "hiddenSeries": false,
       "id": 46,
       "legend": {
         "alignAsTable": false,
@@ -7723,7 +8151,11 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -7811,6 +8243,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "Erasure Recovery ($hostid)",
       "tooltip": {
@@ -7857,13 +8290,21 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 6,
         "w": 8,
         "x": 0,
         "y": 65
       },
+      "hiddenSeries": false,
       "id": 47,
       "legend": {
         "alignAsTable": false,
@@ -7882,13 +8323,38 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "null as zero",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 1,
       "points": false,
       "renderer": "flot",
       "seriesOverrides": [
         {
+          "$$hashKey": "object:373",
           "alias": "poh-service.elapsed_ms",
+          "yaxis": 2
+        },
+        {
+          "$$hashKey": "object:425",
+          "alias": "poh-service.total_sleep_us",
+          "yaxis": 2
+        },
+        {
+          "$$hashKey": "object:426",
+          "alias": "poh-service.total_tick_time_us",
+          "yaxis": 2
+        },
+        {
+          "$$hashKey": "object:448",
+          "alias": "poh-service.total_hash_time_us",
+          "yaxis": 2
+        },
+        {
+          "$$hashKey": "object:449",
+          "alias": "poh-service.total_lock_time_us",
           "yaxis": 2
         }
       ],
@@ -7989,9 +8455,161 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT mean(\"elapsed_ms\") as \"elapsed_ms\" FROM \"$testnet\".\"autogen\".\"poh-service\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter  GROUP BY time(1s) fill(null)\n",
+          "query": "SELECT mean(\"elapsed_us\") as \"elapsed_ms\" FROM \"$testnet\".\"autogen\".\"poh-service\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter  GROUP BY time(1s) fill(null)\n",
           "rawQuery": true,
           "refId": "C",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT mean(\"total_sleep_us\") as \"total_sleep_us\" FROM \"$testnet\".\"autogen\".\"poh-service\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter  GROUP BY time(1s) fill(null)\n",
+          "rawQuery": true,
+          "refId": "D",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT mean(\"total_tick_time_us\") as \"total_tick_time_us\" FROM \"$testnet\".\"autogen\".\"poh-service\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter  GROUP BY time(1s) fill(null)\n",
+          "rawQuery": true,
+          "refId": "E",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT mean(\"total_lock_time_us\") as \"total_lock_time_us\" FROM \"$testnet\".\"autogen\".\"poh-service\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter  GROUP BY time(1s) fill(null)\n",
+          "rawQuery": true,
+          "refId": "F",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT mean(\"total_hash_time_us\") as \"total_hash_time_us\" FROM \"$testnet\".\"autogen\".\"poh-service\" WHERE host_id::tag =~ /$hostid/ AND $timeFilter  GROUP BY time(1s) fill(null)\n",
+          "rawQuery": true,
+          "refId": "G",
           "resultFormat": "time_series",
           "select": [
             [
@@ -8012,6 +8630,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "PoH ($hostid)",
       "tooltip": {
@@ -8029,6 +8648,7 @@
       },
       "yaxes": [
         {
+          "$$hashKey": "object:380",
           "decimals": 0,
           "format": "short",
           "label": null,
@@ -8038,7 +8658,8 @@
           "show": true
         },
         {
-          "format": "ms",
+          "$$hashKey": "object:381",
+          "format": "µs",
           "label": null,
           "logBase": 1,
           "max": null,
@@ -8059,13 +8680,21 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 6,
         "w": 8,
         "x": 8,
         "y": 65
       },
+      "hiddenSeries": false,
       "id": 48,
       "legend": {
         "alignAsTable": false,
@@ -8084,7 +8713,11 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "null as zero",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 1,
       "points": false,
       "renderer": "flot",
@@ -8443,6 +9076,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "Gossip ($hostid)",
       "tooltip": {
@@ -8488,13 +9122,21 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 6,
         "w": 8,
         "x": 16,
         "y": 65
       },
+      "hiddenSeries": false,
       "id": 49,
       "legend": {
         "alignAsTable": false,
@@ -8510,7 +9152,11 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -8560,6 +9206,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "Skipped Leader Slots ($hostid)",
       "tooltip": {
@@ -8604,13 +9251,21 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 6,
         "w": 8,
         "x": 0,
         "y": 71
       },
+      "hiddenSeries": false,
       "id": 50,
       "legend": {
         "alignAsTable": false,
@@ -8626,7 +9281,11 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -8676,6 +9335,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "Vote dropped hash mismatch ($hostid)",
       "tooltip": {
@@ -8720,13 +9380,21 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 6,
         "w": 8,
         "x": 8,
         "y": 71
       },
+      "hiddenSeries": false,
       "id": 51,
       "legend": {
         "alignAsTable": false,
@@ -8742,7 +9410,11 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -8995,6 +9667,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "Retransmit ($hostid)",
       "tooltip": {
@@ -9041,13 +9714,21 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 6,
         "w": 8,
         "x": 16,
         "y": 71
       },
+      "hiddenSeries": false,
       "id": 52,
       "legend": {
         "alignAsTable": false,
@@ -9066,7 +9747,11 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "null as zero",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 1,
       "points": false,
       "renderer": "flot",
@@ -9273,6 +9958,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "Blockstore Insert ($hostid)",
       "tooltip": {
@@ -9314,6 +10000,7 @@
     },
     {
       "collapsed": false,
+      "datasource": null,
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -9336,13 +10023,21 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 5,
         "w": 8,
         "x": 0,
         "y": 78
       },
+      "hiddenSeries": false,
       "id": 54,
       "legend": {
         "alignAsTable": false,
@@ -9358,7 +10053,11 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 2,
       "points": true,
       "renderer": "flot",
@@ -9446,6 +10145,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "Tower Distance in Latest and Root Slot ($hostid)",
       "tooltip": {
@@ -9496,13 +10196,21 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 5,
         "w": 8,
         "x": 8,
         "y": 78
       },
+      "hiddenSeries": false,
       "id": 55,
       "legend": {
         "alignAsTable": false,
@@ -9518,7 +10226,11 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 2,
       "points": true,
       "renderer": "flot",
@@ -9643,6 +10355,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "Tower Root Slot ($hostid)",
       "tooltip": {
@@ -9693,13 +10406,21 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 5,
         "w": 8,
         "x": 16,
         "y": 78
       },
+      "hiddenSeries": false,
       "id": 56,
       "legend": {
         "alignAsTable": false,
@@ -9715,7 +10436,11 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 2,
       "points": true,
       "renderer": "flot",
@@ -9839,6 +10564,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "Leader Change",
       "tooltip": {
@@ -9889,13 +10615,21 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 5,
         "w": 8,
         "x": 0,
         "y": 83
       },
+      "hiddenSeries": false,
       "id": 57,
       "legend": {
         "alignAsTable": false,
@@ -9911,7 +10645,11 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 2,
       "points": true,
       "renderer": "flot",
@@ -9962,6 +10700,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "Optimistic Slots ($hostid)",
       "tooltip": {
@@ -10012,13 +10751,21 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 5,
         "w": 8,
         "x": 8,
         "y": 83
       },
+      "hiddenSeries": false,
       "id": 58,
       "legend": {
         "alignAsTable": false,
@@ -10034,7 +10781,11 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 2,
       "points": true,
       "renderer": "flot",
@@ -10085,6 +10836,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "Unrooted Optimistic Slots ($hostid)",
       "tooltip": {
@@ -10135,13 +10887,21 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 5,
         "w": 8,
         "x": 16,
         "y": 83
       },
+      "hiddenSeries": false,
       "id": 59,
       "legend": {
         "alignAsTable": false,
@@ -10157,7 +10917,11 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 2,
       "points": true,
       "renderer": "flot",
@@ -10208,6 +10972,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "Average Time Between Optimistic Confirmations ($hostid)",
       "tooltip": {
@@ -10258,14 +11023,22 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 5,
         "w": 8,
         "x": 8,
         "y": 88
       },
-      "id": 79,
+      "hiddenSeries": false,
+      "id": 60,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -10280,7 +11053,11 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 2,
       "points": true,
       "renderer": "flot",
@@ -10448,6 +11225,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "Slot Production ($hostid)",
       "tooltip": {
@@ -10488,13 +11266,14 @@
     },
     {
       "collapsed": false,
+      "datasource": null,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
         "y": 93
       },
-      "id": 60,
+      "id": 61,
       "panels": [],
       "repeat": null,
       "title": "IP Network",
@@ -10506,14 +11285,22 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 5,
         "w": 12,
         "x": 0,
         "y": 94
       },
-      "id": 61,
+      "hiddenSeries": false,
+      "id": 62,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -10529,7 +11316,11 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "null as zero",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 1,
       "points": false,
       "renderer": "flot",
@@ -10694,6 +11485,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "UDP Net Stats ($hostid)",
       "tooltip": {
@@ -10739,14 +11531,22 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 5,
         "w": 12,
         "x": 12,
         "y": 94
       },
-      "id": 62,
+      "hiddenSeries": false,
+      "id": 63,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -10764,7 +11564,11 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "null as zero",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 1,
       "points": false,
       "renderer": "flot",
@@ -10852,6 +11656,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "Total IP traffic (octets)",
       "tooltip": {
@@ -10893,13 +11698,14 @@
     },
     {
       "collapsed": false,
+      "datasource": null,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
         "y": 99
       },
-      "id": 63,
+      "id": 64,
       "panels": [],
       "title": "Signature Verification",
       "type": "row"
@@ -10910,14 +11716,22 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 5,
         "w": 12,
         "x": 0,
         "y": 100
       },
-      "id": 64,
+      "hiddenSeries": false,
+      "id": 65,
       "legend": {
         "avg": false,
         "current": false,
@@ -10931,7 +11745,11 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -11062,6 +11880,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "sigverify_stage - Batch Verification Time",
       "tooltip": {
@@ -11112,14 +11931,22 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 5,
         "w": 12,
         "x": 12,
         "y": 100
       },
-      "id": 65,
+      "hiddenSeries": false,
+      "id": 66,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -11134,7 +11961,11 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 2,
       "points": true,
       "renderer": "flot",
@@ -11222,6 +12053,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "Bank Height / Slot Distance ($hostid)",
       "tooltip": {
@@ -11262,13 +12094,14 @@
     },
     {
       "collapsed": false,
+      "datasource": null,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
         "y": 105
       },
-      "id": 66,
+      "id": 67,
       "panels": [],
       "title": "Snapshots",
       "type": "row"
@@ -11279,6 +12112,12 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
       "gridPos": {
         "h": 6,
@@ -11286,7 +12125,7 @@
         "x": 0,
         "y": 106
       },
-      "id": 67,
+      "id": 68,
       "legend": {
         "avg": false,
         "current": false,
@@ -11301,6 +12140,7 @@
       "links": [],
       "nullPointMode": "connected",
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 3,
       "points": true,
       "renderer": "flot",
@@ -11471,6 +12311,12 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
       "gridPos": {
         "h": 6,
@@ -11478,7 +12324,7 @@
         "x": 8,
         "y": 106
       },
-      "id": 68,
+      "id": 69,
       "legend": {
         "avg": false,
         "current": false,
@@ -11493,6 +12339,7 @@
       "links": [],
       "nullPointMode": "null",
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 5,
       "points": true,
       "renderer": "flot",
@@ -11739,6 +12586,12 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
       "gridPos": {
         "h": 6,
@@ -11746,7 +12599,7 @@
         "x": 16,
         "y": 106
       },
-      "id": 69,
+      "id": 70,
       "legend": {
         "avg": false,
         "current": false,
@@ -11761,6 +12614,7 @@
       "links": [],
       "nullPointMode": "null",
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 4,
       "points": true,
       "renderer": "flot",
@@ -11933,6 +12787,12 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
       "gridPos": {
         "h": 6,
@@ -11940,7 +12800,7 @@
         "x": 0,
         "y": 112
       },
-      "id": 70,
+      "id": 71,
       "legend": {
         "avg": false,
         "current": false,
@@ -11957,6 +12817,7 @@
       "links": [],
       "nullPointMode": "null as zero",
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 1,
       "points": false,
       "renderer": "flot",
@@ -12125,13 +12986,14 @@
     },
     {
       "collapsed": false,
+      "datasource": null,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
         "y": 118
       },
-      "id": 71,
+      "id": 72,
       "panels": [],
       "title": "RPC Send Transaction Service",
       "type": "row"
@@ -12142,6 +13004,12 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
       "gridPos": {
         "h": 6,
@@ -12149,7 +13017,7 @@
         "x": 0,
         "y": 119
       },
-      "id": 72,
+      "id": 73,
       "legend": {
         "avg": false,
         "current": false,
@@ -12166,6 +13034,7 @@
       "links": [],
       "nullPointMode": "connected",
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 3,
       "points": false,
       "renderer": "flot",
@@ -12260,6 +13129,12 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
       "gridPos": {
         "h": 6,
@@ -12267,7 +13142,7 @@
         "x": 12,
         "y": 119
       },
-      "id": 73,
+      "id": 74,
       "legend": {
         "avg": false,
         "current": false,
@@ -12284,6 +13159,7 @@
       "links": [],
       "nullPointMode": "connected",
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 3,
       "points": true,
       "renderer": "flot",
@@ -12524,13 +13400,14 @@
     },
     {
       "collapsed": false,
+      "datasource": null,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
         "y": 125
       },
-      "id": 74,
+      "id": 75,
       "panels": [],
       "title": "Bench TPS",
       "type": "row"
@@ -12541,6 +13418,12 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
       "gridPos": {
         "h": 5,
@@ -12548,7 +13431,7 @@
         "x": 0,
         "y": 126
       },
-      "id": 75,
+      "id": 76,
       "legend": {
         "avg": false,
         "current": false,
@@ -12563,6 +13446,7 @@
       "links": [],
       "nullPointMode": "null",
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -12656,6 +13540,12 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
       "gridPos": {
         "h": 5,
@@ -12663,7 +13553,7 @@
         "x": 7,
         "y": 126
       },
-      "id": 76,
+      "id": 77,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -12679,6 +13569,7 @@
       "links": [],
       "nullPointMode": "null",
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -12846,7 +13737,6 @@
         "sort": 0,
         "value_type": "individual"
       },
-      "transparent": false,
       "type": "graph",
       "xaxis": {
         "buckets": null,
@@ -12881,6 +13771,12 @@
     {
       "columns": [],
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fontSize": "100%",
       "gridPos": {
         "h": 5,
@@ -12888,7 +13784,7 @@
         "x": 14,
         "y": 126
       },
-      "id": 77,
+      "id": 78,
       "links": [],
       "pageSize": null,
       "scroll": true,
@@ -12900,12 +13796,14 @@
       "styles": [
         {
           "alias": "Time",
+          "align": "auto",
           "dateFormat": "YYYY-MM-DD HH:mm:ss",
           "pattern": "Time",
           "type": "date"
         },
         {
           "alias": "",
+          "align": "auto",
           "colorMode": null,
           "colors": [
             "rgba(245, 54, 54, 0.9)",
@@ -12961,7 +13859,7 @@
       ],
       "title": "Ramp TPS Events",
       "transform": "table",
-      "type": "table"
+      "type": "table-old"
     },
     {
       "aliasColors": {},
@@ -12969,6 +13867,12 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$datasource",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
       "fill": 1,
       "gridPos": {
         "h": 4,
@@ -12976,7 +13880,7 @@
         "x": 0,
         "y": 131
       },
-      "id": 78,
+      "id": 79,
       "legend": {
         "avg": false,
         "current": false,
@@ -12991,6 +13895,7 @@
       "links": [],
       "nullPointMode": "null",
       "percentage": false,
+      "pluginVersion": "7.4.3",
       "pointradius": 5,
       "points": true,
       "renderer": "flot",
@@ -13079,8 +13984,8 @@
       }
     }
   ],
-  "refresh": "60s",
-  "schemaVersion": 16,
+  "refresh": "30s",
+  "schemaVersion": 27,
   "style": "dark",
   "tags": [],
   "templating": {
@@ -13090,49 +13995,59 @@
           "text": "$datasource",
           "value": "$datasource"
         },
+        "description": null,
+        "error": null,
         "hide": 1,
+        "includeAll": false,
         "label": "Data Source",
+        "multi": false,
         "name": "datasource",
         "options": [],
         "query": "influxdb",
         "refresh": 1,
         "regex": "",
+        "skipUrlSync": false,
         "type": "datasource"
       },
       {
-        "allValue": null,
+        "allValue": ".*",
         "current": {
+          "selected": true,
           "text": "Mainnet Beta",
           "value": "mainnet-beta"
         },
+        "datasource": "$datasource",
+        "definition": "",
+        "description": null,
+        "error": null,
         "hide": 1,
         "includeAll": false,
         "label": "Testnet",
         "multi": false,
         "name": "testnet",
-        "options": [
-          {
-            "selected": true,
-            "text": "Devnet",
-            "value": "devnet"
-          },
-          {
-            "selected": false,
-            "text": "Mainnet Beta",
-            "value": "mainnet-beta"
-          },
-          {
-            "selected": false,
-            "text": "Testnet",
-            "value": "tds"
-          }
-        ],
-        "query": "devnet,mainnet-beta,tds",
-        "type": "custom"
+        "options": [],
+        "query": "show databases",
+        "refresh": 1,
+        "regex": "(devnet|tds|mainnet-beta|testnet.*)",
+        "skipUrlSync": false,
+        "sort": 1,
+        "tagValuesQuery": "",
+        "tags": [],
+        "tagsQuery": "",
+        "type": "query",
+        "useTags": false
       },
       {
         "allValue": ".*",
+        "current": {
+          "selected": false,
+          "text": "All",
+          "value": "$__all"
+        },
         "datasource": "$datasource",
+        "definition": "",
+        "description": null,
+        "error": null,
         "hide": 0,
         "includeAll": true,
         "label": "HostID",
@@ -13142,6 +14057,7 @@
         "query": "SELECT DISTINCT(\"id\") FROM \"$testnet\".\"autogen\".\"validator-new\" ",
         "refresh": 2,
         "regex": "",
+        "skipUrlSync": false,
         "sort": 1,
         "tagValuesQuery": "",
         "tags": [],
@@ -13178,5 +14094,5 @@
   "timezone": "",
   "title": "Cluster Telemetry",
   "uid": "monitor",
-  "version": 1
+  "version": 2
 }
