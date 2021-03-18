@@ -88,7 +88,7 @@ trees = "0.2.1"
 [dev-dependencies]
 matches = "0.1.6"
 num_cpus = "1.13.0"
-reqwest = { version = "0.10.8", default-features = false, features = ["blocking", "rustls-tls", "json"] }
+reqwest = { version = "0.11.2", default-features = false, features = ["blocking", "rustls-tls", "json"] }
 serial_test = "0.4.0"
 symlink = "0.1.0"
 systemstat = "0.1.5"
