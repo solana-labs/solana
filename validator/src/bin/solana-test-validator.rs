@@ -14,7 +14,7 @@ use {
     solana_sdk::{
         account::AccountSharedData,
         clock::Slot,
-        epoch_schedule::EpochSchedule,
+        epoch_schedule::{EpochSchedule, MINIMUM_SLOTS_PER_EPOCH},
         native_token::sol_to_lamports,
         pubkey::Pubkey,
         rpc_port,
@@ -151,7 +151,18 @@ fn main() {
             Arg::with_name("slots_per_epoch")
                 .long("slots-per-epoch")
                 .value_name("SLOTS")
-                .validator(is_slot)
+                .validator(|value| {
+                    value
+                        .parse::<Slot>()
+                        .map_err(|err| format!("error parsing '{}': {}", value, err))
+                        .and_then(|slot| {
+                            if slot < MINIMUM_SLOTS_PER_EPOCH {
+                                Err(format!("value must be >= {}", MINIMUM_SLOTS_PER_EPOCH))
+                            } else {
+                                Ok(())
+                            }
+                        })
+                })
                 .takes_value(true)
                 .help(
                     "Override the number of slots in an epoch. \
