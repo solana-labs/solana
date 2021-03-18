@@ -996,11 +996,12 @@ pub fn process_get_epoch_info(rpc_client: &RpcClient, config: &CliConfig) -> Pro
     let epoch_info = rpc_client.get_epoch_info()?;
     let average_slot_time_ms = rpc_client
         .get_recent_performance_samples(Some(60))
-        .map(|samples| {
+        .ok()
+        .and_then(|samples| {
             let (slots, secs) = samples.iter().fold((0, 0), |(slots, secs), sample| {
                 (slots + sample.num_slots, secs + sample.sample_period_secs)
             });
-            (secs as u64 * 1000) / slots
+            (secs as u64).saturating_mul(1000).checked_div(slots)
         })
         .unwrap_or(clock::DEFAULT_MS_PER_SLOT);
     let epoch_info = CliEpochInfo {
