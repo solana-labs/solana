@@ -1685,6 +1685,7 @@ pub struct CliUpgradeableBuffer {
     pub authority: String,
     pub data_len: usize,
     pub lamports: u64,
+    #[serde(skip_serializing)]
     pub use_lamports_unit: bool,
 }
 impl QuietDisplay for CliUpgradeableBuffer {}
@@ -1713,6 +1714,7 @@ impl fmt::Display for CliUpgradeableBuffer {
 #[serde(rename_all = "camelCase")]
 pub struct CliUpgradeableBuffers {
     pub buffers: Vec<CliUpgradeableBuffer>,
+    #[serde(skip_serializing)]
     pub use_lamports_unit: bool,
 }
 impl QuietDisplay for CliUpgradeableBuffers {}
