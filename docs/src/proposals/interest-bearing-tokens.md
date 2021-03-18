@@ -249,7 +249,7 @@ becomes:
 
 * call `CreateHolding` on the token program (allocate and assign)
 * calculate rent requirement based on the data size of holding account
-* `transfer` required lamports
+* `SystemInstruction::Transfer` the required lamports to make the holding account rent-exempt
 * call `InitializeAccount` on the token program
 
 ### Web3 / Wallets
