@@ -28,14 +28,10 @@ use solana_sdk::{
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     clock::Clock,
     entrypoint::SUCCESS,
-<<<<<<< HEAD
     feature_set::{
         bpf_compute_budget_balancing, matching_buffer_upgrade_authorities,
-        prevent_upgrade_and_invoke,
+        prevent_upgrade_and_invoke, upgradeable_close_instruction,
     },
-=======
-    feature_set::{skip_ro_deserialization, upgradeable_close_instruction},
->>>>>>> 7f500d610... Add Close instrruction and tooling to upgradeable loader (#15887)
     ic_logger_msg, ic_msg,
     instruction::InstructionError,
     keyed_account::{from_keyed_account, next_keyed_account, KeyedAccount},
@@ -598,14 +594,8 @@ fn process_loader_upgradeable_instruction(
             })?;
             programdata.try_account_ref_mut()?.data
                 [programdata_data_offset..programdata_data_offset + buffer_data_len]
-<<<<<<< HEAD
                 .copy_from_slice(&buffer.try_account_ref()?.data[buffer_data_offset..]);
-            for i in &mut programdata.try_account_ref_mut()?.data
-=======
-                .copy_from_slice(&buffer.try_account_ref()?.data()[buffer_data_offset..]);
-            programdata.try_account_ref_mut()?.data_as_mut_slice()
->>>>>>> 7f500d610... Add Close instrruction and tooling to upgradeable loader (#15887)
-                [programdata_data_offset + buffer_data_len..]
+            programdata.try_account_ref_mut()?.data[programdata_data_offset + buffer_data_len..]
                 .fill(0);
 
             // Fund ProgramData to rent-exemption, spill the rest
@@ -3263,11 +3253,11 @@ mod tests {
     fn test_bpf_loader_upgradeable_close() {
         let instruction = bincode::serialize(&UpgradeableLoaderInstruction::Close).unwrap();
         let authority_address = Pubkey::new_unique();
-        let authority_account = AccountSharedData::new_ref(1, 0, &Pubkey::new_unique());
+        let authority_account = Account::new_ref(1, 0, &Pubkey::new_unique());
         let recipient_address = Pubkey::new_unique();
-        let recipient_account = AccountSharedData::new_ref(1, 0, &Pubkey::new_unique());
+        let recipient_account = Account::new_ref(1, 0, &Pubkey::new_unique());
         let buffer_address = Pubkey::new_unique();
-        let buffer_account = AccountSharedData::new_ref(
+        let buffer_account = Account::new_ref(
             1,
             UpgradeableLoaderState::buffer_len(0).unwrap(),
             &bpf_loader_upgradeable::id(),
@@ -3293,8 +3283,8 @@ mod tests {
                 &mut MockInvokeContext::default()
             )
         );
-        assert_eq!(0, buffer_account.borrow().lamports());
-        assert_eq!(2, recipient_account.borrow().lamports());
+        assert_eq!(0, buffer_account.borrow().lamports);
+        assert_eq!(2, recipient_account.borrow().lamports);
         assert!(buffer_account.borrow().data.iter().all(|&value| value == 0));
 
         // Case: close with wrong authority

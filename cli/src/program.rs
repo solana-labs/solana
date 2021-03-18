@@ -10,21 +10,13 @@ use bincode::serialize;
 use bip39::{Language, Mnemonic, MnemonicType, Seed};
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 use log::*;
-<<<<<<< HEAD
 use serde_json::{self, json, Value};
-use solana_bpf_loader_program::{bpf_verifier, BpfError, ThisInstructionMeter};
-use solana_clap_utils::{self, input_parsers::*, input_validators::*, keypair::*};
-use solana_cli_output::{
-    display::new_spinner_progress_bar, CliProgram, CliUpgradeableBuffer, CliUpgradeableProgram,
-=======
 use solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig};
 use solana_bpf_loader_program::{bpf_verifier, BpfError, ThisInstructionMeter};
 use solana_clap_utils::{self, input_parsers::*, input_validators::*, keypair::*};
 use solana_cli_output::{
-    display::new_spinner_progress_bar, CliProgram, CliProgramAccountType, CliProgramAuthority,
-    CliProgramBuffer, CliProgramId, CliUpgradeableBuffer, CliUpgradeableBuffers,
+    display::new_spinner_progress_bar, CliProgram, CliUpgradeableBuffer, CliUpgradeableBuffers,
     CliUpgradeableProgram,
->>>>>>> 7f500d610... Add Close instrruction and tooling to upgradeable loader (#15887)
 };
 use solana_client::{
     client_error::ClientErrorKind,
@@ -1988,13 +1980,8 @@ fn report_ephemeral_mnemonic(words: usize, mnemonic: bip39::Mnemonic) {
     eprintln!("as the [BUFFER_SIGNER] to `solana program deploy` or `solana write-buffer'.");
     eprintln!("Or to recover the account's lamports, pass it as the");
     eprintln!(
-<<<<<<< HEAD
-        "then pass it as the [BUFFER_SIGNER] argument to `solana upgrade ...`\n{}\n{}\n{}",
-        divider, phrase, divider
-=======
         "[BUFFER_ACCOUNT_ADDRESS] argument to `solana program close`.\n{}",
         divider
->>>>>>> 7f500d610... Add Close instrruction and tooling to upgradeable loader (#15887)
     );
 }
 
