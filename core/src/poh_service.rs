@@ -1,12 +1,12 @@
 //! The `poh_service` module implements a service that records the passing of
 //! "ticks", a measure of time in the PoH stream
-use crate::poh_recorder::PohRecorder;
+use crate::poh_recorder::{PohRecorder, Record};
 use solana_measure::measure::Measure;
 use solana_sdk::poh_config::PohConfig;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{mpsc::Receiver, Arc, Mutex};
 use std::thread::{self, sleep, Builder, JoinHandle};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 pub struct PohService {
     tick_producer: JoinHandle<()>,
@@ -32,6 +32,7 @@ impl PohService {
         ticks_per_slot: u64,
         pinned_cpu_core: usize,
         hashes_per_batch: u64,
+        record_receiver: Receiver<Record>,
     ) -> Self {
         let poh_exit_ = poh_exit.clone();
         let poh_config = poh_config.clone();
@@ -41,12 +42,18 @@ impl PohService {
                 solana_sys_tuner::request_realtime_poh();
                 if poh_config.hashes_per_tick.is_none() {
                     if poh_config.target_tick_count.is_none() {
-                        Self::sleepy_tick_producer(poh_recorder, &poh_config, &poh_exit_);
+                        Self::sleepy_tick_producer(
+                            poh_recorder,
+                            &poh_config,
+                            &poh_exit_,
+                            record_receiver,
+                        );
                     } else {
                         Self::short_lived_sleepy_tick_producer(
                             poh_recorder,
                             &poh_config,
                             &poh_exit_,
+                            record_receiver,
                         );
                     }
                 } else {
@@ -69,6 +76,7 @@ impl PohService {
                         poh_config.target_tick_duration.as_nanos() as u64 - adjustment_per_tick,
                         ticks_per_slot,
                         hashes_per_batch,
+                        record_receiver,
                     );
                 }
                 poh_exit_.store(true, Ordering::Relaxed);
@@ -82,10 +90,37 @@ impl PohService {
         poh_recorder: Arc<Mutex<PohRecorder>>,
         poh_config: &PohConfig,
         poh_exit: &AtomicBool,
+        record_receiver: Receiver<Record>,
     ) {
         while !poh_exit.load(Ordering::Relaxed) {
+            Self::read_record_receiver_and_process(
+                &poh_recorder,
+                &record_receiver,
+                Duration::from_millis(0),
+            );
             sleep(poh_config.target_tick_duration);
             poh_recorder.lock().unwrap().tick();
+        }
+    }
+
+    pub fn read_record_receiver_and_process(
+        poh_recorder: &Arc<Mutex<PohRecorder>>,
+        record_receiver: &Receiver<Record>,
+        timeout: Duration,
+    ) {
+        let record = record_receiver.recv_timeout(timeout);
+        if let Ok(record) = record {
+            if record
+                .sender
+                .send(poh_recorder.lock().unwrap().record(
+                    record.slot,
+                    record.mixin,
+                    record.transactions,
+                ))
+                .is_err()
+            {
+                panic!("Error returning mixin hash");
+            }
         }
     }
 
@@ -93,9 +128,15 @@ impl PohService {
         poh_recorder: Arc<Mutex<PohRecorder>>,
         poh_config: &PohConfig,
         poh_exit: &AtomicBool,
+        record_receiver: Receiver<Record>,
     ) {
         let mut warned = false;
         for _ in 0..poh_config.target_tick_count.unwrap() {
+            Self::read_record_receiver_and_process(
+                &poh_recorder,
+                &record_receiver,
+                Duration::from_millis(0),
+            );
             sleep(poh_config.target_tick_duration);
             poh_recorder.lock().unwrap().tick();
             if poh_exit.load(Ordering::Relaxed) && !warned {
@@ -111,6 +152,7 @@ impl PohService {
         target_tick_ns: u64,
         ticks_per_slot: u64,
         hashes_per_batch: u64,
+        record_receiver: Receiver<Record>,
     ) {
         let poh = poh_recorder.lock().unwrap().poh.clone();
         let mut now = Instant::now();
@@ -121,18 +163,66 @@ impl PohService {
         let mut total_lock_time_ns = 0;
         let mut total_hash_time_ns = 0;
         let mut total_tick_time_ns = 0;
+        let mut try_again_mixin = None;
         loop {
-            num_hashes += hashes_per_batch;
             let should_tick = {
-                let mut lock_time = Measure::start("lock");
-                let mut poh_l = poh.lock().unwrap();
-                lock_time.stop();
-                total_lock_time_ns += lock_time.as_ns();
-                let mut hash_time = Measure::start("hash");
-                let r = poh_l.hash(hashes_per_batch);
-                hash_time.stop();
-                total_hash_time_ns += hash_time.as_ns();
-                r
+                let mixin = if let Some(record) = try_again_mixin {
+                    try_again_mixin = None;
+                    Ok(record)
+                } else {
+                    record_receiver.try_recv()
+                };
+                if let Ok(mut record) = mixin {
+                    let mut lock_time = Measure::start("lock");
+                    let mut poh_recorder_l = poh_recorder.lock().unwrap();
+                    lock_time.stop();
+                    total_lock_time_ns += lock_time.as_ns();
+                    loop {
+                        let mut temp = Vec::new();
+                        std::mem::swap(&mut temp, &mut record.transactions);
+                        let res = poh_recorder_l.record(record.slot, record.mixin, temp);
+                        let _ = record.sender.send(res); // TODO what do we do on failure here?
+                        num_hashes += 1; // may have also ticked inside record
+
+                        let get_again = record_receiver.try_recv();
+                        match get_again {
+                            Ok(mut record2) => {
+                                std::mem::swap(&mut record2, &mut record);
+                            }
+                            Err(_) => {
+                                break;
+                            }
+                        }
+                    }
+                    false // record will tick if it needs to
+                } else {
+                    let mut lock_time = Measure::start("lock");
+                    let mut poh_l = poh.lock().unwrap();
+                    lock_time.stop();
+                    total_lock_time_ns += lock_time.as_ns();
+                    let mut r;
+                    loop {
+                        num_hashes += hashes_per_batch;
+                        let mut hash_time = Measure::start("hash");
+                        r = poh_l.hash(hashes_per_batch);
+                        hash_time.stop();
+                        total_hash_time_ns += hash_time.as_ns();
+                        if r {
+                            break;
+                        }
+                        let get_again = record_receiver.try_recv();
+                        match get_again {
+                            Ok(inside) => {
+                                try_again_mixin = Some(inside);
+                                break;
+                            }
+                            Err(_) => {
+                                continue;
+                            }
+                        }
+                    }
+                    r
+                }
             };
             if should_tick {
                 // Lock PohRecorder only for the final hash...
@@ -225,7 +315,7 @@ mod tests {
                 target_tick_duration,
                 target_tick_count: None,
             });
-            let (poh_recorder, entry_receiver) = PohRecorder::new(
+            let (poh_recorder, entry_receiver, record_receiver) = PohRecorder::new(
                 bank.tick_height(),
                 prev_hash,
                 bank.slot(),
@@ -305,6 +395,7 @@ mod tests {
                 0,
                 DEFAULT_PINNED_CPU_CORE,
                 hashes_per_batch,
+                record_receiver,
             );
             poh_recorder.lock().unwrap().set_working_bank(working_bank);
 
