@@ -66,8 +66,8 @@ use solana_sdk::{
 };
 use solana_stake_program::stake_state::StakeState;
 use solana_transaction_status::{
-    EncodedConfirmedBlock, EncodedConfirmedTransaction, TransactionConfirmationStatus,
-    TransactionStatus, UiTransactionEncoding,
+    EncodedConfirmedTransaction, TransactionConfirmationStatus, TransactionStatus,
+    UiConfirmedBlock, UiTransactionEncoding,
 };
 use solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
 use spl_token_v2_0::{
@@ -720,11 +720,13 @@ impl JsonRpcRequestProcessor {
         &self,
         slot: Slot,
         config: Option<RpcEncodingConfigWrapper<RpcConfirmedBlockConfig>>,
-    ) -> Result<Option<EncodedConfirmedBlock>> {
+    ) -> Result<Option<UiConfirmedBlock>> {
         let config = config
             .map(|config| config.convert_to_current())
             .unwrap_or_default();
         let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Json);
+        let transaction_details = config.transaction_details.unwrap_or_default();
+        let show_rewards = config.rewards.unwrap_or(true);
         if self.config.enable_rpc_transaction_history
             && slot
                 <= self
@@ -741,15 +743,15 @@ impl JsonRpcRequestProcessor {
                         .runtime
                         .block_on(bigtable_ledger_storage.get_confirmed_block(slot));
                     self.check_bigtable_result(&bigtable_result)?;
-                    return Ok(bigtable_result
-                        .ok()
-                        .map(|confirmed_block| confirmed_block.encode(encoding)));
+                    return Ok(bigtable_result.ok().map(|confirmed_block| {
+                        confirmed_block.configure(encoding, transaction_details, show_rewards)
+                    }));
                 }
             }
             self.check_slot_cleaned_up(&result, slot)?;
-            Ok(result
-                .ok()
-                .map(|confirmed_block| confirmed_block.encode(encoding)))
+            Ok(result.ok().map(|confirmed_block| {
+                confirmed_block.configure(encoding, transaction_details, show_rewards)
+            }))
         } else {
             Err(RpcCustomError::BlockNotAvailable { slot }.into())
         }
@@ -2185,7 +2187,7 @@ pub mod rpc_full {
             meta: Self::Metadata,
             slot: Slot,
             config: Option<RpcEncodingConfigWrapper<RpcConfirmedBlockConfig>>,
-        ) -> Result<Option<EncodedConfirmedBlock>>;
+        ) -> Result<Option<UiConfirmedBlock>>;
 
         #[rpc(meta, name = "getBlockTime")]
         fn get_block_time(&self, meta: Self::Metadata, slot: Slot)
@@ -2793,7 +2795,7 @@ pub mod rpc_full {
             meta: Self::Metadata,
             slot: Slot,
             config: Option<RpcEncodingConfigWrapper<RpcConfirmedBlockConfig>>,
-        ) -> Result<Option<EncodedConfirmedBlock>> {
+        ) -> Result<Option<UiConfirmedBlock>> {
             debug!("get_confirmed_block rpc request received: {:?}", slot);
             meta.get_confirmed_block(slot, config)
         }
@@ -3119,7 +3121,8 @@ pub mod tests {
         transaction::{self, TransactionError},
     };
     use solana_transaction_status::{
-        EncodedTransaction, EncodedTransactionWithStatusMeta, UiMessage,
+        EncodedConfirmedBlock, EncodedTransaction, EncodedTransactionWithStatusMeta,
+        TransactionDetails, UiMessage,
     };
     use solana_vote_program::{
         vote_instruction,
@@ -5077,6 +5080,7 @@ pub mod tests {
             serde_json::from_value(result["result"].clone()).unwrap();
         let confirmed_block = confirmed_block.unwrap();
         assert_eq!(confirmed_block.transactions.len(), 3);
+        assert_eq!(confirmed_block.rewards, vec![]);
 
         for EncodedTransactionWithStatusMeta { transaction, meta } in
             confirmed_block.transactions.into_iter()
@@ -5121,6 +5125,7 @@ pub mod tests {
             serde_json::from_value(result["result"].clone()).unwrap();
         let confirmed_block = confirmed_block.unwrap();
         assert_eq!(confirmed_block.transactions.len(), 3);
+        assert_eq!(confirmed_block.rewards, vec![]);
 
         for EncodedTransactionWithStatusMeta { transaction, meta } in
             confirmed_block.transactions.into_iter()
@@ -5154,6 +5159,55 @@ pub mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn test_get_confirmed_block_config() {
+        let bob_pubkey = solana_sdk::pubkey::new_rand();
+        let RpcHandler {
+            io,
+            meta,
+            confirmed_block_signatures,
+            ..
+        } = start_rpc_handler_with_tx(&bob_pubkey);
+
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlock","params":[0,{}]}}"#,
+            json!(RpcConfirmedBlockConfig {
+                encoding: None,
+                transaction_details: Some(TransactionDetails::Signatures),
+                rewards: Some(false),
+            })
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        let confirmed_block: Option<UiConfirmedBlock> =
+            serde_json::from_value(result["result"].clone()).unwrap();
+        let confirmed_block = confirmed_block.unwrap();
+        assert!(confirmed_block.transactions.is_none());
+        assert!(confirmed_block.rewards.is_none());
+        for (i, signature) in confirmed_block.signatures.unwrap()[..2].iter().enumerate() {
+            assert_eq!(*signature, confirmed_block_signatures[i].to_string());
+        }
+
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlock","params":[0,{}]}}"#,
+            json!(RpcConfirmedBlockConfig {
+                encoding: None,
+                transaction_details: Some(TransactionDetails::None),
+                rewards: Some(true),
+            })
+        );
+        let res = io.handle_request_sync(&req, meta);
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        let confirmed_block: Option<UiConfirmedBlock> =
+            serde_json::from_value(result["result"].clone()).unwrap();
+        let confirmed_block = confirmed_block.unwrap();
+        assert!(confirmed_block.transactions.is_none());
+        assert!(confirmed_block.signatures.is_none());
+        assert_eq!(confirmed_block.rewards.unwrap(), vec![]);
     }
 
     #[test]

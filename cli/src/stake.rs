@@ -27,6 +27,7 @@ use solana_client::{
     client_error::{ClientError, ClientErrorKind},
     nonce_utils,
     rpc_client::RpcClient,
+    rpc_config::RpcConfirmedBlockConfig,
     rpc_custom_error,
     rpc_request::{self, DELINQUENT_VALIDATOR_SLOT_DISTANCE},
 };
@@ -1674,9 +1675,9 @@ pub(crate) fn fetch_epoch_rewards(
             .get(0)
             .ok_or_else(|| format!("Unable to fetch first confirmed block for epoch {}", epoch))?;
 
-        let first_confirmed_block = match rpc_client.get_confirmed_block_with_encoding(
+        let first_confirmed_block = match rpc_client.get_configured_confirmed_block(
             first_confirmed_block_in_epoch,
-            solana_transaction_status::UiTransactionEncoding::Base64,
+            RpcConfirmedBlockConfig::rewards_only(),
         ) {
             Ok(first_confirmed_block) => first_confirmed_block,
             Err(ClientError {
@@ -1702,7 +1703,7 @@ pub(crate) fn fetch_epoch_rewards(
         };
 
         // Rewards for the previous epoch are found in the first confirmed block of the current epoch
-        let previous_epoch_rewards = first_confirmed_block.rewards;
+        let previous_epoch_rewards = first_confirmed_block.rewards.unwrap_or_default();
 
         if let Some((effective_slot, epoch_end_time, epoch_rewards)) = epoch_info {
             let wallclock_epoch_duration = if epoch_end_time > epoch_start_time {
