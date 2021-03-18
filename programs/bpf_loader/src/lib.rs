@@ -84,7 +84,7 @@ pub fn create_executor(
         enable_instruction_tracing: log_enabled!(Trace),
     };
     let mut executable = {
-        let keyed_accounts = invoke_context.get_keyed_accounts();
+        let keyed_accounts = invoke_context.get_keyed_accounts()?;
         let program = keyed_account_at_index(keyed_accounts, program_account_index)?;
         let account = program.try_account_ref()?;
         let data = &account.data()[program_data_offset..];
@@ -114,7 +114,7 @@ fn write_program_data(
     bytes: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
-    let keyed_accounts = invoke_context.get_keyed_accounts();
+    let keyed_accounts = invoke_context.get_keyed_accounts()?;
     let program = keyed_account_at_index(keyed_accounts, program_account_index)?;
     let mut account = program.try_account_ref_mut()?;
     let data = &mut account.data_as_mut_slice();
@@ -179,7 +179,7 @@ fn process_instruction_common(
     use_jit: bool,
 ) -> Result<(), InstructionError> {
     let logger = invoke_context.get_logger();
-    let keyed_accounts = invoke_context.get_keyed_accounts();
+    let keyed_accounts = invoke_context.get_keyed_accounts()?;
 
     let first_account = keyed_account_at_index(keyed_accounts, 0)?;
     if first_account.executable()? {
@@ -198,7 +198,7 @@ fn process_instruction_common(
                     ic_logger_msg!(logger, "Wrong ProgramData account for this Program account");
                     return Err(InstructionError::InvalidArgument);
                 }
-                invoke_context.remove_first_keyed_account();
+                invoke_context.remove_first_keyed_account()?;
                 UpgradeableLoaderState::programdata_data_offset()?
             } else {
                 ic_logger_msg!(logger, "Invalid Program account");
@@ -208,7 +208,7 @@ fn process_instruction_common(
             0
         };
 
-        let keyed_accounts = invoke_context.get_keyed_accounts();
+        let keyed_accounts = invoke_context.get_keyed_accounts()?;
         let program = keyed_account_at_index(keyed_accounts, 0)?;
         let loader_id = &program.owner()?;
 
@@ -259,7 +259,7 @@ fn process_loader_upgradeable_instruction(
     use_jit: bool,
 ) -> Result<(), InstructionError> {
     let logger = invoke_context.get_logger();
-    let keyed_accounts = invoke_context.get_keyed_accounts();
+    let keyed_accounts = invoke_context.get_keyed_accounts()?;
 
     match limited_deserialize(instruction_data)? {
         UpgradeableLoaderInstruction::InitializeBuffer => {
@@ -400,7 +400,7 @@ fn process_loader_upgradeable_instruction(
             let executor = create_executor(3, buffer_data_offset, invoke_context, use_jit)?;
             invoke_context.add_executor(program_id, executor);
 
-            let keyed_accounts = invoke_context.get_keyed_accounts();
+            let keyed_accounts = invoke_context.get_keyed_accounts()?;
             let payer = keyed_account_at_index(keyed_accounts, 0)?;
             let programdata = keyed_account_at_index(keyed_accounts, 1)?;
             let program = keyed_account_at_index(keyed_accounts, 2)?;
@@ -524,7 +524,7 @@ fn process_loader_upgradeable_instruction(
 
             // Load and verify the program bits
             let executor = create_executor(2, buffer_data_offset, invoke_context, use_jit)?;
-            let keyed_accounts = invoke_context.get_keyed_accounts();
+            let keyed_accounts = invoke_context.get_keyed_accounts()?;
             let program = keyed_account_at_index(keyed_accounts, 1)?;
             invoke_context.add_executor(program.unsigned_key(), executor);
 
@@ -664,7 +664,7 @@ fn process_loader_instruction(
     invoke_context: &mut dyn InvokeContext,
     use_jit: bool,
 ) -> Result<(), InstructionError> {
-    let keyed_accounts = invoke_context.get_keyed_accounts();
+    let keyed_accounts = invoke_context.get_keyed_accounts()?;
     let program = keyed_account_at_index(keyed_accounts, 0)?;
     if program.owner()? != *program_id {
         ic_msg!(
@@ -688,7 +688,7 @@ fn process_loader_instruction(
             }
 
             let executor = create_executor(0, 0, invoke_context, use_jit)?;
-            let keyed_accounts = invoke_context.get_keyed_accounts();
+            let keyed_accounts = invoke_context.get_keyed_accounts()?;
             let program = keyed_account_at_index(keyed_accounts, 0)?;
             invoke_context.add_executor(program.unsigned_key(), executor);
             program.try_account_ref_mut()?.executable = true;
@@ -747,10 +747,10 @@ impl Executor for BpfExecutor {
         let logger = invoke_context.get_logger();
         let invoke_depth = invoke_context.invoke_depth();
 
-        invoke_context.remove_first_keyed_account();
+        invoke_context.remove_first_keyed_account()?;
 
         let mut serialize_time = Measure::start("serialize");
-        let keyed_accounts = invoke_context.get_keyed_accounts();
+        let keyed_accounts = invoke_context.get_keyed_accounts()?;
         let mut parameter_bytes =
             serialize_parameters(loader_id, program_id, keyed_accounts, &instruction_data)?;
         serialize_time.stop();
@@ -821,7 +821,7 @@ impl Executor for BpfExecutor {
             execute_time.stop();
         }
         let mut deserialize_time = Measure::start("deserialize");
-        let keyed_accounts = invoke_context.get_keyed_accounts();
+        let keyed_accounts = invoke_context.get_keyed_accounts()?;
         deserialize_parameters(
             loader_id,
             keyed_accounts,

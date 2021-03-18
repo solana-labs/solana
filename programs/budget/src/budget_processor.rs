@@ -119,7 +119,7 @@ pub fn process_instruction(
     data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
-    let keyed_accounts = invoke_context.get_keyed_accounts();
+    let keyed_accounts = invoke_context.get_keyed_accounts()?;
 
     let instruction = limited_deserialize(data)?;
 

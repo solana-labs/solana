@@ -1766,6 +1766,7 @@ fn call<'a>(
         )?;
         let keyed_account_refs = invoke_context
             .get_keyed_accounts()
+            .map_err(SyscallError::InstructionError)?
             .iter()
             .collect::<Vec<&KeyedAccount>>();
         let (message, callee_program_id, callee_program_id_index) =

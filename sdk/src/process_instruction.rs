@@ -48,9 +48,9 @@ pub trait InvokeContext {
     /// Get the program ID of the currently executing program
     fn get_caller(&self) -> Result<&Pubkey, InstructionError>;
     /// Removes the first keyed account
-    fn remove_first_keyed_account(&mut self);
+    fn remove_first_keyed_account(&mut self) -> Result<(), InstructionError>;
     /// Get the list of keyed accounts
-    fn get_keyed_accounts(&self) -> &[KeyedAccount];
+    fn get_keyed_accounts(&self) -> Result<&[KeyedAccount], InstructionError>;
     /// Get a list of built-in programs
     fn get_programs(&self) -> &[(Pubkey, ProcessInstructionWithContext)];
     /// Get this invocation's logger
@@ -343,21 +343,19 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
             .map(|frame| &frame.0)
             .ok_or(InstructionError::GenericError)
     }
-    fn remove_first_keyed_account(&mut self) {
+    fn remove_first_keyed_account(&mut self) -> Result<(), InstructionError> {
         let mut stack_frame = &mut self
             .invoke_stack
             .last_mut()
-            .ok_or(InstructionError::GenericError)
-            .unwrap();
+            .ok_or(InstructionError::GenericError)?;
         stack_frame.1 = &stack_frame.1[1..];
+        Ok(())
     }
-    fn get_keyed_accounts(&self) -> &[KeyedAccount] {
-        &self
-            .invoke_stack
+    fn get_keyed_accounts(&self) -> Result<&[KeyedAccount], InstructionError> {
+        self.invoke_stack
             .last()
+            .map(|frame| frame.1)
             .ok_or(InstructionError::GenericError)
-            .unwrap()
-            .1
     }
     fn get_programs(&self) -> &[(Pubkey, ProcessInstructionWithContext)] {
         &self.programs

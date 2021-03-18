@@ -33,7 +33,7 @@ pub fn process_instruction(
     data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
-    let keyed_accounts = invoke_context.get_keyed_accounts();
+    let keyed_accounts = invoke_context.get_keyed_accounts()?;
 
     let new_owner_pubkey: Pubkey = limited_deserialize(data)?;
     let account_keyed_account = &mut keyed_account_at_index(keyed_accounts, 0)?;

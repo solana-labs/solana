@@ -139,7 +139,7 @@ impl NativeLoader {
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
         let (program_id, name_vec) = {
-            let keyed_accounts = invoke_context.get_keyed_accounts();
+            let keyed_accounts = invoke_context.get_keyed_accounts()?;
             let program = keyed_account_at_index(keyed_accounts, 0)?;
             if native_loader::id() != *program_id {
                 error!("Program id mismatch");
@@ -170,7 +170,7 @@ impl NativeLoader {
             return Err(NativeLoaderError::InvalidAccountData.into());
         }
         trace!("Call native {:?}", name);
-        invoke_context.remove_first_keyed_account();
+        invoke_context.remove_first_keyed_account()?;
         if name.ends_with("loader_program") {
             let entrypoint =
                 Self::get_entrypoint::<LoaderEntrypoint>(name, &self.loader_symbol_cache)?;
@@ -181,7 +181,7 @@ impl NativeLoader {
             unsafe {
                 entrypoint(
                     &program_id,
-                    invoke_context.get_keyed_accounts(),
+                    invoke_context.get_keyed_accounts()?,
                     instruction_data,
                 )
             }

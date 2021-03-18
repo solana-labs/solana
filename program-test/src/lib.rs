@@ -103,7 +103,7 @@ pub fn builtin_process_instruction(
 ) -> Result<(), InstructionError> {
     set_invoke_context(invoke_context);
 
-    let keyed_accounts = invoke_context.get_keyed_accounts();
+    let keyed_accounts = invoke_context.get_keyed_accounts()?;
 
     // Copy all the accounts into a HashMap to ensure there are no duplicates
     let mut accounts: HashMap<Pubkey, Account> = keyed_accounts

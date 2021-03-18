@@ -5432,7 +5432,7 @@ pub(crate) mod tests {
         data: &[u8],
         invoke_context: &mut dyn InvokeContext,
     ) -> result::Result<(), InstructionError> {
-        let keyed_accounts = invoke_context.get_keyed_accounts();
+        let keyed_accounts = invoke_context.get_keyed_accounts()?;
         if let Ok(instruction) = bincode::deserialize(data) {
             match instruction {
                 MockInstruction::Deduction => {
@@ -9849,7 +9849,7 @@ pub(crate) mod tests {
             data: &[u8],
             invoke_context: &mut dyn InvokeContext,
         ) -> result::Result<(), InstructionError> {
-            let keyed_accounts = invoke_context.get_keyed_accounts();
+            let keyed_accounts = invoke_context.get_keyed_accounts()?;
             let lamports = data[0] as u64;
             {
                 let mut to_account = keyed_accounts[1].try_account_ref_mut()?;
@@ -10339,7 +10339,7 @@ pub(crate) mod tests {
             _data: &[u8],
             invoke_context: &mut dyn InvokeContext,
         ) -> result::Result<(), InstructionError> {
-            let keyed_accounts = invoke_context.get_keyed_accounts();
+            let keyed_accounts = invoke_context.get_keyed_accounts()?;
             assert_eq!(42, keyed_accounts[0].lamports().unwrap());
             let mut account = keyed_accounts[0].try_account_ref_mut()?;
             account.lamports += 1;
@@ -12397,7 +12397,7 @@ pub(crate) mod tests {
             invoke_context: &mut dyn InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             use solana_sdk::account::WritableAccount;
-            let keyed_accounts = invoke_context.get_keyed_accounts();
+            let keyed_accounts = invoke_context.get_keyed_accounts()?;
             let mut data = keyed_accounts[1].try_account_ref_mut()?;
             data.data_as_mut_slice()[0] = 5;
             Ok(())

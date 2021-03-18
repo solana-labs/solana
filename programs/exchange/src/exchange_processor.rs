@@ -490,7 +490,7 @@ pub fn process_instruction(
     data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
-    let keyed_accounts = invoke_context.get_keyed_accounts();
+    let keyed_accounts = invoke_context.get_keyed_accounts()?;
 
     solana_logger::setup();
     match limited_deserialize::<ExchangeInstruction>(data)? {

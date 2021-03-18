@@ -362,21 +362,19 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             .map(|frame| &frame.0)
             .ok_or(InstructionError::GenericError)
     }
-    fn remove_first_keyed_account(&mut self) {
+    fn remove_first_keyed_account(&mut self) -> Result<(), InstructionError> {
         let mut stack_frame = &mut self
             .invoke_stack
             .last_mut()
-            .ok_or(InstructionError::GenericError)
-            .unwrap();
+            .ok_or(InstructionError::GenericError)?;
         stack_frame.1 = &stack_frame.1[1..];
+        Ok(())
     }
-    fn get_keyed_accounts(&self) -> &[KeyedAccount] {
-        &self
-            .invoke_stack
+    fn get_keyed_accounts(&self) -> Result<&[KeyedAccount], InstructionError> {
+        self.invoke_stack
             .last()
+            .map(|frame| frame.1)
             .ok_or(InstructionError::GenericError)
-            .unwrap()
-            .1
     }
     fn get_programs(&self) -> &[(Pubkey, ProcessInstructionWithContext)] {
         self.programs
@@ -607,12 +605,12 @@ impl MessageProcessor {
         instruction_data: &[u8],
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
-        if let Some(root_account) = invoke_context.get_keyed_accounts().iter().next() {
+        if let Some(root_account) = invoke_context.get_keyed_accounts()?.iter().next() {
             let root_id = root_account.unsigned_key();
             if native_loader::check_id(&root_account.owner()?) {
                 for (id, process_instruction) in &self.programs {
                     if id == root_id {
-                        invoke_context.remove_first_keyed_account();
+                        invoke_context.remove_first_keyed_account()?;
                         // Call the builtin program
                         return process_instruction(&program_id, instruction_data, invoke_context);
                     }
@@ -733,14 +731,14 @@ impl MessageProcessor {
             let invoke_context = invoke_context.borrow();
 
             // Translate and verify caller's data
-            let keyed_accounts = invoke_context.get_keyed_accounts();
+            let keyed_accounts = invoke_context.get_keyed_accounts()?;
             let keyed_accounts = keyed_account_indices
                 .iter()
                 .map(|index| keyed_account_at_index(keyed_accounts, *index))
                 .collect::<Result<Vec<&KeyedAccount>, InstructionError>>()?;
             let (message, callee_program_id, _) =
                 Self::create_message(&instruction, &keyed_accounts, &signers, &invoke_context)?;
-            let keyed_accounts = invoke_context.get_keyed_accounts();
+            let keyed_accounts = invoke_context.get_keyed_accounts()?;
             let mut caller_write_privileges = keyed_account_indices
                 .iter()
                 .map(|index| keyed_accounts[*index].is_writable())
@@ -748,7 +746,7 @@ impl MessageProcessor {
             caller_write_privileges.insert(0, false);
             let mut accounts = vec![];
             let mut keyed_account_indices_reordered = vec![];
-            let keyed_accounts = invoke_context.get_keyed_accounts();
+            let keyed_accounts = invoke_context.get_keyed_accounts()?;
             'root: for account_key in message.account_keys.iter() {
                 for keyed_account_index in keyed_account_indices {
                     let keyed_account = &keyed_accounts[*keyed_account_index];
@@ -838,7 +836,7 @@ impl MessageProcessor {
 
         {
             let invoke_context = invoke_context.borrow();
-            let keyed_accounts = invoke_context.get_keyed_accounts();
+            let keyed_accounts = invoke_context.get_keyed_accounts()?;
             for (src_keyed_account_index, (account, dst_keyed_account_index)) in accounts
                 .iter()
                 .zip(keyed_account_indices_reordered)
@@ -1764,7 +1762,7 @@ mod tests {
             data: &[u8],
             invoke_context: &mut dyn InvokeContext,
         ) -> Result<(), InstructionError> {
-            let keyed_accounts = invoke_context.get_keyed_accounts();
+            let keyed_accounts = invoke_context.get_keyed_accounts()?;
             if let Ok(instruction) = bincode::deserialize(data) {
                 match instruction {
                     MockSystemInstruction::Correct => Ok(()),
@@ -1917,7 +1915,7 @@ mod tests {
             data: &[u8],
             invoke_context: &mut dyn InvokeContext,
         ) -> Result<(), InstructionError> {
-            let keyed_accounts = invoke_context.get_keyed_accounts();
+            let keyed_accounts = invoke_context.get_keyed_accounts()?;
             if let Ok(instruction) = bincode::deserialize(data) {
                 match instruction {
                     MockSystemInstruction::BorrowFail => {
@@ -2096,7 +2094,7 @@ mod tests {
             data: &[u8],
             invoke_context: &mut dyn InvokeContext,
         ) -> Result<(), InstructionError> {
-            let keyed_accounts = invoke_context.get_keyed_accounts();
+            let keyed_accounts = invoke_context.get_keyed_accounts()?;
             assert_eq!(*program_id, keyed_accounts[0].owner()?);
             assert_ne!(
                 keyed_accounts[1].owner()?,
