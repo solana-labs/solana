@@ -129,16 +129,33 @@ pub trait EncodingConfig {
     fn new_with_encoding(encoding: &Option<UiTransactionEncoding>) -> Self;
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum TransactionDetails {
+    All,
+    Signatures,
+    None,
+}
+
+impl Default for TransactionDetails {
+    fn default() -> Self {
+        Self::All
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcConfirmedBlockConfig {
     pub encoding: Option<UiTransactionEncoding>,
+    pub transaction_details: Option<TransactionDetails>,
+    pub no_rewards: Option<bool>,
 }
 
 impl EncodingConfig for RpcConfirmedBlockConfig {
     fn new_with_encoding(encoding: &Option<UiTransactionEncoding>) -> Self {
         Self {
             encoding: *encoding,
+            ..Self::default()
         }
     }
 }
