@@ -24,7 +24,7 @@ indicatif = "0.15.0"
 humantime = "2.0.1"
 num-traits = "0.2"
 pretty-hex = "0.2.1"
-reqwest = { version = "0.10.8", default-features = false, features = ["blocking", "rustls-tls", "json"] }
+reqwest = { version = "0.11.2", default-features = false, features = ["blocking", "rustls-tls", "json"] }
 serde = "1.0.122"
 serde_derive = "1.0.103"
 serde_json = "1.0.56"
