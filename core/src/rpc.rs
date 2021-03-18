@@ -726,7 +726,7 @@ impl JsonRpcRequestProcessor {
             .unwrap_or_default();
         let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Json);
         let transaction_details = config.transaction_details.unwrap_or_default();
-        let show_rewards = !config.no_rewards.unwrap_or_default();
+        let show_rewards = config.rewards.unwrap_or(true);
         if self.config.enable_rpc_transaction_history
             && slot
                 <= self
@@ -5176,7 +5176,7 @@ pub mod tests {
             json!(RpcConfirmedBlockConfig {
                 encoding: None,
                 transaction_details: Some(TransactionDetails::Signatures),
-                no_rewards: Some(true),
+                rewards: Some(false),
             })
         );
         let res = io.handle_request_sync(&req, meta.clone());
@@ -5196,7 +5196,7 @@ pub mod tests {
             json!(RpcConfirmedBlockConfig {
                 encoding: None,
                 transaction_details: Some(TransactionDetails::None),
-                no_rewards: Some(false),
+                rewards: Some(true),
             })
         );
         let res = io.handle_request_sync(&req, meta);

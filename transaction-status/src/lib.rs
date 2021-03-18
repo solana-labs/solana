@@ -370,7 +370,7 @@ impl ConfirmedBlock {
         show_rewards: bool,
     ) -> UiConfirmedBlock {
         let (transactions, signatures) = match transaction_details {
-            TransactionDetails::All => (
+            TransactionDetails::Full => (
                 Some(
                     self.transactions
                         .into_iter()
@@ -449,14 +449,14 @@ impl From<EncodedConfirmedBlock> for UiConfirmedBlock {
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum TransactionDetails {
-    All,
+    Full,
     Signatures,
     None,
 }
 
 impl Default for TransactionDetails {
     fn default() -> Self {
-        Self::All
+        Self::Full
     }
 }
 

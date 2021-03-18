@@ -134,7 +134,7 @@ pub trait EncodingConfig {
 pub struct RpcConfirmedBlockConfig {
     pub encoding: Option<UiTransactionEncoding>,
     pub transaction_details: Option<TransactionDetails>,
-    pub no_rewards: Option<bool>,
+    pub rewards: Option<bool>,
 }
 
 impl EncodingConfig for RpcConfirmedBlockConfig {
