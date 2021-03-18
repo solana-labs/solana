@@ -595,8 +595,11 @@ fn process_loader_upgradeable_instruction(
             programdata.try_account_ref_mut()?.data
                 [programdata_data_offset..programdata_data_offset + buffer_data_len]
                 .copy_from_slice(&buffer.try_account_ref()?.data[buffer_data_offset..]);
-            programdata.try_account_ref_mut()?.data[programdata_data_offset + buffer_data_len..]
-                .fill(0);
+            for i in &mut programdata.try_account_ref_mut()?.data
+                [programdata_data_offset + buffer_data_len..]
+            {
+                *i = 0
+            }
 
             // Fund ProgramData to rent-exemption, spill the rest
 
@@ -697,7 +700,9 @@ fn process_loader_upgradeable_instruction(
 
                 recipient_account.try_account_ref_mut()?.lamports += close_account.lamports()?;
                 close_account.try_account_ref_mut()?.lamports = 0;
-                close_account.try_account_ref_mut()?.data.fill(0);
+                for i in &mut close_account.try_account_ref_mut()?.data {
+                    *i = 0
+                }
             } else {
                 ic_logger_msg!(logger, "Account does not support closing");
                 return Err(InstructionError::InvalidArgument);
