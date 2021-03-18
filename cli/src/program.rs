@@ -1385,21 +1385,15 @@ fn process_close(
                         authority_signer,
                     )?;
 
-                    if let Ok(UpgradeableLoaderState::Buffer { authority_address }) =
-                        account.state()
-                    {
-                        buffers.push(CliUpgradeableBuffer {
-                            address: account_pubkey.to_string(),
-                            authority: authority_address
-                                .map(|pubkey| pubkey.to_string())
-                                .unwrap_or_else(|| "none".to_string()),
-                            data_len: 0,
-                            lamports: account.lamports,
-                            use_lamports_unit,
-                        });
-                    } else {
-                        return Err(format!("Error parsing account {}", account_pubkey).into());
-                    }
+                    buffers.push(CliUpgradeableBuffer {
+                        address: account_pubkey.to_string(),
+                        authority: authority_address
+                            .map(|pubkey| pubkey.to_string())
+                            .unwrap_or_else(|| "none".to_string()),
+                        data_len: 0,
+                        lamports: account.lamports,
+                        use_lamports_unit,
+                    });
                 }
             } else {
                 return Err(format!(
