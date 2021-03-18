@@ -1,17 +1,26 @@
-#![allow(clippy::integer_arithmetic)]
 //! The `timing` module provides std::time utility functions.
+use crate::unchecked_div_by_const;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub fn duration_as_ns(d: &Duration) -> u64 {
-    d.as_secs() * 1_000_000_000 + u64::from(d.subsec_nanos())
+    d.as_secs()
+        .saturating_mul(1_000_000_000)
+        .saturating_add(u64::from(d.subsec_nanos()))
 }
 
 pub fn duration_as_us(d: &Duration) -> u64 {
-    (d.as_secs() * 1000 * 1000) + (u64::from(d.subsec_nanos()) / 1_000)
+    d.as_secs()
+        .saturating_mul(1_000_000)
+        .saturating_add(unchecked_div_by_const!(u64::from(d.subsec_nanos()), 1_000))
 }
 
 pub fn duration_as_ms(d: &Duration) -> u64 {
-    (d.as_secs() * 1000) + (u64::from(d.subsec_nanos()) / 1_000_000)
+    d.as_secs()
+        .saturating_mul(1000)
+        .saturating_add(unchecked_div_by_const!(
+            u64::from(d.subsec_nanos()),
+            1_000_000
+        ))
 }
 
 pub fn duration_as_s(d: &Duration) -> f32 {
@@ -34,7 +43,7 @@ pub fn years_as_slots(years: f64, tick_duration: &Duration, ticks_per_slot: u64)
     //  slots/year  is  seconds/year ...
         SECONDS_PER_YEAR
     //  * (ns/s)/(ns/tick) / ticks/slot = 1/s/1/tick = ticks/s
-        *(1_000_000_000.0 / duration_as_ns(tick_duration) as f64)
+        * (1_000_000_000.0 / duration_as_ns(tick_duration) as f64)
     //  / ticks/slot
         / ticks_per_slot as f64
 }
