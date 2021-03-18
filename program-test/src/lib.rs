@@ -8,21 +8,29 @@ use {
     solana_banks_client::start_client,
     solana_banks_server::banks_server::start_local_server,
     solana_program::{
-        account_info::AccountInfo, entrypoint::ProgramResult, fee_calculator::FeeCalculator,
-        hash::Hash, instruction::Instruction, instruction::InstructionError, message::Message,
-        native_token::sol_to_lamports, program_error::ProgramError, program_stubs, pubkey::Pubkey,
+        account_info::AccountInfo,
+        entrypoint::ProgramResult,
+        fee_calculator::{FeeCalculator, FeeRateGovernor},
+        hash::Hash,
+        instruction::Instruction,
+        instruction::InstructionError,
+        message::Message,
+        native_token::sol_to_lamports,
+        program_error::ProgramError,
+        program_stubs,
+        pubkey::Pubkey,
         rent::Rent,
     },
     solana_runtime::{
         bank::{Bank, Builtin, ExecuteTimings},
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
-        genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
+        genesis_utils::{create_genesis_config_with_leader_ex, GenesisConfigInfo},
     },
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount},
         clock::Slot,
-        genesis_config::GenesisConfig,
+        genesis_config::{ClusterType, GenesisConfig},
         keyed_account::KeyedAccount,
         process_instruction::{
             stable_log, BpfComputeBudget, InvokeContext, ProcessInstructionWithContext,
@@ -623,19 +631,27 @@ impl ProgramTest {
         }
 
         let rent = Rent::default();
+        let fee_rate_governor = FeeRateGovernor::default();
         let bootstrap_validator_pubkey = Pubkey::new_unique();
-        let bootstrap_validator_lamports = rent.minimum_balance(VoteState::size_of());
+        let bootstrap_validator_stake_lamports = rent.minimum_balance(VoteState::size_of());
 
-        let mut gci = create_genesis_config_with_leader(
+        let mint_keypair = Keypair::new();
+        let voting_keypair = Keypair::new();
+
+        let genesis_config = create_genesis_config_with_leader_ex(
             sol_to_lamports(1_000_000.0),
+            &mint_keypair.pubkey(),
             &bootstrap_validator_pubkey,
-            bootstrap_validator_lamports,
+            &voting_keypair.pubkey(),
+            &Pubkey::new_unique(),
+            bootstrap_validator_stake_lamports,
+            42,
+            fee_rate_governor,
+            rent,
+            ClusterType::Development,
+            vec![],
         );
-        let genesis_config = &mut gci.genesis_config;
-        genesis_config.rent = rent;
-        genesis_config.fee_rate_governor =
-            solana_program::fee_calculator::FeeRateGovernor::default();
-        debug!("Payer address: {}", gci.mint_keypair.pubkey());
+        debug!("Payer address: {}", mint_keypair.pubkey());
         debug!("Genesis config: {}", genesis_config);
 
         let mut bank = Bank::new(&genesis_config);
@@ -682,7 +698,16 @@ impl ProgramTest {
             BlockCommitmentCache::new_for_tests_with_slots(slot, slot),
         ));
 
-        (bank_forks, block_commitment_cache, last_blockhash, gci)
+        (
+            bank_forks,
+            block_commitment_cache,
+            last_blockhash,
+            GenesisConfigInfo {
+                mint_keypair,
+                voting_keypair,
+                genesis_config,
+            },
+        )
     }
 
     pub async fn start(self) -> (BanksClient, Keypair, Hash) {
