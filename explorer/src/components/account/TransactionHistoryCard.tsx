@@ -121,8 +121,8 @@ export function TransactionHistoryCard({ pubkey }: { pubkey: PublicKey }) {
         </button>
       </div>
 
-      <div className="table-responsive mb-0">
-        <table className="table table-sm table-nowrap card-table">
+      <div className="table-responsive-sm mb-0">
+        <table className="table table-sm table-nowrap">
           <thead>
             <tr>
               <th className="text-muted w-1">Slot</th>

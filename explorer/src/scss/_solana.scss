@@ -353,3 +353,10 @@ pre.data-wrap, pre.json-wrap {
 pre.json-wrap {
   max-width: 36rem;
 }
+
+td {
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

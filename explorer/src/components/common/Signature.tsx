@@ -14,7 +14,7 @@ type Props = {
 export function Signature({ signature, alignRight, link, truncate }: Props) {
   return (
     <div
-      className={`d-flex align-items-center ${
+      className={`d-inline align-items-center ${
         alignRight ? "justify-content-end" : ""
       }`}
     >
