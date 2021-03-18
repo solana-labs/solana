@@ -4,7 +4,7 @@ use solana_sdk::{
     clock::Epoch,
     commitment_config::{CommitmentConfig, CommitmentLevel},
 };
-use solana_transaction_status::UiTransactionEncoding;
+use solana_transaction_status::{TransactionDetails, UiTransactionEncoding};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -133,12 +133,24 @@ pub trait EncodingConfig {
 #[serde(rename_all = "camelCase")]
 pub struct RpcConfirmedBlockConfig {
     pub encoding: Option<UiTransactionEncoding>,
+    pub transaction_details: Option<TransactionDetails>,
+    pub rewards: Option<bool>,
 }
 
 impl EncodingConfig for RpcConfirmedBlockConfig {
     fn new_with_encoding(encoding: &Option<UiTransactionEncoding>) -> Self {
         Self {
             encoding: *encoding,
+            ..Self::default()
+        }
+    }
+}
+
+impl RpcConfirmedBlockConfig {
+    pub fn rewards_only() -> Self {
+        Self {
+            transaction_details: Some(TransactionDetails::None),
+            ..Self::default()
         }
     }
 }

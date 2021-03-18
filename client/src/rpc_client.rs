@@ -4,9 +4,9 @@ use crate::{
     mock_sender::{MockSender, Mocks},
     rpc_config::RpcAccountInfoConfig,
     rpc_config::{
-        RpcGetConfirmedSignaturesForAddress2Config, RpcLargestAccountsConfig,
-        RpcProgramAccountsConfig, RpcSendTransactionConfig, RpcSimulateTransactionConfig,
-        RpcTokenAccountsFilter,
+        RpcConfirmedBlockConfig, RpcGetConfirmedSignaturesForAddress2Config,
+        RpcLargestAccountsConfig, RpcProgramAccountsConfig, RpcSendTransactionConfig,
+        RpcSimulateTransactionConfig, RpcTokenAccountsFilter,
     },
     rpc_request::{RpcError, RpcRequest, RpcResponseErrorData, TokenAccountsFilter},
     rpc_response::*,
@@ -33,7 +33,8 @@ use solana_sdk::{
     transaction::{self, uses_durable_nonce, Transaction},
 };
 use solana_transaction_status::{
-    EncodedConfirmedBlock, EncodedConfirmedTransaction, TransactionStatus, UiTransactionEncoding,
+    EncodedConfirmedBlock, EncodedConfirmedTransaction, TransactionStatus, UiConfirmedBlock,
+    UiTransactionEncoding,
 };
 use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::{
@@ -505,6 +506,14 @@ impl RpcClient {
         encoding: UiTransactionEncoding,
     ) -> ClientResult<EncodedConfirmedBlock> {
         self.send(RpcRequest::GetConfirmedBlock, json!([slot, encoding]))
+    }
+
+    pub fn get_configured_confirmed_block(
+        &self,
+        slot: Slot,
+        config: RpcConfirmedBlockConfig,
+    ) -> ClientResult<UiConfirmedBlock> {
+        self.send(RpcRequest::GetConfirmedBlock, json!([slot, config]))
     }
 
     pub fn get_confirmed_blocks(
