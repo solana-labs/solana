@@ -163,8 +163,11 @@ impl Accounts {
         false
     }
 
-    fn construct_instructions_account(message: &Message) -> AccountSharedData {
-        let mut data = message.serialize_instructions();
+    fn construct_instructions_account(
+        message: &Message,
+        demote_sysvar_write_locks: bool,
+    ) -> AccountSharedData {
+        let mut data = message.serialize_instructions(demote_sysvar_write_locks);
         // add room for current instruction index.
         data.resize(data.len() + 2, 0);
         AccountSharedData::from(Account {
@@ -193,6 +196,8 @@ impl Accounts {
             let mut tx_rent: TransactionRent = 0;
             let mut accounts = Vec::with_capacity(message.account_keys.len());
             let mut account_deps = Vec::with_capacity(message.account_keys.len());
+            let demote_sysvar_write_locks =
+                feature_set.is_active(&feature_set::demote_sysvar_write_locks::id());
 
             for (i, key) in message.account_keys.iter().enumerate() {
                 let account = if message.is_non_loader_key(key, i) {
@@ -203,16 +208,16 @@ impl Accounts {
                     if solana_sdk::sysvar::instructions::check_id(key)
                         && feature_set.is_active(&feature_set::instructions_sysvar_enabled::id())
                     {
-                        if message.is_writable(i) {
+                        if message.is_writable(i, demote_sysvar_write_locks) {
                             return Err(TransactionError::InvalidAccountIndex);
                         }
-                        Self::construct_instructions_account(message)
+                        Self::construct_instructions_account(message, demote_sysvar_write_locks)
                     } else {
                         let (account, rent) = self
                             .accounts_db
                             .load(ancestors, key)
                             .map(|(mut account, _)| {
-                                if message.is_writable(i) {
+                                if message.is_writable(i, demote_sysvar_write_locks) {
                                     let rent_due = rent_collector
                                         .collect_from_existing_account(&key, &mut account);
                                     (account, rent_due)
@@ -858,6 +863,7 @@ impl Accounts {
         rent_collector: &RentCollector,
         last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
         fix_recent_blockhashes_sysvar_delay: bool,
+        demote_sysvar_write_locks: bool,
     ) {
         let accounts_to_store = self.collect_accounts_to_store(
             txs,
@@ -867,6 +873,7 @@ impl Accounts {
             rent_collector,
             last_blockhash_with_fee_calculator,
             fix_recent_blockhashes_sysvar_delay,
+            demote_sysvar_write_locks,
         );
         self.accounts_db.store_cached(slot, &accounts_to_store);
     }
@@ -891,6 +898,7 @@ impl Accounts {
         rent_collector: &RentCollector,
         last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
         fix_recent_blockhashes_sysvar_delay: bool,
+        demote_sysvar_write_locks: bool,
     ) -> Vec<(&'a Pubkey, &'a AccountSharedData)> {
         let mut accounts = Vec::with_capacity(loaded.len());
         for (i, ((raccs, _nonce_rollback), (_, tx))) in loaded
@@ -941,7 +949,7 @@ impl Accounts {
                     fee_payer_index = Some(i);
                 }
                 let is_fee_payer = Some(i) == fee_payer_index;
-                if message.is_writable(i)
+                if message.is_writable(i, demote_sysvar_write_locks)
                     && (res.is_ok()
                         || (maybe_nonce_rollback.is_some() && (is_nonce_account || is_fee_payer)))
                 {
@@ -1908,6 +1916,7 @@ mod tests {
                 .unwrap()
                 .insert_new_readonly(&pubkey);
         }
+        let demote_sysvar_write_locks = true;
         let collected_accounts = accounts.collect_accounts_to_store(
             &txs,
             None,
@@ -1916,6 +1925,7 @@ mod tests {
             &rent_collector,
             &(Hash::default(), FeeCalculator::default()),
             true,
+            demote_sysvar_write_locks,
         );
         assert_eq!(collected_accounts.len(), 2);
         assert!(collected_accounts
@@ -2270,6 +2280,7 @@ mod tests {
 
         let mut loaded = vec![loaded];
 
+        let demote_sysvar_write_locks = true;
         let next_blockhash = Hash::new_unique();
         let accounts =
             Accounts::new_with_config(Vec::new(), &ClusterType::Development, HashSet::new(), false);
@@ -2281,6 +2292,7 @@ mod tests {
             &rent_collector,
             &(next_blockhash, FeeCalculator::default()),
             true,
+            demote_sysvar_write_locks,
         );
         assert_eq!(collected_accounts.len(), 2);
         assert_eq!(
@@ -2391,6 +2403,7 @@ mod tests {
             loaded.as_mut_slice(),
             &rent_collector,
             &(next_blockhash, FeeCalculator::default()),
+            true,
             true,
         );
         assert_eq!(collected_accounts.len(), 1);

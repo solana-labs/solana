@@ -3217,6 +3217,7 @@ impl Bank {
             &self.rent_collector,
             &self.last_blockhash_with_fee_calculator(),
             self.fix_recent_blockhashes_sysvar_delay(),
+            self.demote_sysvar_write_locks(),
         );
         self.collect_rent(executed, loaded_accounts);
 
@@ -12282,14 +12283,7 @@ pub(crate) mod tests {
             &Pubkey::new_unique(),
             bootstrap_validator_stake_lamports(),
         );
-        let bank = Arc::new(Bank::new(&genesis_config));
-
-        let blockhash = bank.last_blockhash();
-        let blockhash_sysvar = sysvar::recent_blockhashes::id();
-        info!("{:?}", bank.get_account(&sysvar::recent_blockhashes::id()));
-        let tx = system_transaction::transfer(&mint_keypair, &blockhash_sysvar, 10, blockhash);
-        bank.process_transaction(&tx).unwrap();
-        info!("{:?}", bank.get_account(&sysvar::recent_blockhashes::id()));
+        let mut bank = Bank::new(&genesis_config);
 
         fn mock_ix_processor(
             _pubkey: &Pubkey,
@@ -12297,20 +12291,41 @@ pub(crate) mod tests {
             _data: &[u8],
             _invoke_context: &mut dyn InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
-            ka[0].try_borrow_mut().data[0] = 5;
+            ka[1].try_account_ref_mut()?.data[0] = 5;
             Ok(())
         }
 
         let program_id = solana_sdk::pubkey::new_rand();
         bank.add_builtin("mock_program1", program_id, mock_ix_processor);
 
+        let blockhash = bank.last_blockhash();
+        let blockhash_sysvar = sysvar::recent_blockhashes::id();
+        let orig_lamports = bank.get_account(&sysvar::recent_blockhashes::id()).unwrap().lamports;
+        info!("{:?}", bank.get_account(&sysvar::recent_blockhashes::id()));
+        let tx = system_transaction::transfer(&mint_keypair, &blockhash_sysvar, 10, blockhash);
+        assert_eq!(
+            bank.process_transaction(&tx),
+            Err(TransactionError::InstructionError(
+                0,
+                InstructionError::ReadonlyLamportChange
+            ))
+        );
+        assert_eq!(bank.get_account(&sysvar::recent_blockhashes::id()).unwrap().lamports, orig_lamports);
+        info!("{:?}", bank.get_account(&sysvar::recent_blockhashes::id()));
+
         let accounts = vec![
             AccountMeta::new(mint_keypair.pubkey(), true),
             AccountMeta::new(blockhash_sysvar, false),
         ];
-        let ix = Instruction::new_with_bincode(program_id, &[], accounts);
+        let ix = Instruction::new_with_bincode(program_id, &0, accounts);
         let message = Message::new(&[ix], Some(&mint_keypair.pubkey()));
         let tx = Transaction::new(&[&mint_keypair], message, blockhash);
-        bank.process_transaction(&tx).unwrap();
+        assert_eq!(
+            bank.process_transaction(&tx),
+            Err(TransactionError::InstructionError(
+                0,
+                InstructionError::ReadonlyDataModified
+            ))
+        );
     }
 }

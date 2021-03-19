@@ -347,9 +347,14 @@ impl Message {
         self.program_position(i).is_some()
     }
 
-    pub fn is_writable(&self, i: usize) -> bool {
-        i < (self.header.num_required_signatures - self.header.num_readonly_signed_accounts)
-            as usize
+    pub fn is_writable(&self, i: usize, demote_sysvar_write_locks: bool) -> bool {
+        if demote_sysvar_write_locks
+            && (sysvar::is_sysvar_id(&self.account_keys[i]) || BUILTIN_PROGRAMS_KEYS.contains(&self.account_keys[i])) {
+                return false;
+        }
+
+        let max_readonly_index = (self.header.num_required_signatures - self.header.num_readonly_signed_accounts) as usize;
+        i < max_readonly_index
             || (i >= self.header.num_required_signatures as usize
                 && i < self.account_keys.len()
                     - self.header.num_readonly_unsigned_accounts as usize)
@@ -366,14 +371,8 @@ impl Message {
         let mut writable_keys = vec![];
         let mut readonly_keys = vec![];
         for (i, key) in self.account_keys.iter().enumerate() {
-            if self.is_writable(i) {
-                if demote_sysvar_write_locks
-                    && (sysvar::is_sysvar_id(key) || BUILTIN_PROGRAMS_KEYS.contains(key))
-                {
-                    readonly_keys.push(key);
-                } else {
-                    writable_keys.push(key);
-                }
+            if self.is_writable(i, demote_sysvar_write_locks) {
+                writable_keys.push(key);
             } else {
                 readonly_keys.push(key);
             }
@@ -394,7 +393,7 @@ impl Message {
     //   36..64 - program_id
     //     33..34 - data len - u16
     //     35..data_len - data
-    pub fn serialize_instructions(&self) -> Vec<u8> {
+    pub fn serialize_instructions(&self, demote_sysvar_write_locks: bool) -> Vec<u8> {
         // 64 bytes is a reasonable guess, calculating exactly is slower in benchmarks
         let mut data = Vec::with_capacity(self.instructions.len() * (32 * 2));
         append_u16(&mut data, self.instructions.len() as u16);
@@ -409,7 +408,7 @@ impl Message {
             for account_index in &instruction.accounts {
                 let account_index = *account_index as usize;
                 let is_signer = self.is_signer(account_index);
-                let is_writable = self.is_writable(account_index);
+                let is_writable = self.is_writable(account_index, demote_sysvar_write_locks);
                 let mut meta_byte = 0;
                 if is_signer {
                     meta_byte |= 1 << Self::IS_SIGNER_BIT;
