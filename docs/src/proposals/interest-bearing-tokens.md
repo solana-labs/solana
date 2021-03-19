@@ -109,7 +109,7 @@ program must implement:
 * `ApproveChecked`
 * `MintToChecked`
 * `BurnChecked`
-* `InitializeHolding2` (previously `InitializeAccount2`)
+* `InitializeHoldingWithOwnerAddress` (previously `InitializeAccount2`)
 
 And the program should throw errors for:
 
