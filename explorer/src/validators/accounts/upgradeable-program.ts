@@ -9,6 +9,8 @@ import {
   union,
   coerce,
   create,
+  array,
+  string,
 } from "superstruct";
 import { ParsedInfo } from "validators";
 import { PublicKeyFromString } from "validators/pubkey";
@@ -27,7 +29,7 @@ export const ProgramAccount = type({
 export type ProgramDataAccountInfo = Infer<typeof ProgramDataAccountInfo>;
 export const ProgramDataAccountInfo = type({
   authority: nullable(PublicKeyFromString),
-  // don't care about data yet
+  data: array(string()),
   slot: number(),
 });
 
@@ -40,7 +42,7 @@ export const ProgramDataAccount = type({
 export type ProgramBufferAccountInfo = Infer<typeof ProgramBufferAccountInfo>;
 export const ProgramBufferAccountInfo = type({
   authority: nullable(PublicKeyFromString),
-  // don't care about data yet
+  data: array(string()),
 });
 
 export type ProgramBufferAccount = Infer<typeof ProgramBufferAccount>;

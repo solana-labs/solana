@@ -20,7 +20,7 @@ export function ProgramLogSection({ signature }: SignatureProps) {
         </div>
       </div>
       <div className="card">
-        <ul className="log-messages">
+        <ul className="data-view log-messages">
           {logMessages.map((message, key) => (
             <li key={key}>{message.replace(/^Program log: /, "")}</li>
           ))}

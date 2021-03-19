@@ -13,6 +13,7 @@ import { Slot } from "components/common/Slot";
 import { addressLabel } from "utils/tx";
 import { useCluster } from "providers/cluster";
 import { ErrorCard } from "components/common/ErrorCard";
+import { Copyable } from "components/common/Copyable";
 
 export function UpgradeableLoaderAccountSection({
   account,
@@ -145,61 +146,68 @@ export function UpgradeableProgramDataSection({
 }) {
   const refresh = useFetchAccountInfo();
   return (
-    <div className="card">
-      <div className="card-header">
-        <h3 className="card-header-title mb-0 d-flex align-items-center">
-          Program Executable Data Account
-        </h3>
-        <button
-          className="btn btn-white btn-sm"
-          onClick={() => refresh(account.pubkey)}
-        >
-          <span className="fe fe-refresh-cw mr-2"></span>
-          Refresh
-        </button>
-      </div>
+    <>
+      <div className="card">
+        <div className="card-header">
+          <h3 className="card-header-title mb-0 d-flex align-items-center">
+            Program Executable Data Account
+          </h3>
+          <button
+            className="btn btn-white btn-sm"
+            onClick={() => refresh(account.pubkey)}
+          >
+            <span className="fe fe-refresh-cw mr-2"></span>
+            Refresh
+          </button>
+        </div>
 
-      <TableCardBody>
-        <tr>
-          <td>Address</td>
-          <td className="text-lg-right">
-            <Address pubkey={account.pubkey} alignRight raw />
-          </td>
-        </tr>
-        <tr>
-          <td>Balance (SOL)</td>
-          <td className="text-lg-right text-uppercase">
-            {lamportsToSolString(account.lamports || 0)}
-          </td>
-        </tr>
-        {account.details?.space !== undefined && (
+        <TableCardBody>
           <tr>
-            <td>Data (Bytes)</td>
-            <td className="text-lg-right">{account.details.space}</td>
-          </tr>
-        )}
-        <tr>
-          <td>Upgradeable</td>
-          <td className="text-lg-right">
-            {programData.authority !== null ? "Yes" : "No"}
-          </td>
-        </tr>
-        <tr>
-          <td>Last Deployed Slot</td>
-          <td className="text-lg-right">
-            <Slot slot={programData.slot} link />
-          </td>
-        </tr>
-        {programData.authority !== null && (
-          <tr>
-            <td>Upgrade Authority</td>
+            <td>Address</td>
             <td className="text-lg-right">
-              <Address pubkey={programData.authority} alignRight link />
+              <Address pubkey={account.pubkey} alignRight raw />
             </td>
           </tr>
-        )}
-      </TableCardBody>
-    </div>
+          <tr>
+            <td>Balance (SOL)</td>
+            <td className="text-lg-right text-uppercase">
+              {lamportsToSolString(account.lamports || 0)}
+            </td>
+          </tr>
+          {account.details?.space !== undefined && (
+            <tr>
+              <td>Data (Bytes)</td>
+              <td className="text-lg-right">{account.details.space}</td>
+            </tr>
+          )}
+          <tr>
+            <td>Upgradeable</td>
+            <td className="text-lg-right">
+              {programData.authority !== null ? "Yes" : "No"}
+            </td>
+          </tr>
+          <tr>
+            <td>Last Deployed Slot</td>
+            <td className="text-lg-right">
+              <Slot slot={programData.slot} link />
+            </td>
+          </tr>
+          {programData.authority !== null && (
+            <tr>
+              <td>Upgrade Authority</td>
+              <td className="text-lg-right">
+                <Address pubkey={programData.authority} alignRight link />
+              </td>
+            </tr>
+          )}
+        </TableCardBody>
+      </div>
+      <DataContainer
+        title="Program Data"
+        data={programData.data[0]}
+        type={programData.data[1]}
+      />
+    </>
   );
 }
 
@@ -212,56 +220,94 @@ export function UpgradeableProgramBufferSection({
 }) {
   const refresh = useFetchAccountInfo();
   return (
-    <div className="card">
-      <div className="card-header">
-        <h3 className="card-header-title mb-0 d-flex align-items-center">
-          Program Deploy Buffer Account
-        </h3>
-        <button
-          className="btn btn-white btn-sm"
-          onClick={() => refresh(account.pubkey)}
-        >
-          <span className="fe fe-refresh-cw mr-2"></span>
-          Refresh
-        </button>
-      </div>
+    <>
+      <div className="card">
+        <div className="card-header">
+          <h3 className="card-header-title mb-0 d-flex align-items-center">
+            Program Deploy Buffer Account
+          </h3>
+          <button
+            className="btn btn-white btn-sm"
+            onClick={() => refresh(account.pubkey)}
+          >
+            <span className="fe fe-refresh-cw mr-2"></span>
+            Refresh
+          </button>
+        </div>
 
-      <TableCardBody>
-        <tr>
-          <td>Address</td>
-          <td className="text-lg-right">
-            <Address pubkey={account.pubkey} alignRight raw />
-          </td>
-        </tr>
-        <tr>
-          <td>Balance (SOL)</td>
-          <td className="text-lg-right text-uppercase">
-            {lamportsToSolString(account.lamports || 0)}
-          </td>
-        </tr>
-        {account.details?.space !== undefined && (
+        <TableCardBody>
           <tr>
-            <td>Data (Bytes)</td>
-            <td className="text-lg-right">{account.details.space}</td>
-          </tr>
-        )}
-        {programBuffer.authority !== null && (
-          <tr>
-            <td>Deploy Authority</td>
+            <td>Address</td>
             <td className="text-lg-right">
-              <Address pubkey={programBuffer.authority} alignRight link />
+              <Address pubkey={account.pubkey} alignRight raw />
             </td>
           </tr>
-        )}
-        {account.details && (
           <tr>
-            <td>Owner</td>
-            <td className="text-lg-right">
-              <Address pubkey={account.details.owner} alignRight link />
+            <td>Balance (SOL)</td>
+            <td className="text-lg-right text-uppercase">
+              {lamportsToSolString(account.lamports || 0)}
             </td>
           </tr>
-        )}
-      </TableCardBody>
-    </div>
+          {account.details?.space !== undefined && (
+            <tr>
+              <td>Data (Bytes)</td>
+              <td className="text-lg-right">{account.details.space}</td>
+            </tr>
+          )}
+          {programBuffer.authority !== null && (
+            <tr>
+              <td>Deploy Authority</td>
+              <td className="text-lg-right">
+                <Address pubkey={programBuffer.authority} alignRight link />
+              </td>
+            </tr>
+          )}
+          {account.details && (
+            <tr>
+              <td>Owner</td>
+              <td className="text-lg-right">
+                <Address pubkey={account.details.owner} alignRight link />
+              </td>
+            </tr>
+          )}
+        </TableCardBody>
+      </div>
+      <DataContainer
+        title="Buffer Data"
+        data={programBuffer.data[0]}
+        type={programBuffer.data[1]}
+      />
+    </>
+  );
+}
+
+function DataContainer({
+  title,
+  data,
+  type,
+}: {
+  title: string;
+  data: string;
+  type: string;
+}) {
+  return (
+    <>
+      <div className="container">
+        <div className="header">
+          <div className="header-body">
+            <Copyable text={data} />
+            <h3
+              className="card-header-title"
+              style={{ display: "inline-block" }}
+            >
+              {title} <small className="text-muted">({type})</small>
+            </h3>
+          </div>
+        </div>
+      </div>
+      <div className="card">
+        <div className="data-view">{data}</div>
+      </div>
+    </>
   );
 }
