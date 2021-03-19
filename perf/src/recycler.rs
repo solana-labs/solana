@@ -1,6 +1,7 @@
 use rand::{thread_rng, Rng};
 use solana_measure::measure::Measure;
 use std::{
+    convert::TryFrom,
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
         Arc, Mutex, Weak,
@@ -112,7 +113,14 @@ impl<T: Default + Reset> ObjectPool<T> {
     }
 
     fn get_shrink_target(shrink_pct: u32, current_size: u32) -> u32 {
-        ((shrink_pct * current_size) + 99) / 100
+        let shrink_pct = u64::from(shrink_pct);
+        let current_size = u64::from(current_size);
+        let shrink_target = shrink_pct
+            .saturating_mul(current_size)
+            .saturating_add(99)
+            .checked_div(100)
+            .unwrap_or(0);
+        u32::try_from(shrink_target).unwrap_or(u32::MAX)
     }
 
     fn shrink_if_necessary(
@@ -138,7 +146,7 @@ impl<T: Default + Reset> ObjectPool<T> {
             if self.len() > self.minimum_object_count as usize
                 && self.len() > shrink_threshold_count as usize
             {
-                self.above_shrink_pct_count += 1;
+                self.above_shrink_pct_count = self.above_shrink_pct_count.saturating_add(1);
             } else {
                 self.above_shrink_pct_count = 0;
             }
@@ -147,7 +155,7 @@ impl<T: Default + Reset> ObjectPool<T> {
                 let mut recycler_shrink_elapsed = Measure::start("recycler_shrink");
                 // Do the shrink
                 let target_size = std::cmp::max(self.minimum_object_count, shrink_threshold_count);
-                let ideal_num_to_remove = self.total_allocated_count - target_size;
+                let ideal_num_to_remove = self.total_allocated_count.saturating_sub(target_size);
                 let mut shrink_removed_objects = Vec::with_capacity(ideal_num_to_remove as usize);
                 for _ in 0..ideal_num_to_remove {
                     if let Some(mut expired_object) = self.objects.pop() {
@@ -160,7 +168,7 @@ impl<T: Default + Reset> ObjectPool<T> {
                         // before the object is allocated (see `should_allocate_new` logic below).
                         // This race allows a difference of up to the number of threads allocating
                         // with this recycler.
-                        self.total_allocated_count -= 1;
+                        self.total_allocated_count = self.total_allocated_count.saturating_sub(1);
                     } else {
                         break;
                     }
@@ -191,13 +199,13 @@ impl<T: Default + Reset> ObjectPool<T> {
             AllocationDecision::Reuse(reused_object)
         } else if let Some(limit) = self.limit {
             if self.total_allocated_count < limit {
-                self.total_allocated_count += 1;
+                self.total_allocated_count = self.total_allocated_count.saturating_add(1);
                 AllocationDecision::Allocate(self.total_allocated_count, self.len())
             } else {
                 AllocationDecision::AllocationLimitReached
             }
         } else {
-            self.total_allocated_count += 1;
+            self.total_allocated_count = self.total_allocated_count.saturating_add(1);
             AllocationDecision::Allocate(self.total_allocated_count, self.len())
         }
     }
