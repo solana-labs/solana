@@ -53,8 +53,8 @@ pub type VerifiedVoteTransactionsSender = CrossbeamSender<Vec<Transaction>>;
 pub type VerifiedVoteTransactionsReceiver = CrossbeamReceiver<Vec<Transaction>>;
 pub type VerifiedVoteSender = CrossbeamSender<(Pubkey, Vec<Slot>)>;
 pub type VerifiedVoteReceiver = CrossbeamReceiver<(Pubkey, Vec<Slot>)>;
-pub type GossipConfirmedSlotsSender = CrossbeamSender<ThresholdConfirmedSlots>;
-pub type GossipConfirmedSlotsReceiver = CrossbeamReceiver<ThresholdConfirmedSlots>;
+pub type GossipDuplicateConfirmedSlotsSender = CrossbeamSender<ThresholdConfirmedSlots>;
+pub type GossipDuplicateConfirmedSlotsReceiver = CrossbeamReceiver<ThresholdConfirmedSlots>;
 
 const THRESHOLDS_TO_CHECK: [f64; 2] = [DUPLICATE_THRESHOLD, VOTE_THRESHOLD_SIZE];
 
@@ -252,7 +252,7 @@ impl ClusterInfoVoteListener {
         replay_votes_receiver: ReplayVoteReceiver,
         blockstore: Arc<Blockstore>,
         bank_notification_sender: Option<BankNotificationSender>,
-        cluster_confirmed_slot_sender: GossipConfirmedSlotsSender,
+        cluster_confirmed_slot_sender: GossipDuplicateConfirmedSlotsSender,
     ) -> Self {
         let exit_ = exit.clone();
 
@@ -426,7 +426,7 @@ impl ClusterInfoVoteListener {
         replay_votes_receiver: ReplayVoteReceiver,
         blockstore: Arc<Blockstore>,
         bank_notification_sender: Option<BankNotificationSender>,
-        cluster_confirmed_slot_sender: GossipConfirmedSlotsSender,
+        cluster_confirmed_slot_sender: GossipDuplicateConfirmedSlotsSender,
     ) -> Result<()> {
         let mut confirmation_verifier =
             OptimisticConfirmationVerifier::new(bank_forks.read().unwrap().root());
@@ -507,7 +507,7 @@ impl ClusterInfoVoteListener {
         verified_vote_sender: &VerifiedVoteSender,
         replay_votes_receiver: &ReplayVoteReceiver,
         bank_notification_sender: &Option<BankNotificationSender>,
-        cluster_confirmed_slot_sender: &Option<GossipConfirmedSlotsSender>,
+        cluster_confirmed_slot_sender: &Option<GossipDuplicateConfirmedSlotsSender>,
     ) -> Result<ThresholdConfirmedSlots> {
         let mut sel = Select::new();
         sel.recv(gossip_vote_txs_receiver);
@@ -559,7 +559,7 @@ impl ClusterInfoVoteListener {
         new_optimistic_confirmed_slots: &mut ThresholdConfirmedSlots,
         is_gossip_vote: bool,
         bank_notification_sender: &Option<BankNotificationSender>,
-        cluster_confirmed_slot_sender: &Option<GossipConfirmedSlotsSender>,
+        cluster_confirmed_slot_sender: &Option<GossipDuplicateConfirmedSlotsSender>,
     ) {
         if vote.slots.is_empty() {
             return;
@@ -693,7 +693,7 @@ impl ClusterInfoVoteListener {
         subscriptions: &RpcSubscriptions,
         verified_vote_sender: &VerifiedVoteSender,
         bank_notification_sender: &Option<BankNotificationSender>,
-        cluster_confirmed_slot_sender: &Option<GossipConfirmedSlotsSender>,
+        cluster_confirmed_slot_sender: &Option<GossipDuplicateConfirmedSlotsSender>,
     ) -> ThresholdConfirmedSlots {
         let mut diff: HashMap<Slot, HashMap<Pubkey, bool>> = HashMap::new();
         let mut new_optimistic_confirmed_slots = vec![];

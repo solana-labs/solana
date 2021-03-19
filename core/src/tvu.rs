@@ -6,7 +6,9 @@ use crate::{
     broadcast_stage::RetransmitSlotsSender,
     cache_block_time_service::CacheBlockTimeSender,
     cluster_info::ClusterInfo,
-    cluster_info_vote_listener::{GossipConfirmedSlotsReceiver, VerifiedVoteReceiver, VoteTracker},
+    cluster_info_vote_listener::{
+        GossipDuplicateConfirmedSlotsReceiver, VerifiedVoteReceiver, VoteTracker,
+    },
     cluster_slots::ClusterSlots,
     completed_data_sets_service::CompletedDataSetsSender,
     consensus::Tower,
@@ -120,7 +122,7 @@ impl Tvu {
         replay_vote_sender: ReplayVoteSender,
         completed_data_sets_sender: CompletedDataSetsSender,
         bank_notification_sender: Option<BankNotificationSender>,
-        gossip_confirmed_slots_receiver: GossipConfirmedSlotsReceiver,
+        gossip_confirmed_slots_receiver: GossipDuplicateConfirmedSlotsReceiver,
         tvu_config: TvuConfig,
         max_slots: &Arc<MaxSlots>,
     ) -> Self {

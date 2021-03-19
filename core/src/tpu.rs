@@ -6,7 +6,8 @@ use crate::{
     broadcast_stage::{BroadcastStage, BroadcastStageType, RetransmitSlotsReceiver},
     cluster_info::ClusterInfo,
     cluster_info_vote_listener::{
-        ClusterInfoVoteListener, GossipConfirmedSlotsSender, VerifiedVoteSender, VoteTracker,
+        ClusterInfoVoteListener, GossipDuplicateConfirmedSlotsSender, VerifiedVoteSender,
+        VoteTracker,
     },
     fetch_stage::FetchStage,
     optimistically_confirmed_bank_tracker::BankNotificationSender,
@@ -64,7 +65,7 @@ impl Tpu {
         replay_vote_sender: ReplayVoteSender,
         bank_notification_sender: Option<BankNotificationSender>,
         tpu_coalesce_ms: u64,
-        cluster_confirmed_slot_sender: GossipConfirmedSlotsSender,
+        cluster_confirmed_slot_sender: GossipDuplicateConfirmedSlotsSender,
     ) -> Self {
         let (packet_sender, packet_receiver) = channel();
         let fetch_stage = FetchStage::new_with_sender(
