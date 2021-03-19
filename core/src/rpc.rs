@@ -1157,9 +1157,25 @@ impl JsonRpcRequestProcessor {
         let stake_state: StakeState = stake_account
             .state()
             .map_err(|_| Error::invalid_params("Invalid param: not a stake account".to_string()))?;
-        let delegation = stake_state.delegation().ok_or_else(|| {
-            Error::invalid_params("Invalid param: stake account has not been delegated".to_string())
-        })?;
+        let delegation = stake_state.delegation();
+        if delegation.is_none() {
+            match stake_state.meta() {
+                None => {
+                    return Err(Error::invalid_params(
+                        "Invalid param: stake account not initialized".to_string(),
+                    ));
+                }
+                Some(meta) => {
+                    let rent_exempt_reserve = meta.rent_exempt_reserve;
+                    return Ok(RpcStakeActivation {
+                        state: StakeActivationState::Inactive,
+                        active: 0,
+                        inactive: stake_account.lamports().saturating_sub(rent_exempt_reserve),
+                    });
+                }
+            }
+        }
+        let delegation = delegation.unwrap();
 
         let stake_history_account = bank
             .get_account(&stake_history::id())
