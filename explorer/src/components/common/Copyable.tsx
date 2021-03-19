@@ -8,7 +8,7 @@ export function Copyable({
   replaceText,
 }: {
   text: string;
-  children?: ReactNode;
+  children: ReactNode;
   replaceText?: boolean;
 }) {
   const [state, setState] = useState<CopyState>("copy");
@@ -60,7 +60,7 @@ export function Copyable({
             <CopyIcon />
           </span>
         </span>
-        {children && children}
+        {children}
       </>
     );
   }

@@ -295,13 +295,14 @@ function DataContainer({
       <div className="container">
         <div className="header">
           <div className="header-body">
-            <Copyable text={data} />
-            <h3
-              className="card-header-title"
-              style={{ display: "inline-block" }}
-            >
-              {title} <small className="text-muted">({type})</small>
-            </h3>
+            <Copyable text={data}>
+              <h3
+                className="card-header-title"
+                style={{ display: "inline-block" }}
+              >
+                {title} <small className="text-muted">({type})</small>
+              </h3>
+            </Copyable>
           </div>
         </div>
       </div>
