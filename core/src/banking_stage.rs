@@ -2444,6 +2444,7 @@ mod tests {
         Blockstore::destroy(&ledger_path).unwrap();
     }
 
+    #[allow(clippy::type_complexity)]
     fn setup_conflicting_transactions(
         ledger_path: &Path,
     ) -> (
