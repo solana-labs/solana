@@ -131,11 +131,8 @@ balance is constantly changing.
 There are also new read-only instructions, which write data to a provided account
 buffer:
 
-* `GetHoldingBalance`: balance of the holding
-* `GetHoldingOwner`: owner's public key
-* `GetMintSupply`: mint supply
-* `GetMintAuthority`: mint authority's public key
-* `GetMintDecimals`: mint decimals
+* `SerializeHoldingToSPL`: write holding data in SPL token format
+* `SerializeMintToSPL`: write mint data in SPL token format
 
 See the Runtime section for more information on how these are used.
 
@@ -188,9 +185,9 @@ accounts", which only contain data, can be passed through CPI to other programs,
 and disappear after the instruction.
 
 For a program using i-tokens, to get the balance of a holding, the program creates
-an ephemeral account with 8 bytes of data, passes it to the i-token program's
-`GetHoldingBalance` instruction, then reads the information back as a `u64`. At the
-end of the instruction, the account disappears.
+an ephemeral account with 165 bytes of data, passes it to the i-token program's
+`SerializeHoldingToSPL` instruction, then deserializes the data back into the base
+`spl_token::Holding`. At the end of the instruction, the account disappears.
 
 TODO What's the best approach to implement this?  For example, does an ephemeral
 account even need a public key?
@@ -205,7 +202,7 @@ check that a CPI must use a subset of accounts provided to the calling program.
 #### Dynamic sysvars
 
 The i-token program also requires the use of dynamic sysvars. For example,
-during the `GetHoldingBalance` instruction, the program needs to know the current
+during the `SerializeHoldingToSPL` instruction, the program needs to know the current
 time in order to properly convert from token amount to share amount.
 
 Without dynamic sysvars, we need to create a system to tell what sysvars are
@@ -304,13 +301,10 @@ include the program id of the token(s) holdings they're passing in.
 For example, token-swap needs to accept separate token programs for token A and B
 * hard-coded token program: avoid using `Tokenkeg...` directly, and delete `id()`
 the SPL token code
-* get balance: instead of deserializing the account data into an SPL holding, use
-the new wrapper to deserialize or call `GetHoldingBalance` instruction with the
-appropriate token program
-* get owner: same as above, but using the `GetHoldingOwner`
-* get supply: same as above, but using the `GetMintSupply`
-* get mint authority: same as above, but using the `GetMintAuthority`
-* get mint decimals: same as above, but using the `GetMintDecimals`
+* get holding data: instead of deserializing the account data into an SPL holding, use
+the new wrapper to directly deserialize or call the `SerializeHoldingToSPL`
+instruction with the appropriate token program
+* get mint data: same as above, but using the `SerializeMintToSPL`
 * transfer: only use `TransferChecked`, which requires passing mints
 
 ## Other New Token Programs
