@@ -1,8 +1,8 @@
 import bs58 from 'bs58';
 import invariant from 'assert';
-import { Buffer } from 'buffer';
-import { Token, u64 } from '@solana/spl-token';
-import { expect, use } from 'chai';
+import {Buffer} from 'buffer';
+import {Token, u64} from '@solana/spl-token';
+import {expect, use} from 'chai';
 import chaiAsPromised from 'chai-as-promised';
 
 import {
@@ -17,8 +17,8 @@ import {
   StakeProgram,
   sendAndConfirmTransaction,
 } from '../src';
-import { DEFAULT_TICKS_PER_SLOT, NUM_TICKS_PER_SECOND } from '../src/timing';
-import { MOCK_PORT, url } from './url';
+import {DEFAULT_TICKS_PER_SLOT, NUM_TICKS_PER_SECOND} from '../src/timing';
+import {MOCK_PORT, url} from './url';
 import {
   BLOCKHASH_CACHE_TIMEOUT_MS,
   Commitment,
@@ -27,7 +27,7 @@ import {
   InflationGovernor,
   SlotInfo,
 } from '../src/connection';
-import { sleep } from '../src/util/sleep';
+import {sleep} from '../src/util/sleep';
 import {
   helpers,
   mockErrorMessage,
@@ -36,8 +36,8 @@ import {
   mockRpcResponse,
   mockServer,
 } from './mocks/rpc-http';
-import { stubRpcWebSocket, restoreRpcWebSocket } from './mocks/rpc-websockets';
-import type { TransactionSignature } from '../src/transaction';
+import {stubRpcWebSocket, restoreRpcWebSocket} from './mocks/rpc-websockets';
+import type {TransactionSignature} from '../src/transaction';
 import type {
   SignatureStatus,
   TransactionError,
@@ -93,7 +93,7 @@ describe('Connection', () => {
 
     await mockRpcResponse({
       method: 'getAccountInfo',
-      params: [account.publicKey.toBase58(), { encoding: 'base64' }],
+      params: [account.publicKey.toBase58(), {encoding: 'base64'}],
       value: null,
       withContext: true,
     });
@@ -102,7 +102,7 @@ describe('Connection', () => {
 
     await mockRpcResponse({
       method: 'getAccountInfo',
-      params: [account.publicKey.toBase58(), { encoding: 'jsonParsed' }],
+      params: [account.publicKey.toBase58(), {encoding: 'jsonParsed'}],
       value: null,
       withContext: true,
     });
@@ -160,7 +160,7 @@ describe('Connection', () => {
       });
     }
 
-    const feeCalculator = (await helpers.recentBlockhash({ connection }))
+    const feeCalculator = (await helpers.recentBlockhash({connection}))
       .feeCalculator;
 
     {
@@ -168,7 +168,7 @@ describe('Connection', () => {
         method: 'getProgramAccounts',
         params: [
           programId.publicKey.toBase58(),
-          { commitment: 'confirmed', encoding: 'base64' },
+          {commitment: 'confirmed', encoding: 'base64'},
         ],
         value: [
           {
@@ -219,7 +219,7 @@ describe('Connection', () => {
         method: 'getProgramAccounts',
         params: [
           programId.publicKey.toBase58(),
-          { commitment: 'confirmed', encoding: 'jsonParsed' },
+          {commitment: 'confirmed', encoding: 'jsonParsed'},
         ],
         value: [
           {
@@ -316,7 +316,7 @@ describe('Connection', () => {
   it('get epoch info', async () => {
     await mockRpcResponse({
       method: 'getEpochInfo',
-      params: [{ commitment: 'confirmed' }],
+      params: [{commitment: 'confirmed'}],
       value: {
         epoch: 0,
         slotIndex: 1,
@@ -539,7 +539,7 @@ describe('Connection', () => {
               fee: 10000,
               postBalances: [499260347380, 15298080, 1, 1, 1],
               preBalances: [499260357380, 15298080, 1, 1, 1],
-              status: { Ok: null },
+              status: {Ok: null},
               err: null,
             },
             transaction: {
@@ -626,7 +626,7 @@ describe('Connection', () => {
     // getConfirmedSignaturesForAddress2 tests...
     await mockRpcResponse({
       method: 'getConfirmedSignaturesForAddress2',
-      params: [address.toBase58(), { limit: 1 }],
+      params: [address.toBase58(), {limit: 1}],
       value: [
         {
           signature: expectedSignature,
@@ -639,7 +639,7 @@ describe('Connection', () => {
 
     const confirmedSignatures2 = await connection.getConfirmedSignaturesForAddress2(
       address,
-      { limit: 1 },
+      {limit: 1},
     );
     expect(confirmedSignatures2).to.have.length(1);
     if (mockServer) {
@@ -665,7 +665,6 @@ describe('Connection', () => {
     let slot = 0;
     let confirmedTransactions = [];
     while (confirmedTransactions.length < 2) {
-
       await mockRpcResponse({
         method: 'getConfirmedBlock',
         params: [++slot],
@@ -680,7 +679,7 @@ describe('Connection', () => {
                 fee: 10000,
                 postBalances: [499260347380, 15298080, 1, 1, 1],
                 preBalances: [499260357380, 15298080, 1, 1, 1],
-                status: { Ok: null },
+                status: {Ok: null},
                 err: null,
               },
               transaction: {
@@ -705,7 +704,8 @@ describe('Connection', () => {
                       programIdIndex: 4,
                     },
                   ],
-                  recentBlockhash: 'GeyAFFRY3WGpmam2hbgrKw4rbU2RKzfVLm5QLSeZwTZE',
+                  recentBlockhash:
+                    'GeyAFFRY3WGpmam2hbgrKw4rbU2RKzfVLm5QLSeZwTZE',
                 },
                 signatures: [
                   'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt',
@@ -926,7 +926,7 @@ describe('Connection', () => {
               fee: 10000,
               postBalances: [499260347380, 15298080, 1, 1, 1],
               preBalances: [499260357380, 15298080, 1, 1, 1],
-              status: { Ok: null },
+              status: {Ok: null},
               err: null,
             },
             transaction: {
@@ -1014,7 +1014,7 @@ describe('Connection', () => {
           fee: 10000,
           postBalances: [499260347380, 15298080, 1, 1, 1],
           preBalances: [499260357380, 15298080, 1, 1, 1],
-          status: { Ok: null },
+          status: {Ok: null},
           err: null,
         },
       },
@@ -1099,7 +1099,7 @@ describe('Connection', () => {
                 instructions: [inner],
               },
             ],
-            status: { Ok: null },
+            status: {Ok: null},
             err: null,
           },
         };
@@ -1201,7 +1201,7 @@ describe('Connection', () => {
               fee: 10000,
               postBalances: [499260347380, 15298080, 1, 1, 1],
               preBalances: [499260357380, 15298080, 1, 1, 1],
-              status: { Ok: null },
+              status: {Ok: null},
               err: null,
             },
             transaction: {
@@ -1269,7 +1269,7 @@ describe('Connection', () => {
   it('get recent blockhash', async () => {
     const commitments: Commitment[] = ['processed', 'confirmed', 'finalized'];
     for (const commitment of commitments) {
-      const { blockhash, feeCalculator } = await helpers.recentBlockhash({
+      const {blockhash, feeCalculator} = await helpers.recentBlockhash({
         connection,
         commitment,
       });
@@ -1279,10 +1279,10 @@ describe('Connection', () => {
   });
 
   it('get fee calculator', async () => {
-    const { blockhash } = await helpers.recentBlockhash({ connection });
+    const {blockhash} = await helpers.recentBlockhash({connection});
     await mockRpcResponse({
       method: 'getFeeCalculatorForBlockhash',
-      params: [blockhash, { commitment: 'confirmed' }],
+      params: [blockhash, {commitment: 'confirmed'}],
       value: {
         feeCalculator: {
           lamportsPerSignature: 5000,
@@ -1496,7 +1496,7 @@ describe('Connection', () => {
           expect(parsedTx).not.to.be.null;
           return;
         }
-        const { signatures, message } = parsedTx.transaction;
+        const {signatures, message} = parsedTx.transaction;
         expect(signatures[0]).to.eq(testSignature);
         const ix = message.instructions[0];
         if ('parsed' in ix) {
@@ -1546,7 +1546,7 @@ describe('Connection', () => {
         const tokenAccounts = await connection.getParsedProgramAccounts(
           TOKEN_PROGRAM_ID,
         );
-        tokenAccounts.forEach(({ account }) => {
+        tokenAccounts.forEach(({account}) => {
           expect(account.owner).to.eql(TOKEN_PROGRAM_ID);
           const data = account.data;
           if (data instanceof Buffer) {
@@ -1564,7 +1564,7 @@ describe('Connection', () => {
             mint: testToken.publicKey,
           })
         ).value;
-        tokenAccounts.forEach(({ account }) => {
+        tokenAccounts.forEach(({account}) => {
           expect(account.owner).to.eql(TOKEN_PROGRAM_ID);
           const data = account.data;
           if (data instanceof Buffer) {
@@ -1652,7 +1652,7 @@ describe('Connection', () => {
     await mockRpcResponse({
       method: 'getStakeActivation',
       params: [publicKey.toBase58(), {}],
-      error: { message: 'account not delegated' },
+      error: {message: 'account not delegated'},
     });
 
     await expect(connection.getStakeActivation(publicKey)).to.be.rejected;
@@ -1761,7 +1761,7 @@ describe('Connection', () => {
     await mockRpcResponse({
       method: 'getVersion',
       params: [],
-      value: { 'solana-core': '0.20.4' },
+      value: {'solana-core': '0.20.4'},
     });
 
     const version = await connection.getVersion();
@@ -1779,7 +1779,7 @@ describe('Connection', () => {
 
     await mockRpcResponse({
       method: 'getBalance',
-      params: [account.publicKey.toBase58(), { commitment: 'confirmed' }],
+      params: [account.publicKey.toBase58(), {commitment: 'confirmed'}],
       value: LAMPORTS_PER_SOL,
       withContext: true,
     });
@@ -1791,7 +1791,7 @@ describe('Connection', () => {
       method: 'getAccountInfo',
       params: [
         account.publicKey.toBase58(),
-        { commitment: 'confirmed', encoding: 'base64' },
+        {commitment: 'confirmed', encoding: 'base64'},
       ],
       value: {
         owner: '11111111111111111111111111111111',
@@ -1819,7 +1819,7 @@ describe('Connection', () => {
       method: 'getAccountInfo',
       params: [
         account.publicKey.toBase58(),
-        { commitment: 'confirmed', encoding: 'jsonParsed' },
+        {commitment: 'confirmed', encoding: 'jsonParsed'},
       ],
       value: {
         owner: '11111111111111111111111111111111',
@@ -1874,7 +1874,7 @@ describe('Connection', () => {
     });
 
     // This should fail because the account is already created
-    const expectedErr = { InstructionError: [0, { Custom: 0 }] };
+    const expectedErr = {InstructionError: [0, {Custom: 0}]};
     const confirmResult = (
       await helpers.processTransaction({
         connection,
@@ -1895,7 +1895,7 @@ describe('Connection', () => {
         {
           slot: 0,
           confirmations: 11,
-          status: { Err: expectedErr },
+          status: {Err: expectedErr},
           err: expectedErr,
         },
       ],
@@ -1939,7 +1939,7 @@ describe('Connection', () => {
         connection,
         transaction,
         [accountFrom],
-        { preflightCommitment: 'confirmed' },
+        {preflightCommitment: 'confirmed'},
       );
 
       // Send again and ensure that new blockhash is used
@@ -1956,7 +1956,7 @@ describe('Connection', () => {
         connection,
         transaction2,
         [accountFrom],
-        { preflightCommitment: 'confirmed' },
+        {preflightCommitment: 'confirmed'},
       );
 
       expect(signature).not.to.eq(signature2);
@@ -2058,7 +2058,7 @@ describe('Connection', () => {
       signature = await connection.sendTransaction(
         transaction,
         [accountFrom, accountTo],
-        { skipPreflight: true },
+        {skipPreflight: true},
       );
 
       await connection.confirmTransaction(signature);
