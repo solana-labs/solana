@@ -129,7 +129,7 @@ mod tests {
         let data = bincode::serialize(&clock).unwrap();
         let account = AccountSharedData::from(Account {
             lamports: rng.gen(),
-            data: data.clone().into(),
+            data: data.clone(),
             owner: Pubkey::new_unique(),
             executable: rng.gen(),
             rent_epoch: rng.gen(),
