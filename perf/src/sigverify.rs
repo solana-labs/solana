@@ -18,6 +18,7 @@ use solana_sdk::short_vec::decode_len;
 use solana_sdk::signature::Signature;
 #[cfg(test)]
 use solana_sdk::transaction::Transaction;
+use std::convert::TryFrom;
 use std::mem::size_of;
 
 // Representing key tKeYE4wtowRb8yRroZShTipE18YVnqwXjsSAoNsFU6g
@@ -109,8 +110,8 @@ fn verify_packet(packet: &mut Packet) {
 
     let msg_end = packet.meta.size;
     for _ in 0..packet_offsets.sig_len {
-        let pubkey_end = pubkey_start as usize + size_of::<Pubkey>();
-        let sig_end = sig_start as usize + size_of::<Signature>();
+        let pubkey_end = pubkey_start.saturating_add(size_of::<Pubkey>());
+        let sig_end = sig_start.saturating_add(size_of::<Signature>());
 
         if pubkey_end >= packet.meta.size || sig_end >= packet.meta.size {
             packet.meta.discard = true;
@@ -134,8 +135,8 @@ fn verify_packet(packet: &mut Packet) {
             packet.meta.is_tracer_tx = true;
         }
 
-        pubkey_start += size_of::<Pubkey>();
-        sig_start += size_of::<Signature>();
+        pubkey_start = pubkey_end;
+        sig_start = sig_end;
     }
 }
 
@@ -150,7 +151,11 @@ fn do_get_packet_offsets(
 ) -> Result<PacketOffsets, PacketError> {
     let message_header_size = serialized_size(&MessageHeader::default()).unwrap() as usize;
     // should have at least 1 signature, sig lengths and the message header
-    if (1 + size_of::<Signature>() + message_header_size) > packet.meta.size {
+    let min_packet_size = 1usize
+        .checked_add(size_of::<Signature>())
+        .and_then(|v| v.checked_add(message_header_size))
+        .ok_or(PacketError::InvalidLen)?;
+    if min_packet_size > packet.meta.size {
         return Err(PacketError::InvalidLen);
     }
 
@@ -160,23 +165,35 @@ fn do_get_packet_offsets(
 
     // Using msg_start_offset which is based on sig_len_untrusted introduces uncertainty.
     // Ultimately, the actual sigverify will determine the uncertainty.
-    let msg_start_offset = sig_size + sig_len_untrusted * size_of::<Signature>();
+    let msg_start_offset = sig_len_untrusted
+        .checked_mul(size_of::<Signature>())
+        .and_then(|v| v.checked_add(sig_size))
+        .ok_or(PacketError::InvalidLen)?;
 
     // Packet should have data at least for signatures, MessageHeader, 1 byte for Message.account_keys.len
-    if (msg_start_offset + message_header_size + 1) > packet.meta.size {
+    let min_message_end_offset = msg_start_offset
+        .checked_add(message_header_size)
+        .and_then(|v| v.checked_add(1))
+        .ok_or(PacketError::InvalidSignatureLen)?;
+    if min_message_end_offset > packet.meta.size {
         return Err(PacketError::InvalidSignatureLen);
     }
 
     // read MessageHeader.num_required_signatures (serialized with u8)
     let sig_len_maybe_trusted = packet.data[msg_start_offset] as usize;
 
-    let message_account_keys_len_offset = msg_start_offset + message_header_size;
+    let message_account_keys_len_offset = msg_start_offset
+        .checked_add(message_header_size)
+        .ok_or(PacketError::InvalidLen)?;
 
     // This reads and compares the MessageHeader num_required_signatures and
     // num_readonly_signed_accounts bytes. If num_required_signatures is not larger than
     // num_readonly_signed_accounts, the first account is not debitable, and cannot be charged
     // required transaction fees.
-    if packet.data[msg_start_offset] <= packet.data[msg_start_offset + 1] {
+    let readonly_signer_offset = msg_start_offset
+        .checked_add(1)
+        .ok_or(PacketError::InvalidLen)?;
+    if packet.data[msg_start_offset] <= packet.data[readonly_signer_offset] {
         return Err(PacketError::PayerNotWritable);
     }
 
@@ -184,25 +201,41 @@ fn do_get_packet_offsets(
     let (pubkey_len, pubkey_len_size) = decode_len(&packet.data[message_account_keys_len_offset..])
         .map_err(|_| PacketError::InvalidShortVec)?;
 
-    if (message_account_keys_len_offset + pubkey_len * size_of::<Pubkey>() + pubkey_len_size)
-        > packet.meta.size
-    {
+    let min_account_keys_end_offset = pubkey_len
+        .checked_mul(size_of::<Pubkey>())
+        .and_then(|v| v.checked_add(message_account_keys_len_offset))
+        .and_then(|v| v.checked_add(pubkey_len_size))
+        .ok_or(PacketError::InvalidPubkeyLen)?;
+    if min_account_keys_end_offset > packet.meta.size {
         return Err(PacketError::InvalidPubkeyLen);
     }
 
-    let sig_start = current_offset as usize + sig_size;
-    let msg_start = current_offset as usize + msg_start_offset;
-    let pubkey_start = msg_start + message_header_size + pubkey_len_size;
+    let sig_start = usize::try_from(current_offset)
+        .ok()
+        .and_then(|v| v.checked_add(sig_size))
+        .ok_or(PacketError::InvalidLen)?;
+    let msg_start = usize::try_from(current_offset)
+        .ok()
+        .and_then(|v| v.checked_add(msg_start_offset))
+        .ok_or(PacketError::InvalidLen)?;
+    let pubkey_start = msg_start
+        .checked_add(message_header_size)
+        .and_then(|v| v.checked_add(pubkey_len_size))
+        .ok_or(PacketError::InvalidLen)?;
 
     if sig_len_maybe_trusted != sig_len_untrusted {
         return Err(PacketError::MismatchSignatureLen);
     }
 
+    fn to_u32(value: usize) -> Result<u32, PacketError> {
+        u32::try_from(value).map_err(|_| PacketError::InvalidLen)
+    }
+
     Ok(PacketOffsets::new(
-        sig_len_untrusted as u32,
-        sig_start as u32,
-        msg_start as u32,
-        pubkey_start as u32,
+        to_u32(sig_len_untrusted)?,
+        to_u32(sig_start)?,
+        to_u32(msg_start)?,
+        to_u32(pubkey_start)?,
     ))
 }
 
@@ -226,12 +259,12 @@ pub fn generate_offsets(batches: &[Packets], recycler: &Recycler<TxOffset>) -> T
     msg_start_offsets.set_pinnable();
     let mut msg_sizes: PinnedVec<_> = recycler.allocate().unwrap();
     msg_sizes.set_pinnable();
-    let mut current_packet = 0;
+    let mut current_packet: u32 = 0;
     let mut v_sig_lens = Vec::new();
     batches.iter().for_each(|p| {
         let mut sig_lens = Vec::new();
         p.packets.iter().for_each(|packet| {
-            let current_offset = current_packet as u32 * size_of::<Packet>() as u32;
+            let current_offset = current_packet.saturating_mul(size_of::<Packet>() as u32);
 
             let packet_offsets = get_packet_offsets(packet, current_offset);
 
@@ -243,17 +276,19 @@ pub fn generate_offsets(batches: &[Packets], recycler: &Recycler<TxOffset>) -> T
             let mut sig_offset = packet_offsets.sig_start;
             for _ in 0..packet_offsets.sig_len {
                 signature_offsets.push(sig_offset);
-                sig_offset += size_of::<Signature>() as u32;
+                sig_offset = sig_offset.saturating_add(size_of::<Signature>() as u32);
 
                 pubkey_offsets.push(pubkey_offset);
-                pubkey_offset += size_of::<Pubkey>() as u32;
+                pubkey_offset = pubkey_offset.saturating_add(size_of::<Pubkey>() as u32);
 
                 msg_start_offsets.push(packet_offsets.msg_start);
 
-                msg_sizes
-                    .push(current_offset + (packet.meta.size as u32) - packet_offsets.msg_start);
+                let msg_size = current_offset
+                    .saturating_add(packet.meta.size as u32)
+                    .saturating_sub(packet_offsets.msg_start);
+                msg_sizes.push(msg_size);
             }
-            current_packet += 1;
+            current_packet = current_packet.saturating_add(1);
         });
         v_sig_lens.push(sig_lens);
     });
@@ -302,7 +337,7 @@ pub fn copy_return_values(sig_lens: &[Vec<u32>], out: &PinnedVec<u8>, rvs: &mut 
                     if 0 == out[num] {
                         vout = 0;
                     }
-                    num += 1;
+                    num = num.saturating_add(1);
                 }
                 *v = vout;
             }
@@ -382,7 +417,7 @@ pub fn ed25519_verify(
     let mut elems = Vec::new();
     let mut rvs = Vec::new();
 
-    let mut num_packets = 0;
+    let mut num_packets: usize = 0;
     for p in batches.iter() {
         elems.push(perf_libs::Elems {
             elems: p.packets.as_ptr(),
@@ -391,7 +426,7 @@ pub fn ed25519_verify(
         let mut v = Vec::new();
         v.resize(p.packets.len(), 0);
         rvs.push(v);
-        num_packets += p.packets.len();
+        num_packets = num_packets.saturating_add(p.packets.len());
     }
     out.resize(signature_offsets.len(), 0);
     trace!("Starting verify num packets: {}", num_packets);
@@ -435,6 +470,7 @@ pub fn make_packet_from_transaction(tx: Transaction) -> Packet {
 }
 
 #[cfg(test)]
+#[allow(clippy::integer_arithmetic)]
 mod tests {
     use super::*;
     use crate::packet::{Packet, Packets};
