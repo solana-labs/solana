@@ -728,7 +728,6 @@ function createRpcBatchRequest(client: RpcClient): RpcBatchRequest {
           reject(err);
           return;
         }
-
         resolve(response);
       });
     });
