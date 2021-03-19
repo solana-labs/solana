@@ -164,6 +164,8 @@ async fn stake_rewards_from_warp() {
     let program_test = ProgramTest::default();
 
     let mut context = program_test.start_with_context().await;
+    // warp once to make sure stake config doesn't get rent-collected
+    context.warp_to_slot(100).unwrap();
     let mut instructions = vec![];
     let validator_keypair = Keypair::new();
     instructions.push(system_instruction::create_account(
