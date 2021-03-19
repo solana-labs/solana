@@ -357,6 +357,11 @@ very large over time and it's recommended that log rotation be configured.
 The validator will re-open its when it receives the `USR1` signal, which is the
 basic primitive that enables log rotation.
 
+If the validator is being started by a wrapper shell script, it is important to
+launch the process with `exec` (`exec solana-validator ...`) when using logrotate.
+This will prevent the `USR1` signal from being sent to the script's process
+instead of the validator's, which will kill them both.
+
 #### Using logrotate
 
 An example setup for the `logrotate`, which assumes that the validator is
