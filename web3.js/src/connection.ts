@@ -1460,18 +1460,24 @@ type SlotSubscriptionInfo = {
 };
 
 /**
- * Callback function for signature notifications
+ * Callback function for signature status notifications
  */
 export type SignatureResultCallback = (
   signatureResult: SignatureResult,
   context: Context,
 ) => void;
 
+/**
+ * Signature status notification with transaction result
+ */
 export type SignatureStatusNotification = {
   type: 'status';
   result: SignatureResult;
 };
 
+/**
+ * Signature received notification
+ */
 export type SignatureReceivedNotification = {
   type: 'received';
 };
@@ -1485,7 +1491,7 @@ export type SignatureSubscriptionCallback = (
 ) => void;
 
 /**
- * Callback function for signature notifications
+ * Signature subscription options
  */
 export type SignatureSubscriptionOptions = {
   commitment?: Commitment;
