@@ -141,6 +141,8 @@ fn get_program_ids(instructions: &[Instruction]) -> Vec<Pubkey> {
         .collect()
 }
 
+pub const MESSAGE_HEADER_LENGTH: usize = 3;
+
 #[frozen_abi(digest = "BVC5RhetsNpheGipt5rUrkR6RDDUHtD5sCLK1UjymL4S")]
 #[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, AbiExample)]
 #[serde(rename_all = "camelCase")]
@@ -945,5 +947,13 @@ mod tests {
             message.hash(),
             Hash::from_str("CXRH7GHLieaQZRUjH1mpnNnUZQtU4V4RpJpAFgy77i3z").unwrap()
         )
+    }
+
+    #[test]
+    fn test_message_header_len_constant() {
+        assert_eq!(
+            bincode::serialized_size(&MessageHeader::default()).unwrap() as usize,
+            MESSAGE_HEADER_LENGTH
+        );
     }
 }
