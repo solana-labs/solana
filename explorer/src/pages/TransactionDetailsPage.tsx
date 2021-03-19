@@ -244,7 +244,7 @@ function StatusCard({
               <InfoTooltip
                 bottom
                 right
-                text="Timestamps are available for confirmed blocks within the past 5 epochs"
+                text="Timestamps are only available for confirmed blocks"
               >
                 Unavailable
               </InfoTooltip>
