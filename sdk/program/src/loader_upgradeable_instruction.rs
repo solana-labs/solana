@@ -107,4 +107,13 @@ pub enum UpgradeableLoaderInstruction {
     ///   2. `[]` The new authority, optional, if omitted then the program will
     ///      not be upgradeable.
     SetAuthority,
+
+    /// Closes an account owned by the upgradeable loader of all lamports and
+    /// withdraws all the lamports
+    ///
+    /// # Account references
+    ///   0. `[writable]` The account to close.
+    ///   1. `[writable]` The account to deposit the closed account's lamports.
+    ///   2. `[signer]` The account's authority.
+    Close,
 }

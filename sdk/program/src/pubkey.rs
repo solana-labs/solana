@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 use crate::{decode_error::DecodeError, hash::hashv};
 use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
 use num_derive::{FromPrimitive, ToPrimitive};

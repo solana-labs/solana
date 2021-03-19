@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 use crate::{decode_error::DecodeError, instruction::InstructionError, msg, pubkey::PubkeyError};
 use borsh::maybestd::io::Error as BorshIoError;
 use num_traits::{FromPrimitive, ToPrimitive};

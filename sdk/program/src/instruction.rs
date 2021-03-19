@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 //! Defines a composable Instruction type and a memory-efficient CompiledInstruction.
 
 use crate::sanitize::Sanitize;

@@ -18,6 +18,19 @@ import { useTokenRegistry } from "providers/mints/token-registry";
 import { BigNumber } from "bignumber.js";
 import { Copyable } from "components/common/Copyable";
 
+const getEthAddress = (link?: string) => {
+  let address = "";
+  if (link) {
+    const extractEth = link.match(/0x[a-fA-F0-9]{40,64}/);
+
+    if (extractEth) {
+      address = extractEth[0];
+    }
+  }
+
+  return address;
+};
+
 export function TokenAccountSection({
   account,
   tokenAccount,
@@ -62,16 +75,12 @@ function MintAccountCard({
 
   const tokenInfo = tokenRegistry.get(mintAddress);
 
-  let bridgeContractAddress = tokenInfo?.extensions?.address;
-  if (tokenInfo?.extensions?.bridgeContract && !bridgeContractAddress) {
-    const extractEth = tokenInfo.extensions.bridgeContract.match(
-      /0x[a-fA-F0-9]{40,64}/
-    );
-
-    if (extractEth) {
-      bridgeContractAddress = extractEth[0];
-    }
-  }
+  const bridgeContractAddress = getEthAddress(
+    tokenInfo?.extensions?.bridgeContract
+  );
+  const assetContractAddress = getEthAddress(
+    tokenInfo?.extensions?.assetContract
+  );
 
   return (
     <div className="card">
@@ -145,7 +154,7 @@ function MintAccountCard({
         )}
         {tokenInfo?.extensions?.bridgeContract && bridgeContractAddress && (
           <tr>
-            <td>Wormhole Bridge Contract</td>
+            <td>Bridge Contract</td>
             <td className="text-lg-right">
               <Copyable text={bridgeContractAddress}>
                 <a
@@ -154,6 +163,22 @@ function MintAccountCard({
                   rel="noreferrer"
                 >
                   {bridgeContractAddress}
+                </a>
+              </Copyable>
+            </td>
+          </tr>
+        )}
+        {tokenInfo?.extensions?.assetContract && assetContractAddress && (
+          <tr>
+            <td>Bridged Asset Contract</td>
+            <td className="text-lg-right">
+              <Copyable text={assetContractAddress}>
+                <a
+                  href={tokenInfo.extensions.bridgeContract}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {assetContractAddress}
                 </a>
               </Copyable>
             </td>

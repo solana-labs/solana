@@ -362,6 +362,48 @@ impl ConfirmedBlock {
             block_time: self.block_time,
         }
     }
+
+    pub fn configure(
+        self,
+        encoding: UiTransactionEncoding,
+        transaction_details: TransactionDetails,
+        show_rewards: bool,
+    ) -> UiConfirmedBlock {
+        let (transactions, signatures) = match transaction_details {
+            TransactionDetails::Full => (
+                Some(
+                    self.transactions
+                        .into_iter()
+                        .map(|tx| tx.encode(encoding))
+                        .collect(),
+                ),
+                None,
+            ),
+            TransactionDetails::Signatures => (
+                None,
+                Some(
+                    self.transactions
+                        .into_iter()
+                        .map(|tx| tx.transaction.signatures[0].to_string())
+                        .collect(),
+                ),
+            ),
+            TransactionDetails::None => (None, None),
+        };
+        UiConfirmedBlock {
+            previous_blockhash: self.previous_blockhash,
+            blockhash: self.blockhash,
+            parent_slot: self.parent_slot,
+            transactions,
+            signatures,
+            rewards: if show_rewards {
+                Some(self.rewards)
+            } else {
+                None
+            },
+            block_time: self.block_time,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -373,6 +415,49 @@ pub struct EncodedConfirmedBlock {
     pub transactions: Vec<EncodedTransactionWithStatusMeta>,
     pub rewards: Rewards,
     pub block_time: Option<UnixTimestamp>,
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UiConfirmedBlock {
+    pub previous_blockhash: String,
+    pub blockhash: String,
+    pub parent_slot: Slot,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transactions: Option<Vec<EncodedTransactionWithStatusMeta>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signatures: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rewards: Option<Rewards>,
+    pub block_time: Option<UnixTimestamp>,
+}
+
+impl From<EncodedConfirmedBlock> for UiConfirmedBlock {
+    fn from(block: EncodedConfirmedBlock) -> Self {
+        Self {
+            previous_blockhash: block.previous_blockhash,
+            blockhash: block.blockhash,
+            parent_slot: block.parent_slot,
+            transactions: Some(block.transactions),
+            signatures: None,
+            rewards: Some(block.rewards),
+            block_time: block.block_time,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum TransactionDetails {
+    Full,
+    Signatures,
+    None,
+}
+
+impl Default for TransactionDetails {
+    fn default() -> Self {
+        Self::Full
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

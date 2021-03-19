@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 //! A library for generating a message from a sequence of instructions
 
 use crate::sanitize::{Sanitize, SanitizeError};
@@ -404,7 +405,10 @@ impl Message {
         data: &[u8],
     ) -> Result<Instruction, SanitizeError> {
         let mut current = 0;
-        let _num_instructions = read_u16(&mut current, &data)?;
+        let num_instructions = read_u16(&mut current, &data)?;
+        if index >= num_instructions as usize {
+            return Err(SanitizeError::IndexOutOfBounds);
+        }
 
         // index into the instruction byte-offset table.
         current += index * 2;
@@ -438,6 +442,15 @@ impl Message {
             data,
             accounts,
         })
+    }
+
+    pub fn signer_keys(&self) -> Vec<&Pubkey> {
+        // Clamp in case we're working on un-`sanitize()`ed input
+        let last_key = self
+            .account_keys
+            .len()
+            .max(self.header.num_required_signatures as usize);
+        self.account_keys[..last_key].iter().collect()
     }
 }
 
@@ -851,6 +864,25 @@ mod tests {
                 *instruction
             );
         }
+    }
+
+    #[test]
+    fn test_decompile_instructions_out_of_bounds() {
+        solana_logger::setup();
+        let program_id0 = Pubkey::new_unique();
+        let id0 = Pubkey::new_unique();
+        let id1 = Pubkey::new_unique();
+        let instructions = vec![
+            Instruction::new_with_bincode(program_id0, &0, vec![AccountMeta::new(id0, false)]),
+            Instruction::new_with_bincode(program_id0, &0, vec![AccountMeta::new(id1, true)]),
+        ];
+
+        let message = Message::new(&instructions, Some(&id1));
+        let serialized = message.serialize_instructions();
+        assert_eq!(
+            Message::deserialize_instruction(instructions.len(), &serialized).unwrap_err(),
+            SanitizeError::IndexOutOfBounds,
+        );
     }
 
     #[test]

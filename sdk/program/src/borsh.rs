@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 //! Borsh utils
 use borsh::schema::{BorshSchema, Declaration, Definition, Fields};
 use std::collections::HashMap;

@@ -14,6 +14,7 @@ use {
     solana_sdk::{
         account::AccountSharedData,
         clock::Slot,
+        epoch_schedule::{EpochSchedule, MINIMUM_SLOTS_PER_EPOCH},
         native_token::sol_to_lamports,
         pubkey::Pubkey,
         rpc_port,
@@ -147,6 +148,28 @@ fn main() {
                 .help("Disable the just-in-time compiler and instead use the interpreter for BPF"),
         )
         .arg(
+            Arg::with_name("slots_per_epoch")
+                .long("slots-per-epoch")
+                .value_name("SLOTS")
+                .validator(|value| {
+                    value
+                        .parse::<Slot>()
+                        .map_err(|err| format!("error parsing '{}': {}", value, err))
+                        .and_then(|slot| {
+                            if slot < MINIMUM_SLOTS_PER_EPOCH {
+                                Err(format!("value must be >= {}", MINIMUM_SLOTS_PER_EPOCH))
+                            } else {
+                                Ok(())
+                            }
+                        })
+                })
+                .takes_value(true)
+                .help(
+                    "Override the number of slots in an epoch. \
+                       If the ledger already exists then this parameter is silently ignored",
+                ),
+        )
+        .arg(
             Arg::with_name("clone_account")
                 .long("clone")
                 .short("c")
@@ -205,6 +228,7 @@ fn main() {
         Output::Dashboard
     };
     let rpc_port = value_t_or_exit!(matches, "rpc_port", u16);
+    let slots_per_epoch = value_t!(matches, "slots_per_epoch", Slot).ok();
 
     let faucet_addr = Some(SocketAddr::new(
         IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
@@ -354,6 +378,19 @@ fn main() {
         });
     }
 
+    if TestValidatorGenesis::ledger_exists(&ledger_path) {
+        for (name, long) in &[
+            ("bpf_program", "--bpf-program"),
+            ("clone_account", "--clone"),
+            ("mint_address", "--mint"),
+            ("slots_per_epoch", "--slots-per-epoch"),
+        ] {
+            if matches.is_present(name) {
+                println!("{} argument ignored, ledger already exists", long);
+            }
+        }
+    }
+
     let mut genesis = TestValidatorGenesis::default();
 
     admin_rpc_service::run(
@@ -408,6 +445,14 @@ fn main() {
 
     if let Some(warp_slot) = warp_slot {
         genesis.warp_slot(warp_slot);
+    }
+
+    if let Some(slots_per_epoch) = slots_per_epoch {
+        genesis.epoch_schedule(EpochSchedule::custom(
+            slots_per_epoch,
+            slots_per_epoch,
+            /* enable_warmup_epochs = */ false,
+        ));
     }
 
     match genesis.start_with_mint_address(mint_address) {

@@ -11,7 +11,7 @@ extern crate solana_vest_program;
 use clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg, ArgMatches};
 use solana_clap_utils::{
     input_parsers::{cluster_type_of, pubkey_of, pubkeys_of, unix_timestamp_from_rfc3339_datetime},
-    input_validators::{is_pubkey_or_keypair, is_rfc3339_datetime, is_valid_percentage},
+    input_validators::{is_pubkey_or_keypair, is_rfc3339_datetime, is_slot, is_valid_percentage},
 };
 use solana_genesis::{genesis_accounts::add_genesis_accounts, Base64Account};
 use solana_ledger::{
@@ -328,6 +328,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             Arg::with_name("slots_per_epoch")
                 .long("slots-per-epoch")
                 .value_name("SLOTS")
+                .validator(is_slot)
                 .takes_value(true)
                 .help("The number of slots in an epoch"),
         )

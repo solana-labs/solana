@@ -1470,7 +1470,7 @@ mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(10);
-        let bank = Arc::new(Bank::new(&genesis_config));
+        let bank = Arc::new(Bank::new_no_wallclock_throttle(&genesis_config));
         let start_hash = bank.last_blockhash();
         let (verified_sender, verified_receiver) = unbounded();
         let (vote_sender, vote_receiver) = unbounded();
@@ -1545,7 +1545,7 @@ mod tests {
             drop(poh_recorder);
 
             let mut blockhash = start_hash;
-            let bank = Bank::new(&genesis_config);
+            let bank = Arc::new(Bank::new_no_wallclock_throttle(&genesis_config));
             bank.process_transaction(&fund_tx).unwrap();
             //receive entries + ticks
             loop {
@@ -1623,7 +1623,7 @@ mod tests {
 
             let entry_receiver = {
                 // start a banking_stage to eat verified receiver
-                let bank = Arc::new(Bank::new(&genesis_config));
+                let bank = Arc::new(Bank::new_no_wallclock_throttle(&genesis_config));
                 let blockstore = Arc::new(
                     Blockstore::open(&ledger_path)
                         .expect("Expected to be able to open database ledger"),
@@ -1667,7 +1667,7 @@ mod tests {
                 .map(|(_bank, (entry, _tick_height))| entry)
                 .collect();
 
-            let bank = Bank::new(&genesis_config);
+            let bank = Bank::new_no_wallclock_throttle(&genesis_config);
             for entry in &entries {
                 bank.process_transactions(&entry.transactions)
                     .iter()
@@ -2231,10 +2231,7 @@ mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(10_000);
-        let mut bank = Bank::new(&genesis_config);
-        // Allow arbitrary transaction processing time for the purposes of this test
-        bank.ns_per_slot = std::u128::MAX;
-        let bank = Arc::new(Bank::new(&genesis_config));
+        let bank = Arc::new(Bank::new_no_wallclock_throttle(&genesis_config));
 
         let pubkey = solana_sdk::pubkey::new_rand();
 

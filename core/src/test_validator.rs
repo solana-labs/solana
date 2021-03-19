@@ -16,6 +16,7 @@ use {
         account::{Account, AccountSharedData},
         clock::{Slot, DEFAULT_MS_PER_SLOT},
         commitment_config::CommitmentConfig,
+        epoch_schedule::EpochSchedule,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         hash::Hash,
         native_token::sol_to_lamports,
@@ -27,7 +28,7 @@ use {
         collections::HashMap,
         fs::remove_dir_all,
         net::{IpAddr, Ipv4Addr, SocketAddr},
-        path::PathBuf,
+        path::{Path, PathBuf},
         sync::{Arc, RwLock},
         thread::sleep,
         time::Duration,
@@ -52,6 +53,7 @@ pub struct TestValidatorGenesis {
     no_bpf_jit: bool,
     accounts: HashMap<Pubkey, AccountSharedData>,
     programs: Vec<ProgramInfo>,
+    epoch_schedule: Option<EpochSchedule>,
     pub validator_exit: Arc<RwLock<ValidatorExit>>,
     pub start_progress: Arc<RwLock<ValidatorStartProgress>>,
 }
@@ -62,8 +64,18 @@ impl TestValidatorGenesis {
         self
     }
 
+    /// Check if a given TestValidator ledger has already been initialized
+    pub fn ledger_exists(ledger_path: &Path) -> bool {
+        ledger_path.join("vote-account-keypair.json").exists()
+    }
+
     pub fn fee_rate_governor(&mut self, fee_rate_governor: FeeRateGovernor) -> &mut Self {
         self.fee_rate_governor = fee_rate_governor;
+        self
+    }
+
+    pub fn epoch_schedule(&mut self, epoch_schedule: EpochSchedule) -> &mut Self {
+        self.epoch_schedule = Some(epoch_schedule);
         self
     }
 
@@ -308,12 +320,14 @@ impl TestValidator {
             solana_sdk::genesis_config::ClusterType::Development,
             accounts.into_iter().collect(),
         );
-        genesis_config.epoch_schedule = solana_sdk::epoch_schedule::EpochSchedule::without_warmup();
+        genesis_config.epoch_schedule = config
+            .epoch_schedule
+            .unwrap_or_else(EpochSchedule::without_warmup);
 
         let ledger_path = match &config.ledger_path {
             None => create_new_tmp_ledger!(&genesis_config).0,
             Some(ledger_path) => {
-                if ledger_path.join("validator-keypair.json").exists() {
+                if TestValidatorGenesis::ledger_exists(ledger_path) {
                     return Ok(ledger_path.to_path_buf());
                 }
 
@@ -338,6 +352,10 @@ impl TestValidator {
             &validator_identity,
             ledger_path.join("validator-keypair.json").to_str().unwrap(),
         )?;
+
+        // `ledger_exists` should fail until the vote account keypair is written
+        assert!(!TestValidatorGenesis::ledger_exists(&ledger_path));
+
         write_keypair_file(
             &validator_vote_account,
             ledger_path

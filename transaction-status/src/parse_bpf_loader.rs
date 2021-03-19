@@ -131,6 +131,17 @@ pub fn parse_bpf_upgradeable_loader(
                 }),
             })
         }
+        UpgradeableLoaderInstruction::Close => {
+            check_num_bpf_upgradeable_loader_accounts(&instruction.accounts, 3)?;
+            Ok(ParsedInstructionEnum {
+                instruction_type: "close".to_string(),
+                info: json!({
+                    "account": account_keys[instruction.accounts[0] as usize].to_string(),
+                    "recipient": account_keys[instruction.accounts[1] as usize].to_string(),
+                    "authority": account_keys[instruction.accounts[2] as usize].to_string()
+                }),
+            })
+        }
     }
 }
 
@@ -348,6 +359,21 @@ mod test {
                     "account": keys[1].to_string(),
                     "authority": keys[0].to_string(),
                     "newAuthority": Value::Null,
+                }),
+            }
+        );
+        assert!(parse_bpf_upgradeable_loader(&message.instructions[0], &keys[0..1]).is_err());
+
+        let instruction = solana_sdk::bpf_loader_upgradeable::close(&keys[0], &keys[1], &keys[2]);
+        let message = Message::new(&[instruction], None);
+        assert_eq!(
+            parse_bpf_upgradeable_loader(&message.instructions[0], &keys[..3]).unwrap(),
+            ParsedInstructionEnum {
+                instruction_type: "close".to_string(),
+                info: json!({
+                    "account": keys[1].to_string(),
+                    "recipient": keys[2].to_string(),
+                    "authority": keys[0].to_string(),
                 }),
             }
         );

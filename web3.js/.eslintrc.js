@@ -9,14 +9,16 @@ module.exports = {
     'eslint:recommended',
     'plugin:import/errors',
     'plugin:import/warnings',
+    'plugin:import/typescript',
   ],
-  parser: 'babel-eslint', // upgrade to @babel/eslint-parser blocked on eslint-plugin-flowtype
+  parser: '@typescript-eslint/parser',
   parserOptions: {
     sourceType: 'module',
     ecmaVersion: 8,
   },
+  plugins: ['@typescript-eslint'],
   rules: {
-    'no-trailing-spaces': ['error'],
+    '@typescript-eslint/no-unused-vars': ['error'],
     'import/first': ['error'],
     'import/no-commonjs': ['error'],
     'import/order': [
@@ -39,6 +41,8 @@ module.exports = {
     ],
     'linebreak-style': ['error', 'unix'],
     'no-console': [0],
+    'no-trailing-spaces': ['error'],
+    'no-unused-vars': 'off',
     quotes: [
       'error',
       'single',
@@ -47,25 +51,4 @@ module.exports = {
     'require-await': ['error'],
     semi: ['error', 'always'],
   },
-
-  // Used to lint the TypeScript type declaration file
-  overrides: [
-    {
-      files: ['*.js'],
-      plugins: ['flowtype'],
-      extends: ['plugin:flowtype/recommended'],
-      rules: {
-        'flowtype/generic-spacing': [0],
-      },
-    },
-    {
-      files: ['*.d.ts'],
-      parser: '@typescript-eslint/parser',
-      plugins: ['@typescript-eslint'],
-      rules: {
-        'no-unused-vars': 'off',
-        '@typescript-eslint/no-unused-vars': ['error'],
-      },
-    },
-  ],
 };

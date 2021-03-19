@@ -1,17 +1,18 @@
 import alias from '@rollup/plugin-alias';
 import babel from '@rollup/plugin-babel';
 import commonjs from '@rollup/plugin-commonjs';
-import flowRemoveTypes from 'flow-remove-types';
 import json from '@rollup/plugin-json';
 import multi from '@rollup/plugin-multi-entry';
 import nodeResolve from '@rollup/plugin-node-resolve';
 import nodePolyfills from 'rollup-plugin-node-polyfills';
 import replace from '@rollup/plugin-replace';
 
+const extensions = ['.js', '.ts'];
+
 export default {
   input: {
-    include: ['test/**/*.test.js'],
-    exclude: ['test/agent-manager.test.js', 'test/bpf-loader.test.js'],
+    include: ['test/**/*.test.ts'],
+    exclude: ['test/agent-manager.test.ts', 'test/bpf-loader.test.ts'],
   },
   external: ['node-forge', 'http2', '_stream_wrap'],
   output: {
@@ -20,16 +21,17 @@ export default {
     sourcemap: true,
   },
   plugins: [
-    flow(),
     multi(),
     commonjs(),
     nodeResolve({
       browser: true,
       preferBuiltins: false,
+      extensions,
       dedupe: ['bn.js', 'buffer'],
     }),
     babel({
       exclude: '**/node_modules/**',
+      extensions,
       babelHelpers: 'runtime',
       plugins: ['@babel/plugin-transform-runtime'],
     }),
@@ -54,18 +56,6 @@ export default {
     }
   },
   treeshake: {
-    moduleSideEffects: path => path.endsWith('test.js'),
+    moduleSideEffects: path => path.endsWith('test.ts'),
   },
 };
-
-// Using this instead of rollup-plugin-flow due to
-// https://github.com/leebyron/rollup-plugin-flow/issues/5
-function flow() {
-  return {
-    name: 'flow-remove-types',
-    transform: code => ({
-      code: flowRemoveTypes(code).toString(),
-      map: null,
-    }),
-  };
-}

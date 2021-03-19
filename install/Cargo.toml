@@ -21,7 +21,7 @@ dirs-next = "2.0.0"
 indicatif = "0.15.0"
 lazy_static = "1.4.0"
 nix = "0.19.0"
-reqwest = { version = "0.10.8", default-features = false, features = ["blocking", "rustls-tls", "json"] }
+reqwest = { version = "0.11.2", default-features = false, features = ["blocking", "rustls-tls", "json"] }
 serde = { version = "1.0.122", features = ["derive"] }
 serde_json = "1.0.62"
 serde_yaml = "0.8.13"
