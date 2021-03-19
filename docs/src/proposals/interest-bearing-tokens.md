@@ -65,10 +65,10 @@ wallets, applications, and end-users.
 ## Proposed Solution
 
 Following the approach taken by Aave, we can lean on a crucial feature of i-tokens:
-although the token holding amounts are constantly changing, each token holder's
+although the holding's token amount is constantly changing, each token holder's
 proportion of total supply stays the same. Therefore, we can satisfy the
-fungibility requirement for tokens on proportional ownership. The actual token
-amounts used for token transfers / mints / burns are just an interface, and
+fungibility requirement for tokens on proportional ownership. The token
+amount used for token transfers / mints / burns is just an interface, and
 everything is converted to proportional shares inside the program.
 
 Let's go through an example. Imagine we have an i-token mint with a total of
@@ -124,6 +124,9 @@ New instructions required:
 * `CreateHolding` (TODO name): only performs `Allocate` and `Assign` to self,
 useful for creating a holding when you don't know the program that you're
 interacting with. See the Associated Token Account section for how to use this.
+* `TransferAllChecked`: transfers everything from the source holding to the
+destination holding. Useful for closing a interest-bearing token holding since the
+balance is constantly changing.
 
 There are also new read-only instructions, which write data to a provided account
 buffer:
@@ -156,7 +159,7 @@ new token program.
 
 The same applies for mints, but only for the first 82 bytes.
 
-The `amount` field in an SPL token holding should contain a balance in order
+The `amount` field in an SPL token holding should contain a token amount in order
 to properly integrate with RPC's `preTokenBalances` and `postTokenBalances`.
 
 For i-tokens, `amount` will be in terms of tokens, and not shares, so that UIs
@@ -230,9 +233,9 @@ discounting.
 #### `preTokenBalances` and `postTokenBalances`
 
 As mentioned earlier in the Token Program Conformance section, the i-token
-program caches balances in the `amount` field of the SPL token holding. This
-should only be used by RPC, and not by programs to get the balance of a non-SPL
-holding.
+program caches token balances (not share amounts) in the `amount` field of the
+SPL token holding. This should only be used by RPC, and not by programs to get
+the balance of a non-SPL holding.
 
 #### New Secondary Indexes
 
@@ -329,3 +332,52 @@ on a new mint or NFT account.
 
 Only a certain list keys are allowed (or not) to transfer to tokens, controlled
 by the mint.
+
+## Terminology
+
+* token amount: the amount of tokens as seen from the outside. For example, an
+interest-bearing token holding with 10 in token amount is converted to a proportional
+ownership of 0.5% of the total supply. This amount is always shown in UIs, and
+also cached in the `amount` field of 
+
+* share amount: the proportional ownership of a holding in terms of the total
+supply of shares. Internally, the interest-bearing token program uses shares to
+mint / transfer / burn, and this amount is never shown in UIs.
+
+## Proposed Layout
+
+### Mint
+
+```rust
+pub struct Mint {
+    // SPL Mint Fields
+    pub mint_authority: COption<Pubkey>,
+    pub supply: u64, // Cached token amount of current supply, used by RPC
+    pub decimals: u8,
+    pub is_initialized: bool,
+    pub freeze_authority: COption<Pubkey>,
+
+    // Interest-bearing Mint Fields
+    pub share_supply: f64, // The total amount of shares outstanding
+    pub initialized_slot: Slot, // When the mint was created, used to discount present value (in terms of token amount) into share amount
+}
+```
+
+### Holding
+
+```rust
+pub struct Holding {
+    // SPL Holding Fields
+    pub mint: Pubkey,
+    pub owner: Pubkey,
+    pub amount: u64, // Cached token amount of holding, used by RPC
+    pub delegate: COption<Pubkey>,
+    pub state: AccountState,
+    pub is_native: COption<u64>,
+    pub delegated_amount: u64,
+    pub close_authority: COption<Pubkey>,
+
+    // Interest-bearing Holding Fields
+    pub share_amount: f64, // This holding's proportional share of the total
+}
+```
