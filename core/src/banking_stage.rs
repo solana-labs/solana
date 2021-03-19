@@ -2451,6 +2451,8 @@ mod tests {
         Arc<Bank>,
         Arc<Mutex<PohRecorder>>,
         Receiver<WorkingBankEntry>,
+        JoinHandle<()>,
+        Arc<AtomicBool>,
     ) {
         Blockstore::destroy(&ledger_path).unwrap();
         let genesis_config_info = create_genesis_config(10_000);
@@ -2462,7 +2464,7 @@ mod tests {
         let blockstore =
             Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger");
         let bank = Arc::new(Bank::new(&genesis_config));
-        let (poh_recorder, entry_receiver, _record_receiver) = PohRecorder::new(
+        let (poh_recorder, entry_receiver, record_receiver) = PohRecorder::new(
             bank.tick_height(),
             bank.last_blockhash(),
             bank.slot(),
@@ -2484,14 +2486,23 @@ mod tests {
             system_transaction::transfer(&mint_keypair, &pubkey1, 1, genesis_config.hash()),
             system_transaction::transfer(&mint_keypair, &pubkey2, 1, genesis_config.hash()),
         ];
-        (transactions, bank, poh_recorder, entry_receiver)
+        let (poh_simulator, stop) = simulate_poh(record_receiver, &poh_recorder);
+
+        (
+            transactions,
+            bank,
+            poh_recorder,
+            entry_receiver,
+            poh_simulator,
+            stop,
+        )
     }
 
     #[test]
     fn test_consume_buffered_packets() {
         let ledger_path = get_tmp_ledger_path!();
         {
-            let (transactions, bank, poh_recorder, _entry_receiver) =
+            let (transactions, bank, poh_recorder, _entry_receiver, poh_simulator, stop) =
                 setup_conflicting_transactions(&ledger_path);
             let recorder = poh_recorder.lock().unwrap().recorder();
             let num_conflicting_transactions = transactions.len();
@@ -2545,6 +2556,8 @@ mod tests {
                     assert_eq!(buffered_packets[0].1.len(), num_expected_unprocessed);
                 }
             }
+            stop.store(true, Ordering::Relaxed);
+            let _ = poh_simulator.join();
         }
         Blockstore::destroy(&ledger_path).unwrap();
     }
@@ -2553,7 +2566,7 @@ mod tests {
     fn test_consume_buffered_packets_interrupted() {
         let ledger_path = get_tmp_ledger_path!();
         {
-            let (transactions, bank, poh_recorder, _entry_receiver) =
+            let (transactions, bank, poh_recorder, _entry_receiver, poh_simulator, stop) =
                 setup_conflicting_transactions(&ledger_path);
             let num_conflicting_transactions = transactions.len();
             let packets_vec = to_packets_chunked(&transactions, 1);
@@ -2630,6 +2643,8 @@ mod tests {
             }
 
             t_consume.join().unwrap();
+            stop.store(true, Ordering::Relaxed);
+            let _ = poh_simulator.join();
         }
         Blockstore::destroy(&ledger_path).unwrap();
     }

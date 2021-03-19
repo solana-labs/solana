@@ -111,14 +111,14 @@ impl Recorder {
             self.result_sender.clone(),
         ));
         if res.is_err() {
-            return Err(PohRecorderError::InvalidCallingObject); // TODO what error here
+            return Err(PohRecorderError::MaxHeightReached); // TODO what error here
         }
         let res = self
             .result_receiver
             .recv_timeout(std::time::Duration::from_millis(2000)); //TODO: consider timeout? _timeout(Duration::from_millis(4000));
         match res {
             Err(_err) => {
-                Err(PohRecorderError::InvalidCallingObject) // TODO - what error here
+                Err(PohRecorderError::MaxHeightReached) // TODO - what error here
             }
             Ok(result) => result,
         }
