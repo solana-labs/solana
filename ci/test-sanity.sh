@@ -3,6 +3,8 @@ set -e
 
 cd "$(dirname "$0")/.."
 
+rm -rf ~/.cache/solana/v1.2
+
 source ci/_
 
 (
