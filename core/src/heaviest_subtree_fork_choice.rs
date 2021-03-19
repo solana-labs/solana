@@ -273,6 +273,15 @@ impl HeaviestSubtreeForkChoice {
             let child_weight = self
                 .stake_voted_subtree(*child)
                 .expect("child must exist in `self.fork_infos`");
+
+            // Don't count children currently marked as invalid
+            if !self
+                .is_candidate_slot(*child)
+                .expect("child must exist in tree")
+            {
+                continue;
+            }
+
             if child_weight > maybe_best_child_weight
                 || (maybe_best_child_weight == child_weight && *child < maybe_best_child)
             {
@@ -1697,18 +1706,27 @@ mod test {
 
         // Adding another descendant to the invalid candidate won't
         // update the best slot, even if it contains votes
-        let new_leaf_slot = 7;
-        heaviest_subtree_fork_choice.add_new_leaf_slot(new_leaf_slot, Some(6));
+        let new_leaf_slot7 = 7;
+        heaviest_subtree_fork_choice.add_new_leaf_slot(new_leaf_slot7, Some(6));
         assert_eq!(heaviest_subtree_fork_choice.best_overall_slot(), 3);
-        let pubkey_votes: Vec<(Pubkey, Slot)> = vec![(vote_pubkeys[0], new_leaf_slot)];
-        let expected_best_slot = 3;
+        let pubkey_votes: Vec<(Pubkey, Slot)> = vec![(vote_pubkeys[0], new_leaf_slot7)];
+        let invalid_slot_ancestor = 3;
         assert_eq!(
             heaviest_subtree_fork_choice.add_votes(
                 &pubkey_votes,
                 bank.epoch_stakes_map(),
                 bank.epoch_schedule()
             ),
-            expected_best_slot,
+            invalid_slot_ancestor,
+        );
+
+        // Adding a descendant to the ancestor of the invalid candidate *should* update
+        // the best slot though, since the ancestor is on the heaviest fork
+        let new_leaf_slot8 = 8;
+        heaviest_subtree_fork_choice.add_new_leaf_slot(new_leaf_slot8, Some(invalid_slot_ancestor));
+        assert_eq!(
+            heaviest_subtree_fork_choice.best_overall_slot(),
+            new_leaf_slot8
         );
 
         // If we mark slot a descendant of `invalid_candidate` as valid, then that
@@ -1720,7 +1738,8 @@ mod test {
             .unwrap());
         assert_eq!(
             heaviest_subtree_fork_choice.best_overall_slot(),
-            new_leaf_slot
+            // Should pick the smaller slot of the two new equally weighted leaves
+            new_leaf_slot7
         );
     }
 
