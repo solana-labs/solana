@@ -1788,6 +1788,7 @@ pub mod test {
         for (i, duplicate_ancestor) in confirm_ancestors.into_iter().enumerate() {
             vote_simulator.progress.set_confirmed_duplicate_slot(
                 duplicate_ancestor,
+                ancestors.get(&duplicate_ancestor).unwrap(),
                 &descendants.get(&duplicate_ancestor).unwrap(),
             );
             let res = tower.check_switch_threshold(

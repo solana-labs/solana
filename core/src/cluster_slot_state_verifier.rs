@@ -158,6 +158,7 @@ fn on_cluster_update(
 }
 
 fn get_cluster_duplicate_confirmed_hash<'a>(
+    slot: Slot,
     gossip_duplicate_confirmed_hash: Option<&'a Hash>,
     local_frozen_hash: &'a Hash,
     is_local_replay_duplicate_confirmed: bool,
@@ -176,8 +177,14 @@ fn get_cluster_duplicate_confirmed_hash<'a>(
         local_duplicate_confirmed_hash,
         gossip_duplicate_confirmed_hash,
     ) {
-        (Some(local_frozen_hash), Some(gossip_duplicate_confirmed_hash)) => {
-            assert_eq!(local_frozen_hash, gossip_duplicate_confirmed_hash);
+        (Some(local_duplicate_confirmed_hash), Some(gossip_duplicate_confirmed_hash)) => {
+            if local_duplicate_confirmed_hash != gossip_duplicate_confirmed_hash {
+                error!(
+                    "For slot {}, the gossip duplicate confirmed hash {}, is not equal
+                to the confirmed hash we replayed: {}",
+                    slot, gossip_duplicate_confirmed_hash, local_duplicate_confirmed_hash
+                );
+            }
             Some(&local_frozen_hash)
         }
         (Some(local_frozen_hash), None) => Some(local_frozen_hash),
@@ -189,6 +196,7 @@ fn apply_state_changes(
     slot: Slot,
     progress: &mut ProgressMap,
     fork_choice: &mut HeaviestSubtreeForkChoice,
+    ancestors: &HashMap<Slot, HashSet<Slot>>,
     descendants: &HashMap<Slot, HashSet<Slot>>,
     state_changes: Vec<ResultingStateChange>,
 ) {
@@ -211,6 +219,7 @@ fn apply_state_changes(
             ResultingStateChange::DuplicateConfirmedSlotMatchesCluster => {
                 progress.set_confirmed_duplicate_slot(
                     slot,
+                    ancestors.get(&slot).unwrap_or(&HashSet::default()),
                     descendants.get(&slot).unwrap_or(&HashSet::default()),
                 );
                 fork_choice.mark_fork_valid_candidate(slot);
@@ -224,6 +233,7 @@ pub(crate) fn check_slot_agrees_with_cluster(
     root: Slot,
     frozen_hash: Option<Hash>,
     gossip_duplicate_confirmed_slots: &GossipDuplicateConfirmedSlots,
+    ancestors: &HashMap<Slot, HashSet<Slot>>,
     descendants: &HashMap<Slot, HashSet<Slot>>,
     progress: &mut ProgressMap,
     fork_choice: &mut HeaviestSubtreeForkChoice,
@@ -242,8 +252,9 @@ pub(crate) fn check_slot_agrees_with_cluster(
 
     let frozen_hash = frozen_hash.unwrap();
     let gossip_duplicate_confirmed_hash = gossip_duplicate_confirmed_slots.get(&slot);
-    let is_local_replay_duplicate_confirmed = progress.is_confirmed(slot).expect("If the frozen hash exists, then the slot must exist in bank forks and thus in progress map");
+    let is_local_replay_duplicate_confirmed = progress.is_supermajority_confirmed(slot).expect("If the frozen hash exists, then the slot must exist in bank forks and thus in progress map");
     let cluster_duplicate_confirmed_hash = get_cluster_duplicate_confirmed_hash(
+        slot,
         gossip_duplicate_confirmed_hash,
         &frozen_hash,
         is_local_replay_duplicate_confirmed,
@@ -270,7 +281,14 @@ pub(crate) fn check_slot_agrees_with_cluster(
         is_slot_duplicate,
         is_dead,
     );
-    apply_state_changes(slot, progress, fork_choice, descendants, state_changes);
+    apply_state_changes(
+        slot,
+        progress,
+        fork_choice,
+        ancestors,
+        descendants,
+        state_changes,
+    );
 }
 
 #[cfg(test)]
@@ -282,6 +300,7 @@ mod test {
     struct InitialState {
         heaviest_subtree_fork_choice: HeaviestSubtreeForkChoice,
         progress: ProgressMap,
+        ancestors: HashMap<Slot, HashSet<Slot>>,
         descendants: HashMap<Slot, HashSet<Slot>>,
         slot: Slot,
     }
@@ -291,6 +310,8 @@ mod test {
         let forks = tr(0) / (tr(1) / (tr(2) / tr(3)));
         let mut vote_simulator = VoteSimulator::new(1);
         vote_simulator.fill_bank_forks(forks, &HashMap::new());
+        let ancestors = vote_simulator.bank_forks.read().unwrap().ancestors();
+
         let descendants = vote_simulator
             .bank_forks
             .read()
@@ -301,6 +322,7 @@ mod test {
         InitialState {
             heaviest_subtree_fork_choice: vote_simulator.heaviest_subtree_fork_choice,
             progress: vote_simulator.progress,
+            ancestors,
             descendants,
             slot: 0,
         }
@@ -569,6 +591,7 @@ mod test {
         let InitialState {
             mut heaviest_subtree_fork_choice,
             mut progress,
+            ancestors,
             descendants,
             slot,
         } = setup();
@@ -579,6 +602,7 @@ mod test {
             slot,
             &mut progress,
             &mut heaviest_subtree_fork_choice,
+            &ancestors,
             &descendants,
             vec![ResultingStateChange::MarkSlotDuplicate],
         );
@@ -604,6 +628,7 @@ mod test {
             slot,
             &mut progress,
             &mut heaviest_subtree_fork_choice,
+            &ancestors,
             &descendants,
             vec![ResultingStateChange::DuplicateConfirmedSlotMatchesCluster],
         );
