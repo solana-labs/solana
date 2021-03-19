@@ -667,7 +667,9 @@ fn process_loader_upgradeable_instruction(
 
                 recipient_account.try_account_ref_mut()?.lamports += close_account.lamports()?;
                 close_account.try_account_ref_mut()?.lamports = 0;
-                close_account.try_account_ref_mut()?.data.fill(0);
+                for elt in close_account.try_account_ref_mut()?.data_as_mut_slice() {
+                    *elt = 0;
+                }
             } else {
                 ic_logger_msg!(logger, "Account does not support closing");
                 return Err(InstructionError::InvalidArgument);
