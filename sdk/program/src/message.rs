@@ -142,6 +142,8 @@ fn get_program_ids(instructions: &[Instruction]) -> Vec<Pubkey> {
         .collect()
 }
 
+pub const MESSAGE_HEADER_LENGTH: usize = 3;
+
 #[frozen_abi(digest = "BVC5RhetsNpheGipt5rUrkR6RDDUHtD5sCLK1UjymL4S")]
 #[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, AbiExample)]
 #[serde(rename_all = "camelCase")]
@@ -940,5 +942,13 @@ mod tests {
         assert!(message.is_non_loader_key(&key0, 0));
         assert!(message.is_non_loader_key(&key1, 1));
         assert!(!message.is_non_loader_key(&loader2, 2));
+    }
+
+    #[test]
+    fn test_message_header_len_constant() {
+        assert_eq!(
+            bincode::serialized_size(&MessageHeader::default()).unwrap() as usize,
+            MESSAGE_HEADER_LENGTH
+        );
     }
 }
