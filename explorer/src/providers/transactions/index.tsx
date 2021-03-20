@@ -21,7 +21,7 @@ export interface TransactionStatusInfo {
   result: SignatureResult;
   timestamp: Timestamp;
   confirmations: Confirmations;
-  confirmationStatus: TransactionConfirmationStatus | null;
+  confirmationStatus?: TransactionConfirmationStatus;
 }
 
 export interface TransactionStatus {

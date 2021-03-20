@@ -81,7 +81,7 @@ function renderDetails<T>(
 
       if (value.timestamp) {
         attributes.push(
-          <tr>
+          <tr key="timestamp">
             <td>Timestamp</td>
             <td className="text-lg-right text-monospace">
               {displayTimestamp(value.timestamp * 1000)}
