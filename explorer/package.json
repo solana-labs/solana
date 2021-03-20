@@ -7,7 +7,7 @@
     "@react-hook/debounce": "^3.0.0",
     "@sentry/react": "^6.2.2",
     "@solana/spl-token-registry": "^0.2.38",
-    "@solana/web3.js": "^0.94.2",
+    "@solana/web3.js": "^1.0.0",
     "@testing-library/jest-dom": "^5.11.9",
     "@testing-library/react": "^11.2.5",
     "@testing-library/user-event": "^13.0.2",
@@ -45,6 +45,7 @@
     "typescript": "^4.2.3"
   },
   "scripts": {
+    "preinstall": "npx npm-force-resolutions",
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
@@ -66,5 +67,11 @@
       "last 1 safari version"
     ]
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "npm-force-resolutions": "0.0.10"
+  },
+  "resolutions": {
+    "@solana/web3.js": "1.0.0",
+    "superstruct": "0.14.2"
+  }
 }
