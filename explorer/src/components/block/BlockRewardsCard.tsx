@@ -8,7 +8,7 @@ const PAGE_SIZE = 10;
 export function BlockRewardsCard({ block }: { block: ConfirmedBlock }) {
   const [rewardsDisplayed, setRewardsDisplayed] = React.useState(PAGE_SIZE);
 
-  if (block.rewards.length < 1) {
+  if (!block.rewards || block.rewards.length < 1) {
     return null;
   }
 
