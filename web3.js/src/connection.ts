@@ -1525,6 +1525,54 @@ type RootSubscriptionInfo = {
 };
 
 /**
+ * @internal
+ */
+const LogsResult = pick({
+  err: TransactionErrorResult,
+  logs: array(string()),
+  signature: string(),
+});
+
+/**
+ * Logs result.
+ *
+ * @typedef {Object} Logs.
+ */
+export type Logs = {
+  err: TransactionError | null;
+  logs: string[];
+  signature: string;
+};
+
+/**
+ * Expected JSON RPC response for the "logsNotification" message.
+ */
+const LogsNotificationResult = pick({
+  result: notificationResultAndContext(LogsResult),
+  subscription: number(),
+});
+
+/**
+ * Filter for log subscriptions.
+ */
+export type LogsFilter = {mentions: string[]} | 'all ' | 'allWithVotes';
+
+/**
+ * Callback function for log notifications.
+ */
+type LogsCallback = (logs: Logs, ctx: Context) => void;
+
+/**
+ * @private
+ */
+type LogsSubscriptionInfo = {
+  callback: LogsCallback;
+  filter: LogsFilter;
+  subscriptionId: SubscriptionId | null; // null when there's no current server subscription id
+  commitment?: Commitment;
+};
+
+/**
  * Signature result
  *
  * @typedef {Object} SignatureResult
@@ -1635,6 +1683,11 @@ export class Connection {
     [id: number]: SlotSubscriptionInfo;
   } = {};
 
+  /** @internal */ _logsSubscriptionCounter: number = 0;
+  /** @internal */ _logsSubscriptions: {
+    [id: number]: LogsSubscriptionInfo;
+  } = {};
+
   /**
    * Establish a JSON RPC connection
    *
@@ -1693,6 +1746,10 @@ export class Connection {
     this._rpcWebSocket.on(
       'rootNotification',
       this._wsOnRootNotification.bind(this),
+    );
+    this._rpcWebSocket.on(
+      'logsNotification',
+      this._wsOnLogsNotification.bind(this),
     );
   }
 
@@ -2928,12 +2985,14 @@ export class Connection {
     const slotKeys = Object.keys(this._slotSubscriptions).map(Number);
     const signatureKeys = Object.keys(this._signatureSubscriptions).map(Number);
     const rootKeys = Object.keys(this._rootSubscriptions).map(Number);
+    const logsKeys = Object.keys(this._logsSubscriptions).map(Number);
     if (
       accountKeys.length === 0 &&
       programKeys.length === 0 &&
       slotKeys.length === 0 &&
       signatureKeys.length === 0 &&
-      rootKeys.length === 0
+      rootKeys.length === 0 &&
+      logsKeys.length === 0
     ) {
       if (this._rpcWebSocketConnected) {
         this._rpcWebSocketConnected = false;
@@ -2989,6 +3048,15 @@ export class Connection {
     for (let id of rootKeys) {
       const sub = this._rootSubscriptions[id];
       this._subscribe(sub, 'rootSubscribe', []);
+    }
+
+    for (let id of logsKeys) {
+      const sub = this._logsSubscriptions[id];
+      this._subscribe(
+        sub,
+        'logsSubscribe',
+        this._buildArgs([sub.filter], sub.commitment),
+      );
     }
   }
 
@@ -3103,6 +3171,55 @@ export class Connection {
       this._updateSubscriptions();
     } else {
       throw new Error(`Unknown program account change id: ${id}`);
+    }
+  }
+
+  /**
+   * Registers a callback to be invoked whenever logs are emitted.
+   */
+  onLogs(
+    filter: LogsFilter,
+    callback: LogsCallback,
+    commitment?: Commitment,
+  ): number {
+    const id = ++this._logsSubscriptionCounter;
+    this._logsSubscriptions[id] = {
+      filter,
+      callback,
+      commitment,
+      subscriptionId: null,
+    };
+    this._updateSubscriptions();
+    return id;
+  }
+
+  /**
+   * Deregister a logs callback.
+   *
+   * @param id subscription id to deregister.
+   */
+  async removeOnLogsListener(id: number): Promise<void> {
+    if (!this._logsSubscriptions[id]) {
+      throw new Error(`Unknown logs id: ${id}`);
+    }
+    const subInfo = this._logsSubscriptions[id];
+    delete this._logsSubscriptions[id];
+    await this._unsubscribe(subInfo, 'logsUnsubscribe');
+    this._updateSubscriptions();
+  }
+
+  /**
+   * @internal
+   */
+  _wsOnLogsNotification(notification: Object) {
+    const res = create(notification, LogsNotificationResult);
+    const keys = Object.keys(this._logsSubscriptions).map(Number);
+    for (let id of keys) {
+      const sub = this._logsSubscriptions[id];
+      if (sub.subscriptionId === res.subscription) {
+        sub.callback(res.result.value, res.result.context);
+        return;
+      }
     }
   }
 

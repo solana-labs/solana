@@ -41,6 +41,7 @@ import type {
   SignatureStatus,
   TransactionError,
   KeyedAccountInfo,
+  LogsFilter,
 } from '../src/connection';
 
 use(chaiAsPromised);
@@ -2000,6 +2001,28 @@ describe('Connection', () => {
 
       expect(roots[1]).to.be.greaterThan(roots[0]);
       await connection.removeRootChangeListener(subscriptionId);
+    });
+
+    it('logs notification', async () => {
+      let listener: number | undefined;
+      const owner = new Account();
+      const [logsRes, ctx] = await new Promise(resolve => {
+        const filter = 'all' as LogsFilter;
+        listener = connection.onLogs(filter, (logs, ctx) => {
+          resolve([logs, ctx]);
+        });
+        // Execute a transaction so that we can pickup its logs.
+        connection.requestAirdrop(owner.publicKey, 1);
+      });
+      expect(ctx.slot).to.be.greaterThan(0);
+      expect(logsRes.logs.length).to.eq(2);
+      expect(logsRes.logs[0]).to.eq(
+        'Program 11111111111111111111111111111111 invoke [1]',
+      );
+      expect(logsRes.logs[1]).to.eq(
+        'Program 11111111111111111111111111111111 success',
+      );
+      await connection.removeOnLogsListener(listener!);
     });
 
     it('https request', async () => {
