@@ -1,6 +1,6 @@
 use crate::{account_data::AccountData, clock::Epoch, pubkey::Pubkey};
-use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
-use serde::ser::{Serialize, SerializeStruct, Serializer};
+use serde::de::{Deserialize, Deserializer};
+use serde::ser::{Serialize, Serializer};
 use solana_program::{account_info::AccountInfo, sysvar::Sysvar};
 use std::{cell::Ref, cell::RefCell, cmp, fmt, rc::Rc, sync::Arc};
 
@@ -46,108 +46,24 @@ impl<'de> Deserialize<'de> for AccountSharedData {
     where
         D: Deserializer<'de>,
     {
-        #[derive(Deserialize)]
-        #[serde(field_identifier, rename_all = "lowercase")]
-        enum Field {
-            Lamports,
-            Data,
-            Owner,
-            Executable,
-            RentEpoch,
-        }
-        struct AccountSharedDataVisitor;
-
-        impl<'de> Visitor<'de> for AccountSharedDataVisitor {
-            type Value = AccountSharedData;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("struct AccountSharedData")
-            }
-
-            fn visit_seq<V>(self, mut seq: V) -> Result<AccountSharedData, V::Error>
-            where
-                V: SeqAccess<'de>,
-            {
-                let lamports = seq
-                    .next_element()?
-                    .ok_or_else(|| serde::de::Error::invalid_length(0, &self))?;
-                let data = seq
-                    .next_element()?
-                    .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
-                let owner = seq
-                    .next_element()?
-                    .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
-                let executable = seq
-                    .next_element()?
-                    .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
-                let rent_epoch = seq
-                    .next_element()?
-                    .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
-                Ok(AccountSharedData::from(Account::create(
-                    lamports, data, owner, executable, rent_epoch,
-                )))
-            }
-
-            fn visit_map<V>(self, mut map: V) -> Result<AccountSharedData, V::Error>
-            where
-                V: MapAccess<'de>,
-            {
-                let mut lamports = None;
-                let mut data = None;
-                let mut owner = None;
-                let mut executable = None;
-                let mut rent_epoch = None;
-                while let Some(key) = map.next_key()? {
-                    match key {
-                        Field::Lamports => {
-                            if lamports.is_some() {
-                                return Err(serde::de::Error::duplicate_field("lamports"));
-                            }
-                            lamports = Some(map.next_value()?);
-                        }
-                        Field::Data => {
-                            if data.is_some() {
-                                return Err(serde::de::Error::duplicate_field("data"));
-                            }
-                            data = Some(map.next_value()?);
-                        }
-                        Field::Owner => {
-                            if owner.is_some() {
-                                return Err(serde::de::Error::duplicate_field("owner"));
-                            }
-                            owner = Some(map.next_value()?);
-                        }
-                        Field::Executable => {
-                            if executable.is_some() {
-                                return Err(serde::de::Error::duplicate_field("executable"));
-                            }
-                            executable = Some(map.next_value()?);
-                        }
-                        Field::RentEpoch => {
-                            if rent_epoch.is_some() {
-                                return Err(serde::de::Error::duplicate_field("rent_epoch"));
-                            }
-                            rent_epoch = Some(map.next_value()?);
-                        }
-                    }
-                }
-                let lamports =
-                    lamports.ok_or_else(|| serde::de::Error::missing_field("lamports"))?;
-                let data = data.ok_or_else(|| serde::de::Error::missing_field("data"))?;
-                let owner = owner.ok_or_else(|| serde::de::Error::missing_field("owner"))?;
-                let executable =
-                    executable.ok_or_else(|| serde::de::Error::missing_field("executable"))?;
-                let rent_epoch =
-                    rent_epoch.ok_or_else(|| serde::de::Error::missing_field("rent_epoch"))?;
-                Ok(AccountSharedData::from(Account::create(
-                    lamports, data, owner, executable, rent_epoch,
-                )))
-            }
-        }
-
-        const FIELDS: &[&str] = &["lamports", "data", "owner", "executable", "rent_epoch"];
-        deserializer.deserialize_struct("AccountSharedData", FIELDS, AccountSharedDataVisitor)
+        Ok(AccountSharedData::from(Account::deserialize(deserializer)?))
     }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AccountSharedDataSerialize<'a> {
+    /// lamports in the account
+    pub lamports: u64,
+    /// data held in this account
+    #[serde(with = "serde_bytes")]
+    pub data: &'a Vec<u8>,
+    /// the program that owns this account. If executable, the program that loads this account.
+    pub owner: Pubkey,
+    /// this account's data contains a loaded program (and is now read-only)
+    pub executable: bool,
+    /// the epoch at which this account will next owe rent
+    pub rent_epoch: Epoch,
 }
 
 impl Serialize for AccountSharedData {
@@ -155,27 +71,16 @@ impl Serialize for AccountSharedData {
     where
         S: Serializer,
     {
-        // 3 is the number of fields in the struct.
-        let mut state = serializer.serialize_struct("AccountSharedData", 3)?;
-        state.serialize_field("lamports", &self.lamports)?;
-        state.serialize_field("data", self.data())?;
-        state.serialize_field("owner", &self.owner)?;
-        state.serialize_field("executable", &self.executable)?;
-        state.serialize_field("rent_epoch", &self.rent_epoch)?;
-        state.end()
+        let temp = AccountSharedDataSerialize {
+            lamports: self.lamports,
+            data: &self.data(), // no data copy here
+            owner: self.owner,
+            executable: self.executable,
+            rent_epoch: self.rent_epoch,
+        };
+        temp.serialize(serializer)
     }
 }
-/*
-impl<'de> Deserialize<'de> for AccountSharedData {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let data = Arc::new(serde_bytes::deserialize::<Vec<u8>, D>(deserializer)?.into());
-        Ok(Self::from(data))
-    }
-}
-*/
 
 /// Compares two ReadableAccounts
 ///
