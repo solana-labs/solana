@@ -1555,12 +1555,12 @@ const LogsNotificationResult = pick({
 /**
  * Filter for log subscriptions.
  */
-export type LogsFilter = {mentions: string[]} | 'all ' | 'allWithVotes';
+export type LogsFilter = PublicKey | 'all' | 'allWithVotes';
 
 /**
  * Callback function for log notifications.
  */
-type LogsCallback = (logs: Logs, ctx: Context) => void;
+export type LogsCallback = (logs: Logs, ctx: Context) => void;
 
 /**
  * @private
@@ -3052,10 +3052,16 @@ export class Connection {
 
     for (let id of logsKeys) {
       const sub = this._logsSubscriptions[id];
+      let filter;
+      if (typeof sub.filter === 'object') {
+        filter = {mentions: [sub.filter.toString()]};
+      } else {
+        filter = sub.filter;
+      }
       this._subscribe(
         sub,
         'logsSubscribe',
-        this._buildArgs([sub.filter], sub.commitment),
+        this._buildArgs([filter], sub.commitment),
       );
     }
   }

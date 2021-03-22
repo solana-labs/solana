@@ -41,7 +41,6 @@ import type {
   SignatureStatus,
   TransactionError,
   KeyedAccountInfo,
-  LogsFilter,
 } from '../src/connection';
 
 use(chaiAsPromised);
@@ -2007,8 +2006,7 @@ describe('Connection', () => {
       let listener: number | undefined;
       const owner = new Account();
       const [logsRes, ctx] = await new Promise(resolve => {
-        const filter = 'all' as LogsFilter;
-        listener = connection.onLogs(filter, (logs, ctx) => {
+        listener = connection.onLogs('all', (logs, ctx) => {
           resolve([logs, ctx]);
         });
         // Execute a transaction so that we can pickup its logs.
