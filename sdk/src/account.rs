@@ -95,12 +95,10 @@ pub fn accounts_equal<T: ReadableAccount, U: ReadableAccount>(me: &T, other: &U)
 
 impl From<AccountSharedData> for Account {
     fn from(mut other: AccountSharedData) -> Self {
-        let mut account_data = Arc::make_mut(&mut other.data);
-        let mut data_empty = vec![];
-        std::mem::swap(&mut data_empty, &mut account_data);
+        let account_data = Arc::make_mut(&mut other.data);
         Self {
             lamports: other.lamports,
-            data: data_empty,
+            data: std::mem::take(account_data),
             owner: other.owner,
             executable: other.executable,
             rent_epoch: other.rent_epoch,
