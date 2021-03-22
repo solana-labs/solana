@@ -130,8 +130,8 @@ balance is constantly changing.
 There are also new read-only instructions, which write data to a provided account
 buffer:
 
-* `NormalizeToSPLHolding`: write holding data in SPL token format
-* `NormalizeToSPLMint`: write mint data in SPL token format
+* `NormalizeHolding`: write holding data in SPL token format
+* `NormalizeMint`: write mint data in SPL token format
 
 See the Runtime section for more information on how these are used.
 
@@ -144,7 +144,7 @@ For the base SPL token program, the wrapper simply deserializes the account data
 and returns the relevant data. For other programs, it calls the appropriate
 read-only instruction using an ephemeral account input.
 
-For interest-bearing tokens, after `NormalizeToSPLHolding` and deserialization
+For interest-bearing tokens, after `NormalizeHolding` and deserialization
 into a `spl_token::Holding`, the `amount` field will be in terms of tokens, and
 not shares, so that UIs can properly display amounts in terms of tokens.
 
@@ -180,7 +180,7 @@ and disappear after the instruction.
 
 For a program using i-tokens, to get the balance of a holding, the program creates
 an ephemeral account with 165 bytes of data, passes it to the i-token program's
-`NormalizeToSPLHolding` instruction, then deserializes the data back into the base
+`NormalizeHolding` instruction, then deserializes the data back into the base
 `spl_token::Holding`. At the end of the instruction, the account disappears.
 
 TODO What's the best approach to implement this?  For example, does an ephemeral
@@ -196,7 +196,7 @@ check that a CPI must use a subset of accounts provided to the calling program.
 #### Dynamic sysvars
 
 The interest-bearing token program also requires the use of dynamic sysvars. For example,
-during the `NormalizeToSPLHolding` instruction, the program needs to know the current
+during the `NormalizeHolding` instruction, the program needs to know the current
 time in order to properly convert from token amount to share amount.
 
 Without dynamic sysvars, we need to create a system to tell what sysvars are
@@ -300,9 +300,9 @@ For example, token-swap needs to accept separate token programs for token A and 
 * hard-coded token program: avoid using `Tokenkeg...` directly, and delete `id()`
 the SPL token code
 * get holding data: instead of deserializing the account data into an SPL holding, use
-the new wrapper to directly deserialize or call the `NormalizeToSPLHolding`
+the new wrapper to directly deserialize or call the `NormalizeHolding`
 instruction with the appropriate token program
-* get mint data: same as above, but using the `NormalizeToSPLMint`
+* get mint data: same as above, but using the `NormalizeMint`
 * transfer: only use `TransferChecked`, which requires passing mints
 
 ### Ledger
