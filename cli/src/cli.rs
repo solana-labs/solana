@@ -360,6 +360,7 @@ pub enum CliCommand {
         from: SignerIndex,
         sign_only: bool,
         dump_transaction_message: bool,
+        allow_unfunded_recipient: bool,
         no_wait: bool,
         blockhash_query: BlockhashQuery,
         nonce_account: Option<Pubkey>,
@@ -865,6 +866,7 @@ pub fn parse_command(
             let (fee_payer, fee_payer_pubkey) =
                 signer_of(matches, FEE_PAYER_ARG.name, wallet_manager)?;
             let (from, from_pubkey) = signer_of(matches, "from", wallet_manager)?;
+            let allow_unfunded_recipient = matches.is_present("allow_unfunded_recipient");
 
             let mut bulk_signers = vec![fee_payer, from];
             if nonce_account.is_some() {
@@ -886,6 +888,7 @@ pub fn parse_command(
                     to,
                     sign_only,
                     dump_transaction_message,
+                    allow_unfunded_recipient,
                     no_wait,
                     blockhash_query,
                     nonce_account,
@@ -1139,6 +1142,7 @@ fn process_transfer(
     from: SignerIndex,
     sign_only: bool,
     dump_transaction_message: bool,
+    allow_unfunded_recipient: bool,
     no_wait: bool,
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<&Pubkey>,
@@ -1152,6 +1156,21 @@ fn process_transfer(
 
     let (recent_blockhash, fee_calculator) =
         blockhash_query.get_blockhash_and_fee_calculator(rpc_client, config.commitment)?;
+
+    if !allow_unfunded_recipient {
+        let recipient_balance = rpc_client
+            .get_balance_with_commitment(to, config.commitment)?
+            .value;
+        if recipient_balance == 0 {
+            return Err(format!(
+                "The recipient address ({}) is not funded. \
+                                Add `--allow-unfunded-recipient` to complete the transfer \
+                               ",
+                to
+            )
+            .into());
+        }
+    }
 
     let nonce_authority = config.signers[nonce_authority];
     let fee_payer = config.signers[fee_payer];
@@ -1822,6 +1841,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             from,
             sign_only,
             dump_transaction_message,
+            allow_unfunded_recipient,
             no_wait,
             ref blockhash_query,
             ref nonce_account,
@@ -1837,6 +1857,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *from,
             *sign_only,
             *dump_transaction_message,
+            *allow_unfunded_recipient,
             *no_wait,
             blockhash_query,
             nonce_account.as_ref(),
@@ -2204,6 +2225,12 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("PROGRAM_ID")
                         .requires("derived_address_seed")
                         .hidden(true)
+                )
+                .arg(
+                    Arg::with_name("allow_unfunded_recipient")
+                        .long("allow-unfunded-recipient")
+                        .takes_value(false)
+                        .help("Complete the transfer even if the recipient address is not funded")
                 )
                 .offline_args()
                 .nonce_args(false)
@@ -2908,6 +2935,7 @@ mod tests {
                     from: 0,
                     sign_only: false,
                     dump_transaction_message: false,
+                    allow_unfunded_recipient: false,
                     no_wait: false,
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
@@ -2933,6 +2961,7 @@ mod tests {
                     from: 0,
                     sign_only: false,
                     dump_transaction_message: false,
+                    allow_unfunded_recipient: false,
                     no_wait: false,
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
@@ -2945,11 +2974,12 @@ mod tests {
             }
         );
 
-        // Test Transfer no-wait
+        // Test Transfer no-wait and --allow-unfunded-recipient
         let test_transfer = test_commands.clone().get_matches_from(vec![
             "test",
             "transfer",
             "--no-wait",
+            "--allow-unfunded-recipient",
             &to_string,
             "42",
         ]);
@@ -2962,6 +2992,7 @@ mod tests {
                     from: 0,
                     sign_only: false,
                     dump_transaction_message: false,
+                    allow_unfunded_recipient: true,
                     no_wait: true,
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
@@ -2995,6 +3026,7 @@ mod tests {
                     from: 0,
                     sign_only: true,
                     dump_transaction_message: false,
+                    allow_unfunded_recipient: false,
                     no_wait: false,
                     blockhash_query: BlockhashQuery::None(blockhash),
                     nonce_account: None,
@@ -3033,6 +3065,7 @@ mod tests {
                     from: 0,
                     sign_only: false,
                     dump_transaction_message: false,
+                    allow_unfunded_recipient: false,
                     no_wait: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(
                         blockhash_query::Source::Cluster,
@@ -3075,6 +3108,7 @@ mod tests {
                     from: 0,
                     sign_only: false,
                     dump_transaction_message: false,
+                    allow_unfunded_recipient: false,
                     no_wait: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(
                         blockhash_query::Source::NonceAccount(nonce_address),
@@ -3115,6 +3149,7 @@ mod tests {
                     from: 0,
                     sign_only: false,
                     dump_transaction_message: false,
+                    allow_unfunded_recipient: false,
                     no_wait: false,
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
