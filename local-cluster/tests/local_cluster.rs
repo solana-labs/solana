@@ -1344,20 +1344,6 @@ fn test_duplicate_shreds_broadcast_leader() {
     ));
 }
 
-#[test]
-#[serial]
-#[ignore]
-#[allow(unused_attributes)]
-fn test_duplicate_confirmed_shreds_broadcast_leader() {
-    test_faulty_node(BroadcastStageType::BroadcastDuplicates(
-        BroadcastDuplicatesConfig {
-            stake_partition: 50,
-            // Increase send delay so that we send duplicates for already confirmed slots
-            duplicate_send_delay: 10,
-        },
-    ));
-}
-
 fn test_faulty_node(faulty_node_type: BroadcastStageType) {
     solana_logger::setup_with_default("solana_local_cluster=info");
     let num_nodes = 3;
