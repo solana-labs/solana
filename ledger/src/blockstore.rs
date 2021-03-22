@@ -1260,6 +1260,21 @@ impl Blockstore {
         shred_index < slot_meta.consumed || data_index.is_present(shred_index)
     }
 
+    fn get_data_shred_from_just_inserted_or_db<'a>(
+        &'a self,
+        just_inserted_data_shreds: &'a HashMap<(u64, u64), Shred>,
+        slot: Slot,
+        index: u64,
+    ) -> Cow<'a, Vec<u8>> {
+        if let Some(shred) = just_inserted_data_shreds.get(&(slot, index)) {
+            Cow::Borrowed(&shred.payload)
+        } else {
+            // If it doesn't exist in the just inserted set, it must exist in
+            // the backing store
+            Cow::Owned(self.get_data_shred(slot, index).unwrap().unwrap())
+        }
+    }
+
     fn should_insert_data_shred(
         &self,
         shred: &Shred,
@@ -1269,54 +1284,41 @@ impl Blockstore {
         leader_schedule: Option<&Arc<LeaderScheduleCache>>,
         is_recovered: bool,
     ) -> bool {
-        loop {
-            let shred_index = u64::from(shred.index());
-            let slot = shred.slot();
-            let last_in_slot = if shred.last_in_slot() {
-                debug!("got last in slot");
-                true
-            } else {
-                false
-            };
+        let shred_index = u64::from(shred.index());
+        let slot = shred.slot();
+        let last_in_slot = if shred.last_in_slot() {
+            debug!("got last in slot");
+            true
+        } else {
+            false
+        };
 
-            // Check that we do not receive shred_index >= than the last_index
-            // for the slot
-            let last_index = slot_meta.last_index;
-            if shred_index >= last_index {
-                let leader_pubkey = leader_schedule
-                    .map(|leader_schedule| leader_schedule.slot_leader_at(slot, None))
-                    .unwrap_or(None);
+        // Check that we do not receive shred_index >= than the last_index
+        // for the slot
+        let last_index = slot_meta.last_index;
+        if shred_index >= last_index {
+            let leader_pubkey = leader_schedule
+                .map(|leader_schedule| leader_schedule.slot_leader_at(slot, None))
+                .unwrap_or(None);
 
-                let ending_shred: Option<Cow<Vec<u8>>> =
-                    if let Some(shred) = just_inserted_data_shreds.get(&(slot, last_index)) {
-                        Some(Cow::Borrowed(&shred.payload))
-                    } else {
-                        self.get_data_shred(slot, last_index)
-                            .unwrap()
-                            .map(Cow::Owned)
-                    };
+            let ending_shred: Cow<Vec<u8>> = self.get_data_shred_from_just_inserted_or_db(
+                just_inserted_data_shreds,
+                slot,
+                last_index,
+            );
 
-                if ending_shred.is_none() {
-                    // The slot data might have been cleared between us fetching the SlotMeta and
-                    // retrieving the `ending_shred`. Slot data might have been cleared by
-                    // `Blockstore::clear_unconfirmed_slot()` due to events like duplicate block detection.
-                    // In this case, try to get the updated SlotMeta and try again
-                    continue;
-                }
+            if self
+                .store_duplicate_if_not_existing(
+                    slot,
+                    ending_shred.into_owned(),
+                    shred.payload.clone(),
+                )
+                .is_err()
+            {
+                warn!("store duplicate error");
+            }
 
-                let ending_shred = ending_shred.unwrap();
-                if self
-                    .store_duplicate_if_not_existing(
-                        slot,
-                        ending_shred.into_owned(),
-                        shred.payload.clone(),
-                    )
-                    .is_err()
-                {
-                    warn!("store duplicate error");
-                }
-
-                datapoint_error!(
+            datapoint_error!(
                     "blockstore_error",
                     (
                         "error",
@@ -1327,31 +1329,33 @@ impl Blockstore {
                         String
                     )
                 );
-                return false;
+            return false;
+        }
+        // Check that we do not receive a shred with "last_index" true, but shred_index
+        // less than our current received
+        if last_in_slot && shred_index < slot_meta.received {
+            let leader_pubkey = leader_schedule
+                .map(|leader_schedule| leader_schedule.slot_leader_at(slot, None))
+                .unwrap_or(None);
+
+            let ending_shred: Cow<Vec<u8>> = self.get_data_shred_from_just_inserted_or_db(
+                just_inserted_data_shreds,
+                slot,
+                slot_meta.received - 1,
+            );
+
+            if self
+                .store_duplicate_if_not_existing(
+                    slot,
+                    ending_shred.into_owned(),
+                    shred.payload.clone(),
+                )
+                .is_err()
+            {
+                warn!("store duplicate error");
             }
-            // Check that we do not receive a shred with "last_index" true, but shred_index
-            // less than our current received
-            if last_in_slot && shred_index < slot_meta.received {
-                let leader_pubkey = leader_schedule
-                    .map(|leader_schedule| leader_schedule.slot_leader_at(slot, None))
-                    .unwrap_or(None);
 
-                let ending_shred = self.get_data_shred(slot, slot_meta.received - 1).unwrap();
-                if ending_shred.is_none() {
-                    // Slot data must have been reset, try to get the updated SlotMeta
-                    // and try again
-                    continue;
-                }
-                let ending_shred = ending_shred.unwrap();
-
-                if self
-                    .store_duplicate_if_not_existing(slot, ending_shred, shred.payload.clone())
-                    .is_err()
-                {
-                    warn!("store duplicate error");
-                }
-
-                datapoint_error!(
+            datapoint_error!(
                     "blockstore_error",
                     (
                         "error",
@@ -1362,12 +1366,11 @@ impl Blockstore {
                         String
                     )
                 );
-                return false;
-            }
-
-            let last_root = *last_root.read().unwrap();
-            return verify_shred_slots(slot, slot_meta.parent_slot, last_root);
+            return false;
         }
+
+        let last_root = *last_root.read().unwrap();
+        verify_shred_slots(slot, slot_meta.parent_slot, last_root)
     }
 
     fn insert_data_shred(
