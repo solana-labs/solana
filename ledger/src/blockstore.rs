@@ -1264,7 +1264,7 @@ impl Blockstore {
         &self,
         shred: &Shred,
         slot_meta: &SlotMeta,
-        just_inserted_data_shreds: &mut HashMap<(u64, u64), Shred>,
+        just_inserted_data_shreds: &HashMap<(u64, u64), Shred>,
         last_root: &RwLock<u64>,
         leader_schedule: Option<&Arc<LeaderScheduleCache>>,
         is_recovered: bool,
@@ -5195,7 +5195,14 @@ pub mod tests {
                 }
             };
             assert_eq!(
-                blockstore.should_insert_data_shred(&shred7, &slot_meta, &last_root, None, false),
+                blockstore.should_insert_data_shred(
+                    &shred7,
+                    &slot_meta,
+                    &HashMap::new(),
+                    &last_root,
+                    None,
+                    false
+                ),
                 false
             );
             assert!(blockstore.has_duplicate_shreds_in_slot(0));
@@ -5212,7 +5219,14 @@ pub mod tests {
                 panic!("Shred in unexpected format")
             }
             assert_eq!(
-                blockstore.should_insert_data_shred(&shred7, &slot_meta, &last_root, None, false),
+                blockstore.should_insert_data_shred(
+                    &shred7,
+                    &slot_meta,
+                    &HashMap::new(),
+                    &last_root,
+                    None,
+                    false
+                ),
                 false
             );
         }
@@ -7474,6 +7488,26 @@ pub mod tests {
             // Check no coding shreds are inserted
             let res = blockstore.get_coding_shreds_for_slot(slot, 0).unwrap();
             assert!(res.is_empty());
+        }
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_duplicate_last_index() {
+        let num_shreds = 2;
+        let num_entries = max_ticks_per_n_shreds(num_shreds, None);
+        let slot = 1;
+        let (mut shreds, _) = make_slot_entries(slot, 0, num_entries);
+
+        // Mark both as last shred
+        shreds[0].set_last_in_slot();
+        shreds[1].set_last_in_slot();
+        let blockstore_path = get_tmp_ledger_path!();
+        {
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+            blockstore.insert_shreds(shreds, None, false).unwrap();
+
+            assert!(blockstore.get_duplicate_slot(slot).is_some());
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
