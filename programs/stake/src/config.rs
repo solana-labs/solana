@@ -4,10 +4,10 @@ use bincode::{deserialize, serialized_size};
 use serde_derive::{Deserialize, Serialize};
 use solana_config_program::{create_config_account, get_config_data, ConfigState};
 use solana_sdk::{
-    account::{AccountSharedData, ReadableAccount},
     genesis_config::GenesisConfig,
     instruction::InstructionError,
     keyed_account::KeyedAccount,
+    {account::ReadableAccount, account_shared_data::AccountSharedData},
 };
 
 // stake config ID

@@ -13,7 +13,8 @@ use {
         hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
     },
     solana_sdk::{
-        account::{Account, AccountSharedData},
+        account::Account,
+        account_shared_data::AccountSharedData,
         clock::{Slot, DEFAULT_MS_PER_SLOT},
         commitment_config::CommitmentConfig,
         epoch_schedule::EpochSchedule,

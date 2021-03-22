@@ -1,7 +1,8 @@
 use serde::de::{Deserialize, Deserializer};
 use serde::ser::{Serialize, Serializer};
 use solana_sdk::{
-    account::Account, account::AccountSharedData, instruction::InstructionError, pubkey::Pubkey,
+    account::Account, account_shared_data::AccountSharedData, instruction::InstructionError,
+    pubkey::Pubkey,
 };
 use solana_vote_program::vote_state::VoteState;
 use std::{

@@ -1,5 +1,6 @@
 use crate::{
-    account::{from_account, AccountSharedData, ReadableAccount},
+    account::{from_account, ReadableAccount},
+    account_shared_data::AccountSharedData,
     account_utils::{State, StateMut},
 };
 use solana_program::{clock::Epoch, instruction::InstructionError, pubkey::Pubkey, sysvar::Sysvar};

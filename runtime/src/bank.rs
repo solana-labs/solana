@@ -31,10 +31,9 @@ use rayon::ThreadPool;
 use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_debug, inc_new_counter_debug, inc_new_counter_info};
 use solana_sdk::{
-    account::{
-        create_account_shared_data as create_account, from_account, Account, AccountSharedData,
-        ReadableAccount,
-    },
+    account::{from_account, Account, ReadableAccount},
+    account_shared_data::create_account_shared_data as create_account,
+    account_shared_data::AccountSharedData,
     clock::{
         Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp, DEFAULT_TICKS_PER_SECOND,
         MAX_PROCESSING_AGE, MAX_RECENT_BLOCKHASHES, MAX_TRANSACTION_FORWARDING_DELAY,
@@ -4820,13 +4819,14 @@ impl Bank {
         };
 
         if reconfigure_token2_native_mint {
-            let mut native_mint_account = solana_sdk::account::AccountSharedData::from(Account {
-                owner: inline_spl_token_v2_0::id(),
-                data: inline_spl_token_v2_0::native_mint::ACCOUNT_DATA.to_vec(),
-                lamports: sol_to_lamports(1.),
-                executable: false,
-                rent_epoch: self.epoch() + 1,
-            });
+            let mut native_mint_account =
+                solana_sdk::account_shared_data::AccountSharedData::from(Account {
+                    owner: inline_spl_token_v2_0::id(),
+                    data: inline_spl_token_v2_0::native_mint::ACCOUNT_DATA.to_vec(),
+                    lamports: sol_to_lamports(1.),
+                    executable: false,
+                    rent_epoch: self.epoch() + 1,
+                });
 
             // As a workaround for
             // https://github.com/solana-labs/solana-program-library/issues/374, ensure that the

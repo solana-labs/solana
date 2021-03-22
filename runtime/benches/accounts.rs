@@ -11,7 +11,7 @@ use solana_runtime::{
     bank::*,
 };
 use solana_sdk::{
-    account::AccountSharedData,
+    account_shared_data::AccountSharedData,
     genesis_config::{create_genesis_config, ClusterType},
     hash::Hash,
     pubkey::Pubkey,

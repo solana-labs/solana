@@ -28,7 +28,8 @@ use solana_runtime::{
     commitment::{BlockCommitmentCache, CommitmentSlots},
 };
 use solana_sdk::{
-    account::{AccountSharedData, ReadableAccount},
+    account::ReadableAccount,
+    account_shared_data::AccountSharedData,
     clock::{Slot, UnixTimestamp},
     commitment_config::CommitmentConfig,
     pubkey::Pubkey,

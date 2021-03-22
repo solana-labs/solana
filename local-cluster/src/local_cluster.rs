@@ -19,7 +19,7 @@ use solana_runtime::genesis_utils::{
 };
 use solana_sdk::{
     account::Account,
-    account::AccountSharedData,
+    account_shared_data::AccountSharedData,
     client::SyncClient,
     clock::{DEFAULT_DEV_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
     commitment_config::CommitmentConfig,

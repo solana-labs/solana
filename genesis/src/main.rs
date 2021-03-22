@@ -19,7 +19,8 @@ use solana_ledger::{
 };
 use solana_runtime::hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE;
 use solana_sdk::{
-    account::{Account, AccountSharedData},
+    account::Account,
+    account_shared_data::AccountSharedData,
     clock,
     epoch_schedule::EpochSchedule,
     fee_calculator::FeeRateGovernor,

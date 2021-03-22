@@ -1,5 +1,7 @@
 //! useful extras for Account state
-use crate::{account::Account, account::AccountSharedData, instruction::InstructionError};
+use crate::{
+    account::Account, account_shared_data::AccountSharedData, instruction::InstructionError,
+};
 use bincode::ErrorKind;
 use std::cell::Ref;
 
@@ -61,7 +63,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{account::AccountSharedData, pubkey::Pubkey};
+    use crate::{account_shared_data::AccountSharedData, pubkey::Pubkey};
 
     #[test]
     fn test_account_state() {

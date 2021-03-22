@@ -19,7 +19,7 @@ use solana_runtime::{
     loader_utils::load_program,
 };
 use solana_sdk::{
-    account::AccountSharedData,
+    account_shared_data::AccountSharedData,
     bpf_loader,
     client::SyncClient,
     entrypoint::SUCCESS,

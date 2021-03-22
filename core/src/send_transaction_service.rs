@@ -321,7 +321,7 @@ mod test {
         create_genesis_config_with_vote_accounts, GenesisConfigInfo, ValidatorVoteKeypairs,
     };
     use solana_sdk::{
-        account::AccountSharedData,
+        account_shared_data::AccountSharedData,
         fee_calculator::FeeCalculator,
         genesis_config::create_genesis_config,
         nonce,

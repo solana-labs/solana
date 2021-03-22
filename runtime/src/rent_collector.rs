@@ -1,6 +1,5 @@
 //! calculate and collect rent from Accounts
 use solana_sdk::{
-    account::{AccountSharedData, ReadableAccount},
     clock::Epoch,
     epoch_schedule::EpochSchedule,
     genesis_config::GenesisConfig,
@@ -8,6 +7,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     rent::Rent,
     sysvar,
+    {account::ReadableAccount, account_shared_data::AccountSharedData},
 };
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug, AbiExample)]

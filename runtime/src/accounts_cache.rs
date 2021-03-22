@@ -1,9 +1,9 @@
 use dashmap::DashMap;
 use solana_sdk::{
-    account::{AccountSharedData, ReadableAccount},
     clock::Slot,
     hash::Hash,
     pubkey::Pubkey,
+    {account::ReadableAccount, account_shared_data::AccountSharedData},
 };
 use std::{
     collections::BTreeSet,

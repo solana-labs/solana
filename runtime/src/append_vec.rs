@@ -5,7 +5,8 @@ use log::*;
 use memmap2::MmapMut;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{
-    account::{Account, AccountSharedData, ReadableAccount},
+    account::{Account, ReadableAccount},
+    account_shared_data::AccountSharedData,
     clock::{Epoch, Slot},
     hash::Hash,
     pubkey::Pubkey,
@@ -507,7 +508,7 @@ pub mod test_utils {
     use super::StoredMeta;
     use rand::distributions::Alphanumeric;
     use rand::{thread_rng, Rng};
-    use solana_sdk::account::AccountSharedData;
+    use solana_sdk::account_shared_data::AccountSharedData;
     use solana_sdk::pubkey::Pubkey;
     use std::fs::create_dir_all;
     use std::path::PathBuf;

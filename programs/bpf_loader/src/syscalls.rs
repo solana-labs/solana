@@ -10,8 +10,9 @@ use solana_rbpf::{
 };
 use solana_runtime::message_processor::MessageProcessor;
 use solana_sdk::{
-    account::{Account, AccountSharedData, ReadableAccount},
+    account::{Account, ReadableAccount},
     account_info::AccountInfo,
+    account_shared_data::AccountSharedData,
     account_utils::StateMut,
     bpf_loader, bpf_loader_deprecated,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},

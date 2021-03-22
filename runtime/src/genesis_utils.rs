@@ -1,6 +1,6 @@
 use solana_sdk::{
     account::Account,
-    account::AccountSharedData,
+    account_shared_data::AccountSharedData,
     feature::{self, Feature},
     feature_set::FeatureSet,
     fee_calculator::FeeRateGovernor,

@@ -4,7 +4,7 @@
 
 use crate::{
     account::Account,
-    account::AccountSharedData,
+    account_shared_data::AccountSharedData,
     clock::{UnixTimestamp, DEFAULT_TICKS_PER_SLOT},
     epoch_schedule::EpochSchedule,
     fee_calculator::FeeRateGovernor,

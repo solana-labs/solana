@@ -38,7 +38,7 @@ use solana_runtime::{
     snapshot_utils,
 };
 use solana_sdk::{
-    account::AccountSharedData,
+    account_shared_data::AccountSharedData,
     client::{AsyncClient, SyncClient},
     clock::{self, Slot},
     commitment_config::CommitmentConfig,

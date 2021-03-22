@@ -31,7 +31,6 @@ use solana_runtime::{
     snapshot_utils::SnapshotVersion,
 };
 use solana_sdk::{
-    account::{AccountSharedData, ReadableAccount},
     clock::{Epoch, Slot},
     feature::{self, Feature},
     feature_set,
@@ -43,6 +42,7 @@ use solana_sdk::{
     rent::Rent,
     shred_version::compute_shred_version,
     system_program,
+    {account::ReadableAccount, account_shared_data::AccountSharedData},
 };
 use solana_stake_program::stake_state::{self, PointValue, StakeState};
 use solana_vote_program::{

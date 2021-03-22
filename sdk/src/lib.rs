@@ -8,6 +8,7 @@ pub use solana_program::*;
 
 pub mod account;
 pub mod account_data;
+pub mod account_shared_data;
 pub mod account_utils;
 pub mod arithmetic;
 pub mod builtins;

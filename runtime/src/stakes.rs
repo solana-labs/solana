@@ -2,10 +2,10 @@
 //! node stakes
 use crate::vote_account::{ArcVoteAccount, VoteAccounts};
 use solana_sdk::{
-    account::{AccountSharedData, ReadableAccount},
     clock::Epoch,
     pubkey::Pubkey,
     sysvar::stake_history::StakeHistory,
+    {account::ReadableAccount, account_shared_data::AccountSharedData},
 };
 use solana_stake_program::stake_state::{new_stake_history_entry, Delegation, StakeState};
 use solana_vote_program::vote_state::VoteState;

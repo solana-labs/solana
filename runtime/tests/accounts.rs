@@ -3,7 +3,7 @@ use rand::{thread_rng, Rng};
 use rayon::prelude::*;
 use solana_runtime::{accounts_db::AccountsDb, accounts_index::Ancestors};
 use solana_sdk::genesis_config::ClusterType;
-use solana_sdk::{account::AccountSharedData, clock::Slot, pubkey::Pubkey};
+use solana_sdk::{account_shared_data::AccountSharedData, clock::Slot, pubkey::Pubkey};
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;

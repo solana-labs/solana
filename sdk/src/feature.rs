@@ -1,4 +1,7 @@
-use crate::account::{AccountSharedData, ReadableAccount, WritableAccount};
+use crate::{
+    account::{ReadableAccount, WritableAccount},
+    account_shared_data::AccountSharedData,
+};
 pub use solana_program::feature::*;
 
 pub fn from_account<T: ReadableAccount>(account: &T) -> Option<Feature> {

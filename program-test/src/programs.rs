@@ -1,7 +1,5 @@
 use solana_sdk::{
-    account::{Account, AccountSharedData},
-    pubkey::Pubkey,
-    rent::Rent,
+    account::Account, account_shared_data::AccountSharedData, pubkey::Pubkey, rent::Rent,
 };
 
 mod spl_token {

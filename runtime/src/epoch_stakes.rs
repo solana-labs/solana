@@ -116,7 +116,7 @@ impl EpochStakes {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use solana_sdk::account::AccountSharedData;
+    use solana_sdk::account_shared_data::AccountSharedData;
     use solana_vote_program::vote_state::create_account_with_authorized;
     use std::iter;
 

@@ -19,6 +19,8 @@ default = [
   "full" # functionality that is not compatible or needed for on-chain programs
 ]
 full = [
+#    "account_data",
+#    "account_shared_data",
     "assert_matches",
     "byteorder",
     "chrono",

@@ -138,7 +138,7 @@ mod tests {
     use super::*;
     use solana_sdk::{
         account::Account,
-        account::AccountSharedData,
+        account_shared_data::AccountSharedData,
         epoch_schedule::EpochSchedule,
         genesis_config::{ClusterType, GenesisConfig},
     };

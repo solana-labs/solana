@@ -68,7 +68,7 @@ pub(crate) mod tests {
     use rand::Rng;
     use solana_runtime::vote_account::{ArcVoteAccount, VoteAccounts};
     use solana_sdk::{
-        account::{from_account, AccountSharedData},
+        account::{from_account}, account_shared_data::AccountSharedData,
         clock::Clock,
         instruction::Instruction,
         pubkey::Pubkey,

@@ -1,4 +1,5 @@
-use crate::account::{Account, AccountSharedData};
+use crate::account::Account;
+use crate::account_shared_data::AccountSharedData;
 
 crate::declare_id!("NativeLoader1111111111111111111111111111111");
 

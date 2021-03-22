@@ -134,7 +134,7 @@ mod tests {
     use bincode::serialized_size;
     use serde_derive::{Deserialize, Serialize};
     use solana_sdk::{
-        account::{Account, AccountSharedData},
+        account::{Account}, account_shared_data::AccountSharedData,
         keyed_account::create_keyed_is_signer_accounts,
         process_instruction::MockInvokeContext,
         signature::{Keypair, Signer},

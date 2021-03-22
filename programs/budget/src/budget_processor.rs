@@ -247,7 +247,7 @@ mod tests {
     use crate::id;
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
-    use solana_sdk::account::{Account, AccountSharedData};
+    use solana_sdk::{account::{Account}, account_shared_data::AccountSharedData};
     use solana_sdk::client::SyncClient;
     use solana_sdk::genesis_config::create_genesis_config;
     use solana_sdk::hash::hash;

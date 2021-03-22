@@ -7,7 +7,9 @@ use chrono::{
     serde::ts_seconds,
 };
 use serde_derive::{Deserialize, Serialize};
-use solana_sdk::{account::AccountSharedData, instruction::InstructionError, pubkey::Pubkey};
+use solana_sdk::{
+    account_shared_data::AccountSharedData, instruction::InstructionError, pubkey::Pubkey,
+};
 use std::cmp::min;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -119,8 +121,11 @@ impl VestState {
 mod test {
     use super::*;
     use crate::id;
-    use solana_sdk::account::{AccountSharedData, ReadableAccount, WritableAccount};
     use solana_sdk::system_program;
+    use solana_sdk::{
+        account::{ReadableAccount, WritableAccount},
+        account_shared_data::AccountSharedData,
+    };
 
     #[test]
     fn test_serializer() {

@@ -1,5 +1,5 @@
 use crate::{
-    account::AccountSharedData,
+    account_shared_data::AccountSharedData,
     account_utils::StateMut,
     fee_calculator::FeeCalculator,
     hash::Hash,

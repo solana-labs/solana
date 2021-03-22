@@ -10,7 +10,7 @@ use {
     bincode::serialize_into,
     rand::{thread_rng, Rng},
     solana_sdk::{
-        account::AccountSharedData,
+        account_shared_data::AccountSharedData,
         clock::Slot,
         genesis_config::{create_genesis_config, ClusterType},
         pubkey::Pubkey,

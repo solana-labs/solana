@@ -28,7 +28,8 @@ use {
         genesis_utils::{create_genesis_config_with_leader_ex, GenesisConfigInfo},
     },
     solana_sdk::{
-        account::{Account, AccountSharedData, ReadableAccount},
+        account::{Account, ReadableAccount},
+        account_shared_data::AccountSharedData,
         clock::Slot,
         genesis_config::{ClusterType, GenesisConfig},
         keyed_account::KeyedAccount,

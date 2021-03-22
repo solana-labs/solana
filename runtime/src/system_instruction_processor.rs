@@ -1,6 +1,5 @@
 use log::*;
 use solana_sdk::{
-    account::{AccountSharedData, ReadableAccount},
     account_utils::StateMut,
     ic_msg,
     instruction::InstructionError,
@@ -13,6 +12,7 @@ use solana_sdk::{
     system_instruction::{SystemError, SystemInstruction, MAX_PERMITTED_DATA_LENGTH},
     system_program,
     sysvar::{self, recent_blockhashes::RecentBlockhashes, rent::Rent},
+    {account::ReadableAccount, account_shared_data::AccountSharedData},
 };
 use std::collections::HashSet;
 
@@ -446,7 +446,8 @@ mod tests {
     use crate::{bank::Bank, bank_client::BankClient};
     use bincode::serialize;
     use solana_sdk::{
-        account::{self, Account, AccountSharedData},
+        account::Account,
+        account_shared_data::AccountSharedData,
         client::SyncClient,
         fee_calculator::FeeCalculator,
         genesis_config::create_genesis_config,
@@ -500,7 +501,10 @@ mod tests {
         ))
     }
     fn create_default_rent_account() -> RefCell<AccountSharedData> {
-        RefCell::new(account::create_account_shared_data(&Rent::free(), 1))
+        RefCell::new(solana_sdk::account_shared_data::create_account_shared_data(
+            &Rent::free(),
+            1,
+        ))
     }
 
     #[test]
@@ -1376,7 +1380,7 @@ mod tests {
                 RefCell::new(if sysvar::recent_blockhashes::check_id(&meta.pubkey) {
                     create_default_recent_blockhashes_account().into_inner()
                 } else if sysvar::rent::check_id(&meta.pubkey) {
-                    account::create_account_shared_data(&Rent::free(), 1)
+                    solana_sdk::account_shared_data::create_account_shared_data(&Rent::free(), 1)
                 } else {
                     AccountSharedData::default()
                 })

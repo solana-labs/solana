@@ -12,7 +12,7 @@ use {
     solana_core::rpc::JsonRpcConfig,
     solana_faucet::faucet::{run_local_faucet_with_port, FAUCET_PORT},
     solana_sdk::{
-        account::AccountSharedData,
+        account_shared_data::AccountSharedData,
         clock::Slot,
         epoch_schedule::{EpochSchedule, MINIMUM_SLOTS_PER_EPOCH},
         native_token::sol_to_lamports,

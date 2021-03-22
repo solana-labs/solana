@@ -49,7 +49,8 @@ use solana_runtime::{
     snapshot_utils::get_highest_snapshot_archive_path,
 };
 use solana_sdk::{
-    account::{AccountSharedData, ReadableAccount},
+    account::ReadableAccount,
+    account_shared_data::AccountSharedData,
     account_utils::StateMut,
     clock::{Slot, UnixTimestamp, MAX_RECENT_BLOCKHASHES},
     commitment_config::{CommitmentConfig, CommitmentLevel},

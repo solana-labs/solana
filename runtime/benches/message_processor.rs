@@ -4,7 +4,7 @@ extern crate test;
 
 use log::*;
 use solana_runtime::message_processor::{ExecuteDetailsTimings, PreAccount};
-use solana_sdk::{account::AccountSharedData, pubkey, rent::Rent};
+use solana_sdk::{account_shared_data::AccountSharedData, pubkey, rent::Rent};
 use test::Bencher;
 
 #[bench]

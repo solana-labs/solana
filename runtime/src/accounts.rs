@@ -16,7 +16,8 @@ use dashmap::{
 use log::*;
 use rand::{thread_rng, Rng};
 use solana_sdk::{
-    account::{Account, AccountSharedData},
+    account::Account,
+    account_shared_data::AccountSharedData,
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     clock::Slot,
@@ -1028,7 +1029,6 @@ mod tests {
     use super::*;
     use crate::rent_collector::RentCollector;
     use solana_sdk::{
-        account::{AccountSharedData, WritableAccount},
         epoch_schedule::EpochSchedule,
         fee_calculator::FeeCalculator,
         genesis_config::ClusterType,
@@ -1039,6 +1039,7 @@ mod tests {
         rent::Rent,
         signature::{keypair_from_seed, Keypair, Signer},
         system_instruction, system_program,
+        {account::WritableAccount, account_shared_data::AccountSharedData},
     };
     use std::{
         sync::atomic::{AtomicBool, AtomicU64, Ordering},

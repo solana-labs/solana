@@ -1209,7 +1209,8 @@ pub mod tests {
         self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
     };
     use solana_sdk::{
-        account::{AccountSharedData, WritableAccount},
+        account::WritableAccount,
+        account_shared_data::AccountSharedData,
         epoch_schedule::EpochSchedule,
         hash::Hash,
         pubkey::Pubkey,

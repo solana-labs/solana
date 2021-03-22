@@ -424,7 +424,7 @@ mod test {
     use super::*;
     use crate::genesis_utils::create_genesis_config;
     use crossbeam_channel::unbounded;
-    use solana_sdk::{account::AccountSharedData, pubkey::Pubkey};
+    use solana_sdk::{account_shared_data::AccountSharedData, pubkey::Pubkey};
 
     #[test]
     fn test_accounts_background_service_remove_dead_slots() {

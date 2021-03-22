@@ -10,7 +10,6 @@ use crate::{
 };
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
-    account::{AccountSharedData, ReadableAccount},
     account_utils::{State, StateMut},
     clock::{Clock, Epoch, UnixTimestamp},
     ic_msg,
@@ -20,6 +19,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     rent::{Rent, ACCOUNT_STORAGE_OVERHEAD},
     stake_history::{StakeHistory, StakeHistoryEntry},
+    {account::ReadableAccount, account_shared_data::AccountSharedData},
 };
 use solana_vote_program::vote_state::{VoteState, VoteStateVersions};
 use std::{collections::HashSet, convert::TryFrom};
@@ -1708,8 +1708,8 @@ mod tests {
     use super::*;
     use crate::id;
     use solana_sdk::{
-        account::AccountSharedData, native_token, process_instruction::MockInvokeContext,
-        pubkey::Pubkey, system_program,
+        account_shared_data::AccountSharedData, native_token,
+        process_instruction::MockInvokeContext, pubkey::Pubkey, system_program,
     };
     use solana_vote_program::vote_state;
     use std::{cell::RefCell, iter::FromIterator};

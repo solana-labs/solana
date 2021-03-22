@@ -41,11 +41,11 @@ use serde::{Deserialize, Serialize};
 use solana_measure::measure::Measure;
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::{
-    account::{AccountSharedData, ReadableAccount},
     clock::{Epoch, Slot},
     genesis_config::ClusterType,
     hash::{Hash, Hasher},
     pubkey::Pubkey,
+    {account::ReadableAccount, account_shared_data::AccountSharedData},
 };
 use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::{
@@ -5030,7 +5030,8 @@ pub mod tests {
     use assert_matches::assert_matches;
     use rand::{thread_rng, Rng};
     use solana_sdk::{
-        account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
+        account::{Account, ReadableAccount, WritableAccount},
+        account_shared_data::AccountSharedData,
         hash::HASH_BYTES,
         pubkey::PUBKEY_BYTES,
     };

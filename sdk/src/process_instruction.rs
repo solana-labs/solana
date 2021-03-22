@@ -1,5 +1,5 @@
 use solana_sdk::{
-    account::AccountSharedData,
+    account_shared_data::AccountSharedData,
     instruction::{CompiledInstruction, Instruction, InstructionError},
     keyed_account::KeyedAccount,
     message::Message,

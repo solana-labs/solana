@@ -7,7 +7,8 @@ use chrono::prelude::*;
 use solana_config_program::date_instruction::DateConfig;
 use solana_config_program::get_config_data;
 use solana_sdk::{
-    account::{AccountSharedData, ReadableAccount, WritableAccount},
+    account::{ReadableAccount, WritableAccount},
+    account_shared_data::AccountSharedData,
     feature_set,
     instruction::InstructionError,
     keyed_account::{next_keyed_account, KeyedAccount},

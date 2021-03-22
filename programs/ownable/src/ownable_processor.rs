@@ -62,7 +62,7 @@ mod tests {
     use crate::ownable_instruction;
     use solana_runtime::{bank::Bank, bank_client::BankClient};
     use solana_sdk::{
-        account::AccountSharedData,
+        account_shared_data::AccountSharedData,
         client::SyncClient,
         genesis_config::create_genesis_config,
         message::Message,

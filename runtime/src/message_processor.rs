@@ -5,7 +5,6 @@ use crate::{
 use log::*;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{
-    account::{AccountSharedData, ReadableAccount, WritableAccount},
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     feature_set::{cpi_share_ro_and_exec_accounts, instructions_sysvar_enabled, FeatureSet},
@@ -22,6 +21,10 @@ use solana_sdk::{
     rent::Rent,
     system_program,
     transaction::TransactionError,
+    {
+        account::{ReadableAccount, WritableAccount},
+        account_shared_data::AccountSharedData,
+    },
 };
 use std::{
     cell::{Ref, RefCell},
