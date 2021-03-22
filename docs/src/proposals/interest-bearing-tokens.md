@@ -14,13 +14,12 @@ spawned very successful tongue-in-cheek projects, such as
 [$MEME farming](https://dontbuymeme.com/).
 
 Tokens that accrue interest are an attractive and popular version of yield farming,
-as seen most prominently with Aave's [aTokens](https://aave.com/atokens). For
-simplicity, we'll refer to interest-bearing tokens as i-tokens.
+as seen most prominently with Aave's [aTokens](https://aave.com/atokens).
 
 ### How do these work?
 
-Let's explain through an example: assume there's an i-token mint with a total
-supply of 1,000 tokens
+Let's explain through an example: assume there's an interest-bearing token mint
+with a total supply of 1,000 tokens
 and a 10% annual interest rate. This means that one year later, the total supply
 will be 1,100 tokens, and all token holders will have 10% more tokens in their
 holding account.
@@ -35,10 +34,10 @@ new_supply = 1100 * exp(0.095 / 31536000)
 new_supply = 1100.0000033...
 ```
 
-Since i-tokens are constantly accruing interest, they do not have the same
-properties as normal tokens. Most importantly, i-tokens held in two different
+Since interest-bearing tokens are constantly accruing interest, they do not have the same
+properties as normal tokens. Most importantly, interest-bearing tokens held in two different
 accounts are only fungible if they have been updated to the same time. For example,
-10 i-tokens in the year 1999 are worth much more than 10 i-tokens in the year 3000, since
+10 interest-bearing tokens in the year 1999 are worth much more than 10 interest-bearing tokens in the year 3000, since
 those tokens from 1999 have over 1,000 years of interest (see Futurama). Because
 of this, we have to compound interest before any minting, burning, and
 transferring.
@@ -64,14 +63,14 @@ wallets, applications, and end-users.
 
 ## Proposed Solution
 
-Following the approach taken by Aave, we can lean on a crucial feature of i-tokens:
+Following the approach taken by Aave, we can lean on a crucial feature of interest-bearing tokens:
 although the holding's token amount is constantly changing, each token holder's
 proportion of total supply stays the same. Therefore, we can satisfy the
 fungibility requirement for tokens on proportional ownership. The token
 amount used for token transfers / mints / burns is just an interface, and
 everything is converted to proportional shares inside the program.
 
-Let's go through an example. Imagine we have an i-token mint with a total of
+Let's go through an example. Imagine we have an interest-bearing token mint with a total of
 10,000 proportional shares, a 20% annual interest rate, and 1 share is currently
 worth 100 tokens. If I transfer 1,000 tokens today, the program converts that and moves
 10 shares. One year later, 1 share is worth 120 tokens, so if I transfer
@@ -84,8 +83,8 @@ simply need to call the right program to perform instructions.
 ## Required Changes
 
 A new interest-bearing token program is only one component of the overall solution,
-since i-tokens need to be easily integrated in on-chain programs, web apps,
-and wallets.
+which also comprises an interface for tokens (i-tokens) to be easily integrated in
+on-chain programs, web apps, and wallets.
 
 ### Token Program Conformance
 
@@ -121,7 +120,7 @@ And the program should throw errors for:
 
 New instructions required:
 
-* `CreateHolding` (TODO name): only performs `Allocate` and `Assign` to self,
+* `CreateHolding`: only performs `Allocate` and `Assign` to self,
 useful for creating a holding when you don't know the program that you're
 interacting with. See the Associated Token Account section for how to use this.
 * `TransferAllChecked`: transfers everything from the source holding to the
@@ -131,8 +130,8 @@ balance is constantly changing.
 There are also new read-only instructions, which write data to a provided account
 buffer:
 
-* `SerializeHoldingToSPL`: write holding data in SPL token format
-* `SerializeMintToSPL`: write mint data in SPL token format
+* `NormalizeToSPLHolding`: write holding data in SPL token format
+* `NormalizeToSPLMint`: write mint data in SPL token format
 
 See the Runtime section for more information on how these are used.
 
@@ -145,22 +144,9 @@ For the base SPL token program, the wrapper simply deserializes the account data
 and returns the relevant data. For other programs, it calls the appropriate
 read-only instruction using an ephemeral account input.
 
-The structure for new holding and mint accounts must follow the layout of the
-existing SPL token accounts to ensure compatibility in RPC when fetching pre and
-post token balances.
-
-For a holding, the first 165 bytes must contain the same information
-as a normal SPL token holding. The following byte must be the type of
-account (ie. `Holding`), and after that, any data is allowed as required by the
-new token program.
-
-The same applies for mints, but only for the first 82 bytes.
-
-The `amount` field in an SPL token holding should contain a token amount in order
-to properly integrate with RPC's `preTokenBalances` and `postTokenBalances`.
-
-For i-tokens, `amount` will be in terms of tokens, and not shares, so that UIs
-can properly display amounts moved.
+For interest-bearing tokens, after `NormalizeToSPLHolding` and deserialization
+into a `spl_token::Holding`, the `amount` field will be in terms of tokens, and
+not shares, so that UIs can properly display amounts in terms of tokens.
 
 ### Token Program Registry
 
@@ -186,7 +172,7 @@ and disappear after the instruction.
 
 For a program using i-tokens, to get the balance of a holding, the program creates
 an ephemeral account with 165 bytes of data, passes it to the i-token program's
-`SerializeHoldingToSPL` instruction, then deserializes the data back into the base
+`NormalizeToSPLHolding` instruction, then deserializes the data back into the base
 `spl_token::Holding`. At the end of the instruction, the account disappears.
 
 TODO What's the best approach to implement this?  For example, does an ephemeral
@@ -201,8 +187,8 @@ check that a CPI must use a subset of accounts provided to the calling program.
 
 #### Dynamic sysvars
 
-The i-token program also requires the use of dynamic sysvars. For example,
-during the `SerializeHoldingToSPL` instruction, the program needs to know the current
+The interest-bearing token program also requires the use of dynamic sysvars. For example,
+during the `NormalizeToSPLHolding` instruction, the program needs to know the current
 time in order to properly convert from token amount to share amount.
 
 Without dynamic sysvars, we need to create a system to tell what sysvars are
@@ -214,6 +200,14 @@ for all users.
 The validator's RPC server needs to properly handle new token program accounts
 for read-only instructions and pre / post balances.
 
+Performance will be a concern when it comes to calling into the bank to perform
+serialization into an ephemeral account.
+
+The BPF compute cost of read-only transactions may need to be lowered specially
+for read-only RPC calls. The interest-bearing token program will probably be one of the more
+cost-intensive computations possible since it is performing present value
+discounting.
+
 #### `getBalance` and `getSupply`
 
 Instead of deserializing SPL token accounts and returning the data, the
@@ -222,17 +216,12 @@ RPC server runs read-only transactions on the i-token program.
 RPC simply uses the same flow as on-chain programs: create an ephemeral account
 then runs the read-only transaction onto the bank requested.
 
-TODO how do we set the cost of read-only transactions? Do we lower it specially
-for read-only RPC calls? The i-token program will probably be one of the more
-cost-intensive computations possible since it is performing present value
-discounting.
-
 #### `preTokenBalances` and `postTokenBalances`
 
 As mentioned earlier in the Token Program Conformance section, the i-token
-program caches token balances (not share amounts) in the `amount` field of the
-SPL token holding. This should only be used by RPC, and not by programs to get
-the balance of a non-SPL holding.
+program must implement instructions to serialize a mint and holding into the
+SPL format. RPC will call into these instructions before and after the transaction
+is run to generate `preTokenBalances` and `postTokenBalances`.
 
 #### New Secondary Indexes
 
@@ -302,9 +291,9 @@ For example, token-swap needs to accept separate token programs for token A and 
 * hard-coded token program: avoid using `Tokenkeg...` directly, and delete `id()`
 the SPL token code
 * get holding data: instead of deserializing the account data into an SPL holding, use
-the new wrapper to directly deserialize or call the `SerializeHoldingToSPL`
+the new wrapper to directly deserialize or call the `NormalizeToSPLHolding`
 instruction with the appropriate token program
-* get mint data: same as above, but using the `SerializeMintToSPL`
+* get mint data: same as above, but using the `NormalizeToSPLMint`
 * transfer: only use `TransferChecked`, which requires passing mints
 
 ## Other New Token Programs
@@ -333,10 +322,15 @@ by the mint.
 interest-bearing token holding with 10 in token amount is converted to a proportional
 ownership of 0.5% of the total supply. This amount is always shown in UIs, and
 also cached in the `amount` field of 
-
 * share amount: the proportional ownership of a holding in terms of the total
 supply of shares. Internally, the interest-bearing token program uses shares to
 mint / transfer / burn, and this amount is never shown in UIs.
+* spl-token: the base on-chain program for tokens at address `Tokenkeg...` on
+[all networks](https://explorer.solana.com/address/TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA)
+which also defines the ABI standard required for other token programs that wish
+to work "out of the box" with programs and wallets
+* i-token: a program implementing the spl-token ABI, all of the instructions mentioned
+in the "Token Program Conformance" section
 
 ## Proposed Layout
 
@@ -346,13 +340,12 @@ mint / transfer / burn, and this amount is never shown in UIs.
 pub struct Mint {
     // SPL Mint Fields
     pub mint_authority: COption<Pubkey>,
-    pub supply: u64, // Cached token amount of current supply, used by RPC
     pub decimals: u8,
     pub is_initialized: bool,
     pub freeze_authority: COption<Pubkey>,
 
     // Interest-bearing Mint Fields
-    pub share_supply: f64, // The total amount of shares outstanding
+    pub share_supply: Decimal, // The total amount of shares outstanding
     pub initialized_slot: Slot, // When the mint was created, used to discount present value (in terms of token amount) into share amount
 }
 ```
@@ -364,7 +357,6 @@ pub struct Holding {
     // SPL Holding Fields
     pub mint: Pubkey,
     pub owner: Pubkey,
-    pub amount: u64, // Cached token amount of holding, used by RPC
     pub delegate: COption<Pubkey>,
     pub state: AccountState,
     pub is_native: COption<u64>,
@@ -372,6 +364,6 @@ pub struct Holding {
     pub close_authority: COption<Pubkey>,
 
     // Interest-bearing Holding Fields
-    pub share_amount: f64, // This holding's proportional share of the total
+    pub share_amount: Decimal, // This holding's proportional share of the total
 }
 ```
