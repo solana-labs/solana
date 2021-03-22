@@ -102,7 +102,9 @@ if ((airdrops_enabled)); then
     echo "--keypair argument must be provided"
     exit 1
   fi
-  $solana_cli "${common_args[@]}" --keypair "$SOLANA_CONFIG_DIR/faucet.json" transfer "$keypair" "$stake_sol"
+  $solana_cli \
+    "${common_args[@]}" --keypair "$SOLANA_CONFIG_DIR/faucet.json" \
+    transfer --allow-unfunded-recipient "$keypair" "$stake_sol"
 fi
 
 if [[ -n $keypair ]]; then

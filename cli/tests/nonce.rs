@@ -294,6 +294,7 @@ fn test_create_account_with_seed() {
         from: 0,
         sign_only: true,
         dump_transaction_message: true,
+        allow_unfunded_recipient: true,
         no_wait: false,
         blockhash_query: BlockhashQuery::None(nonce_hash),
         nonce_account: Some(nonce_address),
@@ -318,6 +319,7 @@ fn test_create_account_with_seed() {
         from: 0,
         sign_only: false,
         dump_transaction_message: true,
+        allow_unfunded_recipient: true,
         no_wait: false,
         blockhash_query: BlockhashQuery::FeeCalculator(
             blockhash_query::Source::NonceAccount(nonce_address),

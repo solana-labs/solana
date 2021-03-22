@@ -274,7 +274,9 @@ setup_validator_accounts() {
       echo "Adding $node_sol to validator identity account:"
       (
         set -x
-        $solana_cli --keypair "$SOLANA_CONFIG_DIR/faucet.json" --url "$rpc_url" transfer "$identity" "$node_sol"
+        $solana_cli \
+          --keypair "$SOLANA_CONFIG_DIR/faucet.json" --url "$rpc_url" \
+          transfer --allow-unfunded-recipient "$identity" "$node_sol"
       ) || return $?
     fi
 

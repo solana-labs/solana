@@ -72,6 +72,7 @@ fn test_vote_authorize_and_withdraw() {
         from: 0,
         sign_only: false,
         dump_transaction_message: false,
+        allow_unfunded_recipient: true,
         no_wait: false,
         blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
         nonce_account: None,
