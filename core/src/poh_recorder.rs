@@ -84,6 +84,7 @@ pub struct PohRecorder {
     tick_lock_contention_us: u64,
     tick_overhead_us: u64,
     record_us: u64,
+    ticks_from_record: u64,
     last_metric: Instant,
 }
 
@@ -414,6 +415,7 @@ impl PohRecorder {
                 ("flush_cache_tick_us", self.flush_cache_tick_us, i64),
                 ("prepare_send_us", self.prepare_send_us, i64),
                 ("send_us", self.send_us, i64),
+                ("ticks_from_record", self.ticks_from_record, i64),
                 ("tick_overhead", self.tick_overhead_us, i64),
                 (
                     "record_lock_contention",
@@ -430,6 +432,7 @@ impl PohRecorder {
             self.flush_cache_tick_us = 0;
             self.prepare_send_us = 0;
             self.send_us = 0;
+            self.ticks_from_record = 0;
             self.last_metric = Instant::now();
         }
     }
@@ -483,6 +486,7 @@ impl PohRecorder {
             }
             // record() might fail if the next PoH hash needs to be a tick.  But that's ok, tick()
             // and re-record()
+            self.ticks_from_record += 1;
             self.tick();
         }
     }
@@ -533,6 +537,7 @@ impl PohRecorder {
                 tick_lock_contention_us: 0,
                 record_us: 0,
                 tick_overhead_us: 0,
+                ticks_from_record: 0,
                 last_metric: Instant::now(),
             },
             receiver,
