@@ -157,9 +157,17 @@ The token list will publish a file of known program ids at
 [token-list releases](https://github.com/solana-labs/token-list/releases/latest),
 to be used by RPC and programs.
 
-TODO consider adding Rust and C versions of the registry for on-chain programs and RPC
+The entries in the token-list are signed using a managed key. As wallets or
+Ledgers are asked to send transactions using a particular token program, they can
+cross-check the mint or program information using a signature check on the 
+token-list data.
+
+TODO consider adding Rust and C versions of the registry for on-chain programs,
+Ledger, and RPC
 
 TODO consider detailing the process of including a new program
+
+TODO figure out how the token-list signing key will be managed
 
 ### Runtime
 
@@ -272,6 +280,7 @@ becomes:
 To properly support i-tokens, wallets and applications will need to make the
 following changes:
 
+* validate program: using the token-list, check that the given program id is legit
 * get holdings: query for holdings owned by the public key, for all official
 token programs listed in the registry (not just `Tokenkeg...`)
 * get balances: avoid deserializing holding data, and instead use
@@ -295,6 +304,23 @@ the new wrapper to directly deserialize or call the `NormalizeToSPLHolding`
 instruction with the appropriate token program
 * get mint data: same as above, but using the `NormalizeToSPLMint`
 * transfer: only use `TransferChecked`, which requires passing mints
+
+### Ledger
+
+Ledger integrates with token-list in order to provide verified token program ids
+and token tickers to the Ledger SDK and eliminate the need to store static
+information in the Ledger Solana App.
+
+A wallet or CLI with Ledger integration fetches the token-list and signing
+information. When the user wishes to transfer tokens, the wallet provides
+Ledger with the signed token and program metadata.
+
+The Solana App pushes a signature verification on the metadata using Ledger's
+native transaction model. If the signature verification passes, then the program
+id and token mint information are valid, and the actual transfer proceeds. If
+it fails due to spoofed program or mint data, the whole transaction aborts.
+
+TODO any associated token program considerations?
 
 ## Other New Token Programs
 
