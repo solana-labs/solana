@@ -41,6 +41,7 @@ use solana_transaction_status::{
     TransactionStatusMeta, TransactionWithStatusMeta,
 };
 use std::{
+    borrow::Cow,
     cell::RefCell,
     cmp,
     collections::{HashMap, HashSet},
@@ -1187,6 +1188,7 @@ impl Blockstore {
             } else if !self.should_insert_data_shred(
                 &shred,
                 slot_meta,
+                just_inserted_data_shreds,
                 &self.last_root,
                 leader_schedule,
                 is_recovered,
@@ -1262,6 +1264,7 @@ impl Blockstore {
         &self,
         shred: &Shred,
         slot_meta: &SlotMeta,
+        just_inserted_data_shreds: &mut HashMap<(u64, u64), Shred>,
         last_root: &RwLock<u64>,
         leader_schedule: Option<&Arc<LeaderScheduleCache>>,
         is_recovered: bool,
@@ -1284,15 +1287,30 @@ impl Blockstore {
                     .map(|leader_schedule| leader_schedule.slot_leader_at(slot, None))
                     .unwrap_or(None);
 
-                let ending_shred = self.get_data_shred(slot, last_index).unwrap();
+                let ending_shred: Option<Cow<Vec<u8>>> =
+                    if let Some(shred) = just_inserted_data_shreds.get(&(slot, last_index)) {
+                        Some(Cow::Borrowed(&shred.payload))
+                    } else {
+                        self.get_data_shred(slot, last_index)
+                            .unwrap()
+                            .map(Cow::Owned)
+                    };
+
                 if ending_shred.is_none() {
-                    // Slot data must have been reset, try to get the updated SlotMeta
-                    // and try again
+                    // The slot data might have been cleared between us fetching the SlotMeta and
+                    // retrieving the `ending_shred`. Slot data might have been cleared by
+                    // `Blockstore::clear_unconfirmed_slot()` due to events like duplicate block detection.
+                    // In this case, try to get the updated SlotMeta and try again
                     continue;
                 }
+
                 let ending_shred = ending_shred.unwrap();
                 if self
-                    .store_duplicate_if_not_existing(slot, ending_shred, shred.payload.clone())
+                    .store_duplicate_if_not_existing(
+                        slot,
+                        ending_shred.into_owned(),
+                        shred.payload.clone(),
+                    )
                     .is_err()
                 {
                     warn!("store duplicate error");
