@@ -203,9 +203,7 @@ impl PohService {
         hashes_per_batch: u64,
         poh: &Arc<Mutex<Poh>>,
     ) -> bool {
-        let mut next = None;
-        std::mem::swap(&mut next, next_record);
-        match next {
+        match next_record.take() {
             Some(mut record) => {
                 // received message to record
                 // so, record for as long as we have queued up record requests
@@ -222,11 +220,11 @@ impl PohService {
                     let _ = record.sender.send(res); // what do we do on failure here? Ignore for now.
                     timing.num_hashes += 1; // note: may have also ticked inside record
 
-                    let get_again = record_receiver.try_recv();
-                    match get_again {
-                        Ok(mut record2) => {
+                    let new_record_result = record_receiver.try_recv();
+                    match new_record_result {
+                        Ok(new_record) => {
                             // we already have second request to record, so record again while we still have the mutex
-                            std::mem::swap(&mut record2, &mut record);
+                            record = new_record;
                         }
                         Err(_) => {
                             break;
@@ -241,11 +239,10 @@ impl PohService {
                 let mut poh_l = poh.lock().unwrap();
                 lock_time.stop();
                 timing.total_lock_time_ns += lock_time.as_ns();
-                let mut should_tick;
                 loop {
                     timing.num_hashes += hashes_per_batch;
                     let mut hash_time = Measure::start("hash");
-                    should_tick = poh_l.hash(hashes_per_batch);
+                    let should_tick = poh_l.hash(hashes_per_batch);
                     hash_time.stop();
                     timing.total_hash_time_ns += hash_time.as_ns();
                     if should_tick {
@@ -291,7 +288,7 @@ impl PohService {
                 &poh,
             );
             if should_tick {
-                // Lock PohRecorder only for the final hash...
+                // Lock PohRecorder only for the final hash. record_or_hash will lock PohRecorder for record calls but not for hashing.
                 {
                     let mut lock_time = Measure::start("lock");
                     let mut poh_recorder_l = poh_recorder.lock().unwrap();

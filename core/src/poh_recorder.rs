@@ -73,7 +73,7 @@ impl Record {
     }
 }
 
-pub struct Recorder {
+pub struct TransactionRecorder {
     // shared by all users of PohRecorder
     pub record_sender: Sender<Record>,
     // unique to this caller
@@ -81,16 +81,16 @@ pub struct Recorder {
     pub result_receiver: Receiver<Result<()>>,
 }
 
-impl Clone for Recorder {
+impl Clone for TransactionRecorder {
     fn clone(&self) -> Self {
-        Recorder::new(self.record_sender.clone())
+        TransactionRecorder::new(self.record_sender.clone())
     }
 }
 
-impl Recorder {
+impl TransactionRecorder {
     pub fn new(record_sender: Sender<Record>) -> Self {
         let (result_sender, result_receiver) = channel();
-        Recorder {
+        Self {
             // shared
             record_sender,
             // unique to this caller
@@ -111,7 +111,9 @@ impl Recorder {
             self.result_sender.clone(),
         ));
         if res.is_err() {
-            return Err(PohRecorderError::MaxHeightReached); // re-use an error that gives appropriate behavior
+            // If the channel is dropped, then the validator is shutting down so return that we are hitting
+            //  the max tick height to stop transaction processing and flush any transactions in the pipeline.
+            return Err(PohRecorderError::MaxHeightReached);
         }
         let res = self
             .result_receiver
@@ -234,8 +236,8 @@ impl PohRecorder {
         self.ticks_per_slot
     }
 
-    pub fn recorder(&self) -> Recorder {
-        Recorder::new(self.record_sender.clone())
+    pub fn recorder(&self) -> TransactionRecorder {
+        TransactionRecorder::new(self.record_sender.clone())
     }
 
     fn is_same_fork_as_previous_leader(&self, slot: Slot) -> bool {

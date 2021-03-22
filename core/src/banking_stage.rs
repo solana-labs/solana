@@ -4,7 +4,7 @@
 use crate::{
     cluster_info::ClusterInfo,
     packet_hasher::PacketHasher,
-    poh_recorder::{PohRecorder, PohRecorderError, Recorder, WorkingBankEntry},
+    poh_recorder::{PohRecorder, PohRecorderError, TransactionRecorder, WorkingBankEntry},
     poh_service::{self, PohService},
 };
 use crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError};
@@ -295,7 +295,7 @@ impl BankingStage {
         gossip_vote_sender: &ReplayVoteSender,
         test_fn: Option<impl Fn()>,
         banking_stage_stats: Option<&BankingStageStats>,
-        recorder: &Recorder,
+        recorder: &TransactionRecorder,
     ) {
         let mut rebuffered_packets_len = 0;
         let mut new_tx_count = 0;
@@ -429,7 +429,7 @@ impl BankingStage {
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
         banking_stage_stats: &BankingStageStats,
-        recorder: &Recorder,
+        recorder: &TransactionRecorder,
     ) -> BufferedPacketsDecision {
         let bank_start;
         let (
@@ -631,7 +631,7 @@ impl BankingStage {
         bank_slot: Slot,
         txs: &[Transaction],
         results: &[TransactionExecutionResult],
-        recorder: &Recorder,
+        recorder: &TransactionRecorder,
     ) -> (Result<usize, PohRecorderError>, Vec<usize>) {
         let mut processed_generation = Measure::start("record::process_generation");
         let (processed_transactions, processed_transactions_indexes): (Vec<_>, Vec<_>) = results
@@ -686,7 +686,7 @@ impl BankingStage {
 
     fn process_and_record_transactions_locked(
         bank: &Arc<Bank>,
-        poh: &Recorder,
+        poh: &TransactionRecorder,
         batch: &TransactionBatch,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
@@ -805,7 +805,7 @@ impl BankingStage {
     pub fn process_and_record_transactions(
         bank: &Arc<Bank>,
         txs: &[Transaction],
-        poh: &Recorder,
+        poh: &TransactionRecorder,
         chunk_offset: usize,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
@@ -849,7 +849,7 @@ impl BankingStage {
         bank: &Arc<Bank>,
         bank_creation_time: &Instant,
         transactions: &[Transaction],
-        poh: &Recorder,
+        poh: &TransactionRecorder,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
     ) -> (usize, Vec<usize>) {
@@ -1020,7 +1020,7 @@ impl BankingStage {
     fn process_packets_transactions(
         bank: &Arc<Bank>,
         bank_creation_time: &Instant,
-        poh: &Recorder,
+        poh: &TransactionRecorder,
         msgs: &Packets,
         packet_indexes: Vec<usize>,
         transaction_status_sender: Option<TransactionStatusSender>,
@@ -1134,7 +1134,7 @@ impl BankingStage {
         buffered_packets: &mut UnprocessedPackets,
         banking_stage_stats: &BankingStageStats,
         duplicates: &Arc<Mutex<(LruCache<u64, ()>, PacketHasher)>>,
-        recorder: &Recorder,
+        recorder: &TransactionRecorder,
     ) -> Result<(), RecvTimeoutError> {
         let mut recv_time = Measure::start("process_packets_recv");
         let mms = verified_receiver.recv_timeout(recv_timeout)?;
@@ -1344,7 +1344,7 @@ pub fn create_test_recorder(
 mod tests {
     use super::*;
     use crate::{
-        cluster_info::Node, poh_recorder::WorkingBank,
+        cluster_info::Node, poh_recorder::Record, poh_recorder::WorkingBank,
         transaction_status_service::TransactionStatusService,
     };
     use crossbeam_channel::unbounded;
@@ -1364,7 +1364,15 @@ mod tests {
         transaction::TransactionError,
     };
     use solana_transaction_status::TransactionWithStatusMeta;
-    use std::{net::SocketAddr, path::Path, sync::atomic::Ordering, thread::sleep};
+    use std::{
+        net::SocketAddr,
+        path::Path,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            mpsc::Receiver,
+        },
+        thread::sleep,
+    };
 
     #[test]
     fn test_banking_stage_shutdown1() {
@@ -1723,7 +1731,7 @@ mod tests {
             let recorder = poh_recorder.recorder();
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
-            let (poh_simulator, stop) = simulate_poh(record_receiver, &poh_recorder);
+            let (poh_simulator, exit) = simulate_poh(record_receiver, &poh_recorder);
 
             poh_recorder.lock().unwrap().set_working_bank(working_bank);
             let pubkey = solana_sdk::pubkey::new_rand();
@@ -1781,7 +1789,7 @@ mod tests {
             // Should receive nothing from PohRecorder b/c record failed
             assert!(entry_receiver.try_recv().is_err());
 
-            stop.store(true, Ordering::Relaxed);
+            exit.store(true, Ordering::Relaxed);
             let _ = poh_simulator.join();
         }
         Blockstore::destroy(&ledger_path).unwrap();
@@ -2068,7 +2076,7 @@ mod tests {
             let recorder = poh_recorder.recorder();
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
-            let (poh_simulator, stop) = simulate_poh(record_receiver, &poh_recorder);
+            let (poh_simulator, exit) = simulate_poh(record_receiver, &poh_recorder);
 
             poh_recorder.lock().unwrap().set_working_bank(working_bank);
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
@@ -2122,7 +2130,7 @@ mod tests {
                 Err(PohRecorderError::MaxHeightReached)
             );
 
-            stop.store(true, Ordering::Relaxed);
+            exit.store(true, Ordering::Relaxed);
             let _ = poh_simulator.join();
 
             assert_eq!(bank.get_balance(&pubkey), 1);
@@ -2130,16 +2138,12 @@ mod tests {
         Blockstore::destroy(&ledger_path).unwrap();
     }
 
-    use crate::poh_recorder::Record;
-    use std::sync::atomic::AtomicBool;
-    use std::sync::mpsc::Receiver;
-
     fn simulate_poh(
         record_receiver: Receiver<Record>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
     ) -> (JoinHandle<()>, Arc<AtomicBool>) {
-        let stop = Arc::new(AtomicBool::new(false));
-        let stop_ = stop.clone();
+        let exit = Arc::new(AtomicBool::new(false));
+        let exit_ = exit.clone();
         let poh_recorder = poh_recorder.clone();
         let tick_producer = Builder::new()
             .name("solana-simulate_poh".to_string())
@@ -2149,11 +2153,11 @@ mod tests {
                     &record_receiver,
                     Duration::from_millis(10),
                 );
-                if stop_.load(Ordering::Relaxed) {
+                if exit_.load(Ordering::Relaxed) {
                     break;
                 }
             });
-        (tick_producer.unwrap(), stop)
+        (tick_producer.unwrap(), exit)
     }
 
     #[test]
@@ -2200,7 +2204,7 @@ mod tests {
 
             poh_recorder.lock().unwrap().set_working_bank(working_bank);
 
-            let (poh_simulator, stop) = simulate_poh(record_receiver, &poh_recorder);
+            let (poh_simulator, exit) = simulate_poh(record_receiver, &poh_recorder);
 
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
 
@@ -2213,7 +2217,7 @@ mod tests {
                 &gossip_vote_sender,
             );
 
-            stop.store(true, Ordering::Relaxed);
+            exit.store(true, Ordering::Relaxed);
             let _ = poh_simulator.join();
 
             assert!(result.is_ok());
@@ -2301,7 +2305,7 @@ mod tests {
             // record
             let recorder = poh_recorder.recorder();
 
-            let (poh_simulator, stop) =
+            let (poh_simulator, exit) =
                 simulate_poh(record_receiver, &Arc::new(Mutex::new(poh_recorder)));
 
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
@@ -2322,7 +2326,7 @@ mod tests {
             let expected: Vec<usize> = (0..transactions.len()).collect();
             assert_eq!(retryable_txs, expected);
 
-            stop.store(true, Ordering::Relaxed);
+            exit.store(true, Ordering::Relaxed);
             let _ = poh_simulator.join();
         }
 
@@ -2384,7 +2388,7 @@ mod tests {
             let recorder = poh_recorder.recorder();
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
-            let (poh_simulator, stop) = simulate_poh(record_receiver, &poh_recorder);
+            let (poh_simulator, exit) = simulate_poh(record_receiver, &poh_recorder);
 
             poh_recorder.lock().unwrap().set_working_bank(working_bank);
 
@@ -2438,7 +2442,7 @@ mod tests {
                 }
             }
 
-            stop.store(true, Ordering::Relaxed);
+            exit.store(true, Ordering::Relaxed);
             let _ = poh_simulator.join();
         }
         Blockstore::destroy(&ledger_path).unwrap();
@@ -2487,7 +2491,7 @@ mod tests {
             system_transaction::transfer(&mint_keypair, &pubkey1, 1, genesis_config.hash()),
             system_transaction::transfer(&mint_keypair, &pubkey2, 1, genesis_config.hash()),
         ];
-        let (poh_simulator, stop) = simulate_poh(record_receiver, &poh_recorder);
+        let (poh_simulator, exit) = simulate_poh(record_receiver, &poh_recorder);
 
         (
             transactions,
@@ -2495,7 +2499,7 @@ mod tests {
             poh_recorder,
             entry_receiver,
             poh_simulator,
-            stop,
+            exit,
         )
     }
 
@@ -2503,7 +2507,7 @@ mod tests {
     fn test_consume_buffered_packets() {
         let ledger_path = get_tmp_ledger_path!();
         {
-            let (transactions, bank, poh_recorder, _entry_receiver, poh_simulator, stop) =
+            let (transactions, bank, poh_recorder, _entry_receiver, poh_simulator, exit) =
                 setup_conflicting_transactions(&ledger_path);
             let recorder = poh_recorder.lock().unwrap().recorder();
             let num_conflicting_transactions = transactions.len();
@@ -2557,7 +2561,7 @@ mod tests {
                     assert_eq!(buffered_packets[0].1.len(), num_expected_unprocessed);
                 }
             }
-            stop.store(true, Ordering::Relaxed);
+            exit.store(true, Ordering::Relaxed);
             let _ = poh_simulator.join();
         }
         Blockstore::destroy(&ledger_path).unwrap();
@@ -2567,7 +2571,7 @@ mod tests {
     fn test_consume_buffered_packets_interrupted() {
         let ledger_path = get_tmp_ledger_path!();
         {
-            let (transactions, bank, poh_recorder, _entry_receiver, poh_simulator, stop) =
+            let (transactions, bank, poh_recorder, _entry_receiver, poh_simulator, exit) =
                 setup_conflicting_transactions(&ledger_path);
             let num_conflicting_transactions = transactions.len();
             let packets_vec = to_packets_chunked(&transactions, 1);
@@ -2644,7 +2648,7 @@ mod tests {
             }
 
             t_consume.join().unwrap();
-            stop.store(true, Ordering::Relaxed);
+            exit.store(true, Ordering::Relaxed);
             let _ = poh_simulator.join();
         }
         Blockstore::destroy(&ledger_path).unwrap();
