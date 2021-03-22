@@ -316,7 +316,7 @@ mod tests {
     fn new_rand_vote_account<R: Rng>(
         rng: &mut R,
         node_pubkey: Option<Pubkey>,
-    ) -> (AccountSharedData, VoteState) {
+    ) -> (Account, VoteState) {
         let vote_init = VoteInit {
             node_pubkey: node_pubkey.unwrap_or_else(Pubkey::new_unique),
             authorized_voter: Pubkey::new_unique(),
@@ -331,7 +331,7 @@ mod tests {
             unix_timestamp: rng.gen(),
         };
         let vote_state = VoteState::new(&vote_init, &clock);
-        let account = AccountSharedData::new_data(
+        let account = Account::new_data(
             rng.gen(), // lamports
             &VoteStateVersions::new_current(vote_state.clone()),
             &Pubkey::new_unique(), // owner
