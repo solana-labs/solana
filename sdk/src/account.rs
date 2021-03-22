@@ -27,7 +27,7 @@ pub struct Account {
 /// This will become a new in-memory representation of the 'Account' struct data.
 /// The existing 'Account' structure cannot easily change due to downstream projects.
 /// This struct will shortly rely on something like the ReadableAccount trait for access to the fields.
-#[derive(PartialEq, Eq, Clone, Default, AbiExample)]
+#[derive(PartialEq, Eq, Clone, Default)]
 pub struct AccountSharedData {
     /// lamports in the account
     pub lamports: u64,
