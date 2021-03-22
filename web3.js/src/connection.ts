@@ -65,6 +65,9 @@ type RpcRequest = (methodName: string, args: Array<any>) => any;
 
 type RpcBatchRequest = (requests: RpcParams[]) => any;
 
+/**
+ * @internal
+ */
 export type RpcParams = {
   methodName: string;
   args: Array<any>;
@@ -2541,7 +2544,7 @@ export class Connection {
    */
   async getParsedConfirmedTransactions(
     signatures: TransactionSignature[],
-  ): Promise<any> {
+  ): Promise<(ParsedConfirmedTransaction | null)[]> {
     const batch = signatures.map(signature => {
       return {
         methodName: 'getConfirmedTransaction',
