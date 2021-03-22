@@ -1,6 +1,4 @@
 use crate::{account_data::AccountData, clock::Epoch, pubkey::Pubkey};
-use serde::de::{Deserialize, Deserializer};
-use serde::ser::{Serialize, Serializer};
 use solana_program::{account_info::AccountInfo, sysvar::Sysvar};
 use std::{cell::Ref, cell::RefCell, cmp, fmt, rc::Rc, sync::Arc};
 
@@ -39,47 +37,6 @@ pub struct AccountSharedData {
     pub executable: bool,
     /// the epoch at which this account will next owe rent
     pub rent_epoch: Epoch,
-}
-
-impl<'de> Deserialize<'de> for AccountSharedData {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        Ok(AccountSharedData::from(Account::deserialize(deserializer)?))
-    }
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct AccountSharedDataSerialize<'a> {
-    /// lamports in the account
-    pub lamports: u64,
-    /// data held in this account
-    #[serde(with = "serde_bytes")]
-    pub data: &'a Vec<u8>,
-    /// the program that owns this account. If executable, the program that loads this account.
-    pub owner: Pubkey,
-    /// this account's data contains a loaded program (and is now read-only)
-    pub executable: bool,
-    /// the epoch at which this account will next owe rent
-    pub rent_epoch: Epoch,
-}
-
-impl Serialize for AccountSharedData {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let temp = AccountSharedDataSerialize {
-            lamports: self.lamports,
-            data: &self.data(), // no data copy here
-            owner: self.owner,
-            executable: self.executable,
-            rent_epoch: self.rent_epoch,
-        };
-        temp.serialize(serializer)
-    }
 }
 
 /// Compares two ReadableAccounts
