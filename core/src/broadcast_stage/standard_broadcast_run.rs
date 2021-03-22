@@ -398,19 +398,15 @@ impl StandardBroadcastRun {
 
     fn report_and_reset_stats(&mut self) {
         let stats = &self.process_shreds_stats;
-        assert!(self.unfinished_slot.is_some());
+        let unfinished_slot = self.unfinished_slot.as_ref().unwrap();
         datapoint_info!(
             "broadcast-process-shreds-stats",
-            (
-                "slot",
-                self.unfinished_slot.as_ref().unwrap().slot as i64,
-                i64
-            ),
+            ("slot", unfinished_slot.slot as i64, i64),
             ("shredding_time", stats.shredding_elapsed, i64),
             ("receive_time", stats.receive_elapsed, i64),
             (
                 "num_data_shreds",
-                self.unfinished_slot.as_ref().unwrap().next_shred_index as i64,
+                unfinished_slot.next_shred_index as i64,
                 i64
             ),
             (
@@ -695,6 +691,50 @@ mod test {
         assert_eq!(
             blockstore.get_slot_entries(0, num_shreds_per_slot).unwrap(),
             vec![],
+        );
+    }
+
+    #[test]
+    fn test_buffer_data_shreds() {
+        let num_shreds_per_slot = 2;
+        let (blockstore, genesis_config, _cluster_info, bank, leader_keypair, _socket) =
+            setup(num_shreds_per_slot);
+        let (bsend, brecv) = channel();
+        let (ssend, _srecv) = channel();
+        let mut last_tick_height = 0;
+        let mut standard_broadcast_run = StandardBroadcastRun::new(leader_keypair, 0);
+        let mut process_ticks = |num_ticks| {
+            let ticks = create_ticks(num_ticks, 0, genesis_config.hash());
+            last_tick_height += (ticks.len() - 1) as u64;
+            let receive_results = ReceiveResults {
+                entries: ticks,
+                time_elapsed: Duration::new(1, 0),
+                bank: bank.clone(),
+                last_tick_height,
+            };
+            standard_broadcast_run
+                .process_receive_results(&blockstore, &ssend, &bsend, receive_results)
+                .unwrap();
+        };
+        for i in 0..3 {
+            process_ticks((i + 1) * 100);
+        }
+        let mut shreds = Vec::<Shred>::new();
+        while let Ok((recv_shreds, _)) = brecv.recv_timeout(Duration::from_secs(1)) {
+            shreds.extend(recv_shreds.deref().clone());
+        }
+        assert!(shreds.len() < 32, "shreds.len(): {}", shreds.len());
+        assert!(shreds.iter().all(|shred| shred.is_data()));
+        process_ticks(75);
+        while let Ok((recv_shreds, _)) = brecv.recv_timeout(Duration::from_secs(1)) {
+            shreds.extend(recv_shreds.deref().clone());
+        }
+        assert!(shreds.len() > 64, "shreds.len(): {}", shreds.len());
+        let num_coding_shreds = shreds.iter().filter(|shred| shred.is_code()).count();
+        assert_eq!(
+            num_coding_shreds, 32,
+            "num coding shreds: {}",
+            num_coding_shreds
         );
     }
 
