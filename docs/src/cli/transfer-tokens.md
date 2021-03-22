@@ -71,7 +71,7 @@ with the private keypair corresponding to the sender's public key in the
 transaction.
 
 ```bash
-solana transfer --from <KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> 5 --url https://devnet.solana.com --fee-payer <KEYPAIR>
+solana transfer --from <KEYPAIR> <RECIPIENT_ACCOUNT_ADDRESS> 5 --allow-unfunded-recipient --url https://devnet.solana.com --fee-payer <KEYPAIR>
 ```
 
 where you replace `<KEYPAIR>` with the path to a keypair in your first wallet,
@@ -118,7 +118,7 @@ Save this seed phrase to recover your new keypair:
 clump panic cousin hurt coast charge engage fall eager urge win love   # If this was a real wallet, never share these words on the internet like this!
 ====================================================================
 
-$ solana transfer --from my_solana_wallet.json 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv 5 --url https://devnet.solana.com --fee-payer my_solana_wallet.json  # Transferring tokens to the public address of the paper wallet
+$ solana transfer --from my_solana_wallet.json 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv 5 --allow-unfunded-recipient --url https://devnet.solana.com --fee-payer my_solana_wallet.json  # Transferring tokens to the public address of the paper wallet
 3gmXvykAd1nCQQ7MjosaHLf69Xyaqyq1qw2eu1mgPyYXd5G4v1rihhg1CiRw35b9fHzcftGKKEu4mbUeXY2pEX2z  # This is the transaction signature
 
 $ solana balance DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com
