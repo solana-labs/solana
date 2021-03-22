@@ -178,11 +178,13 @@ impl PohService {
                     lock_time.stop();
                     total_lock_time_ns += lock_time.as_ns();
                     loop {
-                        let mut temp = Vec::new();
-                        std::mem::swap(&mut temp, &mut record.transactions);
-                        let res = poh_recorder_l.record(record.slot, record.mixin, temp);
-                        let _ = record.sender.send(res); // TODO what do we do on failure here?
-                        num_hashes += 1; // may have also ticked inside record
+                        let res = poh_recorder_l.record(
+                            record.slot,
+                            record.mixin,
+                            std::mem::take(&mut record.transactions),
+                        );
+                        let _ = record.sender.send(res); // what do we do on failure here? Ignore for now.
+                        num_hashes += 1; // note: may have also ticked inside record
 
                         let get_again = record_receiver.try_recv();
                         match get_again {

@@ -111,15 +111,13 @@ impl Recorder {
             self.result_sender.clone(),
         ));
         if res.is_err() {
-            return Err(PohRecorderError::MaxHeightReached); // TODO what error here
+            return Err(PohRecorderError::MaxHeightReached); // re-use an error that gives appropriate behavior
         }
         let res = self
             .result_receiver
-            .recv_timeout(std::time::Duration::from_millis(2000)); //TODO: consider timeout? _timeout(Duration::from_millis(4000));
+            .recv_timeout(std::time::Duration::from_millis(2000));
         match res {
-            Err(_err) => {
-                Err(PohRecorderError::MaxHeightReached) // TODO - what error here
-            }
+            Err(_err) => Err(PohRecorderError::MaxHeightReached),
             Ok(result) => result,
         }
     }
