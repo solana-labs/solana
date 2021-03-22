@@ -905,8 +905,14 @@ describe('Connection', () => {
     }
 
     expect(result).to.be.length(2);
-    expect(result[0].transaction.signatures).not.to.be.null;
-    expect(result[1].transaction.signatures).not.to.be.null;
+    expect(result[0]).to.not.be.null;
+    expect(result[1]).to.not.be.null;
+    if (result[0] !== null) {
+      expect(result[0].transaction.signatures).not.to.be.null;
+    }
+    if (result[1] !== null) {
+      expect(result[1].transaction.signatures).not.to.be.null;
+    }
   });
 
   it('get confirmed transaction', async () => {
