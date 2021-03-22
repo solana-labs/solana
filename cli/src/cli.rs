@@ -2194,6 +2194,12 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .requires("derived_address_seed")
                         .hidden(true)
                 )
+                .arg(
+                    Arg::with_name("allow_unfunded_recipient")
+                        .long("allow-unfunded-recipient")
+                        .takes_value(false)
+                        .hidden(true) // Forward compatibility with v1.6
+                )
                 .offline_args()
                 .nonce_args(false)
                 .arg(fee_payer_arg()),
