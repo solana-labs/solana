@@ -1347,16 +1347,20 @@ fn test_duplicate_shreds_broadcast_leader() {
 fn test_faulty_node(faulty_node_type: BroadcastStageType) {
     solana_logger::setup_with_default("solana_local_cluster=info");
     let num_nodes = 3;
+
     let mut error_validator_config = ValidatorConfig::default();
     error_validator_config.broadcast_stage_type = faulty_node_type;
     let mut validator_configs = Vec::with_capacity(num_nodes);
     validator_configs.resize_with(num_nodes - 1, ValidatorConfig::default);
     validator_configs.push(error_validator_config);
+
     let mut validator_keys = Vec::with_capacity(num_nodes);
     validator_keys.resize_with(num_nodes, || (Arc::new(Keypair::new()), true));
+
     let node_stakes = vec![60, 50, 60];
     assert_eq!(node_stakes.len(), num_nodes);
     assert_eq!(validator_keys.len(), num_nodes);
+
     let mut cluster_config = ClusterConfig {
         cluster_lamports: 10_000,
         node_stakes,
