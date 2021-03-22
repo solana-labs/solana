@@ -11,12 +11,17 @@ import { slotsToHumanString } from "utils";
 import { useCluster } from "providers/cluster";
 import { TpsCard } from "components/TpsCard";
 import { displayTimestampUtc } from "utils/date";
+import {
+  useSetActive,
+  useSolanaBeachDashboardInfo,
+} from "providers/stats/solanaBeach";
 
 const CLUSTER_STATS_TIMEOUT = 10000;
 
 export function ClusterStatsPage() {
   return (
     <div className="container mt-4">
+      <StakingComponent />
       <div className="card">
         <div className="card-header">
           <div className="row align-items-center">
@@ -28,6 +33,51 @@ export function ClusterStatsPage() {
         <StatsCardBody />
       </div>
       <TpsCard />
+    </div>
+  );
+}
+
+function StakingComponent() {
+  const setSocketActive = useSetActive();
+  const dashboardInfo = useSolanaBeachDashboardInfo();
+  const { cluster } = useCluster();
+
+  // React.useEffect(() => {
+  //   setSocketActive(true);
+  //   return () => setSocketActive(false);
+  // }, [setSocketActive, cluster]);
+
+  // if (!dashboardInfo) {
+  //   return null;
+  // }
+
+  return (
+    <div className="card staking-card">
+      <div className="card-body">
+        <div className="d-flex bd-highlight">
+          <div className="p-2 flex-fill bd-highlight">
+            <h4>Circulating Supply</h4>
+            <h1>
+              <em>267.5M</em> / <small>491.3M</small>
+            </h1>
+            <h5><em>54.4%</em> is circulating</h5>
+          </div>
+          <div className="p-2 flex-fill bd-highlight">
+            <h4>Active Stake</h4>
+            <h1>
+              <em>302.1M</em> / <small>491.3M</small>
+            </h1>
+            <h5>Delinquent stake: <em>0.4%</em></h5>
+          </div>
+          <div className="p-2 flex-fill bd-highlight">
+            <h4>Price</h4>
+            <h1>
+              <em>$15.74</em> <small>&#8593; 12.6%</small>
+            </h1>
+            <h5>24h Vol: <em>$246.7M</em> MCap: <em>$7.7B</em></h5>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
