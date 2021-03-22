@@ -1,7 +1,8 @@
 //! A stage to broadcast data from a leader node to validators
 #![allow(clippy::rc_buffer)]
 use self::{
-    broadcast_duplicates_run::BroadcastDuplicatesRun, broadcast_metrics::*,
+    broadcast_duplicates_run::BroadcastDuplicatesRun,
+    broadcast_fake_shreds_run::BroadcastFakeShredsRun, broadcast_metrics::*,
     fail_entry_verification_broadcast_run::FailEntryVerificationBroadcastRun,
     standard_broadcast_run::StandardBroadcastRun,
 };
@@ -36,6 +37,7 @@ use std::{
 };
 
 mod broadcast_duplicates_run;
+mod broadcast_fake_shreds_run;
 pub mod broadcast_metrics;
 pub(crate) mod broadcast_utils;
 mod fail_entry_verification_broadcast_run;
@@ -64,6 +66,7 @@ pub struct BroadcastDuplicatesConfig {
 pub enum BroadcastStageType {
     Standard,
     FailEntryVerification,
+    BroadcastFakeShreds,
     BroadcastDuplicates(BroadcastDuplicatesConfig),
 }
 
@@ -98,6 +101,16 @@ impl BroadcastStageType {
                 exit_sender,
                 blockstore,
                 FailEntryVerificationBroadcastRun::new(keypair, shred_version),
+            ),
+
+            BroadcastStageType::BroadcastFakeShreds => BroadcastStage::new(
+                sock,
+                cluster_info,
+                receiver,
+                retransmit_slots_receiver,
+                exit_sender,
+                blockstore,
+                BroadcastFakeShredsRun::new(keypair, 0, shred_version),
             ),
 
             BroadcastStageType::BroadcastDuplicates(config) => BroadcastStage::new(

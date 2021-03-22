@@ -65,7 +65,7 @@ impl BroadcastDuplicatesRun {
         //  2) setting all transaction entries to zero hashes and all tick entries to `hashes_per_tick`.
         //  3) removing any transactions which reference blockhashes which aren't in the
         //     duplicate blockhash queue.
-        let (duplicate_entries, next_shred_index) = if bank.slot() > MINIMUM_FAKE_SLOT {
+        let (duplicate_entries, next_shred_index) = if bank.slot() > MINIMUM_DUPLICATE_SLOT {
             let mut tx_entries: Vec<Entry> = receive_results
                 .entries
                 .iter()
@@ -131,7 +131,7 @@ impl BroadcastDuplicatesRun {
 /// Duplicate slots should only be sent once all validators have started.
 /// This constant is intended to be used as a buffer so that all validators
 /// are live before sending duplicate slots.
-pub const MINIMUM_FAKE_SLOT: Slot = 20;
+pub const MINIMUM_DUPLICATE_SLOT: Slot = 20;
 
 impl BroadcastRun for BroadcastDuplicatesRun {
     fn run(
@@ -229,7 +229,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         }
 
         if let Some(highest_staked_node) = highest_staked_node {
-            if bank.slot() > MINIMUM_FAKE_SLOT && last_tick_height == bank.max_tick_height() {
+            if bank.slot() > MINIMUM_DUPLICATE_SLOT && last_tick_height == bank.max_tick_height() {
                 warn!(
                     "{} sent duplicate slot {} to nodes: {:?}",
                     self.keypair.pubkey(),

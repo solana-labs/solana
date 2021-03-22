@@ -1327,6 +1327,14 @@ fn test_fail_entry_verification_leader() {
 #[serial]
 #[ignore]
 #[allow(unused_attributes)]
+fn test_fake_shreds_broadcast_leader() {
+    test_faulty_node(BroadcastStageType::BroadcastFakeShreds);
+}
+
+#[test]
+#[serial]
+#[ignore]
+#[allow(unused_attributes)]
 fn test_duplicate_shreds_broadcast_leader() {
     test_faulty_node(BroadcastStageType::BroadcastDuplicates(
         BroadcastDuplicatesConfig {
