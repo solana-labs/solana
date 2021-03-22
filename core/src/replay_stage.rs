@@ -530,8 +530,7 @@ impl ReplayStage {
                                 if !partition_exists && partition_detected
                                 {
                                     warn!(
-                                        "{}, PARTITION DETECTED waiting to join heaviest fork: {} last vote: {:?}, reset slot: {}",
-                                        &my_pubkey,
+                                        "PARTITION DETECTED waiting to join heaviest fork: {} last vote: {:?}, reset slot: {}",
                                         heaviest_bank.slot(),
                                         last_voted_slot,
                                         reset_bank.slot(),
@@ -994,7 +993,6 @@ impl ReplayStage {
     }
 
     fn replay_blockstore_into_bank(
-        my_pubkey: &Pubkey,
         bank: &Arc<Bank>,
         blockstore: &Blockstore,
         bank_progress: &mut ForkProgress,
@@ -1374,7 +1372,6 @@ impl ReplayStage {
             });
             if bank.collector_id() != my_pubkey {
                 let replay_result = Self::replay_blockstore_into_bank(
-                    &my_pubkey,
                     &bank,
                     &blockstore,
                     bank_progress,
@@ -2577,7 +2574,6 @@ pub(crate) mod tests {
             let bank_forks = Arc::new(RwLock::new(bank_forks));
             let exit = Arc::new(AtomicBool::new(false));
             let res = ReplayStage::replay_blockstore_into_bank(
-                &Pubkey::default(),
                 &bank0,
                 &blockstore,
                 &mut bank0_progress,

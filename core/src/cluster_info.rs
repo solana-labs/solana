@@ -2082,7 +2082,7 @@ impl ClusterInfo {
                 .filter(|(_, _, caller)| match caller.contact_info() {
                     None => false,
                     Some(caller) if caller.id == self_pubkey => {
-                        // warn!("PullRequest ignored, I'm talking to myself");
+                        warn!("PullRequest ignored, I'm talking to myself");
                         inc_new_counter_debug!("cluster_info-window-request-loopback", 1);
                         false
                     }

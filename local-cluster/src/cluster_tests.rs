@@ -281,7 +281,7 @@ pub fn check_for_new_roots(num_new_roots: usize, contact_infos: &[ContactInfo], 
         for (i, ingress_node) in contact_infos.iter().enumerate() {
             let client = create_client(ingress_node.client_facing_addr(), VALIDATOR_PORT_RANGE);
             let root_slot = client
-                .get_slot_with_commitment(CommitmentConfig::root())
+                .get_slot_with_commitment(CommitmentConfig::finalized())
                 .unwrap_or(0);
             roots[i].insert(root_slot);
             num_roots_map.insert(ingress_node.id, roots[i].len());

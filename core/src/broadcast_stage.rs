@@ -1,7 +1,7 @@
 //! A stage to broadcast data from a leader node to validators
 #![allow(clippy::rc_buffer)]
 use self::{
-    broadcast_fake_shreds_run::BroadcastFakeShredsRun, broadcast_metrics::*,
+    broadcast_duplicates_run::BroadcastDuplicatesRun, broadcast_metrics::*,
     fail_entry_verification_broadcast_run::FailEntryVerificationBroadcastRun,
     standard_broadcast_run::StandardBroadcastRun,
 };
@@ -35,7 +35,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-mod broadcast_fake_shreds_run;
+mod broadcast_duplicates_run;
 pub mod broadcast_metrics;
 pub(crate) mod broadcast_utils;
 mod fail_entry_verification_broadcast_run;
@@ -107,7 +107,7 @@ impl BroadcastStageType {
                 retransmit_slots_receiver,
                 exit_sender,
                 blockstore,
-                BroadcastFakeShredsRun::new(keypair, shred_version, config.clone()),
+                BroadcastDuplicatesRun::new(keypair, shred_version, config.clone()),
             ),
         }
     }

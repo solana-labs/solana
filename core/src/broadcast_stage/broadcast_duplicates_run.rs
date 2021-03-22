@@ -13,22 +13,22 @@ use std::collections::VecDeque;
 use std::sync::Mutex;
 
 #[derive(Clone)]
-pub(super) struct BroadcastFakeShredsRun {
+pub(super) struct BroadcastDuplicatesRun {
     config: BroadcastDuplicatesConfig,
-    // Local queue for broadcast to track which fake blockhashes we've sent
-    fake_queue: BlockhashQueue,
+    // Local queue for broadcast to track which duplicate blockhashes we've sent
+    duplicate_queue: BlockhashQueue,
     // Shared queue between broadcast and transmit threads
     delayed_deque: Arc<Mutex<VecDeque<(Option<Pubkey>, Option<Vec<Shred>>)>>>,
-    // Buffer for fake entries
-    fake_entries_buffer: Vec<Entry>,
-    last_fake_entry_hash: Hash,
+    // Buffer for duplicate entries
+    duplicate_entries_buffer: Vec<Entry>,
+    last_duplicate_entry_hash: Hash,
     last_broadcast_slot: Slot,
     next_shred_index: u32,
     shred_version: u16,
     keypair: Arc<Keypair>,
 }
 
-impl BroadcastFakeShredsRun {
+impl BroadcastDuplicatesRun {
     pub(super) fn new(
         keypair: Arc<Keypair>,
         shred_version: u16,
@@ -39,33 +39,33 @@ impl BroadcastFakeShredsRun {
         Self {
             config,
             delayed_deque: Arc::new(Mutex::new(delayed_deque)),
-            fake_queue: BlockhashQueue::default(),
-            fake_entries_buffer: vec![],
+            duplicate_queue: BlockhashQueue::default(),
+            duplicate_entries_buffer: vec![],
             next_shred_index: u32::MAX,
             last_broadcast_slot: 0,
-            last_fake_entry_hash: Hash::default(),
+            last_duplicate_entry_hash: Hash::default(),
             shred_version,
             keypair,
         }
     }
 
-    fn queue_or_create_fake_entries(
+    fn queue_or_create_duplicate_entries(
         &mut self,
         bank: &Arc<Bank>,
         receive_results: &ReceiveResults,
     ) -> (Vec<Entry>, u32) {
         // If the last entry hash is default, grab the last blockhash from the parent bank
-        if self.last_fake_entry_hash == Hash::default() {
-            self.last_fake_entry_hash = bank.last_blockhash();
+        if self.last_duplicate_entry_hash == Hash::default() {
+            self.last_duplicate_entry_hash = bank.last_blockhash();
         }
 
-        // Create fake entries by..
+        // Create duplicate entries by..
         //  1) rearranging real entries so that all transaction entries are moved to
         //     the front and tick entries are moved to the back.
         //  2) setting all transaction entries to zero hashes and all tick entries to `hashes_per_tick`.
         //  3) removing any transactions which reference blockhashes which aren't in the
-        //     fake blockhash queue.
-        let (fake_entries, next_shred_index) = if bank.slot() > MINIMUM_FAKE_SLOT {
+        //     duplicate blockhash queue.
+        let (duplicate_entries, next_shred_index) = if bank.slot() > MINIMUM_FAKE_SLOT {
             let mut tx_entries: Vec<Entry> = receive_results
                 .entries
                 .iter()
@@ -78,7 +78,7 @@ impl BroadcastFakeShredsRun {
                         .transactions
                         .iter()
                         .filter(|tx| {
-                            self.fake_queue
+                            self.duplicate_queue
                                 .get_hash_age(&tx.message.recent_blockhash)
                                 .is_some()
                         })
@@ -86,7 +86,7 @@ impl BroadcastFakeShredsRun {
                         .collect();
                     if !transactions.is_empty() {
                         Some(Entry::new_mut(
-                            &mut self.last_fake_entry_hash,
+                            &mut self.last_duplicate_entry_hash,
                             &mut 0,
                             transactions,
                         ))
@@ -98,16 +98,16 @@ impl BroadcastFakeShredsRun {
             let mut tick_entries = create_ticks(
                 receive_results.entries.tick_count(),
                 bank.hashes_per_tick().unwrap_or_default(),
-                self.last_fake_entry_hash,
+                self.last_duplicate_entry_hash,
             );
-            self.fake_entries_buffer.append(&mut tx_entries);
-            self.fake_entries_buffer.append(&mut tick_entries);
+            self.duplicate_entries_buffer.append(&mut tx_entries);
+            self.duplicate_entries_buffer.append(&mut tick_entries);
 
-            // Only send out fake entries when the block is finished otherwise the
+            // Only send out duplicate entries when the block is finished otherwise the
             // recipient will start repairing for shreds they haven't received yet and
             // hit duplicate slot issues before we want them to.
             let entries = if receive_results.last_tick_height == bank.max_tick_height() {
-                self.fake_entries_buffer.drain(..).collect()
+                self.duplicate_entries_buffer.drain(..).collect()
             } else {
                 vec![]
             };
@@ -115,25 +115,25 @@ impl BroadcastFakeShredsRun {
             // Set next shred index to 0 since we are sending the full slot
             (entries, 0)
         } else {
-            // Send real entries until we hit min fake slot
+            // Send real entries until we hit min duplicate slot
             (receive_results.entries.clone(), self.next_shred_index)
         };
 
-        // Save last fake entry hash to avoid invalid entry hash errors
-        if let Some(last_fake_entry) = fake_entries.last() {
-            self.last_fake_entry_hash = last_fake_entry.hash;
+        // Save last duplicate entry hash to avoid invalid entry hash errors
+        if let Some(last_duplicate_entry) = duplicate_entries.last() {
+            self.last_duplicate_entry_hash = last_duplicate_entry.hash;
         }
 
-        (fake_entries, next_shred_index)
+        (duplicate_entries, next_shred_index)
     }
 }
 
-/// Fake slots should only be sent once all validators have started.
+/// Duplicate slots should only be sent once all validators have started.
 /// This constant is intended to be used as a buffer so that all validators
-/// are live before sending fake slots.
+/// are live before sending duplicate slots.
 pub const MINIMUM_FAKE_SLOT: Slot = 20;
 
-impl BroadcastRun for BroadcastFakeShredsRun {
+impl BroadcastRun for BroadcastDuplicatesRun {
     fn run(
         &mut self,
         blockstore: &Arc<Blockstore>,
@@ -156,7 +156,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
 
         // We were not the leader, but just became leader again
         if bank.slot() > self.last_broadcast_slot + 1 {
-            self.last_fake_entry_hash = Hash::default();
+            self.last_duplicate_entry_hash = Hash::default();
         }
         self.last_broadcast_slot = bank.slot();
 
@@ -176,13 +176,13 @@ impl BroadcastRun for BroadcastFakeShredsRun {
             self.next_shred_index,
         );
 
-        let (fake_entries, next_fake_shred_index) =
-            self.queue_or_create_fake_entries(&bank, &receive_results);
-        let (fake_data_shreds, fake_coding_shreds, _) = if !fake_entries.is_empty() {
+        let (duplicate_entries, next_duplicate_shred_index) =
+            self.queue_or_create_duplicate_entries(&bank, &receive_results);
+        let (duplicate_data_shreds, duplicate_coding_shreds, _) = if !duplicate_entries.is_empty() {
             shredder.entries_to_shreds(
-                &fake_entries,
+                &duplicate_entries,
                 last_tick_height == bank.max_tick_height(),
-                next_fake_shred_index,
+                next_duplicate_shred_index,
             )
         } else {
             (vec![], vec![], 0)
@@ -191,15 +191,15 @@ impl BroadcastRun for BroadcastFakeShredsRun {
         // Manually track the shred index because relying on slot meta consumed is racy
         if last_tick_height == bank.max_tick_height() {
             self.next_shred_index = 0;
-            self.fake_queue
-                .register_hash(&self.last_fake_entry_hash, &FeeCalculator::default());
+            self.duplicate_queue
+                .register_hash(&self.last_duplicate_entry_hash, &FeeCalculator::default());
         } else {
             self.next_shred_index = last_shred_index;
         }
 
-        // Partition network with fake and real shreds based on stake
+        // Partition network with duplicate and real shreds based on stake
         let bank_epoch = bank.get_leader_schedule_epoch(bank.slot());
-        let mut fake_recipients = HashMap::new();
+        let mut duplicate_recipients = HashMap::new();
         let mut real_recipients = HashMap::new();
 
         let mut stakes: Vec<(Pubkey, u64)> = bank
@@ -222,7 +222,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
         for (pubkey, stake) in stakes.into_iter().rev() {
             cumulative_stake += stake;
             if (100 * cumulative_stake / stake_total) as u8 <= self.config.stake_partition {
-                fake_recipients.insert(pubkey, stake);
+                duplicate_recipients.insert(pubkey, stake);
             } else {
                 real_recipients.insert(pubkey, stake);
             }
@@ -231,10 +231,10 @@ impl BroadcastRun for BroadcastFakeShredsRun {
         if let Some(highest_staked_node) = highest_staked_node {
             if bank.slot() > MINIMUM_FAKE_SLOT && last_tick_height == bank.max_tick_height() {
                 warn!(
-                    "{} sent fake slot {} to nodes: {:?}",
+                    "{} sent duplicate slot {} to nodes: {:?}",
                     self.keypair.pubkey(),
                     bank.slot(),
-                    &fake_recipients,
+                    &duplicate_recipients,
                 );
                 warn!(
                     "Duplicate shreds for slot {} will be broadcast in {} slot(s)",
@@ -243,7 +243,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
                 );
 
                 let delayed_shreds: Option<Vec<Shred>> = vec![
-                    fake_data_shreds.last().cloned(),
+                    duplicate_data_shreds.last().cloned(),
                     data_shreds.last().cloned(),
                 ]
                 .into_iter()
@@ -255,7 +255,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
             }
         }
 
-        let fake_recipients = Arc::new(fake_recipients);
+        let duplicate_recipients = Arc::new(duplicate_recipients);
         let real_recipients = Arc::new(real_recipients);
 
         let data_shreds = Arc::new(data_shreds);
@@ -263,10 +263,19 @@ impl BroadcastRun for BroadcastFakeShredsRun {
 
         // 3) Start broadcast step
         socket_sender.send((
-            (Some(fake_recipients.clone()), Arc::new(fake_data_shreds)),
+            (
+                Some(duplicate_recipients.clone()),
+                Arc::new(duplicate_data_shreds),
+            ),
             None,
         ))?;
-        socket_sender.send(((Some(fake_recipients), Arc::new(fake_coding_shreds)), None))?;
+        socket_sender.send((
+            (
+                Some(duplicate_recipients),
+                Arc::new(duplicate_coding_shreds),
+            ),
+            None,
+        ))?;
         socket_sender.send(((Some(real_recipients.clone()), data_shreds), None))?;
         socket_sender.send(((Some(real_recipients), Arc::new(coding_shreds)), None))?;
 
