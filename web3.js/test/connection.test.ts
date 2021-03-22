@@ -32,6 +32,7 @@ import {
   helpers,
   mockErrorMessage,
   mockErrorResponse,
+  mockRpcBatchResponse,
   mockRpcResponse,
   mockServer,
 } from './mocks/rpc-http';
@@ -646,6 +647,271 @@ describe('Connection', () => {
       expect(confirmedSignatures2[0].slot).to.eq(slot);
       expect(confirmedSignatures2[0].err).to.be.null;
       expect(confirmedSignatures2[0].memo).to.be.null;
+    }
+  });
+
+  it('get parsed confirmed transactions', async () => {
+    await mockRpcResponse({
+      method: 'getSlot',
+      params: [],
+      value: 1,
+    });
+
+    while ((await connection.getSlot()) <= 0) {
+      continue;
+    }
+
+    await mockRpcResponse({
+      method: 'getConfirmedBlock',
+      params: [1],
+      value: {
+        blockTime: 1614281964,
+        blockhash: '57zQNBZBEiHsCZFqsaY6h176ioXy5MsSLmcvHkEyaLGy',
+        previousBlockhash: 'H5nJ91eGag3B5ZSRHZ7zG5ZwXJ6ywCt2hyR8xCsV7xMo',
+        parentSlot: 0,
+        transactions: [
+          {
+            meta: {
+              fee: 10000,
+              postBalances: [499260347380, 15298080, 1, 1, 1],
+              preBalances: [499260357380, 15298080, 1, 1, 1],
+              status: {Ok: null},
+              err: null,
+            },
+            transaction: {
+              message: {
+                accountKeys: [
+                  'va12u4o9DipLEB2z4fuoHszroq1U9NcAB9aooFDPJSf',
+                  '57zQNBZBEiHsCZFqsaY6h176ioXy5MsSLmcvHkEyaLGy',
+                  'SysvarS1otHashes111111111111111111111111111',
+                  'SysvarC1ock11111111111111111111111111111111',
+                  'Vote111111111111111111111111111111111111111',
+                ],
+                header: {
+                  numReadonlySignedAccounts: 0,
+                  numReadonlyUnsignedAccounts: 3,
+                  numRequiredSignatures: 2,
+                },
+                instructions: [
+                  {
+                    accounts: [1, 2, 3],
+                    data:
+                      '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
+                    programIdIndex: 4,
+                  },
+                ],
+                recentBlockhash: 'GeyAFFRY3WGpmam2hbgrKw4rbU2RKzfVLm5QLSeZwTZE',
+              },
+              signatures: [
+                'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt',
+                '4oCEqwGrMdBeMxpzuWiukCYqSfV4DsSKXSiVVCh1iJ6pS772X7y219JZP3mgqBz5PhsvprpKyhzChjYc3VSBQXzG',
+              ],
+            },
+          },
+        ],
+      },
+    });
+
+    // Find a block that has a transaction, usually Block 1
+    let slot = 0;
+    let confirmedTransaction: string | undefined;
+    while (!confirmedTransaction) {
+      slot++;
+      const block = await connection.getConfirmedBlock(slot);
+      for (const tx of block.transactions) {
+        if (tx.transaction.signature) {
+          confirmedTransaction = bs58.encode(tx.transaction.signature);
+        }
+      }
+    }
+
+    await mockRpcBatchResponse({
+      batch: [
+        {
+          methodName: 'getConfirmedTransaction',
+          args: [],
+        },
+      ],
+      result: [
+        {
+          blockTime: 1616102519,
+          meta: {
+            err: null,
+            fee: 5000,
+            innerInstructions: [],
+            logMessages: [
+              'Program Vote111111111111111111111111111111111111111 invoke [1]',
+              'Program Vote111111111111111111111111111111111111111 success',
+            ],
+            postBalances: [499999995000, 26858640, 1, 1, 1],
+            postTokenBalances: [],
+            preBalances: [500000000000, 26858640, 1, 1, 1],
+            preTokenBalances: [],
+            status: {
+              Ok: null,
+            },
+          },
+          slot: 2,
+          transaction: {
+            message: {
+              accountKeys: [
+                {
+                  pubkey: 'jcU4R7JccGEvDpe1i6bahvHpe47XahMXacG73EzE198',
+                  signer: true,
+                  writable: true,
+                },
+                {
+                  pubkey: 'GfBcnCAU7kWfAYqKRCNyWEHjdEJZmzRZvEcX5bbzEQqt',
+                  signer: false,
+                  writable: true,
+                },
+                {
+                  pubkey: 'SysvarS1otHashes111111111111111111111111111',
+                  signer: false,
+                  writable: false,
+                },
+                {
+                  pubkey: 'SysvarC1ock11111111111111111111111111111111',
+                  signer: false,
+                  writable: false,
+                },
+                {
+                  pubkey: 'Vote111111111111111111111111111111111111111',
+                  signer: false,
+                  writable: false,
+                },
+              ],
+              instructions: [
+                {
+                  parsed: {
+                    info: {
+                      clockSysvar:
+                        'SysvarC1ock11111111111111111111111111111111',
+                      slotHashesSysvar:
+                        'SysvarS1otHashes111111111111111111111111111',
+                      vote: {
+                        hash: 'GuCya3AAGxn1qhoqxqy3WEdZdZUkXKpa9pthQ3tqvbpx',
+                        slots: [1],
+                        timestamp: 1616102669,
+                      },
+                      voteAccount:
+                        'GfBcnCAU7kWfAYqKRCNyWEHjdEJZmzRZvEcX5bbzEQqt',
+                      voteAuthority:
+                        'jcU4R7JccGEvDpe1i6bahvHpe47XahMXacG73EzE198',
+                    },
+                    type: 'vote',
+                  },
+                  program: 'vote',
+                  programId: 'Vote111111111111111111111111111111111111111',
+                },
+              ],
+              recentBlockhash: 'G9ywjV5CVgMtLXruXtrE7af4QgFKYNXgDTw4jp7SWcSo',
+            },
+            signatures: [
+              '4G4rTqnUdzrmBHsdKJSiMtonpQLWSw1avJ8YxWQ95jE6iFFHFsEkBnoYycxnkBS9xHWRc6EarDsrFG9USFBbjfjx',
+            ],
+          },
+        },
+        {
+          blockTime: 1616102519,
+          meta: {
+            err: null,
+            fee: 5000,
+            innerInstructions: [],
+            logMessages: [
+              'Program Vote111111111111111111111111111111111111111 invoke [1]',
+              'Program Vote111111111111111111111111111111111111111 success',
+            ],
+            postBalances: [499999995000, 26858640, 1, 1, 1],
+            postTokenBalances: [],
+            preBalances: [500000000000, 26858640, 1, 1, 1],
+            preTokenBalances: [],
+            status: {
+              Ok: null,
+            },
+          },
+          slot: 2,
+          transaction: {
+            message: {
+              accountKeys: [
+                {
+                  pubkey: 'jcU4R7JccGEvDpe1i6bahvHpe47XahMXacG73EzE198',
+                  signer: true,
+                  writable: true,
+                },
+                {
+                  pubkey: 'GfBcnCAU7kWfAYqKRCNyWEHjdEJZmzRZvEcX5bbzEQqt',
+                  signer: false,
+                  writable: true,
+                },
+                {
+                  pubkey: 'SysvarS1otHashes111111111111111111111111111',
+                  signer: false,
+                  writable: false,
+                },
+                {
+                  pubkey: 'SysvarC1ock11111111111111111111111111111111',
+                  signer: false,
+                  writable: false,
+                },
+                {
+                  pubkey: 'Vote111111111111111111111111111111111111111',
+                  signer: false,
+                  writable: false,
+                },
+              ],
+              instructions: [
+                {
+                  parsed: {
+                    info: {
+                      clockSysvar:
+                        'SysvarC1ock11111111111111111111111111111111',
+                      slotHashesSysvar:
+                        'SysvarS1otHashes111111111111111111111111111',
+                      vote: {
+                        hash: 'GuCya3AAGxn1qhoqxqy3WEdZdZUkXKpa9pthQ3tqvbpx',
+                        slots: [1],
+                        timestamp: 1616102669,
+                      },
+                      voteAccount:
+                        'GfBcnCAU7kWfAYqKRCNyWEHjdEJZmzRZvEcX5bbzEQqt',
+                      voteAuthority:
+                        'jcU4R7JccGEvDpe1i6bahvHpe47XahMXacG73EzE198',
+                    },
+                    type: 'vote',
+                  },
+                  program: 'vote',
+                  programId: 'Vote111111111111111111111111111111111111111',
+                },
+              ],
+              recentBlockhash: 'G9ywjV5CVgMtLXruXtrE7af4QgFKYNXgDTw4jp7SWcSo',
+            },
+            signatures: [
+              '4G4rTqnUdzrmBHsdKJSiMtonpQLWSw1avJ8YxWQ95jE6iFFHFsEkBnoYycxnkBS9xHWRc6EarDsrFG9USFBbjfjx',
+            ],
+          },
+        },
+      ],
+    });
+
+    const result = await connection.getParsedConfirmedTransactions([
+      confirmedTransaction,
+      confirmedTransaction,
+    ]);
+
+    if (!result) {
+      expect(result).to.be.ok;
+      return;
+    }
+
+    expect(result).to.be.length(2);
+    expect(result[0]).to.not.be.null;
+    expect(result[1]).to.not.be.null;
+    if (result[0] !== null) {
+      expect(result[0].transaction.signatures).not.to.be.null;
+    }
+    if (result[1] !== null) {
+      expect(result[1].transaction.signatures).not.to.be.null;
     }
   });
 

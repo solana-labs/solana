@@ -63,6 +63,16 @@ export const BLOCKHASH_CACHE_TIMEOUT_MS = 30 * 1000;
 
 type RpcRequest = (methodName: string, args: Array<any>) => any;
 
+type RpcBatchRequest = (requests: RpcParams[]) => any;
+
+/**
+ * @internal
+ */
+export type RpcParams = {
+  methodName: string;
+  args: Array<any>;
+};
+
 export type TokenAccountsFilter =
   | {
       mint: PublicKey;
@@ -642,7 +652,7 @@ export type PerfSample = {
   samplePeriodSecs: number;
 };
 
-function createRpcRequest(url: string, useHttps: boolean): RpcRequest {
+function createRpcClient(url: string, useHttps: boolean): RpcClient {
   let agentManager: AgentManager | undefined;
   if (!process.env.BROWSER) {
     agentManager = new AgentManager(useHttps);
@@ -692,9 +702,31 @@ function createRpcRequest(url: string, useHttps: boolean): RpcRequest {
     }
   }, {});
 
+  return clientBrowser;
+}
+
+function createRpcRequest(client: RpcClient): RpcRequest {
   return (method, args) => {
     return new Promise((resolve, reject) => {
-      clientBrowser.request(method, args, (err: any, response: any) => {
+      client.request(method, args, (err: any, response: any) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        resolve(response);
+      });
+    });
+  };
+}
+
+function createRpcBatchRequest(client: RpcClient): RpcBatchRequest {
+  return (requests: RpcParams[]) => {
+    return new Promise((resolve, reject) => {
+      const batch = requests.map((params: RpcParams) => {
+        return client.request(params.methodName, params.args);
+      });
+
+      client.request(batch, (err: any, response: any) => {
         if (err) {
           reject(err);
           return;
@@ -1591,7 +1623,9 @@ export type ConfirmedSignatureInfo = {
 export class Connection {
   /** @internal */ _commitment?: Commitment;
   /** @internal */ _rpcEndpoint: string;
+  /** @internal */ _rpcClient: RpcClient;
   /** @internal */ _rpcRequest: RpcRequest;
+  /** @internal */ _rpcBatchRequest: RpcBatchRequest;
   /** @internal */ _rpcWebSocket: RpcWebSocketClient;
   /** @internal */ _rpcWebSocketConnected: boolean = false;
   /** @internal */ _rpcWebSocketHeartbeat: ReturnType<
@@ -1647,7 +1681,9 @@ export class Connection {
     let url = urlParse(endpoint);
     const useHttps = url.protocol === 'https:';
 
-    this._rpcRequest = createRpcRequest(url.href, useHttps);
+    this._rpcClient = createRpcClient(url.href, useHttps);
+    this._rpcRequest = createRpcRequest(this._rpcClient);
+    this._rpcBatchRequest = createRpcBatchRequest(this._rpcClient);
     this._commitment = commitment;
     this._blockhashInfo = {
       recentBlockhash: null,
@@ -2501,6 +2537,33 @@ export class Connection {
       );
     }
     return res.result;
+  }
+
+  /**
+   * Fetch parsed transaction details for a batch of confirmed transactions
+   */
+  async getParsedConfirmedTransactions(
+    signatures: TransactionSignature[],
+  ): Promise<(ParsedConfirmedTransaction | null)[]> {
+    const batch = signatures.map(signature => {
+      return {
+        methodName: 'getConfirmedTransaction',
+        args: [signature, 'jsonParsed'],
+      };
+    });
+
+    const unsafeRes = await this._rpcBatchRequest(batch);
+    const res = unsafeRes.map((unsafeRes: any) => {
+      const res = create(unsafeRes, GetParsedConfirmedTransactionRpcResult);
+      if ('error' in res) {
+        throw new Error(
+          'failed to get confirmed transactions: ' + res.error.message,
+        );
+      }
+      return res.result;
+    });
+
+    return res;
   }
 
   /**
