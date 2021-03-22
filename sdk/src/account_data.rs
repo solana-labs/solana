@@ -5,7 +5,7 @@ use std::{
     slice::SliceIndex,
 };
 
-#[derive(Debug, Default, AbiExample)]
+#[derive(Debug, Default)]
 pub struct AccountData {
     data: Vec<u8>,
 }
