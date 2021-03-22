@@ -104,7 +104,8 @@ impl<'de> Deserialize<'de> for AccountData {
 #[cfg(test)]
 mod tests {
     use crate::{
-        account::{self, accounts_equal, Account}, account_shared_data::AccountSharedData,
+        account::{self, accounts_equal, Account},
+        account_shared_data::AccountSharedData,
         pubkey::Pubkey,
     };
     use bincode::Options;

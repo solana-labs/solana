@@ -247,7 +247,6 @@ mod tests {
     use crate::id;
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
-    use solana_sdk::{account::{Account}, account_shared_data::AccountSharedData};
     use solana_sdk::client::SyncClient;
     use solana_sdk::genesis_config::create_genesis_config;
     use solana_sdk::hash::hash;
@@ -255,6 +254,7 @@ mod tests {
     use solana_sdk::message::Message;
     use solana_sdk::signature::{Keypair, Signer};
     use solana_sdk::transaction::TransactionError;
+    use solana_sdk::{account::Account, account_shared_data::AccountSharedData};
 
     fn create_bank(lamports: u64) -> (Bank, Keypair) {
         let (genesis_config, mint_keypair) = create_genesis_config(lamports);

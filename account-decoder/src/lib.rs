@@ -190,7 +190,7 @@ fn slice_data(data: &[u8], data_slice_config: Option<UiDataSliceConfig>) -> &[u8
 #[cfg(test)]
 mod test {
     use super::*;
-    use solana_sdk::{account::{Account}, account_shared_data::AccountSharedData};
+    use solana_sdk::{account::Account, account_shared_data::AccountSharedData};
 
     #[test]
     fn test_slice_data() {

@@ -280,10 +280,8 @@ pub fn deserialize_parameters_aligned(
 mod tests {
     use super::*;
     use solana_sdk::{
-        account::{Account}, account_shared_data::AccountSharedData,
-        account_info::AccountInfo,
-        bpf_loader,
-        entrypoint::deserialize,
+        account::Account, account_info::AccountInfo, account_shared_data::AccountSharedData,
+        bpf_loader, entrypoint::deserialize,
     };
     use std::{
         cell::RefCell,

@@ -622,7 +622,8 @@ mod tests {
     use super::*;
     use bincode::serialize;
     use solana_sdk::{
-        account::{Account}, account_shared_data::{AccountSharedData, create_account_shared_data},
+        account::Account,
+        account_shared_data::{create_account_shared_data, AccountSharedData},
         process_instruction::MockInvokeContext,
         rent::Rent,
         sysvar::stake_history::StakeHistory,
@@ -1071,10 +1072,7 @@ mod tests {
                     KeyedAccount::new(
                         &sysvar::stake_history::id(),
                         false,
-                        &RefCell::new(create_account_shared_data(
-                            &StakeHistory::default(),
-                            1,
-                        ))
+                        &RefCell::new(create_account_shared_data(&StakeHistory::default(), 1,))
                     ),
                 ],
                 &serialize(&StakeInstruction::Withdraw(42)).unwrap(),

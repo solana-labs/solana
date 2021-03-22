@@ -1253,7 +1253,8 @@ pub mod test {
         },
     };
     use solana_sdk::{
-        account::{Account, WritableAccount},account_shared_data::AccountSharedData,
+        account::{Account, WritableAccount},
+        account_shared_data::AccountSharedData,
         clock::Slot,
         hash::Hash,
         pubkey::Pubkey,
