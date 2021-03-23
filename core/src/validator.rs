@@ -493,6 +493,7 @@ impl Validator {
                         config.send_transaction_retry_ms,
                         config.send_transaction_leader_forward_count,
                         max_slots.clone(),
+                        leader_schedule_cache.clone(),
                     ),
                     pubsub_service: PubSubService::new(
                         config.pubsub_config.clone(),
