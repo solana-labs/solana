@@ -252,7 +252,7 @@ pub(crate) fn check_slot_agrees_with_cluster(
 
     let frozen_hash = frozen_hash.unwrap();
     let gossip_duplicate_confirmed_hash = gossip_duplicate_confirmed_slots.get(&slot);
-    let is_local_replay_duplicate_confirmed = progress.is_supermajority_confirmed(slot).expect("If the frozen hash exists, then the slot must exist in bank forks and thus in progress map");
+    let is_local_replay_duplicate_confirmed = progress.is_duplicate_confirmed(slot).expect("If the frozen hash exists, then the slot must exist in bank forks and thus in progress map");
     let cluster_duplicate_confirmed_hash = get_cluster_duplicate_confirmed_hash(
         slot,
         gossip_duplicate_confirmed_hash,

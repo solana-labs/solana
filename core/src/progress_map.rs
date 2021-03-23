@@ -535,7 +535,6 @@ impl ProgressMap {
             .map(|s| s.fork_stats.is_supermajority_confirmed)
     }
 
-    #[cfg(test)]
     pub fn is_duplicate_confirmed(&self, slot: Slot) -> Option<bool> {
         self.progress_map
             .get(&slot)
