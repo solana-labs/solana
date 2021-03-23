@@ -1157,7 +1157,7 @@ fn process_transfer(
     let (recent_blockhash, fee_calculator) =
         blockhash_query.get_blockhash_and_fee_calculator(rpc_client, config.commitment)?;
 
-    if !allow_unfunded_recipient {
+    if !sign_only && !allow_unfunded_recipient {
         let recipient_balance = rpc_client
             .get_balance_with_commitment(to, config.commitment)?
             .value;
