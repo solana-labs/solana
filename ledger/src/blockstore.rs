@@ -7450,8 +7450,8 @@ pub mod tests {
         let ledger_path = get_tmp_ledger_path!();
         let ledger = Blockstore::open(&ledger_path).unwrap();
 
-        let coding1 = Shredder::generate_coding_shreds(slot, 0.5f32, &shreds, 0x42, usize::MAX);
-        let coding2 = Shredder::generate_coding_shreds(slot, 1.0f32, &shreds, 0x42, usize::MAX);
+        let coding1 = Shredder::generate_coding_shreds(0.5f32, &shreds, usize::MAX);
+        let coding2 = Shredder::generate_coding_shreds(1.0f32, &shreds, usize::MAX);
         for shred in &shreds {
             info!("shred {:?}", shred);
         }
