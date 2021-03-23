@@ -66,7 +66,7 @@ impl From<Account> for AccountSharedData {
     fn from(other: Account) -> Self {
         Self {
             lamports: other.lamports,
-            data: Arc::new(other.data.into()),
+            data: Arc::new(other.data),
             owner: other.owner,
             executable: other.executable,
             rent_epoch: other.rent_epoch,
@@ -174,7 +174,7 @@ impl WritableAccount for AccountSharedData {
     ) -> Self {
         AccountSharedData {
             lamports,
-            data: Arc::new(data.into()),
+            data: Arc::new(data),
             owner,
             executable,
             rent_epoch,
@@ -399,11 +399,11 @@ impl AccountSharedData {
         let len_different = len != data.len();
         let different = len_different || data != &self.data[..];
         if different {
-            self.data = Arc::new(data.to_vec().into());
+            self.data = Arc::new(data.to_vec());
         }
     }
     pub fn set_data(&mut self, data: Vec<u8>) {
-        self.data = Arc::new(data.into());
+        self.data = Arc::new(data);
     }
     pub fn new(lamports: u64, space: usize, owner: &Pubkey) -> Self {
         shared_new(lamports, space, owner)
