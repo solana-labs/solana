@@ -1,4 +1,4 @@
-use crate::{account_data::AccountData, clock::Epoch, pubkey::Pubkey};
+use crate::{clock::Epoch, pubkey::Pubkey};
 use solana_program::{account_info::AccountInfo, sysvar::Sysvar};
 use std::{cell::Ref, cell::RefCell, cmp, fmt, rc::Rc, sync::Arc};
 
@@ -22,15 +22,14 @@ pub struct Account {
 }
 
 /// An Account with data that is stored on chain
-/// This will become a new in-memory representation of the 'Account' struct data.
+/// This will be the in-memory representation of the 'Account' struct data.
 /// The existing 'Account' structure cannot easily change due to downstream projects.
-/// This struct will shortly rely on something like the ReadableAccount trait for access to the fields.
 #[derive(PartialEq, Eq, Clone, Default, AbiExample)]
 pub struct AccountSharedData {
     /// lamports in the account
     pub lamports: u64,
     /// data held in this account
-    pub data: Arc<AccountData>,
+    pub data: Arc<Vec<u8>>,
     /// the program that owns this account. If executable, the program that loads this account.
     pub owner: Pubkey,
     /// this account's data contains a loaded program (and is now read-only)
