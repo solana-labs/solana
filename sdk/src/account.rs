@@ -1,6 +1,6 @@
 use crate::{clock::Epoch, pubkey::Pubkey};
 use solana_program::{account_info::AccountInfo, sysvar::Sysvar};
-use std::{cell::Ref, cell::RefCell, cmp, fmt, rc::Rc};
+use std::{cell::Ref, cell::RefCell, cmp, fmt, rc::Rc, sync::Arc};
 
 /// An Account with data that is stored on chain
 #[repr(C)]
@@ -22,16 +22,14 @@ pub struct Account {
 }
 
 /// An Account with data that is stored on chain
-/// This will become a new in-memory representation of the 'Account' struct data.
+/// This will be the in-memory representation of the 'Account' struct data.
 /// The existing 'Account' structure cannot easily change due to downstream projects.
-/// This struct will shortly rely on something like the ReadableAccount trait for access to the fields.
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Default, AbiExample)]
+#[derive(PartialEq, Eq, Clone, Default, AbiExample)]
 pub struct AccountSharedData {
     /// lamports in the account
     pub lamports: u64,
     /// data held in this account
-    #[serde(with = "serde_bytes")]
-    pub data: Vec<u8>, // will be: Arc<Vec<u8>>,
+    pub data: Arc<Vec<u8>>,
     /// the program that owns this account. If executable, the program that loads this account.
     pub owner: Pubkey,
     /// this account's data contains a loaded program (and is now read-only)
@@ -52,10 +50,11 @@ pub fn accounts_equal<T: ReadableAccount, U: ReadableAccount>(me: &T, other: &U)
 }
 
 impl From<AccountSharedData> for Account {
-    fn from(other: AccountSharedData) -> Self {
+    fn from(mut other: AccountSharedData) -> Self {
+        let account_data = Arc::make_mut(&mut other.data);
         Self {
             lamports: other.lamports,
-            data: other.data,
+            data: std::mem::take(account_data),
             owner: other.owner,
             executable: other.executable,
             rent_epoch: other.rent_epoch,
@@ -67,7 +66,7 @@ impl From<Account> for AccountSharedData {
     fn from(other: Account) -> Self {
         Self {
             lamports: other.lamports,
-            data: other.data,
+            data: Arc::new(other.data),
             owner: other.owner,
             executable: other.executable,
             rent_epoch: other.rent_epoch,
@@ -154,7 +153,8 @@ impl WritableAccount for AccountSharedData {
         self.lamports = lamports;
     }
     fn data_as_mut_slice(&mut self) -> &mut [u8] {
-        &mut self.data
+        let data = Arc::make_mut(&mut self.data);
+        &mut data[..]
     }
     fn set_owner(&mut self, owner: Pubkey) {
         self.owner = owner;
@@ -174,7 +174,7 @@ impl WritableAccount for AccountSharedData {
     ) -> Self {
         AccountSharedData {
             lamports,
-            data,
+            data: Arc::new(data),
             owner,
             executable,
             rent_epoch,
@@ -394,22 +394,16 @@ impl Account {
 }
 
 impl AccountSharedData {
-    /// make account's data equal to 'data'. This may require resizing and copying data.
     pub fn set_data_from_slice(&mut self, data: &[u8]) {
         let len = self.data.len();
         let len_different = len != data.len();
-        if len_different {
-            // if the resize causes a reallocation and copy, it would be better to create a new copy of the final data
-            //  rather than resize (+ copy current) and then copy over below.
-            // however, the implementation of account's data is soon to be copy on write, so the tradeoffs will soon be different.
-            self.data.resize(data.len(), 0);
+        let different = len_different || data != &self.data[..];
+        if different {
+            self.data = Arc::new(data.to_vec());
         }
-        // we could compare here to determine whether we need to modify the original data or not. In the current implementation, that would
-        //  not make a positive difference.
-        self.data.copy_from_slice(data);
     }
     pub fn set_data(&mut self, data: Vec<u8>) {
-        self.data = data;
+        self.data = Arc::new(data);
     }
     pub fn new(lamports: u64, space: usize, owner: &Pubkey) -> Self {
         shared_new(lamports, space, owner)
@@ -691,7 +685,7 @@ pub mod tests {
                         account1.data_as_mut_slice()[0] = account1.data[0] + 1;
                     } else if pass == 3 {
                         account_expected.data[0] += 1;
-                        account2.data[0] += 1;
+                        account2.data_as_mut_slice()[0] += 1;
                     }
                 } else if field_index == 2 {
                     if pass == 0 {
