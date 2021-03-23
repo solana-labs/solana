@@ -201,7 +201,7 @@ impl Shred {
         index: u32,
         parent_offset: u16,
         data: Option<&[u8]>,
-        is_last_in_fec_set: bool,
+        is_last_data: bool,
         is_last_in_slot: bool,
         reference_tick: u8,
         version: u16,
@@ -226,7 +226,7 @@ impl Shred {
             size,
         };
 
-        if is_last_in_fec_set {
+        if is_last_data {
             data_header.flags |= DATA_COMPLETE_SHRED
         }
 
@@ -596,7 +596,7 @@ impl Shredder {
                         let fec_set_index =
                             shred_index - (i % MAX_DATA_SHREDS_PER_FEC_BLOCK as usize) as u32;
 
-                        let (is_last_in_fec_set, is_last_in_slot) = {
+                        let (is_last_data, is_last_in_slot) = {
                             if shred_index == last_shred_index {
                                 (true, is_last_in_slot)
                             } else {
@@ -609,7 +609,7 @@ impl Shredder {
                             shred_index,
                             (self.slot - self.parent_slot) as u16,
                             Some(shred_data),
-                            is_last_in_fec_set,
+                            is_last_data,
                             is_last_in_slot,
                             self.reference_tick,
                             self.version,
@@ -1082,7 +1082,7 @@ pub fn verify_test_data_shred(
     pk: &Pubkey,
     verify: bool,
     is_last_in_slot: bool,
-    is_last_in_fec_set: bool,
+    is_last_data: bool,
 ) {
     assert_eq!(shred.payload.len(), SHRED_PAYLOAD_SIZE);
     assert!(shred.is_data());
@@ -1095,7 +1095,7 @@ pub fn verify_test_data_shred(
     } else {
         assert!(!shred.last_in_slot());
     }
-    if is_last_in_fec_set {
+    if is_last_data {
         assert!(shred.data_complete());
     } else {
         assert!(!shred.data_complete());
