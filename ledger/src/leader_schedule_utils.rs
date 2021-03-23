@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::leader_schedule::LeaderSchedule;
 use solana_runtime::bank::Bank;
 use solana_sdk::{
@@ -19,6 +21,27 @@ pub fn leader_schedule(epoch: Epoch, bank: &Bank) -> Option<LeaderSchedule> {
             NUM_CONSECUTIVE_LEADER_SLOTS,
         )
     })
+}
+
+/// Map of leader base58 identity pubkeys to the slot indices relative to the first epoch slot
+pub type LeaderScheduleByIdentity = HashMap<String, Vec<usize>>;
+
+pub fn leader_schedule_by_identity<'a>(
+    upcoming_leaders: impl Iterator<Item = (usize, &'a Pubkey)>,
+) -> LeaderScheduleByIdentity {
+    let mut leader_schedule_by_identity = HashMap::new();
+
+    for (slot_index, identity_pubkey) in upcoming_leaders {
+        leader_schedule_by_identity
+            .entry(identity_pubkey)
+            .or_insert_with(Vec::new)
+            .push(slot_index);
+    }
+
+    leader_schedule_by_identity
+        .into_iter()
+        .map(|(identity_pubkey, slot_indices)| (identity_pubkey.to_string(), slot_indices))
+        .collect()
 }
 
 /// Return the leader for the given slot.

@@ -542,6 +542,7 @@ impl Validator {
                     config.send_transaction_retry_ms,
                     config.send_transaction_leader_forward_count,
                     max_slots.clone(),
+                    leader_schedule_cache.clone(),
                 )),
                 if config.rpc_config.minimal_api {
                     None
