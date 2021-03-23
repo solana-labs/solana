@@ -4,11 +4,7 @@ set -ex
 [[ $(uname) = Linux ]] || exit 1
 [[ $USER = root ]] || exit 1
 
-snap install core
-snap refresh core
-
-snap install --classic certbot
-ln -sf /snap/bin/certbot /usr/bin/certbot
+apt install -y certbot
 
 cat > /certbot-restore.sh <<'EOF'
 #!/usr/bin/env bash
