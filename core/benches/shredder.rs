@@ -42,7 +42,13 @@ fn make_shreds(num_shreds: usize) -> Vec<Shred> {
     let shredder =
         Shredder::new(1, 0, RECOMMENDED_FEC_RATE, Arc::new(Keypair::new()), 0, 0).unwrap();
     let data_shreds = shredder
-        .entries_to_data_shreds(&entries, true, 0, &mut ProcessShredsStats::default())
+        .entries_to_data_shreds(
+            &entries,
+            true, // is_last_in_slot
+            0,    // next_shred_index
+            0,    // fec_set_offset
+            &mut ProcessShredsStats::default(),
+        )
         .0;
     assert!(data_shreds.len() >= num_shreds);
     data_shreds
@@ -127,10 +133,8 @@ fn bench_shredder_coding(bencher: &mut Bencher) {
     let data_shreds = make_shreds(symbol_count);
     bencher.iter(|| {
         Shredder::generate_coding_shreds(
-            0,
             RECOMMENDED_FEC_RATE,
             &data_shreds[..symbol_count],
-            0,
             symbol_count,
         )
         .len();
@@ -142,10 +146,8 @@ fn bench_shredder_decoding(bencher: &mut Bencher) {
     let symbol_count = MAX_DATA_SHREDS_PER_FEC_BLOCK as usize;
     let data_shreds = make_shreds(symbol_count);
     let coding_shreds = Shredder::generate_coding_shreds(
-        0,
         RECOMMENDED_FEC_RATE,
         &data_shreds[..symbol_count],
-        0,
         symbol_count,
     );
     bencher.iter(|| {
