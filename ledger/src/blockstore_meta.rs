@@ -125,6 +125,10 @@ impl ShredIndex {
             self.set_present(idx, present);
         }
     }
+
+    pub fn largest(&self) -> Option<u64> {
+        self.index.iter().rev().next().copied()
+    }
 }
 
 impl SlotMeta {

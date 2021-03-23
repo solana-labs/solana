@@ -270,13 +270,6 @@ where
                                     }
                                 };
                                 if shred_filter(&shred, last_root) {
-                                    // Mark slot as dead if the current shred is on the boundary
-                                    // of max shreds per slot. However, let the current shred
-                                    // get retransmitted. It'll allow peer nodes to see this shred
-                                    // and trigger them to mark the slot as dead.
-                                    if shred.index() >= (MAX_DATA_SHREDS_PER_SLOT - 1) as u32 {
-                                        let _ = blockstore.set_dead_slot(shred.slot());
-                                    }
                                     packet.meta.slot = shred.slot();
                                     packet.meta.seed = shred.seed();
                                     Some((shred, repair_info))
