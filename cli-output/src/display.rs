@@ -133,7 +133,8 @@ fn format_account_mode(message: &Message, index: usize) -> String {
         } else {
             "-"
         },
-        if message.is_writable(index) {
+        // TODO: Confirm hardcoded demote_sysvar_write_locks here.
+        if message.is_writable(index, /*demote_sysvar_write_locks=*/ false) {
             "w" // comment for consistent rust fmt (no joking; lol)
         } else {
             "-"

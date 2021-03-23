@@ -1916,7 +1916,6 @@ mod tests {
                 .unwrap()
                 .insert_new_readonly(&pubkey);
         }
-        let demote_sysvar_write_locks = true;
         let collected_accounts = accounts.collect_accounts_to_store(
             &txs,
             None,
@@ -1925,7 +1924,7 @@ mod tests {
             &rent_collector,
             &(Hash::default(), FeeCalculator::default()),
             true,
-            demote_sysvar_write_locks,
+            true, // demote_sysvar_write_locks
         );
         assert_eq!(collected_accounts.len(), 2);
         assert!(collected_accounts
@@ -2280,7 +2279,6 @@ mod tests {
 
         let mut loaded = vec![loaded];
 
-        let demote_sysvar_write_locks = true;
         let next_blockhash = Hash::new_unique();
         let accounts =
             Accounts::new_with_config(Vec::new(), &ClusterType::Development, HashSet::new(), false);
@@ -2292,7 +2290,7 @@ mod tests {
             &rent_collector,
             &(next_blockhash, FeeCalculator::default()),
             true,
-            demote_sysvar_write_locks,
+            true, // demote_sysvar_write_locks
         );
         assert_eq!(collected_accounts.len(), 2);
         assert_eq!(
@@ -2404,7 +2402,7 @@ mod tests {
             &rent_collector,
             &(next_blockhash, FeeCalculator::default()),
             true,
-            true,
+            true, // demote_sysvar_write_locks
         );
         assert_eq!(collected_accounts.len(), 1);
         let collected_nonce_account = collected_accounts

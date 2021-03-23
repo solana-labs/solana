@@ -797,7 +797,6 @@ impl MessageProcessor {
             &accounts,
             &caller_write_privileges,
             *(&mut *(invoke_context.borrow_mut())),
-            demote_sysvar_write_locks,
         )?;
 
         // Copy results back to caller
@@ -838,7 +837,6 @@ impl MessageProcessor {
         accounts: &[Rc<RefCell<AccountSharedData>>],
         caller_write_privileges: &[bool],
         invoke_context: &mut dyn InvokeContext,
-        demote_sysvar_write_locks: bool,
     ) -> Result<(), InstructionError> {
         if let Some(instruction) = message.instructions.get(0) {
             let program_id = instruction.program_id(&message.account_keys);
@@ -850,7 +848,8 @@ impl MessageProcessor {
                 accounts,
                 Some(caller_write_privileges),
             )?;
-
+            let demote_sysvar_write_locks =
+                invoke_context.is_feature_active(&demote_sysvar_write_locks::id());
             // Construct keyed accounts
             let keyed_accounts = Self::create_keyed_accounts(
                 message,
@@ -2108,7 +2107,7 @@ mod tests {
             .account_keys
             .iter()
             .enumerate()
-            .map(|(i, _)| message.is_writable(i, true))
+            .map(|(i, _)| message.is_writable(i, demote_sysvar_write_locks))
             .collect::<Vec<bool>>();
         assert_eq!(
             MessageProcessor::process_cross_program_instruction(
@@ -2117,7 +2116,6 @@ mod tests {
                 &accounts,
                 &caller_write_privileges,
                 &mut invoke_context,
-                demote_sysvar_write_locks,
             ),
             Err(InstructionError::ExternalAccountDataModified)
         );
@@ -2153,7 +2151,6 @@ mod tests {
                     &accounts,
                     &caller_write_privileges,
                     &mut invoke_context,
-                    demote_sysvar_write_locks,
                 ),
                 case.1
             );

@@ -348,16 +348,16 @@ impl Message {
     }
 
     pub fn is_writable(&self, i: usize, demote_sysvar_write_locks: bool) -> bool {
-        if demote_sysvar_write_locks
-            && (sysvar::is_sysvar_id(&self.account_keys[i]) || BUILTIN_PROGRAMS_KEYS.contains(&self.account_keys[i])) {
-                return false;
-        }
-
-        let max_readonly_index = (self.header.num_required_signatures - self.header.num_readonly_signed_accounts) as usize;
-        i < max_readonly_index
+        (i < (self.header.num_required_signatures - self.header.num_readonly_signed_accounts)
+            as usize
             || (i >= self.header.num_required_signatures as usize
                 && i < self.account_keys.len()
-                    - self.header.num_readonly_unsigned_accounts as usize)
+                    - self.header.num_readonly_unsigned_accounts as usize))
+            && !{
+                let key = self.account_keys[i];
+                demote_sysvar_write_locks
+                    && (sysvar::is_sysvar_id(&key) || BUILTIN_PROGRAMS_KEYS.contains(&key))
+            }
     }
 
     pub fn is_signer(&self, i: usize) -> bool {
@@ -393,6 +393,7 @@ impl Message {
     //   36..64 - program_id
     //     33..34 - data len - u16
     //     35..data_len - data
+    // TODO: Maybe this should always use false for demote_sysvar_write_locks.
     pub fn serialize_instructions(&self, demote_sysvar_write_locks: bool) -> Vec<u8> {
         // 64 bytes is a reasonable guess, calculating exactly is slower in benchmarks
         let mut data = Vec::with_capacity(self.instructions.len() * (32 * 2));
@@ -847,12 +848,13 @@ mod tests {
             recent_blockhash: Hash::default(),
             instructions: vec![],
         };
-        assert_eq!(message.is_writable(0), true);
-        assert_eq!(message.is_writable(1), false);
-        assert_eq!(message.is_writable(2), false);
-        assert_eq!(message.is_writable(3), true);
-        assert_eq!(message.is_writable(4), true);
-        assert_eq!(message.is_writable(5), false);
+        let demote_sysvar_write_locks = true;
+        assert_eq!(message.is_writable(0, demote_sysvar_write_locks), true);
+        assert_eq!(message.is_writable(1, demote_sysvar_write_locks), false);
+        assert_eq!(message.is_writable(2, demote_sysvar_write_locks), false);
+        assert_eq!(message.is_writable(3, demote_sysvar_write_locks), true);
+        assert_eq!(message.is_writable(4, demote_sysvar_write_locks), true);
+        assert_eq!(message.is_writable(5, demote_sysvar_write_locks), false);
     }
 
     #[test]
@@ -910,7 +912,9 @@ mod tests {
         ];
 
         let message = Message::new(&instructions, Some(&id1));
-        let serialized = message.serialize_instructions();
+        let serialized = message.serialize_instructions(
+            true, // demote_sysvar_write_locks
+        );
         for (i, instruction) in instructions.iter().enumerate() {
             assert_eq!(
                 Message::deserialize_instruction(i, &serialized).unwrap(),
@@ -931,7 +935,9 @@ mod tests {
         ];
 
         let message = Message::new(&instructions, Some(&id1));
-        let serialized = message.serialize_instructions();
+        let serialized = message.serialize_instructions(
+            true, // demote_sysvar_write_locks
+        );
         assert_eq!(
             Message::deserialize_instruction(instructions.len(), &serialized).unwrap_err(),
             SanitizeError::IndexOutOfBounds,

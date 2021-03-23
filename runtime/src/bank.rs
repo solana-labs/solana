@@ -12291,7 +12291,8 @@ pub(crate) mod tests {
             _data: &[u8],
             _invoke_context: &mut dyn InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
-            ka[1].try_account_ref_mut()?.data[0] = 5;
+            let data = &mut ka[1].try_account_ref_mut()?.data;
+            Arc::make_mut(data)[0] = 5;
             Ok(())
         }
 
@@ -12300,7 +12301,10 @@ pub(crate) mod tests {
 
         let blockhash = bank.last_blockhash();
         let blockhash_sysvar = sysvar::recent_blockhashes::id();
-        let orig_lamports = bank.get_account(&sysvar::recent_blockhashes::id()).unwrap().lamports;
+        let orig_lamports = bank
+            .get_account(&sysvar::recent_blockhashes::id())
+            .unwrap()
+            .lamports;
         info!("{:?}", bank.get_account(&sysvar::recent_blockhashes::id()));
         let tx = system_transaction::transfer(&mint_keypair, &blockhash_sysvar, 10, blockhash);
         assert_eq!(
@@ -12310,7 +12314,12 @@ pub(crate) mod tests {
                 InstructionError::ReadonlyLamportChange
             ))
         );
-        assert_eq!(bank.get_account(&sysvar::recent_blockhashes::id()).unwrap().lamports, orig_lamports);
+        assert_eq!(
+            bank.get_account(&sysvar::recent_blockhashes::id())
+                .unwrap()
+                .lamports,
+            orig_lamports
+        );
         info!("{:?}", bank.get_account(&sysvar::recent_blockhashes::id()));
 
         let accounts = vec![
