@@ -251,7 +251,10 @@ pub fn deserialize_parameters_aligned(
                 + size_of::<u8>() // executable
                 + 4 // padding to 128-bit aligned
                 + size_of::<Pubkey>(); // key
-            account.owner = Pubkey::new(&buffer[start..start + size_of::<Pubkey>()]);
+            account
+                .owner
+                .as_mut()
+                .copy_from_slice(&buffer[start..start + size_of::<Pubkey>()]);
             start += size_of::<Pubkey>(); // owner
             account.lamports = LittleEndian::read_u64(&buffer[start..]);
             start += size_of::<u64>(); // lamports

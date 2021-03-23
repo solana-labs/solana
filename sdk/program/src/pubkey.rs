@@ -325,6 +325,12 @@ impl AsRef<[u8]> for Pubkey {
     }
 }
 
+impl AsMut<[u8]> for Pubkey {
+    fn as_mut(&mut self) -> &mut [u8] {
+        &mut self.0[..]
+    }
+}
+
 impl fmt::Debug for Pubkey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", bs58::encode(self.0).into_string())
