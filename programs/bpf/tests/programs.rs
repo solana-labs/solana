@@ -1248,26 +1248,31 @@ fn assert_instruction_count() {
             ("solana_bpf_rust_128bit", 581),
             ("solana_bpf_rust_alloc", 8941),
             ("solana_bpf_rust_dep_crate", 2),
-            ("solana_bpf_rust_external_spend", 505),
+            ("solana_bpf_rust_external_spend", 499),
             ("solana_bpf_rust_iter", 724),
             ("solana_bpf_rust_many_args", 237),
-            ("solana_bpf_rust_noop", 479),
+            ("solana_bpf_rust_noop", 473),
             ("solana_bpf_rust_param_passing", 54),
-            ("solana_bpf_rust_ristretto", 19275),
-            ("solana_bpf_rust_sanity", 956),
+            ("solana_bpf_rust_ristretto", 19223),
+            ("solana_bpf_rust_sanity", 929),
         ]);
     }
 
+    let mut passed = true;
+    println!("\n  {:30} expected actual diff", "BPF program");
     for program in programs.iter() {
-        println!("Test program: {:?}", program.0);
         let program_id = solana_sdk::pubkey::new_rand();
         let key = solana_sdk::pubkey::new_rand();
         let mut account = RefCell::new(AccountSharedData::default());
         let parameter_accounts = vec![KeyedAccount::new(&key, false, &mut account)];
         let count = run_program(program.0, &program_id, &parameter_accounts[..], &[]).unwrap();
-        println!("  {} : {:?} ({:?})", program.0, count, program.1,);
-        assert!(count <= program.1);
+        let diff: i64 = count as i64 - program.1 as i64;
+        println!("  {:30} {:8} {:6} {:+4}", program.0, program.1, count, diff);
+        if count > program.1 {
+            passed = false;
+        }
     }
+    assert!(passed);
 }
 
 #[cfg(any(feature = "bpf_rust"))]
