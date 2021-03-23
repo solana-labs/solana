@@ -2006,9 +2006,13 @@ describe('Connection', () => {
       let listener: number | undefined;
       const owner = new Account();
       const [logsRes, ctx] = await new Promise(resolve => {
-        listener = connection.onLogs('all', (logs, ctx) => {
-          resolve([logs, ctx]);
-        });
+        listener = connection.onLogs(
+          'all',
+          (logs, ctx) => {
+            resolve([logs, ctx]);
+          },
+          'processed',
+        );
         // Execute a transaction so that we can pickup its logs.
         connection.requestAirdrop(owner.publicKey, 1);
       });
