@@ -631,38 +631,7 @@ impl Shredder {
                     .enumerate()
                     .map(|(i, shred_data)| {
                         let shred_index = next_shred_index + i as u32;
-<<<<<<< HEAD
-
-                        // Each FEC block has maximum MAX_DATA_SHREDS_PER_FEC_BLOCK shreds
-                        // "FEC set index" is the index of first data shred in that FEC block
-                        let fec_set_index =
-                            shred_index - (i % MAX_DATA_SHREDS_PER_FEC_BLOCK as usize) as u32;
-
-                        let (is_last_data, is_last_in_slot) = {
-                            if shred_index == last_shred_index {
-                                (true, is_last_in_slot)
-                            } else {
-                                (false, false)
-                            }
-                        };
-
-                        let mut shred = Shred::new_from_data(
-                            self.slot,
-                            shred_index,
-                            (self.slot - self.parent_slot) as u16,
-                            Some(shred_data),
-                            is_last_data,
-                            is_last_in_slot,
-                            self.reference_tick,
-                            self.version,
-                            fec_set_index,
-                        );
-
-                        Shredder::sign_shred(&self.keypair, &mut shred);
-                        shred
-=======
                         make_data_shred(shred_index, shred_data)
->>>>>>> 4f82b897b... buffers data shreds to make larger erasure coded sets (#15849)
                     })
                     .collect()
             })
