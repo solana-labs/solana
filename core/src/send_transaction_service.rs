@@ -801,7 +801,7 @@ mod test {
             );
             let bank = Arc::new(Bank::new(&genesis_config));
 
-            let (poh_recorder, _entry_receiver) = PohRecorder::new(
+            let (poh_recorder, _entry_receiver, _record_receiver) = PohRecorder::new(
                 0,
                 bank.last_blockhash(),
                 0,
