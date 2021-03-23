@@ -40,6 +40,7 @@ use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::{
     cmp::min,
     net::SocketAddr,
+    str::FromStr,
     sync::RwLock,
     thread::sleep,
     time::{Duration, Instant},
@@ -403,6 +404,24 @@ impl RpcClient {
             RpcRequest::GetSlot,
             json!([self.maybe_map_commitment(commitment_config)?]),
         )
+    }
+
+    pub fn get_slot_leaders(&self, start_slot: Slot, limit: u64) -> ClientResult<Vec<Pubkey>> {
+        self.send(RpcRequest::GetSlotLeaders, json!([start_slot, limit]))
+            .and_then(|slot_leaders: Vec<String>| {
+                slot_leaders
+                    .iter()
+                    .map(|slot_leader| {
+                        Pubkey::from_str(slot_leader).map_err(|err| {
+                            ClientErrorKind::Custom(format!(
+                                "pubkey deserialization failed: {}",
+                                err
+                            ))
+                            .into()
+                        })
+                    })
+                    .collect()
+            })
     }
 
     pub fn supply(&self) -> RpcResult<RpcSupply> {

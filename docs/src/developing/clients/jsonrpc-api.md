@@ -52,6 +52,7 @@ gives a convenient interface for the RPC methods.
 - [getSignatureStatuses](jsonrpc-api.md#getsignaturestatuses)
 - [getSlot](jsonrpc-api.md#getslot)
 - [getSlotLeader](jsonrpc-api.md#getslotleader)
+- [getSlotLeaders](jsonrpc-api.md#getslotleaders)
 - [getStakeActivation](jsonrpc-api.md#getstakeactivation)
 - [getSupply](jsonrpc-api.md#getsupply)
 - [getTokenAccountBalance](jsonrpc-api.md#gettokenaccountbalance)
@@ -2250,6 +2251,53 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 Result:
 ```json
 {"jsonrpc":"2.0","result":"ENvAW7JScgYq6o4zKZwewtkzzJgDzuJAFxYasvmEQdpS","id":1}
+```
+
+### getSlotLeaders
+
+Returns the slot leaders for a given slot range
+
+#### Parameters:
+
+- `<u64>` - Start slot, as u64 integer
+- `<u64>` - Limit, as u64 integer
+
+#### Results:
+
+- `<array<string>>` - Node identity public keys as base-58 encoded strings
+
+#### Example:
+
+If the current slot is #99, query the next 10 leaders with the following request:
+
+Request:
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"getSlotLeaders", "params":[100, 10]}
+'
+```
+
+Result:
+
+The first leader returned is the leader for slot #100:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": [
+    "ChorusmmK7i1AxXeiTtQgQZhQNiXYU84ULeaYF1EH15n",
+    "ChorusmmK7i1AxXeiTtQgQZhQNiXYU84ULeaYF1EH15n",
+    "ChorusmmK7i1AxXeiTtQgQZhQNiXYU84ULeaYF1EH15n",
+    "ChorusmmK7i1AxXeiTtQgQZhQNiXYU84ULeaYF1EH15n",
+    "Awes4Tr6TX8JDzEhCZY2QVNimT6iD1zWHzf1vNyGvpLM",
+    "Awes4Tr6TX8JDzEhCZY2QVNimT6iD1zWHzf1vNyGvpLM",
+    "Awes4Tr6TX8JDzEhCZY2QVNimT6iD1zWHzf1vNyGvpLM",
+    "Awes4Tr6TX8JDzEhCZY2QVNimT6iD1zWHzf1vNyGvpLM",
+    "DWvDTSh3qfn88UoQTEKRV2JnLt5jtJAVoiCo3ivtMwXP",
+    "DWvDTSh3qfn88UoQTEKRV2JnLt5jtJAVoiCo3ivtMwXP"
+  ],
+  "id": 1
+}
 ```
 
 ### getStakeActivation

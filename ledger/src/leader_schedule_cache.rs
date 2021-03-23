@@ -195,6 +195,10 @@ impl LeaderScheduleCache {
         }
     }
 
+    pub fn get_epoch_leader_schedule(&self, epoch: Epoch) -> Option<Arc<LeaderSchedule>> {
+        self.cached_schedules.read().unwrap().0.get(&epoch).cloned()
+    }
+
     fn get_epoch_schedule_else_compute(
         &self,
         epoch: Epoch,
@@ -205,8 +209,7 @@ impl LeaderScheduleCache {
                 return Some(fixed_schedule.leader_schedule.clone());
             }
         }
-        let epoch_schedule = self.cached_schedules.read().unwrap().0.get(&epoch).cloned();
-
+        let epoch_schedule = self.get_epoch_leader_schedule(epoch);
         if epoch_schedule.is_some() {
             epoch_schedule
         } else if let Some(epoch_schedule) = self.compute_epoch_schedule(epoch, bank) {
