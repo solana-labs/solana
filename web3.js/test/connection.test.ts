@@ -2268,6 +2268,40 @@ describe('Connection', () => {
       await connection.removeRootChangeListener(subscriptionId);
     });
 
+    it('logs notification', async () => {
+      let listener: number | undefined;
+      const owner = new Account();
+      const [logsRes, ctx] = await new Promise(resolve => {
+        listener = connection.onLogs(
+          'all',
+          (logs, ctx) => {
+            resolve([logs, ctx]);
+          },
+          'processed',
+        );
+        // Sleep to allow the subscription time to be setup.
+        //
+        // Without this, there's a race condition between setting up the log
+        // subscription and executing the transaction to trigger the log.
+        // If the transaction to trigger the log executes before the
+        // subscription is setup, the log event listener never fires and so the
+        // promise never resolves.
+        sleep(1000).then(() => {
+          // Execute a transaction so that we can pickup its logs.
+          connection.requestAirdrop(owner.publicKey, 1);
+        });
+      });
+      expect(ctx.slot).to.be.greaterThan(0);
+      expect(logsRes.logs.length).to.eq(2);
+      expect(logsRes.logs[0]).to.eq(
+        'Program 11111111111111111111111111111111 invoke [1]',
+      );
+      expect(logsRes.logs[1]).to.eq(
+        'Program 11111111111111111111111111111111 success',
+      );
+      await connection.removeOnLogsListener(listener!);
+    });
+
     it('https request', async () => {
       const connection = new Connection('https://devnet.solana.com');
       const version = await connection.getVersion();
