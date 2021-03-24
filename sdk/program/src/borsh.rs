@@ -1,7 +1,13 @@
 #![allow(clippy::integer_arithmetic)]
 //! Borsh utils
-use borsh::schema::{BorshSchema, Declaration, Definition, Fields};
-use std::collections::HashMap;
+use {
+    borsh::{
+        maybestd::io::Error,
+        schema::{BorshSchema, Declaration, Definition, Fields},
+        BorshDeserialize,
+    },
+    std::collections::HashMap,
+};
 
 /// Get packed length for the given BorchSchema Declaration
 fn get_declaration_packed_len(
@@ -53,4 +59,11 @@ fn get_declaration_packed_len(
 pub fn get_packed_len<S: BorshSchema>() -> usize {
     let schema_container = S::schema_container();
     get_declaration_packed_len(&schema_container.declaration, &schema_container.definitions)
+}
+
+/// Deserializes without checking that the entire slice has been consumed
+pub fn try_from_slice_unchecked<T: BorshDeserialize>(data: &[u8]) -> Result<T, Error> {
+    let mut data_mut = data;
+    let result = T::deserialize(&mut data_mut)?;
+    Ok(result)
 }
