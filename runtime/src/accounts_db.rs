@@ -5973,14 +5973,14 @@ pub mod tests {
             account2
         );
 
-        // lots of stores, but 3 storages should be enough for everything
+        // lots of stores, but 7 storages should be enough for everything
         for _ in 0..25 {
             accounts.store_uncached(0, &[(&pubkey1, &account1)]);
             {
                 assert_eq!(accounts.storage.0.len(), 1);
                 let stores = &accounts.storage.get_slot_stores(0).unwrap();
                 let r_stores = stores.read().unwrap();
-                assert!(r_stores.len() <= 5);
+                assert!(r_stores.len() <= 7);
                 assert_eq!(r_stores[&0].status(), status[0]);
             }
             let ancestors = vec![(0, 0)].into_iter().collect();
