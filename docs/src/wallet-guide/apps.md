@@ -6,9 +6,9 @@ Solana is supported by multiple third-party apps which should provide a familiar
 experience for most people who are new or experienced with using crypto wallets.
 
 ## Exodus
-Send, receive & exchange cryptocurrency with ease on the world's leading Desktop, Mobile and Hardware crypto wallets. 
+Send, receive & exchange cryptocurrency with ease on the world's leading Desktop, Mobile and Hardware crypto wallets.
 
-Download [Exodus](https://exodus.com/) to easily and securely manage your Solana tokens. 
+Download [Exodus](https://exodus.com/) to easily and securely manage your Solana tokens.
 
 Exodus includes live charts, a built-in exchange, and 24/7 human support.
 
