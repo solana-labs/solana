@@ -3926,6 +3926,8 @@ impl Bank {
         self.rc.accounts.accounts_db.expire_old_recycle_stores()
     }
 
+    /// Technically this issues (or even burns!) new lamports,
+    /// so be extra careful for its usage
     fn store_account_and_update_capitalization(
         &self,
         pubkey: &Pubkey,
