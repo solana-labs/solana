@@ -1323,7 +1323,8 @@ fn test_program_bpf_instruction_introspection() {
     let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
     assert_eq!(
         result.unwrap_err().unwrap(),
-        TransactionError::InvalidAccountIndex
+        // sysvar write locks are demoted to read only.
+        TransactionError::InstructionError(0, InstructionError::ProgramFailedToComplete),
     );
 
     // No accounts, should error

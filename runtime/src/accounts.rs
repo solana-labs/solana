@@ -1687,7 +1687,11 @@ mod tests {
             instructions,
         );
         let tx = Transaction::new(&[&keypair0], message, Hash::default());
-        let results0 = accounts.lock_accounts(&[tx.clone()], None, false);
+        let results0 = accounts.lock_accounts(
+            &[tx.clone()],
+            None, // txs_iteration_order
+            true, // demote_sysvar_write_locks
+        );
 
         assert!(results0[0].is_ok());
         assert_eq!(
@@ -1722,7 +1726,10 @@ mod tests {
         );
         let tx1 = Transaction::new(&[&keypair1], message, Hash::default());
         let txs = vec![tx0, tx1];
-        let results1 = accounts.lock_accounts(&txs, None, false);
+        let results1 = accounts.lock_accounts(
+            &txs, None, // txs_iteration_order
+            true, // demote_sysvar_write_locks
+        );
 
         assert!(results1[0].is_ok()); // Read-only account (keypair1) can be referenced multiple times
         assert!(results1[1].is_err()); // Read-only account (keypair1) cannot also be locked as writable
@@ -1737,9 +1744,16 @@ mod tests {
             2
         );
 
-        accounts.unlock_accounts(&[tx], None, &results0, false);
-        accounts.unlock_accounts(&txs, None, &results1, false);
-
+        accounts.unlock_accounts(
+            &[tx],
+            None, // txs_iteration_order
+            &results0,
+            true, // demote_sysvar_write_locks
+        );
+        accounts.unlock_accounts(
+            &txs, None, // txs_iteration_order
+            &results1, true, // demote_sysvar_write_locks
+        );
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
         let message = Message::new_with_compiled_instructions(
             1,
@@ -1750,8 +1764,11 @@ mod tests {
             instructions,
         );
         let tx = Transaction::new(&[&keypair1], message, Hash::default());
-        let results2 = accounts.lock_accounts(&[tx], None, false);
-
+        let results2 = accounts.lock_accounts(
+            &[tx],
+            None, // txs_iteration_order
+            true, // demote_sysvar_write_locks
+        );
         assert!(results2[0].is_ok()); // Now keypair1 account can be locked as writable
 
         // Check that read-only lock with zero references is deleted
@@ -1815,13 +1832,19 @@ mod tests {
             let exit_clone = exit_clone.clone();
             loop {
                 let txs = vec![writable_tx.clone()];
-                let results = accounts_clone.clone().lock_accounts(&txs, None, false);
+                let results = accounts_clone.clone().lock_accounts(
+                    &txs, None, // txs_iteration_order
+                    true, // demote_sysvar_write_locks
+                );
                 for result in results.iter() {
                     if result.is_ok() {
                         counter_clone.clone().fetch_add(1, Ordering::SeqCst);
                     }
                 }
-                accounts_clone.unlock_accounts(&txs, None, &results, false);
+                accounts_clone.unlock_accounts(
+                    &txs, None, // txs_iteration_order
+                    &results, true, // demote_sysvar_write_locks
+                );
                 if exit_clone.clone().load(Ordering::Relaxed) {
                     break;
                 }
@@ -1830,13 +1853,19 @@ mod tests {
         let counter_clone = counter;
         for _ in 0..5 {
             let txs = vec![readonly_tx.clone()];
-            let results = accounts_arc.clone().lock_accounts(&txs, None, false);
+            let results = accounts_arc.clone().lock_accounts(
+                &txs, None, // txs_iteration_order
+                true, // demote_sysvar_write_locks
+            );
             if results[0].is_ok() {
                 let counter_value = counter_clone.clone().load(Ordering::SeqCst);
                 thread::sleep(time::Duration::from_millis(50));
                 assert_eq!(counter_value, counter_clone.clone().load(Ordering::SeqCst));
             }
-            accounts_arc.unlock_accounts(&txs, None, &results, false);
+            accounts_arc.unlock_accounts(
+                &txs, None, // txs_iteration_order
+                &results, true, // demote_sysvar_write_locks
+            );
             thread::sleep(time::Duration::from_millis(50));
         }
         exit.store(true, Ordering::Relaxed);

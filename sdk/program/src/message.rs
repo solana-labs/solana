@@ -882,7 +882,9 @@ mod tests {
             Some(&id1),
         );
         assert_eq!(
-            message.get_account_keys_by_lock_type(false),
+            message.get_account_keys_by_lock_type(
+                true, // demote_sysvar_write_locks
+            ),
             (vec![&id1, &id0], vec![&id3, &id2, &program_id])
         );
     }
