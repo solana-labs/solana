@@ -44,6 +44,13 @@ where
     account
 }
 
+pub fn create_account_with_data_for_test<'a, I>(recent_blockhash_iter: I) -> AccountSharedData
+where
+    I: IntoIterator<Item = IterItem<'a>>,
+{
+    create_account_with_data_and_fields(recent_blockhash_iter, DUMMY_INHERITABLE_ACCOUNT_FIELDS)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -57,7 +64,7 @@ mod tests {
 
     #[test]
     fn test_create_account_empty() {
-        let account = create_account_with_data(42, vec![].into_iter());
+        let account = create_account_with_data_for_test(vec![].into_iter());
         let recent_blockhashes = from_account::<RecentBlockhashes, _>(&account).unwrap();
         assert_eq!(recent_blockhashes, RecentBlockhashes::default());
     }
@@ -66,8 +73,7 @@ mod tests {
     fn test_create_account_full() {
         let def_hash = Hash::default();
         let def_fees = FeeCalculator::default();
-        let account = create_account_with_data(
-            42,
+        let account = create_account_with_data_for_test(
             vec![IterItem(0u64, &def_hash, &def_fees); MAX_ENTRIES].into_iter(),
         );
         let recent_blockhashes = from_account::<RecentBlockhashes, _>(&account).unwrap();
@@ -78,8 +84,7 @@ mod tests {
     fn test_create_account_truncate() {
         let def_hash = Hash::default();
         let def_fees = FeeCalculator::default();
-        let account = create_account_with_data(
-            42,
+        let account = create_account_with_data_for_test(
             vec![IterItem(0u64, &def_hash, &def_fees); MAX_ENTRIES + 1].into_iter(),
         );
         let recent_blockhashes = from_account::<RecentBlockhashes, _>(&account).unwrap();
@@ -101,8 +106,7 @@ mod tests {
             .collect();
         unsorted_blocks.shuffle(&mut thread_rng());
 
-        let account = create_account_with_data(
-            42,
+        let account = create_account_with_data_for_test(
             unsorted_blocks
                 .iter()
                 .map(|(i, hash)| IterItem(*i, hash, &def_fees)),

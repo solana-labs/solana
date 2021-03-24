@@ -370,11 +370,11 @@ mod tests {
             .iter()
             .map(|meta| {
                 RefCell::new(if sysvar::clock::check_id(&meta.pubkey) {
-                    account::create_account_shared_data(&Clock::default(), 1)
+                    account::create_account_shared_data_for_test(&Clock::default())
                 } else if sysvar::slot_hashes::check_id(&meta.pubkey) {
-                    account::create_account_shared_data(&SlotHashes::default(), 1)
+                    account::create_account_shared_data_for_test(&SlotHashes::default())
                 } else if sysvar::rent::check_id(&meta.pubkey) {
-                    account::create_account_shared_data(&Rent::free(), 1)
+                    account::create_account_shared_data_for_test(&Rent::free())
                 } else if meta.pubkey == invalid_vote_state_pubkey() {
                     AccountSharedData::from(Account {
                         owner: invalid_vote_state_pubkey(),

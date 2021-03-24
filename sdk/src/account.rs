@@ -471,6 +471,10 @@ pub fn create_account_with_fields<S: Sysvar>(
     account
 }
 
+pub fn create_account_for_test<S: Sysvar>(sysvar: &S) -> Account {
+    create_account_with_fields(sysvar, DUMMY_INHERITABLE_ACCOUNT_FIELDS)
+}
+
 /// Create an `Account` from a `Sysvar`.
 pub fn create_account_shared_data<S: Sysvar>(sysvar: &S, lamports: u64) -> AccountSharedData {
     AccountSharedData::from(create_account_with_fields(
@@ -484,6 +488,13 @@ pub fn create_account_shared_data_with_fields<S: Sysvar>(
     fields: InheritableAccountFields,
 ) -> AccountSharedData {
     AccountSharedData::from(create_account_with_fields(sysvar, fields))
+}
+
+pub fn create_account_shared_data_for_test<S: Sysvar>(sysvar: &S) -> AccountSharedData {
+    AccountSharedData::from(create_account_with_fields(
+        sysvar,
+        DUMMY_INHERITABLE_ACCOUNT_FIELDS,
+    ))
 }
 
 /// Create a `Sysvar` from an `Account`'s data.
