@@ -701,10 +701,8 @@ impl ForkChoice for HeaviestSubtreeForkChoice {
         if let Some(fork_info) = fork_info {
             // If a bunch of slots on the same fork are confirmed at once, then only the latest
             // slot will incur this aggregation operation
-            if !fork_info.is_candidate {
-                fork_info.is_candidate = true;
-                self.insert_mark_valid_aggregate_operations(&mut aggregate_operations, valid_slot);
-            }
+            fork_info.is_candidate = true;
+            self.insert_mark_valid_aggregate_operations(&mut aggregate_operations, valid_slot);
         }
 
         // Aggregate to find the new best slots including this fork
