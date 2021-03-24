@@ -928,7 +928,7 @@ impl JsonRpcRequestProcessor {
                 Some(status)
             } else if self.config.enable_rpc_transaction_history && search_transaction_history {
                 self.blockstore
-                    .get_transaction_status(signature)
+                    .get_transaction_status(signature, true)
                     .map_err(|_| Error::internal_error())?
                     .filter(|(slot, _status_meta)| {
                         slot <= &self
