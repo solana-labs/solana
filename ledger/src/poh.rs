@@ -8,6 +8,7 @@ pub struct Poh {
     num_hashes: u64,
     hashes_per_tick: u64,
     remaining_hashes: u64,
+    tick_start_time: Instant,
 }
 
 #[derive(Debug)]
@@ -25,12 +26,59 @@ impl Poh {
             num_hashes: 0,
             hashes_per_tick,
             remaining_hashes: hashes_per_tick,
+            tick_start_time: Instant::now(),
         }
     }
 
     pub fn reset(&mut self, hash: Hash, hashes_per_tick: Option<u64>) {
         let mut poh = Poh::new(hash, hashes_per_tick);
         std::mem::swap(&mut poh, self);
+    }
+
+    fn num_hashes(&self) -> u64 {
+        self.num_hashes
+    }
+
+    fn hashes_per_tick(&self) -> u64 {
+        self.hashes_per_tick
+    }
+
+    fn tick_start_time(&self) -> Instant {
+        self.tick_start_time
+    }
+
+    // static: does not require lock - maybe we expose this later
+    fn delay_ns_to_let_wallclock_catchup(
+        num_hashes: u64,
+        hashes_per_tick: u64,
+        tick_start_time: Instant,
+        target_ns_per_tick: u64,
+        now: Instant,
+    ) -> u64 {
+        let elapsed_ns = (now - tick_start_time).as_nanos();
+        // report 10ns less. Figuring all this out and interrupting the flow costs something.
+        let buffer_ns = 10;
+        let target_elapsed_ns =
+            (target_ns_per_tick * num_hashes / hashes_per_tick - buffer_ns) as u128;
+        if elapsed_ns >= target_elapsed_ns {
+            0
+        } else {
+            (target_elapsed_ns - elapsed_ns) as u64
+        }
+    }
+
+    pub fn calculate_delay_ns_to_let_wallclock_catchup(
+        &self,
+        target_ns_per_tick: u64,
+        now: Instant,
+    ) -> u64 {
+        Self::delay_ns_to_let_wallclock_catchup(
+            self.num_hashes(),
+            self.hashes_per_tick(),
+            self.tick_start_time(),
+            target_ns_per_tick,
+            now,
+        )
     }
 
     pub fn hash(&mut self, max_num_hashes: u64) -> bool {
@@ -75,6 +123,7 @@ impl Poh {
         let num_hashes = self.num_hashes;
         self.remaining_hashes = self.hashes_per_tick;
         self.num_hashes = 0;
+        self.tick_start_time = Instant::now();
         Some(PohEntry {
             num_hashes,
             hash: self.hash,

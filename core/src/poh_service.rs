@@ -35,6 +35,7 @@ struct PohTiming {
     total_tick_time_ns: u64,
     last_metric: Instant,
     total_record_time_us: u64,
+    total_sleeps: u64,
 }
 
 impl PohTiming {
@@ -48,6 +49,7 @@ impl PohTiming {
             total_tick_time_ns: 0,
             last_metric: Instant::now(),
             total_record_time_us: 0,
+            total_sleeps: 0,
         }
     }
     fn report(&mut self, ticks_per_slot: u64) {
@@ -64,6 +66,7 @@ impl PohTiming {
                 ("total_lock_time_us", self.total_lock_time_ns / 1000, i64),
                 ("total_hash_time_us", self.total_hash_time_ns / 1000, i64),
                 ("total_record_time_us", self.total_record_time_us, i64),
+                ("total_sleeps", self.total_sleeps, i64),
             );
             self.total_sleep_us = 0;
             self.num_ticks = 0;
@@ -73,6 +76,7 @@ impl PohTiming {
             self.total_hash_time_ns = 0;
             self.last_metric = Instant::now();
             self.total_record_time_us = 0;
+            self.total_sleeps = 0;
         }
     }
 }
@@ -206,6 +210,8 @@ impl PohService {
         record_receiver: &Receiver<Record>,
         hashes_per_batch: u64,
         poh: &Arc<Mutex<Poh>>,
+        target_tick_ns: u64,
+        current_tick: u64,
     ) -> bool {
         match next_record.take() {
             Some(mut record) => {
@@ -263,10 +269,43 @@ impl PohService {
                             *next_record = Some(record);
                             break;
                         }
-                        Err(_) => {
-                            continue;
-                        }
+                        Err(_) => (),
                     }
+                    let delay_start = Instant::now();
+                    let mut delay_ns_to_let_wallclock_catchup = poh_l
+                        .calculate_delay_ns_to_let_wallclock_catchup(target_tick_ns, delay_start)
+                        as u128;
+
+                    // wait less earlier in the slot and more later in the slot
+                    let multiplier_1000 = (current_tick as u128 % 64) * 1000 / 64;
+                    delay_ns_to_let_wallclock_catchup *= multiplier_1000 / 1000;
+
+                    if delay_ns_to_let_wallclock_catchup == 0 {
+                        continue; // don't busy_wait
+                    }
+
+                    // now, we start a busy wait where we poll record_receiver
+                    timing.total_sleeps += 1;
+                    drop(poh_l);
+                    loop {
+                        // check to see if a record request has been sent
+                        let get_again = record_receiver.try_recv();
+                        match get_again {
+                            Ok(record) => {
+                                // remember the record we just received as the next record to occur
+                                *next_record = Some(record);
+                                break;
+                            }
+                            Err(_) => (),
+                        }
+                        let waited_ns = delay_start.elapsed().as_nanos();
+                        if waited_ns >= delay_ns_to_let_wallclock_catchup {
+                            timing.total_sleep_us += (waited_ns / 1000) as u64;
+                            break;
+                        }
+                        // keep polling and waiting
+                    }
+                    break;
                 }
             }
         };
@@ -285,6 +324,7 @@ impl PohService {
         let mut now = Instant::now();
         let mut timing = PohTiming::new();
         let mut next_record = None;
+        let mut current_tick = 0;
         loop {
             let should_tick = Self::record_or_hash(
                 &mut next_record,
@@ -293,6 +333,8 @@ impl PohService {
                 &record_receiver,
                 hashes_per_batch,
                 &poh,
+                target_tick_ns,
+                current_tick,
             );
             if should_tick {
                 // Lock PohRecorder only for the final hash. record_or_hash will lock PohRecorder for record calls but not for hashing.
@@ -303,6 +345,7 @@ impl PohService {
                     timing.total_lock_time_ns += lock_time.as_ns();
                     let mut tick_time = Measure::start("tick");
                     poh_recorder_l.tick();
+                    current_tick = poh_recorder_l.tick_height();
                     tick_time.stop();
                     timing.total_tick_time_ns += tick_time.as_ns();
                 }
@@ -310,7 +353,12 @@ impl PohService {
                 let elapsed_ns = now.elapsed().as_nanos() as u64;
                 // sleep is not accurate enough to get a predictable time.
                 // Kernel can not schedule the thread for a while.
+                let mut first = true;
                 while (now.elapsed().as_nanos() as u64) < target_tick_ns {
+                    if first {
+                        timing.total_sleeps += 1;
+                    }
+                    first = false;
                     std::hint::spin_loop();
                 }
                 timing.total_sleep_us += (now.elapsed().as_nanos() as u64 - elapsed_ns) / 1000;
