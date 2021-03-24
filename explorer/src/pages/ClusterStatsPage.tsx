@@ -7,16 +7,24 @@ import {
   usePerformanceInfo,
   useStatsProvider,
 } from "providers/stats/solanaClusterStats";
-import { slotsToHumanString } from "utils";
-import { useCluster } from "providers/cluster";
+import { lamportsToSol, slotsToHumanString } from "utils";
+import { ClusterStatus, useCluster } from "providers/cluster";
 import { TpsCard } from "components/TpsCard";
 import { displayTimestampUtc } from "utils/date";
-import {
-  useSetActive,
-  useSolanaBeachDashboardInfo,
-} from "providers/stats/solanaBeach";
+import { Status, useFetchSupply, useSupply } from "providers/supply";
+import { PublicKey } from "@solana/web3.js";
+import { ErrorCard } from "components/common/ErrorCard";
+import { LoadingCard } from "components/common/LoadingCard";
+import { useAccountInfo, useFetchAccountInfo } from "providers/accounts";
+import { FetchStatus } from "providers/cache";
+// @ts-ignore
+import * as CoinGecko from "coingecko-api";
+import { useVoteAccounts } from "providers/accounts/vote-accounts";
+const CoinGeckoClient = new CoinGecko();
 
-const CLUSTER_STATS_TIMEOUT = 10000;
+const CLUSTER_STATS_TIMEOUT = 5000;
+const STAKE_HISTORY_ACCOUNT = "SysvarStakeHistory1111111111111111111111111";
+const PRICE_REFRESH = 10000;
 
 export function ClusterStatsPage() {
   return (
@@ -38,48 +46,142 @@ export function ClusterStatsPage() {
 }
 
 function StakingComponent() {
-  const setSocketActive = useSetActive();
-  const dashboardInfo = useSolanaBeachDashboardInfo();
-  const { cluster } = useCluster();
+  const { status } = useCluster();
+  const supply = useSupply();
+  const fetchSupply = useFetchSupply();
+  const fetchAccount = useFetchAccountInfo();
+  const stakeInfo = useAccountInfo(STAKE_HISTORY_ACCOUNT);
+  const solanaInfo = useCoinGecko("solana");
+  const { fetchVoteAccounts, voteAccounts } = useVoteAccounts();
 
-  // React.useEffect(() => {
-  //   setSocketActive(true);
-  //   return () => setSocketActive(false);
-  // }, [setSocketActive, cluster]);
+  function fetchData() {
+    fetchSupply();
+    fetchAccount(new PublicKey(STAKE_HISTORY_ACCOUNT));
+    fetchVoteAccounts();
+  }
 
-  // if (!dashboardInfo) {
-  //   return null;
-  // }
+  React.useEffect(() => {
+    if (status === ClusterStatus.Connected) {
+      fetchData();
+    }
+  }, [status]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const deliquentStake = React.useMemo(() => {
+    if (voteAccounts) {
+      return voteAccounts.delinquent.reduce(
+        (prev, current) => prev + current.activatedStake,
+        0
+      );
+    }
+  }, [voteAccounts]);
+
+  let stakeHistory = stakeInfo?.data?.details?.data?.parsed.info;
+
+  if (supply === Status.Disconnected) {
+    // we'll return here to prevent flicker
+    return null;
+  }
+
+  if (
+    supply === Status.Idle ||
+    supply === Status.Connecting ||
+    !stakeInfo ||
+    !stakeHistory
+  ) {
+    return <LoadingCard />;
+  } else if (typeof supply === "string") {
+    return <ErrorCard text={supply} retry={fetchData} />;
+  } else if (stakeInfo.status === FetchStatus.FetchFailed) {
+    return (
+      <ErrorCard
+        text={"Error fetching stake history account"}
+        retry={fetchData}
+      />
+    );
+  }
+
+  stakeHistory = stakeHistory[0].stakeHistory;
+
+  const circulatingPercentage = (
+    (supply.circulating / supply.total) *
+    100
+  ).toFixed(1);
+
+  let delinquentStakePercentage;
+  if (deliquentStake) {
+    delinquentStakePercentage = (
+      (deliquentStake / stakeHistory.effective) *
+      100
+    ).toFixed(1);
+  }
 
   return (
     <div className="card staking-card">
       <div className="card-body">
-        <div className="d-flex bd-highlight">
-          <div className="p-2 flex-fill bd-highlight">
+        <div className="d-flex">
+          <div className="p-2 flex-fill">
             <h4>Circulating Supply</h4>
             <h1>
-              <em>267.5M</em> / <small>491.3M</small>
+              <em>{displayLamports(supply.circulating)}</em> /{" "}
+              <small>{displayLamports(supply.total)}</small>
             </h1>
-            <h5><em>54.4%</em> is circulating</h5>
+            <h5>
+              <em>{circulatingPercentage}%</em> is circulating
+            </h5>
           </div>
-          <div className="p-2 flex-fill bd-highlight">
+          <div className="p-2 flex-fill">
             <h4>Active Stake</h4>
             <h1>
-              <em>302.1M</em> / <small>491.3M</small>
+              <em>{displayLamports(stakeHistory.effective)}</em> /{" "}
+              <small>{displayLamports(supply.total)}</small>
             </h1>
-            <h5>Delinquent stake: <em>0.4%</em></h5>
+            {delinquentStakePercentage && (
+              <h5>
+                Delinquent stake: <em>{delinquentStakePercentage}%</em>
+              </h5>
+            )}
           </div>
-          <div className="p-2 flex-fill bd-highlight">
-            <h4>Price</h4>
-            <h1>
-              <em>$15.74</em> <small>&#8593; 12.6%</small>
-            </h1>
-            <h5>24h Vol: <em>$246.7M</em> MCap: <em>$7.7B</em></h5>
-          </div>
+          {solanaInfo && (
+            <div className="p-2 flex-fill">
+              <h4>Price</h4>
+              <h1>
+                <em>${solanaInfo.price.toFixed(2)}</em>{" "}
+                {solanaInfo.price_change_percentage_24h > 0 && (
+                  <small>
+                    &uarr; {solanaInfo.price_change_percentage_24h.toFixed(2)}%
+                  </small>
+                )}
+                {solanaInfo.price_change_percentage_24h < 0 && (
+                  <small>
+                    &darr; {solanaInfo.price_change_percentage_24h.toFixed(2)}%
+                  </small>
+                )}
+                {solanaInfo.price_change_percentage_24h === 0 && (
+                  <small>0%</small>
+                )}
+              </h1>
+              <h5>
+                24h Vol: <em>${abbreviatedNumber(solanaInfo.volume_24)}</em>{" "}
+                MCap: <em>${abbreviatedNumber(solanaInfo.market_cap)}</em>
+              </h5>
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
+}
+
+const abbreviatedNumber = (value: number, fixed = 1) => {
+  if (value < 1e3) return value;
+  if (value >= 1e3 && value < 1e6) return +(value / 1e3).toFixed(fixed) + "K";
+  if (value >= 1e6 && value < 1e9) return +(value / 1e6).toFixed(fixed) + "M";
+  if (value >= 1e9 && value < 1e12) return +(value / 1e9).toFixed(fixed) + "B";
+  if (value >= 1e12) return +(value / 1e12).toFixed(fixed) + "T";
+};
+
+function displayLamports(value: number) {
+  return abbreviatedNumber(lamportsToSol(value));
 }
 
 function StatsCardBody() {
@@ -207,4 +309,62 @@ export function StatsNotReady({ error }: { error: boolean }) {
       Loading
     </div>
   );
+}
+
+interface CoinInfo {
+  price: number;
+  volume_24: number;
+  market_cap: number;
+  price_change_percentage_24h: number;
+}
+
+interface CoinInfoResult {
+  data: {
+    market_data: {
+      current_price: {
+        usd: number;
+      };
+      total_volume: {
+        usd: number;
+      };
+      market_cap: {
+        usd: number;
+      };
+      price_change_percentage_24h: number;
+    };
+  };
+}
+
+function useCoinGecko(coinId: string): CoinInfo | undefined {
+  const [coinInfo, setCoinInfo] = React.useState<CoinInfoResult>();
+
+  React.useEffect(() => {
+    const getCoinInfo = () => {
+      CoinGeckoClient.coins.fetch("solana").then((info: CoinInfoResult) => {
+        setCoinInfo(info);
+      });
+    };
+
+    getCoinInfo();
+
+    const interval = setInterval(() => {
+      getCoinInfo();
+    }, PRICE_REFRESH);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [setCoinInfo]);
+
+  if (coinInfo === undefined) {
+    return;
+  }
+
+  return {
+    price: coinInfo.data.market_data.current_price.usd,
+    volume_24: coinInfo.data.market_data.total_volume.usd,
+    market_cap: coinInfo.data.market_data.market_cap.usd,
+    price_change_percentage_24h:
+      coinInfo.data.market_data.price_change_percentage_24h,
+  };
 }
