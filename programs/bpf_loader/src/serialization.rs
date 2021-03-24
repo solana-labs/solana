@@ -448,7 +448,7 @@ mod tests {
             assert_eq!(account.lamports, de_keyed_account.lamports().unwrap());
             assert_eq!(
                 &account.data()[..],
-                &de_keyed_account.try_account_ref().unwrap().data[..]
+                &de_keyed_account.try_account_ref().unwrap().data()[..]
             );
             assert_eq!(account.owner, de_keyed_account.owner().unwrap());
             assert_eq!(account.executable, de_keyed_account.executable().unwrap());
@@ -507,7 +507,7 @@ mod tests {
             assert_eq!(account.lamports, de_keyed_account.lamports().unwrap());
             assert_eq!(
                 &account.data()[..],
-                &de_keyed_account.try_account_ref().unwrap().data[..]
+                &de_keyed_account.try_account_ref().unwrap().data()[..]
             );
             assert_eq!(account.owner, de_keyed_account.owner().unwrap());
             assert_eq!(account.executable, de_keyed_account.executable().unwrap());

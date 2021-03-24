@@ -413,7 +413,7 @@ pub mod tests {
 
         // Vote account too big
         let cache_data = vote_account.data().to_vec();
-        let mut pushed = vote_account.data.to_vec();
+        let mut pushed = vote_account.data().to_vec();
         pushed.push(0);
         vote_account.set_data(pushed);
         stakes.store(&vote_pubkey, &vote_account, true, true);
