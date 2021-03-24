@@ -22,6 +22,10 @@ where
     to_account(&recent_blockhashes, account)
 }
 
+#[deprecated(
+    since = "1.5.17",
+    note = "Please use `create_account_with_data_for_test` instead"
+)]
 pub fn create_account_with_data<'a, I>(lamports: u64, recent_blockhash_iter: I) -> AccountSharedData
 where
     I: IntoIterator<Item = IterItem<'a>>,
