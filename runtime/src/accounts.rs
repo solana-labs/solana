@@ -19,7 +19,7 @@ use solana_sdk::{
     account::{Account, AccountSharedData},
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-    clock::Slot,
+    clock::{Slot, INITIAL_RENT_EPOCH},
     feature_set::{self, FeatureSet},
     fee_calculator::{FeeCalculator, FeeConfig},
     genesis_config::ClusterType,
@@ -944,7 +944,7 @@ impl Accounts {
                             _ => panic!("unexpected nonce_rollback condition"),
                         }
                     }
-                    if account.rent_epoch == 0 {
+                    if account.rent_epoch == INITIAL_RENT_EPOCH {
                         loaded_transaction.rent +=
                             rent_collector.collect_from_created_account(&key, account);
                     }

@@ -1,4 +1,8 @@
-use crate::account::{create_account_shared_data, to_account, AccountSharedData};
+use crate::account::{
+    create_account_shared_data_with_fields, to_account, AccountSharedData,
+    InheritableAccountFields, DUMMY_INHERITABLE_ACCOUNT_FIELDS,
+};
+use crate::clock::INITIAL_RENT_EPOCH;
 use solana_program::sysvar::recent_blockhashes::{
     IntoIterSorted, IterItem, RecentBlockhashes, MAX_ENTRIES,
 };
@@ -22,8 +26,20 @@ pub fn create_account_with_data<'a, I>(lamports: u64, recent_blockhash_iter: I) 
 where
     I: IntoIterator<Item = IterItem<'a>>,
 {
-    let mut account =
-        create_account_shared_data::<RecentBlockhashes>(&RecentBlockhashes::default(), lamports);
+    create_account_with_data_and_fields(recent_blockhash_iter, (lamports, INITIAL_RENT_EPOCH))
+}
+
+pub fn create_account_with_data_and_fields<'a, I>(
+    recent_blockhash_iter: I,
+    fields: InheritableAccountFields,
+) -> AccountSharedData
+where
+    I: IntoIterator<Item = IterItem<'a>>,
+{
+    let mut account = create_account_shared_data_with_fields::<RecentBlockhashes>(
+        &RecentBlockhashes::default(),
+        fields,
+    );
     update_account(&mut account, recent_blockhash_iter).unwrap();
     account
 }
