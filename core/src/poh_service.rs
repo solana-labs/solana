@@ -34,6 +34,7 @@ struct PohTiming {
     total_hash_time_ns: u64,
     total_tick_time_ns: u64,
     last_metric: Instant,
+    total_record_time_us: u64,
 }
 
 impl PohTiming {
@@ -46,6 +47,7 @@ impl PohTiming {
             total_hash_time_ns: 0,
             total_tick_time_ns: 0,
             last_metric: Instant::now(),
+            total_record_time_us: 0,
         }
     }
     fn report(&mut self, ticks_per_slot: u64) {
@@ -61,6 +63,7 @@ impl PohTiming {
                 ("total_tick_time_us", self.total_tick_time_ns / 1000, i64),
                 ("total_lock_time_us", self.total_lock_time_ns / 1000, i64),
                 ("total_hash_time_us", self.total_hash_time_ns / 1000, i64),
+                ("total_record_time_us", self.total_record_time_us, i64),
             );
             self.total_sleep_us = 0;
             self.num_ticks = 0;
@@ -69,6 +72,7 @@ impl PohTiming {
             self.total_lock_time_ns = 0;
             self.total_hash_time_ns = 0;
             self.last_metric = Instant::now();
+            self.total_record_time_us = 0;
         }
     }
 }
@@ -211,6 +215,7 @@ impl PohService {
                 let mut poh_recorder_l = poh_recorder.lock().unwrap();
                 lock_time.stop();
                 timing.total_lock_time_ns += lock_time.as_ns();
+                let mut record_time = Measure::start("record");
                 loop {
                     let res = poh_recorder_l.record(
                         record.slot,
@@ -231,6 +236,8 @@ impl PohService {
                         }
                     }
                 }
+                record_time.stop();
+                timing.total_record_time_us += record_time.as_us();
                 // PohRecorder.record would have ticked if it needed to, so should_tick will be false
             }
             None => {
