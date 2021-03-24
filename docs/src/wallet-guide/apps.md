@@ -5,6 +5,13 @@ title: Mobile App Wallets
 Solana is supported by multiple third-party apps which should provide a familiar
 experience for most people who are new or experienced with using crypto wallets.
 
+## Exodus
+Send, receive & exchange cryptocurrency with ease on the world's leading Desktop, Mobile and Hardware crypto wallets.
+
+Download [Exodus](https://exodus.com/) to easily and securely manage your Solana tokens.
+
+Exodus includes live charts, a built-in exchange, and 24/7 human support.
+
 ## Trust Wallet
 [Trust Wallet](https://trustwallet.com/) is an app available for iOS and Android
 and can be used to send and receive SOL tokens.
