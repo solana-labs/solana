@@ -3739,11 +3739,25 @@ impl Bank {
     // for development/performance purpose.
     // Absolutely not under ClusterType::MainnetBeta!!!!
     fn use_multi_epoch_collection_cycle(&self, epoch: Epoch) -> bool {
+        // Force normal behavior, disabling multi epoch collection cycle for manual local testing
+        #[cfg(not(test))]
+        if self.slot_count_per_normal_epoch() == solana_sdk::epoch_schedule::MINIMUM_SLOTS_PER_EPOCH
+        {
+            return false;
+        }
+
         epoch >= self.first_normal_epoch()
             && self.slot_count_per_normal_epoch() < self.slot_count_in_two_day()
     }
 
     fn use_fixed_collection_cycle(&self) -> bool {
+        // Force normal behavior, disabling fixed collection cycle for manual local testing
+        #[cfg(not(test))]
+        if self.slot_count_per_normal_epoch() == solana_sdk::epoch_schedule::MINIMUM_SLOTS_PER_EPOCH
+        {
+            return false;
+        }
+
         self.cluster_type() != ClusterType::MainnetBeta
             && self.slot_count_per_normal_epoch() < self.slot_count_in_two_day()
     }
