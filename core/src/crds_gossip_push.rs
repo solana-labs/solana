@@ -9,6 +9,7 @@
 //! 2. The prune set is stored in a Bloom filter.
 
 use crate::{
+    cluster_info::CRDS_UNIQUE_PUBKEY_CAPACITY,
     contact_info::ContactInfo,
     crds::{Crds, VersionedCrdsValue},
     crds_gossip::{get_stake, get_weight, CRDS_GOSSIP_DEFAULT_BLOOM_ITEMS},
@@ -19,6 +20,7 @@ use crate::{
 use bincode::serialized_size;
 use indexmap::map::IndexMap;
 use itertools::Itertools;
+use lru::LruCache;
 use rand::{seq::SliceRandom, Rng};
 use solana_runtime::bloom::{AtomicBloom, Bloom};
 use solana_sdk::{hash::Hash, packet::PACKET_DATA_SIZE, pubkey::Pubkey, timing::timestamp};
@@ -39,9 +41,6 @@ pub const CRDS_GOSSIP_PRUNE_MIN_INGRESS_NODES: usize = 3;
 // Do not push to peers which have not been updated for this long.
 const PUSH_ACTIVE_TIMEOUT_MS: u64 = 60_000;
 
-// 10 minutes
-const MAX_PUSHED_TO_TIMEOUT_MS: u64 = 10 * 60 * 1000;
-
 pub struct CrdsGossipPush {
     /// max bytes per message
     pub max_bytes: usize,
@@ -54,8 +53,7 @@ pub struct CrdsGossipPush {
     /// This cache represents a lagging view of which validators
     /// currently have this node in their `active_set`
     received_cache: HashMap<Pubkey, HashMap<Pubkey, (bool, u64)>>,
-    last_pushed_to: HashMap<Pubkey, u64>,
-    last_pushed_to_cleanup_ts: u64,
+    last_pushed_to: LruCache<Pubkey, u64>,
     pub num_active: usize,
     pub push_fanout: usize,
     pub msg_timeout: u64,
@@ -73,8 +71,7 @@ impl Default for CrdsGossipPush {
             active_set: IndexMap::new(),
             push_messages: HashMap::new(),
             received_cache: HashMap::new(),
-            last_pushed_to: HashMap::new(),
-            last_pushed_to_cleanup_ts: 0,
+            last_pushed_to: LruCache::new(CRDS_UNIQUE_PUBKEY_CAPACITY),
             num_active: CRDS_GOSSIP_NUM_ACTIVE,
             push_fanout: CRDS_GOSSIP_PUSH_FANOUT,
             msg_timeout: CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS,
@@ -269,13 +266,8 @@ impl CrdsGossipPush {
         for label in labels {
             self.push_messages.remove(&label);
         }
-        for target_pubkey in push_messages.keys() {
-            *self.last_pushed_to.entry(*target_pubkey).or_insert(0) = now;
-        }
-        if now - self.last_pushed_to_cleanup_ts > MAX_PUSHED_TO_TIMEOUT_MS {
-            self.last_pushed_to
-                .retain(|_id, timestamp| now - *timestamp > MAX_PUSHED_TO_TIMEOUT_MS);
-            self.last_pushed_to_cleanup_ts = now;
+        for target_pubkey in push_messages.keys().copied() {
+            self.last_pushed_to.put(target_pubkey, now);
         }
         push_messages
     }
@@ -395,8 +387,12 @@ impl CrdsGossipPush {
                     })
             })
             .map(|info| {
-                let last_pushed_to: u64 = *self.last_pushed_to.get(&info.id).unwrap_or(&0);
-                let since = (now.saturating_sub(last_pushed_to) / 1024) as u32;
+                let last_pushed_to = self
+                    .last_pushed_to
+                    .peek(&info.id)
+                    .copied()
+                    .unwrap_or_default();
+                let since = (now.saturating_sub(last_pushed_to).min(3600 * 1000) / 1024) as u32;
                 let stake = get_stake(&info.id, stakes);
                 let weight = get_weight(max_weight, since, stake);
                 (weight, info)
@@ -423,15 +419,20 @@ impl CrdsGossipPush {
 
     // Only for tests and simulations.
     pub(crate) fn mock_clone(&self) -> Self {
-        let mut active_set = IndexMap::<Pubkey, AtomicBloom<Pubkey>>::new();
-        for (k, v) in &self.active_set {
-            active_set.insert(*k, v.mock_clone());
+        let active_set = self
+            .active_set
+            .iter()
+            .map(|(k, v)| (*k, v.mock_clone()))
+            .collect();
+        let mut last_pushed_to = LruCache::new(self.last_pushed_to.cap());
+        for (k, v) in self.last_pushed_to.iter().rev() {
+            last_pushed_to.put(*k, *v);
         }
         Self {
             active_set,
             push_messages: self.push_messages.clone(),
             received_cache: self.received_cache.clone(),
-            last_pushed_to: self.last_pushed_to.clone(),
+            last_pushed_to,
             ..*self
         }
     }
@@ -641,7 +642,7 @@ mod test {
             let id = peer.label().pubkey();
             crds.insert(peer.clone(), time).unwrap();
             stakes.insert(id, i * 100);
-            push.last_pushed_to.insert(id, time);
+            push.last_pushed_to.put(id, time);
         }
         let mut options = push.push_options(&crds, &Pubkey::default(), 0, &stakes, None);
         assert!(!options.is_empty());
