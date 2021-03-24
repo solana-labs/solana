@@ -141,6 +141,23 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
     if legacy_program_feature_present {
         println!("Legacy program feature detected");
     }
+<<<<<<< HEAD
+=======
+    let bpf_tools_filename = if cfg!(target_os = "macos") {
+        "solana-bpf-tools-osx.tar.bz2"
+    } else {
+        "solana-bpf-tools-linux.tar.bz2"
+    };
+    install_if_missing(
+        &config,
+        "bpf-tools",
+        "v1.3",
+        "https://github.com/solana-labs/bpf-tools/releases/download",
+        &PathBuf::from(bpf_tools_filename),
+    )
+    .expect("Failed to install bpf-tools");
+    link_bpf_toolchain(&config);
+>>>>>>> 664ed7652... Bump bpf-tools to version v1.3 (#16068)
 
     let xargo_build = config.bpf_sdk.join("rust").join("xargo-build.sh");
     let mut xargo_build_args = vec![];
