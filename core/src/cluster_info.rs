@@ -115,7 +115,7 @@ pub const DEFAULT_CONTACT_SAVE_INTERVAL_MILLIS: u64 = 60_000;
 /// Minimum serialized size of a Protocol::PullResponse packet.
 const PULL_RESPONSE_MIN_SERIALIZED_SIZE: usize = 161;
 // Limit number of unique pubkeys in the crds table.
-const CRDS_UNIQUE_PUBKEY_CAPACITY: usize = 4096;
+pub(crate) const CRDS_UNIQUE_PUBKEY_CAPACITY: usize = 4096;
 /// Minimum stake that a node should have so that its CRDS values are
 /// propagated through gossip (few types are exempted).
 const MIN_STAKE_FOR_GOSSIP: u64 = solana_sdk::native_token::LAMPORTS_PER_SOL;
@@ -3466,6 +3466,7 @@ mod tests {
     };
     use itertools::izip;
     use rand::seq::SliceRandom;
+    use serial_test::serial;
     use solana_ledger::shred::Shredder;
     use solana_sdk::signature::{Keypair, Signer};
     use solana_vote_program::{vote_instruction, vote_state::Vote};
@@ -4741,5 +4742,55 @@ mod tests {
                 assert_eq!(k, 1);
             }
         }
+    }
+
+    #[test]
+    #[serial]
+    fn test_pull_request_time_pruning() {
+        let node = Node::new_localhost();
+        let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(node.info));
+        let entrypoint_pubkey = solana_sdk::pubkey::new_rand();
+        let entrypoint = ContactInfo::new_localhost(&entrypoint_pubkey, timestamp());
+        cluster_info.set_entrypoint(entrypoint);
+
+        let mut rng = rand::thread_rng();
+        let shred_version = cluster_info.my_shred_version();
+        let mut peers: Vec<Pubkey> = vec![];
+
+        const NO_ENTRIES: usize = 20000;
+        let data: Vec<_> = repeat_with(|| {
+            let keypair = Keypair::new();
+            peers.push(keypair.pubkey());
+            let mut rand_ci = ContactInfo::new_rand(&mut rng, Some(keypair.pubkey()));
+            rand_ci.shred_version = shred_version;
+            rand_ci.wallclock = timestamp();
+            CrdsValue::new_signed(CrdsData::ContactInfo(rand_ci), &keypair)
+        })
+        .take(NO_ENTRIES)
+        .collect();
+        let timeouts = cluster_info.gossip.read().unwrap().make_timeouts_test();
+        assert_eq!(
+            (0, 0, NO_ENTRIES),
+            cluster_info.handle_pull_response(&entrypoint_pubkey, data, &timeouts)
+        );
+
+        let now = timestamp();
+        for peer in peers {
+            cluster_info
+                .gossip
+                .write()
+                .unwrap()
+                .mark_pull_request_creation_time(&peer, now);
+        }
+        assert_eq!(
+            cluster_info
+                .gossip
+                .read()
+                .unwrap()
+                .pull
+                .pull_request_time
+                .len(),
+            CRDS_UNIQUE_PUBKEY_CAPACITY
+        );
     }
 }
