@@ -990,10 +990,10 @@ fn test_program_bpf_invoke_sanity() {
         assert_eq!(invoke_program_id, account.owner);
         assert_eq!(
             MAX_PERMITTED_DATA_INCREASE,
-            bank.get_account(&derived_key1).unwrap().data.len()
+            bank.get_account(&derived_key1).unwrap().data().len()
         );
         for i in 0..20 {
-            assert_eq!(i as u8, account.data[i]);
+            assert_eq!(i as u8, account.data()[i]);
         }
 
         // Attempt to realloc into unauthorized address space
