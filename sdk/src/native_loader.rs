@@ -1,11 +1,7 @@
-<<<<<<< HEAD
-use crate::account::AccountSharedData;
-=======
 use crate::account::{
-    Account, AccountSharedData, InheritableAccountFields, DUMMY_INHERITABLE_ACCOUNT_FIELDS,
+    AccountSharedData, InheritableAccountFields, DUMMY_INHERITABLE_ACCOUNT_FIELDS,
 };
 use crate::clock::INITIAL_RENT_EPOCH;
->>>>>>> 6d5c6c17c... Simplify account.rent_epoch handling for sysvar rent (#16049)
 
 crate::declare_id!("NativeLoader1111111111111111111111111111111");
 
@@ -15,9 +11,6 @@ crate::declare_id!("NativeLoader1111111111111111111111111111111");
     note = "Please use `create_loadable_account_for_test` instead"
 )]
 pub fn create_loadable_account(name: &str, lamports: u64) -> AccountSharedData {
-<<<<<<< HEAD
-    AccountSharedData {
-=======
     create_loadable_account_with_fields(name, (lamports, INITIAL_RENT_EPOCH))
 }
 
@@ -25,19 +18,13 @@ pub fn create_loadable_account_with_fields(
     name: &str,
     (lamports, rent_epoch): InheritableAccountFields,
 ) -> AccountSharedData {
-    AccountSharedData::from(Account {
->>>>>>> 6d5c6c17c... Simplify account.rent_epoch handling for sysvar rent (#16049)
+    AccountSharedData {
         lamports,
         owner: id(),
         data: name.as_bytes().to_vec(),
         executable: true,
-<<<<<<< HEAD
-        rent_epoch: 0,
-    }
-=======
         rent_epoch,
-    })
->>>>>>> 6d5c6c17c... Simplify account.rent_epoch handling for sysvar rent (#16049)
+    }
 }
 
 pub fn create_loadable_account_for_test(name: &str) -> AccountSharedData {
