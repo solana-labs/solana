@@ -490,17 +490,18 @@ mod tests {
         RefCell::new(AccountSharedData::default())
     }
     fn create_default_recent_blockhashes_account() -> RefCell<AccountSharedData> {
-        RefCell::new(recent_blockhashes_account::create_account_with_data(
-            1,
-            vec![
-                IterItem(0u64, &Hash::default(), &FeeCalculator::default());
-                sysvar::recent_blockhashes::MAX_ENTRIES
-            ]
-            .into_iter(),
-        ))
+        RefCell::new(
+            recent_blockhashes_account::create_account_with_data_for_test(
+                vec![
+                    IterItem(0u64, &Hash::default(), &FeeCalculator::default());
+                    sysvar::recent_blockhashes::MAX_ENTRIES
+                ]
+                .into_iter(),
+            ),
+        )
     }
     fn create_default_rent_account() -> RefCell<AccountSharedData> {
-        RefCell::new(account::create_account_shared_data(&Rent::free(), 1))
+        RefCell::new(account::create_account_shared_data_for_test(&Rent::free()))
     }
 
     #[test]
@@ -1376,7 +1377,7 @@ mod tests {
                 RefCell::new(if sysvar::recent_blockhashes::check_id(&meta.pubkey) {
                     create_default_recent_blockhashes_account().into_inner()
                 } else if sysvar::rent::check_id(&meta.pubkey) {
-                    account::create_account_shared_data(&Rent::free(), 1)
+                    account::create_account_shared_data_for_test(&Rent::free())
                 } else {
                     AccountSharedData::default()
                 })
@@ -1470,8 +1471,7 @@ mod tests {
         )
         .unwrap();
         let new_recent_blockhashes_account = RefCell::new(
-            solana_sdk::recent_blockhashes_account::create_account_with_data(
-                1,
+            solana_sdk::recent_blockhashes_account::create_account_with_data_for_test(
                 vec![
                     IterItem(
                         0u64,

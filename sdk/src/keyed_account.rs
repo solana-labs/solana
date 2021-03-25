@@ -225,7 +225,7 @@ pub fn from_keyed_account<S: Sysvar>(
 mod tests {
     use super::*;
     use crate::{
-        account::{create_account, to_account},
+        account::{create_account_for_test, to_account},
         pubkey::Pubkey,
     };
     use std::cell::RefCell;
@@ -249,7 +249,7 @@ mod tests {
         let key = crate::keyed_account::tests::id();
         let wrong_key = Pubkey::new_unique();
 
-        let account = create_account(&test_sysvar, 42);
+        let account = create_account_for_test(&test_sysvar);
         let test_sysvar = from_account::<TestSysvar, _>(&account).unwrap();
         assert_eq!(test_sysvar, TestSysvar::default());
 
