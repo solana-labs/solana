@@ -163,11 +163,8 @@ impl Accounts {
         false
     }
 
-    fn construct_instructions_account(
-        message: &Message,
-        demote_sysvar_write_locks: bool,
-    ) -> AccountSharedData {
-        let mut data = message.serialize_instructions(demote_sysvar_write_locks);
+    fn construct_instructions_account(message: &Message) -> AccountSharedData {
+        let mut data = message.serialize_instructions();
         // add room for current instruction index.
         data.resize(data.len() + 2, 0);
         AccountSharedData::from(Account {
@@ -211,7 +208,7 @@ impl Accounts {
                         if message.is_writable(i, demote_sysvar_write_locks) {
                             return Err(TransactionError::InvalidAccountIndex);
                         }
-                        Self::construct_instructions_account(message, demote_sysvar_write_locks)
+                        Self::construct_instructions_account(message)
                     } else {
                         let (account, rent) = self
                             .accounts_db

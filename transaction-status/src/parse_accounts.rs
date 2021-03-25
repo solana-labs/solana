@@ -13,7 +13,8 @@ pub fn parse_accounts(message: &Message) -> Vec<ParsedAccount> {
     for (i, account_key) in message.account_keys.iter().enumerate() {
         accounts.push(ParsedAccount {
             pubkey: account_key.to_string(),
-            // TODO: Confirm hardcoded demote_sysvar_write_locks here.
+            // Hard coding demote_sysvar_write_locks to false here not to
+            // change encodings.
             writable: message.is_writable(i, /*demote_sysvar_write_locks=*/ false),
             signer: message.is_signer(i),
         });
