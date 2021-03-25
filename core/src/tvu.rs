@@ -6,7 +6,9 @@ use crate::{
     broadcast_stage::RetransmitSlotsSender,
     cache_block_time_service::CacheBlockTimeSender,
     cluster_info::ClusterInfo,
-    cluster_info_vote_listener::{VerifiedVoteReceiver, VoteTracker},
+    cluster_info_vote_listener::{
+        GossipDuplicateConfirmedSlotsReceiver, VerifiedVoteReceiver, VoteTracker,
+    },
     cluster_slots::ClusterSlots,
     completed_data_sets_service::CompletedDataSetsSender,
     consensus::Tower,
@@ -120,6 +122,7 @@ impl Tvu {
         replay_vote_sender: ReplayVoteSender,
         completed_data_sets_sender: CompletedDataSetsSender,
         bank_notification_sender: Option<BankNotificationSender>,
+        gossip_confirmed_slots_receiver: GossipDuplicateConfirmedSlotsReceiver,
         tvu_config: TvuConfig,
         max_slots: &Arc<MaxSlots>,
     ) -> Self {
@@ -159,6 +162,7 @@ impl Tvu {
         let (duplicate_slots_reset_sender, duplicate_slots_reset_receiver) = unbounded();
         let compaction_interval = tvu_config.rocksdb_compaction_interval;
         let max_compaction_jitter = tvu_config.rocksdb_max_compaction_jitter;
+        let (duplicate_slots_sender, duplicate_slots_receiver) = unbounded();
         let retransmit_stage = RetransmitStage::new(
             bank_forks.clone(),
             leader_schedule_cache,
@@ -179,6 +183,7 @@ impl Tvu {
             completed_data_sets_sender,
             max_slots,
             Some(subscriptions.clone()),
+            duplicate_slots_sender,
         );
 
         let (ledger_cleanup_slot_sender, ledger_cleanup_slot_receiver) = channel();
@@ -262,6 +267,7 @@ impl Tvu {
             bank_forks.clone(),
             cluster_info.clone(),
             ledger_signal_receiver,
+            duplicate_slots_receiver,
             poh_recorder.clone(),
             tower,
             vote_tracker,
@@ -269,6 +275,7 @@ impl Tvu {
             retransmit_slots_sender,
             duplicate_slots_reset_receiver,
             replay_vote_sender,
+            gossip_confirmed_slots_receiver,
         );
 
         let ledger_cleanup_service = tvu_config.max_ledger_shreds.map(|max_ledger_shreds| {
@@ -371,6 +378,7 @@ pub mod tests {
         let (_verified_vote_sender, verified_vote_receiver) = unbounded();
         let (replay_vote_sender, _replay_vote_receiver) = unbounded();
         let (completed_data_sets_sender, _completed_data_sets_receiver) = unbounded();
+        let (_, gossip_confirmed_slots_receiver) = unbounded();
         let bank_forks = Arc::new(RwLock::new(bank_forks));
         let tower = Tower::new_with_key(&target1_keypair.pubkey());
         let tvu = Tvu::new(
@@ -411,6 +419,7 @@ pub mod tests {
             replay_vote_sender,
             completed_data_sets_sender,
             None,
+            gossip_confirmed_slots_receiver,
             TvuConfig::default(),
             &Arc::new(MaxSlots::default()),
         );

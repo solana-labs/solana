@@ -275,6 +275,10 @@ impl PohRecorder {
                     || !self.is_same_fork_as_previous_leader(current_slot)))
     }
 
+    pub fn last_reset_slot(&self) -> Slot {
+        self.start_slot
+    }
+
     /// returns if leader slot has been reached, how many grace ticks were afforded,
     ///   imputed leader_slot and self.start_slot
     /// reached_leader_slot() == true means "ready for a bank"

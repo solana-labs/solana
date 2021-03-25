@@ -25,6 +25,7 @@ const MAX_ROOT_PRINT_SECONDS: u64 = 30;
 enum UpdateLabel {
     Aggregate,
     Add,
+    MarkValid,
     Subtract,
 }
 
@@ -32,6 +33,7 @@ enum UpdateLabel {
 enum UpdateOperation {
     Aggregate,
     Add(u64),
+    MarkValid,
     Subtract(u64),
 }
 
@@ -40,6 +42,7 @@ impl UpdateOperation {
         match self {
             Self::Aggregate => panic!("Should not get here"),
             Self::Add(stake) => *stake += new_stake,
+            Self::MarkValid => panic!("Should not get here"),
             Self::Subtract(stake) => *stake += new_stake,
         }
     }
@@ -56,6 +59,9 @@ struct ForkInfo {
     best_slot: Slot,
     parent: Option<Slot>,
     children: Vec<Slot>,
+    // Whether the fork rooted at this slot is a valid contender
+    // for the best fork
+    is_candidate: bool,
 }
 
 pub struct HeaviestSubtreeForkChoice {
@@ -142,6 +148,12 @@ impl HeaviestSubtreeForkChoice {
             .map(|fork_info| fork_info.stake_voted_subtree)
     }
 
+    pub fn is_candidate_slot(&self, slot: Slot) -> Option<bool> {
+        self.fork_infos
+            .get(&slot)
+            .map(|fork_info| fork_info.is_candidate)
+    }
+
     pub fn root(&self) -> Slot {
         self.root
     }
@@ -205,6 +217,7 @@ impl HeaviestSubtreeForkChoice {
             best_slot: root_info.best_slot,
             children: vec![self.root],
             parent: None,
+            is_candidate: true,
         };
         self.fork_infos.insert(root_parent, root_parent_info);
         self.root = root_parent;
@@ -226,6 +239,7 @@ impl HeaviestSubtreeForkChoice {
                 best_slot: slot,
                 children: vec![],
                 parent,
+                is_candidate: true,
             });
 
         if parent.is_none() {
@@ -259,6 +273,15 @@ impl HeaviestSubtreeForkChoice {
             let child_weight = self
                 .stake_voted_subtree(*child)
                 .expect("child must exist in `self.fork_infos`");
+
+            // Don't count children currently marked as invalid
+            if !self
+                .is_candidate_slot(*child)
+                .expect("child must exist in tree")
+            {
+                continue;
+            }
+
             if child_weight > maybe_best_child_weight
                 || (maybe_best_child_weight == child_weight && *child < maybe_best_child)
             {
@@ -268,6 +291,7 @@ impl HeaviestSubtreeForkChoice {
 
         true
     }
+
     pub fn all_slots_stake_voted_subtree(&self) -> Vec<(Slot, u64)> {
         self.fork_infos
             .iter()
@@ -346,18 +370,39 @@ impl HeaviestSubtreeForkChoice {
         }
     }
 
-    #[allow(clippy::map_entry)]
+    fn insert_mark_valid_aggregate_operations(
+        &self,
+        update_operations: &mut BTreeMap<(Slot, UpdateLabel), UpdateOperation>,
+        slot: Slot,
+    ) {
+        self.do_insert_aggregate_operations(update_operations, true, slot);
+    }
+
     fn insert_aggregate_operations(
         &self,
         update_operations: &mut BTreeMap<(Slot, UpdateLabel), UpdateOperation>,
         slot: Slot,
     ) {
+        self.do_insert_aggregate_operations(update_operations, false, slot);
+    }
+
+    #[allow(clippy::map_entry)]
+    fn do_insert_aggregate_operations(
+        &self,
+        update_operations: &mut BTreeMap<(Slot, UpdateLabel), UpdateOperation>,
+        should_mark_valid: bool,
+        slot: Slot,
+    ) {
         for parent in self.ancestor_iterator(slot) {
-            let label = (parent, UpdateLabel::Aggregate);
-            if update_operations.contains_key(&label) {
+            let aggregate_label = (parent, UpdateLabel::Aggregate);
+            if update_operations.contains_key(&aggregate_label) {
                 break;
             } else {
-                update_operations.insert(label, UpdateOperation::Aggregate);
+                if should_mark_valid {
+                    update_operations
+                        .insert((parent, UpdateLabel::MarkValid), UpdateOperation::MarkValid);
+                }
+                update_operations.insert(aggregate_label, UpdateOperation::Aggregate);
             }
         }
     }
@@ -375,17 +420,44 @@ impl HeaviestSubtreeForkChoice {
             let mut best_child_slot = slot;
             for &child in &fork_info.children {
                 let child_stake_voted_subtree = self.stake_voted_subtree(child).unwrap();
+                // Child forks that are not candidates still contribute to the weight
+                // of the subtree rooted at `slot`. For instance:
+                /*
+                    Build fork structure:
+                          slot 0
+                            |
+                          slot 1
+                          /    \
+                    slot 2     |
+                        |     slot 3 (34%)
+                slot 4 (66%)
+
+                    If slot 4 is a duplicate slot, so no longer qualifies as a candidate until
+                    the slot is confirmed, the weight of votes on slot 4 should still count towards
+                    slot 2, otherwise we might pick slot 3 as the heaviest fork to build blocks on
+                    instead of slot 2.
+                */
+
+                // See comment above for why this check is outside of the `is_candidate` check.
                 stake_voted_subtree += child_stake_voted_subtree;
-                if best_child_slot == slot ||
-                child_stake_voted_subtree > best_child_stake_voted_subtree ||
-            // tiebreaker by slot height, prioritize earlier slot
-            (child_stake_voted_subtree == best_child_stake_voted_subtree && child < best_child_slot)
+
+                // Note: If there's no valid children, then the best slot should default to the
+                // input `slot` itself.
+                if self
+                    .is_candidate_slot(child)
+                    .expect("Child must exist in fork_info map")
+                    && (best_child_slot == slot ||
+                    child_stake_voted_subtree > best_child_stake_voted_subtree ||
+                // tiebreaker by slot height, prioritize earlier slot
+                (child_stake_voted_subtree == best_child_stake_voted_subtree && child < best_child_slot))
                 {
-                    best_child_stake_voted_subtree = child_stake_voted_subtree;
-                    best_child_slot = child;
-                    best_slot = self
-                        .best_slot(child)
-                        .expect("`child` must exist in `self.fork_infos`");
+                    {
+                        best_child_stake_voted_subtree = child_stake_voted_subtree;
+                        best_child_slot = child;
+                        best_slot = self
+                            .best_slot(child)
+                            .expect("`child` must exist in `self.fork_infos`");
+                    }
                 }
             }
         } else {
@@ -395,6 +467,12 @@ impl HeaviestSubtreeForkChoice {
         let fork_info = self.fork_infos.get_mut(&slot).unwrap();
         fork_info.stake_voted_subtree = stake_voted_subtree;
         fork_info.best_slot = best_slot;
+    }
+
+    fn mark_slot_valid(&mut self, valid_slot: Slot) {
+        if let Some(fork_info) = self.fork_infos.get_mut(&valid_slot) {
+            fork_info.is_candidate = true;
+        }
     }
 
     fn generate_update_operations(
@@ -453,6 +531,7 @@ impl HeaviestSubtreeForkChoice {
         // Iterate through the update operations from greatest to smallest slot
         for ((slot, _), operation) in update_operations.into_iter().rev() {
             match operation {
+                UpdateOperation::MarkValid => self.mark_slot_valid(slot),
                 UpdateOperation::Aggregate => self.aggregate_slot(slot),
                 UpdateOperation::Add(stake) => self.add_slot_stake(slot, stake),
                 UpdateOperation::Subtract(stake) => self.subtract_slot_stake(slot, stake),
@@ -601,6 +680,33 @@ impl ForkChoice for HeaviestSubtreeForkChoice {
                         .clone()
                 }),
         )
+    }
+
+    fn mark_fork_invalid_candidate(&mut self, invalid_slot: Slot) {
+        let fork_info = self.fork_infos.get_mut(&invalid_slot);
+        if let Some(fork_info) = fork_info {
+            if fork_info.is_candidate {
+                fork_info.is_candidate = false;
+                // Aggregate to find the new best slots excluding this fork
+                let mut aggregate_operations = BTreeMap::new();
+                self.insert_aggregate_operations(&mut aggregate_operations, invalid_slot);
+                self.process_update_operations(aggregate_operations);
+            }
+        }
+    }
+
+    fn mark_fork_valid_candidate(&mut self, valid_slot: Slot) {
+        let mut aggregate_operations = BTreeMap::new();
+        let fork_info = self.fork_infos.get_mut(&valid_slot);
+        if let Some(fork_info) = fork_info {
+            // If a bunch of slots on the same fork are confirmed at once, then only the latest
+            // slot will incur this aggregation operation
+            fork_info.is_candidate = true;
+            self.insert_mark_valid_aggregate_operations(&mut aggregate_operations, valid_slot);
+        }
+
+        // Aggregate to find the new best slots including this fork
+        self.process_update_operations(aggregate_operations);
     }
 }
 
@@ -1560,6 +1666,78 @@ mod test {
         assert_eq!(
             heaviest_subtree_fork_choice.heaviest_slot_on_same_voted_fork(&tower),
             None
+        );
+    }
+
+    #[test]
+    fn test_mark_valid_invalid_forks() {
+        let mut heaviest_subtree_fork_choice = setup_forks();
+        let stake = 100;
+        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys(3, stake);
+
+        let pubkey_votes: Vec<(Pubkey, Slot)> = vec![
+            (vote_pubkeys[0], 6),
+            (vote_pubkeys[1], 6),
+            (vote_pubkeys[2], 2),
+        ];
+        let expected_best_slot = 6;
+        assert_eq!(
+            heaviest_subtree_fork_choice.add_votes(
+                &pubkey_votes,
+                bank.epoch_stakes_map(),
+                bank.epoch_schedule()
+            ),
+            expected_best_slot,
+        );
+
+        // Mark slot 5 as invalid, the best fork should be its ancestor 3,
+        // not the other for at 4.
+        let invalid_candidate = 5;
+        heaviest_subtree_fork_choice.mark_fork_invalid_candidate(invalid_candidate);
+        assert_eq!(heaviest_subtree_fork_choice.best_overall_slot(), 3);
+        assert!(!heaviest_subtree_fork_choice
+            .is_candidate_slot(invalid_candidate)
+            .unwrap());
+
+        // The ancestor is still a candidate
+        assert!(heaviest_subtree_fork_choice.is_candidate_slot(3).unwrap());
+
+        // Adding another descendant to the invalid candidate won't
+        // update the best slot, even if it contains votes
+        let new_leaf_slot7 = 7;
+        heaviest_subtree_fork_choice.add_new_leaf_slot(new_leaf_slot7, Some(6));
+        assert_eq!(heaviest_subtree_fork_choice.best_overall_slot(), 3);
+        let pubkey_votes: Vec<(Pubkey, Slot)> = vec![(vote_pubkeys[0], new_leaf_slot7)];
+        let invalid_slot_ancestor = 3;
+        assert_eq!(
+            heaviest_subtree_fork_choice.add_votes(
+                &pubkey_votes,
+                bank.epoch_stakes_map(),
+                bank.epoch_schedule()
+            ),
+            invalid_slot_ancestor,
+        );
+
+        // Adding a descendant to the ancestor of the invalid candidate *should* update
+        // the best slot though, since the ancestor is on the heaviest fork
+        let new_leaf_slot8 = 8;
+        heaviest_subtree_fork_choice.add_new_leaf_slot(new_leaf_slot8, Some(invalid_slot_ancestor));
+        assert_eq!(
+            heaviest_subtree_fork_choice.best_overall_slot(),
+            new_leaf_slot8
+        );
+
+        // If we mark slot a descendant of `invalid_candidate` as valid, then that
+        // should also mark `invalid_candidate` as valid, and the best slot should
+        // be the leaf of the heaviest fork, `new_leaf_slot`.
+        heaviest_subtree_fork_choice.mark_fork_valid_candidate(invalid_candidate);
+        assert!(heaviest_subtree_fork_choice
+            .is_candidate_slot(invalid_candidate)
+            .unwrap());
+        assert_eq!(
+            heaviest_subtree_fork_choice.best_overall_slot(),
+            // Should pick the smaller slot of the two new equally weighted leaves
+            new_leaf_slot7
         );
     }
 

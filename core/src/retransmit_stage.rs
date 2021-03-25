@@ -16,7 +16,7 @@ use crate::{
     rpc_subscriptions::RpcSubscriptions,
     window_service::{should_retransmit_and_persist, WindowService},
 };
-use crossbeam_channel::Receiver;
+use crossbeam_channel::{Receiver, Sender};
 use lru::LruCache;
 use solana_client::rpc_response::SlotUpdate;
 use solana_ledger::shred::{get_shred_slot_index_type, ShredFetchStats};
@@ -605,6 +605,7 @@ impl RetransmitStage {
         completed_data_sets_sender: CompletedDataSetsSender,
         max_slots: &Arc<MaxSlots>,
         rpc_subscriptions: Option<Arc<RpcSubscriptions>>,
+        duplicate_slots_sender: Sender<Slot>,
     ) -> Self {
         let (retransmit_sender, retransmit_receiver) = channel();
 
@@ -666,6 +667,7 @@ impl RetransmitStage {
             cluster_slots,
             verified_vote_receiver,
             completed_data_sets_sender,
+            duplicate_slots_sender,
         );
 
         let mut thread_hdls = t_retransmit;

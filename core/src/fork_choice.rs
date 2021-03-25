@@ -4,6 +4,7 @@ use crate::{
     replay_stage::HeaviestForkFailures,
 };
 use solana_runtime::{bank::Bank, bank_forks::BankForks};
+use solana_sdk::clock::Slot;
 use std::{
     collections::{HashMap, HashSet},
     sync::{Arc, RwLock},
@@ -36,4 +37,8 @@ pub(crate) trait ForkChoice {
         ancestors: &HashMap<u64, HashSet<u64>>,
         bank_forks: &RwLock<BankForks>,
     ) -> (Arc<Bank>, Option<Arc<Bank>>);
+
+    fn mark_fork_invalid_candidate(&mut self, invalid_slot: Slot);
+
+    fn mark_fork_valid_candidate(&mut self, valid_slot: Slot);
 }
