@@ -390,6 +390,17 @@ impl Tower {
         slot
     }
 
+    pub fn record_bank_vote(
+        &mut self,
+        bank: &Bank,
+        vote_account_pubkey: &Pubkey,
+    ) -> (Option<Slot>, Vec<Slot> /*VoteState.tower*/) {
+        let (vote, tower_slots) = self.new_vote_from_bank(bank, vote_account_pubkey);
+
+        let new_root = self.record_bank_vote_update_lockouts(vote);
+        (new_root, tower_slots)
+    }
+
     pub fn new_vote_from_bank(
         &self,
         bank: &Bank,
@@ -399,7 +410,7 @@ impl Tower {
         Self::new_vote(&self.lockouts, bank.slot(), bank.hash(), voted_slot)
     }
 
-    pub fn record_bank_vote(&mut self, vote: Vote) -> Option<Slot> {
+    pub fn record_bank_vote_update_lockouts(&mut self, vote: Vote) -> Option<Slot> {
         let slot = vote.last_voted_slot().unwrap_or(0);
         trace!("{} record_vote for {}", self.node_pubkey, slot);
         let old_root = self.root();
@@ -418,7 +429,7 @@ impl Tower {
     #[cfg(test)]
     pub fn record_vote(&mut self, slot: Slot, hash: Hash) -> Option<Slot> {
         let vote = Vote::new(vec![slot], hash);
-        self.record_bank_vote(vote)
+        self.record_bank_vote_update_lockouts(vote)
     }
 
     pub fn last_voted_slot(&self) -> Option<Slot> {
@@ -1426,8 +1437,9 @@ pub mod test {
             if !heaviest_fork_failures.is_empty() {
                 return heaviest_fork_failures;
             }
-            let vote = tower.new_vote_from_bank(&vote_bank, &my_vote_pubkey).0;
-            if let Some(new_root) = tower.record_bank_vote(vote) {
+
+            let (new_root, _) = tower.record_bank_vote(&vote_bank, &my_vote_pubkey);
+            if let Some(new_root) = new_root {
                 self.set_root(new_root);
             }
 

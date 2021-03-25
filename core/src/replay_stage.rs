@@ -1243,8 +1243,7 @@ impl ReplayStage {
             inc_new_counter_info!("replay_stage-voted_empty_bank", 1);
         }
         trace!("handle votable bank {}", bank.slot());
-        let (vote, tower_slots) = tower.new_vote_from_bank(bank, vote_account_pubkey);
-        let new_root = tower.record_bank_vote(vote);
+        let (new_root, tower_slots) = tower.record_bank_vote(bank, vote_account_pubkey);
         let last_vote = tower.last_vote_and_timestamp();
 
         if let Err(err) = tower.save(&cluster_info.keypair) {
@@ -4205,8 +4204,36 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn test_unconfirmed_duplicate_slots_not_votable() {
-        let (bank_forks, mut progress) = setup_forks();
+    fn test_unconfirmed_duplicate_slots_and_lockouts() {
+        /*
+            Build fork structure:
+
+                 slot 0
+                   |
+                 slot 1
+                 /    \
+            slot 2    |
+               |      |
+            slot 3    |
+               |      |
+            slot 4    |
+                    slot 5
+                      |
+                    slot 6
+        */
+        let forks = tr(0) / (tr(1) / (tr(2) / (tr(3) / (tr(4)))) / (tr(5) / (tr(6))));
+
+        // Make enough validators for vote switch thrshold later
+        let mut vote_simulator = VoteSimulator::new(2);
+        let validator_votes: HashMap<Pubkey, Vec<u64>> = vec![
+            (vote_simulator.node_pubkeys[0], vec![5]),
+            (vote_simulator.node_pubkeys[1], vec![2]),
+        ]
+        .into_iter()
+        .collect();
+        vote_simulator.fill_bank_forks(forks, &validator_votes);
+
+        let (bank_forks, mut progress) = (vote_simulator.bank_forks, vote_simulator.progress);
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(
             Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger"),
@@ -4226,11 +4253,45 @@ pub(crate) mod tests {
         assert_eq!(vote_fork.unwrap(), 4);
         assert_eq!(reset_fork.unwrap(), 4);
 
-        // Mark 2, an ancestor of 4, as duplicate
+        // Record the vote for 4
+        tower.record_bank_vote(
+            &bank_forks.read().unwrap().get(4).unwrap(),
+            &Pubkey::default(),
+        );
+
+        // Mark 4 as duplicate, 3 should be the heaviest slot, but should not be votable
+        // because of lockout
+        blockstore.store_duplicate_slot(4, vec![], vec![]).unwrap();
+        let ancestors = bank_forks.read().unwrap().ancestors();
+        let descendants = bank_forks.read().unwrap().descendants().clone();
+        let mut gossip_duplicate_confirmed_slots = BTreeMap::new();
+        let bank4_hash = bank_forks.read().unwrap().get(4).unwrap().hash();
+        assert_ne!(bank4_hash, Hash::default());
+        check_slot_agrees_with_cluster(
+            4,
+            bank_forks.read().unwrap().root(),
+            Some(bank4_hash),
+            &gossip_duplicate_confirmed_slots,
+            &ancestors,
+            &descendants,
+            &mut progress,
+            &mut heaviest_subtree_fork_choice,
+            SlotStateUpdate::Duplicate,
+        );
+
+        let (vote_fork, reset_fork) = run_compute_and_select_forks(
+            &bank_forks,
+            &mut progress,
+            &mut tower,
+            &mut heaviest_subtree_fork_choice,
+        );
+        assert!(vote_fork.is_none());
+        assert_eq!(reset_fork.unwrap(), 3);
+
+        // Now mark 2, an ancestor of 4, as duplicate
         blockstore.store_duplicate_slot(2, vec![], vec![]).unwrap();
         let ancestors = bank_forks.read().unwrap().ancestors();
         let descendants = bank_forks.read().unwrap().descendants().clone();
-        let gossip_duplicate_confirmed_slots = BTreeMap::new();
         let bank2_hash = bank_forks.read().unwrap().get(2).unwrap().hash();
         assert_ne!(bank2_hash, Hash::default());
         check_slot_agrees_with_cluster(
@@ -4244,24 +4305,32 @@ pub(crate) mod tests {
             &mut heaviest_subtree_fork_choice,
             SlotStateUpdate::Duplicate,
         );
+
         let (vote_fork, reset_fork) = run_compute_and_select_forks(
             &bank_forks,
             &mut progress,
             &mut tower,
             &mut heaviest_subtree_fork_choice,
         );
-        // Should now pick the next heaviest fork that is not a descendant of 2, which is 6
-        assert_eq!(vote_fork.unwrap(), 6);
+
+        // Should now pick the next heaviest fork that is not a descendant of 2, which is 6.
+        // However the lockout from vote 4 should still apply, so 6 should not be votable
+        assert!(vote_fork.is_none());
         assert_eq!(reset_fork.unwrap(), 6);
 
-        // If slot 2 is marked as confirmed, then slot 4 is now votable again
-        ReplayStage::mark_slots_confirmed(
-            &[2],
-            &bank_forks,
-            &mut progress,
+        // If slot 4 is marked as confirmed, then this confirms slot 2 and 4, and
+        // then slot 4 is now the heaviest bank again
+        gossip_duplicate_confirmed_slots.insert(4, bank4_hash);
+        check_slot_agrees_with_cluster(
+            4,
+            bank_forks.read().unwrap().root(),
+            Some(bank4_hash),
+            &gossip_duplicate_confirmed_slots,
             &ancestors,
             &descendants,
+            &mut progress,
             &mut heaviest_subtree_fork_choice,
+            SlotStateUpdate::DuplicateConfirmed,
         );
         let (vote_fork, reset_fork) = run_compute_and_select_forks(
             &bank_forks,
@@ -4269,9 +4338,9 @@ pub(crate) mod tests {
             &mut tower,
             &mut heaviest_subtree_fork_choice,
         );
-        // Should now pick the next heaviest fork because it's confirmed,
-        // even though it was a duplicate
-        assert_eq!(vote_fork.unwrap(), 4);
+        // Should now pick the heaviest fork 4 again, but lockouts apply so fork 4
+        // is not votable, which avoids voting for 4 again.
+        assert!(vote_fork.is_none());
         assert_eq!(reset_fork.unwrap(), 4);
     }
 
