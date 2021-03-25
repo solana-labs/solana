@@ -4710,6 +4710,7 @@ dependencies = [
  "itertools",
  "log 0.4.11",
  "rand 0.7.3",
+ "rayon",
  "serial_test",
  "solana-client",
  "solana-config-program",
