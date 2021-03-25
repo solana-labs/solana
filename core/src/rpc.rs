@@ -876,7 +876,12 @@ impl JsonRpcRequestProcessor {
             self.check_slot_cleaned_up(&result, slot)?;
             Ok(result.ok().unwrap_or(None))
         } else {
-            Err(RpcCustomError::BlockNotAvailable { slot }.into())
+            let r_bank_forks = self.bank_forks.read().unwrap();
+            if let Some(bank) = r_bank_forks.get(slot) {
+                Ok(Some(bank.clock().unix_timestamp))
+            } else {
+                Err(RpcCustomError::BlockNotAvailable { slot }.into())
+            }
         }
     }
 
