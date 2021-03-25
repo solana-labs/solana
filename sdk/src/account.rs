@@ -32,7 +32,7 @@ pub struct AccountSharedData {
     /// lamports in the account
     pub lamports: u64,
     /// data held in this account
-    pub data: Arc<Vec<u8>>,
+    data: Arc<Vec<u8>>,
     /// the program that owns this account. If executable, the program that loads this account.
     pub owner: Pubkey,
     /// this account's data contains a loaded program (and is now read-only)

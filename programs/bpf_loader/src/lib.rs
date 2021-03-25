@@ -1561,7 +1561,7 @@ mod tests {
     }
 
     fn truncate_data(account: &mut AccountSharedData, len: usize) {
-        let mut data = account.data.to_vec();
+        let mut data = account.data().to_vec();
         data.truncate(len);
         account.set_data(data);
     }
@@ -3290,7 +3290,11 @@ mod tests {
         );
         assert_eq!(0, buffer_account.borrow().lamports());
         assert_eq!(2, recipient_account.borrow().lamports());
-        assert!(buffer_account.borrow().data.iter().all(|&value| value == 0));
+        assert!(buffer_account
+            .borrow()
+            .data()
+            .iter()
+            .all(|&value| value == 0));
 
         // Case: close with wrong authority
         buffer_account
