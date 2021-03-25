@@ -17,9 +17,15 @@ import { ErrorCard } from "components/common/ErrorCard";
 import { LoadingCard } from "components/common/LoadingCard";
 import { useAccountInfo, useFetchAccountInfo } from "providers/accounts";
 import { FetchStatus } from "providers/cache";
+import { useVoteAccounts } from "providers/accounts/vote-accounts";
 // @ts-ignore
 import * as CoinGecko from "coingecko-api";
-import { useVoteAccounts } from "providers/accounts/vote-accounts";
+
+enum CoingeckoStatus {
+  Success,
+  FetchFailed,
+}
+
 const CoinGeckoClient = new CoinGecko();
 
 const CLUSTER_STATS_TIMEOUT = 5000;
@@ -51,7 +57,7 @@ function StakingComponent() {
   const fetchSupply = useFetchSupply();
   const fetchAccount = useFetchAccountInfo();
   const stakeInfo = useAccountInfo(STAKE_HISTORY_ACCOUNT);
-  const solanaInfo = useCoinGecko("solana");
+  const coinInfo = useCoinGecko("solana");
   const { fetchVoteAccounts, voteAccounts } = useVoteAccounts();
 
   function fetchData() {
@@ -86,17 +92,15 @@ function StakingComponent() {
     supply === Status.Idle ||
     supply === Status.Connecting ||
     !stakeInfo ||
-    !stakeHistory
+    !stakeHistory ||
+    !coinInfo
   ) {
     return <LoadingCard />;
   } else if (typeof supply === "string") {
     return <ErrorCard text={supply} retry={fetchData} />;
   } else if (stakeInfo.status === FetchStatus.FetchFailed) {
     return (
-      <ErrorCard
-        text={"Error fetching stake history account"}
-        retry={fetchData}
-      />
+      <ErrorCard text={"Failed to fetch active stake"} retry={fetchData} />
     );
   }
 
@@ -113,6 +117,11 @@ function StakingComponent() {
       (deliquentStake / stakeHistory.effective) *
       100
     ).toFixed(1);
+  }
+
+  let solanaInfo;
+  if (coinInfo.status === CoingeckoStatus.Success) {
+    solanaInfo = coinInfo.coinInfo;
   }
 
   return (
@@ -164,6 +173,15 @@ function StakingComponent() {
                 24h Vol: <em>${abbreviatedNumber(solanaInfo.volume_24)}</em>{" "}
                 MCap: <em>${abbreviatedNumber(solanaInfo.market_cap)}</em>
               </h5>
+            </div>
+          )}
+          {coinInfo.status === CoingeckoStatus.FetchFailed && (
+            <div className="p-2 flex-fill">
+              <h4>Price</h4>
+              <h1>
+                <em>$--.--</em>
+              </h1>
+              <h5>Error fetching the latest price information</h5>
             </div>
           )}
         </div>
@@ -335,18 +353,38 @@ interface CoinInfoResult {
   };
 }
 
-function useCoinGecko(coinId: string): CoinInfo | undefined {
-  const [coinInfo, setCoinInfo] = React.useState<CoinInfoResult>();
+type CoinGeckoResult = {
+  coinInfo?: CoinInfo;
+  status: CoingeckoStatus;
+};
+
+function useCoinGecko(coinId: string): CoinGeckoResult | undefined {
+  const [coinInfo, setCoinInfo] = React.useState<CoinGeckoResult>();
 
   React.useEffect(() => {
     const getCoinInfo = () => {
-      CoinGeckoClient.coins.fetch("solana").then((info: CoinInfoResult) => {
-        setCoinInfo(info);
-      });
+      CoinGeckoClient.coins
+        .fetch("solana")
+        .then((info: CoinInfoResult) => {
+          setCoinInfo({
+            coinInfo: {
+              price: info.data.market_data.current_price.usd,
+              volume_24: info.data.market_data.total_volume.usd,
+              market_cap: info.data.market_data.market_cap.usd,
+              price_change_percentage_24h:
+                info.data.market_data.price_change_percentage_24h,
+            },
+            status: CoingeckoStatus.Success,
+          });
+        })
+        .catch((error: any) => {
+          setCoinInfo({
+            status: CoingeckoStatus.FetchFailed,
+          });
+        });
     };
 
     getCoinInfo();
-
     const interval = setInterval(() => {
       getCoinInfo();
     }, PRICE_REFRESH);
@@ -356,15 +394,5 @@ function useCoinGecko(coinId: string): CoinInfo | undefined {
     };
   }, [setCoinInfo]);
 
-  if (coinInfo === undefined) {
-    return;
-  }
-
-  return {
-    price: coinInfo.data.market_data.current_price.usd,
-    volume_24: coinInfo.data.market_data.total_volume.usd,
-    market_cap: coinInfo.data.market_data.market_cap.usd,
-    price_change_percentage_24h:
-      coinInfo.data.market_data.price_change_percentage_24h,
-  };
+  return coinInfo;
 }
