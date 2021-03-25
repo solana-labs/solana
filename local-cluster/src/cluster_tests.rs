@@ -287,11 +287,11 @@ pub fn check_for_new_roots(num_new_roots: usize, contact_infos: &[ContactInfo], 
             let slot = client.get_slot().unwrap_or(0);
             roots[i].insert(slot);
             let min_node = roots.iter().map(|r| r.len()).min().unwrap_or(0);
-            if last_print.elapsed().as_secs() > 3 {
+            done = min_node >= num_new_roots;
+            if done || last_print.elapsed().as_secs() > 3 {
                 info!("{} min observed roots {}/16", test_name, min_node);
                 last_print = Instant::now();
             }
-            done = min_node >= num_new_roots;
         }
         sleep(Duration::from_millis(clock::DEFAULT_MS_PER_SLOT / 2));
     }

@@ -65,7 +65,7 @@ use std::{
 use tempfile::TempDir;
 
 const RUST_LOG_FILTER: &str =
-    "solana_core::replay_stage=warn,solana_local_cluster=info,local_cluster=info";
+    "error,solana_core::replay_stage=warn,solana_local_cluster=info,local_cluster=info";
 
 #[test]
 #[serial]
@@ -1423,9 +1423,6 @@ fn test_no_voting() {
 #[serial]
 fn test_optimistic_confirmation_violation_detection() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
-    let buf = std::env::var("OPTIMISTIC_CONF_TEST_DUMP_LOG")
-        .err()
-        .map(|_| BufferRedirect::stderr().unwrap());
     // First set up the cluster with 2 nodes
     let slots_per_epoch = 2048;
     let node_stakes = vec![51, 50];
@@ -1490,20 +1487,42 @@ fn test_optimistic_confirmation_violation_detection() {
         // ancestor in bank forks).
         blockstore.set_dead_slot(prev_voted_slot).unwrap();
     }
-    cluster.restart_node(&entry_point_id, exited_validator_info);
 
-    // Wait for a root > prev_voted_slot to be set. Because the root is on a
-    // different fork than `prev_voted_slot`, then optimistic confirmation is
-    // violated
-    let client = cluster.get_validator_client(&entry_point_id).unwrap();
-    loop {
-        let last_root = client
-            .get_slot_with_commitment(CommitmentConfig::finalized())
-            .unwrap();
-        if last_root > prev_voted_slot {
-            break;
+    {
+        // Buffer stderr to detect optimistic slot violation log
+        let buf = std::env::var("OPTIMISTIC_CONF_TEST_DUMP_LOG")
+            .err()
+            .map(|_| BufferRedirect::stderr().unwrap());
+        cluster.restart_node(&entry_point_id, exited_validator_info);
+
+        // Wait for a root > prev_voted_slot to be set. Because the root is on a
+        // different fork than `prev_voted_slot`, then optimistic confirmation is
+        // violated
+        let client = cluster.get_validator_client(&entry_point_id).unwrap();
+        loop {
+            let last_root = client
+                .get_slot_with_commitment(CommitmentConfig::finalized())
+                .unwrap();
+            if last_root > prev_voted_slot {
+                break;
+            }
+            sleep(Duration::from_millis(100));
         }
-        sleep(Duration::from_millis(100));
+
+        // Check to see that validator detected optimistic confirmation for
+        // `prev_voted_slot` failed
+        let expected_log =
+            OptimisticConfirmationVerifier::format_optimistic_confirmed_slot_violation_log(
+                prev_voted_slot,
+            );
+        if let Some(mut buf) = buf {
+            let mut output = String::new();
+            buf.read_to_string(&mut output).unwrap();
+            assert!(output.contains(&expected_log));
+            print!("{}", output);
+        } else {
+            panic!("dumped log and disabled testing");
+        }
     }
 
     // Make sure validator still makes progress
@@ -1512,20 +1531,6 @@ fn test_optimistic_confirmation_violation_detection() {
         &[cluster.get_contact_info(&entry_point_id).unwrap().clone()],
         "test_optimistic_confirmation_violation",
     );
-
-    // Check to see that validator detected optimistic confirmation for
-    // `prev_voted_slot` failed
-    let expected_log =
-        OptimisticConfirmationVerifier::format_optimistic_confirmd_slot_violation_log(
-            prev_voted_slot,
-        );
-    if let Some(mut buf) = buf {
-        let mut output = String::new();
-        buf.read_to_string(&mut output).unwrap();
-        assert!(output.contains(&expected_log));
-    } else {
-        panic!("dumped log and disaled testing");
-    }
 }
 
 #[test]
