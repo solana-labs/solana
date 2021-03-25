@@ -122,6 +122,15 @@ impl DefaultSigner {
     ) -> Result<Box<dyn Signer>, Box<dyn std::error::Error>> {
         signer_from_path(matches, &self.path, &self.arg_name, wallet_manager)
     }
+
+    pub fn signer_from_path_with_config(
+        &self,
+        matches: &ArgMatches,
+        wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+        config: &SignerFromPathConfig,
+    ) -> Result<Box<dyn Signer>, Box<dyn std::error::Error>> {
+        signer_from_path_with_config(matches, &self.path, &self.arg_name, wallet_manager, config)
+    }
 }
 
 pub enum KeypairUrl {
@@ -159,11 +168,35 @@ pub fn presigner_from_pubkey_sigs(
     })
 }
 
+#[derive(Debug)]
+pub struct SignerFromPathConfig {
+    pub allow_null_signer: bool,
+}
+
+impl Default for SignerFromPathConfig {
+    fn default() -> Self {
+        Self {
+            allow_null_signer: false,
+        }
+    }
+}
+
 pub fn signer_from_path(
     matches: &ArgMatches,
     path: &str,
     keypair_name: &str,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+) -> Result<Box<dyn Signer>, Box<dyn error::Error>> {
+    let config = SignerFromPathConfig::default();
+    signer_from_path_with_config(matches, path, keypair_name, wallet_manager, &config)
+}
+
+pub fn signer_from_path_with_config(
+    matches: &ArgMatches,
+    path: &str,
+    keypair_name: &str,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    config: &SignerFromPathConfig,
 ) -> Result<Box<dyn Signer>, Box<dyn error::Error>> {
     match parse_keypair_path(path) {
         KeypairUrl::Ask => {
@@ -207,7 +240,7 @@ pub fn signer_from_path(
                 .and_then(|presigners| presigner_from_pubkey_sigs(&pubkey, presigners));
             if let Some(presigner) = presigner {
                 Ok(Box::new(presigner))
-            } else if matches.is_present(SIGN_ONLY_ARG.name) {
+            } else if config.allow_null_signer || matches.is_present(SIGN_ONLY_ARG.name) {
                 Ok(Box::new(NullSigner::new(&pubkey)))
             } else {
                 Err(std::io::Error::new(
