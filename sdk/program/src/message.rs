@@ -393,7 +393,6 @@ impl Message {
     //   36..64 - program_id
     //     33..34 - data len - u16
     //     35..data_len - data
-    // TODO: Maybe this should always use false for demote_sysvar_write_locks.
     pub fn serialize_instructions(&self, demote_sysvar_write_locks: bool) -> Vec<u8> {
         // 64 bytes is a reasonable guess, calculating exactly is slower in benchmarks
         let mut data = Vec::with_capacity(self.instructions.len() * (32 * 2));
