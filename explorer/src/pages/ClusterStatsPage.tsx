@@ -154,7 +154,12 @@ function StakingComponent() {
           <hr className="hidden-sm-up" />
           {solanaInfo && (
             <div className="p-2 flex-fill">
-              <h4>Price</h4>
+              <h4>
+                Price{" "}
+                <span className="ml-2 badge badge-primary rank">
+                  Rank #{solanaInfo.market_cap_rank}
+                </span>
+              </h4>
               <h1>
                 <em>${solanaInfo.price.toFixed(2)}</em>{" "}
                 {solanaInfo.price_change_percentage_24h > 0 && (
