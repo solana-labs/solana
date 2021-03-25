@@ -102,7 +102,7 @@ echo "##### validator finished running! #####"
 
 ./solana-validator \
   --ledger cluster-sanity/ledger \
-  exit
+  exit --force
 
 attempts=4000
 while [[ -d "/proc/$validator_then_ledger_tool_pid" ]]; do
