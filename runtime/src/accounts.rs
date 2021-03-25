@@ -19,7 +19,11 @@ use solana_sdk::{
     account::Account,
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
+<<<<<<< HEAD
     clock::{Epoch, Slot},
+=======
+    clock::{Slot, INITIAL_RENT_EPOCH},
+>>>>>>> 6d5c6c17c... Simplify account.rent_epoch handling for sysvar rent (#16049)
     feature_set::{self, FeatureSet},
     fee_calculator::{FeeCalculator, FeeConfig},
     genesis_config::ClusterType,
@@ -966,8 +970,14 @@ impl Accounts {
                             _ => panic!("unexpected nonce_rollback condition"),
                         }
                     }
+<<<<<<< HEAD
                     if account.rent_epoch == 0 {
                         acc.3 += rent_collector.collect_from_created_account(&key, account);
+=======
+                    if account.rent_epoch == INITIAL_RENT_EPOCH {
+                        loaded_transaction.rent +=
+                            rent_collector.collect_from_created_account(&key, account);
+>>>>>>> 6d5c6c17c... Simplify account.rent_epoch handling for sysvar rent (#16049)
                     }
                     accounts.push((key, &*account));
                 }
