@@ -58,10 +58,7 @@ impl Poh {
         tick_start_time + Duration::from_nanos(offset_ns)
     }
 
-    pub fn target_poh_time(
-        &self,
-        target_ns_per_tick: u64,
-    ) -> Instant {
+    pub fn target_poh_time(&self, target_ns_per_tick: u64) -> Instant {
         Self::calculate_target_poh_time(
             self.num_hashes(),
             self.hashes_per_tick(),

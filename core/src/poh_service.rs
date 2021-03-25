@@ -287,7 +287,7 @@ impl PohService {
         let mut timing = PohTiming::new();
         let mut next_record = None;
         loop {
-            let (should_tick, tick_start_time) = Self::record_or_hash(
+            let (should_tick, tick_target_time) = Self::record_or_hash(
                 &mut next_record,
                 &poh_recorder,
                 &mut timing,
@@ -309,15 +309,14 @@ impl PohService {
                     timing.total_tick_time_ns += tick_time.as_ns();
                 }
                 timing.num_ticks += 1;
-                let elapsed_ns = tick_start_time.elapsed().as_nanos() as u64;
                 // sleep is not accurate enough to get a predictable time.
                 // Kernel can not schedule the thread for a while.
-                while (tick_start_time.elapsed().as_nanos() as u64) < target_tick_ns {
-                    // TODO: we could get a reset while we're here
+                let started_waiting = Instant::now();
+                while Instant::now() < tick_target_time {
+                    // TODO: we could possibly get a reset or record request while we're here
                     std::hint::spin_loop();
                 }
-                timing.total_sleep_us +=
-                    (tick_start_time.elapsed().as_nanos() as u64 - elapsed_ns) / 1000;
+                timing.total_sleep_us += started_waiting.elapsed().as_nanos() as u64 / 1000;
 
                 timing.report(ticks_per_slot);
                 if poh_exit.load(Ordering::Relaxed) {
