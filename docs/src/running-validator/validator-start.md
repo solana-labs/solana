@@ -159,10 +159,11 @@ solana-keygen grind --starts-with e1v1s:1
 
 You may request that the generated vanity keypair be expressed as a seed phrase
 which allows recovery of the keypair from the seed phrase and an optionally
-supplied passphrase:
+supplied passphrase (note that this is significantly slower than grinding without
+a mnemonic):
 
 ```bash
-solana-keygen grind --mnemonic --starts-with e1v1s:1
+solana-keygen grind --use-mnemonic --starts-with e1v1s:1
 ```
 
 Depending on the string requested, it may take days to find a match...

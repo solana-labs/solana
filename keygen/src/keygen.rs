@@ -10,7 +10,7 @@ use solana_clap_utils::{
         keypair_from_seed_phrase, prompt_passphrase, signer_from_path,
         SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
-    DisplayError,
+    ArgConstant, DisplayError,
 };
 use solana_cli_config::{Config, CONFIG_FILE};
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
@@ -39,6 +39,86 @@ struct GrindMatch {
     starts: String,
     ends: String,
     count: AtomicU64,
+}
+
+const WORD_COUNT_ARG: ArgConstant<'static> = ArgConstant {
+    long: "word-count",
+    name: "word_count",
+    help: "Specify the number of words that will be present in the generated seed phrase",
+};
+
+const LANGUAGE_ARG: ArgConstant<'static> = ArgConstant {
+    long: "language",
+    name: "language",
+    help: "Specify the mnemonic lanaguage that will be present in the generated seed phrase",
+};
+
+const NO_PASSPHRASE_ARG: ArgConstant<'static> = ArgConstant {
+    long: "no-bip39-passphrase",
+    name: "no-passphrase",
+    help: "Do not prompt for a BIP39 passphrase",
+};
+
+const NO_OUTFILE_ARG: ArgConstant<'static> = ArgConstant {
+    long: "no-outfile",
+    name: "no_outfile",
+    help: "Only print a seed phrase and pubkey. Do not output a keypair file",
+};
+
+fn word_count_arg<'a, 'b>() -> Arg<'a, 'b> {
+    Arg::with_name(WORD_COUNT_ARG.name)
+        .long(WORD_COUNT_ARG.long)
+        .possible_values(&["12", "15", "18", "21", "24"])
+        .default_value("12")
+        .value_name("NUMBER")
+        .takes_value(true)
+        .help(WORD_COUNT_ARG.help)
+}
+
+fn language_arg<'a, 'b>() -> Arg<'a, 'b> {
+    Arg::with_name(LANGUAGE_ARG.name)
+        .long(LANGUAGE_ARG.long)
+        .possible_values(&[
+            "english",
+            "chinese-simplified",
+            "chinese-traditional",
+            "japanese",
+            "spanish",
+            "korean",
+            "french",
+            "italian",
+        ])
+        .default_value("english")
+        .value_name("LANGUAGE")
+        .takes_value(true)
+        .help(LANGUAGE_ARG.help)
+}
+
+fn no_passphrase_arg<'a, 'b>() -> Arg<'a, 'b> {
+    Arg::with_name(NO_PASSPHRASE_ARG.name)
+        .long(NO_PASSPHRASE_ARG.long)
+        .alias("no-passphrase")
+        .help(NO_PASSPHRASE_ARG.help)
+}
+
+fn no_outfile_arg<'a, 'b>() -> Arg<'a, 'b> {
+    Arg::with_name(NO_OUTFILE_ARG.name)
+        .long(NO_OUTFILE_ARG.long)
+        .conflicts_with_all(&["outfile", "silent"])
+        .help(NO_OUTFILE_ARG.help)
+}
+
+trait NewGrindCommonArgs {
+    fn new_grind_common_args(self) -> Self;
+}
+
+impl NewGrindCommonArgs for App<'_, '_> {
+    fn new_grind_common_args(self) -> Self {
+        self.arg(word_count_arg())
+            .arg(language_arg())
+            .arg(no_passphrase_arg())
+            .arg(no_outfile_arg())
+    }
 }
 
 fn check_for_overwrite(outfile: &str, matches: &ArgMatches) {
@@ -305,41 +385,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .help("Overwrite the output file if it exists"),
                 )
                 .arg(
-                    Arg::with_name("word_count")
-                        .long("word-count")
-                        .possible_values(&["12", "15", "18", "21", "24"])
-                        .default_value("12")
-                        .value_name("NUMBER")
-                        .takes_value(true)
-                        .help("Specify the number of words that will be present in the generated seed phrase"),
-                )
-                .arg(
-                    Arg::with_name("language")
-                        .long("language")
-                        .possible_values(&["english", "chinese-simplified", "chinese-traditional", "japanese", "spanish", "korean", "french", "italian"])
-                        .default_value("english")
-                        .value_name("LANGUAGE")
-                        .takes_value(true)
-                        .help("Specify the mnemonic lanaguage that will be present in the generated seed phrase"),
-                )
-                .arg(
-                    Arg::with_name("no_passphrase")
-                        .long("no-bip39-passphrase")
-                        .alias("no-passphrase")
-                        .help("Do not prompt for a BIP39 passphrase"),
-                )
-                .arg(
-                    Arg::with_name("no_outfile")
-                        .long("no-outfile")
-                        .conflicts_with_all(&["outfile", "silent"])
-                        .help("Only print a seed phrase and pubkey. Do not output a keypair file"),
-                )
-                .arg(
                     Arg::with_name("silent")
                         .short("s")
                         .long("silent")
                         .help("Do not display seed phrase. Useful when piping output to other programs that prompt for user input, like gpg"),
                 )
+                .new_grind_common_args()
         )
         .subcommand(
             SubCommand::with_name("grind")
@@ -390,45 +441,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .help("Specify the number of grind threads"),
                 )
                 .arg(
-                    Arg::with_name("mnemonic")
-                        .long("mnemonic")
-                        .alias("use-mnemonic")
-                        .help("Generate using a mnemonic key phrase"),
+                    Arg::with_name("use_mnemonic")
+                        .long("use-mnemonic")
+                        .help("Generate using a mnemonic key phrase.  Expect a significant slowdown in this mode"),
                 )
-                .arg(
-                    Arg::with_name("word_count")
-                        .requires_all(&["mnemonic"])
-                        .long("word-count")
-                        .possible_values(&["12", "15", "18", "21", "24"])
-                        .default_value("12")
-                        .value_name("NUMBER")
-                        .takes_value(true)
-                        .help("(requires mnemonic) Specify the number of words that will be present in the generated seed phrase"),
-                )
-                .arg(
-                    Arg::with_name("language")
-                        .requires_all(&["mnemonic"])
-                        .long("language")
-                        .possible_values(&["english", "chinese-simplified", "chinese-traditional", "japanese", "spanish", "korean", "french", "italian"])
-                        .default_value("english")
-                        .value_name("LANGUAGE")
-                        .takes_value(true)
-                        .help("(requires mnemonic) Specify the mnemonic lanaguage that will be present in the generated seed phrase"),
-                )
-                .arg(
-                    Arg::with_name("no_passphrase")
-                        .requires_all(&["mnemonic"])
-                        .long("no-bip39-passphrase")
-                        .alias("no-passphrase")
-                        .help("(requires mnemonic) Do not prompt for a BIP39 passphrase"),
-                )
-                .arg(
-                    Arg::with_name("no_outfile")
-                        .requires_all(&["mnemonic"])
-                        .long("no-outfile")
-                        .conflicts_with_all(&["outfile", "silent"])
-                        .help("(requires mnemonic) Only print a seed phrase and pubkey. Do not output a keypair file"),
-                )
+                .new_grind_common_args()
         )
         .subcommand(
             SubCommand::with_name("pubkey")
@@ -623,7 +640,7 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
                 num_threads,
             );
 
-            let use_mnemonic = matches.is_present("mnemonic");
+            let use_mnemonic = matches.is_present("use_mnemonic");
 
             let word_count = value_t!(matches.value_of("word_count"), usize).unwrap();
             let mnemonic_type = MnemonicType::for_word_count(word_count)?;
@@ -707,8 +724,11 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
                                 if use_mnemonic {
                                     let divider = String::from_utf8(vec![b'='; phrase.len()]).unwrap();
                                     println!(
-                                        "{}\nSave this seed phrase{} to recover your new keypair:\n{}\n{}",
-                                        &divider, passphrase_message, phrase, &divider
+                                        "{}\nFound matching key {}",
+                                        &divider, keypair.pubkey());
+                                    println!(
+                                        "\nSave this seed phrase{} to recover your new keypair:\n{}\n{}",
+                                        passphrase_message, phrase, &divider
                                     );
                                 }
                             }
