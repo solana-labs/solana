@@ -2974,7 +2974,19 @@ pub(crate) mod tests {
             arc_bank.freeze();
         }
 
-        thread::sleep(Duration::from_millis(200));
+        for _ in 0..10 {
+            let done = {
+                let bcc = block_commitment_cache.read().unwrap();
+                bcc.get_block_commitment(0).is_some()
+                    && bcc.get_block_commitment(1).is_some()
+                    && bcc.get_block_commitment(2).is_some()
+            };
+            if done {
+                break;
+            } else {
+                thread::sleep(Duration::from_millis(200));
+            }
+        }
 
         let mut expected0 = BlockCommitment::default();
         expected0.increase_confirmation_stake(3, leader_lamports);
