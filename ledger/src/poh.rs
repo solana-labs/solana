@@ -69,6 +69,11 @@ impl Poh {
 
     pub fn hash(&mut self, max_num_hashes: u64) -> bool {
         let num_hashes = std::cmp::min(self.remaining_hashes - 1, max_num_hashes);
+        if self.num_hashes == 0 {
+            // caller may throttle when they start hashing
+            self.tick_start_time = Instant::now();
+        }
+
         for _ in 0..num_hashes {
             self.hash = hash(&self.hash.as_ref());
         }
