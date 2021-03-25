@@ -393,7 +393,8 @@ impl Message {
     //   36..64 - program_id
     //     33..34 - data len - u16
     //     35..data_len - data
-    pub fn serialize_instructions(&self) -> Vec<u8> {
+    // TODO: Maybe this should always use false for demote_sysvar_write_locks.
+    pub fn serialize_instructions(&self, demote_sysvar_write_locks: bool) -> Vec<u8> {
         // 64 bytes is a reasonable guess, calculating exactly is slower in benchmarks
         let mut data = Vec::with_capacity(self.instructions.len() * (32 * 2));
         append_u16(&mut data, self.instructions.len() as u16);
@@ -408,12 +409,7 @@ impl Message {
             for account_index in &instruction.accounts {
                 let account_index = *account_index as usize;
                 let is_signer = self.is_signer(account_index);
-                // Hard coding demote_sysvar_write_locks to false here not to
-                // change serializations.
-                let is_writable = self.is_writable(
-                    account_index,
-                    false, // demote_sysvar_write_locks
-                );
+                let is_writable = self.is_writable(account_index, demote_sysvar_write_locks);
                 let mut meta_byte = 0;
                 if is_signer {
                     meta_byte |= 1 << Self::IS_SIGNER_BIT;
@@ -918,7 +914,9 @@ mod tests {
         ];
 
         let message = Message::new(&instructions, Some(&id1));
-        let serialized = message.serialize_instructions();
+        let serialized = message.serialize_instructions(
+            true, // demote_sysvar_write_locks
+        );
         for (i, instruction) in instructions.iter().enumerate() {
             assert_eq!(
                 Message::deserialize_instruction(i, &serialized).unwrap(),
@@ -939,7 +937,9 @@ mod tests {
         ];
 
         let message = Message::new(&instructions, Some(&id1));
-        let serialized = message.serialize_instructions();
+        let serialized = message.serialize_instructions(
+            true, // demote_sysvar_write_locks
+        );
         assert_eq!(
             Message::deserialize_instruction(instructions.len(), &serialized).unwrap_err(),
             SanitizeError::IndexOutOfBounds,
