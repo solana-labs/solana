@@ -100,7 +100,7 @@ fn new_response<T>(bank: &Bank, value: T) -> RpcResponse<T> {
     Response { context, value }
 }
 
-pub fn is_confirmed_rooted(
+fn is_finalized(
     block_commitment_cache: &BlockCommitmentCache,
     bank: &Bank,
     blockstore: &Blockstore,
@@ -982,7 +982,7 @@ impl JsonRpcRequestProcessor {
             optimistically_confirmed_bank.get_signature_status_slot(&signature);
 
         let confirmations = if r_block_commitment_cache.root() >= slot
-            && is_confirmed_rooted(&r_block_commitment_cache, bank, &self.blockstore, slot)
+            && is_finalized(&r_block_commitment_cache, bank, &self.blockstore, slot)
         {
             None
         } else {
@@ -5741,7 +5741,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_is_confirmed_rooted() {
+    fn test_is_finalized() {
         let bank = Arc::new(Bank::default());
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
@@ -5769,25 +5769,15 @@ pub mod tests {
             },
         );
 
-        assert!(is_confirmed_rooted(
-            &block_commitment_cache,
-            &bank,
-            &blockstore,
-            0
-        ));
-        assert!(is_confirmed_rooted(
-            &block_commitment_cache,
-            &bank,
-            &blockstore,
-            1
-        ));
-        assert!(!is_confirmed_rooted(
+        assert!(is_finalized(&block_commitment_cache, &bank, &blockstore, 0));
+        assert!(is_finalized(&block_commitment_cache, &bank, &blockstore, 1));
+        assert!(!is_finalized(
             &block_commitment_cache,
             &bank,
             &blockstore,
             2
         ));
-        assert!(!is_confirmed_rooted(
+        assert!(!is_finalized(
             &block_commitment_cache,
             &bank,
             &blockstore,
