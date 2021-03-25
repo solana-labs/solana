@@ -527,7 +527,7 @@ impl RpcClient {
         self.send(RpcRequest::GetConfirmedBlock, json!([slot, encoding]))
     }
 
-    pub fn get_configured_confirmed_block(
+    pub fn get_confirmed_block_with_config(
         &self,
         slot: Slot,
         config: RpcConfirmedBlockConfig,
