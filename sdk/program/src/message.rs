@@ -451,7 +451,7 @@ impl Message {
         let last_key = self
             .account_keys
             .len()
-            .max(self.header.num_required_signatures as usize);
+            .min(self.header.num_required_signatures as usize);
         self.account_keys[..last_key].iter().collect()
     }
 }
