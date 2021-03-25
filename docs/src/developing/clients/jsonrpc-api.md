@@ -378,7 +378,7 @@ Result:
 
 ### getBlockTime
 
-Returns the estimated production time of a confirmed block.
+Returns the estimated production time of a block.
 
 Each validator reports their UTC time to the ledger on a regular interval by
 intermittently adding a timestamp to a Vote for a particular block. A requested
