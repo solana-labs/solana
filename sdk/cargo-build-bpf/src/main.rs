@@ -109,7 +109,7 @@ fn install_if_missing(
         url.push_str(version);
         url.push('/');
         url.push_str(file.to_str().unwrap());
-        download_file(&url.as_str(), &file, false)?;
+        download_file(&url.as_str(), &file, true)?;
         fs::create_dir_all(&target_path).map_err(|err| err.to_string())?;
         let zip = File::open(&file).map_err(|err| err.to_string())?;
         let tar = BzDecoder::new(BufReader::new(zip));
