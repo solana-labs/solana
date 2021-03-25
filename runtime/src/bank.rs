@@ -31,7 +31,8 @@ use rayon::ThreadPool;
 use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_debug, inc_new_counter_debug, inc_new_counter_info};
 use solana_sdk::{
-    account::{create_account_with_fields as create_account, from_account, Account,
+    account::{
+        create_account_with_fields as create_account, from_account, Account,
         InheritableAccountFields,
     },
     clock::{
@@ -3937,11 +3938,7 @@ impl Bank {
 
     /// Technically this issues (or even burns!) new lamports,
     /// so be extra careful for its usage
-    fn store_account_and_update_capitalization(
-        &self,
-        pubkey: &Pubkey,
-        new_account: &Account,
-    ) {
+    fn store_account_and_update_capitalization(&self, pubkey: &Pubkey, new_account: &Account) {
         if let Some(old_account) = self.get_account(&pubkey) {
             match new_account.lamports.cmp(&old_account.lamports) {
                 std::cmp::Ordering::Greater => {

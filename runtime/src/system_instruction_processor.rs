@@ -490,13 +490,15 @@ mod tests {
         RefCell::new(Account::default())
     }
     fn create_default_recent_blockhashes_account() -> RefCell<Account> {
-        RefCell::new(recent_blockhashes_account::create_account_with_data_for_test(
-            vec![
-                IterItem(0u64, &Hash::default(), &FeeCalculator::default());
-                sysvar::recent_blockhashes::MAX_ENTRIES
-            ]
-            .into_iter(),
-        ))
+        RefCell::new(
+            recent_blockhashes_account::create_account_with_data_for_test(
+                vec![
+                    IterItem(0u64, &Hash::default(), &FeeCalculator::default());
+                    sysvar::recent_blockhashes::MAX_ENTRIES
+                ]
+                .into_iter(),
+            ),
+        )
     }
     fn create_default_rent_account() -> RefCell<Account> {
         RefCell::new(account::create_account_for_test(&Rent::free()))

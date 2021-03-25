@@ -1028,7 +1028,9 @@ mod tests {
                     KeyedAccount::new(
                         &sysvar::clock::id(),
                         false,
-                        &RefCell::new(account::create_account_for_test(&sysvar::clock::Clock::default()))
+                        &RefCell::new(account::create_account_for_test(
+                            &sysvar::clock::Clock::default()
+                        ))
                     ),
                     KeyedAccount::new(
                         &sysvar::stake_history::id(),

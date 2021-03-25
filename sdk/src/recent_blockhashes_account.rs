@@ -1,6 +1,6 @@
 use crate::account::{
-    create_account_with_fields, to_account, Account,
-    InheritableAccountFields, DUMMY_INHERITABLE_ACCOUNT_FIELDS,
+    create_account_with_fields, to_account, Account, InheritableAccountFields,
+    DUMMY_INHERITABLE_ACCOUNT_FIELDS,
 };
 use crate::clock::INITIAL_RENT_EPOCH;
 use solana_program::sysvar::recent_blockhashes::{
@@ -37,7 +37,8 @@ pub fn create_account_with_data_and_fields<'a, I>(
 where
     I: IntoIterator<Item = IterItem<'a>>,
 {
-    let mut account = create_account_with_fields::<RecentBlockhashes>(&RecentBlockhashes::default(), fields);
+    let mut account =
+        create_account_with_fields::<RecentBlockhashes>(&RecentBlockhashes::default(), fields);
     update_account(&mut account, recent_blockhash_iter).unwrap();
     account
 }

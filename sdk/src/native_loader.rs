@@ -1,6 +1,4 @@
-use crate::account::{
-    Account, InheritableAccountFields, DUMMY_INHERITABLE_ACCOUNT_FIELDS,
-};
+use crate::account::{Account, InheritableAccountFields, DUMMY_INHERITABLE_ACCOUNT_FIELDS};
 use crate::clock::INITIAL_RENT_EPOCH;
 
 crate::declare_id!("NativeLoader1111111111111111111111111111111");
