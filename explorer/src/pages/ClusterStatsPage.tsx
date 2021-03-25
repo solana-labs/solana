@@ -10,7 +10,7 @@ import {
 import { lamportsToSol, slotsToHumanString } from "utils";
 import { ClusterStatus, useCluster } from "providers/cluster";
 import { TpsCard } from "components/TpsCard";
-import { displayTimestampUtc } from "utils/date";
+import { displayTimestampWithoutDate, displayTimestampUtc } from "utils/date";
 import { Status, useFetchSupply, useSupply } from "providers/supply";
 import { PublicKey } from "@solana/web3.js";
 import { ErrorCard } from "components/common/ErrorCard";
@@ -127,7 +127,7 @@ function StakingComponent() {
   return (
     <div className="card staking-card">
       <div className="card-body">
-        <div className="d-flex flex-sm-row flex-column">
+        <div className="d-flex flex-md-row flex-column">
           <div className="p-2 flex-fill">
             <h4>Circulating Supply</h4>
             <h1>
@@ -138,7 +138,7 @@ function StakingComponent() {
               <em>{circulatingPercentage}%</em> is circulating
             </h5>
           </div>
-          <hr className="hidden-xs-up" />
+          <hr className="hidden-sm-up" />
           <div className="p-2 flex-fill">
             <h4>Active Stake</h4>
             <h1>
@@ -151,19 +151,24 @@ function StakingComponent() {
               </h5>
             )}
           </div>
-          <hr className="hidden-xs-up" />
+          <hr className="hidden-sm-up" />
           {solanaInfo && (
             <div className="p-2 flex-fill">
-              <h4>Price</h4>
+              <h4>
+                Price{" "}
+                <span className="ml-2 badge badge-primary rank">
+                  Rank #{solanaInfo.market_cap_rank}
+                </span>
+              </h4>
               <h1>
                 <em>${solanaInfo.price.toFixed(2)}</em>{" "}
                 {solanaInfo.price_change_percentage_24h > 0 && (
-                  <small>
+                  <small className="change-positive">
                     &uarr; {solanaInfo.price_change_percentage_24h.toFixed(2)}%
                   </small>
                 )}
                 {solanaInfo.price_change_percentage_24h < 0 && (
-                  <small>
+                  <small className="change-negative">
                     &darr; {solanaInfo.price_change_percentage_24h.toFixed(2)}%
                   </small>
                 )}
@@ -187,6 +192,12 @@ function StakingComponent() {
             </div>
           )}
         </div>
+        {solanaInfo && (
+          <p className="updated-time text-muted mb-0">
+            Updated at{" "}
+            {displayTimestampWithoutDate(solanaInfo.last_updated.getTime())}
+          </p>
+        )}
       </div>
     </div>
   );
@@ -336,6 +347,8 @@ interface CoinInfo {
   volume_24: number;
   market_cap: number;
   price_change_percentage_24h: number;
+  market_cap_rank: number;
+  last_updated: Date;
 }
 
 interface CoinInfoResult {
@@ -351,7 +364,9 @@ interface CoinInfoResult {
         usd: number;
       };
       price_change_percentage_24h: number;
+      market_cap_rank: number;
     };
+    last_updated: string;
   };
 }
 
@@ -373,8 +388,10 @@ function useCoinGecko(coinId: string): CoinGeckoResult | undefined {
               price: info.data.market_data.current_price.usd,
               volume_24: info.data.market_data.total_volume.usd,
               market_cap: info.data.market_data.market_cap.usd,
+              market_cap_rank: info.data.market_data.market_cap_rank,
               price_change_percentage_24h:
                 info.data.market_data.price_change_percentage_24h,
+              last_updated: new Date(info.data.last_updated),
             },
             status: CoingeckoStatus.Success,
           });

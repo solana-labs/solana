@@ -369,3 +369,16 @@ pre.json-wrap {
     color: $primary
   }
 }
+
+p.updated-time {
+  font-size: .66rem;
+  text-align: right;
+}
+
+.change-positive {
+  color: $success;
+}
+
+.change-negative {
+  color: $warning;
+}
