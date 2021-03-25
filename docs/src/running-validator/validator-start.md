@@ -157,6 +157,14 @@ You can generate a custom vanity keypair using solana-keygen. For instance:
 solana-keygen grind --starts-with e1v1s:1
 ```
 
+You may request that the generated vanity keypair be expressed as a seed phrase
+which allows recovery of the keypair from the seed phrase and an optionally
+supplied passphrase:
+
+```bash
+solana-keygen grind --mnemonic --starts-with e1v1s:1
+```
+
 Depending on the string requested, it may take days to find a match...
 
 ---
