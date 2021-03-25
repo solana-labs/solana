@@ -1,4 +1,7 @@
-use crate::{clock::Epoch, pubkey::Pubkey};
+use crate::{
+    clock::{Epoch, INITIAL_RENT_EPOCH},
+    pubkey::Pubkey,
+};
 use solana_program::{account_info::AccountInfo, sysvar::Sysvar};
 use std::{cell::Ref, cell::RefCell, cmp, fmt, rc::Rc, sync::Arc};
 
@@ -449,17 +452,57 @@ impl AccountSharedData {
     }
 }
 
+pub type InheritableAccountFields = (u64, Epoch);
+pub const DUMMY_INHERITABLE_ACCOUNT_FIELDS: InheritableAccountFields = (1, INITIAL_RENT_EPOCH);
+
 /// Create an `Account` from a `Sysvar`.
+#[deprecated(
+    since = "1.5.17",
+    note = "Please use `create_account_for_test` instead"
+)]
 pub fn create_account<S: Sysvar>(sysvar: &S, lamports: u64) -> Account {
+    create_account_with_fields(sysvar, (lamports, INITIAL_RENT_EPOCH))
+}
+
+pub fn create_account_with_fields<S: Sysvar>(
+    sysvar: &S,
+    (lamports, rent_epoch): InheritableAccountFields,
+) -> Account {
     let data_len = S::size_of().max(bincode::serialized_size(sysvar).unwrap() as usize);
     let mut account = Account::new(lamports, data_len, &solana_program::sysvar::id());
     to_account::<S, Account>(sysvar, &mut account).unwrap();
+    account.rent_epoch = rent_epoch;
     account
 }
 
+pub fn create_account_for_test<S: Sysvar>(sysvar: &S) -> Account {
+    create_account_with_fields(sysvar, DUMMY_INHERITABLE_ACCOUNT_FIELDS)
+}
+
 /// Create an `Account` from a `Sysvar`.
+#[deprecated(
+    since = "1.5.17",
+    note = "Please use `create_account_shared_data_for_test` instead"
+)]
 pub fn create_account_shared_data<S: Sysvar>(sysvar: &S, lamports: u64) -> AccountSharedData {
-    AccountSharedData::from(create_account(sysvar, lamports))
+    AccountSharedData::from(create_account_with_fields(
+        sysvar,
+        (lamports, INITIAL_RENT_EPOCH),
+    ))
+}
+
+pub fn create_account_shared_data_with_fields<S: Sysvar>(
+    sysvar: &S,
+    fields: InheritableAccountFields,
+) -> AccountSharedData {
+    AccountSharedData::from(create_account_with_fields(sysvar, fields))
+}
+
+pub fn create_account_shared_data_for_test<S: Sysvar>(sysvar: &S) -> AccountSharedData {
+    AccountSharedData::from(create_account_with_fields(
+        sysvar,
+        DUMMY_INHERITABLE_ACCOUNT_FIELDS,
+    ))
 }
 
 /// Create a `Sysvar` from an `Account`'s data.
