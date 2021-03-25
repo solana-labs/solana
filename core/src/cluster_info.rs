@@ -4757,7 +4757,7 @@ mod tests {
         let shred_version = cluster_info.my_shred_version();
         let mut peers: Vec<Pubkey> = vec![];
 
-        const NO_ENTRIES: usize = 20000;
+        const NO_ENTRIES: usize = CRDS_UNIQUE_PUBKEY_CAPACITY + 128;
         let data: Vec<_> = repeat_with(|| {
             let keypair = Keypair::new();
             peers.push(keypair.pubkey());
