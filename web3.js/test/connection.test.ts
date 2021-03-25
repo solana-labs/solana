@@ -2303,7 +2303,7 @@ describe('Connection', () => {
     });
 
     it('https request', async () => {
-      const connection = new Connection('https://devnet.solana.com');
+      const connection = new Connection('https://api.mainnet-beta.solana.com');
       const version = await connection.getVersion();
       expect(version['solana-core']).to.be.ok;
     });
