@@ -1557,6 +1557,9 @@ impl ReplayStage {
                 );
                 did_complete_bank = true;
                 info!("bank frozen: {}", bank.slot());
+                if let Some(transaction_status_sender) = transaction_status_sender.clone() {
+                    transaction_status_sender.send_transaction_status_freeze_message(&bank);
+                }
                 bank.freeze();
                 heaviest_subtree_fork_choice
                     .add_new_leaf_slot(bank.slot(), Some(bank.parent_slot()));

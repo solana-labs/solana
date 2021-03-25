@@ -146,7 +146,7 @@ fn execute_batch(
         let token_balances =
             TransactionTokenBalancesSet::new(pre_token_balances, post_token_balances);
 
-        send_transaction_status_batch(
+        transaction_status_sender.send_transaction_status_batch(
             bank.clone(),
             batch.transactions(),
             batch.iteration_order_vec(),
@@ -155,7 +155,6 @@ fn execute_batch(
             token_balances,
             inner_instructions,
             transaction_logs,
-            transaction_status_sender,
         );
     }
 
@@ -1106,6 +1105,11 @@ fn process_single_slot(
     Ok(())
 }
 
+pub enum TransactionStatusMessage {
+    Batch(TransactionStatusBatch),
+    Freeze(Slot),
+}
+
 pub struct TransactionStatusBatch {
     pub bank: Arc<Bank>,
     pub transactions: Vec<Transaction>,
@@ -1119,46 +1123,58 @@ pub struct TransactionStatusBatch {
 
 #[derive(Clone)]
 pub struct TransactionStatusSender {
-    pub sender: Sender<TransactionStatusBatch>,
+    pub sender: Sender<TransactionStatusMessage>,
     pub enable_cpi_and_log_storage: bool,
 }
 
-pub fn send_transaction_status_batch(
-    bank: Arc<Bank>,
-    transactions: &[Transaction],
-    iteration_order: Option<Vec<usize>>,
-    statuses: Vec<TransactionExecutionResult>,
-    balances: TransactionBalancesSet,
-    token_balances: TransactionTokenBalancesSet,
-    inner_instructions: Vec<Option<InnerInstructionsList>>,
-    transaction_logs: Vec<TransactionLogMessages>,
-    transaction_status_sender: TransactionStatusSender,
-) {
-    let slot = bank.slot();
-    let (inner_instructions, transaction_logs) =
-        if !transaction_status_sender.enable_cpi_and_log_storage {
+impl TransactionStatusSender {
+    pub fn send_transaction_status_batch(
+        &self,
+        bank: Arc<Bank>,
+        transactions: &[Transaction],
+        iteration_order: Option<Vec<usize>>,
+        statuses: Vec<TransactionExecutionResult>,
+        balances: TransactionBalancesSet,
+        token_balances: TransactionTokenBalancesSet,
+        inner_instructions: Vec<Option<InnerInstructionsList>>,
+        transaction_logs: Vec<TransactionLogMessages>,
+    ) {
+        let slot = bank.slot();
+        let (inner_instructions, transaction_logs) = if !self.enable_cpi_and_log_storage {
             (None, None)
         } else {
             (Some(inner_instructions), Some(transaction_logs))
         };
-    if let Err(e) = transaction_status_sender
-        .sender
-        .send(TransactionStatusBatch {
-            bank,
-            transactions: transactions.to_vec(),
-            iteration_order,
-            statuses,
-            balances,
-            token_balances,
-            inner_instructions,
-            transaction_logs,
-        })
-    {
-        trace!(
-            "Slot {} transaction_status send batch failed: {:?}",
-            slot,
-            e
-        );
+        if let Err(e) = self
+            .sender
+            .send(TransactionStatusMessage::Batch(TransactionStatusBatch {
+                bank,
+                transactions: transactions.to_vec(),
+                iteration_order,
+                statuses,
+                balances,
+                token_balances,
+                inner_instructions,
+                transaction_logs,
+            }))
+        {
+            trace!(
+                "Slot {} transaction_status send batch failed: {:?}",
+                slot,
+                e
+            );
+        }
+    }
+
+    pub fn send_transaction_status_freeze_message(&self, bank: &Arc<Bank>) {
+        let slot = bank.slot();
+        if let Err(e) = self.sender.send(TransactionStatusMessage::Freeze(slot)) {
+            trace!(
+                "Slot {} transaction_status send freeze message failed: {:?}",
+                slot,
+                e
+            );
+        }
     }
 }
 
