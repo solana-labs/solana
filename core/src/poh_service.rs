@@ -199,6 +199,7 @@ impl PohService {
         }
     }
 
+    // returns target time for tick if we need to tick, or None if we don't need to tick
     fn record_or_hash(
         next_record: &mut Option<Record>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
@@ -207,7 +208,7 @@ impl PohService {
         hashes_per_batch: u64,
         poh: &Arc<Mutex<Poh>>,
         target_ns_per_tick: u64,
-    ) -> (bool, Instant) {
+    ) -> Option<Instant> {
         match next_record.take() {
             Some(mut record) => {
                 // received message to record
@@ -255,7 +256,7 @@ impl PohService {
                     timing.total_hash_time_ns += hash_time.as_ns();
                     if should_tick {
                         // nothing else can be done. tick required.
-                        return (true, poh_l.target_poh_time(target_ns_per_tick));
+                        return Some(poh_l.target_poh_time(target_ns_per_tick));
                     }
                     // check to see if a record request has been sent
                     let get_again = record_receiver.try_recv();
@@ -272,7 +273,7 @@ impl PohService {
                 }
             }
         };
-        (false, Instant::now()) // should_tick = false for all code that reaches here
+        None // should_tick = false for all code that reaches here
     }
 
     fn tick_producer(
@@ -287,7 +288,7 @@ impl PohService {
         let mut timing = PohTiming::new();
         let mut next_record = None;
         loop {
-            let (should_tick, tick_target_time) = Self::record_or_hash(
+            let should_tick = Self::record_or_hash(
                 &mut next_record,
                 &poh_recorder,
                 &mut timing,
@@ -296,7 +297,7 @@ impl PohService {
                 &poh,
                 target_tick_ns,
             );
-            if should_tick {
+            if let Some(tick_target_time) = should_tick {
                 // Lock PohRecorder only for the final hash. record_or_hash will lock PohRecorder for record calls but not for hashing.
                 {
                     let mut lock_time = Measure::start("lock");
