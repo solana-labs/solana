@@ -108,12 +108,12 @@ fn no_outfile_arg<'a, 'b>() -> Arg<'a, 'b> {
         .help(NO_OUTFILE_ARG.help)
 }
 
-trait NewGrindCommonArgs {
-    fn new_grind_common_args(self) -> Self;
+trait KeyGenerationCommonArgs {
+    fn key_generation_common_args(self) -> Self;
 }
 
-impl NewGrindCommonArgs for App<'_, '_> {
-    fn new_grind_common_args(self) -> Self {
+impl KeyGenerationCommonArgs for App<'_, '_> {
+    fn key_generation_common_args(self) -> Self {
         self.arg(word_count_arg())
             .arg(language_arg())
             .arg(no_passphrase_arg())
@@ -390,7 +390,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .long("silent")
                         .help("Do not display seed phrase. Useful when piping output to other programs that prompt for user input, like gpg"),
                 )
-                .new_grind_common_args()
+                .key_generation_common_args()
         )
         .subcommand(
             SubCommand::with_name("grind")
@@ -445,7 +445,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .long("use-mnemonic")
                         .help("Generate using a mnemonic key phrase.  Expect a significant slowdown in this mode"),
                 )
-                .new_grind_common_args()
+                .key_generation_common_args()
         )
         .subcommand(
             SubCommand::with_name("pubkey")
