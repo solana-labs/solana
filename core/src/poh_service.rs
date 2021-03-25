@@ -317,6 +317,7 @@ impl PohService {
                     // TODO: we could possibly get a reset or record request while we're here
                     std::hint::spin_loop();
                 }
+                assert!(Instant::now() >= tick_target_time);
                 timing.total_sleep_us += started_waiting.elapsed().as_nanos() as u64 / 1000;
 
                 timing.report(ticks_per_slot);
