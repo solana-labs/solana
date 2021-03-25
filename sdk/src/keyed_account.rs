@@ -243,13 +243,8 @@ mod tests {
         let key = crate::keyed_account::tests::id();
         let wrong_key = Pubkey::new_unique();
 
-<<<<<<< HEAD
-        let account = create_account(&test_sysvar, 42);
-        let test_sysvar = from_account::<TestSysvar>(&account).unwrap();
-=======
         let account = create_account_for_test(&test_sysvar);
-        let test_sysvar = from_account::<TestSysvar, _>(&account).unwrap();
->>>>>>> 6d5c6c17c... Simplify account.rent_epoch handling for sysvar rent (#16049)
+        let test_sysvar = from_account::<TestSysvar>(&account).unwrap();
         assert_eq!(test_sysvar, TestSysvar::default());
 
         let mut account = Account::new(42, TestSysvar::size_of(), &key);

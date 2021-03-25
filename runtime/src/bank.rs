@@ -31,14 +31,9 @@ use rayon::ThreadPool;
 use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_debug, inc_new_counter_debug, inc_new_counter_info};
 use solana_sdk::{
-<<<<<<< HEAD
-    account::{create_account, from_account, Account},
-=======
-    account::{
-        create_account_shared_data_with_fields as create_account, from_account, Account,
-        AccountSharedData, InheritableAccountFields, ReadableAccount,
+    account::{create_account_with_fields as create_account, from_account, Account,
+        InheritableAccountFields,
     },
->>>>>>> 6d5c6c17c... Simplify account.rent_epoch handling for sysvar rent (#16049)
     clock::{
         Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp, DEFAULT_TICKS_PER_SECOND,
         INITIAL_RENT_EPOCH, MAX_PROCESSING_AGE, MAX_RECENT_BLOCKHASHES,
@@ -1373,19 +1368,14 @@ impl Bank {
         self.store_account_and_update_capitalization(pubkey, &new_account);
     }
 
-<<<<<<< HEAD
-    fn inherit_specially_retained_account_balance(&self, old_account: &Option<Account>) -> u64 {
-        old_account.as_ref().map(|a| a.lamports).unwrap_or(1)
-=======
     fn inherit_specially_retained_account_fields(
         &self,
-        old_account: &Option<AccountSharedData>,
+        old_account: &Option<Account>,
     ) -> InheritableAccountFields {
         (
             old_account.as_ref().map(|a| a.lamports).unwrap_or(1),
             INITIAL_RENT_EPOCH,
         )
->>>>>>> 6d5c6c17c... Simplify account.rent_epoch handling for sysvar rent (#16049)
     }
 
     /// Unused conversion
@@ -3945,17 +3935,13 @@ impl Bank {
         self.rc.accounts.accounts_db.expire_old_recycle_stores()
     }
 
-<<<<<<< HEAD
-    fn store_account_and_update_capitalization(&self, pubkey: &Pubkey, new_account: &Account) {
-=======
     /// Technically this issues (or even burns!) new lamports,
     /// so be extra careful for its usage
     fn store_account_and_update_capitalization(
         &self,
         pubkey: &Pubkey,
-        new_account: &AccountSharedData,
+        new_account: &Account,
     ) {
->>>>>>> 6d5c6c17c... Simplify account.rent_epoch handling for sysvar rent (#16049)
         if let Some(old_account) = self.get_account(&pubkey) {
             match new_account.lamports.cmp(&old_account.lamports) {
                 std::cmp::Ordering::Greater => {

@@ -140,13 +140,7 @@ pub fn create_account_with_fields<S: Sysvar>(
 ) -> Account {
     let data_len = S::size_of().max(bincode::serialized_size(sysvar).unwrap() as usize);
     let mut account = Account::new(lamports, data_len, &solana_program::sysvar::id());
-<<<<<<< HEAD
     to_account::<S>(sysvar, &mut account).unwrap();
-    account
-}
-
-=======
-    to_account::<S, Account>(sysvar, &mut account).unwrap();
     account.rent_epoch = rent_epoch;
     account
 }
@@ -155,33 +149,6 @@ pub fn create_account_for_test<S: Sysvar>(sysvar: &S) -> Account {
     create_account_with_fields(sysvar, DUMMY_INHERITABLE_ACCOUNT_FIELDS)
 }
 
-/// Create an `Account` from a `Sysvar`.
-#[deprecated(
-    since = "1.5.17",
-    note = "Please use `create_account_shared_data_for_test` instead"
-)]
-pub fn create_account_shared_data<S: Sysvar>(sysvar: &S, lamports: u64) -> AccountSharedData {
-    AccountSharedData::from(create_account_with_fields(
-        sysvar,
-        (lamports, INITIAL_RENT_EPOCH),
-    ))
-}
-
-pub fn create_account_shared_data_with_fields<S: Sysvar>(
-    sysvar: &S,
-    fields: InheritableAccountFields,
-) -> AccountSharedData {
-    AccountSharedData::from(create_account_with_fields(sysvar, fields))
-}
-
-pub fn create_account_shared_data_for_test<S: Sysvar>(sysvar: &S) -> AccountSharedData {
-    AccountSharedData::from(create_account_with_fields(
-        sysvar,
-        DUMMY_INHERITABLE_ACCOUNT_FIELDS,
-    ))
-}
-
->>>>>>> 6d5c6c17c... Simplify account.rent_epoch handling for sysvar rent (#16049)
 /// Create a `Sysvar` from an `Account`'s data.
 pub fn from_account<S: Sysvar>(account: &Account) -> Option<S> {
     bincode::deserialize(&account.data).ok()

@@ -15,12 +15,7 @@ fn bench_to_from_account(b: &mut Bencher) {
         slot_hashes.add(i as Slot, Hash::default());
     }
     b.iter(|| {
-<<<<<<< HEAD
-        let account = create_account(&slot_hashes, 0);
-        slot_hashes = from_account::<SlotHashes>(&account).unwrap();
-=======
         let account = create_account_for_test(&slot_hashes);
-        slot_hashes = from_account::<SlotHashes, _>(&account).unwrap();
->>>>>>> 6d5c6c17c... Simplify account.rent_epoch handling for sysvar rent (#16049)
+        slot_hashes = from_account::<SlotHashes>(&account).unwrap();
     });
 }

@@ -897,13 +897,7 @@ mod tests {
         message_processor::{Executors, ThisInvokeContext},
     };
     use solana_sdk::{
-<<<<<<< HEAD
-        account::{create_account, Account},
-=======
-        account::{
-            create_account_shared_data_for_test as create_account_for_test, AccountSharedData,
-        },
->>>>>>> 6d5c6c17c... Simplify account.rent_epoch handling for sysvar rent (#16049)
+        account::{create_account_for_test, Account},
         account_utils::StateMut,
         client::SyncClient,
         clock::Clock,

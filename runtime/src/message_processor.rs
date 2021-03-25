@@ -1614,15 +1614,8 @@ mod tests {
         let account = Account::new_ref(0, 1, &mock_system_program_id);
         accounts.push(account);
 
-<<<<<<< HEAD
         let mut loaders: Vec<Vec<(Pubkey, RefCell<Account>)>> = Vec::new();
-        let account = RefCell::new(create_loadable_account("mock_system_program", 1));
-=======
-        let mut loaders: Vec<Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>> = Vec::new();
-        let account = Rc::new(RefCell::new(create_loadable_account_for_test(
-            "mock_system_program",
-        )));
->>>>>>> 6d5c6c17c... Simplify account.rent_epoch handling for sysvar rent (#16049)
+        let account = RefCell::new(create_loadable_account_for_test("mock_system_program"));
         loaders.push(vec![(mock_system_program_id, account)]);
 
         let executors = Rc::new(RefCell::new(Executors::default()));
@@ -1785,15 +1778,8 @@ mod tests {
         let account = Account::new_ref(0, 1, &mock_program_id);
         accounts.push(account);
 
-<<<<<<< HEAD
         let mut loaders: Vec<Vec<(Pubkey, RefCell<Account>)>> = Vec::new();
-        let account = RefCell::new(create_loadable_account("mock_system_program", 1));
-=======
-        let mut loaders: Vec<Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>> = Vec::new();
-        let account = Rc::new(RefCell::new(create_loadable_account_for_test(
-            "mock_system_program",
-        )));
->>>>>>> 6d5c6c17c... Simplify account.rent_epoch handling for sysvar rent (#16049)
+        let account = RefCell::new(create_loadable_account_for_test("mock_system_program"));
         loaders.push(vec![(mock_program_id, account)]);
 
         let executors = Rc::new(RefCell::new(Executors::default()));

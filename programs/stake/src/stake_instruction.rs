@@ -663,29 +663,15 @@ mod tests {
             .iter()
             .map(|meta| {
                 RefCell::new(if sysvar::clock::check_id(&meta.pubkey) {
-<<<<<<< HEAD
-                    account::create_account(&sysvar::clock::Clock::default(), 1)
+                    account::create_account_for_test(&sysvar::clock::Clock::default())
                 } else if sysvar::rewards::check_id(&meta.pubkey) {
-                    account::create_account(&sysvar::rewards::Rewards::new(0.0), 1)
+                    account::create_account_for_test(&sysvar::rewards::Rewards::new(0.0))
                 } else if sysvar::stake_history::check_id(&meta.pubkey) {
-                    account::create_account(&StakeHistory::default(), 1)
+                    account::create_account_for_test(&StakeHistory::default())
                 } else if config::check_id(&meta.pubkey) {
                     config::create_account(0, &config::Config::default())
                 } else if sysvar::rent::check_id(&meta.pubkey) {
-                    account::create_account(&Rent::default(), 1)
-=======
-                    account::create_account_shared_data_for_test(&sysvar::clock::Clock::default())
-                } else if sysvar::rewards::check_id(&meta.pubkey) {
-                    account::create_account_shared_data_for_test(&sysvar::rewards::Rewards::new(
-                        0.0,
-                    ))
-                } else if sysvar::stake_history::check_id(&meta.pubkey) {
-                    account::create_account_shared_data_for_test(&StakeHistory::default())
-                } else if config::check_id(&meta.pubkey) {
-                    config::create_account(0, &config::Config::default())
-                } else if sysvar::rent::check_id(&meta.pubkey) {
-                    account::create_account_shared_data_for_test(&Rent::default())
->>>>>>> 6d5c6c17c... Simplify account.rent_epoch handling for sysvar rent (#16049)
+                    account::create_account_for_test(&Rent::default())
                 } else if meta.pubkey == invalid_stake_state_pubkey() {
                     Account {
                         owner: id(),
@@ -987,13 +973,7 @@ mod tests {
                     KeyedAccount::new(
                         &sysvar::rent::id(),
                         false,
-<<<<<<< HEAD
-                        &RefCell::new(account::create_account(&Rent::default(), 0))
-=======
-                        &RefCell::new(account::create_account_shared_data_for_test(
-                            &Rent::default()
-                        ))
->>>>>>> 6d5c6c17c... Simplify account.rent_epoch handling for sysvar rent (#16049)
+                        &RefCell::new(account::create_account_for_test(&Rent::default()))
                     )
                 ],
                 &serialize(&StakeInstruction::Initialize(
@@ -1048,22 +1028,12 @@ mod tests {
                     KeyedAccount::new(
                         &sysvar::clock::id(),
                         false,
-<<<<<<< HEAD
-                        &RefCell::new(account::create_account(&sysvar::clock::Clock::default(), 1))
-=======
-                        &RefCell::new(account::create_account_shared_data_for_test(
-                            &sysvar::clock::Clock::default(),
-                        ))
->>>>>>> 6d5c6c17c... Simplify account.rent_epoch handling for sysvar rent (#16049)
+                        &RefCell::new(account::create_account_for_test(&sysvar::clock::Clock::default()))
                     ),
                     KeyedAccount::new(
                         &sysvar::stake_history::id(),
                         false,
-<<<<<<< HEAD
-                        &RefCell::new(account::create_account(
-=======
-                        &RefCell::new(account::create_account_shared_data_for_test(
->>>>>>> 6d5c6c17c... Simplify account.rent_epoch handling for sysvar rent (#16049)
+                        &RefCell::new(account::create_account_for_test(
                             &sysvar::stake_history::StakeHistory::default(),
                         ))
                     ),
@@ -1089,24 +1059,14 @@ mod tests {
                     KeyedAccount::new(
                         &sysvar::rewards::id(),
                         false,
-<<<<<<< HEAD
-                        &RefCell::new(account::create_account(
-=======
-                        &RefCell::new(account::create_account_shared_data_for_test(
->>>>>>> 6d5c6c17c... Simplify account.rent_epoch handling for sysvar rent (#16049)
+                        &RefCell::new(account::create_account_for_test(
                             &sysvar::rewards::Rewards::new(0.0),
                         ))
                     ),
                     KeyedAccount::new(
                         &sysvar::stake_history::id(),
                         false,
-<<<<<<< HEAD
-                        &RefCell::new(account::create_account(&StakeHistory::default(), 1,))
-=======
-                        &RefCell::new(account::create_account_shared_data_for_test(
-                            &StakeHistory::default(),
-                        ))
->>>>>>> 6d5c6c17c... Simplify account.rent_epoch handling for sysvar rent (#16049)
+                        &RefCell::new(account::create_account_for_test(&StakeHistory::default()))
                     ),
                 ],
                 &serialize(&StakeInstruction::Withdraw(42)).unwrap(),
@@ -1139,11 +1099,7 @@ mod tests {
                     KeyedAccount::new(
                         &sysvar::rewards::id(),
                         false,
-<<<<<<< HEAD
-                        &RefCell::new(account::create_account(
-=======
-                        &RefCell::new(account::create_account_shared_data_for_test(
->>>>>>> 6d5c6c17c... Simplify account.rent_epoch handling for sysvar rent (#16049)
+                        &RefCell::new(account::create_account_for_test(
                             &sysvar::rewards::Rewards::new(0.0),
                         ))
                     ),
