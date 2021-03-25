@@ -2085,8 +2085,8 @@ impl Blockstore {
             .find(|transaction| transaction.signatures[0] == signature))
     }
 
-    // Returns all cached signatures for an address, ordered by slot that the transaction was
-    // processed in.   Within each slot the transactions will be ordered by signature, and NOT by
+    // Returns all rooted signatures for an address, ordered by slot that the transaction was
+    // processed in. Within each slot the transactions will be ordered by signature, and NOT by
     // the order in which the transactions exist in the block
     fn find_address_signatures(
         &self,
