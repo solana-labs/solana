@@ -897,7 +897,7 @@ mod tests {
         message_processor::{Executors, ThisInvokeContext},
     };
     use solana_sdk::{
-        account::{create_account, Account},
+        account::{create_account_for_test, Account},
         account_utils::StateMut,
         client::SyncClient,
         clock::Clock,
@@ -2214,15 +2214,12 @@ mod tests {
         file.read_to_end(&mut elf_new).unwrap();
         assert_ne!(elf_orig.len(), elf_new.len());
         let rent = Rent::default();
-        let rent_account = RefCell::new(create_account(&Rent::default(), 1));
+        let rent_account = RefCell::new(create_account_for_test(&Rent::default()));
         let slot = 42;
-        let clock_account = RefCell::new(create_account(
-            &Clock {
-                slot,
-                ..Clock::default()
-            },
-            1,
-        ));
+        let clock_account = RefCell::new(create_account_for_test(&Clock {
+            slot,
+            ..Clock::default()
+        }));
         let min_program_balance =
             1.max(rent.minimum_balance(UpgradeableLoaderState::program_len().unwrap()));
         let min_programdata_balance = 1.max(rent.minimum_balance(

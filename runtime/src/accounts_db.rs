@@ -7498,7 +7498,7 @@ pub mod tests {
             some_slot,
             &[(
                 &native_account_pubkey,
-                &solana_sdk::native_loader::create_loadable_account("foo", 1),
+                &solana_sdk::native_loader::create_loadable_account_for_test("foo"),
             )],
         );
         db.update_accounts_hash_test(some_slot, &ancestors);
@@ -8510,9 +8510,8 @@ pub mod tests {
 
     #[test]
     fn test_account_balance_for_capitalization_sysvar() {
-        let normal_sysvar = solana_sdk::account::create_account(
+        let normal_sysvar = solana_sdk::account::create_account_for_test(
             &solana_sdk::slot_history::SlotHistory::default(),
-            1,
         );
         assert_eq!(
             AccountsDb::account_balance_for_capitalization(
@@ -8532,7 +8531,8 @@ pub mod tests {
 
     #[test]
     fn test_account_balance_for_capitalization_native_program() {
-        let normal_native_program = solana_sdk::native_loader::create_loadable_account("foo", 1);
+        let normal_native_program =
+            solana_sdk::native_loader::create_loadable_account_for_test("foo");
         assert_eq!(
             AccountsDb::account_balance_for_capitalization(
                 normal_native_program.lamports,

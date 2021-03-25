@@ -19,7 +19,7 @@ use solana_sdk::{
     account::Account,
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-    clock::{Epoch, Slot},
+    clock::{Epoch, Slot, INITIAL_RENT_EPOCH},
     feature_set::{self, FeatureSet},
     fee_calculator::{FeeCalculator, FeeConfig},
     genesis_config::ClusterType,
@@ -966,7 +966,7 @@ impl Accounts {
                             _ => panic!("unexpected nonce_rollback condition"),
                         }
                     }
-                    if account.rent_epoch == 0 {
+                    if account.rent_epoch == INITIAL_RENT_EPOCH {
                         acc.3 += rent_collector.collect_from_created_account(&key, account);
                     }
                     accounts.push((key, &*account));

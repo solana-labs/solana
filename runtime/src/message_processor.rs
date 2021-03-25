@@ -1040,7 +1040,7 @@ mod tests {
     use solana_sdk::{
         instruction::{AccountMeta, Instruction, InstructionError},
         message::Message,
-        native_loader::create_loadable_account,
+        native_loader::create_loadable_account_for_test,
     };
 
     #[test]
@@ -1615,7 +1615,7 @@ mod tests {
         accounts.push(account);
 
         let mut loaders: Vec<Vec<(Pubkey, RefCell<Account>)>> = Vec::new();
-        let account = RefCell::new(create_loadable_account("mock_system_program", 1));
+        let account = RefCell::new(create_loadable_account_for_test("mock_system_program"));
         loaders.push(vec![(mock_system_program_id, account)]);
 
         let executors = Rc::new(RefCell::new(Executors::default()));
@@ -1779,7 +1779,7 @@ mod tests {
         accounts.push(account);
 
         let mut loaders: Vec<Vec<(Pubkey, RefCell<Account>)>> = Vec::new();
-        let account = RefCell::new(create_loadable_account("mock_system_program", 1));
+        let account = RefCell::new(create_loadable_account_for_test("mock_system_program"));
         loaders.push(vec![(mock_program_id, account)]);
 
         let executors = Rc::new(RefCell::new(Executors::default()));
