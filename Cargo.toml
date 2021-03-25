@@ -31,7 +31,6 @@ members = [
     "log-analyzer",
     "merkle-root-bench",
     "merkle-tree",
-    "stake-o-matic",
     "storage-bigtable",
     "storage-proto",
     "streamer",
