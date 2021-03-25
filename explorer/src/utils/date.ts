@@ -39,3 +39,18 @@ export function displayTimestampUtc(
   }).format(expireDate);
   return `${dateString} at ${timeString}`;
 }
+
+export function displayTimestampWithoutDate(
+  unixTimestamp: number,
+  shortTimeZoneName = true
+) {
+  const expireDate = new Date(unixTimestamp);
+  const timeString = new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "numeric",
+    second: "numeric",
+    hourCycle: "h23",
+    timeZoneName: shortTimeZoneName ? "short" : "long",
+  }).format(expireDate);
+  return timeString;
+}
