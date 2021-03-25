@@ -4,9 +4,10 @@ use crate::{
     mock_sender::{MockSender, Mocks},
     rpc_config::RpcAccountInfoConfig,
     rpc_config::{
-        RpcConfirmedBlockConfig, RpcGetConfirmedSignaturesForAddress2Config,
-        RpcLargestAccountsConfig, RpcProgramAccountsConfig, RpcSendTransactionConfig,
-        RpcSimulateTransactionConfig, RpcTokenAccountsFilter,
+        RpcConfirmedBlockConfig, RpcConfirmedTransactionConfig,
+        RpcGetConfirmedSignaturesForAddress2Config, RpcLargestAccountsConfig,
+        RpcProgramAccountsConfig, RpcSendTransactionConfig, RpcSimulateTransactionConfig,
+        RpcTokenAccountsFilter,
     },
     rpc_request::{RpcError, RpcRequest, RpcResponseErrorData, TokenAccountsFilter},
     rpc_response::*,
@@ -616,6 +617,17 @@ impl RpcClient {
         self.send(
             RpcRequest::GetConfirmedTransaction,
             json!([signature.to_string(), encoding]),
+        )
+    }
+
+    pub fn get_confirmed_transaction_with_config(
+        &self,
+        signature: &Signature,
+        config: RpcConfirmedTransactionConfig,
+    ) -> ClientResult<EncodedConfirmedTransaction> {
+        self.send(
+            RpcRequest::GetConfirmedTransaction,
+            json!([signature.to_string(), config]),
         )
     }
 
