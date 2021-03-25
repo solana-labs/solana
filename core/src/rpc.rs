@@ -1028,19 +1028,30 @@ impl JsonRpcRequestProcessor {
         &self,
         signature: Signature,
         config: Option<RpcEncodingConfigWrapper<RpcConfirmedTransactionConfig>>,
-    ) -> Option<EncodedConfirmedTransaction> {
+    ) -> Result<Option<EncodedConfirmedTransaction>> {
         let config = config
             .map(|config| config.convert_to_current())
             .unwrap_or_default();
         let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Json);
-        let _commitment = config.commitment.unwrap_or_default();
+        let commitment = config.commitment.unwrap_or_default();
+        check_confirmed_commitment(commitment)?;
+
         if self.config.enable_rpc_transaction_history {
             match self
                 .blockstore
-                .get_confirmed_transaction(signature)
+                .get_complete_transaction(signature)
                 .unwrap_or(None)
             {
                 Some(confirmed_transaction) => {
+                    if commitment.is_confirmed() {
+                        let confirmed_bank = self.bank(Some(CommitmentConfig::confirmed()));
+                        if confirmed_bank
+                            .status_cache_ancestors()
+                            .contains(&confirmed_transaction.slot)
+                        {
+                            return Ok(Some(confirmed_transaction.encode(encoding)));
+                        }
+                    }
                     if confirmed_transaction.slot
                         <= self
                             .block_commitment_cache
@@ -1048,21 +1059,21 @@ impl JsonRpcRequestProcessor {
                             .unwrap()
                             .highest_confirmed_root()
                     {
-                        return Some(confirmed_transaction.encode(encoding));
+                        return Ok(Some(confirmed_transaction.encode(encoding)));
                     }
                 }
                 None => {
                     if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
-                        return self
+                        return Ok(self
                             .runtime
                             .block_on(bigtable_ledger_storage.get_confirmed_transaction(&signature))
                             .unwrap_or(None)
-                            .map(|confirmed| confirmed.encode(encoding));
+                            .map(|confirmed| confirmed.encode(encoding)));
                     }
                 }
             }
         }
-        None
+        Ok(None)
     }
 
     pub fn get_confirmed_signatures_for_address(
@@ -2949,7 +2960,7 @@ pub mod rpc_full {
                 signature_str
             );
             let signature = verify_signature(&signature_str)?;
-            Ok(meta.get_confirmed_transaction(signature, config))
+            meta.get_confirmed_transaction(signature, config)
         }
 
         fn get_confirmed_signatures_for_address(
