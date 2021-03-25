@@ -76,7 +76,7 @@ impl OptimisticConfirmationVerifier {
         self.last_optimistic_slot_ts = Instant::now();
     }
 
-    pub fn format_optimistic_confirmd_slot_violation_log(slot: Slot) -> String {
+    pub fn format_optimistic_confirmed_slot_violation_log(slot: Slot) -> String {
         format!("Optimistically confirmed slot {} was not rooted", slot)
     }
 
@@ -109,7 +109,7 @@ impl OptimisticConfirmationVerifier {
                     voted stake: {},
                     total epoch stake: {},
                     pct: {}",
-                    Self::format_optimistic_confirmd_slot_violation_log(*optimistic_slot),
+                    Self::format_optimistic_confirmed_slot_violation_log(*optimistic_slot),
                     hash,
                     epoch,
                     r_slot_tracker
