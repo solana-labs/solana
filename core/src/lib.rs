@@ -22,6 +22,7 @@ pub mod shred_fetch_stage;
 #[macro_use]
 pub mod contact_info;
 pub mod cluster_info;
+pub mod cluster_slot_state_verifier;
 pub mod cluster_slots;
 pub mod cluster_slots_service;
 pub mod consensus;
