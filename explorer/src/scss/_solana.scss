@@ -353,3 +353,19 @@ pre.data-wrap, pre.json-wrap {
 pre.json-wrap {
   max-width: 36rem;
 }
+
+.staking-card {
+  h1 {
+    margin-bottom: .75rem;
+    small {
+      font-size: 1rem;
+    }
+  }
+  h5 {
+    margin-bottom: 0;
+  }
+  em {
+    font-style: normal;
+    color: $primary
+  }
+}
