@@ -6,81 +6,114 @@ blocks.
 Leaders that produce multiple blocks for the same slot increase the number of
 potential forks that the cluster has to resolve.
 
-## Procedure
-1. Blockstore changes:
-    * a. Augment `DeadSlots` keyspace in Blockstore to be an Option<Blockhash>.
-    This is called the `approved_blockhash`.
-    * b. Augment the `Roots` column family to include the blockhash of the
-    rooted banks
+## Primitives
+1. gossip_root: Nodes now gossip their current root
+2. gossip_duplicate_slots: Nodes can gossip up to `N` duplicate slot proofs.
+3. `DUPLICATE_THRESHOLD`: The minimum percentage of stake that needs to vote on a fork with version `X` of a duplicate slot, in order for that fork to become votable.
 
-2. Once the CheckDuplicate thread detects a duplicate slot, it:
-    * a. Stores a proof of the two duplicate shreds for that slot
-    * b. Sends a signal to ReplayStage for that slot.
+## Protocol
+1. When WindowStage detects a duplicate slot proof `P`, it checks the new `gossip_root` to see if `<= 33%` of the nodes have rooted a slot `S >= P`. If so, it pushes a proof to `gossip_duplicate_slots` to gossip. WindowStage then signals ReplayStage about this duplicate slot `S`. These proofs can be purged from gossip once the validator sees > 2/3 of people gossiping roots `R > S`.
 
-3. Once ReplayStage receives a signal about a duplicate slot, it checks if
-the current version with blockhash `B` has less than 2^THRESHOLD lockout. 
-    * a. If so, then remove that slot and all its children from the progress
-    map. Mark the slot as `dead` in `DeadSlots`, with `approved_blockhash`
-    set to `None`.
-    * b. Otherwise, check `!approved_blockhash.is_none()`.
-        * i. If true, set the `approved_blockhash` for that slot to `B` in 
-    `DeadSlots`. This is why `1b` is important, because banks for slots 
-    earlier than the root will have been purged by BankForks and thus 
-    the blockhash will not be available in memory.
-        * ii. If false, this hash must have been set by step `6b`, in which
-    case, check that the existing hash matches `B`. If not true, throw an
-    error because that meanss >33% of the cluster is malicious.
-    * c. When fetching new slots in ReplayStage, a slot is not replayed if it is
-    dead, unless an `approved_blockhash` is set.
+2. When ReplayStage receives the signal for a duplicate slot `S` from `1)` above, the validator monitors gossip and replay waiting for`>= DUPLICATE_THRESHOLD` votes for the same hash which implies the same version of the slot. If this conditon is met for some version with hash `H` of slot `S`, this is then known as the `duplicate_confirmed` version of the slot.
 
-    Note: It's posssible the slot is already dead when ReplayStage receives
-    the duplicate signal. In this case the `approved_blockhash` in `DeadSlots`
-    will also be set as `None`. This case is be handled by step `5` below if another
-    playble version of this slot gains approvals (The "approved blockhash" 
-    will be set).
+Before a duplciate slot `S` is `duplicate_confirmed`, it's first excluded rom the vote candidate set in the fork choice rules. In addition, ReplayStage also resets PoH to the *latest* ancestor of the *earliest* `non-duplicate/confirmed_duplicate_slot`, so that block generation can start happening on the earliest known *safe* block.
 
-4. WindowService will now stop accepting shreds for dead slots or shreds with
-parents chaining to dead slots, unless the shred is also: 
-    * a. A repair request
-    * b. For the `approved_blockhash` (TODO: Need a way to confirm this, as 
-    repair requests are currently too small to contain another hash.
-    Probably will need a merkle)
-    
-    Thus, a duplicate slot marked "dead" by ReplayStage will not receive further
-    shreds unless an "approved blockhassh" is set.
+Some notes about the `DUPLICATE_THRESHOLD`. In the cases below, assume `DUPLICATE_THRESHOLD = 52`:
 
-5. Repair thread iterates over the set of slots in Blocktree that are:
-    * a. Greater than the root
-    * b. The slot exists in `DeadSlots` in Blockstore but the 
-       `approved_blockhash` in `DeadSlots` is `None` (implies ReplayStage 
-       has either gotten a signal from the CheckDuplicate thread, or
-       has seen a bad version of this slot).
-    * c. The slot exists in `DuplicateSlots` in Blockstore
+a) If less than `2 * DUPLICATE_THRESHOLD - 1` percentage of the network is malicious, then there can only be one such `duplicate_confirmed` version of the slot. With `DUPLICATE_THRESHOLD = 52`, this is
+a malcious tolerance of `4%`
 
-    For each of these slots that passes the above criteria, the repair thread
-    queries the cluster's validators about their `approved_blockhash`. 
+b) The liveness of the network is at most `1 - DUPLICATE_THRESHOLD - SWITCH_THRESHOLD`. This is because if you need at least `SWITCH_THRESHOLD` percentage of the stake voting on a different fork in order to switch off of a duplicate fork that has `< DUPLICATE_THRESHOLD` stake voting on it, and is *not* `duplicate_confirmed`. For `DUPLICATE_THRESHOLD = 52` and `DUPLICATE_THRESHOLD = 38`, this implies a liveness tolerance of `10%`.
 
-    If the repair thread sees >33% of validators with the same `approved_blockhash`
-    `B`, then that means the following condition must be true:
+For example in the situation below, validators that voted on `2` can't vote any farther on fork `2` because it's been removed from fork choice. Now slot 6 better have enough stake for a switching proof, or the network halts.
 
-    `There are > 66% of people who have voted on blockhash B`
+```text
+    |-------- 2 (51% voted, then detected this slot was a duplicate and removed this slot from fork choice)
+0---|
+    |---------- 6 (39%)
 
-    This is because there are <= 33% malicious validators on the network, and
-    `> 33%` responded with the same `approved_blockhash`, so there is at least
-    one correct validator that saw the above condition hold. This is then a
-    safe version of the slot to repair because no correct validator can be locked
-    out more than `2^THRESHOLD` on another version of this slot, and thus all
-    correct validators will either repair this version off the slot, or skip 
-    this slot.
+```
 
-    The repair thread then sends an `Approved Blockhash` signal to ReplayStage
+3. Switching proofs need to be extended to allow including vote hashes from different versions of the same same slot (detected through 1). Right now this is not supported since switching proofs can
+only be built using votes from banks in BankForks, and two different versions of the same slot cannot
+simultaneously exist in BankForks. For instance:
 
-6. Upon receiving the `Approved Blockhash` signal, ReplayStage checks if 
-an `approved_blockhash` is equal to `None`. If not:
-    * a. Clear the slot-related columns in Blockstore. This is safe because
-    there are no simultaneous writes to these columns from WindowService as 
-    guaranteed by step `4`. 
-    * b. Set the `approved_blockhash` in DeadSlots, allowing ReplayStage to once 
-    again replay this slot. (see step `3c`).
+```text
+    |-------- 2
+    |
+0------------- 1 ------ 2'
+    |
+    |---------- 6
 
-  If the hash does exist, run step `3.b.ii` above.
+```
+
+Imagine each version of slot 2 and 2' have `DUPLICATE_THRESHOLD / 2` of the votes on them, so neither duplicate can be confirmed. At most slot 6 has `1 - DUPLICATE_THRESHOLD / 2` of the votes
+on it, which is less than the switching threshold. Thus, in order for validators voting on `2` or `2'` to switch to slot 6, and make progress, they need to incorporate votes from the other version of the slot into their switching proofs.
+
+
+## TBD:
+
+### The repair problem.
+Now what happens if one of the following occurs:
+
+1) Due to network blips/latencies, some validators fail to observe the gossip votes before they are overwritten by newer votes? Then some validators may conclude a slot `S` is `duplicate_confirmed` while others don't.
+
+2) Due to lockouts, no version of duplicate slot `S` reaches `duplicate_confirmed` status, but one of its descendants may reach `duplicate_confirmed` after those lockouts expire, which by definition, means `S` is also `duplicate_confirmed`.
+
+3) People who are catching up and don't see the votes in gossip encounter a dup block and can't make progress.
+
+We assume that given a network is eventually stable, if at least one correct validator observed `S` is `duplicate_confirmed`, then if `S` is part of the heaviest fork, then eventaully all validators will observe some descendant of `S` is duplicate confirmed.
+
+This problem we need to solve is modeled simply by the below scenario:
+
+```text
+1 -> 2 (duplicate) -> 3 -> 4 (duplicate)
+```
+Assume the following:
+
+1. Due to gossiping duplciate proofs, we assume everyone will eventually see duplicate proofs for 2 and 4, so everyone agrees to remove them from fork choice until they are `duplicate_confirmed`.
+
+2. Due to lockouts, `> DUPLICATE_THRESHOLD` of the stake votes on 4, but not 2. This means at least `DUPLICATE_THRESHOLD` of people have the "correct" version of both slots 2 and 4.
+
+3. However, the remaining `1-DUPLICATE_THRESHOLD` of people have wrong version of 2. This means in replay, their slot 3 will be marked dead, *even though the faulty slot is 2*. The goal is to get these people on the right fork again.
+
+Possible solution:
+
+1. Change `EpochSlots` to signal when a bank is frozen, not when a slot is complete. If we see > `DUPLICATE_THRESHOLD` have frozen the dead slot 3, then we attempt recovery. Note this does not mean that all `DUPLICATE_THRESHOLD` have frozen the same version of the bank, it's just a signal to us that something may be wrong with our version of the bank.
+
+2. Recovery takes the form of a special repair request, `RepairDuplicateConfirmed(dead_slot, Vec<(Slot, Hash)>)`, which specifies a  dead slot, and then a vector of `(slot, hash)` of `N` of its latest parents.
+
+3. The repairer sees this request and responds with the correct hash only if any element of the `(slot, hash)` vector is both `duplicate_confirmed` and the hash doesn't match the requester's hash in the vector.
+
+4. Once the requester sees the "correct" hash is different than their frozen hash, they dump the block so that they can accept a new block, and ask the network for the block with the correct hash.
+
+Of course the repairer might lie to you, and you'll get the wrong version of the block, in which case you'll end up with another dead block and repeat the procedure.
+
+### The fork choice problem
+How should we weight votes in fork choice if a validator votes on two or more different versions of the same slot?
+
+For instance, take the below fork choice. We have two version of 8 and 8'. A validator can add both
+to fork choice if they replayed one version, dumped it, and repaired a different version.
+
+```text
+                  .
+                    |------- 8 (30%) ---- 9
+    |-------- 5 ----
+    |               |------7----8' (30%)----10
+0---
+    |---------- 6 (40%)
+
+```
+
+If somebody votes on both 8 and 8' should their votes:
+
+1) Count for both forks? (Seem like the safest route, but you'll need to make sure common ancestors
+like 5, and 0 don't double count the same validator's stake, this implies some extra state necesary for tracking)
+
+2) Only count one of the forks based on some arbitrary metric like take the biggest hash? This one seems incorrect since some validators may not have seen the incorrect version, dumped it, then repaired the correct version.
+
+This means some validators may have seen only one version, while others have seen both, and this may make them value fork 6 differently. For instance, if version 8 is the correct version, but version 8' has the higher hash, then if we observe both versions, we may detract validator votes from version 8 if those same validators also voted on 8', but if we only observed verson 8, that won't happen.
+
+3) We cannot simply ignore those votes, since that might cause 6 to be selected.
+
+4) Something more complex and involved :)
