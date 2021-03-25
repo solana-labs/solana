@@ -2,7 +2,7 @@
 
 extern crate test;
 use solana_sdk::{
-    account::{create_account, from_account},
+    account::{create_account_for_test, from_account},
     hash::Hash,
     slot_hashes::{Slot, SlotHashes, MAX_ENTRIES},
 };
@@ -15,7 +15,7 @@ fn bench_to_from_account(b: &mut Bencher) {
         slot_hashes.add(i as Slot, Hash::default());
     }
     b.iter(|| {
-        let account = create_account(&slot_hashes, 0);
+        let account = create_account_for_test(&slot_hashes);
         slot_hashes = from_account::<SlotHashes, _>(&account).unwrap();
     });
 }

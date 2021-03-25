@@ -32,13 +32,13 @@ use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_debug, inc_new_counter_debug, inc_new_counter_info};
 use solana_sdk::{
     account::{
-        create_account_shared_data as create_account, from_account, Account, AccountSharedData,
-        ReadableAccount,
+        create_account_shared_data_with_fields as create_account, from_account, Account,
+        AccountSharedData, InheritableAccountFields, ReadableAccount,
     },
     clock::{
         Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp, DEFAULT_TICKS_PER_SECOND,
-        MAX_PROCESSING_AGE, MAX_RECENT_BLOCKHASHES, MAX_TRANSACTION_FORWARDING_DELAY,
-        SECONDS_PER_DAY,
+        INITIAL_RENT_EPOCH, MAX_PROCESSING_AGE, MAX_RECENT_BLOCKHASHES,
+        MAX_TRANSACTION_FORWARDING_DELAY, SECONDS_PER_DAY,
     },
     epoch_info::EpochInfo,
     epoch_schedule::EpochSchedule,
@@ -1156,7 +1156,7 @@ impl Bank {
         new.update_sysvar_account(&sysvar::clock::id(), |account| {
             create_account(
                 &clock,
-                new.inherit_specially_retained_account_balance(account),
+                new.inherit_specially_retained_account_fields(account),
             )
         });
 
@@ -1370,11 +1370,14 @@ impl Bank {
         self.store_account_and_update_capitalization(pubkey, &new_account);
     }
 
-    fn inherit_specially_retained_account_balance(
+    fn inherit_specially_retained_account_fields(
         &self,
         old_account: &Option<AccountSharedData>,
-    ) -> u64 {
-        old_account.as_ref().map(|a| a.lamports).unwrap_or(1)
+    ) -> InheritableAccountFields {
+        (
+            old_account.as_ref().map(|a| a.lamports).unwrap_or(1),
+            INITIAL_RENT_EPOCH,
+        )
     }
 
     /// Unused conversion
@@ -1455,7 +1458,7 @@ impl Bank {
         self.update_sysvar_account(&sysvar::clock::id(), |account| {
             create_account(
                 &clock,
-                self.inherit_specially_retained_account_balance(account),
+                self.inherit_specially_retained_account_fields(account),
             )
         });
     }
@@ -1469,7 +1472,7 @@ impl Bank {
             slot_history.add(self.slot());
             create_account(
                 &slot_history,
-                self.inherit_specially_retained_account_balance(account),
+                self.inherit_specially_retained_account_fields(account),
             )
         });
     }
@@ -1483,7 +1486,7 @@ impl Bank {
             slot_hashes.add(self.parent_slot, self.parent_hash);
             create_account(
                 &slot_hashes,
-                self.inherit_specially_retained_account_balance(account),
+                self.inherit_specially_retained_account_fields(account),
             )
         });
     }
@@ -1528,7 +1531,7 @@ impl Bank {
         self.update_sysvar_account(&sysvar::fees::id(), |account| {
             create_account(
                 &sysvar::fees::Fees::new(&self.fee_calculator),
-                self.inherit_specially_retained_account_balance(account),
+                self.inherit_specially_retained_account_fields(account),
             )
         });
     }
@@ -1537,7 +1540,7 @@ impl Bank {
         self.update_sysvar_account(&sysvar::rent::id(), |account| {
             create_account(
                 &self.rent_collector.rent,
-                self.inherit_specially_retained_account_balance(account),
+                self.inherit_specially_retained_account_fields(account),
             )
         });
     }
@@ -1546,7 +1549,7 @@ impl Bank {
         self.update_sysvar_account(&sysvar::epoch_schedule::id(), |account| {
             create_account(
                 &self.epoch_schedule,
-                self.inherit_specially_retained_account_balance(account),
+                self.inherit_specially_retained_account_fields(account),
             )
         });
     }
@@ -1559,7 +1562,7 @@ impl Bank {
         self.update_sysvar_account(&sysvar::stake_history::id(), |account| {
             create_account::<sysvar::stake_history::StakeHistory>(
                 &self.stakes.read().unwrap().history(),
-                self.inherit_specially_retained_account_balance(account),
+                self.inherit_specially_retained_account_fields(account),
             )
         });
     }
@@ -1687,7 +1690,7 @@ impl Bank {
             self.update_sysvar_account(&sysvar::rewards::id(), |account| {
                 create_account(
                     &sysvar::rewards::Rewards::new(validator_point_value),
-                    self.inherit_specially_retained_account_balance(account),
+                    self.inherit_specially_retained_account_fields(account),
                 )
             });
         }
@@ -1914,9 +1917,9 @@ impl Bank {
     fn update_recent_blockhashes_locked(&self, locked_blockhash_queue: &BlockhashQueue) {
         self.update_sysvar_account(&sysvar::recent_blockhashes::id(), |account| {
             let recent_blockhash_iter = locked_blockhash_queue.get_recent_blockhashes();
-            recent_blockhashes_account::create_account_with_data(
-                self.inherit_specially_retained_account_balance(account),
+            recent_blockhashes_account::create_account_with_data_and_fields(
                 recent_blockhash_iter,
+                self.inherit_specially_retained_account_fields(account),
             )
         });
     }
@@ -2255,9 +2258,9 @@ impl Bank {
         );
 
         // Add a bogus executable native account, which will be loaded and ignored.
-        let account = native_loader::create_loadable_account(
+        let account = native_loader::create_loadable_account_with_fields(
             name,
-            self.inherit_specially_retained_account_balance(&existing_genuine_program),
+            self.inherit_specially_retained_account_fields(&existing_genuine_program),
         );
         self.store_account_and_update_capitalization(&program_id, &account);
 
@@ -3739,11 +3742,25 @@ impl Bank {
     // for development/performance purpose.
     // Absolutely not under ClusterType::MainnetBeta!!!!
     fn use_multi_epoch_collection_cycle(&self, epoch: Epoch) -> bool {
+        // Force normal behavior, disabling multi epoch collection cycle for manual local testing
+        #[cfg(not(test))]
+        if self.slot_count_per_normal_epoch() == solana_sdk::epoch_schedule::MINIMUM_SLOTS_PER_EPOCH
+        {
+            return false;
+        }
+
         epoch >= self.first_normal_epoch()
             && self.slot_count_per_normal_epoch() < self.slot_count_in_two_day()
     }
 
     fn use_fixed_collection_cycle(&self) -> bool {
+        // Force normal behavior, disabling fixed collection cycle for manual local testing
+        #[cfg(not(test))]
+        if self.slot_count_per_normal_epoch() == solana_sdk::epoch_schedule::MINIMUM_SLOTS_PER_EPOCH
+        {
+            return false;
+        }
+
         self.cluster_type() != ClusterType::MainnetBeta
             && self.slot_count_per_normal_epoch() < self.slot_count_in_two_day()
     }
@@ -3912,6 +3929,8 @@ impl Bank {
         self.rc.accounts.accounts_db.expire_old_recycle_stores()
     }
 
+    /// Technically this issues (or even burns!) new lamports,
+    /// so be extra careful for its usage
     fn store_account_and_update_capitalization(
         &self,
         pubkey: &Pubkey,
@@ -8237,7 +8256,7 @@ pub(crate) mod tests {
                             slot: expected_previous_slot,
                             ..Clock::default()
                         },
-                        bank1.inherit_specially_retained_account_balance(optional_account),
+                        bank1.inherit_specially_retained_account_fields(optional_account),
                     )
                 });
                 let current_account = bank1.get_account(&dummy_clock_id).unwrap();
@@ -8262,7 +8281,7 @@ pub(crate) mod tests {
                             slot: expected_previous_slot,
                             ..Clock::default()
                         },
-                        bank1.inherit_specially_retained_account_balance(optional_account),
+                        bank1.inherit_specially_retained_account_fields(optional_account),
                     )
                 })
             },
@@ -8288,7 +8307,7 @@ pub(crate) mod tests {
                             slot,
                             ..Clock::default()
                         },
-                        bank2.inherit_specially_retained_account_balance(optional_account),
+                        bank2.inherit_specially_retained_account_fields(optional_account),
                     )
                 });
                 let current_account = bank2.get_account(&dummy_clock_id).unwrap();
@@ -8319,7 +8338,7 @@ pub(crate) mod tests {
                             slot,
                             ..Clock::default()
                         },
-                        bank2.inherit_specially_retained_account_balance(optional_account),
+                        bank2.inherit_specially_retained_account_fields(optional_account),
                     )
                 });
                 let current_account = bank2.get_account(&dummy_clock_id).unwrap();

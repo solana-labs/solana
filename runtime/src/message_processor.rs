@@ -1124,7 +1124,7 @@ mod tests {
         account::Account,
         instruction::{AccountMeta, Instruction, InstructionError},
         message::Message,
-        native_loader::create_loadable_account,
+        native_loader::create_loadable_account_for_test,
     };
 
     #[test]
@@ -1706,9 +1706,8 @@ mod tests {
         accounts.push(account);
 
         let mut loaders: Vec<Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>> = Vec::new();
-        let account = Rc::new(RefCell::new(create_loadable_account(
+        let account = Rc::new(RefCell::new(create_loadable_account_for_test(
             "mock_system_program",
-            1,
         )));
         loaders.push(vec![(mock_system_program_id, account)]);
 
@@ -1876,9 +1875,8 @@ mod tests {
         accounts.push(account);
 
         let mut loaders: Vec<Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>> = Vec::new();
-        let account = Rc::new(RefCell::new(create_loadable_account(
+        let account = Rc::new(RefCell::new(create_loadable_account_for_test(
             "mock_system_program",
-            1,
         )));
         loaders.push(vec![(mock_program_id, account)]);
 
