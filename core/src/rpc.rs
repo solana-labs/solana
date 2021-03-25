@@ -739,6 +739,7 @@ impl JsonRpcRequestProcessor {
         let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Json);
         let transaction_details = config.transaction_details.unwrap_or_default();
         let show_rewards = config.rewards.unwrap_or(true);
+        let _commitment = config.commitment.unwrap_or_default();
         if self.config.enable_rpc_transaction_history
             && slot
                 <= self
@@ -1015,6 +1016,7 @@ impl JsonRpcRequestProcessor {
             .map(|config| config.convert_to_current())
             .unwrap_or_default();
         let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Json);
+        let _commitment = config.commitment.unwrap_or_default();
         if self.config.enable_rpc_transaction_history {
             match self
                 .blockstore
@@ -5317,6 +5319,7 @@ pub mod tests {
                 encoding: None,
                 transaction_details: Some(TransactionDetails::Signatures),
                 rewards: Some(false),
+                commitment: None,
             })
         );
         let res = io.handle_request_sync(&req, meta.clone());
@@ -5337,6 +5340,7 @@ pub mod tests {
                 encoding: None,
                 transaction_details: Some(TransactionDetails::None),
                 rewards: Some(true),
+                commitment: None,
             })
         );
         let res = io.handle_request_sync(&req, meta);
