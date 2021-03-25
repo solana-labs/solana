@@ -2403,6 +2403,7 @@ mod tests {
             let (transaction_status_sender, transaction_status_receiver) = unbounded();
             let transaction_status_service = TransactionStatusService::new(
                 transaction_status_receiver,
+                Arc::new(AtomicU64::default()),
                 blockstore.clone(),
                 &Arc::new(AtomicBool::new(false)),
             );

@@ -2328,7 +2328,7 @@ pub(crate) mod tests {
     use std::{
         fs::remove_dir_all,
         iter,
-        sync::{Arc, RwLock},
+        sync::{atomic::AtomicU64, Arc, RwLock},
     };
     use trees::tr;
 
@@ -3016,6 +3016,7 @@ pub(crate) mod tests {
         previous_slot: Slot,
         bank: Arc<Bank>,
         blockstore: Arc<Blockstore>,
+        max_complete_transaction_status_slot: Arc<AtomicU64>,
     ) -> Vec<Signature> {
         let mint_keypair = keypairs[0];
         let keypair1 = keypairs[1];
@@ -3049,6 +3050,7 @@ pub(crate) mod tests {
         let (replay_vote_sender, _replay_vote_receiver) = unbounded();
         let transaction_status_service = TransactionStatusService::new(
             transaction_status_receiver,
+            max_complete_transaction_status_slot,
             blockstore,
             &Arc::new(AtomicBool::new(false)),
         );
@@ -3101,6 +3103,7 @@ pub(crate) mod tests {
                 bank0.slot(),
                 bank1,
                 blockstore.clone(),
+                Arc::new(AtomicU64::default()),
             );
 
             let confirmed_block = blockstore.get_confirmed_block(slot, false).unwrap();

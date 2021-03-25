@@ -11,7 +11,7 @@ use solana_runtime::{
 use solana_transaction_status::{InnerInstructions, TransactionStatusMeta};
 use std::{
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         Arc,
     },
     thread::{self, Builder, JoinHandle},
@@ -26,6 +26,7 @@ impl TransactionStatusService {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
         write_transaction_status_receiver: Receiver<TransactionStatusMessage>,
+        max_complete_transaction_status_slot: Arc<AtomicU64>,
         blockstore: Arc<Blockstore>,
         exit: &Arc<AtomicBool>,
     ) -> Self {
@@ -38,6 +39,7 @@ impl TransactionStatusService {
                 }
                 if let Err(RecvTimeoutError::Disconnected) = Self::write_transaction_status_batch(
                     &write_transaction_status_receiver,
+                    &max_complete_transaction_status_slot,
                     &blockstore,
                 ) {
                     break;
@@ -49,6 +51,7 @@ impl TransactionStatusService {
 
     fn write_transaction_status_batch(
         write_transaction_status_receiver: &Receiver<TransactionStatusMessage>,
+        max_complete_transaction_status_slot: &Arc<AtomicU64>,
         blockstore: &Arc<Blockstore>,
     ) -> Result<(), RecvTimeoutError> {
         match write_transaction_status_receiver.recv_timeout(Duration::from_secs(1))? {
@@ -143,7 +146,9 @@ impl TransactionStatusService {
                     }
                 }
             }
-            TransactionStatusMessage::Freeze(_slot) => {}
+            TransactionStatusMessage::Freeze(slot) => {
+                max_complete_transaction_status_slot.fetch_max(slot, Ordering::Relaxed);
+            }
         }
         Ok(())
     }

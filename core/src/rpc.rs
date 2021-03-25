@@ -84,7 +84,7 @@ use std::{
     net::SocketAddr,
     str::FromStr,
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         mpsc::{channel, Receiver, Sender},
         Arc, Mutex, RwLock,
     },
@@ -144,6 +144,7 @@ pub struct JsonRpcRequestProcessor {
     largest_accounts_cache: Arc<RwLock<LargestAccountsCache>>,
     max_slots: Arc<MaxSlots>,
     leader_schedule_cache: Arc<LeaderScheduleCache>,
+    max_complete_transaction_status_slot: Arc<AtomicU64>,
 }
 impl Metadata for JsonRpcRequestProcessor {}
 
@@ -229,6 +230,7 @@ impl JsonRpcRequestProcessor {
         largest_accounts_cache: Arc<RwLock<LargestAccountsCache>>,
         max_slots: Arc<MaxSlots>,
         leader_schedule_cache: Arc<LeaderScheduleCache>,
+        max_complete_transaction_status_slot: Arc<AtomicU64>,
     ) -> (Self, Receiver<TransactionInfo>) {
         let (sender, receiver) = channel();
         (
@@ -249,6 +251,7 @@ impl JsonRpcRequestProcessor {
                 largest_accounts_cache,
                 max_slots,
                 leader_schedule_cache,
+                max_complete_transaction_status_slot,
             },
             receiver,
         )
@@ -291,6 +294,7 @@ impl JsonRpcRequestProcessor {
             largest_accounts_cache: Arc::new(RwLock::new(LargestAccountsCache::new(30))),
             max_slots: Arc::new(MaxSlots::default()),
             leader_schedule_cache: Arc::new(LeaderScheduleCache::new_from_bank(bank)),
+            max_complete_transaction_status_slot: Arc::new(AtomicU64::default()),
         }
     }
 
@@ -3253,11 +3257,13 @@ pub mod tests {
         let keypair2 = Keypair::new();
         let keypair3 = Keypair::new();
         bank.transfer(4, &alice, &keypair2.pubkey()).unwrap();
+        let max_complete_transaction_status_slot = Arc::new(AtomicU64::new(blockstore.max_root()));
         let confirmed_block_signatures = create_test_transactions_and_populate_blockstore(
             vec![&alice, &keypair1, &keypair2, &keypair3],
             0,
             bank.clone(),
             blockstore.clone(),
+            max_complete_transaction_status_slot.clone(),
         );
 
         let mut commitment_slot0 = BlockCommitment::default();
@@ -3371,6 +3377,7 @@ pub mod tests {
             Arc::new(RwLock::new(LargestAccountsCache::new(30))),
             max_slots,
             Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+            max_complete_transaction_status_slot,
         );
         SendTransactionService::new(tpu_address, &bank_forks, None, receiver, 1000, 1);
 
@@ -4837,6 +4844,7 @@ pub mod tests {
             Arc::new(RwLock::new(LargestAccountsCache::new(30))),
             Arc::new(MaxSlots::default()),
             Arc::new(LeaderScheduleCache::default()),
+            Arc::new(AtomicU64::default()),
         );
         SendTransactionService::new(tpu_address, &bank_forks, None, receiver, 1000, 1);
 
@@ -5113,6 +5121,7 @@ pub mod tests {
             Arc::new(RwLock::new(LargestAccountsCache::new(30))),
             Arc::new(MaxSlots::default()),
             Arc::new(LeaderScheduleCache::default()),
+            Arc::new(AtomicU64::default()),
         );
         SendTransactionService::new(tpu_address, &bank_forks, None, receiver, 1000, 1);
         assert_eq!(
@@ -6403,6 +6412,7 @@ pub mod tests {
             Arc::new(RwLock::new(LargestAccountsCache::new(30))),
             Arc::new(MaxSlots::default()),
             Arc::new(LeaderScheduleCache::default()),
+            Arc::new(AtomicU64::default()),
         );
 
         let mut io = MetaIoHandler::default();
