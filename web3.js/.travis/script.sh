@@ -3,6 +3,8 @@
 set -ex
 solana --version
 
+npm run clean
+npm run build
 ls -l lib
 test -r lib/index.iife.js
 test -r lib/index.cjs.js
