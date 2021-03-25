@@ -263,13 +263,10 @@ impl PohService {
                     }
                     // check to see if a record request has been sent
                     let get_again = record_receiver.try_recv();
-                    match get_again {
-                        Ok(record) => {
-                            // remember the record we just received as the next record to occur
-                            *next_record = Some(record);
-                            break;
-                        }
-                        Err(_) => (),
+                    if let Ok(record) = get_again {
+                        // remember the record we just received as the next record to occur
+                        *next_record = Some(record);
+                        break;
                     }
                     let delay_start = Instant::now();
                     let mut delay_ns_to_let_wallclock_catchup = poh_l
@@ -290,13 +287,10 @@ impl PohService {
                     loop {
                         // check to see if a record request has been sent
                         let get_again = record_receiver.try_recv();
-                        match get_again {
-                            Ok(record) => {
-                                // remember the record we just received as the next record to occur
-                                *next_record = Some(record);
-                                break;
-                            }
-                            Err(_) => (),
+                        if let Ok(record) = get_again {
+                            // remember the record we just received as the next record to occur
+                            *next_record = Some(record);
+                            break;
                         }
                         let waited_ns = delay_start.elapsed().as_nanos();
                         if waited_ns >= delay_ns_to_let_wallclock_catchup {
