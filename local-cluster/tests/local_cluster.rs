@@ -1374,14 +1374,9 @@ fn test_faulty_node(faulty_node_type: BroadcastStageType) {
 
 #[test]
 fn test_wait_for_max_stake() {
-<<<<<<< HEAD
-    solana_logger::setup();
+    solana_logger::setup_with_default(RUST_LOG_FILTER);
     let mut validator_config = ValidatorConfig::default();
     validator_config.rpc_config.enable_validator_exit = true;
-=======
-    solana_logger::setup_with_default(RUST_LOG_FILTER);
-    let validator_config = ValidatorConfig::default();
->>>>>>> e817a6db0... Add timeout for local cluster partition tests (#16123)
     let mut config = ClusterConfig {
         cluster_lamports: 10_000,
         node_stakes: vec![100; 4],
@@ -1401,18 +1396,10 @@ fn test_wait_for_max_stake() {
 // Test that when a leader is leader for banks B_i..B_{i+n}, and B_i is not
 // votable, then B_{i+1} still chains to B_i
 fn test_no_voting() {
-<<<<<<< HEAD
-    solana_logger::setup();
+    solana_logger::setup_with_default(RUST_LOG_FILTER);
     let mut validator_config = ValidatorConfig::default();
     validator_config.rpc_config.enable_validator_exit = true;
     validator_config.voting_disabled = true;
-=======
-    solana_logger::setup_with_default(RUST_LOG_FILTER);
-    let validator_config = ValidatorConfig {
-        voting_disabled: true,
-        ..ValidatorConfig::default()
-    };
->>>>>>> e817a6db0... Add timeout for local cluster partition tests (#16123)
     let mut config = ClusterConfig {
         cluster_lamports: 10_000,
         node_stakes: vec![100],

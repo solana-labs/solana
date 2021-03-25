@@ -32,6 +32,7 @@ use solana_sdk::{
 use std::{
     collections::{HashMap, HashSet},
     path::Path,
+    sync::Arc,
     thread::sleep,
     time::{Duration, Instant},
 };
