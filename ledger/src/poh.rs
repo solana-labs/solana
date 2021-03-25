@@ -54,7 +54,7 @@ impl Poh {
         tick_start_time: Instant,
         target_ns_per_tick: u64,
     ) -> Instant {
-        let offset_ns = target_ns_per_tick / hashes_per_tick * num_hashes;
+        let offset_ns = target_ns_per_tick * num_hashes / hashes_per_tick;
         tick_start_time + Duration::from_nanos(offset_ns)
     }
 
