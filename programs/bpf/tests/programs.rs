@@ -22,7 +22,7 @@ use solana_runtime::{
     },
 };
 use solana_sdk::{
-    account::AccountSharedData,
+    account::{AccountSharedData, ReadableAccount},
     bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
     client::SyncClient,
     clock::{DEFAULT_SLOTS_PER_EPOCH, MAX_PROCESSING_AGE},
