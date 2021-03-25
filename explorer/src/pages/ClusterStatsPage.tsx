@@ -127,7 +127,7 @@ function StakingComponent() {
   return (
     <div className="card staking-card">
       <div className="card-body">
-        <div className="d-flex">
+        <div className="d-flex flex-sm-row flex-column">
           <div className="p-2 flex-fill">
             <h4>Circulating Supply</h4>
             <h1>
@@ -138,6 +138,7 @@ function StakingComponent() {
               <em>{circulatingPercentage}%</em> is circulating
             </h5>
           </div>
+          <hr className="hidden-xs-up" />
           <div className="p-2 flex-fill">
             <h4>Active Stake</h4>
             <h1>
@@ -150,6 +151,7 @@ function StakingComponent() {
               </h5>
             )}
           </div>
+          <hr className="hidden-xs-up" />
           {solanaInfo && (
             <div className="p-2 flex-fill">
               <h4>Price</h4>
