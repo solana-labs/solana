@@ -733,41 +733,58 @@ impl JsonRpcRequestProcessor {
         slot: Slot,
         config: Option<RpcEncodingConfigWrapper<RpcConfirmedBlockConfig>>,
     ) -> Result<Option<UiConfirmedBlock>> {
-        let config = config
-            .map(|config| config.convert_to_current())
-            .unwrap_or_default();
-        let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Json);
-        let transaction_details = config.transaction_details.unwrap_or_default();
-        let show_rewards = config.rewards.unwrap_or(true);
-        let _commitment = config.commitment.unwrap_or_default();
-        if self.config.enable_rpc_transaction_history
-            && slot
+        if self.config.enable_rpc_transaction_history {
+            let config = config
+                .map(|config| config.convert_to_current())
+                .unwrap_or_default();
+            let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Json);
+            let transaction_details = config.transaction_details.unwrap_or_default();
+            let show_rewards = config.rewards.unwrap_or(true);
+            let commitment = config.commitment.unwrap_or_default();
+            check_confirmed_commitment(commitment)?;
+
+            // Block is old enough to be finalized
+            if slot
                 <= self
                     .block_commitment_cache
                     .read()
                     .unwrap()
                     .highest_confirmed_root()
-        {
-            let result = self.blockstore.get_confirmed_block(slot, true);
-            self.check_blockstore_root(&result, slot)?;
-            if result.is_err() {
-                if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
-                    let bigtable_result = self
-                        .runtime
-                        .block_on(bigtable_ledger_storage.get_confirmed_block(slot));
-                    self.check_bigtable_result(&bigtable_result)?;
-                    return Ok(bigtable_result.ok().map(|confirmed_block| {
+            {
+                let result = self.blockstore.get_confirmed_block(slot, true);
+                self.check_blockstore_root(&result, slot)?;
+                if result.is_err() {
+                    if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
+                        let bigtable_result = self
+                            .runtime
+                            .block_on(bigtable_ledger_storage.get_confirmed_block(slot));
+                        self.check_bigtable_result(&bigtable_result)?;
+                        return Ok(bigtable_result.ok().map(|confirmed_block| {
+                            confirmed_block.configure(encoding, transaction_details, show_rewards)
+                        }));
+                    }
+                }
+                self.check_slot_cleaned_up(&result, slot)?;
+                return Ok(result.ok().map(|confirmed_block| {
+                    confirmed_block.configure(encoding, transaction_details, show_rewards)
+                }));
+            } else if commitment.is_confirmed() {
+                // Check if block is confirmed
+                let confirmed_bank = self.bank(Some(CommitmentConfig::confirmed()));
+                if confirmed_bank.status_cache_ancestors().contains(&slot)
+                    && slot
+                        <= self
+                            .max_complete_transaction_status_slot
+                            .load(Ordering::Relaxed)
+                {
+                    let result = self.blockstore.get_complete_block(slot, true);
+                    return Ok(result.ok().map(|confirmed_block| {
                         confirmed_block.configure(encoding, transaction_details, show_rewards)
                     }));
                 }
             }
-            self.check_slot_cleaned_up(&result, slot)?;
-            Ok(result.ok().map(|confirmed_block| {
-                confirmed_block.configure(encoding, transaction_details, show_rewards)
-            }))
-        } else {
-            Err(RpcCustomError::BlockNotAvailable { slot }.into())
         }
+        Err(RpcCustomError::BlockNotAvailable { slot }.into())
     }
 
     pub fn get_confirmed_blocks(
@@ -1572,6 +1589,15 @@ fn verify_token_account_filter(
             Ok(TokenAccountsFilter::ProgramId(program_id))
         }
     }
+}
+
+fn check_confirmed_commitment(commitment: CommitmentConfig) -> Result<()> {
+    if commitment.is_processed() {
+        return Err(Error::invalid_params(
+            "Method does not support `processed` commitment",
+        ));
+    }
+    Ok(())
 }
 
 fn check_slice_and_encoding(encoding: &UiAccountEncoding, data_slice_is_some: bool) -> Result<()> {
