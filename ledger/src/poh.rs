@@ -8,6 +8,7 @@ pub struct Poh {
     num_hashes: u64,
     hashes_per_tick: u64,
     remaining_hashes: u64,
+    tick_start_time: Instant,
 }
 
 #[derive(Debug)]
@@ -25,12 +26,48 @@ impl Poh {
             num_hashes: 0,
             hashes_per_tick,
             remaining_hashes: hashes_per_tick,
+            tick_start_time: Instant::now(),
         }
     }
 
     pub fn reset(&mut self, hash: Hash, hashes_per_tick: Option<u64>) {
         let mut poh = Poh::new(hash, hashes_per_tick);
         std::mem::swap(&mut poh, self);
+    }
+
+    fn num_hashes(&self) -> u64 {
+        self.num_hashes
+    }
+
+    fn hashes_per_tick(&self) -> u64 {
+        self.hashes_per_tick
+    }
+
+    fn tick_start_time(&self) -> Instant {
+        self.tick_start_time
+    }
+
+    // static: does not require lock - maybe we expose this later
+    fn calculate_target_poh_time(
+        num_hashes: u64,
+        hashes_per_tick: u64,
+        tick_start_time: Instant,
+        target_ns_per_tick: u64,
+    ) -> Instant {
+        let offset_ns = target_ns_per_tick / hashes_per_tick * num_hashes;
+        tick_start_time + Duration::from_nanos(offset_ns)
+    }
+
+    pub fn target_poh_time(
+        &self,
+        target_ns_per_tick: u64,
+    ) -> Instant {
+        Self::calculate_target_poh_time(
+            self.num_hashes(),
+            self.hashes_per_tick(),
+            self.tick_start_time(),
+            target_ns_per_tick,
+        )
     }
 
     pub fn hash(&mut self, max_num_hashes: u64) -> bool {
@@ -75,6 +112,7 @@ impl Poh {
         let num_hashes = self.num_hashes;
         self.remaining_hashes = self.hashes_per_tick;
         self.num_hashes = 0;
+        self.tick_start_time = Instant::now();
         Some(PohEntry {
             num_hashes,
             hash: self.hash,

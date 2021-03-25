@@ -206,7 +206,8 @@ impl PohService {
         record_receiver: &Receiver<Record>,
         hashes_per_batch: u64,
         poh: &Arc<Mutex<Poh>>,
-    ) -> bool {
+        target_ns_per_tick: u64,
+    ) -> (bool, Instant) {
         match next_record.take() {
             Some(mut record) => {
                 // received message to record
@@ -253,7 +254,8 @@ impl PohService {
                     hash_time.stop();
                     timing.total_hash_time_ns += hash_time.as_ns();
                     if should_tick {
-                        return true; // nothing else can be done. tick required.
+                        // nothing else can be done. tick required.
+                        return (true, poh_l.target_poh_time(target_ns_per_tick));
                     }
                     // check to see if a record request has been sent
                     let get_again = record_receiver.try_recv();
@@ -270,7 +272,7 @@ impl PohService {
                 }
             }
         };
-        false // should_tick = false for all code that reaches here
+        (false, Instant::now()) // should_tick = false for all code that reaches here
     }
 
     fn tick_producer(
@@ -282,17 +284,17 @@ impl PohService {
         record_receiver: Receiver<Record>,
     ) {
         let poh = poh_recorder.lock().unwrap().poh.clone();
-        let mut now = Instant::now();
         let mut timing = PohTiming::new();
         let mut next_record = None;
         loop {
-            let should_tick = Self::record_or_hash(
+            let (should_tick, tick_start_time) = Self::record_or_hash(
                 &mut next_record,
                 &poh_recorder,
                 &mut timing,
                 &record_receiver,
                 hashes_per_batch,
                 &poh,
+                target_tick_ns,
             );
             if should_tick {
                 // Lock PohRecorder only for the final hash. record_or_hash will lock PohRecorder for record calls but not for hashing.
@@ -307,14 +309,15 @@ impl PohService {
                     timing.total_tick_time_ns += tick_time.as_ns();
                 }
                 timing.num_ticks += 1;
-                let elapsed_ns = now.elapsed().as_nanos() as u64;
+                let elapsed_ns = tick_start_time.elapsed().as_nanos() as u64;
                 // sleep is not accurate enough to get a predictable time.
                 // Kernel can not schedule the thread for a while.
-                while (now.elapsed().as_nanos() as u64) < target_tick_ns {
+                while (tick_start_time.elapsed().as_nanos() as u64) < target_tick_ns {
+                    // TODO: we could get a reset while we're here
                     std::hint::spin_loop();
                 }
-                timing.total_sleep_us += (now.elapsed().as_nanos() as u64 - elapsed_ns) / 1000;
-                now = Instant::now();
+                timing.total_sleep_us +=
+                    (tick_start_time.elapsed().as_nanos() as u64 - elapsed_ns) / 1000;
 
                 timing.report(ticks_per_slot);
                 if poh_exit.load(Ordering::Relaxed) {
