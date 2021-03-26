@@ -202,7 +202,7 @@ impl PohService {
         }
     }
 
-    // returns target time for tick if we need to tick, or None if we don't need to tick
+    // returns true if we need to tick
     fn record_or_hash(
         next_record: &mut Option<Record>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
