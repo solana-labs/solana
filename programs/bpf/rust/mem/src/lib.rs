@@ -58,6 +58,9 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
         let buf = &mut [1_u8, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         compiler_builtins::mem::memmove(&mut buf[0] as *mut u8, &mut buf[9] as *mut u8, 9);
         assert_eq!(buf[..9], buf[9..]);
+        let buf = &mut [0_u8, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+        compiler_builtins::mem::memmove(&mut buf[1] as *mut u8, &mut buf[0] as *mut u8, 9);
+        assert_eq!(&mut [0_u8, 0, 1, 2, 3, 4, 5, 6, 7, 8], buf);
         let buf = &mut [1_u8, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         compiler_builtins::mem::memmove(&mut buf[9] as *mut u8, &mut buf[0] as *mut u8, 9);
         assert_eq!(buf[..9], buf[9..]);
