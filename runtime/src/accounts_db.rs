@@ -8585,6 +8585,54 @@ pub mod tests {
     }
 
     #[test]
+    fn test_read_only_accounts_cache() {
+        let caching_enabled = true;
+        let db = Arc::new(AccountsDb::new_with_config(
+            Vec::new(),
+            &ClusterType::Development,
+            HashSet::new(),
+            caching_enabled,
+        ));
+
+        let account_key = Pubkey::new_unique();
+        let zero_lamport_account =
+            AccountSharedData::new(0, 0, &AccountSharedData::default().owner);
+        let slot1_account = AccountSharedData::new(1, 1, &AccountSharedData::default().owner);
+        db.store_cached(0, &[(&account_key, &zero_lamport_account)]);
+        db.store_cached(1, &[(&account_key, &slot1_account)]);
+
+        db.add_root(0);
+        db.add_root(1);
+
+        assert!(db.read_only_accounts_cache.cache.len() == 0);
+        let account = db
+            .load_and_keep_in_read_only_cache(&Ancestors::default(), &account_key)
+            .unwrap();
+        assert_eq!(account.lamports, 1);
+        assert!(db.read_only_accounts_cache.cache.len() == 1);
+        let account = db
+            .load_and_keep_in_read_only_cache(&Ancestors::default(), &account_key)
+            .unwrap();
+        assert_eq!(account.lamports, 1);
+        assert!(db.read_only_accounts_cache.cache.len() == 1);
+        db.store_cached(1, &[(&account_key, &zero_lamport_account)]);
+        assert!(db.read_only_accounts_cache.cache.len() == 0);
+        let account = db
+            .load_and_keep_in_read_only_cache(&Ancestors::default(), &account_key)
+            .unwrap();
+        assert_eq!(account.lamports, 0);
+        assert!(db.read_only_accounts_cache.cache.len() == 1);
+
+        // Flush, then clean again. Should not need another root to initiate the cleaning
+        // because `accounts_index.uncleaned_roots` should be correct
+        db.flush_accounts_cache(true, None);
+        db.clean_accounts(None);
+        assert!(db
+            .do_load(&Ancestors::default(), &account_key, Some(0))
+            .is_none());
+    }
+
+    #[test]
     fn test_flush_cache_clean() {
         let caching_enabled = true;
         let db = Arc::new(AccountsDb::new_with_config(
@@ -8607,7 +8655,7 @@ pub mod tests {
         // Clean should not remove anything yet as nothing has been flushed
         db.clean_accounts(None);
         let account = db
-            .do_load(&Ancestors::default(), &account_key, Some(0), false)
+            .do_load(&Ancestors::default(), &account_key, Some(0))
             .unwrap();
         assert_eq!(account.0.lamports, 0);
 
@@ -8616,7 +8664,7 @@ pub mod tests {
         db.flush_accounts_cache(true, None);
         db.clean_accounts(None);
         assert!(db
-            .do_load(&Ancestors::default(), &account_key, Some(0), false)
+            .do_load(&Ancestors::default(), &account_key, Some(0))
             .is_none());
     }
 
@@ -8682,15 +8730,10 @@ pub mod tests {
         // entry in slot 1 is blocking cleanup of the zero-lamport account.
         let max_root = None;
         assert_eq!(
-            db.do_load(
-                &Ancestors::default(),
-                &zero_lamport_account_key,
-                max_root,
-                false
-            )
-            .unwrap()
-            .0
-            .lamports,
+            db.do_load(&Ancestors::default(), &zero_lamport_account_key, max_root)
+                .unwrap()
+                .0
+                .lamports,
             0
         );
     }
@@ -8804,7 +8847,7 @@ pub mod tests {
         // Intra cache cleaning should not clean the entry for `account_key` from slot 0,
         // even though it was updated in slot `2` because of the ongoing scan
         let account = db
-            .do_load(&Ancestors::default(), &account_key, Some(0), false)
+            .do_load(&Ancestors::default(), &account_key, Some(0))
             .unwrap();
         assert_eq!(account.0.lamports, zero_lamport_account.lamports);
 
@@ -8812,7 +8855,7 @@ pub mod tests {
         // because we're still doing a scan on it.
         db.clean_accounts(None);
         let account = db
-            .do_load(&scan_ancestors, &account_key, Some(max_scan_root), false)
+            .do_load(&scan_ancestors, &account_key, Some(max_scan_root))
             .unwrap();
         assert_eq!(account.0.lamports, slot1_account.lamports);
 
@@ -8821,14 +8864,14 @@ pub mod tests {
         scan_tracker.exit().unwrap();
         db.clean_accounts(None);
         let account = db
-            .do_load(&scan_ancestors, &account_key, Some(max_scan_root), false)
+            .do_load(&scan_ancestors, &account_key, Some(max_scan_root))
             .unwrap();
         assert_eq!(account.0.lamports, slot1_account.lamports);
 
         // Simulate dropping the bank, which finally removes the slot from the cache
         db.purge_slot(1);
         assert!(db
-            .do_load(&scan_ancestors, &account_key, Some(max_scan_root), false)
+            .do_load(&scan_ancestors, &account_key, Some(max_scan_root))
             .is_none());
     }
 
@@ -8964,7 +9007,7 @@ pub mod tests {
         // a smaller max root
         for key in &keys {
             assert!(accounts_db
-                .do_load(&Ancestors::default(), key, Some(last_dead_slot), false)
+                .do_load(&Ancestors::default(), key, Some(last_dead_slot))
                 .is_some());
         }
 
@@ -8987,7 +9030,7 @@ pub mod tests {
         // as those have been purged from the accounts index for the dead slots.
         for key in &keys {
             assert!(accounts_db
-                .do_load(&Ancestors::default(), key, Some(last_dead_slot), false)
+                .do_load(&Ancestors::default(), key, Some(last_dead_slot))
                 .is_none());
         }
         // Each slot should only have one entry in the storage, since all other accounts were
