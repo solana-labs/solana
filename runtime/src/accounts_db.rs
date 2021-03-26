@@ -19,7 +19,7 @@
 //! commit for each slot entry would be indexed.
 
 use crate::{
-    accounts_cache::{AccountsCache, CachedAccount, CachedAccountInner, SlotCache},
+    accounts_cache::{AccountsCache, CachedAccount, SlotCache},
     accounts_hash::{AccountsHash, CalculateHashIntermediate, HashStats, PreviousPass},
     accounts_index::{
         AccountIndex, AccountsIndex, AccountsIndexRootsStats, Ancestors, IndexKey, IsCached,
@@ -57,7 +57,7 @@ use std::{
     ops::{Range, RangeBounds},
     path::{Path, PathBuf},
     sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
-    sync::mpsc::{channel, Receiver, SendError, Sender, SyncSender},
+    sync::mpsc::{channel, Receiver, Sender},
     sync::{Arc, Mutex, MutexGuard, RwLock},
     thread::{Builder, JoinHandle},
     time::Instant,

@@ -1,5 +1,4 @@
 use dashmap::DashMap;
-use log::error;
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount},
     clock::Slot,
@@ -296,7 +295,9 @@ pub mod tests {
             inserted_slot,
             &Pubkey::new_unique(),
             AccountSharedData::new(1, 0, &Pubkey::default()),
-            Hash::default(),
+            Some(Hash::default()),
+            inserted_slot,
+            ClusterType::Development,
         );
         // If the cache is told the size limit is 0, it should return the one slot
         let removed = cache.remove_slots_le(0);
@@ -314,7 +315,9 @@ pub mod tests {
             inserted_slot,
             &Pubkey::new_unique(),
             AccountSharedData::new(1, 0, &Pubkey::default()),
-            Hash::default(),
+            Some(Hash::default()),
+            inserted_slot,
+            ClusterType::Development,
         );
 
         // If the cache is told the size limit is 0, it should return nothing because there's only
