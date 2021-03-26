@@ -135,6 +135,7 @@ impl CachedAccountInner {
                 hash
             },
             None => {
+                drop(hash);
                 let hash = crate::accounts_db::AccountsDb::hash_account(
                     self.hash_slot,
                     &self.account,
