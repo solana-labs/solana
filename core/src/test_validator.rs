@@ -422,7 +422,6 @@ impl TestValidator {
             warp_slot: config.warp_slot,
             bpf_jit: !config.no_bpf_jit,
             validator_exit: config.validator_exit.clone(),
-            no_wait_for_vote_to_start_leader: true,
             ..ValidatorConfig::default()
         };
 

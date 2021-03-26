@@ -130,7 +130,6 @@ pub struct ValidatorConfig {
     pub accounts_db_use_index_hash_calculation: bool,
     pub tpu_coalesce_ms: u64,
     pub validator_exit: Arc<RwLock<ValidatorExit>>,
-    pub no_wait_for_vote_to_start_leader: bool,
 }
 
 impl Default for ValidatorConfig {
@@ -185,7 +184,6 @@ impl Default for ValidatorConfig {
             accounts_db_use_index_hash_calculation: true,
             tpu_coalesce_ms: DEFAULT_TPU_COALESCE_MS,
             validator_exit: Arc::new(RwLock::new(ValidatorExit::default())),
-            no_wait_for_vote_to_start_leader: true,
         }
     }
 }
@@ -631,20 +629,15 @@ impl Validator {
             check_poh_speed(&genesis_config, None);
         }
 
-        let waited_for_supermajority = if let Ok(waited) = wait_for_supermajority(
+        if wait_for_supermajority(
             config,
             &bank,
             &cluster_info,
             rpc_override_health_check,
             &start_progress,
         ) {
-            waited
-        } else {
             abort();
-        };
-
-        let wait_for_vote_to_start_leader =
-            !waited_for_supermajority && !config.no_wait_for_vote_to_start_leader;
+        }
 
         let poh_service = PohService::new(
             poh_recorder.clone(),
@@ -732,7 +725,6 @@ impl Validator {
                 use_index_hash_calculation: config.accounts_db_use_index_hash_calculation,
                 rocksdb_compaction_interval: config.rocksdb_compaction_interval,
                 rocksdb_max_compaction_jitter: config.rocksdb_compaction_interval,
-                wait_for_vote_to_start_leader,
             },
             &max_slots,
         );
@@ -1300,28 +1292,17 @@ fn initialize_rpc_transaction_history_services(
     }
 }
 
-#[derive(Debug, PartialEq)]
-enum ValidatorError {
-    BadExpectedBankHash,
-    NotEnoughLedgerData,
-}
-
-// Return if the validator waited on other nodes to start. In this case
-// it should not wait for one of it's votes to land to produce blocks
-// because if the whole network is waiting, then it will stall.
-//
-// Error indicates that a bad hash was encountered or another condition
-// that is unrecoverable and the validator should exit.
+// Return true on error, indicating the validator should exit.
 fn wait_for_supermajority(
     config: &ValidatorConfig,
     bank: &Bank,
     cluster_info: &ClusterInfo,
     rpc_override_health_check: Arc<AtomicBool>,
     start_progress: &Arc<RwLock<ValidatorStartProgress>>,
-) -> Result<bool, ValidatorError> {
+) -> bool {
     if let Some(wait_for_supermajority) = config.wait_for_supermajority {
         match wait_for_supermajority.cmp(&bank.slot()) {
-            std::cmp::Ordering::Less => return Ok(false),
+            std::cmp::Ordering::Less => return false,
             std::cmp::Ordering::Greater => {
                 error!(
                     "Ledger does not have enough data to wait for supermajority, \
@@ -1329,12 +1310,12 @@ fn wait_for_supermajority(
                     bank.slot(),
                     wait_for_supermajority
                 );
-                return Err(ValidatorError::NotEnoughLedgerData);
+                return true;
             }
             _ => {}
         }
     } else {
-        return Ok(false);
+        return false;
     }
 
     if let Some(expected_bank_hash) = config.expected_bank_hash {
@@ -1344,7 +1325,7 @@ fn wait_for_supermajority(
                 bank.hash(),
                 expected_bank_hash
             );
-            return Err(ValidatorError::BadExpectedBankHash);
+            return true;
         }
     }
 
@@ -1369,7 +1350,7 @@ fn wait_for_supermajority(
         sleep(Duration::new(1, 0));
     }
     rpc_override_health_check.store(false, Ordering::Relaxed);
-    Ok(true)
+    false
 }
 
 fn report_target_features() {
@@ -1660,21 +1641,17 @@ mod tests {
             &cluster_info,
             rpc_override_health_check.clone(),
             &start_progress,
-        )
-        .unwrap());
+        ));
 
         // bank=0, wait=1, should fail
         config.wait_for_supermajority = Some(1);
-        assert_eq!(
-            wait_for_supermajority(
-                &config,
-                &bank,
-                &cluster_info,
-                rpc_override_health_check.clone(),
-                &start_progress,
-            ),
-            Err(ValidatorError::NotEnoughLedgerData)
-        );
+        assert!(wait_for_supermajority(
+            &config,
+            &bank,
+            &cluster_info,
+            rpc_override_health_check.clone(),
+            &start_progress,
+        ));
 
         // bank=1, wait=0, should pass, bank is past the wait slot
         let bank = Bank::new_from_parent(&bank, &Pubkey::default(), 1);
@@ -1685,22 +1662,18 @@ mod tests {
             &cluster_info,
             rpc_override_health_check.clone(),
             &start_progress,
-        )
-        .unwrap());
+        ));
 
         // bank=1, wait=1, equal, but bad hash provided
         config.wait_for_supermajority = Some(1);
         config.expected_bank_hash = Some(hash(&[1]));
-        assert_eq!(
-            wait_for_supermajority(
-                &config,
-                &bank,
-                &cluster_info,
-                rpc_override_health_check,
-                &start_progress,
-            ),
-            Err(ValidatorError::BadExpectedBankHash)
-        );
+        assert!(wait_for_supermajority(
+            &config,
+            &bank,
+            &cluster_info,
+            rpc_override_health_check,
+            &start_progress,
+        ));
     }
 
     #[test]

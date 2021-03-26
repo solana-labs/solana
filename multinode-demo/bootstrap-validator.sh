@@ -105,7 +105,6 @@ args+=(
   --vote-account "$vote_account"
   --rpc-faucet-address 127.0.0.1:9900
   --no-poh-speed-test
-  --no-wait-for-vote-to-start-leader
 )
 default_arg --gossip-port 8001
 default_arg --log -
