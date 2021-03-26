@@ -1076,7 +1076,7 @@ impl Default for AccountsDb {
             storage: AccountStorage::default(),
             accounts_cache: AccountsCache::default(),
             store_hasher: None,
-            sender_bg_hasher: None, 
+            sender_bg_hasher: None,
             recycle_stores: RwLock::new(RecycleStores::default()),
             uncleaned_pubkeys: DashMap::new(),
             next_id: AtomicUsize::new(0),
@@ -1309,7 +1309,7 @@ impl AccountsDb {
         }
     }
 
-    fn background_hasher(receiver: Receiver<CachedAccount>, cluster_type: ClusterType) {
+    fn background_hasher(receiver: Receiver<CachedAccount>) {
         loop {
             let result = receiver.recv();
             match result {
@@ -1318,8 +1318,10 @@ impl AccountsDb {
                     if Arc::strong_count(&account) > 1 {
                         let _ = (*account).hash();
                     };
-                },
-                Err(_) => {break;},
+                }
+                Err(_) => {
+                    break;
+                }
             }
         }
         //let map = DashMapLazyHasher::default();
@@ -1327,15 +1329,13 @@ impl AccountsDb {
 
     fn start_store_hasher(&mut self) {
         let (sender, receiver) = channel();
-        let cluster_type = self.expected_cluster_type();
-        //self.store_hasher = Arc::new(
         Builder::new()
             .name("solana-accounts-db-store-hasher".to_string())
             .spawn(move || {
-                Self::background_hasher(receiver, cluster_type);
+                Self::background_hasher(receiver);
             })
-            .unwrap();//);
-            self.sender_bg_hasher = Some(Mutex::new(sender));
+            .unwrap(); //);
+        self.sender_bg_hasher = Some(Mutex::new(sender));
     }
 
     fn purge_keys_exact<'a, C: 'a>(
@@ -3310,31 +3310,30 @@ impl AccountsDb {
             let iter_items: Vec<_> = slot_cache.iter().collect();
             let mut purged_slot_pubkeys: HashSet<(Slot, Pubkey)> = HashSet::new();
             let mut pubkey_to_slot_set: Vec<(Pubkey, Slot)> = vec![];
-            let (accounts, hashes): (Vec<(&Pubkey, &AccountSharedData)>, Vec<Hash>) =
-                iter_items
-                    .iter()
-                    .filter_map(|iter_item| {
-                        let key = iter_item.key();
-                        let account = &iter_item.value().account;
-                        let should_flush = should_flush_f
-                            .as_mut()
-                            .map(|should_flush_f| should_flush_f(key, account))
-                            .unwrap_or(true);
-                        if should_flush {
-                            let hash = iter_item.value().hash();
-                            total_size += (account.data().len() + STORE_META_OVERHEAD) as u64;
-                            num_flushed += 1;
-                            Some(((key, account), hash))
-                        } else {
-                            // If we don't flush, we have to remove the entry from the
-                            // index, since it's equivalent to purging
-                            purged_slot_pubkeys.insert((slot, *key));
-                            pubkey_to_slot_set.push((*key, slot));
-                            num_purged += 1;
-                            None
-                        }
-                    })
-                    .unzip();
+            let (accounts, hashes): (Vec<(&Pubkey, &AccountSharedData)>, Vec<Hash>) = iter_items
+                .iter()
+                .filter_map(|iter_item| {
+                    let key = iter_item.key();
+                    let account = &iter_item.value().account;
+                    let should_flush = should_flush_f
+                        .as_mut()
+                        .map(|should_flush_f| should_flush_f(key, account))
+                        .unwrap_or(true);
+                    if should_flush {
+                        let hash = iter_item.value().hash();
+                        total_size += (account.data().len() + STORE_META_OVERHEAD) as u64;
+                        num_flushed += 1;
+                        Some(((key, account), hash))
+                    } else {
+                        // If we don't flush, we have to remove the entry from the
+                        // index, since it's equivalent to purging
+                        purged_slot_pubkeys.insert((slot, *key));
+                        pubkey_to_slot_set.push((*key, slot));
+                        num_purged += 1;
+                        None
+                    }
+                })
+                .unzip();
 
             let is_dead_slot = accounts.is_empty();
             // Remove the account index entries from earlier roots that are outdated by later roots.
@@ -3401,26 +3400,35 @@ impl AccountsDb {
             Some(hashes) => {
                 assert_eq!(hashes.len(), len);
                 hashes
-            },
+            }
             None => &empty,
         };
-        
+
         (0..len)
             .into_iter()
             .map(|i| {
                 let (meta, account) = &accounts_and_meta_to_store[i];
                 let hash = if hashes.is_empty() {
-                    None }
-                    else {Some(hashes[i])};
-                let cached_account =
-                self.accounts_cache
-                    .store(slot, &meta.pubkey, (*account).clone(), hash, slot, self.expected_cluster_type());
+                    None
+                } else {
+                    Some(hashes[i])
+                };
+                let cached_account = self.accounts_cache.store(
+                    slot,
+                    &meta.pubkey,
+                    (*account).clone(),
+                    hash,
+                    slot,
+                    self.expected_cluster_type(),
+                );
                 // hash this account in the bg
                 match &self.sender_bg_hasher {
-                    Some(ref sender) => {let _ = sender.lock().unwrap().send(cached_account);},
+                    Some(ref sender) => {
+                        let _ = sender.lock().unwrap().send(cached_account);
+                    }
                     None => (),
                 };
-                
+
                 AccountInfo {
                     store_id: CACHE_VIRTUAL_STORAGE_ID,
                     offset: CACHE_VIRTUAL_OFFSET,
@@ -3466,14 +3474,12 @@ impl AccountsDb {
             self.write_accounts_to_cache(slot, hashes, &accounts_and_meta_to_store)
         } else {
             match hashes {
-                Some(hashes) => {
-                    self.write_accounts_to_storage(
-                        slot,
-                        hashes,
-                        storage_finder,
-                        &accounts_and_meta_to_store,
-                    )
-                },
+                Some(hashes) => self.write_accounts_to_storage(
+                    slot,
+                    hashes,
+                    storage_finder,
+                    &accounts_and_meta_to_store,
+                ),
                 None => {
                     // hash any accounts where we were lazy in calculating the hash
                     let mut hash_time = Measure::start("hash_accounts");

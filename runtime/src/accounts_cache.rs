@@ -1,4 +1,5 @@
 use dashmap::DashMap;
+use log::error;
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount},
     clock::Slot,
@@ -14,7 +15,6 @@ use std::{
         Arc, RwLock,
     },
 };
-use log::error;
 
 pub type SlotCache = Arc<SlotCacheInner>;
 
@@ -72,10 +72,7 @@ impl SlotCacheInner {
             cluster_type,
             pubkey: *pubkey,
         });
-        self.cache.insert(
-            *pubkey,
-            item.clone(),
-        );
+        self.cache.insert(*pubkey, item.clone());
         item
     }
 
@@ -129,9 +126,7 @@ impl CachedAccountInner {
     pub fn hash(&self) -> Hash {
         let hash = self.hash.read().unwrap();
         match *hash {
-            Some(hash) => {
-                hash
-            },
+            Some(hash) => hash,
             None => {
                 drop(hash);
                 let hash = crate::accounts_db::AccountsDb::hash_account(
