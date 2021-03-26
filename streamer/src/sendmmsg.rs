@@ -97,7 +97,7 @@ pub fn send_mmsg(sock: &UdpSocket, packets: &[(&Vec<u8>, &SocketAddr)]) -> io::R
 }
 
 #[cfg(not(target_os = "linux"))]
-pub fn multicast(sock: &UdpSocket, packet: &mut [u8], dests: &[&SocketAddr]) -> io::Result<usize> {
+pub fn multicast(sock: &UdpSocket, packet: &[u8], dests: &[&SocketAddr]) -> io::Result<usize> {
     let count = dests.len();
     for a in dests {
         sock.send_to(packet, a)?;
@@ -107,7 +107,7 @@ pub fn multicast(sock: &UdpSocket, packet: &mut [u8], dests: &[&SocketAddr]) -> 
 }
 
 #[cfg(target_os = "linux")]
-pub fn multicast(sock: &UdpSocket, packet: &mut [u8], dests: &[&SocketAddr]) -> io::Result<usize> {
+pub fn multicast(sock: &UdpSocket, packet: &[u8], dests: &[&SocketAddr]) -> io::Result<usize> {
     use libc::{sendmmsg, socklen_t};
     use std::mem;
     use std::os::unix::io::AsRawFd;
@@ -216,11 +216,11 @@ mod tests {
 
         let sender = UdpSocket::bind("127.0.0.1:0").expect("bind");
 
-        let mut packet = Packet::default();
+        let packet = Packet::default();
 
         let sent = multicast(
             &sender,
-            &mut packet.data[..packet.meta.size],
+            &packet.data[..packet.meta.size],
             &[&addr, &addr2, &addr3, &addr4],
         )
         .ok();

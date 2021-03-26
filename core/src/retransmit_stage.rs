@@ -289,6 +289,33 @@ fn enable_turbine_retransmit_peers_patch(shred_slot: Slot, root_bank: &Bank) -> 
     }
 }
 
+// Drops shred slot leader from retransmit peers.
+// TODO: decide which bank should be used here.
+fn get_retransmit_peers(
+    self_pubkey: Pubkey,
+    shred_slot: Slot,
+    leader_schedule_cache: &LeaderScheduleCache,
+    bank: &Bank,
+    stakes_cache: &EpochStakesCache,
+) -> Vec<(u64 /*stakes*/, usize /*index*/)> {
+    match leader_schedule_cache.slot_leader_at(shred_slot, Some(bank)) {
+        None => {
+            error!("unknown leader for shred slot");
+            stakes_cache.stakes_and_index.clone()
+        }
+        Some(pubkey) if pubkey == self_pubkey => {
+            error!("retransmit from slot leader: {}", pubkey);
+            stakes_cache.stakes_and_index.clone()
+        }
+        Some(pubkey) => stakes_cache
+            .stakes_and_index
+            .iter()
+            .filter(|(_, i)| stakes_cache.peers[*i].id != pubkey)
+            .copied()
+            .collect(),
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn retransmit(
     bank_forks: &RwLock<BankForks>,
@@ -390,10 +417,17 @@ fn retransmit(
             }
 
             let mut compute_turbine_peers = Measure::start("turbine_start");
+            let stakes_and_index = get_retransmit_peers(
+                my_id,
+                shred_slot,
+                leader_schedule_cache,
+                r_bank.deref(),
+                r_epoch_stakes_cache.deref(),
+            );
             let (my_index, mut shuffled_stakes_and_index) = ClusterInfo::shuffle_peers_and_index(
                 &my_id,
                 &r_epoch_stakes_cache.peers,
-                &r_epoch_stakes_cache.stakes_and_index,
+                &stakes_and_index,
                 packet.meta.seed,
             );
             peers_len = cmp::max(peers_len, shuffled_stakes_and_index.len());
@@ -432,15 +466,11 @@ fn retransmit(
                 .entry(packet.meta.addr().to_string())
                 .or_insert(0) += 1;
 
-            let leader =
-                leader_schedule_cache.slot_leader_at(packet.meta.slot, Some(r_bank.as_ref()));
             let mut retransmit_time = Measure::start("retransmit_to");
             if !packet.meta.forward {
-                ClusterInfo::retransmit_to(&neighbors, packet, leader, sock, true)?;
-                ClusterInfo::retransmit_to(&children, packet, leader, sock, false)?;
-            } else {
-                ClusterInfo::retransmit_to(&children, packet, leader, sock, true)?;
+                ClusterInfo::retransmit_to(&neighbors, packet, sock, true)?;
             }
+            ClusterInfo::retransmit_to(&children, packet, sock, packet.meta.forward)?;
             retransmit_time.stop();
             retransmit_total += retransmit_time.as_us();
         }
