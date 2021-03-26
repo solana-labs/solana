@@ -741,7 +741,7 @@ impl JsonRpcRequestProcessor {
             let transaction_details = config.transaction_details.unwrap_or_default();
             let show_rewards = config.rewards.unwrap_or(true);
             let commitment = config.commitment.unwrap_or_default();
-            check_confirmed_commitment(commitment)?;
+            check_is_at_least_confirmed(commitment)?;
 
             // Block is old enough to be finalized
             if slot
@@ -775,7 +775,7 @@ impl JsonRpcRequestProcessor {
                     && slot
                         <= self
                             .max_complete_transaction_status_slot
-                            .load(Ordering::Relaxed)
+                            .load(Ordering::SeqCst)
                 {
                     let result = self.blockstore.get_complete_block(slot, true);
                     return Ok(result.ok().map(|confirmed_block| {
@@ -1034,7 +1034,7 @@ impl JsonRpcRequestProcessor {
             .unwrap_or_default();
         let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Json);
         let commitment = config.commitment.unwrap_or_default();
-        check_confirmed_commitment(commitment)?;
+        check_is_at_least_confirmed(commitment)?;
 
         if self.config.enable_rpc_transaction_history {
             match self
@@ -1602,10 +1602,10 @@ fn verify_token_account_filter(
     }
 }
 
-fn check_confirmed_commitment(commitment: CommitmentConfig) -> Result<()> {
-    if commitment.is_processed() {
+fn check_is_at_least_confirmed(commitment: CommitmentConfig) -> Result<()> {
+    if !commitment.is_at_least_confirmed() {
         return Err(Error::invalid_params(
-            "Method does not support `processed` commitment",
+            "Method does not support commitment below `confirmed`",
         ));
     }
     Ok(())

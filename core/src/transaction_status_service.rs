@@ -147,7 +147,7 @@ impl TransactionStatusService {
                 }
             }
             TransactionStatusMessage::Freeze(slot) => {
-                max_complete_transaction_status_slot.fetch_max(slot, Ordering::Relaxed);
+                max_complete_transaction_status_slot.fetch_max(slot, Ordering::SeqCst);
             }
         }
         Ok(())
