@@ -212,7 +212,7 @@ fn grind_validator_starts_and_ends_with(v: String) -> Result<(), String> {
 }
 
 fn acquire_language(matches: &ArgMatches<'_>) -> Language {
-    match matches.value_of("language").unwrap() {
+    match matches.value_of(LANGUAGE_ARG.name).unwrap() {
         "english" => Language::English,
         "chinese-simplified" => Language::ChineseSimplified,
         "chinese-traditional" => Language::ChineseTraditional,
@@ -232,7 +232,7 @@ fn no_passphrase_and_message() -> (String, String) {
 fn acquire_passphrase_and_message(
     matches: &ArgMatches<'_>,
 ) -> Result<(String, String), Box<dyn error::Error>> {
-    if matches.is_present("no_passphrase") {
+    if matches.is_present(NO_PASSPHRASE_ARG.name) {
         Ok(no_passphrase_and_message())
     } else {
         match prompt_passphrase(
@@ -534,7 +534,7 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
             let mut path = dirs_next::home_dir().expect("home directory");
             let outfile = if matches.is_present("outfile") {
                 matches.value_of("outfile")
-            } else if matches.is_present("no_outfile") {
+            } else if matches.is_present(NO_OUTFILE_ARG.name) {
                 None
             } else {
                 path.extend(&[".config", "solana", "id.json"]);
@@ -547,7 +547,7 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
                 None => (),
             }
 
-            let word_count = value_t!(matches.value_of("word_count"), usize).unwrap();
+            let word_count = value_t!(matches.value_of(WORD_COUNT_ARG.name), usize).unwrap();
             let mnemonic_type = MnemonicType::for_word_count(word_count)?;
             let language = acquire_language(matches);
 
@@ -642,7 +642,7 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
 
             let use_mnemonic = matches.is_present("use_mnemonic");
 
-            let word_count = value_t!(matches.value_of("word_count"), usize).unwrap();
+            let word_count = value_t!(matches.value_of(WORD_COUNT_ARG.name), usize).unwrap();
             let mnemonic_type = MnemonicType::for_word_count(word_count)?;
             let language = acquire_language(matches);
 
@@ -651,7 +651,7 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
             } else {
                 no_passphrase_and_message()
             };
-            let no_outfile = matches.is_present("no_outfile");
+            let no_outfile = matches.is_present(NO_OUTFILE_ARG.name);
 
             let grind_matches_thread_safe = Arc::new(grind_matches);
             let attempts = Arc::new(AtomicU64::new(1));
