@@ -25,7 +25,6 @@ use solana_runtime::{
     bank_utils,
     commitment::VOTE_THRESHOLD_SIZE,
     transaction_batch::TransactionBatch,
-    transaction_utils::OrderedIterator,
     vote_account::ArcVoteAccount,
     vote_sender_types::ReplayVoteSender,
 };
@@ -76,10 +75,7 @@ fn get_first_error(
     fee_collection_results: Vec<Result<()>>,
 ) -> Option<(Result<()>, Signature)> {
     let mut first_err = None;
-    for (result, (_, transaction)) in fee_collection_results.iter().zip(OrderedIterator::new(
-        batch.transactions(),
-        batch.iteration_order(),
-    )) {
+    for (result, transaction) in fee_collection_results.iter().zip(batch.transactions()) {
         if let Err(ref err) = result {
             if first_err.is_none() {
                 first_err = Some((result.clone(), transaction.signatures[0]));
@@ -149,7 +145,6 @@ fn execute_batch(
         transaction_status_sender.send_transaction_status_batch(
             bank.clone(),
             batch.transactions(),
-            batch.iteration_order_vec(),
             execution_results,
             balances,
             token_balances,
@@ -216,7 +211,7 @@ pub fn process_entries(
     let mut timings = ExecuteTimings::default();
     let result = process_entries_with_callback(
         bank,
-        entries,
+        entries.to_vec(),
         randomize,
         None,
         transaction_status_sender,
@@ -230,7 +225,7 @@ pub fn process_entries(
 
 fn process_entries_with_callback(
     bank: &Arc<Bank>,
-    entries: &[Entry],
+    mut entries: Vec<Entry>,
     randomize: bool,
     entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<TransactionStatusSender>,
@@ -240,7 +235,13 @@ fn process_entries_with_callback(
     // accumulator for entries that can be processed in parallel
     let mut batches = vec![];
     let mut tick_hashes = vec![];
-    for entry in entries {
+    if randomize {
+        let mut rng = thread_rng();
+        for entry in &mut entries {
+            entry.transactions.shuffle(&mut rng);
+        }
+    }
+    for entry in &entries {
         if entry.is_tick() {
             // If it's a tick, save it for later
             tick_hashes.push(entry.hash);
@@ -265,16 +266,8 @@ fn process_entries_with_callback(
         }
         // else loop on processing the entry
         loop {
-            let iteration_order = if randomize {
-                let mut iteration_order: Vec<usize> = (0..entry.transactions.len()).collect();
-                iteration_order.shuffle(&mut thread_rng());
-                Some(iteration_order)
-            } else {
-                None
-            };
-
             // try to lock the accounts
-            let batch = bank.prepare_batch(&entry.transactions, iteration_order);
+            let batch = bank.prepare_batch(&entry.transactions);
 
             let first_lock_err = first_err(batch.lock_results());
 
@@ -740,7 +733,7 @@ pub fn confirm_slot(
     let mut execute_timings = ExecuteTimings::default();
     let process_result = process_entries_with_callback(
         bank,
-        &entries,
+        entries.clone(),
         true,
         entry_callback,
         transaction_status_sender,
@@ -1113,7 +1106,6 @@ pub enum TransactionStatusMessage {
 pub struct TransactionStatusBatch {
     pub bank: Arc<Bank>,
     pub transactions: Vec<Transaction>,
-    pub iteration_order: Option<Vec<usize>>,
     pub statuses: Vec<TransactionExecutionResult>,
     pub balances: TransactionBalancesSet,
     pub token_balances: TransactionTokenBalancesSet,
@@ -1132,7 +1124,6 @@ impl TransactionStatusSender {
         &self,
         bank: Arc<Bank>,
         transactions: &[Transaction],
-        iteration_order: Option<Vec<usize>>,
         statuses: Vec<TransactionExecutionResult>,
         balances: TransactionBalancesSet,
         token_balances: TransactionTokenBalancesSet,
@@ -1150,7 +1141,6 @@ impl TransactionStatusSender {
             .send(TransactionStatusMessage::Batch(TransactionStatusBatch {
                 bank,
                 transactions: transactions.to_vec(),
-                iteration_order,
                 statuses,
                 balances,
                 token_balances,
@@ -2294,13 +2284,13 @@ pub mod tests {
         // Check all accounts are unlocked
         let txs1 = &entry_1_to_mint.transactions[..];
         let txs2 = &entry_2_to_3_mint_to_1.transactions[..];
-        let batch1 = bank.prepare_batch(txs1, None);
+        let batch1 = bank.prepare_batch(txs1);
         for result in batch1.lock_results() {
             assert!(result.is_ok());
         }
         // txs1 and txs2 have accounts that conflict, so we must drop txs1 first
         drop(batch1);
-        let batch2 = bank.prepare_batch(txs2, None);
+        let batch2 = bank.prepare_batch(txs2);
         for result in batch2.lock_results() {
             assert!(result.is_ok());
         }
@@ -2969,7 +2959,7 @@ pub mod tests {
 
         process_entries_with_callback(
             &bank0,
-            &entries,
+            entries,
             true,
             None,
             None,
@@ -3049,12 +3039,8 @@ pub mod tests {
             bank.last_blockhash(),
         );
         account_loaded_twice.message.account_keys[1] = mint_keypair.pubkey();
-        let transactions = [account_loaded_twice, account_not_found_tx];
-
-        // Use inverted iteration_order
-        let iteration_order: Vec<usize> = vec![1, 0];
-
-        let batch = bank.prepare_batch(&transactions, Some(iteration_order));
+        let transactions = [account_not_found_tx, account_loaded_twice];
+        let batch = bank.prepare_batch(&transactions);
         let (
             TransactionResults {
                 fee_collection_results,

@@ -2,9 +2,7 @@ use crate::TransactionTokenBalance;
 use solana_account_decoder::parse_token::{
     spl_token_id_v2_0, spl_token_v2_0_native_mint, token_amount_to_ui_amount, UiTokenAmount,
 };
-use solana_runtime::{
-    bank::Bank, transaction_batch::TransactionBatch, transaction_utils::OrderedIterator,
-};
+use solana_runtime::{bank::Bank, transaction_batch::TransactionBatch};
 use solana_sdk::{account::ReadableAccount, pubkey::Pubkey};
 use spl_token_v2_0::{
     solana_program::program_pack::Pack,
@@ -57,7 +55,7 @@ pub fn collect_token_balances(
 ) -> TransactionTokenBalances {
     let mut balances: TransactionTokenBalances = vec![];
 
-    for (_, transaction) in OrderedIterator::new(batch.transactions(), batch.iteration_order()) {
+    for transaction in batch.transactions() {
         let account_keys = &transaction.message.account_keys;
         let has_token_program = account_keys.iter().any(|p| is_token_program(p));
 
