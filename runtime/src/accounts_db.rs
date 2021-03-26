@@ -703,7 +703,7 @@ impl ReadOnlyAccountsCache {
     }
 
     pub fn store(&self, pubkey: &Pubkey, account: &AccountSharedData) {
-        self.cache.insert(pubkey.clone(), account.clone());
+        self.cache.insert(*pubkey, account.clone());
     }
 
     pub fn remove(&self, pubkey: &Pubkey) {
