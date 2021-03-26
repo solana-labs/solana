@@ -139,7 +139,7 @@ impl PohService {
         } else {
             0
         };
-        target_tick_duration_ns - adjustment_per_tick
+        target_tick_duration_ns.saturating_sub(adjustment_per_tick)
     }
 
     fn sleepy_tick_producer(
