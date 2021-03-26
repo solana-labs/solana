@@ -770,25 +770,13 @@ impl JsonRpcRequestProcessor {
                     .read()
                     .unwrap()
                     .highest_confirmed_root()
-<<<<<<< HEAD
-        {
-            let result = self.blockstore.get_confirmed_block(slot, true);
-            self.check_blockstore_root(&result, slot)?;
-            if result.is_err() {
-                if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
-                    let bigtable_result = self
-                        .runtime_handle
-                        .block_on(bigtable_ledger_storage.get_confirmed_block(slot));
-                    self.check_bigtable_result(&bigtable_result)?;
-                    return Ok(bigtable_result.ok().map(|confirmed_block| {
-=======
             {
                 let result = self.blockstore.get_rooted_block(slot, true);
                 self.check_blockstore_root(&result, slot)?;
                 if result.is_err() {
                     if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
                         let bigtable_result = self
-                            .runtime
+                            .runtime_handle
                             .block_on(bigtable_ledger_storage.get_confirmed_block(slot));
                         self.check_bigtable_result(&bigtable_result)?;
                         return Ok(bigtable_result.ok().map(|confirmed_block| {
@@ -811,7 +799,6 @@ impl JsonRpcRequestProcessor {
                 {
                     let result = self.blockstore.get_complete_block(slot, true);
                     return Ok(result.ok().map(|confirmed_block| {
->>>>>>> 433f1ead1... Rpc: enable getConfirmedBlock and getConfirmedTransaction to return confirmed (not yet finalized) data (#16142)
                         confirmed_block.configure(encoding, transaction_details, show_rewards)
                     }));
                 }
@@ -1097,13 +1084,8 @@ impl JsonRpcRequestProcessor {
                 }
                 None => {
                     if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
-<<<<<<< HEAD
-                        return self
-                            .runtime_handle
-=======
                         return Ok(self
-                            .runtime
->>>>>>> 433f1ead1... Rpc: enable getConfirmedBlock and getConfirmedTransaction to return confirmed (not yet finalized) data (#16142)
+                            .runtime_handle
                             .block_on(bigtable_ledger_storage.get_confirmed_transaction(&signature))
                             .unwrap_or(None)
                             .map(|confirmed| confirmed.encode(encoding)));
@@ -2934,7 +2916,6 @@ impl RpcSol for RpcSolImpl {
         meta.get_confirmed_block(slot, config)
     }
 
-<<<<<<< HEAD
     fn get_confirmed_blocks(
         &self,
         meta: Self::Metadata,
@@ -2947,21 +2928,6 @@ impl RpcSol for RpcSolImpl {
         );
         meta.get_confirmed_blocks(start_slot, end_slot)
     }
-=======
-        fn get_confirmed_transaction(
-            &self,
-            meta: Self::Metadata,
-            signature_str: String,
-            config: Option<RpcEncodingConfigWrapper<RpcConfirmedTransactionConfig>>,
-        ) -> Result<Option<EncodedConfirmedTransaction>> {
-            debug!(
-                "get_confirmed_transaction rpc request received: {:?}",
-                signature_str
-            );
-            let signature = verify_signature(&signature_str)?;
-            meta.get_confirmed_transaction(signature, config)
-        }
->>>>>>> 433f1ead1... Rpc: enable getConfirmedBlock and getConfirmedTransaction to return confirmed (not yet finalized) data (#16142)
 
     fn get_confirmed_blocks_with_limit(
         &self,
@@ -2991,7 +2957,7 @@ impl RpcSol for RpcSolImpl {
             signature_str
         );
         let signature = verify_signature(&signature_str)?;
-        Ok(meta.get_confirmed_transaction(signature, config))
+        meta.get_confirmed_transaction(signature, config)
     }
 
     fn get_confirmed_signatures_for_address(
@@ -5105,6 +5071,7 @@ pub mod tests {
             Arc::new(RwLock::new(LargestAccountsCache::new(30))),
             Arc::new(MaxSlots::default()),
             Arc::new(LeaderScheduleCache::default()),
+            Arc::new(AtomicU64::default()),
         );
         SendTransactionService::new(tpu_address, &bank_forks, None, receiver, 1000, 1);
         assert_eq!(request_processor.validator_exit(), false);
@@ -5141,6 +5108,7 @@ pub mod tests {
             Arc::new(RwLock::new(LargestAccountsCache::new(30))),
             Arc::new(MaxSlots::default()),
             Arc::new(LeaderScheduleCache::default()),
+            Arc::new(AtomicU64::default()),
         );
         SendTransactionService::new(tpu_address, &bank_forks, None, receiver, 1000, 1);
         assert_eq!(request_processor.validator_exit(), true);

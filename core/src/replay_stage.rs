@@ -1392,7 +1392,6 @@ impl ReplayStage {
             }
             assert_eq!(*bank_slot, bank.slot());
             if bank.is_complete() {
-<<<<<<< HEAD
                 if !blockstore.has_duplicate_shreds_in_slot(bank.slot()) {
                     bank_progress.replay_stats.report_stats(
                         bank.slot(),
@@ -1401,6 +1400,9 @@ impl ReplayStage {
                     );
                     did_complete_bank = true;
                     info!("bank frozen: {}", bank.slot());
+                    if let Some(transaction_status_sender) = transaction_status_sender.clone() {
+                        transaction_status_sender.send_transaction_status_freeze_message(&bank);
+                    }
                     bank.freeze();
                     heaviest_subtree_fork_choice
                         .add_new_leaf_slot(bank.slot(), Some(bank.parent_slot()));
@@ -1411,37 +1413,6 @@ impl ReplayStage {
                                 warn!("bank_notification_sender failed: {:?}", err)
                             });
                     }
-=======
-                bank_progress.replay_stats.report_stats(
-                    bank.slot(),
-                    bank_progress.replay_progress.num_entries,
-                    bank_progress.replay_progress.num_shreds,
-                );
-                did_complete_bank = true;
-                info!("bank frozen: {}", bank.slot());
-                if let Some(transaction_status_sender) = transaction_status_sender.clone() {
-                    transaction_status_sender.send_transaction_status_freeze_message(&bank);
-                }
-                bank.freeze();
-                heaviest_subtree_fork_choice
-                    .add_new_leaf_slot(bank.slot(), Some(bank.parent_slot()));
-                check_slot_agrees_with_cluster(
-                    bank.slot(),
-                    bank_forks.read().unwrap().root(),
-                    Some(bank.hash()),
-                    gossip_duplicate_confirmed_slots,
-                    ancestors,
-                    descendants,
-                    progress,
-                    heaviest_subtree_fork_choice,
-                    SlotStateUpdate::Frozen,
-                );
-                if let Some(sender) = bank_notification_sender {
-                    sender
-                        .send(BankNotification::Frozen(bank.clone()))
-                        .unwrap_or_else(|err| warn!("bank_notification_sender failed: {:?}", err));
-                }
->>>>>>> 433f1ead1... Rpc: enable getConfirmedBlock and getConfirmedTransaction to return confirmed (not yet finalized) data (#16142)
 
                     Self::record_rewards(&bank, &rewards_recorder_sender);
                 } else {

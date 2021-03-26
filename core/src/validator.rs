@@ -476,7 +476,6 @@ impl Validator {
             }
             let (bank_notification_sender, bank_notification_receiver) = unbounded();
             (
-<<<<<<< HEAD
                 Some(RpcServices {
                     json_rpc_service: JsonRpcService::new(
                         rpc_addr,
@@ -497,35 +496,9 @@ impl Validator {
                         config.send_transaction_leader_forward_count,
                         max_slots.clone(),
                         leader_schedule_cache.clone(),
+                        max_complete_transaction_status_slot,
                     ),
                     pubsub_service: PubSubService::new(
-=======
-                Some(JsonRpcService::new(
-                    rpc_addr,
-                    config.rpc_config.clone(),
-                    config.snapshot_config.clone(),
-                    bank_forks.clone(),
-                    block_commitment_cache.clone(),
-                    blockstore.clone(),
-                    cluster_info.clone(),
-                    Some(poh_recorder.clone()),
-                    genesis_config.hash(),
-                    ledger_path,
-                    config.validator_exit.clone(),
-                    config.trusted_validators.clone(),
-                    rpc_override_health_check.clone(),
-                    optimistically_confirmed_bank.clone(),
-                    config.send_transaction_retry_ms,
-                    config.send_transaction_leader_forward_count,
-                    max_slots.clone(),
-                    leader_schedule_cache.clone(),
-                    max_complete_transaction_status_slot,
-                )),
-                if config.rpc_config.minimal_api {
-                    None
-                } else {
-                    Some(PubSubService::new(
->>>>>>> 433f1ead1... Rpc: enable getConfirmedBlock and getConfirmedTransaction to return confirmed (not yet finalized) data (#16142)
                         config.pubsub_config.clone(),
                         &subscriptions,
                         rpc_pubsub_addr,
