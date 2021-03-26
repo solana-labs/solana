@@ -4,6 +4,7 @@ use log::*;
 /// All tests must start from an entry point and a funding keypair and
 /// discover the rest of the network.
 use rand::{thread_rng, Rng};
+use rayon::prelude::*;
 use solana_client::thin_client::create_client;
 use solana_core::{
     cluster_info::VALIDATOR_PORT_RANGE, consensus::VOTE_THRESHOLD_DEPTH, contact_info::ContactInfo,
@@ -31,6 +32,7 @@ use solana_sdk::{
 use std::{
     collections::{HashMap, HashSet},
     path::Path,
+    sync::Arc,
     thread::sleep,
     time::{Duration, Instant},
 };
@@ -38,7 +40,7 @@ use std::{
 const DEFAULT_SLOT_MILLIS: u64 = (DEFAULT_TICKS_PER_SLOT * 1000) / DEFAULT_TICKS_PER_SECOND;
 
 /// Spend and verify from every node in the network
-pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher>(
+pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher + Sync + Send>(
     entry_point_info: &ContactInfo,
     funding_keypair: &Keypair,
     nodes: usize,
@@ -46,9 +48,10 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher>(
 ) {
     let cluster_nodes = discover_cluster(&entry_point_info.gossip, nodes).unwrap();
     assert!(cluster_nodes.len() >= nodes);
-    for ingress_node in &cluster_nodes {
+    let ignore_nodes = Arc::new(ignore_nodes);
+    cluster_nodes.par_iter().for_each(|ingress_node| {
         if ignore_nodes.contains(&ingress_node.id) {
-            continue;
+            return;
         }
         let random_keypair = Keypair::new();
         let client = create_client(ingress_node.client_facing_addr(), VALIDATOR_PORT_RANGE);
@@ -60,7 +63,7 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher>(
             .expect("balance in source");
         assert!(bal > 0);
         let (blockhash, _fee_calculator, _last_valid_slot) = client
-            .get_recent_blockhash_with_commitment(CommitmentConfig::processed())
+            .get_recent_blockhash_with_commitment(CommitmentConfig::confirmed())
             .unwrap();
         let mut transaction =
             system_transaction::transfer(&funding_keypair, &random_keypair.pubkey(), 1, blockhash);
@@ -75,7 +78,7 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher>(
             let client = create_client(validator.client_facing_addr(), VALIDATOR_PORT_RANGE);
             client.poll_for_signature_confirmation(&sig, confs).unwrap();
         }
-    }
+    });
 }
 
 pub fn verify_balances<S: ::std::hash::BuildHasher>(
@@ -291,17 +294,20 @@ pub fn check_for_new_roots(num_new_roots: usize, contact_infos: &[ContactInfo], 
     let mut roots = vec![HashSet::new(); contact_infos.len()];
     let mut done = false;
     let mut last_print = Instant::now();
+    let loop_start = Instant::now();
+    let loop_timeout = Duration::from_secs(60);
     while !done {
+        assert!(loop_start.elapsed() < loop_timeout);
         for (i, ingress_node) in contact_infos.iter().enumerate() {
             let client = create_client(ingress_node.client_facing_addr(), VALIDATOR_PORT_RANGE);
             let slot = client.get_slot().unwrap_or(0);
             roots[i].insert(slot);
             let min_node = roots.iter().map(|r| r.len()).min().unwrap_or(0);
-            if last_print.elapsed().as_secs() > 3 {
+            done = min_node >= num_new_roots;
+            if done || last_print.elapsed().as_secs() > 3 {
                 info!("{} min observed roots {}/16", test_name, min_node);
                 last_print = Instant::now();
             }
-            done = min_node >= num_new_roots;
         }
         sleep(Duration::from_millis(clock::DEFAULT_MS_PER_SLOT / 2));
     }
