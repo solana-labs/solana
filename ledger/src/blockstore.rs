@@ -1729,14 +1729,14 @@ impl Blockstore {
         Ok(root_iterator.next().unwrap_or_default())
     }
 
-    pub fn get_confirmed_block(
+    pub fn get_rooted_block(
         &self,
         slot: Slot,
         require_previous_blockhash: bool,
     ) -> Result<ConfirmedBlock> {
         datapoint_info!(
             "blockstore-rpc-api",
-            ("method", "get_confirmed_block".to_string(), String)
+            ("method", "get_rooted_block".to_string(), String)
         );
         let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
         // lowest_cleanup_slot is the last slot that was not cleaned up by
@@ -2166,7 +2166,7 @@ impl Blockstore {
                     None => return Ok(vec![]),
                     Some((slot, _)) => {
                         let confirmed_block =
-                            self.get_confirmed_block(slot, false).map_err(|err| {
+                            self.get_rooted_block(slot, false).map_err(|err| {
                                 BlockstoreError::Io(IoError::new(
                                     ErrorKind::Other,
                                     format!("Unable to get confirmed block: {}", err),
@@ -2217,7 +2217,7 @@ impl Blockstore {
                     None => (0, HashSet::new()),
                     Some((slot, _)) => {
                         let confirmed_block =
-                            self.get_confirmed_block(slot, false).map_err(|err| {
+                            self.get_rooted_block(slot, false).map_err(|err| {
                                 BlockstoreError::Io(IoError::new(
                                     ErrorKind::Other,
                                     format!("Unable to get confirmed block: {}", err),
@@ -5767,7 +5767,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_get_confirmed_block() {
+    fn test_get_rooted_block() {
         let slot = 10;
         let entries = make_slot_entries_with_transactions(100);
         let blockhash = get_last_hash(entries.iter()).unwrap();
@@ -5864,19 +5864,19 @@ pub mod tests {
             .collect();
 
         // Even if marked as root, a slot that is empty of entries should return an error
-        let confirmed_block_err = ledger.get_confirmed_block(slot - 1, true).unwrap_err();
+        let confirmed_block_err = ledger.get_rooted_block(slot - 1, true).unwrap_err();
         assert_matches!(confirmed_block_err, BlockstoreError::SlotUnavailable);
 
         // The previous_blockhash of `expected_block` is default because its parent slot is a root,
         // but empty of entries (eg. snapshot root slots). This now returns an error.
-        let confirmed_block_err = ledger.get_confirmed_block(slot, true).unwrap_err();
+        let confirmed_block_err = ledger.get_rooted_block(slot, true).unwrap_err();
         assert_matches!(
             confirmed_block_err,
             BlockstoreError::ParentEntriesUnavailable
         );
 
         // Test if require_previous_blockhash is false
-        let confirmed_block = ledger.get_confirmed_block(slot, false).unwrap();
+        let confirmed_block = ledger.get_rooted_block(slot, false).unwrap();
         assert_eq!(confirmed_block.transactions.len(), 100);
         let expected_block = ConfirmedBlock {
             transactions: expected_transactions.clone(),
@@ -5888,7 +5888,7 @@ pub mod tests {
         };
         assert_eq!(confirmed_block, expected_block);
 
-        let confirmed_block = ledger.get_confirmed_block(slot + 1, true).unwrap();
+        let confirmed_block = ledger.get_rooted_block(slot + 1, true).unwrap();
         assert_eq!(confirmed_block.transactions.len(), 100);
 
         let mut expected_block = ConfirmedBlock {
@@ -5901,7 +5901,7 @@ pub mod tests {
         };
         assert_eq!(confirmed_block, expected_block);
 
-        let not_root = ledger.get_confirmed_block(slot + 2, true).unwrap_err();
+        let not_root = ledger.get_rooted_block(slot + 2, true).unwrap_err();
         assert_matches!(not_root, BlockstoreError::SlotNotRooted);
 
         let complete_block = ledger.get_complete_block(slot + 2, true).unwrap();
@@ -5922,7 +5922,7 @@ pub mod tests {
         ledger.blocktime_cf.put(slot + 1, &timestamp).unwrap();
         expected_block.block_time = Some(timestamp);
 
-        let confirmed_block = ledger.get_confirmed_block(slot + 1, true).unwrap();
+        let confirmed_block = ledger.get_rooted_block(slot + 1, true).unwrap();
         assert_eq!(confirmed_block, expected_block);
 
         let timestamp = 1_576_183_542;
