@@ -127,11 +127,9 @@ pub struct CachedAccountInner {
 
 impl CachedAccountInner {
     pub fn hash(&self) -> Hash {
-        error!("locking to read hash");
         let hash = self.hash.read().unwrap();
         match *hash {
             Some(hash) => {
-                error!("done locking to read hash");
                 hash
             },
             None => {
@@ -142,9 +140,7 @@ impl CachedAccountInner {
                     &self.pubkey,
                     &self.cluster_type,
                 );
-                error!("write locking to set hash");
                 *self.hash.write().unwrap() = Some(hash.clone());
-                error!("done write locking to set hash");
                 hash
             }
         }
