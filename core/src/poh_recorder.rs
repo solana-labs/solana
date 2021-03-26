@@ -152,6 +152,7 @@ pub struct PohRecorder {
     leader_schedule_cache: Arc<LeaderScheduleCache>,
     poh_config: Arc<PohConfig>,
     ticks_per_slot: u64,
+    target_ns_per_tick: u64,
     record_lock_contention_us: u64,
     flush_cache_no_tick_us: u64,
     flush_cache_tick_us: u64,
@@ -356,7 +357,7 @@ impl PohRecorder {
         let mut cache = vec![];
         let poh_hash = {
             let mut poh = self.poh.lock().unwrap();
-            poh.reset_slot(blockhash, self.poh_config.hashes_per_tick); // TODO: ticks per slot in the bank? can this change?
+            poh.reset(blockhash, self.poh_config.hashes_per_tick);
             poh.hash
         };
         info!(
@@ -468,11 +469,7 @@ impl PohRecorder {
             let mut poh_l = self.poh.lock().unwrap();
             let poh_entry = poh_l.tick();
             let target_time = if poh_entry.is_some() {
-                let target_ns_per_tick = PohService::target_ns_per_tick(
-                    self.ticks_per_slot(),
-                    self.poh_config.target_tick_duration.as_nanos() as u64,
-                );
-                Some(poh_l.target_poh_time(target_ns_per_tick))
+                Some(poh_l.target_poh_time(self.target_ns_per_tick))
             } else {
                 None
             };
@@ -506,7 +503,7 @@ impl PohRecorder {
             // Kernel can not schedule the thread for a while.
             let started_waiting = Instant::now();
             while Instant::now() < target_time {
-                // TODO: we could possibly get a reset or record request while we're here
+                // TODO: a caller could possibly desire to reset or record while we're spinning here
                 std::hint::spin_loop();
             }
             self.total_sleep_us += started_waiting.elapsed().as_nanos() as u64 / 1000;
@@ -622,6 +619,11 @@ impl PohRecorder {
             ticks_per_slot,
             tick_number,
         )));
+
+        let target_ns_per_tick = PohService::target_ns_per_tick(
+            ticks_per_slot,
+            poh_config.target_tick_duration.as_nanos() as u64,
+        );
         let (sender, receiver) = channel();
         let (record_sender, record_receiver) = channel();
         let (leader_first_tick_height, leader_last_tick_height, grace_ticks) =
@@ -643,6 +645,7 @@ impl PohRecorder {
                 blockstore: blockstore.clone(),
                 leader_schedule_cache: leader_schedule_cache.clone(),
                 ticks_per_slot,
+                target_ns_per_tick,
                 poh_config: poh_config.clone(),
                 record_lock_contention_us: 0,
                 flush_cache_tick_us: 0,

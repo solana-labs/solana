@@ -119,10 +119,6 @@ impl PohService {
                     Self::tick_producer(
                         poh_recorder,
                         &poh_exit_,
-                        Self::target_ns_per_tick(
-                            ticks_per_slot,
-                            poh_config.target_tick_duration.as_nanos() as u64,
-                        ),
                         ticks_per_slot,
                         hashes_per_batch,
                         record_receiver,
@@ -285,7 +281,6 @@ impl PohService {
     fn tick_producer(
         poh_recorder: Arc<Mutex<PohRecorder>>,
         poh_exit: &AtomicBool,
-        _target_tick_ns: u64,
         ticks_per_slot: u64,
         hashes_per_batch: u64,
         record_receiver: Receiver<Record>,
