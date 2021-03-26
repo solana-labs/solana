@@ -24,8 +24,9 @@ use solana_client::{
     pubsub_client::PubsubClient,
     rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClient},
     rpc_config::{
-        RpcAccountInfoConfig, RpcLargestAccountsConfig, RpcLargestAccountsFilter,
-        RpcProgramAccountsConfig, RpcTransactionLogsConfig, RpcTransactionLogsFilter,
+        RpcAccountInfoConfig, RpcConfirmedBlockConfig, RpcLargestAccountsConfig,
+        RpcLargestAccountsFilter, RpcProgramAccountsConfig, RpcTransactionLogsConfig,
+        RpcTransactionLogsFilter,
     },
     rpc_filter,
     rpc_response::SlotInfo,
@@ -963,8 +964,16 @@ pub fn process_get_block(
         rpc_client.get_slot_with_commitment(CommitmentConfig::finalized())?
     };
 
-    let encoded_confirmed_block =
-        rpc_client.get_confirmed_block_with_encoding(slot, UiTransactionEncoding::Base64)?;
+    let encoded_confirmed_block = rpc_client
+        .get_confirmed_block_with_config(
+            slot,
+            RpcConfirmedBlockConfig {
+                encoding: Some(UiTransactionEncoding::Base64),
+                commitment: Some(CommitmentConfig::confirmed()),
+                ..RpcConfirmedBlockConfig::default()
+            },
+        )?
+        .into();
     let cli_block = CliBlock {
         encoded_confirmed_block,
         slot,

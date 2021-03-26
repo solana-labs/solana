@@ -1675,7 +1675,7 @@ pub(crate) fn fetch_epoch_rewards(
             .get(0)
             .ok_or_else(|| format!("Unable to fetch first confirmed block for epoch {}", epoch))?;
 
-        let first_confirmed_block = match rpc_client.get_configured_confirmed_block(
+        let first_confirmed_block = match rpc_client.get_confirmed_block_with_config(
             first_confirmed_block_in_epoch,
             RpcConfirmedBlockConfig::rewards_only(),
         ) {
