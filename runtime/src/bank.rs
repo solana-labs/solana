@@ -2933,6 +2933,8 @@ impl Bank {
                         self.feature_set.clone(),
                         bpf_compute_budget,
                         &mut timings.details,
+                        self.rc.accounts.clone(),
+                        &self.ancestors,
                     );
 
                     if enable_log_recording {

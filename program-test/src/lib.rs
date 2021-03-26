@@ -16,8 +16,9 @@ use {
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount},
         account_info::AccountInfo,
-        clock::Slot,
-        entrypoint::ProgramResult,
+        clock::{Clock, Slot},
+        entrypoint::{ProgramResult, SUCCESS},
+        epoch_schedule::EpochSchedule,
         feature_set::demote_sysvar_write_locks,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         genesis_config::{ClusterType, GenesisConfig},
@@ -30,10 +31,15 @@ use {
         process_instruction::{
             stable_log, BpfComputeBudget, InvokeContext, ProcessInstructionWithContext,
         },
-        program_error::ProgramError,
+        program_error::{ProgramError, ACCOUNT_BORROW_FAILED, UNSUPPORTED_SYSVAR},
         pubkey::Pubkey,
         rent::Rent,
         signature::{Keypair, Signer},
+        sysvar::{
+            clock, epoch_schedule,
+            fees::{self, Fees},
+            rent, Sysvar,
+        },
     },
     solana_vote_program::vote_state::{VoteState, VoteStateVersions},
     std::{
@@ -179,6 +185,43 @@ macro_rules! processor {
             },
         )
     };
+}
+
+fn get_sysvar<T: Default + Sysvar + Sized + serde::de::DeserializeOwned>(
+    id: &Pubkey,
+    var_addr: *mut u8,
+) -> u64 {
+    let invoke_context = get_invoke_context();
+
+    let sysvar_data = match invoke_context.get_sysvar_data(id).ok_or_else(|| {
+        ic_msg!(invoke_context, "Unable to get Sysvar {}", id);
+        UNSUPPORTED_SYSVAR
+    }) {
+        Ok(sysvar_data) => sysvar_data,
+        Err(err) => return err,
+    };
+
+    let var: T = match bincode::deserialize(&sysvar_data) {
+        Ok(sysvar_data) => sysvar_data,
+        Err(_) => return UNSUPPORTED_SYSVAR,
+    };
+
+    unsafe {
+        *(var_addr as *mut _ as *mut T) = var;
+    }
+
+    if invoke_context
+        .get_compute_meter()
+        .try_borrow_mut()
+        .map_err(|_| ACCOUNT_BORROW_FAILED)
+        .unwrap()
+        .consume(invoke_context.get_bpf_compute_budget().sysvar_base_cost + T::size_of() as u64)
+        .is_err()
+    {
+        panic!("Exceeded compute budget");
+    }
+
+    SUCCESS
 }
 
 struct SyscallStubs {}
@@ -332,6 +375,22 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
 
         stable_log::program_success(&logger, &program_id);
         Ok(())
+    }
+
+    fn sol_get_clock_sysvar(&self, var_addr: *mut u8) -> u64 {
+        get_sysvar::<Clock>(&clock::id(), var_addr)
+    }
+
+    fn sol_get_epoch_schedule_sysvar(&self, var_addr: *mut u8) -> u64 {
+        get_sysvar::<EpochSchedule>(&epoch_schedule::id(), var_addr)
+    }
+
+    fn sol_get_fees_sysvar(&self, var_addr: *mut u8) -> u64 {
+        get_sysvar::<Fees>(&fees::id(), var_addr)
+    }
+
+    fn sol_get_rent_sysvar(&self, var_addr: *mut u8) -> u64 {
+        get_sysvar::<Rent>(&rent::id(), var_addr)
     }
 }
 
