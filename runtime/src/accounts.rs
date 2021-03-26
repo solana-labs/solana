@@ -367,8 +367,8 @@ impl Accounts {
                 {
                     if let Some(program) = self
                         .accounts_db
-                        .load(ancestors, &programdata_address)
-                        .map(|(account, _)| account)
+                        .load_and_keep_in_read_only_cache(ancestors, &programdata_address)
+                        .map(|account| account)
                     {
                         accounts.insert(0, (programdata_address, program));
                     } else {
