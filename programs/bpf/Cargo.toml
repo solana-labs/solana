@@ -63,6 +63,7 @@ members = [
     "rust/many_args_dep",
     "rust/mem",
     "rust/noop",
+    "rust/packed_len",
     "rust/panic",
     "rust/param_passing",
     "rust/param_passing_dep",

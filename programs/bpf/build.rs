@@ -79,6 +79,7 @@ fn main() {
             "many_args",
             "mem",
             "noop",
+            "packed_len",
             "panic",
             "param_passing",
             "rand",

@@ -2788,6 +2788,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-bpf-rust-packed-len"
+version = "1.7.0"
+dependencies = [
+ "borsh",
+ "solana-program 1.7.0",
+]
+
+[[package]]
 name = "solana-bpf-rust-panic"
 version = "1.7.0"
 dependencies = [
