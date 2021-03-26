@@ -14,6 +14,7 @@ use std::{
         Arc, RwLock,
     },
 };
+use log::error;
 
 pub type SlotCache = Arc<SlotCacheInner>;
 
@@ -55,7 +56,7 @@ impl SlotCacheInner {
         hash: Option<Hash>,
         hash_slot: Slot,
         cluster_type: ClusterType,
-    ) {
+    ) -> CachedAccount {
         if self.cache.contains_key(pubkey) {
             self.same_account_writes.fetch_add(1, Ordering::Relaxed);
             self.same_account_writes_size
@@ -64,16 +65,18 @@ impl SlotCacheInner {
             self.unique_account_writes_size
                 .fetch_add(account.data().len() as u64, Ordering::Relaxed);
         }
+        let item = Arc::new(CachedAccountInner {
+            account,
+            hash: RwLock::new(hash),
+            hash_slot,
+            cluster_type,
+            pubkey: *pubkey,
+        });
         self.cache.insert(
             *pubkey,
-            Arc::new(CachedAccountInner {
-                account,
-                hash: RwLock::new(hash),
-                hash_slot,
-                cluster_type,
-                pubkey: *pubkey,
-            }),
+            item.clone(),
         );
+        item
     }
 
     pub fn get_cloned(&self, pubkey: &Pubkey) -> Option<CachedAccount> {
@@ -124,9 +127,13 @@ pub struct CachedAccountInner {
 
 impl CachedAccountInner {
     pub fn hash(&self) -> Hash {
+        error!("locking to read hash");
         let hash = self.hash.read().unwrap();
         match *hash {
-            Some(hash) => hash,
+            Some(hash) => {
+                error!("done locking to read hash");
+                hash
+            },
             None => {
                 let hash = crate::accounts_db::AccountsDb::hash_account(
                     self.hash_slot,
@@ -134,7 +141,9 @@ impl CachedAccountInner {
                     &self.pubkey,
                     &self.cluster_type,
                 );
+                error!("write locking to set hash");
                 *self.hash.write().unwrap() = Some(hash.clone());
+                error!("done write locking to set hash");
                 hash
             }
         }
@@ -182,7 +191,7 @@ impl AccountsCache {
         hash: Option<Hash>,
         hash_slot: Slot,
         cluster_type: ClusterType,
-    ) {
+    ) -> CachedAccount {
         let slot_cache = self.slot_cache(slot).unwrap_or_else(||
             // DashMap entry.or_insert() returns a RefMut, essentially a write lock,
             // which is dropped after this block ends, minimizing time held by the lock.
@@ -194,7 +203,7 @@ impl AccountsCache {
                 .or_insert(Arc::new(SlotCacheInner::default()))
                 .clone());
 
-        slot_cache.insert(pubkey, account, hash, hash_slot, cluster_type);
+        slot_cache.insert(pubkey, account, hash, hash_slot, cluster_type)
     }
 
     pub fn load(&self, slot: Slot, pubkey: &Pubkey) -> Option<CachedAccount> {

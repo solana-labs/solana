@@ -1310,7 +1310,19 @@ impl AccountsDb {
     }
 
     fn background_hasher(receiver: Receiver<CachedAccount>, cluster_type: ClusterType) {
-        let map = DashMapLazyHasher::default();
+        loop {
+            let result = receiver.recv();
+            match result {
+                Ok(account) => {
+                    // if we hold the only ref, then this account doesn't need to be hashed
+                    if Arc::strong_count(&account) > 1 {
+                        let _ = (*account).hash();
+                    };
+                },
+                Err(_) => {break;},
+            }
+        }
+        //let map = DashMapLazyHasher::default();
     }
 
     fn start_store_hasher(&mut self) {
@@ -3400,8 +3412,15 @@ impl AccountsDb {
                 let hash = if hashes.is_empty() {
                     None }
                     else {Some(hashes[i])};
+                let cached_account =
                 self.accounts_cache
                     .store(slot, &meta.pubkey, (*account).clone(), hash, slot, self.expected_cluster_type());
+                // hash this account in the bg
+                match &self.sender_bg_hasher {
+                    Some(ref sender) => {let _ = sender.lock().unwrap().send(cached_account);},
+                    None => (),
+                };
+                
                 AccountInfo {
                     store_id: CACHE_VIRTUAL_STORAGE_ID,
                     offset: CACHE_VIRTUAL_OFFSET,
