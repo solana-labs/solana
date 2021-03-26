@@ -687,6 +687,7 @@ Returns a list of confirmed blocks between two slots
 
 - `<u64>` - start_slot, as u64 integer
 - `<u64>` - (optional) end_slot, as u64 integer
+- (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
 
 #### Results:
 
@@ -717,6 +718,7 @@ Returns a list of confirmed blocks starting at the given slot
 
 - `<u64>` - start_slot, as u64 integer
 - `<u64>` - limit, as u64 integer
+- (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
 
 #### Results:
 
