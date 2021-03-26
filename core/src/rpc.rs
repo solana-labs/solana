@@ -795,7 +795,7 @@ impl JsonRpcRequestProcessor {
     ) -> Result<Vec<Slot>> {
         let _commitment = commitment.unwrap_or_default();
         let end_slot = min(
-            end_slot.unwrap_or(std::u64::MAX),
+            end_slot.unwrap_or_else(|| start_slot.saturating_add(MAX_GET_CONFIRMED_BLOCKS_RANGE)),
             self.block_commitment_cache
                 .read()
                 .unwrap()
