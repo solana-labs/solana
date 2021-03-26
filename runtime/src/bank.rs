@@ -114,7 +114,7 @@ impl ExecuteTimings {
 }
 
 type BankStatusCache = StatusCache<Signature, Result<()>>;
-#[frozen_abi(digest = "EcB9J7sm37t1R47vLcvGuNeiRciB4Efq1EDWDWL6Bp5h")]
+#[frozen_abi(digest = "4mSWwHd4RrLjCXH7RFrm6K3wZSsi9DfVJK3Ngz9jKk7D")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 type TransactionAccountRefCells = Vec<Rc<RefCell<AccountSharedData>>>;
 type TransactionAccountDepRefCells = Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>;
@@ -2933,6 +2933,8 @@ impl Bank {
                         self.feature_set.clone(),
                         bpf_compute_budget,
                         &mut timings.details,
+                        self.rc.accounts.clone(),
+                        &self.ancestors,
                     );
 
                     if enable_log_recording {

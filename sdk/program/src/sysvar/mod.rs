@@ -1,6 +1,10 @@
 //! named accounts for synthesized data accounts for bank state, etc.
 //!
-use crate::{account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey};
+use crate::{
+    account_info::AccountInfo,
+    program_error::{ProgramError, UNSUPPORTED_SYSVAR},
+    pubkey::Pubkey,
+};
 
 pub mod clock;
 pub mod epoch_schedule;
@@ -35,6 +39,9 @@ macro_rules! declare_sysvar_id(
             fn check_id(pubkey: &$crate::pubkey::Pubkey) -> bool {
                 check_id(pubkey)
             }
+            fn id() -> $crate::pubkey::Pubkey {
+                id()
+            }
         }
 
         #[cfg(test)]
@@ -47,14 +54,15 @@ macro_rules! declare_sysvar_id(
     )
 );
 
-// owner pubkey for sysvar accounts
+// Owner pubkey for sysvar accounts
 crate::declare_id!("Sysvar1111111111111111111111111111111111111");
 
 pub trait SysvarId {
     fn check_id(pubkey: &Pubkey) -> bool;
+    fn id() -> Pubkey;
 }
 
-// utilities for moving into and out of Accounts
+// Sysvar utilities
 pub trait Sysvar:
     SysvarId + Default + Sized + serde::Serialize + serde::de::DeserializeOwned
 {
@@ -69,6 +77,22 @@ pub trait Sysvar:
     }
     fn to_account_info(&self, account_info: &mut AccountInfo) -> Option<()> {
         bincode::serialize_into(&mut account_info.data.borrow_mut()[..], self).ok()
+    }
+    fn get() -> Result<Self, ProgramError> {
+        let mut var = Self::default();
+        let var_addr = &mut var as *mut _ as *mut u8;
+
+        #[cfg(target_arch = "bpf")]
+        let result = Self::call_syscall(var_addr);
+        #[cfg(not(target_arch = "bpf"))]
+        let result = crate::program_stubs::sol_get_sysvar(&Self::id(), var_addr);
+        match result {
+            crate::entrypoint::SUCCESS => Ok(var),
+            e => Err(e.into()),
+        }
+    }
+    fn call_syscall(_var_addr: *mut u8) -> u64 {
+        UNSUPPORTED_SYSVAR
     }
 }
 
@@ -87,6 +111,9 @@ mod tests {
     impl crate::sysvar::SysvarId for TestSysvar {
         fn check_id(pubkey: &crate::pubkey::Pubkey) -> bool {
             check_id(pubkey)
+        }
+        fn id() -> Pubkey {
+            id()
         }
     }
     impl Sysvar for TestSysvar {}

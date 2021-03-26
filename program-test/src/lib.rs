@@ -16,8 +16,8 @@ use {
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount},
         account_info::AccountInfo,
-        clock::Slot,
-        entrypoint::ProgramResult,
+        clock::{Clock, Slot},
+        entrypoint::{ProgramResult, SUCCESS},
         feature_set::demote_sysvar_write_locks,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         genesis_config::{ClusterType, GenesisConfig},
@@ -28,12 +28,13 @@ use {
         message::Message,
         native_token::sol_to_lamports,
         process_instruction::{
-            stable_log, BpfComputeBudget, InvokeContext, ProcessInstructionWithContext,
+            stable_log, BpfComputeBudget, InvokeContext, ProcessInstructionWithContext, Sysvars,
         },
-        program_error::ProgramError,
+        program_error::{ProgramError, ACCOUNT_BORROW_FAILED, UNSUPPORTED_SYSVAR},
         pubkey::Pubkey,
         rent::Rent,
         signature::{Keypair, Signer},
+        sysvar::{clock, rent},
     },
     solana_vote_program::vote_state::{VoteState, VoteStateVersions},
     std::{
@@ -42,7 +43,7 @@ use {
         convert::TryFrom,
         fs::File,
         io::{self, Read},
-        mem::transmute,
+        mem::{size_of, transmute},
         path::{Path, PathBuf},
         rc::Rc,
         sync::{
@@ -332,6 +333,55 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
 
         stable_log::program_success(&logger, &program_id);
         Ok(())
+    }
+
+    fn sol_get_sysvar(&self, id: &Pubkey, var_addr: *mut u8) -> u64 {
+        let invoke_context = get_invoke_context();
+
+        ic_msg!(invoke_context, "sol_get_sysvar");
+
+        let sysvars = match invoke_context.get_sysvar(id).ok_or_else(|| {
+            ic_msg!(invoke_context, "Unable to get Sysvar {}", id);
+            UNSUPPORTED_SYSVAR
+        }) {
+            Ok(sysvar) => sysvar,
+            Err(err) => return err,
+        };
+
+        let size = if *id == clock::id() {
+            match *sysvars {
+                Sysvars::Clock(clock) => {
+                    let var = var_addr as *mut _ as *mut Clock;
+                    unsafe { *var = clock }
+                }
+                _ => return UNSUPPORTED_SYSVAR,
+            }
+            size_of::<Clock>()
+        } else if *id == rent::id() {
+            match *sysvars {
+                Sysvars::Rent(rent) => {
+                    let var = var_addr as *mut _ as *mut Rent;
+                    unsafe { *var = rent }
+                }
+                _ => return UNSUPPORTED_SYSVAR,
+            }
+            size_of::<Rent>()
+        } else {
+            return UNSUPPORTED_SYSVAR;
+        };
+
+        if invoke_context
+            .get_compute_meter()
+            .try_borrow_mut()
+            .map_err(|_| ACCOUNT_BORROW_FAILED)
+            .unwrap()
+            .consume(invoke_context.get_bpf_compute_budget().sysvar_base_cost + size as u64)
+            .is_err()
+        {
+            panic!("Exceeded compute budget");
+        }
+
+        SUCCESS
     }
 }
 

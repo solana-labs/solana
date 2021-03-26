@@ -2,7 +2,10 @@
 
 #![cfg(not(target_arch = "bpf"))]
 
-use crate::{account_info::AccountInfo, entrypoint::ProgramResult, instruction::Instruction};
+use crate::{
+    account_info::AccountInfo, entrypoint::ProgramResult, instruction::Instruction,
+    program_error::UNSUPPORTED_SYSVAR, pubkey::Pubkey,
+};
 use std::sync::{Arc, RwLock};
 
 lazy_static::lazy_static! {
@@ -30,6 +33,10 @@ pub trait SyscallStubs: Sync + Send {
     ) -> ProgramResult {
         sol_log("SyscallStubs: sol_invoke_signed() not available");
         Ok(())
+    }
+
+    fn sol_get_sysvar(&self, _id: &Pubkey, _var_addr: *mut u8) -> u64 {
+        UNSUPPORTED_SYSVAR
     }
 }
 
@@ -60,4 +67,8 @@ pub(crate) fn sol_invoke_signed(
         .read()
         .unwrap()
         .sol_invoke_signed(instruction, account_infos, signers_seeds)
+}
+
+pub(crate) fn sol_get_sysvar(id: &Pubkey, var_addr: *mut u8) -> u64 {
+    SYSCALL_STUBS.read().unwrap().sol_get_sysvar(id, var_addr)
 }

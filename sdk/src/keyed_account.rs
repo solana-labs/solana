@@ -240,6 +240,9 @@ mod tests {
         fn check_id(pubkey: &crate::pubkey::Pubkey) -> bool {
             check_id(pubkey)
         }
+        fn id() -> Pubkey {
+            id()
+        }
     }
     impl Sysvar for TestSysvar {}
 

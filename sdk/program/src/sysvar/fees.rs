@@ -5,7 +5,7 @@ use crate::{fee_calculator::FeeCalculator, sysvar::Sysvar};
 crate::declare_sysvar_id!("SysvarFees111111111111111111111111111111111", Fees);
 
 #[repr(C)]
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
 pub struct Fees {
     pub fee_calculator: FeeCalculator,
 }

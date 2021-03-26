@@ -4977,6 +4977,7 @@ version = "1.7.0"
 dependencies = [
  "async-trait",
  "base64 0.12.3",
+ "bincode",
  "chrono",
  "chrono-humanize",
  "log 0.4.11",

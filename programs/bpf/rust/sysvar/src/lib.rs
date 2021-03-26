@@ -7,6 +7,7 @@ use solana_program::{
     entrypoint,
     entrypoint::ProgramResult,
     msg,
+    program_error::ProgramError,
     pubkey::Pubkey,
     rent,
     sysvar::{
@@ -28,12 +29,17 @@ fn process_instruction(
     let clock = Clock::from_account_info(&accounts[2]).expect("clock");
     assert_eq!(clock.slot, DEFAULT_SLOTS_PER_EPOCH + 1);
 
+    let got_clock = Clock::get()?;
+    assert_eq!(clock, got_clock);
+
     // Fees
     msg!("Fees identifier:");
     sysvar::fees::id().log();
     let fees = Fees::from_account_info(&accounts[3]).expect("fees");
     let fee_calculator = fees.fee_calculator;
     assert_eq!(fee_calculator.lamports_per_signature, 0);
+
+    assert_eq!(Fees::get(), Err(ProgramError::UnsupportedSysvar));
 
     // Slot Hashes
     msg!("SlotHashes identifier:");
@@ -47,6 +53,9 @@ fn process_instruction(
     let stake_history = StakeHistory::from_account_info(&accounts[5]).expect("stake_history");
     assert!(stake_history.len() >= 1);
 
+    // Rent
+    msg!("Rent identifier:");
+    sysvar::rent::id().log();
     let rent = Rent::from_account_info(&accounts[6]).unwrap();
     assert_eq!(
         rent.due(
@@ -56,6 +65,9 @@ fn process_instruction(
         ),
         (0, true)
     );
+
+    let got_rent = Rent::get()?;
+    assert_eq!(rent, got_rent);
 
     Ok(())
 }
