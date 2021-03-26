@@ -1031,10 +1031,6 @@ impl ReplayStage {
         skipped_slots_info: &mut SkippedSlotsInfo,
         has_new_vote_been_rooted: bool,
     ) {
-        if !has_new_vote_been_rooted {
-            info!("Haven't landed a vote, so skipping my leader slot");
-            return;
-        }
         // all the individual calls to poh_recorder.lock() are designed to
         // increase granularity, decrease contention
 
@@ -1070,6 +1066,11 @@ impl ReplayStage {
         );
 
         if let Some(next_leader) = leader_schedule_cache.slot_leader_at(poh_slot, Some(&parent)) {
+            if !has_new_vote_been_rooted {
+                info!("Haven't landed a vote, so skipping my leader slot");
+                return;
+            }
+
             trace!(
                 "{} leader {} at poh slot: {}",
                 my_pubkey,
@@ -1421,6 +1422,10 @@ impl ReplayStage {
 
         let mut vote_tx = Transaction::new_with_payer(&[vote_ix], Some(&node_keypair.pubkey()));
 
+        let blockhash = bank.last_blockhash();
+        vote_tx.partial_sign(&[node_keypair.as_ref()], blockhash);
+        vote_tx.partial_sign(&[authorized_voter_keypair.as_ref()], blockhash);
+
         if !has_new_vote_been_rooted {
             vote_signatures.push(vote_tx.signatures[0]);
             if vote_signatures.len() > MAX_VOTE_SIGNATURES {
@@ -1429,9 +1434,7 @@ impl ReplayStage {
         } else {
             vote_signatures.clear();
         }
-        let blockhash = bank.last_blockhash();
-        vote_tx.partial_sign(&[node_keypair.as_ref()], blockhash);
-        vote_tx.partial_sign(&[authorized_voter_keypair.as_ref()], blockhash);
+
         let _ = cluster_info.send_vote(&vote_tx);
         cluster_info.push_vote(tower, vote_tx);
     }
