@@ -791,7 +791,9 @@ impl JsonRpcRequestProcessor {
         &self,
         start_slot: Slot,
         end_slot: Option<Slot>,
+        commitment: Option<CommitmentConfig>,
     ) -> Result<Vec<Slot>> {
+        let _commitment = commitment.unwrap_or_default();
         let end_slot = min(
             end_slot.unwrap_or(std::u64::MAX),
             self.block_commitment_cache
@@ -845,7 +847,9 @@ impl JsonRpcRequestProcessor {
         &self,
         start_slot: Slot,
         limit: usize,
+        commitment: Option<CommitmentConfig>,
     ) -> Result<Vec<Slot>> {
+        let _commitment = commitment.unwrap_or_default();
         if limit > MAX_GET_CONFIRMED_BLOCKS_RANGE as usize {
             return Err(Error::invalid_params(format!(
                 "Limit too large; max {}",
@@ -2263,7 +2267,8 @@ pub mod rpc_full {
             &self,
             meta: Self::Metadata,
             start_slot: Slot,
-            end_slot: Option<Slot>,
+            config: Option<EndSlotOrCommitment>,
+            commitment: Option<CommitmentConfig>,
         ) -> Result<Vec<Slot>>;
 
         #[rpc(meta, name = "getConfirmedBlocksWithLimit")]
@@ -2272,6 +2277,7 @@ pub mod rpc_full {
             meta: Self::Metadata,
             start_slot: Slot,
             limit: usize,
+            commitment: Option<CommitmentConfig>,
         ) -> Result<Vec<Slot>>;
 
         #[rpc(meta, name = "getConfirmedTransaction")]
@@ -2919,13 +2925,16 @@ pub mod rpc_full {
             &self,
             meta: Self::Metadata,
             start_slot: Slot,
-            end_slot: Option<Slot>,
+            config: Option<EndSlotOrCommitment>,
+            commitment: Option<CommitmentConfig>,
         ) -> Result<Vec<Slot>> {
+            let (end_slot, maybe_commitment) =
+                config.map(|config| config.unzip()).unwrap_or_default();
             debug!(
                 "get_confirmed_blocks rpc request received: {}-{:?}",
                 start_slot, end_slot
             );
-            meta.get_confirmed_blocks(start_slot, end_slot)
+            meta.get_confirmed_blocks(start_slot, end_slot, commitment.or(maybe_commitment))
         }
 
         fn get_confirmed_blocks_with_limit(
@@ -2933,12 +2942,13 @@ pub mod rpc_full {
             meta: Self::Metadata,
             start_slot: Slot,
             limit: usize,
+            commitment: Option<CommitmentConfig>,
         ) -> Result<Vec<Slot>> {
             debug!(
                 "get_confirmed_blocks_with_limit rpc request received: {}-{}",
                 start_slot, limit,
             );
-            meta.get_confirmed_blocks_with_limit(start_slot, limit)
+            meta.get_confirmed_blocks_with_limit(start_slot, limit, commitment)
         }
 
         fn get_block_time(

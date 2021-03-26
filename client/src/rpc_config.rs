@@ -2,7 +2,7 @@ use {
     crate::rpc_filter::RpcFilterType,
     solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig},
     solana_sdk::{
-        clock::Epoch,
+        clock::{Epoch, Slot},
         commitment_config::{CommitmentConfig, CommitmentLevel},
     },
     solana_transaction_status::{TransactionDetails, UiTransactionEncoding},
@@ -172,6 +172,22 @@ impl EncodingConfig for RpcConfirmedTransactionConfig {
         Self {
             encoding: *encoding,
             ..Self::default()
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum EndSlotOrCommitment {
+    EndSlotOnly(Option<Slot>),
+    CommitmentOnly(Option<CommitmentConfig>),
+}
+
+impl EndSlotOrCommitment {
+    pub fn unzip(&self) -> (Option<Slot>, Option<CommitmentConfig>) {
+        match &self {
+            EndSlotOrCommitment::EndSlotOnly(end_slot) => (*end_slot, None),
+            EndSlotOrCommitment::CommitmentOnly(commitment) => (None, *commitment),
         }
     }
 }
