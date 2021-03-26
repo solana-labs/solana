@@ -1455,6 +1455,8 @@ pub mod test {
                 None,
                 &mut self.heaviest_subtree_fork_choice,
                 &mut BTreeMap::new(),
+                &mut true,
+                &mut Vec::new(),
             )
         }
 

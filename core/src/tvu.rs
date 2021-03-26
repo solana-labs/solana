@@ -86,6 +86,7 @@ pub struct TvuConfig {
     pub use_index_hash_calculation: bool,
     pub rocksdb_compaction_interval: Option<u64>,
     pub rocksdb_max_compaction_jitter: Option<u64>,
+    pub wait_for_vote_to_start_leader: bool,
 }
 
 impl Tvu {
@@ -259,6 +260,7 @@ impl Tvu {
             rewards_recorder_sender,
             cache_block_time_sender,
             bank_notification_sender,
+            wait_for_vote_to_start_leader: tvu_config.wait_for_vote_to_start_leader,
         };
 
         let replay_stage = ReplayStage::new(
