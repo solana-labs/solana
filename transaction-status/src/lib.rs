@@ -446,6 +446,19 @@ impl From<EncodedConfirmedBlock> for UiConfirmedBlock {
     }
 }
 
+impl From<UiConfirmedBlock> for EncodedConfirmedBlock {
+    fn from(block: UiConfirmedBlock) -> Self {
+        Self {
+            previous_blockhash: block.previous_blockhash,
+            blockhash: block.blockhash,
+            parent_slot: block.parent_slot,
+            transactions: block.transactions.unwrap_or_default(),
+            rewards: block.rewards.unwrap_or_default(),
+            block_time: block.block_time,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum TransactionDetails {

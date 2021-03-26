@@ -12,10 +12,8 @@ use itertools::Itertools;
 use lru::LruCache;
 use retain_mut::RetainMut;
 use solana_ledger::{
-    blockstore::Blockstore,
-    blockstore_processor::{send_transaction_status_batch, TransactionStatusSender},
-    entry::hash_transactions,
-    leader_schedule_cache::LeaderScheduleCache,
+    blockstore::Blockstore, blockstore_processor::TransactionStatusSender,
+    entry::hash_transactions, leader_schedule_cache::LeaderScheduleCache,
 };
 use solana_measure::{measure::Measure, thread_mem_usage};
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_info};
@@ -768,7 +766,7 @@ impl BankingStage {
             if let Some(transaction_status_sender) = transaction_status_sender {
                 let post_balances = bank.collect_balances(batch);
                 let post_token_balances = collect_token_balances(&bank, &batch, &mut mint_decimals);
-                send_transaction_status_batch(
+                transaction_status_sender.send_transaction_status_batch(
                     bank.clone(),
                     batch.transactions(),
                     batch.iteration_order_vec(),
@@ -777,7 +775,6 @@ impl BankingStage {
                     TransactionTokenBalancesSet::new(pre_token_balances, post_token_balances),
                     inner_instructions,
                     transaction_logs,
-                    transaction_status_sender,
                 );
             }
         }
@@ -2406,6 +2403,7 @@ mod tests {
             let (transaction_status_sender, transaction_status_receiver) = unbounded();
             let transaction_status_service = TransactionStatusService::new(
                 transaction_status_receiver,
+                Arc::new(AtomicU64::default()),
                 blockstore.clone(),
                 &Arc::new(AtomicBool::new(false)),
             );
@@ -2426,7 +2424,7 @@ mod tests {
 
             transaction_status_service.join().unwrap();
 
-            let confirmed_block = blockstore.get_confirmed_block(bank.slot(), false).unwrap();
+            let confirmed_block = blockstore.get_rooted_block(bank.slot(), false).unwrap();
             assert_eq!(confirmed_block.transactions.len(), 3);
 
             for TransactionWithStatusMeta { transaction, meta } in
