@@ -55,7 +55,7 @@ const LANGUAGE_ARG: ArgConstant<'static> = ArgConstant {
 
 const NO_PASSPHRASE_ARG: ArgConstant<'static> = ArgConstant {
     long: "no-bip39-passphrase",
-    name: "no-passphrase",
+    name: "no_passphrase",
     help: "Do not prompt for a BIP39 passphrase",
 };
 
