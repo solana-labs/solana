@@ -53,6 +53,7 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         tpu_coalesce_ms: config.tpu_coalesce_ms,
         validator_exit: Arc::new(RwLock::new(ValidatorExit::default())),
         poh_hashes_per_batch: config.poh_hashes_per_batch,
+        no_wait_for_vote_to_start_leader: config.no_wait_for_vote_to_start_leader,
     }
 }
 

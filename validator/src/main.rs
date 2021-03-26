@@ -1369,6 +1369,14 @@ pub fn main() {
                        supermajority of stake is visible on gossip before starting PoH"),
         )
         .arg(
+            Arg::with_name("no_wait_for_vote_to_start_leader")
+                .hidden(true)
+                .long("no-wait-for-vote-to-start-leader")
+                .help("If the validator starts up with no ledger, it will wait to start block
+                      production until it sees a vote land in a rooted slot. This prevents
+                      double signing. Turn off to risk double signing a block."),
+        )
+        .arg(
             Arg::with_name("hard_forks")
                 .long("hard-fork")
                 .value_name("SLOT")
@@ -1997,6 +2005,7 @@ pub fn main() {
         accounts_db_test_hash_calculation: matches.is_present("accounts_db_test_hash_calculation"),
         accounts_db_use_index_hash_calculation: matches.is_present("accounts_db_index_hashing"),
         tpu_coalesce_ms,
+        no_wait_for_vote_to_start_leader: matches.is_present("no_wait_for_vote_to_start_leader"),
         ..ValidatorConfig::default()
     };
 

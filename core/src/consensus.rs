@@ -1423,6 +1423,8 @@ pub mod test {
                 &AbsRequestSender::default(),
                 None,
                 &mut self.heaviest_subtree_fork_choice,
+                &mut true,
+                &mut Vec::new(),
             )
         }
 
