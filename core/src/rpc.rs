@@ -794,12 +794,14 @@ impl JsonRpcRequestProcessor {
         commitment: Option<CommitmentConfig>,
     ) -> Result<Vec<Slot>> {
         let _commitment = commitment.unwrap_or_default();
+        let highest_confirmed_root = self
+            .block_commitment_cache
+            .read()
+            .unwrap()
+            .highest_confirmed_root();
         let end_slot = min(
             end_slot.unwrap_or_else(|| start_slot.saturating_add(MAX_GET_CONFIRMED_BLOCKS_RANGE)),
-            self.block_commitment_cache
-                .read()
-                .unwrap()
-                .highest_confirmed_root(),
+            highest_confirmed_root,
         );
         if end_slot < start_slot {
             return Ok(vec![]);
@@ -839,7 +841,7 @@ impl JsonRpcRequestProcessor {
             .blockstore
             .rooted_slot_iterator(max(start_slot, lowest_blockstore_slot))
             .map_err(|_| Error::internal_error())?
-            .filter(|&slot| slot <= end_slot)
+            .filter(|&slot| slot <= end_slot && slot <= highest_confirmed_root)
             .collect())
     }
 
@@ -870,11 +872,18 @@ impl JsonRpcRequestProcessor {
             }
         }
 
+        let highest_confirmed_root = self
+            .block_commitment_cache
+            .read()
+            .unwrap()
+            .highest_confirmed_root();
+
         Ok(self
             .blockstore
             .rooted_slot_iterator(max(start_slot, lowest_blockstore_slot))
             .map_err(|_| Error::internal_error())?
             .take(limit)
+            .filter(|&slot| slot <= highest_confirmed_root)
             .collect())
     }
 
