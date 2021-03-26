@@ -62,7 +62,15 @@ pub fn get_packed_len<S: BorshSchema>() -> usize {
 }
 
 /// Deserializes without checking that the entire slice has been consumed
-pub fn try_from_slice_unchecked<T: BorshDeserialize>(data: &[u8]) -> Result<T, Error> {
+///
+/// Normally, `try_from_slice` checks the length of the final slice to ensure
+/// that the deserialization uses up all of the bytes in the slice.
+///
+/// Note that there is a potential issue with this function. Any buffer greater than
+/// or equal to the expected size will properly deserialize. For example, if the
+/// user passes a buffer destined for a different type, the error won't get caught
+/// as easily.
+pub fn try_from_slice_unsized<T: BorshDeserialize>(data: &[u8]) -> Result<T, Error> {
     let mut data_mut = data;
     let result = T::deserialize(&mut data_mut)?;
     Ok(result)
@@ -107,7 +115,7 @@ mod tests {
     }
 
     #[test]
-    fn unchecked_deserialization() {
+    fn unsized_deserialization() {
         let data = vec![
             Child { data: [0u8; 64] },
             Child { data: [1u8; 64] },
@@ -121,16 +129,16 @@ mod tests {
         parent.serialize(&mut bytes).unwrap();
         let deserialized = Parent::try_from_slice(&byte_vec).unwrap();
         assert_eq!(deserialized, parent);
-        let deserialized = try_from_slice_unchecked::<Parent>(&byte_vec).unwrap();
+        let deserialized = try_from_slice_unsized::<Parent>(&byte_vec).unwrap();
         assert_eq!(deserialized, parent);
 
-        // too big, only unchecked works
+        // too big, only unsized works
         let mut byte_vec = vec![0u8; 4 + get_packed_len::<Child>() * 10];
         let mut bytes = byte_vec.as_mut_slice();
         parent.serialize(&mut bytes).unwrap();
         let err = Parent::try_from_slice(&byte_vec).unwrap_err();
         assert_eq!(err.kind(), ErrorKind::InvalidData);
-        let deserialized = try_from_slice_unchecked::<Parent>(&byte_vec).unwrap();
+        let deserialized = try_from_slice_unsized::<Parent>(&byte_vec).unwrap();
         assert_eq!(deserialized, parent);
     }
 
