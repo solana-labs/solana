@@ -7,7 +7,7 @@ source multinode-demo/common.sh
 
 rm -rf config/run/init-completed config/ledger config/snapshot-ledger
 
-timeout 120 ./run.sh &
+SOLANA_RUN_SH_VALIDATOR_ARGS="--snapshot-interval-slots 200" timeout 120 ./run.sh &
 pid=$!
 
 attempts=20
@@ -16,6 +16,8 @@ while [[ ! -f config/run/init-completed ]]; do
   if ((--attempts == 0)); then
      echo "Error: validator failed to boot"
      exit 1
+  else
+    echo "Checking init"
   fi
 done
 
@@ -24,6 +26,7 @@ snapshot_slot=1
 # wait a bit longer than snapshot_slot
 while [[ $($solana_cli --url http://localhost:8899 slot --commitment recent) -le $((snapshot_slot + 1)) ]]; do
   sleep 1
+  echo "Checking slot"
 done
 
 $solana_validator --ledger config/ledger exit --force || true
