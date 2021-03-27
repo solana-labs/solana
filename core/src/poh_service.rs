@@ -267,34 +267,26 @@ impl PohService {
                         return true;
                     }
                     // check to see if a record request has been sent
-                    let get_again = record_receiver.try_recv();
-                    match get_again {
-                        Ok(record) => {
-                            // remember the record we just received as the next record to occur
-                            *next_record = Some(record);
-                            break;
-                        }
-                        Err(_) => (),
+                    if let Ok(record) = record_receiver.try_recv() {
+                        // remember the record we just received as the next record to occur
+                        *next_record = Some(record);
+                        break;
                     }
-
-                    // check to see if we need to busy wait to catch up to ideal
+                    // check to see if we need to wait to catch up to ideal
                     let wait_start = Instant::now();
                     if ideal_time <= wait_start {
+                        // no, keep hashing. We still hold the lock.
                         continue;
                     }
 
-                    // yes, busy wait, polling for new records and after dropping poh lock
+                    // busy wait, polling for new records and after dropping poh lock (reset can occur, for example)
                     drop(poh_l);
                     while ideal_time > Instant::now() {
                         // check to see if a record request has been sent
-                        let get_again = record_receiver.try_recv();
-                        match get_again {
-                            Ok(record) => {
-                                // remember the record we just received as the next record to occur
-                                *next_record = Some(record);
-                                break;
-                            }
-                            Err(_) => (),
+                        if let Ok(record) = record_receiver.try_recv() {
+                            // remember the record we just received as the next record to occur
+                            *next_record = Some(record);
+                            break;
                         }
                     }
                     timing.total_sleep_us += wait_start.elapsed().as_micros() as u64;
