@@ -108,6 +108,10 @@ impl CommitmentConfig {
         )
     }
 
+    pub fn is_at_least_confirmed(&self) -> bool {
+        self.is_confirmed() || self.is_finalized()
+    }
+
     pub fn use_deprecated_commitment(commitment: CommitmentConfig) -> Self {
         match commitment.commitment {
             CommitmentLevel::Finalized => CommitmentConfig::max(),

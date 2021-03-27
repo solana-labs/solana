@@ -69,7 +69,7 @@ use std::{
     net::SocketAddr,
     ops::Deref,
     path::{Path, PathBuf},
-    sync::atomic::{AtomicBool, Ordering},
+    sync::atomic::{AtomicBool, AtomicU64, Ordering},
     sync::mpsc::Receiver,
     sync::{Arc, Mutex, RwLock},
     thread::sleep,
@@ -206,6 +206,7 @@ impl ValidatorExit {
 struct TransactionHistoryServices {
     transaction_status_sender: Option<TransactionStatusSender>,
     transaction_status_service: Option<TransactionStatusService>,
+    max_complete_transaction_status_slot: Arc<AtomicU64>,
     rewards_recorder_sender: Option<RewardsRecorderSender>,
     rewards_recorder_service: Option<RewardsRecorderService>,
     cache_block_time_sender: Option<CacheBlockTimeSender>,
@@ -339,6 +340,7 @@ impl Validator {
             TransactionHistoryServices {
                 transaction_status_sender,
                 transaction_status_service,
+                max_complete_transaction_status_slot,
                 rewards_recorder_sender,
                 rewards_recorder_service,
                 cache_block_time_sender,
@@ -494,6 +496,7 @@ impl Validator {
                         config.send_transaction_leader_forward_count,
                         max_slots.clone(),
                         leader_schedule_cache.clone(),
+                        max_complete_transaction_status_slot,
                     ),
                     pubsub_service: PubSubService::new(
                         config.pubsub_config.clone(),
@@ -1186,6 +1189,7 @@ fn initialize_rpc_transaction_history_services(
     exit: &Arc<AtomicBool>,
     enable_cpi_and_log_storage: bool,
 ) -> TransactionHistoryServices {
+    let max_complete_transaction_status_slot = Arc::new(AtomicU64::new(blockstore.max_root()));
     let (transaction_status_sender, transaction_status_receiver) = unbounded();
     let transaction_status_sender = Some(TransactionStatusSender {
         sender: transaction_status_sender,
@@ -1193,6 +1197,7 @@ fn initialize_rpc_transaction_history_services(
     });
     let transaction_status_service = Some(TransactionStatusService::new(
         transaction_status_receiver,
+        max_complete_transaction_status_slot.clone(),
         blockstore.clone(),
         exit,
     ));
@@ -1215,6 +1220,7 @@ fn initialize_rpc_transaction_history_services(
     TransactionHistoryServices {
         transaction_status_sender,
         transaction_status_service,
+        max_complete_transaction_status_slot,
         rewards_recorder_sender,
         rewards_recorder_service,
         cache_block_time_sender,

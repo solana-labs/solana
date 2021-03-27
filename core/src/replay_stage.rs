@@ -1400,6 +1400,9 @@ impl ReplayStage {
                     );
                     did_complete_bank = true;
                     info!("bank frozen: {}", bank.slot());
+                    if let Some(transaction_status_sender) = transaction_status_sender.clone() {
+                        transaction_status_sender.send_transaction_status_freeze_message(&bank);
+                    }
                     bank.freeze();
                     heaviest_subtree_fork_choice
                         .add_new_leaf_slot(bank.slot(), Some(bank.parent_slot()));
@@ -2063,7 +2066,7 @@ pub(crate) mod tests {
     use std::{
         fs::remove_dir_all,
         iter,
-        sync::{Arc, RwLock},
+        sync::{atomic::AtomicU64, Arc, RwLock},
     };
     use trees::tr;
 
@@ -2713,6 +2716,7 @@ pub(crate) mod tests {
         previous_slot: Slot,
         bank: Arc<Bank>,
         blockstore: Arc<Blockstore>,
+        max_complete_transaction_status_slot: Arc<AtomicU64>,
     ) -> Vec<Signature> {
         let mint_keypair = keypairs[0];
         let keypair1 = keypairs[1];
@@ -2746,12 +2750,13 @@ pub(crate) mod tests {
         let (replay_vote_sender, _replay_vote_receiver) = unbounded();
         let transaction_status_service = TransactionStatusService::new(
             transaction_status_receiver,
+            max_complete_transaction_status_slot,
             blockstore,
             &Arc::new(AtomicBool::new(false)),
         );
 
         // Check that process_entries successfully writes can_commit transactions statuses, and
-        // that they are matched properly by get_confirmed_block
+        // that they are matched properly by get_rooted_block
         let _result = blockstore_processor::process_entries(
             &bank,
             &entries,
@@ -2798,9 +2803,10 @@ pub(crate) mod tests {
                 bank0.slot(),
                 bank1,
                 blockstore.clone(),
+                Arc::new(AtomicU64::default()),
             );
 
-            let confirmed_block = blockstore.get_confirmed_block(slot, false).unwrap();
+            let confirmed_block = blockstore.get_rooted_block(slot, false).unwrap();
             assert_eq!(confirmed_block.transactions.len(), 3);
 
             for TransactionWithStatusMeta { transaction, meta } in
