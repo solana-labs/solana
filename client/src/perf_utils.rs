@@ -1,12 +1,14 @@
-use log::*;
-use solana_sdk::{client::Client, commitment_config::CommitmentConfig, timing::duration_as_s};
-use std::{
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, RwLock,
+use {
+    log::*,
+    solana_sdk::{client::Client, commitment_config::CommitmentConfig, timing::duration_as_s},
+    std::{
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc, RwLock,
+        },
+        thread::sleep,
+        time::{Duration, Instant},
     },
-    thread::sleep,
-    time::{Duration, Instant},
 };
 
 #[derive(Default)]

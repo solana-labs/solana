@@ -1,7 +1,9 @@
-use crate::{rpc_config::RpcLargestAccountsFilter, rpc_response::RpcAccountBalance};
-use std::{
-    collections::HashMap,
-    time::{Duration, SystemTime},
+use {
+    crate::{rpc_config::RpcLargestAccountsFilter, rpc_response::RpcAccountBalance},
+    std::{
+        collections::HashMap,
+        time::{Duration, SystemTime},
+    },
 };
 
 #[derive(Debug, Clone)]
