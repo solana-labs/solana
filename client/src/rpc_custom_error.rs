@@ -1,8 +1,10 @@
 //! Implementation defined RPC server errors
 
-use crate::rpc_response::RpcSimulateTransactionResult;
-use jsonrpc_core::{Error, ErrorCode};
-use solana_sdk::clock::Slot;
+use {
+    crate::rpc_response::RpcSimulateTransactionResult,
+    jsonrpc_core::{Error, ErrorCode},
+    solana_sdk::clock::Slot,
+};
 
 pub const JSON_RPC_SERVER_ERROR_BLOCK_CLEANED_UP: i64 = -32001;
 pub const JSON_RPC_SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE: i64 = -32002;
