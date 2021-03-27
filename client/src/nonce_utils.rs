@@ -1,14 +1,16 @@
-use crate::rpc_client::RpcClient;
-use solana_sdk::{
-    account::{Account, ReadableAccount},
-    account_utils::StateMut,
-    commitment_config::CommitmentConfig,
-    nonce::{
-        state::{Data, Versions},
-        State,
+use {
+    crate::rpc_client::RpcClient,
+    solana_sdk::{
+        account::{Account, ReadableAccount},
+        account_utils::StateMut,
+        commitment_config::CommitmentConfig,
+        nonce::{
+            state::{Data, Versions},
+            State,
+        },
+        pubkey::Pubkey,
+        system_program,
     },
-    pubkey::Pubkey,
-    system_program,
 };
 
 #[derive(Debug, thiserror::Error, PartialEq)]

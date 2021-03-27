@@ -1,13 +1,15 @@
-use crate::client_error;
-use solana_account_decoder::{parse_token::UiTokenAmount, UiAccount};
-use solana_sdk::{
-    clock::{Epoch, Slot, UnixTimestamp},
-    fee_calculator::{FeeCalculator, FeeRateGovernor},
-    inflation::Inflation,
-    transaction::{Result, TransactionError},
+use {
+    crate::client_error,
+    solana_account_decoder::{parse_token::UiTokenAmount, UiAccount},
+    solana_sdk::{
+        clock::{Epoch, Slot, UnixTimestamp},
+        fee_calculator::{FeeCalculator, FeeRateGovernor},
+        inflation::Inflation,
+        transaction::{Result, TransactionError},
+    },
+    solana_transaction_status::ConfirmedTransactionStatusWithSignature,
+    std::{collections::HashMap, fmt, net::SocketAddr},
 };
-use solana_transaction_status::ConfirmedTransactionStatusWithSignature;
-use std::{collections::HashMap, fmt, net::SocketAddr};
 
 pub type RpcResult<T> = client_error::Result<Response<T>>;
 

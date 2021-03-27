@@ -1,27 +1,31 @@
-use crate::{
-    rpc_config::{RpcSignatureSubscribeConfig, RpcTransactionLogsConfig, RpcTransactionLogsFilter},
-    rpc_response::{Response as RpcResponse, RpcLogsResponse, RpcSignatureResult, SlotInfo},
-};
-use log::*;
-use serde::de::DeserializeOwned;
-use serde_json::{
-    json,
-    value::Value::{Number, Object},
-    Map, Value,
-};
-use solana_sdk::signature::Signature;
-use std::{
-    marker::PhantomData,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        mpsc::{channel, Receiver},
-        Arc, RwLock,
+use {
+    crate::{
+        rpc_config::{
+            RpcSignatureSubscribeConfig, RpcTransactionLogsConfig, RpcTransactionLogsFilter,
+        },
+        rpc_response::{Response as RpcResponse, RpcLogsResponse, RpcSignatureResult, SlotInfo},
     },
-    thread::JoinHandle,
+    log::*,
+    serde::de::DeserializeOwned,
+    serde_json::{
+        json,
+        value::Value::{Number, Object},
+        Map, Value,
+    },
+    solana_sdk::signature::Signature,
+    std::{
+        marker::PhantomData,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            mpsc::{channel, Receiver},
+            Arc, RwLock,
+        },
+        thread::JoinHandle,
+    },
+    thiserror::Error,
+    tungstenite::{client::AutoStream, connect, Message, WebSocket},
+    url::{ParseError, Url},
 };
-use thiserror::Error;
-use tungstenite::{client::AutoStream, connect, Message, WebSocket};
-use url::{ParseError, Url};
 
 #[derive(Debug, Error)]
 pub enum PubsubClientError {
