@@ -135,6 +135,8 @@ pub struct RpcConfirmedBlockConfig {
     pub encoding: Option<UiTransactionEncoding>,
     pub transaction_details: Option<TransactionDetails>,
     pub rewards: Option<bool>,
+    #[serde(flatten)]
+    pub commitment: Option<CommitmentConfig>,
 }
 
 impl EncodingConfig for RpcConfirmedBlockConfig {
@@ -159,12 +161,15 @@ impl RpcConfirmedBlockConfig {
 #[serde(rename_all = "camelCase")]
 pub struct RpcConfirmedTransactionConfig {
     pub encoding: Option<UiTransactionEncoding>,
+    #[serde(flatten)]
+    pub commitment: Option<CommitmentConfig>,
 }
 
 impl EncodingConfig for RpcConfirmedTransactionConfig {
     fn new_with_encoding(encoding: &Option<UiTransactionEncoding>) -> Self {
         Self {
             encoding: *encoding,
+            ..Self::default()
         }
     }
 }
