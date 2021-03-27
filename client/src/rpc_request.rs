@@ -1,8 +1,10 @@
-use crate::rpc_response::RpcSimulateTransactionResult;
-use serde_json::{json, Value};
-use solana_sdk::{clock::Slot, pubkey::Pubkey};
-use std::fmt;
-use thiserror::Error;
+use {
+    crate::rpc_response::RpcSimulateTransactionResult,
+    serde_json::{json, Value},
+    solana_sdk::{clock::Slot, pubkey::Pubkey},
+    std::fmt,
+    thiserror::Error,
+};
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum RpcRequest {

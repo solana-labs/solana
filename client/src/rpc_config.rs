@@ -1,10 +1,12 @@
-use crate::rpc_filter::RpcFilterType;
-use solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig};
-use solana_sdk::{
-    clock::Epoch,
-    commitment_config::{CommitmentConfig, CommitmentLevel},
+use {
+    crate::rpc_filter::RpcFilterType,
+    solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig},
+    solana_sdk::{
+        clock::Epoch,
+        commitment_config::{CommitmentConfig, CommitmentLevel},
+    },
+    solana_transaction_status::{TransactionDetails, UiTransactionEncoding},
 };
-use solana_transaction_status::{TransactionDetails, UiTransactionEncoding};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

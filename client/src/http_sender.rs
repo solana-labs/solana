@@ -1,13 +1,15 @@
-use crate::{
-    client_error::Result,
-    rpc_custom_error,
-    rpc_request::{RpcError, RpcRequest, RpcResponseErrorData},
-    rpc_response::RpcSimulateTransactionResult,
-    rpc_sender::RpcSender,
+use {
+    crate::{
+        client_error::Result,
+        rpc_custom_error,
+        rpc_request::{RpcError, RpcRequest, RpcResponseErrorData},
+        rpc_response::RpcSimulateTransactionResult,
+        rpc_sender::RpcSender,
+    },
+    log::*,
+    reqwest::{self, header::CONTENT_TYPE, StatusCode},
+    std::{thread::sleep, time::Duration},
 };
-use log::*;
-use reqwest::{self, header::CONTENT_TYPE, StatusCode};
-use std::{thread::sleep, time::Duration};
 
 pub struct HttpSender {
     client: reqwest::blocking::Client,

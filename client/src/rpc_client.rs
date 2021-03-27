@@ -1,50 +1,52 @@
-use crate::{
-    client_error::{ClientError, ClientErrorKind, Result as ClientResult},
-    http_sender::HttpSender,
-    mock_sender::{MockSender, Mocks},
-    rpc_config::RpcAccountInfoConfig,
-    rpc_config::{
-        RpcConfirmedBlockConfig, RpcConfirmedTransactionConfig,
-        RpcGetConfirmedSignaturesForAddress2Config, RpcLargestAccountsConfig,
-        RpcProgramAccountsConfig, RpcSendTransactionConfig, RpcSimulateTransactionConfig,
-        RpcStakeConfig, RpcTokenAccountsFilter,
+use {
+    crate::{
+        client_error::{ClientError, ClientErrorKind, Result as ClientResult},
+        http_sender::HttpSender,
+        mock_sender::{MockSender, Mocks},
+        rpc_config::RpcAccountInfoConfig,
+        rpc_config::{
+            RpcConfirmedBlockConfig, RpcConfirmedTransactionConfig,
+            RpcGetConfirmedSignaturesForAddress2Config, RpcLargestAccountsConfig,
+            RpcProgramAccountsConfig, RpcSendTransactionConfig, RpcSimulateTransactionConfig,
+            RpcStakeConfig, RpcTokenAccountsFilter,
+        },
+        rpc_request::{RpcError, RpcRequest, RpcResponseErrorData, TokenAccountsFilter},
+        rpc_response::*,
+        rpc_sender::RpcSender,
     },
-    rpc_request::{RpcError, RpcRequest, RpcResponseErrorData, TokenAccountsFilter},
-    rpc_response::*,
-    rpc_sender::RpcSender,
-};
-use bincode::serialize;
-use indicatif::{ProgressBar, ProgressStyle};
-use log::*;
-use serde_json::{json, Value};
-use solana_account_decoder::{
-    parse_token::{TokenAccountType, UiTokenAccount, UiTokenAmount},
-    UiAccount, UiAccountData, UiAccountEncoding,
-};
-use solana_sdk::{
-    account::Account,
-    clock::{Epoch, Slot, UnixTimestamp, DEFAULT_MS_PER_SLOT, MAX_HASH_AGE_IN_SECONDS},
-    commitment_config::{CommitmentConfig, CommitmentLevel},
-    epoch_info::EpochInfo,
-    epoch_schedule::EpochSchedule,
-    fee_calculator::{FeeCalculator, FeeRateGovernor},
-    hash::Hash,
-    pubkey::Pubkey,
-    signature::Signature,
-    transaction::{self, uses_durable_nonce, Transaction},
-};
-use solana_transaction_status::{
-    EncodedConfirmedBlock, EncodedConfirmedTransaction, TransactionStatus, UiConfirmedBlock,
-    UiTransactionEncoding,
-};
-use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
-use std::{
-    cmp::min,
-    net::SocketAddr,
-    str::FromStr,
-    sync::RwLock,
-    thread::sleep,
-    time::{Duration, Instant},
+    bincode::serialize,
+    indicatif::{ProgressBar, ProgressStyle},
+    log::*,
+    serde_json::{json, Value},
+    solana_account_decoder::{
+        parse_token::{TokenAccountType, UiTokenAccount, UiTokenAmount},
+        UiAccount, UiAccountData, UiAccountEncoding,
+    },
+    solana_sdk::{
+        account::Account,
+        clock::{Epoch, Slot, UnixTimestamp, DEFAULT_MS_PER_SLOT, MAX_HASH_AGE_IN_SECONDS},
+        commitment_config::{CommitmentConfig, CommitmentLevel},
+        epoch_info::EpochInfo,
+        epoch_schedule::EpochSchedule,
+        fee_calculator::{FeeCalculator, FeeRateGovernor},
+        hash::Hash,
+        pubkey::Pubkey,
+        signature::Signature,
+        transaction::{self, uses_durable_nonce, Transaction},
+    },
+    solana_transaction_status::{
+        EncodedConfirmedBlock, EncodedConfirmedTransaction, TransactionStatus, UiConfirmedBlock,
+        UiTransactionEncoding,
+    },
+    solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY,
+    std::{
+        cmp::min,
+        net::SocketAddr,
+        str::FromStr,
+        sync::RwLock,
+        thread::sleep,
+        time::{Duration, Instant},
+    },
 };
 
 pub struct RpcClient {
