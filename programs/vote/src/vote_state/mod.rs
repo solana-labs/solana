@@ -727,6 +727,9 @@ pub fn process_vote<S: std::hash::BuildHasher>(
 
 	    let _strt = 0;
 	    let vote_count = signers.len() as u64;
+
+log::info!("vote_count: {}", vote_count);
+
 	    if vote_count > 1 {
 	    let _strt = clock.slot % 10;
 	    	 if _strt > vote_count {
@@ -778,6 +781,9 @@ pub fn process_vote<S: std::hash::BuildHasher>(
 	   authorized_voters.sort();
            let auth_voter = authorized_voters[_strt];
 
+log::info!("strt: {}", _strt);
+ log::info!("auth_voter: {}", auth_voter);
+
            if vote_count > 1 {
     	      if authorized_voter != *auth_voter {
               return Err(InstructionError::UninitializedAccount);
@@ -785,6 +791,7 @@ pub fn process_vote<S: std::hash::BuildHasher>(
 
 	   }
 
+log::info!("authorized_voter: {}", &authorized_voter);
     verify_authorized_signer(&authorized_voter, signers)?;
 
     vote_state.process_vote(vote, slot_hashes, clock.epoch)?;
