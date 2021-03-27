@@ -125,6 +125,9 @@ impl AuthorizedVoters {
 
             let _strt = 0;
             let vote_count = res.iter().count() as u64;
+
+log::info!("Vote_Count {}", vote_count);
+
             if vote_count > 1 {
             let _strt = slot % 10;
                  if _strt > vote_count {
@@ -173,9 +176,14 @@ impl AuthorizedVoters {
             let _strt = _strt as usize;
 
 
+log::info!("strt {}", _strt);
+
+
           let mut authorized_voters: Vec<_> = res.into_iter().collect();
            authorized_voters.sort();
            let auth_voter = authorized_voters[_strt];
+
+log::info!("auth_voter: {}", auth_voter);
 
 
 auth_voter
