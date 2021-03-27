@@ -1220,9 +1220,11 @@ impl ReplayStage {
                 return;
             };
 
+log::info!("authorized_voter_pubkey {}", authorized_voter_pubkey);
+log::info!("authorized_voter_pubkey_string {}", authorized_voter_pubkey.to_string());
 
         let authorized_slot_voter_pubkey = vote_state.get_authorized_slot_voter(bank.epoch(),tower.len() as u64).to_string();
-	
+log::info!("authorized_slot_voter_pubkey {}", authorized_slot_voter_pubkey);	
 	if authorized_slot_voter_pubkey != authorized_voter_pubkey.to_string() {
    		warn!(
                     "Vote account has no authorized voter for slot.  Unable to vote"
