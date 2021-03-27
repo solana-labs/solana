@@ -784,7 +784,7 @@ log::info!("vote_count: {}", vote_count);
 log::info!("strt: {}", _strt);
  log::info!("auth_voter: {}", auth_voter);
 
-           if vote_count > 1 {
+           if vote_count > 0 {
     	      if authorized_voter != *auth_voter {
               return Err(InstructionError::UninitializedAccount);
     	      }
