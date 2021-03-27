@@ -99,9 +99,9 @@ fn visit_byte(elem: u8, val: u16, nth_byte: usize) -> VisitResult {
     }
 
     let shift = u32::try_from(nth_byte)
-        .unwrap_or(u32::MAX)
+        .unwrap_or(std::u32::MAX)
         .saturating_mul(7);
-    let elem_val = elem_val.checked_shl(shift).unwrap_or(u32::MAX);
+    let elem_val = elem_val.checked_shl(shift).unwrap_or(std::u32::MAX);
 
     let new_val = val | elem_val;
     let val = u16::try_from(new_val).map_err(|_| VisitError::Overflow(new_val))?;
