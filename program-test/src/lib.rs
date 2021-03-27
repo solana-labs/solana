@@ -233,18 +233,17 @@ impl program_stubs::SyscallStubs for SyscallStubs {
         let logger = invoke_context.get_logger();
 
         let caller = *invoke_context.get_caller().expect("get_caller");
-        if instruction.accounts.len() + 1 != account_infos.len() {
-            panic!(
-                "Instruction accounts mismatch.  Instruction contains {} accounts, with {}
-                       AccountInfos provided",
-                instruction.accounts.len(),
-                account_infos.len()
-            );
-        }
         let message = Message::new(&[instruction.clone()], None);
         let program_id_index = message.instructions[0].program_id_index as usize;
         let program_id = message.account_keys[program_id_index];
-        let program_account_info = &account_infos[program_id_index];
+        let program_account_info = || {
+            for account_info in account_infos {
+                if account_info.unsigned_key() == &program_id {
+                    return account_info;
+                }
+            }
+            panic!("Program id {} wasn't found in account_infos", program_id);
+        };
         // TODO don't have the caller's keyed_accounts so can't validate writer or signer escalation or deescalation yet
         let caller_privileges = message
             .account_keys
@@ -266,18 +265,19 @@ impl program_stubs::SyscallStubs for SyscallStubs {
         }
         let executables = vec![(
             program_id,
-            Rc::new(RefCell::new(ai_to_a(program_account_info))),
+            Rc::new(RefCell::new(ai_to_a(program_account_info()))),
         )];
 
         // Convert AccountInfos into Accounts
         let mut accounts = vec![];
-        for key in &message.account_keys {
+        'outer: for key in &message.account_keys {
             for account_info in account_infos {
                 if account_info.unsigned_key() == key {
                     accounts.push(Rc::new(RefCell::new(ai_to_a(account_info))));
-                    break;
+                    continue 'outer;
                 }
             }
+            panic!("Account {} wasn't found in account_infos", key);
         }
         assert_eq!(
             accounts.len(),
