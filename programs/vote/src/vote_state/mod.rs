@@ -730,7 +730,7 @@ pub fn process_vote<S: std::hash::BuildHasher>(
 
 log::info!("vote_count: {}", vote_count);
 
-	    if vote_count > 1 {
+	    if vote_count > 0 {
 	    let _strt = clock.slot % 10;
 	    	 if _strt > vote_count {
                  let _strt = _strt/2;
