@@ -1232,6 +1232,10 @@ log::info!("authorized_slot_voter_pubkey {}", authorized_slot_voter_pubkey);
                 return;
 		}
 
+log::info!("authorized_voter0: {}", authorized_voter_keypairs[0].pubkey());
+log::info!("authorized_voter1: {}", authorized_voter_keypairs[1].pubkey());
+
+
 
         let authorized_voter_keypair = match authorized_voter_keypairs
             .iter()

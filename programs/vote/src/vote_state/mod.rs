@@ -778,6 +778,7 @@ log::info!("vote_count: {}", vote_count);
             let _strt = _strt as usize;
 
            let mut authorized_voters: Vec<_> = signers.into_iter().collect();
+
 	   authorized_voters.sort();
            let auth_voter = authorized_voters[_strt];
 
