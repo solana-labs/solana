@@ -28,6 +28,7 @@ function generateConfig(configType, format) {
       generateTypescript
         ? typescript({
             browserslist: false,
+            tsconfig: './tsconfig.d.json',
           })
         : undefined,
       babel({

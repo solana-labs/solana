@@ -104,9 +104,9 @@ export class TransactionInstruction {
 }
 
 /**
- * @internal
+ * Pair of signature and corresponding public key
  */
-type SignaturePubkeyPair = {
+export type SignaturePubkeyPair = {
   signature: Buffer | null;
   publicKey: PublicKey;
 };

@@ -546,6 +546,7 @@ export type SystemInstructionType =
 
 /**
  * An enumeration of valid system InstructionType's
+ * @internal
  */
 export const SYSTEM_INSTRUCTION_LAYOUTS: {
   [type in SystemInstructionType]: InstructionType;

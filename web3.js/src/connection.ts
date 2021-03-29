@@ -1266,7 +1266,7 @@ const ParsedConfirmedTransactionMetaResult = pick({
 /**
  * Expected JSON RPC response for the "getConfirmedBlock" message
  */
-export const GetConfirmedBlockRpcResult = jsonRpcResult(
+const GetConfirmedBlockRpcResult = jsonRpcResult(
   nullable(
     pick({
       blockhash: string(),
