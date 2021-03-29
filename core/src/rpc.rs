@@ -2318,7 +2318,7 @@ pub mod rpc_full {
             &self,
             meta: Self::Metadata,
             start_slot: Slot,
-            config: Option<RpcConfirmedBlocksConfig>,
+            config: Option<RpcConfirmedBlocksConfigWrapper>,
             commitment: Option<CommitmentConfig>,
         ) -> Result<Vec<Slot>>;
 
@@ -2976,7 +2976,7 @@ pub mod rpc_full {
             &self,
             meta: Self::Metadata,
             start_slot: Slot,
-            config: Option<RpcConfirmedBlocksConfig>,
+            config: Option<RpcConfirmedBlocksConfigWrapper>,
             commitment: Option<CommitmentConfig>,
         ) -> Result<Vec<Slot>> {
             let (end_slot, maybe_commitment) =
