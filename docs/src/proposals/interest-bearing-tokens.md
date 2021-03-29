@@ -68,8 +68,9 @@ interest-bearing tokens: although the holding's token amount is constantly
 changing, each token holder's proportion of total supply stays the same.
 
 Therefore, we can satisfy the fungibility requirement for tokens on proportional
-ownership. The token interface stays exactly the same, and we treat the concept
-of "token amount" as the "UI amount" to be displayed by frontends.
+ownership. The token interface stays exactly the same, operating on shares instead
+of tokens, and the concept of "token amount" is actually the "UI amount" to be
+displayed by frontends.
 
 Let's go through an example. Imagine we have an interest-bearing token mint with a total of
 10,000 proportional shares, a 20% annual interest rate, and 1 share is currently
@@ -144,10 +145,12 @@ information.
 
 The SPL token library provides wrappers compatible with any conforming program.
 The wrapper simply checks the program id and deserializes the account data
-as an `spl_token::Holding` or `spl_token::Mint`.
+as an `spl_token::Holding` or `spl_token::Mint`. If a client program requires access
+to data specific to an i-token program, it needs to use that program's serializers.
 
 To convert between amount and UI amount, the wrapper library calls the `AmountToUiAmount`
-instruction on the program, or calls `spl_token::amount_to_ui_amount` inline.
+instruction on the i-token program, or for SPL token accounts, it calls
+`spl_token::amount_to_ui_amount` inline.
 
 For interest-bearing tokens, after deserialization into a `spl_token::Holding`,
 the `amount` field will be in terms of shares, and not token amount, so UIs and
@@ -224,18 +227,18 @@ The validator's RPC server needs to properly handle new token program accounts
 for read-only instructions and pre / post balances.
 
 Performance will be a concern when it comes to calling into the bank to perform
-serialization into an ephemeral account.
+conversions into an ephemeral account.
 
 The BPF compute cost of read-only transactions may need to be lowered specially
-for read-only RPC calls. The interest-bearing token program will probably be one of the more
-cost-intensive computations possible since it is performing present value
+for read-only RPC calls. The interest-bearing token program will probably be one
+of the more cost-intensive computations possible since it is performing present value
 discounting.
 
-#### `getBalance` and `getSupply`
+#### `getTokenAccountBalance` and `getTokenSupply`
 
 Instead of deserializing SPL token accounts and returning the data, the
-RPC server runs read-only transactions on the i-token program. The current SPL
-token program is unaffected.
+RPC server runs read-only transactions on the i-token program to convert between
+amount and UI amount. The current SPL token program is unaffected.
 
 RPC simply uses the same flow as on-chain programs: create an ephemeral account
 then runs the read-only transaction on the bank requested.
@@ -246,7 +249,7 @@ As mentioned earlier in the Token Program Conformance section, the i-token
 `Holding` and `Mint` types must follow the layout for `spl_token::Holding` and
 `spl_token::Mint`, so that RPC can deserialize mints and holdings into the SPL format.
 
-For UI amounts, RPC calls into the `AmountToUiAmount` instructions before and
+For UI amounts, RPC calls the `AmountToUiAmount` instruction before and
 after the transaction to generate `preTokenBalances` and `postTokenBalances`.
 
 #### New Secondary Indexes
@@ -259,8 +262,6 @@ new token programs.  These include:
 * `getTokenAccountsByOwner`
 * `getTokenLargestAccounts`
 * `getTokenSupply`
-
-TODO any others?
 
 #### Vetted Token Programs
 
