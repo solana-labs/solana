@@ -709,7 +709,7 @@ mod tests {
                 &Pubkey::default(),
                 &keyed_accounts,
                 &instruction.data,
-                &mut MockInvokeContext::default(),
+                &mut MockInvokeContext::new(&keyed_accounts),
             )
         }
     }
@@ -924,196 +924,198 @@ mod tests {
                     Lockup::default()
                 ))
                 .unwrap(),
-                &mut MockInvokeContext::default()
+                &mut MockInvokeContext::new(&[])
             ),
             Err(InstructionError::NotEnoughAccountKeys),
         );
 
         // no account for rent
+        let stake_address = Pubkey::default();
+        let stake_account = create_default_stake_account();
+        let keyed_accounts = [KeyedAccount::new(&stake_address, false, &stake_account)];
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &[KeyedAccount::new(
-                    &Pubkey::default(),
-                    false,
-                    &create_default_stake_account(),
-                )],
+                &keyed_accounts,
                 &serialize(&StakeInstruction::Initialize(
                     Authorized::default(),
                     Lockup::default()
                 ))
                 .unwrap(),
-                &mut MockInvokeContext::default()
+                &mut MockInvokeContext::new(&keyed_accounts)
             ),
             Err(InstructionError::NotEnoughAccountKeys),
         );
 
         // rent fails to deserialize
+        let stake_address = Pubkey::default();
+        let stake_account = create_default_stake_account();
+        let rent_address = sysvar::rent::id();
+        let rent_account = create_default_account();
+        let keyed_accounts = [
+            KeyedAccount::new(&stake_address, false, &stake_account),
+            KeyedAccount::new(&rent_address, false, &rent_account),
+        ];
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &[
-                    KeyedAccount::new(&Pubkey::default(), false, &create_default_stake_account()),
-                    KeyedAccount::new(&sysvar::rent::id(), false, &create_default_account())
-                ],
+                &keyed_accounts,
                 &serialize(&StakeInstruction::Initialize(
                     Authorized::default(),
                     Lockup::default()
                 ))
                 .unwrap(),
-                &mut MockInvokeContext::default()
+                &mut MockInvokeContext::new(&keyed_accounts)
             ),
             Err(InstructionError::InvalidArgument),
         );
 
         // fails to deserialize stake state
+        let stake_address = Pubkey::default();
+        let stake_account = create_default_stake_account();
+        let rent_address = sysvar::rent::id();
+        let rent_account = RefCell::new(account::create_account_shared_data_for_test(
+            &Rent::default(),
+        ));
+        let keyed_accounts = [
+            KeyedAccount::new(&stake_address, false, &stake_account),
+            KeyedAccount::new(&rent_address, false, &rent_account),
+        ];
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &[
-                    KeyedAccount::new(&Pubkey::default(), false, &create_default_stake_account()),
-                    KeyedAccount::new(
-                        &sysvar::rent::id(),
-                        false,
-                        &RefCell::new(account::create_account_shared_data_for_test(
-                            &Rent::default()
-                        ))
-                    )
-                ],
+                &keyed_accounts,
                 &serialize(&StakeInstruction::Initialize(
                     Authorized::default(),
                     Lockup::default()
                 ))
                 .unwrap(),
-                &mut MockInvokeContext::default()
+                &mut MockInvokeContext::new(&keyed_accounts)
             ),
             Err(InstructionError::InvalidAccountData),
         );
 
         // gets the first check in delegate, wrong number of accounts
+        let stake_address = Pubkey::default();
+        let stake_account = create_default_stake_account();
+        let keyed_accounts = [KeyedAccount::new(&stake_address, false, &stake_account)];
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &[KeyedAccount::new(
-                    &Pubkey::default(),
-                    false,
-                    &create_default_stake_account()
-                ),],
+                &keyed_accounts,
                 &serialize(&StakeInstruction::DelegateStake).unwrap(),
-                &mut MockInvokeContext::default()
+                &mut MockInvokeContext::new(&keyed_accounts)
             ),
             Err(InstructionError::NotEnoughAccountKeys),
         );
 
         // gets the sub-check for number of args
+        let stake_address = Pubkey::default();
+        let stake_account = create_default_stake_account();
+        let keyed_accounts = [KeyedAccount::new(&stake_address, false, &stake_account)];
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &[KeyedAccount::new(
-                    &Pubkey::default(),
-                    false,
-                    &create_default_stake_account()
-                )],
+                &keyed_accounts,
                 &serialize(&StakeInstruction::DelegateStake).unwrap(),
-                &mut MockInvokeContext::default()
+                &mut MockInvokeContext::new(&keyed_accounts)
             ),
             Err(InstructionError::NotEnoughAccountKeys),
         );
 
         // gets the check non-deserialize-able account in delegate_stake
+        let stake_address = Pubkey::default();
+        let stake_account = create_default_stake_account();
+        let vote_address = Pubkey::default();
         let mut bad_vote_account = create_default_account();
         bad_vote_account.get_mut().owner = solana_vote_program::id();
+        let clock_address = sysvar::clock::id();
+        let clock_account = RefCell::new(account::create_account_shared_data_for_test(
+            &sysvar::clock::Clock::default(),
+        ));
+        let stake_history_address = sysvar::stake_history::id();
+        let stake_history_account = RefCell::new(account::create_account_shared_data_for_test(
+            &sysvar::stake_history::StakeHistory::default(),
+        ));
+        let config_address = config::id();
+        let config_account = RefCell::new(config::create_account(0, &config::Config::default()));
+        let keyed_accounts = [
+            KeyedAccount::new(&stake_address, true, &stake_account),
+            KeyedAccount::new(&vote_address, false, &bad_vote_account),
+            KeyedAccount::new(&clock_address, false, &clock_account),
+            KeyedAccount::new(&stake_history_address, false, &stake_history_account),
+            KeyedAccount::new(&config_address, false, &config_account),
+        ];
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &[
-                    KeyedAccount::new(&Pubkey::default(), true, &create_default_stake_account()),
-                    KeyedAccount::new(&Pubkey::default(), false, &bad_vote_account),
-                    KeyedAccount::new(
-                        &sysvar::clock::id(),
-                        false,
-                        &RefCell::new(account::create_account_shared_data_for_test(
-                            &sysvar::clock::Clock::default(),
-                        ))
-                    ),
-                    KeyedAccount::new(
-                        &sysvar::stake_history::id(),
-                        false,
-                        &RefCell::new(account::create_account_shared_data_for_test(
-                            &sysvar::stake_history::StakeHistory::default(),
-                        ))
-                    ),
-                    KeyedAccount::new(
-                        &config::id(),
-                        false,
-                        &RefCell::new(config::create_account(0, &config::Config::default()))
-                    ),
-                ],
+                &keyed_accounts,
                 &serialize(&StakeInstruction::DelegateStake).unwrap(),
-                &mut MockInvokeContext::default()
+                &mut MockInvokeContext::new(&keyed_accounts)
             ),
             Err(InstructionError::InvalidAccountData),
         );
 
         // Tests 3rd keyed account is of correct type (Clock instead of rewards) in withdraw
+        let stake_address = Pubkey::default();
+        let stake_account = create_default_stake_account();
+        let vote_address = Pubkey::default();
+        let vote_account = create_default_account();
+        let rewards_address = sysvar::rewards::id();
+        let rewards_account = RefCell::new(account::create_account_shared_data_for_test(
+            &sysvar::rewards::Rewards::new(0.0),
+        ));
+        let stake_history_address = sysvar::stake_history::id();
+        let stake_history_account = RefCell::new(account::create_account_shared_data_for_test(
+            &StakeHistory::default(),
+        ));
+        let keyed_accounts = [
+            KeyedAccount::new(&stake_address, false, &stake_account),
+            KeyedAccount::new(&vote_address, false, &vote_account),
+            KeyedAccount::new(&rewards_address, false, &rewards_account),
+            KeyedAccount::new(&stake_history_address, false, &stake_history_account),
+        ];
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &[
-                    KeyedAccount::new(&Pubkey::default(), false, &create_default_stake_account()),
-                    KeyedAccount::new(&Pubkey::default(), false, &create_default_account()),
-                    KeyedAccount::new(
-                        &sysvar::rewards::id(),
-                        false,
-                        &RefCell::new(account::create_account_shared_data_for_test(
-                            &sysvar::rewards::Rewards::new(0.0),
-                        ))
-                    ),
-                    KeyedAccount::new(
-                        &sysvar::stake_history::id(),
-                        false,
-                        &RefCell::new(account::create_account_shared_data_for_test(
-                            &StakeHistory::default(),
-                        ))
-                    ),
-                ],
+                &keyed_accounts,
                 &serialize(&StakeInstruction::Withdraw(42)).unwrap(),
-                &mut MockInvokeContext::default()
+                &mut MockInvokeContext::new(&keyed_accounts)
             ),
             Err(InstructionError::InvalidArgument),
         );
 
         // Tests correct number of accounts are provided in withdraw
+        let stake_address = Pubkey::default();
+        let stake_account = create_default_stake_account();
+        let keyed_accounts = [KeyedAccount::new(&stake_address, false, &stake_account)];
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &[KeyedAccount::new(
-                    &Pubkey::default(),
-                    false,
-                    &create_default_stake_account()
-                )],
+                &keyed_accounts,
                 &serialize(&StakeInstruction::Withdraw(42)).unwrap(),
-                &mut MockInvokeContext::default()
+                &mut MockInvokeContext::new(&keyed_accounts)
             ),
             Err(InstructionError::NotEnoughAccountKeys),
         );
 
         // Tests 2nd keyed account is of correct type (Clock instead of rewards) in deactivate
+        let stake_address = Pubkey::default();
+        let stake_account = create_default_stake_account();
+        let rewards_address = sysvar::rewards::id();
+        let rewards_account = RefCell::new(account::create_account_shared_data_for_test(
+            &sysvar::rewards::Rewards::new(0.0),
+        ));
+        let keyed_accounts = [
+            KeyedAccount::new(&stake_address, false, &stake_account),
+            KeyedAccount::new(&rewards_address, false, &rewards_account),
+        ];
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &[
-                    KeyedAccount::new(&Pubkey::default(), false, &create_default_stake_account()),
-                    KeyedAccount::new(
-                        &sysvar::rewards::id(),
-                        false,
-                        &RefCell::new(account::create_account_shared_data_for_test(
-                            &sysvar::rewards::Rewards::new(0.0),
-                        ))
-                    ),
-                ],
+                &keyed_accounts,
                 &serialize(&StakeInstruction::Deactivate).unwrap(),
-                &mut MockInvokeContext::default()
+                &mut MockInvokeContext::new(&keyed_accounts)
             ),
             Err(InstructionError::InvalidArgument),
         );
@@ -1122,9 +1124,9 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &[],
+                &keyed_accounts,
                 &serialize(&StakeInstruction::Deactivate).unwrap(),
-                &mut MockInvokeContext::default()
+                &mut MockInvokeContext::new(&[])
             ),
             Err(InstructionError::NotEnoughAccountKeys),
         );

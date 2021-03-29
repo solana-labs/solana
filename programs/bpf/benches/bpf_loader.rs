@@ -91,7 +91,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
         .unwrap();
     inner_iter.write_u64::<LittleEndian>(0).unwrap();
     let loader_id = bpf_loader::id();
-    let mut invoke_context = MockInvokeContext::default();
+    let mut invoke_context = MockInvokeContext::new(&[]);
 
     let elf = load_elf("bench_alu").unwrap();
     let mut executable =
@@ -195,8 +195,6 @@ fn bench_program_execute_noop(bencher: &mut Bencher) {
 fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
     const BUDGET: u64 = 200_000;
     let loader_id = bpf_loader::id();
-    let mut invoke_context = MockInvokeContext::default();
-    invoke_context.compute_meter.remaining = BUDGET;
 
     let accounts = [RefCell::new(AccountSharedData::new(
         1,
@@ -210,6 +208,9 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
         .map(|(key, account)| solana_sdk::keyed_account::KeyedAccount::new(&key, false, &account))
         .collect();
     let instruction_data = vec![0u8];
+
+    let mut invoke_context = MockInvokeContext::new(&keyed_accounts);
+    invoke_context.compute_meter.remaining = BUDGET;
 
     // Serialize account data
     let mut serialized = serialize_parameters(

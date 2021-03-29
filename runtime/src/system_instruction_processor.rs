@@ -482,7 +482,7 @@ mod tests {
             owner,
             keyed_accounts,
             instruction_data,
-            &mut MockInvokeContext::default(),
+            &mut MockInvokeContext::new(keyed_accounts),
         )
     }
 
@@ -616,7 +616,7 @@ mod tests {
             Address::create(
                 &to,
                 Some((&from, seed, &owner)),
-                &mut MockInvokeContext::default(),
+                &mut MockInvokeContext::new(&[]),
             ),
             Err(SystemError::AddressWithSeedMismatch.into())
         );
@@ -634,7 +634,7 @@ mod tests {
         let to_address = Address::create(
             &to,
             Some((&from, seed, &new_owner)),
-            &mut MockInvokeContext::default(),
+            &mut MockInvokeContext::new(&[]),
         )
         .unwrap();
 
@@ -647,7 +647,7 @@ mod tests {
                 2,
                 &new_owner,
                 &HashSet::new(),
-                &mut MockInvokeContext::default(),
+                &mut MockInvokeContext::new(&[]),
             ),
             Err(InstructionError::MissingRequiredSignature)
         );
@@ -674,7 +674,7 @@ mod tests {
                 2,
                 &new_owner,
                 &[to].iter().cloned().collect::<HashSet<_>>(),
-                &mut MockInvokeContext::default(),
+                &mut MockInvokeContext::new(&[]),
             ),
             Ok(())
         );
@@ -706,7 +706,7 @@ mod tests {
             2,
             &new_owner,
             &[from, to].iter().cloned().collect::<HashSet<_>>(),
-            &mut MockInvokeContext::default(),
+            &mut MockInvokeContext::new(&[]),
         );
         assert_eq!(result, Err(SystemError::ResultWithNegativeLamports.into()));
     }
@@ -730,7 +730,7 @@ mod tests {
             MAX_PERMITTED_DATA_LENGTH + 1,
             &system_program::id(),
             &signers,
-            &mut MockInvokeContext::default(),
+            &mut MockInvokeContext::new(&[]),
         );
         assert!(result.is_err());
         assert_eq!(
@@ -747,7 +747,7 @@ mod tests {
             MAX_PERMITTED_DATA_LENGTH,
             &system_program::id(),
             &signers,
-            &mut MockInvokeContext::default(),
+            &mut MockInvokeContext::new(&[]),
         );
         assert!(result.is_ok());
         assert_eq!(to_account.borrow().lamports, 50);
@@ -780,7 +780,7 @@ mod tests {
             2,
             &new_owner,
             &signers,
-            &mut MockInvokeContext::default(),
+            &mut MockInvokeContext::new(&[]),
         );
         assert_eq!(result, Err(SystemError::AccountAlreadyInUse.into()));
 
@@ -799,7 +799,7 @@ mod tests {
             2,
             &new_owner,
             &signers,
-            &mut MockInvokeContext::default(),
+            &mut MockInvokeContext::new(&[]),
         );
         assert_eq!(result, Err(SystemError::AccountAlreadyInUse.into()));
         let from_lamports = from_account.borrow().lamports;
@@ -817,7 +817,7 @@ mod tests {
             2,
             &new_owner,
             &signers,
-            &mut MockInvokeContext::default(),
+            &mut MockInvokeContext::new(&[]),
         );
         assert_eq!(result, Err(SystemError::AccountAlreadyInUse.into()));
         assert_eq!(from_lamports, 100);
@@ -845,7 +845,7 @@ mod tests {
             2,
             &new_owner,
             &[owned_key].iter().cloned().collect::<HashSet<_>>(),
-            &mut MockInvokeContext::default(),
+            &mut MockInvokeContext::new(&[]),
         );
         assert_eq!(result, Err(InstructionError::MissingRequiredSignature));
 
@@ -859,7 +859,7 @@ mod tests {
             2,
             &new_owner,
             &[from].iter().cloned().collect::<HashSet<_>>(),
-            &mut MockInvokeContext::default(),
+            &mut MockInvokeContext::new(&[]),
         );
         assert_eq!(result, Err(InstructionError::MissingRequiredSignature));
 
@@ -873,7 +873,7 @@ mod tests {
             2,
             &new_owner,
             &[owned_key].iter().cloned().collect::<HashSet<_>>(),
-            &mut MockInvokeContext::default(),
+            &mut MockInvokeContext::new(&[]),
         );
         assert_eq!(result, Ok(()));
     }
@@ -899,7 +899,7 @@ mod tests {
             2,
             &sysvar::id(),
             &signers,
-            &mut MockInvokeContext::default(),
+            &mut MockInvokeContext::new(&[]),
         );
 
         assert_eq!(result, Err(SystemError::InvalidProgramId.into()));
@@ -933,7 +933,7 @@ mod tests {
             2,
             &new_owner,
             &signers,
-            &mut MockInvokeContext::default(),
+            &mut MockInvokeContext::new(&[]),
         );
         assert_eq!(result, Err(SystemError::AccountAlreadyInUse.into()));
     }
@@ -967,7 +967,7 @@ mod tests {
                 0,
                 &solana_sdk::pubkey::new_rand(),
                 &signers,
-                &mut MockInvokeContext::default(),
+                &mut MockInvokeContext::new(&[]),
             ),
             Err(InstructionError::InvalidArgument),
         );
@@ -986,7 +986,7 @@ mod tests {
                 &pubkey.into(),
                 &new_owner,
                 &HashSet::new(),
-                &mut MockInvokeContext::default(),
+                &mut MockInvokeContext::new(&[]),
             ),
             Err(InstructionError::MissingRequiredSignature)
         );
@@ -997,7 +997,7 @@ mod tests {
                 &pubkey.into(),
                 &system_program::id(),
                 &HashSet::new(),
-                &mut MockInvokeContext::default(),
+                &mut MockInvokeContext::new(&[]),
             ),
             Ok(())
         );
@@ -1026,7 +1026,7 @@ mod tests {
                 &from.into(),
                 &new_owner,
                 &[from].iter().cloned().collect::<HashSet<_>>(),
-                &mut MockInvokeContext::default(),
+                &mut MockInvokeContext::new(&[]),
             ),
             Err(SystemError::InvalidProgramId.into())
         );
@@ -1067,7 +1067,7 @@ mod tests {
             &from_keyed_account,
             &to_keyed_account,
             50,
-            &mut MockInvokeContext::default(),
+            &mut MockInvokeContext::new(&[]),
         )
         .unwrap();
         let from_lamports = from_keyed_account.account.borrow().lamports;
@@ -1081,7 +1081,7 @@ mod tests {
             &from_keyed_account,
             &to_keyed_account,
             100,
-            &mut MockInvokeContext::default(),
+            &mut MockInvokeContext::new(&[]),
         );
         assert_eq!(result, Err(SystemError::ResultWithNegativeLamports.into()));
         assert_eq!(from_keyed_account.account.borrow().lamports, 50);
@@ -1094,7 +1094,7 @@ mod tests {
             &from_keyed_account,
             &to_keyed_account,
             0,
-            &mut MockInvokeContext::default(),
+            &mut MockInvokeContext::new(&[]),
         )
         .is_ok(),);
         assert_eq!(from_keyed_account.account.borrow().lamports, 50);
@@ -1121,7 +1121,7 @@ mod tests {
             &from_owner,
             &to_keyed_account,
             50,
-            &mut MockInvokeContext::default(),
+            &mut MockInvokeContext::new(&[]),
         )
         .unwrap();
         let from_lamports = from_keyed_account.account.borrow().lamports;
@@ -1138,7 +1138,7 @@ mod tests {
             &from_owner,
             &to_keyed_account,
             100,
-            &mut MockInvokeContext::default(),
+            &mut MockInvokeContext::new(&[]),
         );
         assert_eq!(result, Err(SystemError::ResultWithNegativeLamports.into()));
         assert_eq!(from_keyed_account.account.borrow().lamports, 50);
@@ -1153,7 +1153,7 @@ mod tests {
             &from_owner,
             &to_keyed_account,
             0,
-            &mut MockInvokeContext::default(),
+            &mut MockInvokeContext::new(&[]),
         )
         .is_ok(),);
         assert_eq!(from_keyed_account.account.borrow().lamports, 50);
@@ -1184,7 +1184,7 @@ mod tests {
                 &KeyedAccount::new(&from, true, &from_account),
                 &KeyedAccount::new(&to, false, &to_account),
                 50,
-                &mut MockInvokeContext::default(),
+                &mut MockInvokeContext::new(&[]),
             ),
             Err(InstructionError::InvalidArgument),
         )

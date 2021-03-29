@@ -188,7 +188,7 @@ fn run_program(
     let mut data = vec![];
     file.read_to_end(&mut data).unwrap();
     let loader_id = bpf_loader::id();
-    let mut invoke_context = MockInvokeContext::default();
+    let mut invoke_context = MockInvokeContext::new(parameter_accounts);
     let parameter_bytes = serialize_parameters(
         &bpf_loader::id(),
         program_id,

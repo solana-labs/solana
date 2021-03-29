@@ -357,7 +357,7 @@ mod tests {
                 &Pubkey::default(),
                 &[],
                 &[],
-                &mut MockInvokeContext::default()
+                &mut MockInvokeContext::new(&[])
             ),
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -403,7 +403,7 @@ mod tests {
                 &Pubkey::default(),
                 &keyed_accounts,
                 &instruction.data,
-                &mut MockInvokeContext::default(),
+                &mut MockInvokeContext::new(&keyed_accounts),
             )
         }
     }

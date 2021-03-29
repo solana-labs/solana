@@ -289,8 +289,8 @@ pub struct MockInvokeContext<'a> {
     pub invoke_depth: usize,
     pub sysvars: Vec<(Pubkey, Option<Rc<Vec<u8>>>)>,
 }
-impl<'a> Default for MockInvokeContext<'a> {
-    fn default() -> Self {
+impl<'a> MockInvokeContext<'a> {
+    pub fn new(keyed_accounts: &'a [KeyedAccount<'a>]) -> Self {
         MockInvokeContext {
             key: Pubkey::default(),
             logger: MockLogger::default(),
@@ -298,7 +298,7 @@ impl<'a> Default for MockInvokeContext<'a> {
             compute_meter: MockComputeMeter {
                 remaining: std::i64::MAX as u64,
             },
-            keyed_accounts: &[], // TODO [KeyedAccounts to InvokeContext refactoring]
+            keyed_accounts,
             programs: vec![],
             accounts: vec![],
             invoke_depth: 0,
