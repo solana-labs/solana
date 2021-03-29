@@ -2308,12 +2308,6 @@ impl AccountsDb {
         }
     }
 
-    /*
-    fn clear_read_only_cache(&mut self) {
-        self.read_only_accounts_cache = ReadOnlyAccountsCache::default();
-    }
-    */
-
     fn do_load(
         &self,
         ancestors: &Ancestors,
@@ -8604,7 +8598,7 @@ pub mod tests {
         db.add_root(0);
         db.add_root(1);
 
-        assert!(db.read_only_accounts_cache.cache.len() == 0);
+        assert!(db.read_only_accounts_cache.cache.is_empty());
         let account = db
             .load_and_keep_in_read_only_cache(&Ancestors::default(), &account_key)
             .unwrap();
@@ -8616,7 +8610,7 @@ pub mod tests {
         assert_eq!(account.lamports, 1);
         assert!(db.read_only_accounts_cache.cache.len() == 1);
         db.store_cached(1, &[(&account_key, &zero_lamport_account)]);
-        assert!(db.read_only_accounts_cache.cache.len() == 0);
+        assert!(db.read_only_accounts_cache.cache.is_empty());
         let account = db
             .load_and_keep_in_read_only_cache(&Ancestors::default(), &account_key)
             .unwrap();
@@ -8730,7 +8724,7 @@ pub mod tests {
         // entry in slot 1 is blocking cleanup of the zero-lamport account.
         let max_root = None;
         assert_eq!(
-            db.do_load(&Ancestors::default(), &zero_lamport_account_key, max_root)
+            db.do_load(&Ancestors::default(), &zero_lamport_account_key, max_root,)
                 .unwrap()
                 .0
                 .lamports,
