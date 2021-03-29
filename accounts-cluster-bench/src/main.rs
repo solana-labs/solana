@@ -455,14 +455,14 @@ fn main() {
         )
         .arg(
             Arg::with_name("batch_size")
-                .long("batch_size")
+                .long("batch-size")
                 .takes_value(true)
                 .value_name("BYTES")
-                .help("Size of accounts to create"),
+                .help("Number of transactions to send per batch"),
         )
         .arg(
             Arg::with_name("num_instructions")
-                .long("num_instructions")
+                .long("num-instructions")
                 .takes_value(true)
                 .value_name("NUM")
                 .help("Number of accounts to create on each transaction"),
