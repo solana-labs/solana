@@ -659,9 +659,9 @@ export class SystemProgram {
   /**
    * Public key that identifies the System program
    */
-  static get programId(): PublicKey {
-    return new PublicKey('11111111111111111111111111111111');
-  }
+  static programId: PublicKey = new PublicKey(
+    '11111111111111111111111111111111',
+  );
 
   /**
    * Generate a transaction instruction that creates a new account

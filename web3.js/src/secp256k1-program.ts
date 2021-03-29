@@ -79,9 +79,9 @@ export class Secp256k1Program {
   /**
    * Public key that identifies the secp256k1 program
    */
-  static get programId(): PublicKey {
-    return new PublicKey('KeccakSecp256k11111111111111111111111111111');
-  }
+  static programId: PublicKey = new PublicKey(
+    'KeccakSecp256k11111111111111111111111111111',
+  );
 
   /**
    * Construct an Ethereum address from a secp256k1 public key buffer.

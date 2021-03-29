@@ -485,9 +485,9 @@ export class StakeProgram {
   /**
    * Public key that identifies the Stake program
    */
-  static get programId(): PublicKey {
-    return new PublicKey('Stake11111111111111111111111111111111111111');
-  }
+  static programId: PublicKey = new PublicKey(
+    'Stake11111111111111111111111111111111111111',
+  );
 
   /**
    * Max space of a Stake account
@@ -496,9 +496,7 @@ export class StakeProgram {
    * `std::mem::size_of::<StakeState>()`:
    * https://docs.rs/solana-stake-program/1.4.4/solana_stake_program/stake_state/enum.StakeState.html
    */
-  static get space(): number {
-    return 200;
-  }
+  static space: number = 200;
 
   /**
    * Generate an Initialize instruction to add to a Stake Create transaction
