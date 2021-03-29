@@ -6,33 +6,33 @@ use serde::Serialize;
 use solana_sdk::{
     clock::{Slot, MAX_RECENT_BLOCKHASHES},
     hash::Hash,
-    signature::Signature,
 };
 use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
+    marker::PhantomData,
     sync::{Arc, Mutex},
 };
 
 pub const MAX_CACHE_ENTRIES: usize = MAX_RECENT_BLOCKHASHES;
-const CACHED_SIGNATURE_SIZE: usize = 20;
+const CACHED_KEY_SIZE: usize = 20;
 
 // Store forks in a single chunk of memory to avoid another lookup.
 pub type ForkStatus<T> = Vec<(Slot, T)>;
-type SignatureSlice = [u8; CACHED_SIGNATURE_SIZE];
-type SignatureMap<T> = HashMap<SignatureSlice, ForkStatus<T>>;
-// Map of Hash and signature status
-pub type SignatureStatus<T> = Arc<Mutex<HashMap<Hash, (usize, Vec<(SignatureSlice, T)>)>>>;
+type KeySlice = [u8; CACHED_KEY_SIZE];
+type KeyMap<T> = HashMap<KeySlice, ForkStatus<T>>;
+// Map of Hash and status
+pub type Status<T> = Arc<Mutex<HashMap<Hash, (usize, Vec<(KeySlice, T)>)>>>;
 // A Map of hash + the highest fork it's been observed on along with
-// the signature offset and a Map of the signature slice + Fork status for that signature
-type StatusMap<T> = HashMap<Hash, (Slot, usize, SignatureMap<T>)>;
+// the key offset and a Map of the key slice + Fork status for that key
+type KeyStatusMap<T> = HashMap<Hash, (Slot, usize, KeyMap<T>)>;
 
-// A map of signatures recorded in each fork; used to serialize for snapshots easily.
+// A map of keys recorded in each fork; used to serialize for snapshots easily.
 // Doesn't store a `SlotDelta` in it because the bool `root` is usually set much later
-type SlotDeltaMap<T> = HashMap<Slot, SignatureStatus<T>>;
+type SlotDeltaMap<T> = HashMap<Slot, Status<T>>;
 
-// The signature statuses added during a slot, can be used to build on top of a status cache or to
+// The statuses added during a slot, can be used to build on top of a status cache or to
 // construct a new one. Usually derived from a status cache's `SlotDeltaMap`
-pub type SlotDelta<T> = (Slot, bool, SignatureStatus<T>);
+pub type SlotDelta<T> = (Slot, bool, Status<T>);
 
 #[derive(Debug, PartialEq)]
 pub struct SignatureConfirmationStatus<T> {
@@ -42,74 +42,81 @@ pub struct SignatureConfirmationStatus<T> {
 }
 
 #[derive(Clone, Debug, AbiExample)]
-pub struct StatusCache<T: Serialize + Clone> {
-    cache: StatusMap<T>,
+pub struct StatusCache<K, T: Serialize + Clone> {
+    cache: KeyStatusMap<T>,
     roots: HashSet<Slot>,
-    /// all signatures seen during a fork/slot
+    /// all keys seen during a fork/slot
     slot_deltas: SlotDeltaMap<T>,
+    phantom: PhantomData<K>,
 }
 
-impl<T: Serialize + Clone> Default for StatusCache<T> {
+impl<K, T: Serialize + Clone> Default for StatusCache<K, T> {
     fn default() -> Self {
         Self {
             cache: HashMap::default(),
             // 0 is always a root
             roots: [0].iter().cloned().collect(),
             slot_deltas: HashMap::default(),
+            phantom: PhantomData::default(),
         }
     }
 }
 
-impl<T: Serialize + Clone + PartialEq> PartialEq for StatusCache<T> {
+impl<K: AsRef<[u8]>, T: Serialize + Clone + PartialEq> PartialEq for StatusCache<K, T> {
     fn eq(&self, other: &Self) -> bool {
         self.roots == other.roots
-            && self.cache.iter().all(|(hash, (slot, sig_index, sig_map))| {
-                if let Some((other_slot, other_sig_index, other_sig_map)) = other.cache.get(hash) {
-                    if slot == other_slot && sig_index == other_sig_index {
-                        return sig_map.iter().all(|(slice, fork_map)| {
-                            if let Some(other_fork_map) = other_sig_map.get(slice) {
-                                // all this work just to compare the highest forks in the fork map
-                                // per signature
-                                return fork_map.last() == other_fork_map.last();
-                            }
-                            false
-                        });
+            && self
+                .cache
+                .iter()
+                .all(|(hash, (slot, key_index, hash_map))| {
+                    if let Some((other_slot, other_key_index, other_hash_map)) =
+                        other.cache.get(hash)
+                    {
+                        if slot == other_slot && key_index == other_key_index {
+                            return hash_map.iter().all(|(slice, fork_map)| {
+                                if let Some(other_fork_map) = other_hash_map.get(slice) {
+                                    // all this work just to compare the highest forks in the fork map
+                                    // per entry
+                                    return fork_map.last() == other_fork_map.last();
+                                }
+                                false
+                            });
+                        }
                     }
-                }
-                false
-            })
+                    false
+                })
     }
 }
 
-impl<T: Serialize + Clone> StatusCache<T> {
-    pub fn clear_slot_signatures(&mut self, slot: Slot) {
+impl<K: AsRef<[u8]>, T: Serialize + Clone> StatusCache<K, T> {
+    pub fn clear_slot_entries(&mut self, slot: Slot) {
         let slot_deltas = self.slot_deltas.remove(&slot);
         if let Some(slot_deltas) = slot_deltas {
             let slot_deltas = slot_deltas.lock().unwrap();
-            for (blockhash, (_, signature_list)) in slot_deltas.iter() {
+            for (blockhash, (_, key_list)) in slot_deltas.iter() {
                 // Any blockhash that exists in self.slot_deltas must also exist
                 // in self.cache, because in self.purge_roots(), when an entry
                 // (b, (max_slot, _, _)) is removed from self.cache, this implies
                 // all entries in self.slot_deltas < max_slot are also removed
                 if let Entry::Occupied(mut o_blockhash_entries) = self.cache.entry(*blockhash) {
-                    let (_, _, all_sig_maps) = o_blockhash_entries.get_mut();
+                    let (_, _, all_hash_maps) = o_blockhash_entries.get_mut();
 
-                    for (sig_slice, _) in signature_list {
-                        if let Entry::Occupied(mut o_sig_list) = all_sig_maps.entry(*sig_slice) {
-                            let sig_list = o_sig_list.get_mut();
-                            sig_list.retain(|(updated_slot, _)| *updated_slot != slot);
-                            if sig_list.is_empty() {
-                                o_sig_list.remove_entry();
+                    for (key_slice, _) in key_list {
+                        if let Entry::Occupied(mut o_key_list) = all_hash_maps.entry(*key_slice) {
+                            let key_list = o_key_list.get_mut();
+                            key_list.retain(|(updated_slot, _)| *updated_slot != slot);
+                            if key_list.is_empty() {
+                                o_key_list.remove_entry();
                             }
                         } else {
                             panic!(
-                                "Map for signature must exist if signature exists in self.slot_deltas, slot: {}",
+                                "Map for key must exist if key exists in self.slot_deltas, slot: {}",
                                 slot
                             )
                         }
                     }
 
-                    if all_sig_maps.is_empty() {
+                    if all_hash_maps.is_empty() {
                         o_blockhash_entries.remove_entry();
                     }
                 } else {
@@ -122,18 +129,19 @@ impl<T: Serialize + Clone> StatusCache<T> {
         }
     }
 
-    /// Check if the signature from a transaction is in any of the forks in the ancestors set.
-    pub fn get_signature_status(
+    /// Check if the key is in any of the forks in the ancestors set and
+    /// with a certain blockhash.
+    pub fn get_status(
         &self,
-        sig: &Signature,
+        key: &K,
         transaction_blockhash: &Hash,
         ancestors: &Ancestors,
     ) -> Option<(Slot, T)> {
         let map = self.cache.get(transaction_blockhash)?;
-        let (_, index, sigmap) = map;
-        let mut sig_slice = [0u8; CACHED_SIGNATURE_SIZE];
-        sig_slice.clone_from_slice(&sig.as_ref()[*index..*index + CACHED_SIGNATURE_SIZE]);
-        if let Some(stored_forks) = sigmap.get(&sig_slice) {
+        let (_, index, keymap) = map;
+        let mut key_slice = [0u8; CACHED_KEY_SIZE];
+        key_slice.clone_from_slice(&key.as_ref()[*index..*index + CACHED_KEY_SIZE]);
+        if let Some(stored_forks) = keymap.get(&key_slice) {
             let res = stored_forks
                 .iter()
                 .find(|(f, _)| ancestors.get(f).is_some() || self.roots.get(f).is_some())
@@ -145,18 +153,17 @@ impl<T: Serialize + Clone> StatusCache<T> {
         None
     }
 
-    pub fn get_signature_slot(
-        &self,
-        signature: &Signature,
-        ancestors: &Ancestors,
-    ) -> Option<(Slot, T)> {
+    /// Search for a key with any blockhash
+    /// Prefer get_status for performance reasons, it doesn't need
+    /// to search all blockhashes.
+    pub fn get_status_any_blockhash(&self, key: &K, ancestors: &Ancestors) -> Option<(Slot, T)> {
         let mut keys = vec![];
         let mut val: Vec<_> = self.cache.iter().map(|(k, _)| *k).collect();
         keys.append(&mut val);
 
         for blockhash in keys.iter() {
-            trace!("get_signature_slot: trying {}", blockhash);
-            let status = self.get_signature_status(signature, blockhash, ancestors);
+            trace!("get_status_any_blockhash: trying {}", blockhash);
+            let status = self.get_status(key, blockhash, ancestors);
             if status.is_some() {
                 return status;
             }
@@ -165,7 +172,7 @@ impl<T: Serialize + Clone> StatusCache<T> {
     }
 
     /// Add a known root fork.  Roots are always valid ancestors.
-    /// After MAX_CACHE_ENTRIES, roots are removed, and any old signatures are cleared.
+    /// After MAX_CACHE_ENTRIES, roots are removed, and any old keys are cleared.
     pub fn add_root(&mut self, fork: Slot) {
         self.roots.insert(fork);
         self.purge_roots();
@@ -175,25 +182,24 @@ impl<T: Serialize + Clone> StatusCache<T> {
         &self.roots
     }
 
-    /// Insert a new signature for a specific slot.
-    pub fn insert(&mut self, transaction_blockhash: &Hash, sig: &Signature, slot: Slot, res: T) {
-        let sig_index: usize;
-        if let Some(sig_map) = self.cache.get(transaction_blockhash) {
-            sig_index = sig_map.1;
+    /// Insert a new key for a specific slot.
+    pub fn insert(&mut self, transaction_blockhash: &Hash, key: &K, slot: Slot, res: T) {
+        let key_index: usize;
+        if let Some(hash_map) = self.cache.get(transaction_blockhash) {
+            key_index = hash_map.1;
         } else {
-            sig_index =
-                thread_rng().gen_range(0, std::mem::size_of::<Hash>() - CACHED_SIGNATURE_SIZE);
+            key_index = thread_rng().gen_range(0, std::mem::size_of::<K>() - CACHED_KEY_SIZE);
         }
 
-        let sig_map =
+        let hash_map =
             self.cache
                 .entry(*transaction_blockhash)
-                .or_insert((slot, sig_index, HashMap::new()));
-        sig_map.0 = std::cmp::max(slot, sig_map.0);
-        let index = sig_map.1;
-        let mut sig_slice = [0u8; CACHED_SIGNATURE_SIZE];
-        sig_slice.clone_from_slice(&sig.as_ref()[index..index + CACHED_SIGNATURE_SIZE]);
-        self.insert_with_slice(transaction_blockhash, slot, sig_index, sig_slice, res);
+                .or_insert((slot, key_index, HashMap::new()));
+        hash_map.0 = std::cmp::max(slot, hash_map.0);
+        let index = hash_map.1;
+        let mut key_slice = [0u8; CACHED_KEY_SIZE];
+        key_slice.clone_from_slice(&key.as_ref()[index..index + CACHED_KEY_SIZE]);
+        self.insert_with_slice(transaction_blockhash, slot, key_index, key_slice, res);
     }
 
     pub fn purge_roots(&mut self) {
@@ -207,7 +213,7 @@ impl<T: Serialize + Clone> StatusCache<T> {
     }
 
     /// Clear for testing
-    pub fn clear_signatures(&mut self) {
+    pub fn clear(&mut self) {
         for v in self.cache.values_mut() {
             v.2 = HashMap::new();
         }
@@ -217,7 +223,7 @@ impl<T: Serialize + Clone> StatusCache<T> {
             .for_each(|(_, status)| status.lock().unwrap().clear());
     }
 
-    // returns the signature statuses for each slot in the slots provided
+    // returns the statuses for each slot in the slots provided
     pub fn slot_deltas(&self, slots: &[Slot]) -> Vec<SlotDelta<T>> {
         let empty = Arc::new(Mutex::new(HashMap::new()));
         slots
@@ -239,9 +245,9 @@ impl<T: Serialize + Clone> StatusCache<T> {
                 .lock()
                 .unwrap()
                 .iter()
-                .for_each(|(tx_hash, (sig_index, statuses))| {
-                    for (sig_slice, res) in statuses.iter() {
-                        self.insert_with_slice(&tx_hash, *slot, *sig_index, *sig_slice, res.clone())
+                .for_each(|(tx_hash, (key_index, statuses))| {
+                    for (key_slice, res) in statuses.iter() {
+                        self.insert_with_slice(&tx_hash, *slot, *key_index, *key_slice, res.clone())
                     }
                 });
             if *is_root {
@@ -261,33 +267,33 @@ impl<T: Serialize + Clone> StatusCache<T> {
         &mut self,
         transaction_blockhash: &Hash,
         slot: Slot,
-        sig_index: usize,
-        sig_slice: [u8; CACHED_SIGNATURE_SIZE],
+        key_index: usize,
+        key_slice: [u8; CACHED_KEY_SIZE],
         res: T,
     ) {
-        let sig_map =
+        let hash_map =
             self.cache
                 .entry(*transaction_blockhash)
-                .or_insert((slot, sig_index, HashMap::new()));
-        sig_map.0 = std::cmp::max(slot, sig_map.0);
+                .or_insert((slot, key_index, HashMap::new()));
+        hash_map.0 = std::cmp::max(slot, hash_map.0);
 
-        let sig_forks = sig_map.2.entry(sig_slice).or_insert_with(Vec::new);
-        sig_forks.push((slot, res.clone()));
+        let forks = hash_map.2.entry(key_slice).or_insert_with(Vec::new);
+        forks.push((slot, res.clone()));
         let slot_deltas = self.slot_deltas.entry(slot).or_default();
         let mut fork_entry = slot_deltas.lock().unwrap();
         let (_, hash_entry) = fork_entry
             .entry(*transaction_blockhash)
-            .or_insert((sig_index, vec![]));
-        hash_entry.push((sig_slice, res))
+            .or_insert((key_index, vec![]));
+        hash_entry.push((key_slice, res))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::hash::hash;
+    use solana_sdk::{hash::hash, signature::Signature};
 
-    type BankStatusCache = StatusCache<()>;
+    type BankStatusCache = StatusCache<Signature, ()>;
 
     #[test]
     fn test_empty_has_no_sigs() {
@@ -295,10 +301,13 @@ mod tests {
         let blockhash = hash(Hash::default().as_ref());
         let status_cache = BankStatusCache::default();
         assert_eq!(
-            status_cache.get_signature_status(&sig, &blockhash, &HashMap::new()),
+            status_cache.get_status(&sig, &blockhash, &HashMap::new()),
             None
         );
-        assert_eq!(status_cache.get_signature_slot(&sig, &HashMap::new()), None);
+        assert_eq!(
+            status_cache.get_status_any_blockhash(&sig, &HashMap::new()),
+            None
+        );
     }
 
     #[test]
@@ -309,11 +318,11 @@ mod tests {
         let ancestors = vec![(0, 1)].into_iter().collect();
         status_cache.insert(&blockhash, &sig, 0, ());
         assert_eq!(
-            status_cache.get_signature_status(&sig, &blockhash, &ancestors),
+            status_cache.get_status(&sig, &blockhash, &ancestors),
             Some((0, ()))
         );
         assert_eq!(
-            status_cache.get_signature_slot(&sig, &ancestors),
+            status_cache.get_status_any_blockhash(&sig, &ancestors),
             Some((0, ()))
         );
     }
@@ -325,11 +334,11 @@ mod tests {
         let blockhash = hash(Hash::default().as_ref());
         let ancestors = HashMap::new();
         status_cache.insert(&blockhash, &sig, 1, ());
+        assert_eq!(status_cache.get_status(&sig, &blockhash, &ancestors), None);
         assert_eq!(
-            status_cache.get_signature_status(&sig, &blockhash, &ancestors),
+            status_cache.get_status_any_blockhash(&sig, &ancestors),
             None
         );
-        assert_eq!(status_cache.get_signature_slot(&sig, &ancestors), None);
     }
 
     #[test]
@@ -341,7 +350,7 @@ mod tests {
         status_cache.insert(&blockhash, &sig, 0, ());
         status_cache.add_root(0);
         assert_eq!(
-            status_cache.get_signature_status(&sig, &blockhash, &ancestors),
+            status_cache.get_status(&sig, &blockhash, &ancestors),
             Some((0, ()))
         );
     }
@@ -358,7 +367,7 @@ mod tests {
             status_cache.add_root(i as u64);
         }
         assert!(status_cache
-            .get_signature_status(&sig, &blockhash, &ancestors)
+            .get_status(&sig, &blockhash, &ancestors)
             .is_some());
     }
 
@@ -372,10 +381,7 @@ mod tests {
         for i in 0..(MAX_CACHE_ENTRIES + 1) {
             status_cache.add_root(i as u64);
         }
-        assert_eq!(
-            status_cache.get_signature_status(&sig, &blockhash, &ancestors),
-            None
-        );
+        assert_eq!(status_cache.get_status(&sig, &blockhash, &ancestors), None);
     }
 
     #[test]
@@ -386,11 +392,8 @@ mod tests {
         let ancestors = HashMap::new();
         status_cache.insert(&blockhash, &sig, 0, ());
         status_cache.add_root(0);
-        status_cache.clear_signatures();
-        assert_eq!(
-            status_cache.get_signature_status(&sig, &blockhash, &ancestors),
-            None
-        );
+        status_cache.clear();
+        assert_eq!(status_cache.get_status(&sig, &blockhash, &ancestors), None);
     }
 
     #[test]
@@ -400,10 +403,10 @@ mod tests {
         let blockhash = hash(Hash::default().as_ref());
         let ancestors = HashMap::new();
         status_cache.add_root(0);
-        status_cache.clear_signatures();
+        status_cache.clear();
         status_cache.insert(&blockhash, &sig, 0, ());
         assert!(status_cache
-            .get_signature_status(&sig, &blockhash, &ancestors)
+            .get_status(&sig, &blockhash, &ancestors)
             .is_some());
     }
 
@@ -412,11 +415,11 @@ mod tests {
         let sig = Signature::default();
         let mut status_cache = BankStatusCache::default();
         let blockhash = hash(Hash::default().as_ref());
-        status_cache.clear_signatures();
+        status_cache.clear();
         status_cache.insert(&blockhash, &sig, 0, ());
         let (_, index, sig_map) = status_cache.cache.get(&blockhash).unwrap();
-        let mut sig_slice = [0u8; CACHED_SIGNATURE_SIZE];
-        sig_slice.clone_from_slice(&sig.as_ref()[*index..*index + CACHED_SIGNATURE_SIZE]);
+        let mut sig_slice = [0u8; CACHED_KEY_SIZE];
+        sig_slice.clone_from_slice(&sig.as_ref()[*index..*index + CACHED_KEY_SIZE]);
         assert!(sig_map.get(&sig_slice).is_some());
     }
 
@@ -425,7 +428,7 @@ mod tests {
         let sig = Signature::default();
         let mut status_cache = BankStatusCache::default();
         let blockhash = hash(Hash::default().as_ref());
-        status_cache.clear_signatures();
+        status_cache.clear();
         status_cache.insert(&blockhash, &sig, 0, ());
         let slot_deltas = status_cache.slot_deltas(&[0]);
         let cache = StatusCache::from_slot_deltas(&slot_deltas);
@@ -478,17 +481,17 @@ mod tests {
 
         // Clear slot 0 related data
         assert!(status_cache
-            .get_signature_status(&sig, &blockhash, &ancestors0)
+            .get_status(&sig, &blockhash, &ancestors0)
             .is_some());
-        status_cache.clear_slot_signatures(0);
+        status_cache.clear_slot_entries(0);
         assert!(status_cache
-            .get_signature_status(&sig, &blockhash, &ancestors0)
+            .get_status(&sig, &blockhash, &ancestors0)
             .is_none());
         assert!(status_cache
-            .get_signature_status(&sig, &blockhash, &ancestors1)
+            .get_status(&sig, &blockhash, &ancestors1)
             .is_some());
         assert!(status_cache
-            .get_signature_status(&sig, &blockhash2, &ancestors1)
+            .get_status(&sig, &blockhash2, &ancestors1)
             .is_some());
 
         // Check that the slot delta for slot 0 is gone, but slot 1 still
@@ -497,13 +500,13 @@ mod tests {
         assert!(status_cache.slot_deltas.get(&1).is_some());
 
         // Clear slot 1 related data
-        status_cache.clear_slot_signatures(1);
+        status_cache.clear_slot_entries(1);
         assert!(status_cache.slot_deltas.is_empty());
         assert!(status_cache
-            .get_signature_status(&sig, &blockhash, &ancestors1)
+            .get_status(&sig, &blockhash, &ancestors1)
             .is_none());
         assert!(status_cache
-            .get_signature_status(&sig, &blockhash2, &ancestors1)
+            .get_status(&sig, &blockhash2, &ancestors1)
             .is_none());
         assert!(status_cache.cache.is_empty());
     }
