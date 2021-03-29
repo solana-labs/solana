@@ -192,18 +192,7 @@ if [[ ! -e rust-bpf-sysroot-$version.md || ! -e rust-bpf-sysroot ]]; then
   if [[ $exitcode -ne 0 ]]; then
     exit 1
   fi
-<<<<<<< HEAD
   touch rust-bpf-sysroot-$version.md
-=======
-  touch bpf-tools-$version.md
-  set -ex
-  ./bpf-tools/rust/bin/rustc --version
-  ./bpf-tools/rust/bin/rustc --print sysroot
-  set +e
-  rustup toolchain uninstall bpf
-  set -e
-  rustup toolchain link bpf bpf-tools/rust
->>>>>>> abada56ba... Print the rust version when building bpf programs (#16181)
 fi
 
 exit 0
