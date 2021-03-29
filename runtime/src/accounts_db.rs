@@ -7210,13 +7210,11 @@ pub mod tests {
 
         let bank_hashes = db.bank_hashes.read().unwrap();
         let bank_hash = bank_hashes.get(&some_slot).unwrap();
-        /* TODO: temporarily disabled
         assert_eq!(bank_hash.stats.num_updated_accounts, 1);
         assert_eq!(bank_hash.stats.num_removed_accounts, 1);
         assert_eq!(bank_hash.stats.num_lamports_stored, 1);
         assert_eq!(bank_hash.stats.total_data_len, 2 * some_data_len as u64);
         assert_eq!(bank_hash.stats.num_executable_accounts, 1);
-        */
     }
 
     #[test]
@@ -7321,38 +7319,6 @@ pub mod tests {
         );
     }
 
-    impl AccountsDb {
-        fn hash_accounts(
-            &self,
-            slot: Slot,
-            accounts: &[(&Pubkey, &Account)],
-            cluster_type: &ClusterType,
-        ) -> Vec<Hash> {
-            let mut stats = BankHashStats::default();
-            let mut total_data = 0;
-            let hashes: Vec<_> = accounts
-                .iter()
-                .map(|(pubkey, account)| {
-                    total_data += account.data.len();
-                    stats.update(account);
-                    Self::hash_account(slot, account, pubkey, cluster_type)
-                })
-                .collect();
-
-            self.stats
-                .store_total_data
-                .fetch_add(total_data as u64, Ordering::Relaxed);
-
-            let mut bank_hashes = self.bank_hashes.write().unwrap();
-            let slot_info = bank_hashes
-                .entry(slot)
-                .or_insert_with(BankHashInfo::default);
-            slot_info.stats.merge(&stats);
-
-            hashes
-        }
-    }
-
     #[test]
     fn test_verify_bank_hash_bad_account_hash() {
         use BankHashVerificationError::*;
@@ -7366,11 +7332,16 @@ pub mod tests {
         let ancestors = vec![(some_slot, 0)].into_iter().collect();
 
         let accounts = &[(&key, &account)];
-        // update AccountsDb's bank hash but discard real account hashes
-        db.hash_accounts(some_slot, accounts, &ClusterType::Development);
+        // update AccountsDb's bank hash
+        {
+            let mut bank_hashes = db.bank_hashes.write().unwrap();
+            bank_hashes
+                .entry(some_slot)
+                .or_insert_with(BankHashInfo::default);
+        }
         // provide bogus account hashes
         let some_hash = Hash::new(&[0xca; HASH_BYTES]);
-        db.store_accounts_unfrozen(some_slot, accounts, &mut [some_hash], false);
+        db.store_accounts_unfrozen(some_slot, accounts, Some(&[some_hash]), false);
         db.add_root(some_slot);
         assert_matches!(
             db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1),
