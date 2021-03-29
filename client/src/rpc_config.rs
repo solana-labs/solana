@@ -1,8 +1,19 @@
+<<<<<<< HEAD
 use crate::rpc_filter::RpcFilterType;
 use solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig};
 use solana_sdk::{
     clock::Epoch,
     commitment_config::{CommitmentConfig, CommitmentLevel},
+=======
+use {
+    crate::rpc_filter::RpcFilterType,
+    solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig},
+    solana_sdk::{
+        clock::{Epoch, Slot},
+        commitment_config::{CommitmentConfig, CommitmentLevel},
+    },
+    solana_transaction_status::{TransactionDetails, UiTransactionEncoding},
+>>>>>>> 60ed8e289... Rpc: enable getConfirmedBlocks and getConfirmedBlocksWithLimit to return confirmed (not yet finalized) data (#16161)
 };
 use solana_transaction_status::{TransactionDetails, UiTransactionEncoding};
 
@@ -170,6 +181,22 @@ impl EncodingConfig for RpcConfirmedTransactionConfig {
         Self {
             encoding: *encoding,
             ..Self::default()
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum RpcConfirmedBlocksConfig {
+    EndSlotOnly(Option<Slot>),
+    CommitmentOnly(Option<CommitmentConfig>),
+}
+
+impl RpcConfirmedBlocksConfig {
+    pub fn unzip(&self) -> (Option<Slot>, Option<CommitmentConfig>) {
+        match &self {
+            RpcConfirmedBlocksConfig::EndSlotOnly(end_slot) => (*end_slot, None),
+            RpcConfirmedBlocksConfig::CommitmentOnly(commitment) => (None, *commitment),
         }
     }
 }

@@ -811,13 +811,24 @@ impl JsonRpcRequestProcessor {
         &self,
         start_slot: Slot,
         end_slot: Option<Slot>,
+        commitment: Option<CommitmentConfig>,
     ) -> Result<Vec<Slot>> {
+        let commitment = commitment.unwrap_or_default();
+        check_is_at_least_confirmed(commitment)?;
+
+        let highest_confirmed_root = self
+            .block_commitment_cache
+            .read()
+            .unwrap()
+            .highest_confirmed_root();
+
         let end_slot = min(
-            end_slot.unwrap_or(std::u64::MAX),
-            self.block_commitment_cache
-                .read()
-                .unwrap()
-                .highest_confirmed_root(),
+            end_slot.unwrap_or_else(|| start_slot.saturating_add(MAX_GET_CONFIRMED_BLOCKS_RANGE)),
+            if commitment.is_finalized() {
+                highest_confirmed_root
+            } else {
+                self.bank(Some(CommitmentConfig::confirmed())).slot()
+            },
         );
         if end_slot < start_slot {
             return Ok(vec![]);
@@ -832,7 +843,8 @@ impl JsonRpcRequestProcessor {
         let lowest_blockstore_slot = self.blockstore.lowest_slot();
         if start_slot < lowest_blockstore_slot {
             // If the starting slot is lower than what's available in blockstore assume the entire
-            // [start_slot..end_slot] can be fetched from BigTable.
+            // [start_slot..end_slot] can be fetched from BigTable. This range should not ever run
+            // into unfinalized confirmed blocks due to MAX_GET_CONFIRMED_BLOCKS_RANGE
             if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
                 return self
                     .runtime_handle
@@ -853,19 +865,38 @@ impl JsonRpcRequestProcessor {
             }
         }
 
-        Ok(self
+        // Finalized blocks
+        let mut blocks: Vec<_> = self
             .blockstore
             .rooted_slot_iterator(max(start_slot, lowest_blockstore_slot))
             .map_err(|_| Error::internal_error())?
-            .filter(|&slot| slot <= end_slot)
-            .collect())
+            .filter(|&slot| slot <= end_slot && slot <= highest_confirmed_root)
+            .collect();
+        let last_element = blocks.last().cloned().unwrap_or_default();
+
+        // Maybe add confirmed blocks
+        if commitment.is_confirmed() && last_element < end_slot {
+            let confirmed_bank = self.bank(Some(CommitmentConfig::confirmed()));
+            let mut confirmed_blocks = confirmed_bank
+                .status_cache_ancestors()
+                .into_iter()
+                .filter(|&slot| slot <= end_slot && slot > last_element)
+                .collect();
+            blocks.append(&mut confirmed_blocks);
+        }
+
+        Ok(blocks)
     }
 
     pub fn get_confirmed_blocks_with_limit(
         &self,
         start_slot: Slot,
         limit: usize,
+        commitment: Option<CommitmentConfig>,
     ) -> Result<Vec<Slot>> {
+        let commitment = commitment.unwrap_or_default();
+        check_is_at_least_confirmed(commitment)?;
+
         if limit > MAX_GET_CONFIRMED_BLOCKS_RANGE as usize {
             return Err(Error::invalid_params(format!(
                 "Limit too large; max {}",
@@ -877,7 +908,8 @@ impl JsonRpcRequestProcessor {
 
         if start_slot < lowest_blockstore_slot {
             // If the starting slot is lower than what's available in blockstore assume the entire
-            // range can be fetched from BigTable.
+            // range can be fetched from BigTable. This range should not ever run into unfinalized
+            // confirmed blocks due to MAX_GET_CONFIRMED_BLOCKS_RANGE
             if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
                 return Ok(self
                     .runtime_handle
@@ -886,12 +918,35 @@ impl JsonRpcRequestProcessor {
             }
         }
 
-        Ok(self
+        let highest_confirmed_root = self
+            .block_commitment_cache
+            .read()
+            .unwrap()
+            .highest_confirmed_root();
+
+        // Finalized blocks
+        let mut blocks: Vec<_> = self
             .blockstore
             .rooted_slot_iterator(max(start_slot, lowest_blockstore_slot))
             .map_err(|_| Error::internal_error())?
             .take(limit)
-            .collect())
+            .filter(|&slot| slot <= highest_confirmed_root)
+            .collect();
+
+        // Maybe add confirmed blocks
+        if commitment.is_confirmed() && blocks.len() < limit {
+            let last_element = blocks.last().cloned().unwrap_or_default();
+            let confirmed_bank = self.bank(Some(CommitmentConfig::confirmed()));
+            let mut confirmed_blocks = confirmed_bank
+                .status_cache_ancestors()
+                .into_iter()
+                .filter(|&slot| slot > last_element)
+                .collect();
+            blocks.append(&mut confirmed_blocks);
+            blocks.truncate(limit);
+        }
+
+        Ok(blocks)
     }
 
     pub fn get_block_time(&self, slot: Slot) -> Result<Option<UnixTimestamp>> {
@@ -2361,6 +2416,7 @@ impl RpcSol for RpcSolImpl {
         Ok(meta.get_epoch_schedule())
     }
 
+<<<<<<< HEAD
     fn get_balance(
         &self,
         meta: Self::Metadata,
@@ -2371,6 +2427,342 @@ impl RpcSol for RpcSolImpl {
         let pubkey = verify_pubkey(pubkey_str)?;
         Ok(meta.get_balance(&pubkey, commitment))
     }
+=======
+// Full RPC interface that an API node is expected to provide
+// (rpc_minimal should also be provided by an API node)
+pub mod rpc_full {
+    use super::*;
+    #[rpc]
+    pub trait Full {
+        type Metadata;
+
+        // DEPRECATED
+        #[rpc(meta, name = "confirmTransaction")]
+        fn confirm_transaction(
+            &self,
+            meta: Self::Metadata,
+            signature_str: String,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<RpcResponse<bool>>;
+
+        // DEPRECATED
+        #[rpc(meta, name = "getSignatureStatus")]
+        fn get_signature_status(
+            &self,
+            meta: Self::Metadata,
+            signature_str: String,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<Option<transaction::Result<()>>>;
+
+        // DEPRECATED (used by Trust Wallet)
+        #[rpc(meta, name = "getSignatureConfirmation")]
+        fn get_signature_confirmation(
+            &self,
+            meta: Self::Metadata,
+            signature_str: String,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<Option<RpcSignatureConfirmation>>;
+
+        #[rpc(meta, name = "getAccountInfo")]
+        fn get_account_info(
+            &self,
+            meta: Self::Metadata,
+            pubkey_str: String,
+            config: Option<RpcAccountInfoConfig>,
+        ) -> Result<RpcResponse<Option<UiAccount>>>;
+
+        #[rpc(meta, name = "getMultipleAccounts")]
+        fn get_multiple_accounts(
+            &self,
+            meta: Self::Metadata,
+            pubkey_strs: Vec<String>,
+            config: Option<RpcAccountInfoConfig>,
+        ) -> Result<RpcResponse<Vec<Option<UiAccount>>>>;
+
+        #[rpc(meta, name = "getProgramAccounts")]
+        fn get_program_accounts(
+            &self,
+            meta: Self::Metadata,
+            program_id_str: String,
+            config: Option<RpcProgramAccountsConfig>,
+        ) -> Result<Vec<RpcKeyedAccount>>;
+
+        #[rpc(meta, name = "getMinimumBalanceForRentExemption")]
+        fn get_minimum_balance_for_rent_exemption(
+            &self,
+            meta: Self::Metadata,
+            data_len: usize,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<u64>;
+
+        #[rpc(meta, name = "getInflationGovernor")]
+        fn get_inflation_governor(
+            &self,
+            meta: Self::Metadata,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<RpcInflationGovernor>;
+
+        #[rpc(meta, name = "getInflationRate")]
+        fn get_inflation_rate(&self, meta: Self::Metadata) -> Result<RpcInflationRate>;
+
+        #[rpc(meta, name = "getEpochSchedule")]
+        fn get_epoch_schedule(&self, meta: Self::Metadata) -> Result<EpochSchedule>;
+
+        #[rpc(meta, name = "getClusterNodes")]
+        fn get_cluster_nodes(&self, meta: Self::Metadata) -> Result<Vec<RpcContactInfo>>;
+
+        #[rpc(meta, name = "getRecentPerformanceSamples")]
+        fn get_recent_performance_samples(
+            &self,
+            meta: Self::Metadata,
+            limit: Option<usize>,
+        ) -> Result<Vec<RpcPerfSample>>;
+
+        #[rpc(meta, name = "getBlockCommitment")]
+        fn get_block_commitment(
+            &self,
+            meta: Self::Metadata,
+            block: Slot,
+        ) -> Result<RpcBlockCommitment<BlockCommitmentArray>>;
+
+        #[rpc(meta, name = "getGenesisHash")]
+        fn get_genesis_hash(&self, meta: Self::Metadata) -> Result<String>;
+
+        #[rpc(meta, name = "getRecentBlockhash")]
+        fn get_recent_blockhash(
+            &self,
+            meta: Self::Metadata,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<RpcResponse<RpcBlockhashFeeCalculator>>;
+
+        #[rpc(meta, name = "getFees")]
+        fn get_fees(
+            &self,
+            meta: Self::Metadata,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<RpcResponse<RpcFees>>;
+
+        #[rpc(meta, name = "getFeeCalculatorForBlockhash")]
+        fn get_fee_calculator_for_blockhash(
+            &self,
+            meta: Self::Metadata,
+            blockhash: String,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<RpcResponse<Option<RpcFeeCalculator>>>;
+
+        #[rpc(meta, name = "getFeeRateGovernor")]
+        fn get_fee_rate_governor(
+            &self,
+            meta: Self::Metadata,
+        ) -> Result<RpcResponse<RpcFeeRateGovernor>>;
+
+        #[rpc(meta, name = "getSignatureStatuses")]
+        fn get_signature_statuses(
+            &self,
+            meta: Self::Metadata,
+            signature_strs: Vec<String>,
+            config: Option<RpcSignatureStatusConfig>,
+        ) -> Result<RpcResponse<Vec<Option<TransactionStatus>>>>;
+
+        #[rpc(meta, name = "getMaxRetransmitSlot")]
+        fn get_max_retransmit_slot(&self, meta: Self::Metadata) -> Result<Slot>;
+
+        #[rpc(meta, name = "getMaxShredInsertSlot")]
+        fn get_max_shred_insert_slot(&self, meta: Self::Metadata) -> Result<Slot>;
+
+        // DEPRECATED
+        #[rpc(meta, name = "getTotalSupply")]
+        fn get_total_supply(
+            &self,
+            meta: Self::Metadata,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<u64>;
+
+        #[rpc(meta, name = "getLargestAccounts")]
+        fn get_largest_accounts(
+            &self,
+            meta: Self::Metadata,
+            config: Option<RpcLargestAccountsConfig>,
+        ) -> Result<RpcResponse<Vec<RpcAccountBalance>>>;
+
+        #[rpc(meta, name = "getSupply")]
+        fn get_supply(
+            &self,
+            meta: Self::Metadata,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<RpcResponse<RpcSupply>>;
+
+        #[rpc(meta, name = "requestAirdrop")]
+        fn request_airdrop(
+            &self,
+            meta: Self::Metadata,
+            pubkey_str: String,
+            lamports: u64,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<String>;
+
+        #[rpc(meta, name = "sendTransaction")]
+        fn send_transaction(
+            &self,
+            meta: Self::Metadata,
+            data: String,
+            config: Option<RpcSendTransactionConfig>,
+        ) -> Result<String>;
+
+        #[rpc(meta, name = "simulateTransaction")]
+        fn simulate_transaction(
+            &self,
+            meta: Self::Metadata,
+            data: String,
+            config: Option<RpcSimulateTransactionConfig>,
+        ) -> Result<RpcResponse<RpcSimulateTransactionResult>>;
+
+        #[rpc(meta, name = "getSlotLeader")]
+        fn get_slot_leader(
+            &self,
+            meta: Self::Metadata,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<String>;
+
+        #[rpc(meta, name = "getSlotLeaders")]
+        fn get_slot_leaders(
+            &self,
+            meta: Self::Metadata,
+            start_slot: Slot,
+            end_slot: Slot,
+        ) -> Result<Vec<String>>;
+
+        #[rpc(meta, name = "minimumLedgerSlot")]
+        fn minimum_ledger_slot(&self, meta: Self::Metadata) -> Result<Slot>;
+
+        #[rpc(meta, name = "getConfirmedBlock")]
+        fn get_confirmed_block(
+            &self,
+            meta: Self::Metadata,
+            slot: Slot,
+            config: Option<RpcEncodingConfigWrapper<RpcConfirmedBlockConfig>>,
+        ) -> Result<Option<UiConfirmedBlock>>;
+
+        #[rpc(meta, name = "getBlockTime")]
+        fn get_block_time(&self, meta: Self::Metadata, slot: Slot)
+            -> Result<Option<UnixTimestamp>>;
+
+        #[rpc(meta, name = "getConfirmedBlocks")]
+        fn get_confirmed_blocks(
+            &self,
+            meta: Self::Metadata,
+            start_slot: Slot,
+            config: Option<RpcConfirmedBlocksConfig>,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<Vec<Slot>>;
+
+        #[rpc(meta, name = "getConfirmedBlocksWithLimit")]
+        fn get_confirmed_blocks_with_limit(
+            &self,
+            meta: Self::Metadata,
+            start_slot: Slot,
+            limit: usize,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<Vec<Slot>>;
+
+        #[rpc(meta, name = "getConfirmedTransaction")]
+        fn get_confirmed_transaction(
+            &self,
+            meta: Self::Metadata,
+            signature_str: String,
+            config: Option<RpcEncodingConfigWrapper<RpcConfirmedTransactionConfig>>,
+        ) -> Result<Option<EncodedConfirmedTransaction>>;
+
+        #[rpc(meta, name = "getConfirmedSignaturesForAddress")]
+        fn get_confirmed_signatures_for_address(
+            &self,
+            meta: Self::Metadata,
+            pubkey_str: String,
+            start_slot: Slot,
+            end_slot: Slot,
+        ) -> Result<Vec<String>>;
+
+        #[rpc(meta, name = "getConfirmedSignaturesForAddress2")]
+        fn get_confirmed_signatures_for_address2(
+            &self,
+            meta: Self::Metadata,
+            address: String,
+            config: Option<RpcGetConfirmedSignaturesForAddress2Config>,
+        ) -> Result<Vec<RpcConfirmedTransactionStatusWithSignature>>;
+
+        #[rpc(meta, name = "getFirstAvailableBlock")]
+        fn get_first_available_block(&self, meta: Self::Metadata) -> Result<Slot>;
+
+        #[rpc(meta, name = "getStakeActivation")]
+        fn get_stake_activation(
+            &self,
+            meta: Self::Metadata,
+            pubkey_str: String,
+            config: Option<RpcStakeConfig>,
+        ) -> Result<RpcStakeActivation>;
+
+        // SPL Token-specific RPC endpoints
+        // See https://github.com/solana-labs/solana-program-library/releases/tag/token-v2.0.0 for
+        // program details
+
+        #[rpc(meta, name = "getTokenAccountBalance")]
+        fn get_token_account_balance(
+            &self,
+            meta: Self::Metadata,
+            pubkey_str: String,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<RpcResponse<UiTokenAmount>>;
+
+        #[rpc(meta, name = "getTokenSupply")]
+        fn get_token_supply(
+            &self,
+            meta: Self::Metadata,
+            mint_str: String,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<RpcResponse<UiTokenAmount>>;
+
+        #[rpc(meta, name = "getTokenLargestAccounts")]
+        fn get_token_largest_accounts(
+            &self,
+            meta: Self::Metadata,
+            mint_str: String,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<RpcResponse<Vec<RpcTokenAccountBalance>>>;
+
+        #[rpc(meta, name = "getTokenAccountsByOwner")]
+        fn get_token_accounts_by_owner(
+            &self,
+            meta: Self::Metadata,
+            owner_str: String,
+            token_account_filter: RpcTokenAccountsFilter,
+            config: Option<RpcAccountInfoConfig>,
+        ) -> Result<RpcResponse<Vec<RpcKeyedAccount>>>;
+
+        #[rpc(meta, name = "getTokenAccountsByDelegate")]
+        fn get_token_accounts_by_delegate(
+            &self,
+            meta: Self::Metadata,
+            delegate_str: String,
+            token_account_filter: RpcTokenAccountsFilter,
+            config: Option<RpcAccountInfoConfig>,
+        ) -> Result<RpcResponse<Vec<RpcKeyedAccount>>>;
+    }
+
+    pub struct FullImpl;
+    impl Full for FullImpl {
+        type Metadata = JsonRpcRequestProcessor;
+
+        fn confirm_transaction(
+            &self,
+            meta: Self::Metadata,
+            id: String,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<RpcResponse<bool>> {
+            debug!("confirm_transaction rpc request received: {:?}", id);
+            let signature = verify_signature(&id)?;
+            Ok(meta.confirm_transaction(&signature, commitment))
+        }
+>>>>>>> 60ed8e289... Rpc: enable getConfirmedBlocks and getConfirmedBlocksWithLimit to return confirmed (not yet finalized) data (#16161)
 
     fn get_recent_performance_samples(
         &self,
@@ -2891,6 +3283,7 @@ impl RpcSol for RpcSolImpl {
         })
     }
 
+<<<<<<< HEAD
     fn get_version(&self, _: Self::Metadata) -> Result<RpcVersionInfo> {
         debug!("get_version rpc request received");
         let version = solana_version::Version::default();
@@ -2905,6 +3298,37 @@ impl RpcSol for RpcSolImpl {
         meta.set_log_filter(filter);
         Ok(())
     }
+=======
+        fn get_confirmed_blocks(
+            &self,
+            meta: Self::Metadata,
+            start_slot: Slot,
+            config: Option<RpcConfirmedBlocksConfig>,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<Vec<Slot>> {
+            let (end_slot, maybe_commitment) =
+                config.map(|config| config.unzip()).unwrap_or_default();
+            debug!(
+                "get_confirmed_blocks rpc request received: {}-{:?}",
+                start_slot, end_slot
+            );
+            meta.get_confirmed_blocks(start_slot, end_slot, commitment.or(maybe_commitment))
+        }
+
+        fn get_confirmed_blocks_with_limit(
+            &self,
+            meta: Self::Metadata,
+            start_slot: Slot,
+            limit: usize,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<Vec<Slot>> {
+            debug!(
+                "get_confirmed_blocks_with_limit rpc request received: {}-{}",
+                start_slot, limit,
+            );
+            meta.get_confirmed_blocks_with_limit(start_slot, limit, commitment)
+        }
+>>>>>>> 60ed8e289... Rpc: enable getConfirmedBlocks and getConfirmedBlocksWithLimit to return confirmed (not yet finalized) data (#16161)
 
     fn get_confirmed_block(
         &self,
