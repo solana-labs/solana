@@ -21,7 +21,6 @@ use solana_sdk::{
     transaction::Transaction,
 };
 use solana_transaction_status::parse_token::spl_token_v2_0_instruction;
-use spl_token_v2_0::solana_program::pubkey::Pubkey as SplPubkey;
 use std::{
     net::SocketAddr,
     process::exit,
@@ -251,28 +250,38 @@ impl TransactionExecutor {
     }
 }
 
+struct SeedTracker {
+    max_created: Arc<AtomicU64>,
+    _max_closed: Arc<AtomicU64>,
+}
+
 fn make_message(
     keypair: &Keypair,
+    base_keypair: &Keypair,
+    max_created_seed: Arc<AtomicU64>,
     num_instructions: usize,
     balance: u64,
     maybe_space: Option<u64>,
     mint: Option<Pubkey>,
-) -> (Message, Vec<Keypair>) {
+) -> Message {
     let space = maybe_space.unwrap_or_else(|| thread_rng().gen_range(0, 1000));
 
-    let (instructions, new_keypairs): (Vec<_>, Vec<_>) = (0..num_instructions)
+    let instructions: Vec<_> = (0..num_instructions)
         .into_iter()
         .map(|_| {
-            let new_keypair = Keypair::new();
-
             let program_id = if mint.is_some() {
                 inline_spl_token_v2_0::id()
             } else {
                 system_program::id()
             };
-            let mut instructions = vec![system_instruction::create_account(
+            let seed = max_created_seed.fetch_add(1, Ordering::Relaxed).to_string();
+            let to_pubkey =
+                Pubkey::create_with_seed(&base_keypair.pubkey(), &seed, &program_id).unwrap();
+            let mut instructions = vec![system_instruction::create_account_with_seed(
                 &keypair.pubkey(),
-                &new_keypair.pubkey(),
+                &to_pubkey,
+                &base_keypair.pubkey(),
+                &seed,
                 balance,
                 space,
                 &program_id,
@@ -281,23 +290,20 @@ fn make_message(
                 instructions.push(spl_token_v2_0_instruction(
                     spl_token_v2_0::instruction::initialize_account(
                         &spl_token_v2_0::id(),
-                        &spl_token_v2_0_pubkey(&new_keypair.pubkey()),
+                        &spl_token_v2_0_pubkey(&to_pubkey),
                         &spl_token_v2_0_pubkey(&mint_address),
-                        &SplPubkey::new_unique(),
+                        &spl_token_v2_0_pubkey(&base_keypair.pubkey()),
                     )
                     .unwrap(),
                 ));
             }
 
-            (instructions, new_keypair)
+            instructions
         })
-        .unzip();
+        .collect();
     let instructions: Vec<_> = instructions.into_iter().flatten().collect();
 
-    (
-        Message::new(&instructions, Some(&keypair.pubkey())),
-        new_keypairs,
-    )
+    Message::new(&instructions, Some(&keypair.pubkey()))
 }
 
 fn run_accounts_bench(
@@ -334,6 +340,12 @@ fn run_accounts_bench(
             .expect("min balance")
     });
 
+    let base_keypair = Keypair::new();
+    let seed_tracker = SeedTracker {
+        max_created: Arc::new(AtomicU64::default()),
+        _max_closed: Arc::new(AtomicU64::default()),
+    };
+
     info!("Starting balance: {}", balance);
 
     let executor = TransactionExecutor::new(entrypoint_addr);
@@ -344,8 +356,15 @@ fn run_accounts_bench(
             last_blockhash = Instant::now();
         }
 
-        let (message, _keypairs) =
-            make_message(keypair, num_instructions, min_balance, maybe_space, mint);
+        let message = make_message(
+            keypair,
+            &base_keypair,
+            seed_tracker.max_created.clone(),
+            num_instructions,
+            min_balance,
+            maybe_space,
+            mint,
+        );
         let fee = recent_blockhash.1.calculate_fee(&message);
         let lamports = min_balance + fee;
 
@@ -370,21 +389,22 @@ fn run_accounts_bench(
         if sigs_len < batch_size {
             let num_to_create = batch_size - sigs_len;
             info!("creating {} new", num_to_create);
-            let (txs, _new_keypairs): (Vec<_>, Vec<_>) = (0..num_to_create)
+            let txs: Vec<_> = (0..num_to_create)
                 .into_par_iter()
                 .map(|_| {
-                    let (message, new_keypairs) =
-                        make_message(keypair, num_instructions, min_balance, maybe_space, mint);
-                    let signers: Vec<&Keypair> = new_keypairs
-                        .iter()
-                        .chain(std::iter::once(keypair))
-                        .collect();
-                    (
-                        Transaction::new(&signers, message, recent_blockhash.0),
-                        new_keypairs,
-                    )
+                    let message = make_message(
+                        keypair,
+                        &base_keypair,
+                        seed_tracker.max_created.clone(),
+                        num_instructions,
+                        min_balance,
+                        maybe_space,
+                        mint,
+                    );
+                    let signers: Vec<&Keypair> = vec![keypair, &base_keypair];
+                    Transaction::new(&signers, message, recent_blockhash.0)
                 })
-                .unzip();
+                .collect();
             balance = balance.saturating_sub(lamports * txs.len() as u64);
             info!("txs: {}", txs.len());
             let new_ids = executor.push_transactions(txs);
