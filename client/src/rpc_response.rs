@@ -315,7 +315,7 @@ pub struct RpcSupply {
     pub non_circulating_accounts: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum StakeActivationState {
     Activating,
