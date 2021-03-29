@@ -791,13 +791,24 @@ impl JsonRpcRequestProcessor {
         &self,
         start_slot: Slot,
         end_slot: Option<Slot>,
+        commitment: Option<CommitmentConfig>,
     ) -> Result<Vec<Slot>> {
+        let commitment = commitment.unwrap_or_default();
+        check_is_at_least_confirmed(commitment)?;
+
+        let highest_confirmed_root = self
+            .block_commitment_cache
+            .read()
+            .unwrap()
+            .highest_confirmed_root();
+
         let end_slot = min(
-            end_slot.unwrap_or(std::u64::MAX),
-            self.block_commitment_cache
-                .read()
-                .unwrap()
-                .highest_confirmed_root(),
+            end_slot.unwrap_or_else(|| start_slot.saturating_add(MAX_GET_CONFIRMED_BLOCKS_RANGE)),
+            if commitment.is_finalized() {
+                highest_confirmed_root
+            } else {
+                self.bank(Some(CommitmentConfig::confirmed())).slot()
+            },
         );
         if end_slot < start_slot {
             return Ok(vec![]);
@@ -812,7 +823,8 @@ impl JsonRpcRequestProcessor {
         let lowest_blockstore_slot = self.blockstore.lowest_slot();
         if start_slot < lowest_blockstore_slot {
             // If the starting slot is lower than what's available in blockstore assume the entire
-            // [start_slot..end_slot] can be fetched from BigTable.
+            // [start_slot..end_slot] can be fetched from BigTable. This range should not ever run
+            // into unfinalized confirmed blocks due to MAX_GET_CONFIRMED_BLOCKS_RANGE
             if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
                 return self
                     .runtime
@@ -833,19 +845,38 @@ impl JsonRpcRequestProcessor {
             }
         }
 
-        Ok(self
+        // Finalized blocks
+        let mut blocks: Vec<_> = self
             .blockstore
             .rooted_slot_iterator(max(start_slot, lowest_blockstore_slot))
             .map_err(|_| Error::internal_error())?
-            .filter(|&slot| slot <= end_slot)
-            .collect())
+            .filter(|&slot| slot <= end_slot && slot <= highest_confirmed_root)
+            .collect();
+        let last_element = blocks.last().cloned().unwrap_or_default();
+
+        // Maybe add confirmed blocks
+        if commitment.is_confirmed() && last_element < end_slot {
+            let confirmed_bank = self.bank(Some(CommitmentConfig::confirmed()));
+            let mut confirmed_blocks = confirmed_bank
+                .status_cache_ancestors()
+                .into_iter()
+                .filter(|&slot| slot <= end_slot && slot > last_element)
+                .collect();
+            blocks.append(&mut confirmed_blocks);
+        }
+
+        Ok(blocks)
     }
 
     pub fn get_confirmed_blocks_with_limit(
         &self,
         start_slot: Slot,
         limit: usize,
+        commitment: Option<CommitmentConfig>,
     ) -> Result<Vec<Slot>> {
+        let commitment = commitment.unwrap_or_default();
+        check_is_at_least_confirmed(commitment)?;
+
         if limit > MAX_GET_CONFIRMED_BLOCKS_RANGE as usize {
             return Err(Error::invalid_params(format!(
                 "Limit too large; max {}",
@@ -857,7 +888,8 @@ impl JsonRpcRequestProcessor {
 
         if start_slot < lowest_blockstore_slot {
             // If the starting slot is lower than what's available in blockstore assume the entire
-            // range can be fetched from BigTable.
+            // range can be fetched from BigTable. This range should not ever run into unfinalized
+            // confirmed blocks due to MAX_GET_CONFIRMED_BLOCKS_RANGE
             if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
                 return Ok(self
                     .runtime
@@ -866,12 +898,35 @@ impl JsonRpcRequestProcessor {
             }
         }
 
-        Ok(self
+        let highest_confirmed_root = self
+            .block_commitment_cache
+            .read()
+            .unwrap()
+            .highest_confirmed_root();
+
+        // Finalized blocks
+        let mut blocks: Vec<_> = self
             .blockstore
             .rooted_slot_iterator(max(start_slot, lowest_blockstore_slot))
             .map_err(|_| Error::internal_error())?
             .take(limit)
-            .collect())
+            .filter(|&slot| slot <= highest_confirmed_root)
+            .collect();
+
+        // Maybe add confirmed blocks
+        if commitment.is_confirmed() && blocks.len() < limit {
+            let last_element = blocks.last().cloned().unwrap_or_default();
+            let confirmed_bank = self.bank(Some(CommitmentConfig::confirmed()));
+            let mut confirmed_blocks = confirmed_bank
+                .status_cache_ancestors()
+                .into_iter()
+                .filter(|&slot| slot > last_element)
+                .collect();
+            blocks.append(&mut confirmed_blocks);
+            blocks.truncate(limit);
+        }
+
+        Ok(blocks)
     }
 
     pub fn get_block_time(&self, slot: Slot) -> Result<Option<UnixTimestamp>> {
@@ -2263,7 +2318,8 @@ pub mod rpc_full {
             &self,
             meta: Self::Metadata,
             start_slot: Slot,
-            end_slot: Option<Slot>,
+            config: Option<RpcConfirmedBlocksConfig>,
+            commitment: Option<CommitmentConfig>,
         ) -> Result<Vec<Slot>>;
 
         #[rpc(meta, name = "getConfirmedBlocksWithLimit")]
@@ -2272,6 +2328,7 @@ pub mod rpc_full {
             meta: Self::Metadata,
             start_slot: Slot,
             limit: usize,
+            commitment: Option<CommitmentConfig>,
         ) -> Result<Vec<Slot>>;
 
         #[rpc(meta, name = "getConfirmedTransaction")]
@@ -2919,13 +2976,16 @@ pub mod rpc_full {
             &self,
             meta: Self::Metadata,
             start_slot: Slot,
-            end_slot: Option<Slot>,
+            config: Option<RpcConfirmedBlocksConfig>,
+            commitment: Option<CommitmentConfig>,
         ) -> Result<Vec<Slot>> {
+            let (end_slot, maybe_commitment) =
+                config.map(|config| config.unzip()).unwrap_or_default();
             debug!(
                 "get_confirmed_blocks rpc request received: {}-{:?}",
                 start_slot, end_slot
             );
-            meta.get_confirmed_blocks(start_slot, end_slot)
+            meta.get_confirmed_blocks(start_slot, end_slot, commitment.or(maybe_commitment))
         }
 
         fn get_confirmed_blocks_with_limit(
@@ -2933,12 +2993,13 @@ pub mod rpc_full {
             meta: Self::Metadata,
             start_slot: Slot,
             limit: usize,
+            commitment: Option<CommitmentConfig>,
         ) -> Result<Vec<Slot>> {
             debug!(
                 "get_confirmed_blocks_with_limit rpc request received: {}-{}",
                 start_slot, limit,
             );
-            meta.get_confirmed_blocks_with_limit(start_slot, limit)
+            meta.get_confirmed_blocks_with_limit(start_slot, limit, commitment)
         }
 
         fn get_block_time(

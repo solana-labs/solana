@@ -566,6 +566,24 @@ impl RpcClient {
         )
     }
 
+    pub fn get_confirmed_blocks_with_commitment(
+        &self,
+        start_slot: Slot,
+        end_slot: Option<Slot>,
+        commitment_config: CommitmentConfig,
+    ) -> ClientResult<Vec<Slot>> {
+        let json = if end_slot.is_some() {
+            json!([
+                start_slot,
+                end_slot,
+                self.maybe_map_commitment(commitment_config)?
+            ])
+        } else {
+            json!([start_slot, self.maybe_map_commitment(commitment_config)?])
+        };
+        self.send(RpcRequest::GetConfirmedBlocks, json)
+    }
+
     pub fn get_confirmed_blocks_with_limit(
         &self,
         start_slot: Slot,
@@ -574,6 +592,22 @@ impl RpcClient {
         self.send(
             RpcRequest::GetConfirmedBlocksWithLimit,
             json!([start_slot, limit]),
+        )
+    }
+
+    pub fn get_confirmed_blocks_with_limit_and_commitment(
+        &self,
+        start_slot: Slot,
+        limit: usize,
+        commitment_config: CommitmentConfig,
+    ) -> ClientResult<Vec<Slot>> {
+        self.send(
+            RpcRequest::GetConfirmedBlocksWithLimit,
+            json!([
+                start_slot,
+                limit,
+                self.maybe_map_commitment(commitment_config)?
+            ]),
         )
     }
 
