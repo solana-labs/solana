@@ -258,7 +258,7 @@ pub fn deserialize_parameters_aligned(
             start += size_of::<Pubkey>(); // owner
             account.lamports = LittleEndian::read_u64(&buffer[start..]);
             start += size_of::<u64>(); // lamports
-            let pre_len = account.data_as_mut_slice().len();
+            let pre_len = account.data().len();
             let post_len = LittleEndian::read_u64(&buffer[start..]) as usize;
             start += size_of::<u64>(); // data length
             let mut data_end = start + pre_len;
