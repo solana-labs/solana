@@ -111,6 +111,7 @@ if [[ ! -e bpf-tools-$version.md || ! -e bpf-tools ]]; then
   fi
   touch bpf-tools-$version.md
   set -ex
+  ./bpf-tools/rust/bin/rustc --version
   ./bpf-tools/rust/bin/rustc --print sysroot
   set +e
   rustup toolchain uninstall bpf
