@@ -77,9 +77,6 @@ impl Record {
 pub struct TransactionRecorder {
     // shared by all users of PohRecorder
     pub record_sender: Sender<Record>,
-    // unique to this caller
-    pub result_sender: Sender<Result<()>>,
-    pub result_receiver: Receiver<Result<()>>,
 }
 
 impl Clone for TransactionRecorder {
@@ -90,13 +87,9 @@ impl Clone for TransactionRecorder {
 
 impl TransactionRecorder {
     pub fn new(record_sender: Sender<Record>) -> Self {
-        let (result_sender, result_receiver) = channel();
         Self {
             // shared
             record_sender,
-            // unique to this caller
-            result_sender,
-            result_receiver,
         }
     }
     pub fn record(
@@ -105,6 +98,7 @@ impl TransactionRecorder {
         mixin: Hash,
         transactions: Vec<Transaction>,
     ) -> Result<()> {
+        // create a new channel so that there is only 1 sender and when it goes out of scope, the receiver fails
         let (result_sender, result_receiver) = channel();
         let res =
             self.record_sender
