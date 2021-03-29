@@ -178,16 +178,16 @@ impl EncodingConfig for RpcConfirmedTransactionConfig {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum RpcConfirmedBlocksConfig {
+pub enum RpcConfirmedBlocksConfigWrapper {
     EndSlotOnly(Option<Slot>),
     CommitmentOnly(Option<CommitmentConfig>),
 }
 
-impl RpcConfirmedBlocksConfig {
+impl RpcConfirmedBlocksConfigWrapper {
     pub fn unzip(&self) -> (Option<Slot>, Option<CommitmentConfig>) {
         match &self {
-            RpcConfirmedBlocksConfig::EndSlotOnly(end_slot) => (*end_slot, None),
-            RpcConfirmedBlocksConfig::CommitmentOnly(commitment) => (None, *commitment),
+            RpcConfirmedBlocksConfigWrapper::EndSlotOnly(end_slot) => (*end_slot, None),
+            RpcConfirmedBlocksConfigWrapper::CommitmentOnly(commitment) => (None, *commitment),
         }
     }
 }
