@@ -162,8 +162,8 @@ Ledgers are asked to send transactions using a particular token program, they ca
 cross-check the mint or program information using a signature check on the 
 token-list data.
 
-TODO consider adding Rust and C versions of the registry for on-chain programs,
-Ledger, and RPC
+The token-list client libraries can fetch, cache, and query all registry info,
+to be used for simple program and mint validation.
 
 TODO consider detailing the process of including a new program
 
@@ -312,15 +312,15 @@ and token tickers to the Ledger SDK and eliminate the need to store static
 information in the Ledger Solana App.
 
 A wallet or CLI with Ledger integration fetches the token-list and signing
-information. When the user wishes to transfer tokens, the wallet provides
-Ledger with the signed token and program metadata.
+information. When the user wishes to transfer tokens, the wallet first builds an
+on-device token registry by pushing signed entries from the token-list for the subset
+of tokens referenced by the transaction.
 
-The Solana App pushes a signature verification on the metadata using Ledger's
-native transaction model. If the signature verification passes, then the program
-id and token mint information are valid, and the actual transfer proceeds. If
-it fails due to spoofed program or mint data, the whole transaction aborts.
-
-TODO any associated token program considerations?
+Ledger host applications provide token-list entry metadata is pushed to the device
+via a new Ledger APDU command accepting **TBD_DATA_FORMAT** signed by the
+token-list authority, whose public key is embedded in the Ledger app binary. Entries
+whose signature verification passes are stored in a registry on the device that is
+then referenced by a subsequent SIGN_SOLANA_TRANSACTION APDU command.
 
 ## Other New Token Programs
 
