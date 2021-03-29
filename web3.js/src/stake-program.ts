@@ -398,6 +398,7 @@ export type StakeInstructionType =
 
 /**
  * An enumeration of valid stake InstructionType's
+ * @internal
  */
 export const STAKE_INSTRUCTION_LAYOUTS: {
   [type in StakeInstructionType]: InstructionType;
