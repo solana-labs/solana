@@ -37,7 +37,7 @@
     "/src"
   ],
   "scripts": {
-    "build": "cross-env NODE_ENV=production rollup -c; npx flowgen lib/types/index.d.ts -o module.flow.js",
+    "build": "cross-env NODE_ENV=production rollup -c; npm run flowgen",
     "build:browser-test": "rollup -c test/rollup.config.js",
     "build:fixtures": "set -ex; ./test/fixtures/noop-program/build.sh",
     "clean": "rimraf ./coverage ./lib",
@@ -45,6 +45,7 @@
     "dev": "cross-env NODE_ENV=development rollup -c",
     "doc": "set -ex; typedoc",
     "doc:watch": "watch 'npm run doc' . --wait=1 --ignoreDirectoryPattern=/doc/",
+    "flowgen": "./scripts/flowgen.sh",
     "lint": "set -ex; npm run pretty; eslint . --ext .js,.ts",
     "lint:fix": "npm run pretty:fix && eslint . --fix",
     "lint:watch": "watch 'npm run lint:fix' . --wait=1 --ignoreDirectoryPattern=/doc/",
