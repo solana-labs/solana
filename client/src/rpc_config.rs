@@ -1,19 +1,8 @@
-<<<<<<< HEAD
 use crate::rpc_filter::RpcFilterType;
 use solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig};
 use solana_sdk::{
-    clock::Epoch,
+    clock::{Epoch, Slot},
     commitment_config::{CommitmentConfig, CommitmentLevel},
-=======
-use {
-    crate::rpc_filter::RpcFilterType,
-    solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig},
-    solana_sdk::{
-        clock::{Epoch, Slot},
-        commitment_config::{CommitmentConfig, CommitmentLevel},
-    },
-    solana_transaction_status::{TransactionDetails, UiTransactionEncoding},
->>>>>>> 60ed8e289... Rpc: enable getConfirmedBlocks and getConfirmedBlocksWithLimit to return confirmed (not yet finalized) data (#16161)
 };
 use solana_transaction_status::{TransactionDetails, UiTransactionEncoding};
 
