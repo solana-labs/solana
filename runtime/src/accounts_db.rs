@@ -96,7 +96,6 @@ const CACHE_VIRTUAL_OFFSET: usize = 0;
 const CACHE_VIRTUAL_STORED_SIZE: usize = 0;
 
 type DashMapVersionHash = DashMap<Pubkey, (u64, Hash)>;
-type DashMapLazyHasher = DashMap<Pubkey, CachedAccount>;
 
 lazy_static! {
     // FROZEN_ACCOUNT_PANIC is used to signal local_cluster that an AccountsDb panic has occurred,
@@ -3483,16 +3482,12 @@ impl AccountsDb {
                 None => {
                     // hash any accounts where we were lazy in calculating the hash
                     let mut hash_time = Measure::start("hash_accounts");
-                    let mut total_data = 0;
                     let mut stats = BankHashStats::default();
                     let len = accounts_and_meta_to_store.len();
                     let mut hashes = Vec::with_capacity(len);
-                    for i in 0..len {
-                        let mut hash = hashes[i];
-                        let account = accounts[i];
-                        total_data += account.1.data().len();
+                    for account in accounts {
                         stats.update(account.1);
-                        hash = Self::hash_account(
+                        let hash = Self::hash_account(
                             slot,
                             account.1,
                             account.0,
@@ -3500,6 +3495,10 @@ impl AccountsDb {
                         );
                         hashes.push(hash);
                     }
+                    hash_time.stop();
+                    self.stats
+                        .store_hash_accounts
+                        .fetch_add(hash_time.as_us(), Ordering::Relaxed);
 
                     self.write_accounts_to_storage(
                         slot,
@@ -4262,12 +4261,22 @@ impl AccountsDb {
         }
         self.assert_frozen_accounts(accounts);
 
-        {
-            let mut bank_hashes = self.bank_hashes.write().unwrap();
-            bank_hashes
-                .entry(slot)
-                .or_insert_with(BankHashInfo::default);
-        }
+        let mut stats = BankHashStats::default();
+        let mut total_data = 0;
+        accounts.iter().for_each(|(_pubkey, account)| {
+            total_data += account.data().len();
+            stats.update(account);
+        });
+
+        self.stats
+            .store_total_data
+            .fetch_add(total_data as u64, Ordering::Relaxed);
+
+        let mut bank_hashes = self.bank_hashes.write().unwrap();
+        let slot_info = bank_hashes
+            .entry(slot)
+            .or_insert_with(BankHashInfo::default);
+        slot_info.stats.merge(&stats);
 
         // we use default hashes for now since the same account may be stored to the cache multiple times
         self.store_accounts_unfrozen(slot, accounts, None, is_cached_store);

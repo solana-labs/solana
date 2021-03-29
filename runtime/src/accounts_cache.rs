@@ -134,7 +134,7 @@ impl CachedAccountInner {
                     &self.pubkey,
                     &self.cluster_type,
                 );
-                *self.hash.write().unwrap() = Some(hash.clone());
+                *self.hash.write().unwrap() = Some(hash);
                 hash
             }
         }
