@@ -105,6 +105,20 @@ impl TransactionRecorder {
         mixin: Hash,
         transactions: Vec<Transaction>,
     ) -> Result<()> {
+        let mut t = solana_measure::measure::Measure::start("");
+        for _ in 0..1_000_000 {
+            let (result_sender, result_receiver) = channel();
+            let t = TransactionRecorder {
+                // shared
+                record_sender: self.record_sender.clone(),
+                // unique to this caller
+                result_sender,
+                result_receiver,
+            };
+        }
+        t.stop();
+        panic!("creating channels: {}", t.as_us());
+    
         let res = self.record_sender.send(Record::new(
             mixin,
             transactions,
