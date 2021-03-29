@@ -2176,7 +2176,7 @@ pub trait RpcSol {
         &self,
         meta: Self::Metadata,
         start_slot: Slot,
-        config: Option<RpcConfirmedBlocksConfig>,
+        config: Option<RpcConfirmedBlocksConfigWrapper>,
         commitment: Option<CommitmentConfig>,
     ) -> Result<Vec<Slot>>;
 
@@ -2977,7 +2977,7 @@ impl RpcSol for RpcSolImpl {
         &self,
         meta: Self::Metadata,
         start_slot: Slot,
-        config: Option<RpcConfirmedBlocksConfig>,
+        config: Option<RpcConfirmedBlocksConfigWrapper>,
         commitment: Option<CommitmentConfig>,
     ) -> Result<Vec<Slot>> {
         let (end_slot, maybe_commitment) = config.map(|config| config.unzip()).unwrap_or_default();
