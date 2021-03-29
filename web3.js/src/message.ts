@@ -7,6 +7,7 @@ import type {Blockhash} from './blockhash';
 import * as Layout from './layout';
 import {PACKET_DATA_SIZE} from './transaction';
 import * as shortvec from './util/shortvec-encoding';
+import {toBuffer} from './util/to-buffer';
 
 /**
  * The message header, identifying signed and read-only account
@@ -160,7 +161,7 @@ export class Message {
         this.header.numReadonlyUnsignedAccounts,
       ]),
       keyCount: Buffer.from(keyCount),
-      keys: this.accountKeys.map(key => key.toBuffer()),
+      keys: this.accountKeys.map(key => toBuffer(key.toBytes())),
       recentBlockhash: bs58.decode(this.recentBlockhash),
     };
 

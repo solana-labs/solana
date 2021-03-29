@@ -6,6 +6,7 @@ import {NONCE_ACCOUNT_LENGTH} from './nonce-account';
 import {PublicKey} from './publickey';
 import {SYSVAR_RECENT_BLOCKHASHES_PUBKEY, SYSVAR_RENT_PUBKEY} from './sysvar';
 import {Transaction, TransactionInstruction} from './transaction';
+import {toBuffer} from './util/to-buffer';
 
 /**
  * Create account system transaction params
@@ -669,7 +670,7 @@ export class SystemProgram {
     const data = encodeData(type, {
       lamports: params.lamports,
       space: params.space,
-      programId: params.programId.toBuffer(),
+      programId: toBuffer(params.programId.toBytes()),
     });
 
     return new TransactionInstruction({
@@ -695,7 +696,7 @@ export class SystemProgram {
       data = encodeData(type, {
         lamports: params.lamports,
         seed: params.seed,
-        programId: params.programId.toBuffer(),
+        programId: toBuffer(params.programId.toBytes()),
       });
       keys = [
         {pubkey: params.fromPubkey, isSigner: false, isWritable: true},
@@ -729,9 +730,9 @@ export class SystemProgram {
     if ('basePubkey' in params) {
       const type = SYSTEM_INSTRUCTION_LAYOUTS.AssignWithSeed;
       data = encodeData(type, {
-        base: params.basePubkey.toBuffer(),
+        base: toBuffer(params.basePubkey.toBytes()),
         seed: params.seed,
-        programId: params.programId.toBuffer(),
+        programId: toBuffer(params.programId.toBytes()),
       });
       keys = [
         {pubkey: params.accountPubkey, isSigner: false, isWritable: true},
@@ -739,7 +740,9 @@ export class SystemProgram {
       ];
     } else {
       const type = SYSTEM_INSTRUCTION_LAYOUTS.Assign;
-      data = encodeData(type, {programId: params.programId.toBuffer()});
+      data = encodeData(type, {
+        programId: toBuffer(params.programId.toBytes()),
+      });
       keys = [{pubkey: params.accountPubkey, isSigner: true, isWritable: true}];
     }
 
@@ -759,11 +762,11 @@ export class SystemProgram {
   ): TransactionInstruction {
     const type = SYSTEM_INSTRUCTION_LAYOUTS.CreateWithSeed;
     const data = encodeData(type, {
-      base: params.basePubkey.toBuffer(),
+      base: toBuffer(params.basePubkey.toBytes()),
       seed: params.seed,
       lamports: params.lamports,
       space: params.space,
-      programId: params.programId.toBuffer(),
+      programId: toBuffer(params.programId.toBytes()),
     });
     let keys = [
       {pubkey: params.fromPubkey, isSigner: true, isWritable: true},
@@ -828,7 +831,7 @@ export class SystemProgram {
   ): TransactionInstruction {
     const type = SYSTEM_INSTRUCTION_LAYOUTS.InitializeNonceAccount;
     const data = encodeData(type, {
-      authorized: params.authorizedPubkey.toBuffer(),
+      authorized: toBuffer(params.authorizedPubkey.toBytes()),
     });
     const instructionData = {
       keys: [
@@ -903,7 +906,7 @@ export class SystemProgram {
   static nonceAuthorize(params: AuthorizeNonceParams): TransactionInstruction {
     const type = SYSTEM_INSTRUCTION_LAYOUTS.AuthorizeNonceAccount;
     const data = encodeData(type, {
-      authorized: params.newAuthorizedPubkey.toBuffer(),
+      authorized: toBuffer(params.newAuthorizedPubkey.toBytes()),
     });
 
     return new TransactionInstruction({
@@ -927,10 +930,10 @@ export class SystemProgram {
     if ('basePubkey' in params) {
       const type = SYSTEM_INSTRUCTION_LAYOUTS.AllocateWithSeed;
       data = encodeData(type, {
-        base: params.basePubkey.toBuffer(),
+        base: toBuffer(params.basePubkey.toBytes()),
         seed: params.seed,
         space: params.space,
-        programId: params.programId.toBuffer(),
+        programId: toBuffer(params.programId.toBytes()),
       });
       keys = [
         {pubkey: params.accountPubkey, isSigner: false, isWritable: true},

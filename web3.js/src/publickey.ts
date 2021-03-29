@@ -4,6 +4,8 @@ import nacl from 'tweetnacl';
 import {sha256} from 'crypto-hash';
 import {Buffer} from 'buffer';
 
+import {toBuffer} from './util/to-buffer';
+
 /**
  * Maximum length of derived pubkey seed
  */
@@ -48,7 +50,14 @@ export class PublicKey {
    * Return the base-58 representation of the public key
    */
   toBase58(): string {
-    return bs58.encode(this.toBuffer());
+    return bs58.encode(this.toBytes());
+  }
+
+  /**
+   * Return the byte array representation of the public key
+   */
+  toBytes(): Uint8Array {
+    return this.toBuffer();
   }
 
   /**
@@ -101,7 +110,7 @@ export class PublicKey {
       if (seed.length > MAX_SEED_LENGTH) {
         throw new Error(`Max seed length exceeded`);
       }
-      buffer = Buffer.concat([buffer, Buffer.from(seed)]);
+      buffer = Buffer.concat([buffer, toBuffer(seed)]);
     });
     buffer = Buffer.concat([
       buffer,
