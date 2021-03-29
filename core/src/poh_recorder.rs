@@ -105,35 +105,17 @@ impl TransactionRecorder {
         mixin: Hash,
         transactions: Vec<Transaction>,
     ) -> Result<()> {
-        let mut t = solana_measure::measure::Measure::start("");
-        for _ in 0..1_000_000 {
-            let (result_sender, result_receiver) = channel();
-            let t = TransactionRecorder {
-                // shared
-                record_sender: self.record_sender.clone(),
-                // unique to this caller
-                result_sender,
-                result_receiver,
-            };
-        }
-        t.stop();
-        panic!("creating channels: {}", t.as_us());
-    
-        let res = self.record_sender.send(Record::new(
-            mixin,
-            transactions,
-            bank_slot,
-            self.result_sender.clone(),
-        ));
+        let (result_sender, result_receiver) = channel();
+        let res =
+            self.record_sender
+                .send(Record::new(mixin, transactions, bank_slot, result_sender));
         if res.is_err() {
             // If the channel is dropped, then the validator is shutting down so return that we are hitting
             //  the max tick height to stop transaction processing and flush any transactions in the pipeline.
             return Err(PohRecorderError::MaxHeightReached);
         }
         // Besides validator exit, this timeout should primarily be seen to affect test execution environments where the various pieces can be shutdown abruptly
-        let res = self
-            .result_receiver
-            .recv_timeout(std::time::Duration::from_millis(5000));
+        let res = result_receiver.recv();
         match res {
             Err(_err) => Err(PohRecorderError::MaxHeightReached),
             Ok(result) => result,
