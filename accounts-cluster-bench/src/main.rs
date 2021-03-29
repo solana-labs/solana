@@ -252,10 +252,10 @@ impl TransactionExecutor {
 
 struct SeedTracker {
     max_created: Arc<AtomicU64>,
-    _max_closed: Arc<AtomicU64>,
+    max_closed: Arc<AtomicU64>,
 }
 
-fn make_message(
+fn make_create_message(
     keypair: &Keypair,
     base_keypair: &Keypair,
     max_created_seed: Arc<AtomicU64>,
@@ -306,6 +306,53 @@ fn make_message(
     Message::new(&instructions, Some(&keypair.pubkey()))
 }
 
+fn make_close_message(
+    keypair: &Keypair,
+    base_keypair: &Keypair,
+    max_closed_seed: Arc<AtomicU64>,
+    num_instructions: usize,
+    balance: u64,
+    spl_token: bool,
+) -> Message {
+    let instructions: Vec<_> = (0..num_instructions)
+        .into_iter()
+        .map(|_| {
+            let program_id = if spl_token {
+                inline_spl_token_v2_0::id()
+            } else {
+                system_program::id()
+            };
+            let seed = max_closed_seed.fetch_add(1, Ordering::Relaxed).to_string();
+            let address =
+                Pubkey::create_with_seed(&base_keypair.pubkey(), &seed, &program_id).unwrap();
+            if spl_token {
+                spl_token_v2_0_instruction(
+                    spl_token_v2_0::instruction::close_account(
+                        &spl_token_v2_0::id(),
+                        &spl_token_v2_0_pubkey(&address),
+                        &spl_token_v2_0_pubkey(&keypair.pubkey()),
+                        &spl_token_v2_0_pubkey(&base_keypair.pubkey()),
+                        &[],
+                    )
+                    .unwrap(),
+                )
+            } else {
+                system_instruction::transfer_with_seed(
+                    &address,
+                    &base_keypair.pubkey(),
+                    seed,
+                    &program_id,
+                    &keypair.pubkey(),
+                    balance,
+                )
+            }
+        })
+        .collect();
+
+    Message::new(&instructions, Some(&keypair.pubkey()))
+}
+
+#[allow(clippy::too_many_arguments)]
 fn run_accounts_bench(
     entrypoint_addr: SocketAddr,
     faucet_addr: SocketAddr,
@@ -313,6 +360,7 @@ fn run_accounts_bench(
     iterations: usize,
     maybe_space: Option<u64>,
     batch_size: usize,
+    close_nth: u64,
     maybe_lamports: Option<u64>,
     num_instructions: usize,
     mint: Option<Pubkey>,
@@ -328,7 +376,8 @@ fn run_accounts_bench(
     let mut count = 0;
     let mut recent_blockhash = client.get_recent_blockhash().expect("blockhash");
     let mut tx_sent_count = 0;
-    let mut total_account_count = 0;
+    let mut total_accounts_created = 0;
+    let mut total_accounts_closed = 0;
     let mut balance = client.get_balance(&keypair.pubkey()).unwrap_or(0);
     let mut last_balance = Instant::now();
 
@@ -343,7 +392,7 @@ fn run_accounts_bench(
     let base_keypair = Keypair::new();
     let seed_tracker = SeedTracker {
         max_created: Arc::new(AtomicU64::default()),
-        _max_closed: Arc::new(AtomicU64::default()),
+        max_closed: Arc::new(AtomicU64::default()),
     };
 
     info!("Starting balance: {}", balance);
@@ -356,7 +405,7 @@ fn run_accounts_bench(
             last_blockhash = Instant::now();
         }
 
-        let message = make_message(
+        let message = make_create_message(
             keypair,
             &base_keypair,
             seed_tracker.max_created.clone(),
@@ -392,7 +441,7 @@ fn run_accounts_bench(
             let txs: Vec<_> = (0..num_to_create)
                 .into_par_iter()
                 .map(|_| {
-                    let message = make_message(
+                    let message = make_create_message(
                         keypair,
                         &base_keypair,
                         seed_tracker.max_created.clone(),
@@ -410,7 +459,34 @@ fn run_accounts_bench(
             let new_ids = executor.push_transactions(txs);
             info!("ids: {}", new_ids.len());
             tx_sent_count += new_ids.len();
-            total_account_count += num_instructions * new_ids.len();
+            total_accounts_created += num_instructions * new_ids.len();
+
+            if close_nth > 0 {
+                let expected_closed = total_accounts_created as u64 / close_nth;
+                if expected_closed > total_accounts_closed {
+                    let txs: Vec<_> = (0..expected_closed - total_accounts_closed)
+                        .into_par_iter()
+                        .map(|_| {
+                            let message = make_close_message(
+                                keypair,
+                                &base_keypair,
+                                seed_tracker.max_closed.clone(),
+                                1,
+                                min_balance,
+                                mint.is_some(),
+                            );
+                            let signers: Vec<&Keypair> = vec![keypair, &base_keypair];
+                            Transaction::new(&signers, message, recent_blockhash.0)
+                        })
+                        .collect();
+                    balance = balance.saturating_sub(fee * txs.len() as u64);
+                    info!("close txs: {}", txs.len());
+                    let new_ids = executor.push_transactions(txs);
+                    info!("close ids: {}", new_ids.len());
+                    tx_sent_count += new_ids.len();
+                    total_accounts_closed += new_ids.len() as u64;
+                }
+            }
         } else {
             let _ = executor.drain_cleared();
         }
@@ -418,8 +494,8 @@ fn run_accounts_bench(
         count += 1;
         if last_log.elapsed().as_millis() > 3000 {
             info!(
-                "total_accounts: {} tx_sent_count: {} loop_count: {} balance: {}",
-                total_account_count, tx_sent_count, count, balance
+                "total_accounts_created: {} total_accounts_closed: {} tx_sent_count: {} loop_count: {} balance: {}",
+                total_accounts_created, total_accounts_closed, tx_sent_count, count, balance
             );
             last_log = Instant::now();
         }
@@ -481,6 +557,13 @@ fn main() {
                 .help("Number of transactions to send per batch"),
         )
         .arg(
+            Arg::with_name("close_nth")
+                .long("close-frequency")
+                .takes_value(true)
+                .value_name("BYTES")
+                .help("Send close transactions after this many accounts created"),
+        )
+        .arg(
             Arg::with_name("num_instructions")
                 .long("num-instructions")
                 .takes_value(true)
@@ -528,6 +611,7 @@ fn main() {
     let space = value_t!(matches, "space", u64).ok();
     let lamports = value_t!(matches, "lamports", u64).ok();
     let batch_size = value_t!(matches, "batch_size", usize).unwrap_or(4);
+    let close_nth = value_t!(matches, "close_nth", u64).unwrap_or(0);
     let iterations = value_t!(matches, "iterations", usize).unwrap_or(10);
     let num_instructions = value_t!(matches, "num_instructions", usize).unwrap_or(1);
     if num_instructions == 0 || num_instructions > 500 {
@@ -571,6 +655,7 @@ fn main() {
         iterations,
         space,
         batch_size,
+        close_nth,
         lamports,
         num_instructions,
         mint,
@@ -605,6 +690,7 @@ pub mod test {
         let iterations = 10;
         let maybe_space = None;
         let batch_size = 100;
+        let close_nth = 100;
         let maybe_lamports = None;
         let num_instructions = 2;
         let mut start = Measure::start("total accounts run");
@@ -615,6 +701,7 @@ pub mod test {
             iterations,
             maybe_space,
             batch_size,
+            close_nth,
             maybe_lamports,
             num_instructions,
             None,
