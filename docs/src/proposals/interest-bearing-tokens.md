@@ -63,18 +63,20 @@ wallets, applications, and end-users.
 
 ## Proposed Solution
 
-Following the approach taken by Aave, we can lean on a crucial feature of interest-bearing tokens:
-although the holding's token amount is constantly changing, each token holder's
-proportion of total supply stays the same. Therefore, we can satisfy the
-fungibility requirement for tokens on proportional ownership. The token
-amount used for token transfers / mints / burns is just an interface, and
-everything is converted to proportional shares inside the program.
+Following the approach taken by Aave, we can lean on a crucial feature of
+interest-bearing tokens: although the holding's token amount is constantly
+changing, each token holder's proportion of total supply stays the same.
+
+Therefore, we can satisfy the fungibility requirement for tokens on proportional
+ownership. The token interface stays exactly the same, and we treat the concept
+of "token amount" as the "UI amount" to be displayed by frontends.
 
 Let's go through an example. Imagine we have an interest-bearing token mint with a total of
 10,000 proportional shares, a 20% annual interest rate, and 1 share is currently
-worth 100 tokens. If I transfer 1,000 tokens today, the program converts that and moves
+worth 100 tokens. If I transfer 1,000 tokens today, the program converts that
+using the interest-bearing token program and asks it to move
 10 shares. One year later, 1 share is worth 120 tokens, so if I transfer
-1,000 tokens, the program converts and only moves 8.33 shares. The same concept
+1,000 tokens, the program converts and asks to move 8.33 shares. The same concept
 applies to mints and burns.
 
 Following this model, we never have to worry about compounding interest. We
@@ -92,6 +94,8 @@ Since our solution entails the creation of a new token program, we're opening th
 floodgates for other app developers to do the same. To ensure safe and easy integration
 of new token programs, we need a set of conformance tests based on the current
 SPL token test suite.
+
+#### Instructions
 
 A new token program must include all of the same instructions as SPL token,
 but the "unchecked" variants should return errors. Concretely, this means the
@@ -123,15 +127,12 @@ New instructions required:
 * `CreateHolding`: only performs `Allocate` and `Assign` to self,
 useful for creating a holding when you don't know the program that you're
 interacting with. See the Associated Token Account section for how to use this.
-* `TransferAllChecked`: transfers everything from the source holding to the
-destination holding. Useful for closing a interest-bearing token holding since the
-balance is constantly changing.
 
 There are also new read-only instructions, which write data to a provided account
 buffer:
 
-* `NormalizeHolding`: write holding data in SPL token format
-* `NormalizeMint`: write mint data in SPL token format
+* `AmountToUiAmount`: convert the given share amount to a UI token amount
+* `UiAmountToAmount`: convert the given UI token amount to an exact share amount
 
 See the Runtime section for more information on how these are used.
 
@@ -139,14 +140,31 @@ Programs and wallets that wish to support i-tokens must update the instructions
 to use all `Checked` variants and use the new read-only instructions to fetch
 information.
 
-The SPL token library provides wrappers compatible with any conforming program.
-For the base SPL token program, the wrapper simply deserializes the account data
-and returns the relevant data. For other programs, it calls the appropriate
-read-only instruction using an ephemeral account input.
+#### Conversions and Wrapper Library
 
-For interest-bearing tokens, after `NormalizeHolding` and deserialization
-into a `spl_token::Holding`, the `amount` field will be in terms of tokens, and
-not shares, so that UIs can properly display amounts in terms of tokens.
+The SPL token library provides wrappers compatible with any conforming program.
+The wrapper simply checks the program id and deserializes the account data
+as an `spl_token::Holding` or `spl_token::Mint`.
+
+To convert between amount and UI amount, the wrapper library calls the `AmountToUiAmount`
+instruction on the program, or calls `spl_token::amount_to_ui_amount` inline.
+
+For interest-bearing tokens, after deserialization into a `spl_token::Holding`,
+the `amount` field will be in terms of shares, and not token amount, so UIs and
+on-chain programs that need token amounts must convert using `AmountToUiAmount`.
+
+#### Struct Conformance
+
+The structure for new holding and mint accounts must follow the layout of the
+existing SPL token accounts to ensure compatibility in RPC when fetching pre and
+post token balances.
+
+For a holding, the first 165 bytes must contain the same information
+as a normal SPL token holding. The following byte must be the type of
+account (ie. `Holding`), and after that, any data is allowed as required by the
+new token program.
+
+The same applies for mints, but only for the first 82 bytes.
 
 ### Token Program Registry
 
@@ -178,13 +196,10 @@ we need the ability for on-chain programs to dynamically create "ephemeral
 accounts", which only contain data, can be passed through CPI to other programs,
 and disappear after the instruction.
 
-For a program using i-tokens, to get the balance of a holding, the program creates
-an ephemeral account with 165 bytes of data, passes it to the i-token program's
-`NormalizeHolding` instruction, then deserializes the data back into the base
-`spl_token::Holding`. At the end of the instruction, the account disappears.
-
-TODO What's the best approach to implement this?  For example, does an ephemeral
-account even need a public key?
+For a program using i-tokens, to get the UI amount of a holding, the program creates
+an ephemeral account with 8 bytes of data, passes the `amount` to the i-token program's
+`AmountToUiAmount` instruction, then deserializes the data back into an `f64`.
+At the end of the instruction, the account disappears.
 
 This solution avoids the need to pass additional scratch accounts to almost all
 programs that use tokens.
@@ -196,7 +211,7 @@ check that a CPI must use a subset of accounts provided to the calling program.
 #### Dynamic sysvars
 
 The interest-bearing token program also requires the use of dynamic sysvars. For example,
-during the `NormalizeHolding` instruction, the program needs to know the current
+during the `AmountToUiAmount` instruction, the program needs to know the current
 time in order to properly convert from token amount to share amount.
 
 Without dynamic sysvars, we need to create a system to tell what sysvars are
@@ -219,17 +234,20 @@ discounting.
 #### `getBalance` and `getSupply`
 
 Instead of deserializing SPL token accounts and returning the data, the
-RPC server runs read-only transactions on the i-token program.
+RPC server runs read-only transactions on the i-token program. The current SPL
+token program is unaffected.
 
 RPC simply uses the same flow as on-chain programs: create an ephemeral account
-then runs the read-only transaction onto the bank requested.
+then runs the read-only transaction on the bank requested.
 
 #### `preTokenBalances` and `postTokenBalances`
 
 As mentioned earlier in the Token Program Conformance section, the i-token
-program must implement instructions to serialize a mint and holding into the
-SPL format. RPC will call into these instructions before and after the transaction
-is run to generate `preTokenBalances` and `postTokenBalances`.
+`Holding` and `Mint` types must follow the layout for `spl_token::Holding` and
+`spl_token::Mint`, so that RPC can deserialize mints and holdings into the SPL format.
+
+For UI amounts, RPC calls into the `AmountToUiAmount` instructions before and
+after the transaction to generate `preTokenBalances` and `postTokenBalances`.
 
 #### New Secondary Indexes
 
@@ -284,9 +302,10 @@ following changes:
 * get holdings: query for holdings owned by the public key, for all official
 token programs listed in the registry (not just `Tokenkeg...`)
 * get balances: avoid deserializing holding data, and instead use
-`getBalance` from RPC
+`getBalance` from RPC to get UI amounts
 * transfer tokens: only use `ApproveChecked` and `TransferChecked` on the token
-program
+program, and always convert UI amount to amount before calling instructions,
+using `UiAmountToAmount`
 * create holding: avoid directly creating an account and initializing,
 and use the associated token account program instead
 
@@ -300,9 +319,10 @@ For example, token-swap needs to accept separate token programs for token A and 
 * hard-coded token program: avoid using `Tokenkeg...` directly, and delete `id()`
 the SPL token code
 * get holding data: instead of deserializing the account data into an SPL holding, use
-the new wrapper to directly deserialize or call the `NormalizeHolding`
-instruction with the appropriate token program
-* get mint data: same as above, but using the `NormalizeMint`
+the new wrapper to directly deserialize if the i-token program is "valid"
+* get mint data: same as above
+* UI amount vs token amount: know when the program should use amounts, which
+could be share amounts, and when to use UI amounts
 * transfer: only use `TransferChecked`, which requires passing mints
 
 ### Ledger
@@ -346,11 +366,11 @@ by the mint.
 
 * token amount: the amount of tokens as seen from the outside. For example, an
 interest-bearing token holding with 10 in token amount is converted to a proportional
-ownership of 0.5% of the total supply. This amount is always shown in UIs, and
-also cached in the `amount` field of 
+ownership of 0.5% of the total supply. This amount should always be shown in UIs
+using the `AmountToUiAmount` conversion instruction.
 * share amount: the proportional ownership of a holding in terms of the total
 supply of shares. Internally, the interest-bearing token program uses shares to
-mint / transfer / burn, and this amount is never shown in UIs.
+mint / transfer / burn.
 * spl-token: the base on-chain program for tokens at address `Tokenkeg...` on
 [all networks](https://explorer.solana.com/address/TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA)
 which also defines the ABI standard required for other token programs that wish
@@ -366,12 +386,12 @@ in the "Token Program Conformance" section
 pub struct Mint {
     // SPL Mint Fields
     pub mint_authority: COption<Pubkey>,
+    pub supply: u64, // The total amount of shares outstanding
     pub decimals: u8,
     pub is_initialized: bool,
     pub freeze_authority: COption<Pubkey>,
 
     // Interest-bearing Mint Fields
-    pub share_supply: Decimal, // The total amount of shares outstanding
     pub initialized_slot: Slot, // When the mint was created, used to discount present value (in terms of token amount) into share amount
 }
 ```
@@ -383,13 +403,11 @@ pub struct Holding {
     // SPL Holding Fields
     pub mint: Pubkey,
     pub owner: Pubkey,
+    pub amount: u64, // This holding's proportional share of the total
     pub delegate: COption<Pubkey>,
     pub state: AccountState,
     pub is_native: COption<u64>,
     pub delegated_amount: u64,
     pub close_authority: COption<Pubkey>,
-
-    // Interest-bearing Holding Fields
-    pub share_amount: Decimal, // This holding's proportional share of the total
 }
 ```
