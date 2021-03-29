@@ -195,14 +195,8 @@ export class Secp256k1Program {
       `Private key must be ${PRIVATE_KEY_BYTES} bytes but received ${pkey.length} bytes`,
     );
 
-    let privateKey;
-    if (Array.isArray(pkey)) {
-      privateKey = Uint8Array.from(pkey);
-    } else {
-      privateKey = pkey;
-    }
-
     try {
+      const privateKey = toBuffer(pkey);
       const publicKey = publicKeyCreate(privateKey, false).slice(1); // throw away leading byte
       const messageHash = Buffer.from(
         keccak_256.update(toBuffer(message)).digest(),

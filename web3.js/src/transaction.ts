@@ -569,7 +569,7 @@ export class Transaction {
         }
       } else {
         if (
-          !nacl.sign.detached.verify(signData, signature, publicKey.toBuffer())
+          !nacl.sign.detached.verify(signData, signature, publicKey.toBytes())
         ) {
           return false;
         }

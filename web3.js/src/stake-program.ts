@@ -10,6 +10,7 @@ import {
   SYSVAR_STAKE_HISTORY_PUBKEY,
 } from './sysvar';
 import {Transaction, TransactionInstruction} from './transaction';
+import {toBuffer} from './util/to-buffer';
 
 /**
  * Address of the stake config account which configures the rate
@@ -506,13 +507,13 @@ export class StakeProgram {
     const type = STAKE_INSTRUCTION_LAYOUTS.Initialize;
     const data = encodeData(type, {
       authorized: {
-        staker: authorized.staker.toBuffer(),
-        withdrawer: authorized.withdrawer.toBuffer(),
+        staker: toBuffer(authorized.staker.toBytes()),
+        withdrawer: toBuffer(authorized.withdrawer.toBytes()),
       },
       lockup: {
         unixTimestamp: lockup.unixTimestamp,
         epoch: lockup.epoch,
-        custodian: lockup.custodian.toBuffer(),
+        custodian: toBuffer(lockup.custodian.toBytes()),
       },
     });
     const instructionData = {
@@ -613,7 +614,7 @@ export class StakeProgram {
 
     const type = STAKE_INSTRUCTION_LAYOUTS.Authorize;
     const data = encodeData(type, {
-      newAuthorized: newAuthorizedPubkey.toBuffer(),
+      newAuthorized: toBuffer(newAuthorizedPubkey.toBytes()),
       stakeAuthorizationType: stakeAuthorizationType.index,
     });
 
@@ -649,10 +650,10 @@ export class StakeProgram {
 
     const type = STAKE_INSTRUCTION_LAYOUTS.AuthorizeWithSeed;
     const data = encodeData(type, {
-      newAuthorized: newAuthorizedPubkey.toBuffer(),
+      newAuthorized: toBuffer(newAuthorizedPubkey.toBytes()),
       stakeAuthorizationType: stakeAuthorizationType.index,
       authoritySeed: authoritySeed,
-      authorityOwner: authorityOwner.toBuffer(),
+      authorityOwner: toBuffer(authorityOwner.toBytes()),
     });
 
     const keys = [
