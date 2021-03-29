@@ -114,7 +114,7 @@ impl ExecuteTimings {
     }
 }
 
-type BankStatusCache = StatusCache<Result<()>>;
+type BankStatusCache = StatusCache<Signature, Result<()>>;
 #[frozen_abi(digest = "EcB9J7sm37t1R47vLcvGuNeiRciB4Efq1EDWDWL6Bp5h")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 type TransactionAccountRefCells = Vec<Rc<RefCell<AccountSharedData>>>;
@@ -2328,7 +2328,7 @@ impl Bank {
 
     /// Forget all signatures. Useful for benchmarking.
     pub fn clear_signatures(&self) {
-        self.src.status_cache.write().unwrap().clear_signatures();
+        self.src.status_cache.write().unwrap().clear();
     }
 
     pub fn clear_slot_signatures(&self, slot: Slot) {
@@ -2336,7 +2336,7 @@ impl Bank {
             .status_cache
             .write()
             .unwrap()
-            .clear_slot_signatures(slot);
+            .clear_slot_entries(slot);
     }
 
     pub fn can_commit(result: &Result<()>) -> bool {
@@ -2546,7 +2546,7 @@ impl Bank {
                     let (lock_res, _nonce_rollback) = &lock_res;
                     if lock_res.is_ok()
                         && rcache
-                            .get_signature_status(
+                            .get_status(
                                 &tx.signatures[0],
                                 &tx.message().recent_blockhash,
                                 &self.ancestors,
@@ -4191,13 +4191,13 @@ impl Bank {
     ) -> Option<Result<()>> {
         let rcache = self.src.status_cache.read().unwrap();
         rcache
-            .get_signature_status(signature, blockhash, &self.ancestors)
+            .get_status(signature, blockhash, &self.ancestors)
             .map(|v| v.1)
     }
 
     pub fn get_signature_status_slot(&self, signature: &Signature) -> Option<(Slot, Result<()>)> {
         let rcache = self.src.status_cache.read().unwrap();
-        rcache.get_signature_slot(signature, &self.ancestors)
+        rcache.get_status_any_blockhash(signature, &self.ancestors)
     }
 
     pub fn get_signature_status(&self, signature: &Signature) -> Option<Result<()>> {
