@@ -1,4 +1,4 @@
-//! @brief Example Rust-based BPF program that tests sysval use
+//! @brief Example Rust-based BPF program that tests sysvar use
 
 extern crate solana_program;
 use solana_program::{

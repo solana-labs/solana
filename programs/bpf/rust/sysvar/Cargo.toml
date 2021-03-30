@@ -1,12 +1,17 @@
 [package]
+<<<<<<< HEAD:programs/bpf/rust/sysval/Cargo.toml
 name = "solana-bpf-rust-sysval"
 version = "1.6.3"
+=======
+name = "solana-bpf-rust-sysvar"
+version = "1.7.0"
+>>>>>>> f84e88f0a... Cleanup nits (#16211):programs/bpf/rust/sysvar/Cargo.toml
 description = "Solana BPF test program written in Rust"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
-documentation = "https://docs.rs/solana-bpf-rust-sysval"
+documentation = "https://docs.rs/solana-bpf-rust-sysvar"
 edition = "2018"
 
 [dependencies]
