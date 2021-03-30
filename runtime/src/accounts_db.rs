@@ -288,13 +288,6 @@ impl<'a> LoadedAccount<'a> {
             },
         }
     }
-
-    pub fn from_cache(&self) -> bool {
-        match self {
-            LoadedAccount::Stored(_) => false,
-            LoadedAccount::Cached(_) => true,
-        }
-    }
 }
 
 #[derive(Clone, Default, Debug)]
