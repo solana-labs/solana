@@ -288,6 +288,13 @@ impl<'a> LoadedAccount<'a> {
             },
         }
     }
+
+    pub fn from_cache(&self) -> bool {
+        match self {
+            LoadedAccount::Stored(_) => false,
+            LoadedAccount::Cached(_) => true,
+        }
+    }
 }
 
 #[derive(Clone, Default, Debug)]
@@ -1067,7 +1074,7 @@ impl solana_frozen_abi::abi_example::AbiExample for AccountsDb {
 impl Default for AccountsDb {
     fn default() -> Self {
         let num_threads = get_thread_count();
-        const MAX_READ_ONLY_CACHE_DATA_SIZE: usize = 100_000_000;
+        const MAX_READ_ONLY_CACHE_DATA_SIZE: usize = 200_000_000;
 
         let mut bank_hashes = HashMap::new();
         bank_hashes.insert(0, BankHashInfo::default());
@@ -2256,30 +2263,6 @@ impl AccountsDb {
         self.do_load(ancestors, pubkey, None)
     }
 
-    pub fn load_and_keep_in_read_only_cache(
-        &self,
-        ancestors: &Ancestors,
-        pubkey: &Pubkey,
-    ) -> Option<AccountSharedData> {
-        let result = self.read_only_accounts_cache.load(pubkey);
-        if result.is_some() {
-            return result;
-        }
-
-        let result = self.do_load(ancestors, pubkey, None);
-        if self.caching_enabled {
-            match result {
-                Some((account, _)) => {
-                    self.read_only_accounts_cache.store(pubkey, &account);
-                    Some(account)
-                }
-                _ => None,
-            }
-        } else {
-            result.map(|(account, _)| account)
-        }
-    }
-
     fn do_load(
         &self,
         ancestors: &Ancestors,
@@ -2299,10 +2282,32 @@ impl AccountsDb {
             // `lock` released here
         };
 
+        let result = self.read_only_accounts_cache.load(pubkey, slot);
+        if let Some(account) = result {
+            return Some((account, slot));
+        }
+
         //TODO: thread this as a ref
-        self.get_account_accessor_from_cache_or_storage(slot, pubkey, store_id, offset)
+        let mut from_cache = false;
+        let loaded_account = self
+            .get_account_accessor_from_cache_or_storage(slot, pubkey, store_id, offset)
             .get_loaded_account()
-            .map(|loaded_account| (loaded_account.account(), slot))
+            .map(|loaded_account| {
+                from_cache = loaded_account.from_cache();
+                (loaded_account.account(), slot)
+            });
+
+        if self.caching_enabled && !from_cache {
+            match loaded_account {
+                Some((account, slot)) => {
+                    self.read_only_accounts_cache.store(pubkey, slot, &account);
+                    Some((account, slot))
+                }
+                _ => None,
+            }
+        } else {
+            loaded_account
+        }
     }
 
     pub fn load_account_hash(&self, ancestors: &Ancestors, pubkey: &Pubkey) -> Hash {
@@ -3467,7 +3472,7 @@ impl AccountsDb {
         let accounts_and_meta_to_store: Vec<(StoredMeta, &AccountSharedData)> = accounts
             .iter()
             .map(|(pubkey, account)| {
-                self.read_only_accounts_cache.remove(pubkey);
+                self.read_only_accounts_cache.remove(pubkey, slot);
                 let account = if account.lamports == 0 {
                     &default_account
                 } else {
@@ -8569,22 +8574,29 @@ pub mod tests {
 
         db.add_root(0);
         db.add_root(1);
+        db.clean_accounts(None);
+        db.flush_accounts_cache(true, None);
+        db.clean_accounts(None);
+        db.add_root(2);
 
         assert_eq!(db.read_only_accounts_cache.cache_len(), 0);
         let account = db
-            .load_and_keep_in_read_only_cache(&Ancestors::default(), &account_key)
+            .load(&Ancestors::default(), &account_key)
+            .map(|(account, _)| account)
             .unwrap();
         assert_eq!(account.lamports, 1);
         assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
         let account = db
-            .load_and_keep_in_read_only_cache(&Ancestors::default(), &account_key)
+            .load(&Ancestors::default(), &account_key)
+            .map(|(account, _)| account)
             .unwrap();
         assert_eq!(account.lamports, 1);
         assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
-        db.store_cached(1, &[(&account_key, &zero_lamport_account)]);
-        assert_eq!(db.read_only_accounts_cache.cache_len(), 0);
+        db.store_cached(2, &[(&account_key, &zero_lamport_account)]);
+        assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
         let account = db
-            .load_and_keep_in_read_only_cache(&Ancestors::default(), &account_key)
+            .load(&Ancestors::default(), &account_key)
+            .map(|(account, _)| account)
             .unwrap();
         assert_eq!(account.lamports, 0);
         assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
@@ -8616,6 +8628,8 @@ pub mod tests {
             .do_load(&Ancestors::default(), &account_key, Some(0))
             .unwrap();
         assert_eq!(account.0.lamports, 0);
+        // since this item is in the cache, it should not be in the read only cache
+        assert_eq!(db.read_only_accounts_cache.cache_len(), 0);
 
         // Flush, then clean again. Should not need another root to initiate the cleaning
         // because `accounts_index.uncleaned_roots` should be correct

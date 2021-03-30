@@ -215,7 +215,7 @@ impl Accounts {
                     } else {
                         let (account, rent) = self
                             .accounts_db
-                            .load(ancestors, key)
+                            .load(ancestors, key) // replace this, too
                             .map(|(mut account, _)| {
                                 if message.is_writable(i, demote_sysvar_write_locks) {
                                     let rent_due = rent_collector
@@ -342,7 +342,7 @@ impl Accounts {
 
             let program = match self
                 .accounts_db
-                .load(ancestors, &program_id)
+                .load(ancestors, &program_id) // read only cache
                 .map(|(account, _)| account)
             {
                 Some(program) => program,
@@ -367,7 +367,8 @@ impl Accounts {
                 {
                     if let Some(program) = self
                         .accounts_db
-                        .load_and_keep_in_read_only_cache(ancestors, &programdata_address)
+                        .load(ancestors, &programdata_address)
+                        .map(|(account, _)| account)
                     {
                         accounts.insert(0, (programdata_address, program));
                     } else {

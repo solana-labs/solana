@@ -8,6 +8,7 @@ use std::{
 
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount},
+    clock::Slot,
     pubkey::Pubkey,
 };
 
@@ -19,7 +20,7 @@ pub struct ReadOnlyAccountCacheEntry {
 
 #[derive(Debug)]
 pub struct ReadOnlyAccountsCache {
-    cache: DashMap<Pubkey, ReadOnlyAccountCacheEntry>,
+    cache: DashMap<(Pubkey, Slot), ReadOnlyAccountCacheEntry>,
     max_data_size: usize,
     data_size: Arc<RwLock<usize>>,
 }
@@ -33,8 +34,8 @@ impl ReadOnlyAccountsCache {
         }
     }
 
-    pub fn load(&self, pubkey: &Pubkey) -> Option<AccountSharedData> {
-        self.cache.get(pubkey).map(|account_ref| {
+    pub fn load(&self, pubkey: &Pubkey, slot: Slot) -> Option<AccountSharedData> {
+        self.cache.get(&(*pubkey, slot)).map(|account_ref| {
             let value = account_ref.value();
             // remember last use
             let now = Instant::now();
@@ -43,10 +44,10 @@ impl ReadOnlyAccountsCache {
         })
     }
 
-    pub fn store(&self, pubkey: &Pubkey, account: &AccountSharedData) {
+    pub fn store(&self, pubkey: &Pubkey, slot: Slot, account: &AccountSharedData) {
         let len = account.data().len();
         self.cache.insert(
-            *pubkey,
+            (*pubkey, slot),
             ReadOnlyAccountCacheEntry {
                 account: account.clone(),
                 last_used: Arc::new(RwLock::new(Instant::now())),
@@ -58,10 +59,10 @@ impl ReadOnlyAccountsCache {
         *self.data_size.write().unwrap() = new_size;
     }
 
-    pub fn remove(&self, pubkey: &Pubkey) {
+    pub fn remove(&self, pubkey: &Pubkey, slot: Slot) {
         // does not keep track of data size reduction here.
         // data size will be recomputed the next time we store and we think we may now be too large.
-        self.cache.remove(pubkey);
+        self.cache.remove(&(*pubkey, slot));
     }
 
     fn maybe_purge_lru_items(&self, new_item_len: usize) -> usize {
@@ -82,7 +83,7 @@ impl ReadOnlyAccountsCache {
         if new_size > self.max_data_size {
             lru.sort();
             for oldest in lru.into_iter() {
-                self.remove(&oldest.2);
+                self.cache.remove(&oldest.2);
                 new_size = new_size.saturating_sub(oldest.1);
                 if new_size <= self.max_data_size {
                     break;
@@ -110,10 +111,11 @@ pub mod tests {
         solana_logger::setup();
         let max = 100;
         let cache = ReadOnlyAccountsCache::new(max);
-        assert!(cache.load(&Pubkey::default()).is_none());
+        let slot = 0;
+        assert!(cache.load(&Pubkey::default(), slot).is_none());
         assert_eq!(0, cache.cache_len());
         assert_eq!(0, cache.data_size());
-        cache.remove(&Pubkey::default()); // assert no panic
+        cache.remove(&Pubkey::default(), slot); // assert no panic
         let key1 = Pubkey::new_unique();
         let key2 = Pubkey::new_unique();
         let key3 = Pubkey::new_unique();
@@ -125,44 +127,44 @@ pub mod tests {
         account2.lamports += 1; // so they compare differently
         let mut account3 = account1.clone();
         account3.lamports += 4; // so they compare differently
-        cache.store(&key1, &account1);
+        cache.store(&key1, slot, &account1);
         assert_eq!(100, cache.data_size());
-        assert!(accounts_equal(&cache.load(&key1).unwrap(), &account1));
+        assert!(accounts_equal(&cache.load(&key1, slot).unwrap(), &account1));
         assert_eq!(1, cache.cache_len());
-        cache.store(&key2, &account2);
+        cache.store(&key2, slot, &account2);
         assert_eq!(100, cache.data_size());
-        assert!(accounts_equal(&cache.load(&key2).unwrap(), &account2));
+        assert!(accounts_equal(&cache.load(&key2, slot).unwrap(), &account2));
         assert_eq!(1, cache.cache_len());
-        cache.store(&key2, &account1); // overwrite key2 with account1
+        cache.store(&key2, slot, &account1); // overwrite key2 with account1
         assert_eq!(100, cache.data_size());
-        assert!(accounts_equal(&cache.load(&key2).unwrap(), &account1));
+        assert!(accounts_equal(&cache.load(&key2, slot).unwrap(), &account1));
         assert_eq!(1, cache.cache_len());
-        cache.remove(&key2);
+        cache.remove(&key2, slot);
         assert_eq!(100, cache.data_size());
         assert_eq!(0, cache.cache_len());
 
         // can store 2 items, 3rd item kicks oldest item out
         let max = 200;
         let cache = ReadOnlyAccountsCache::new(max);
-        cache.store(&key1, &account1);
+        cache.store(&key1, slot, &account1);
         assert_eq!(100, cache.data_size());
-        assert!(accounts_equal(&cache.load(&key1).unwrap(), &account1));
+        assert!(accounts_equal(&cache.load(&key1, slot).unwrap(), &account1));
         assert_eq!(1, cache.cache_len());
-        cache.store(&key2, &account2);
+        cache.store(&key2, slot, &account2);
         assert_eq!(200, cache.data_size());
-        assert!(accounts_equal(&cache.load(&key1).unwrap(), &account1));
-        assert!(accounts_equal(&cache.load(&key2).unwrap(), &account2));
+        assert!(accounts_equal(&cache.load(&key1, slot).unwrap(), &account1));
+        assert!(accounts_equal(&cache.load(&key2, slot).unwrap(), &account2));
         assert_eq!(2, cache.cache_len());
-        cache.store(&key2, &account1); // overwrite key2 with account1
+        cache.store(&key2, slot, &account1); // overwrite key2 with account1
         assert_eq!(200, cache.data_size());
-        assert!(accounts_equal(&cache.load(&key1).unwrap(), &account1));
-        assert!(accounts_equal(&cache.load(&key2).unwrap(), &account1));
+        assert!(accounts_equal(&cache.load(&key1, slot).unwrap(), &account1));
+        assert!(accounts_equal(&cache.load(&key2, slot).unwrap(), &account1));
         assert_eq!(2, cache.cache_len());
-        cache.store(&key3, &account3);
+        cache.store(&key3, slot, &account3);
         assert_eq!(200, cache.data_size());
-        assert!(cache.load(&key1).is_none()); // was lru purged
-        assert!(accounts_equal(&cache.load(&key2).unwrap(), &account1));
-        assert!(accounts_equal(&cache.load(&key3).unwrap(), &account3));
+        assert!(cache.load(&key1, slot).is_none()); // was lru purged
+        assert!(accounts_equal(&cache.load(&key2, slot).unwrap(), &account1));
+        assert!(accounts_equal(&cache.load(&key3, slot).unwrap(), &account3));
         assert_eq!(2, cache.cache_len());
     }
 }
