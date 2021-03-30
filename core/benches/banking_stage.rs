@@ -66,6 +66,8 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
         let (exit, poh_recorder, poh_service, _signal_receiver) =
             create_test_recorder(&bank, &blockstore, None);
 
+        let recorder = poh_recorder.lock().unwrap().recorder();
+
         let tx = test_tx();
         let len = 4096;
         let chunk_size = 1024;
@@ -88,6 +90,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
                 &s,
                 None::<Box<dyn Fn()>>,
                 None,
+                &recorder,
             );
         });
 
