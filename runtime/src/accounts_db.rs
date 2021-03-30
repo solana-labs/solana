@@ -59,7 +59,7 @@ use std::{
     path::{Path, PathBuf},
     sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
     sync::{Arc, Mutex, MutexGuard, RwLock},
-    thread::{Builder, JoinHandle},
+    thread::Builder,
     time::Instant,
 };
 use tempfile::TempDir;
