@@ -27,6 +27,7 @@ use crate::{
     },
     append_vec::{AppendVec, StoredAccountMeta, StoredMeta},
     contains::Contains,
+    read_only_accounts_cache::ReadOnlyAccountsCache,
 };
 use blake3::traits::digest::Digest;
 use crossbeam_channel::{unbounded, Receiver, Sender};
@@ -690,27 +691,6 @@ impl RecycleStores {
     }
 }
 
-#[derive(Debug, Default)]
-pub struct ReadOnlyAccountsCache {
-    cache: DashMap<Pubkey, AccountSharedData>,
-}
-
-impl ReadOnlyAccountsCache {
-    pub fn load(&self, pubkey: &Pubkey) -> Option<AccountSharedData> {
-        self.cache
-            .get(pubkey)
-            .map(|account_ref| account_ref.value().clone())
-    }
-
-    pub fn store(&self, pubkey: &Pubkey, account: &AccountSharedData) {
-        self.cache.insert(*pubkey, account.clone());
-    }
-
-    pub fn remove(&self, pubkey: &Pubkey) {
-        self.cache.remove(pubkey);
-    }
-}
-
 // This structure handles the load/store of the accounts
 #[derive(Debug)]
 pub struct AccountsDb {
@@ -722,7 +702,6 @@ pub struct AccountsDb {
     pub accounts_cache: AccountsCache,
 
     sender_bg_hasher: Option<Sender<CachedAccount>>,
-    
     pub read_only_accounts_cache: ReadOnlyAccountsCache,
 
     recycle_stores: RwLock<RecycleStores>,
@@ -1095,6 +1074,7 @@ impl solana_frozen_abi::abi_example::AbiExample for AccountsDb {
 impl Default for AccountsDb {
     fn default() -> Self {
         let num_threads = get_thread_count();
+        const MAX_READ_ONLY_CACHE_DATA_SIZE: usize = 100_000_000;
 
         let mut bank_hashes = HashMap::new();
         bank_hashes.insert(0, BankHashInfo::default());
@@ -1103,7 +1083,7 @@ impl Default for AccountsDb {
             storage: AccountStorage::default(),
             accounts_cache: AccountsCache::default(),
             sender_bg_hasher: None,
-            read_only_accounts_cache: ReadOnlyAccountsCache::default(),
+            read_only_accounts_cache: ReadOnlyAccountsCache::new(MAX_READ_ONLY_CACHE_DATA_SIZE),
             recycle_stores: RwLock::new(RecycleStores::default()),
             uncleaned_pubkeys: DashMap::new(),
             next_id: AtomicUsize::new(0),
@@ -2297,7 +2277,6 @@ impl AccountsDb {
         if self.caching_enabled {
             match result {
                 Some((account, _)) => {
-                    // TODO: when to purge old executable accounts
                     self.read_only_accounts_cache.store(pubkey, &account);
                     Some(account)
                 }
@@ -8598,24 +8577,24 @@ pub mod tests {
         db.add_root(0);
         db.add_root(1);
 
-        assert!(db.read_only_accounts_cache.cache.is_empty());
+        assert_eq!(db.read_only_accounts_cache.cache_len(), 0);
         let account = db
             .load_and_keep_in_read_only_cache(&Ancestors::default(), &account_key)
             .unwrap();
         assert_eq!(account.lamports, 1);
-        assert!(db.read_only_accounts_cache.cache.len() == 1);
+        assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
         let account = db
             .load_and_keep_in_read_only_cache(&Ancestors::default(), &account_key)
             .unwrap();
         assert_eq!(account.lamports, 1);
-        assert!(db.read_only_accounts_cache.cache.len() == 1);
+        assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
         db.store_cached(1, &[(&account_key, &zero_lamport_account)]);
-        assert!(db.read_only_accounts_cache.cache.is_empty());
+        assert_eq!(db.read_only_accounts_cache.cache_len(), 0);
         let account = db
             .load_and_keep_in_read_only_cache(&Ancestors::default(), &account_key)
             .unwrap();
         assert_eq!(account.lamports, 0);
-        assert!(db.read_only_accounts_cache.cache.len() == 1);
+        assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
 
         // Flush, then clean again. Should not need another root to initiate the cleaning
         // because `accounts_index.uncleaned_roots` should be correct

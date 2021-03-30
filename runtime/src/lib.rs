@@ -25,6 +25,7 @@ pub mod loader_utils;
 pub mod log_collector;
 pub mod message_processor;
 mod native_loader;
+mod read_only_accounts_cache;
 pub mod rent_collector;
 pub mod secondary_index;
 pub mod serde_snapshot;
