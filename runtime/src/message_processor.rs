@@ -204,7 +204,9 @@ impl PreAccount {
 
     pub fn update(&mut self, account: &AccountSharedData) {
         let mut pre = self.account.borrow_mut();
+        let rent_epoch = pre.rent_epoch();
         *pre = account.clone();
+        pre.set_rent_epoch(rent_epoch);
 
         self.changed = true;
     }
