@@ -105,18 +105,13 @@ impl Deref for SlotCacheInner {
     }
 }
 
-pub struct LazyHash {
-    pub account: Arc<AccountSharedData>,
-    pub hash: RwLock<Hash>,
-}
-
 pub type CachedAccount = Arc<CachedAccountInner>;
 
 #[derive(Debug)]
 pub struct CachedAccountInner {
     pub account: AccountSharedData,
     hash: RwLock<Option<Hash>>,
-    pub hash_slot: Slot,
+    hash_slot: Slot,
     cluster_type: ClusterType,
     pubkey: Pubkey,
 }
