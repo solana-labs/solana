@@ -59,9 +59,10 @@ trees = "0.2.1"
 [dependencies.rocksdb]
 # Avoid the vendored bzip2 within rocksdb-sys that can cause linker conflicts
 # when also using the bzip2 crate
-version = "0.15.0"
+git = "https://github.com/rust-rocksdb/rust-rocksdb"
 default-features = false
-features = ["lz4"]
+rev = "0b700fe70da8ee30483fde79f44df549f8fe11ec"
+features = ["lz4", "multi-threaded-cf"]
 
 [dev-dependencies]
 assert_matches = "1.3.0"
