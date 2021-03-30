@@ -1417,6 +1417,7 @@ describe('Connection', () => {
       const newAccount = new Account().publicKey;
 
       let testToken: Token;
+      let testTokenPubkey: PublicKey;
       let testTokenAccount: PublicKey;
       let testSignature: TransactionSignature;
       let testOwner: Account;
@@ -1474,11 +1475,11 @@ describe('Connection', () => {
         testOwner = accountOwner;
         testToken = token;
         testTokenAccount = tokenAccount as PublicKey;
+        testTokenPubkey = testToken.publicKey as PublicKey;
       });
 
       it('get token supply', async () => {
-        const supply = (await connection.getTokenSupply(testToken.publicKey))
-          .value;
+        const supply = (await connection.getTokenSupply(testTokenPubkey)).value;
         expect(supply.uiAmount).to.eq(111.11);
         expect(supply.decimals).to.eq(2);
         expect(supply.amount).to.eq('11111');
@@ -1488,7 +1489,7 @@ describe('Connection', () => {
 
       it('get token largest accounts', async () => {
         const largestAccounts = (
-          await connection.getTokenLargestAccounts(testToken.publicKey)
+          await connection.getTokenLargestAccounts(testTokenPubkey)
         ).value;
 
         expect(largestAccounts).to.have.length(2);
@@ -1575,7 +1576,7 @@ describe('Connection', () => {
       it('get parsed token accounts by owner', async () => {
         const tokenAccounts = (
           await connection.getParsedTokenAccountsByOwner(testOwner.publicKey, {
-            mint: testToken.publicKey,
+            mint: testTokenPubkey,
           })
         ).value;
         tokenAccounts.forEach(({account}) => {
@@ -1593,7 +1594,7 @@ describe('Connection', () => {
       it('get token accounts by owner', async () => {
         const accountsWithMintFilter = (
           await connection.getTokenAccountsByOwner(testOwner.publicKey, {
-            mint: testToken.publicKey,
+            mint: testTokenPubkey,
           })
         ).value;
         expect(accountsWithMintFilter).to.have.length(2);
@@ -1607,7 +1608,7 @@ describe('Connection', () => {
 
         const noAccounts = (
           await connection.getTokenAccountsByOwner(newAccount, {
-            mint: testToken.publicKey,
+            mint: testTokenPubkey,
           })
         ).value;
         expect(noAccounts).to.have.length(0);
