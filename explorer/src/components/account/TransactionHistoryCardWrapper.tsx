@@ -54,7 +54,6 @@ export function TransactionHistoryCardWrapper({
   }
 
   const transactions = history.data.fetched;
-
   if (transactions.length === 0) {
     if (history.status === FetchStatus.Fetching) {
       return <LoadingCard message="Loading history" />;
@@ -69,7 +68,6 @@ export function TransactionHistoryCardWrapper({
   }
 
   const slotRows: SlotRow[] = [];
-
   for (var i = 0; i < transactions.length; i++) {
     const slot = transactions[i].slot;
     const slotTransactions = [transactions[i]];

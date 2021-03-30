@@ -32,8 +32,8 @@ export type InstructionType = {
 };
 
 export interface InstructionItem {
-  instruction: ParsedInstruction | PartiallyDecodedInstruction,
-  inner: (ParsedInstruction | PartiallyDecodedInstruction)[]
+  instruction: ParsedInstruction | PartiallyDecodedInstruction;
+  inner: (ParsedInstruction | PartiallyDecodedInstruction)[];
 }
 
 export class InstructionContainer {
@@ -43,22 +43,22 @@ export class InstructionContainer {
     return new InstructionContainer(parsedTransaction);
   }
 
-  constructor(
-    parsedTransaction: ParsedConfirmedTransaction
-  ) {
-    this.instructions = parsedTransaction.transaction.message.instructions.map((instruction) => {
-      if ("parsed" in instruction) {
-        instruction.parsed = create(instruction.parsed, ParsedInfo);
-      }
+  constructor(parsedTransaction: ParsedConfirmedTransaction) {
+    this.instructions = parsedTransaction.transaction.message.instructions.map(
+      (instruction) => {
+        if ("parsed" in instruction) {
+          instruction.parsed = create(instruction.parsed, ParsedInfo);
+        }
 
-      return {
-        instruction,
-        inner: []
+        return {
+          instruction,
+          inner: [],
+        };
       }
-    });
+    );
 
     if (parsedTransaction.meta?.innerInstructions) {
-      for(let inner of parsedTransaction.meta.innerInstructions) {
+      for (let inner of parsedTransaction.meta.innerInstructions) {
         this.instructions[inner.index].inner.push(...inner.instructions);
       }
     }
