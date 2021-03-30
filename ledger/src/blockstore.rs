@@ -1407,9 +1407,9 @@ impl Blockstore {
     pub fn get_data_shred(&self, slot: Slot, index: u64) -> Result<Option<Vec<u8>>> {
         use crate::shred::SHRED_PAYLOAD_SIZE;
         self.data_shred_cf.get_bytes((slot, index)).map(|data| {
-            data.and_then(|mut d| {
+            data.map(|mut d| {
                 d.resize(cmp::max(d.len(), SHRED_PAYLOAD_SIZE), 0);
-                Some(d)
+                d
             })
         })
     }
@@ -2688,9 +2688,14 @@ impl Blockstore {
                 .expect("fetch from DuplicateSlots column family failed")
         };
 
-        let new_shred = Shred::new_from_serialized_shred(new_shred_raw.to_vec()).unwrap();
+        let mut payload = new_shred_raw.to_vec();
+        payload.resize(
+            std::cmp::max(new_shred_raw.len(), crate::shred::SHRED_PAYLOAD_SIZE),
+            0,
+        );
+        let new_shred = Shred::new_from_serialized_shred(payload).unwrap();
         res.map(|existing_shred| {
-            if existing_shred != new_shred.payload[..new_shred.data_header.size as usize] {
+            if existing_shred != new_shred.payload {
                 Some(existing_shred)
             } else {
                 None
@@ -6858,7 +6863,7 @@ pub mod tests {
                         .get_data_shred(s.slot(), s.index() as u64)
                         .unwrap()
                         .unwrap(),
-                    buf[..s.data_header.size as usize]
+                    buf
                 );
             }
 
@@ -7099,7 +7104,7 @@ pub mod tests {
                     &duplicate_shred.payload,
                     duplicate_shred.is_data()
                 ),
-                Some(shred.payload[..shred.data_header.size as usize].to_vec())
+                Some(shred.payload.to_vec())
             );
             assert!(blockstore
                 .is_shred_duplicate(
