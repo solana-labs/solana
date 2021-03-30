@@ -20,10 +20,10 @@ $ solana-keygen pubkey
 
 ```bash
 // Command
-$ solana airdrop 2
+$ solana airdrop 1
 
 // Return
-"2.00000000 SOL"
+"1 SOL"
 ```
 
 ### Get Balance
