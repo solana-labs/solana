@@ -31,6 +31,40 @@ export type InstructionType = {
   innerInstructions: (ParsedInstruction | PartiallyDecodedInstruction)[];
 };
 
+export interface InstructionItem {
+  instruction: ParsedInstruction | PartiallyDecodedInstruction,
+  inner: (ParsedInstruction | PartiallyDecodedInstruction)[]
+}
+
+export class InstructionContainer {
+  readonly instructions: InstructionItem[];
+
+  static create(parsedTransaction: ParsedConfirmedTransaction) {
+    return new InstructionContainer(parsedTransaction);
+  }
+
+  constructor(
+    parsedTransaction: ParsedConfirmedTransaction
+  ) {
+    this.instructions = parsedTransaction.transaction.message.instructions.map((instruction) => {
+      if ("parsed" in instruction) {
+        instruction.parsed = create(instruction.parsed, ParsedInfo);
+      }
+
+      return {
+        instruction,
+        inner: []
+      }
+    });
+
+    if (parsedTransaction.meta?.innerInstructions) {
+      for(let inner of parsedTransaction.meta.innerInstructions) {
+        this.instructions[inner.index].inner.push(...inner.instructions);
+      }
+    }
+  }
+}
+
 export function getTokenInstructionName(
   ix: ParsedInstruction,
   signatureInfo: ConfirmedSignatureInfo

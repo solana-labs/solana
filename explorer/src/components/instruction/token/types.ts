@@ -42,7 +42,8 @@ const InitializeMultisig = type({
   m: number(),
 });
 
-const Transfer = type({
+export type Transfer = Infer<typeof Transfer>;
+export const Transfer = type({
   source: PublicKeyFromString,
   destination: PublicKeyFromString,
   amount: union([string(), number()]),
@@ -126,7 +127,8 @@ const ThawAccount = type({
   signers: optional(array(PublicKeyFromString)),
 });
 
-const TransferChecked = type({
+export type TransferChecked = Infer<typeof TransferChecked>;
+export const TransferChecked = type({
   source: PublicKeyFromString,
   mint: PublicKeyFromString,
   destination: PublicKeyFromString,
