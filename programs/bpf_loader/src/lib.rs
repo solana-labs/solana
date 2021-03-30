@@ -31,13 +31,14 @@ use solana_sdk::{
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     clock::Clock,
     entrypoint::SUCCESS,
-    feature_set::upgradeable_close_instruction,
+    feature_set::{add_missing_program_error_mappings, upgradeable_close_instruction},
     ic_logger_msg, ic_msg,
     instruction::InstructionError,
     keyed_account::{from_keyed_account, keyed_account_at_index},
     loader_instruction::LoaderInstruction,
     loader_upgradeable_instruction::UpgradeableLoaderInstruction,
     process_instruction::{stable_log, ComputeMeter, Executor, InvokeContext},
+    program_error::{ACCOUNT_NOT_RENT_EXEMPT, BORSH_IO_ERROR},
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     rent::Rent,
@@ -750,6 +751,8 @@ impl Executor for BpfExecutor {
     ) -> Result<(), InstructionError> {
         let logger = invoke_context.get_logger();
         let invoke_depth = invoke_context.invoke_depth();
+        let add_missing_program_error_mappings =
+            invoke_context.is_feature_active(&add_missing_program_error_mappings::id());
 
         invoke_context.remove_first_keyed_account()?;
 
@@ -803,7 +806,14 @@ impl Executor for BpfExecutor {
             match result {
                 Ok(status) => {
                     if status != SUCCESS {
-                        let error: InstructionError = status.into();
+                        let error: InstructionError = if !add_missing_program_error_mappings
+                            && (status == ACCOUNT_NOT_RENT_EXEMPT || status == BORSH_IO_ERROR)
+                        {
+                            // map originally missing error mappings to InvalidError
+                            InstructionError::InvalidError
+                        } else {
+                            status.into()
+                        };
                         stable_log::program_failure(&logger, program_id, &error);
                         return Err(error);
                     }
