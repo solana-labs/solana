@@ -1,7 +1,6 @@
 import babel from '@rollup/plugin-babel';
 import commonjs from '@rollup/plugin-commonjs';
 import json from '@rollup/plugin-json';
-import typescript from 'rollup-plugin-ts';
 import nodeResolve from '@rollup/plugin-node-resolve';
 import nodePolyfills from 'rollup-plugin-node-polyfills';
 import replace from '@rollup/plugin-replace';
@@ -13,7 +12,6 @@ const extensions = ['.js', '.ts'];
 function generateConfig(configType, format) {
   const browser = configType === 'browser';
   const bundle = format === 'iife';
-  const generateTypescript = configType === 'typescript';
 
   const config = {
     input: 'src/index.ts',
@@ -25,12 +23,6 @@ function generateConfig(configType, format) {
         extensions,
         preferBuiltins: !browser,
       }),
-      generateTypescript
-        ? typescript({
-            browserslist: false,
-            tsconfig: './tsconfig.d.json',
-          })
-        : undefined,
       babel({
         exclude: '**/node_modules/**',
         extensions,
@@ -145,12 +137,6 @@ function generateConfig(configType, format) {
         },
       ];
       break;
-    case 'typescript':
-      config.output = {
-        file: 'lib/types/index.d.ts',
-      };
-      config.plugins.push(json());
-      break;
     default:
       throw new Error(`Unknown configType: ${configType}`);
   }
@@ -160,7 +146,6 @@ function generateConfig(configType, format) {
 
 export default [
   generateConfig('node'),
-  generateConfig('typescript'),
   generateConfig('browser', 'esm'),
   generateConfig('browser', 'iife'),
 ];

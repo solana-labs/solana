@@ -27,3 +27,6 @@ test-ledger/
 
 # Flow
 module.flow.js
+
+# TypeScript
+declarations
