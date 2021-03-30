@@ -14,7 +14,7 @@ import { useTokenRegistry } from "providers/mints/token-registry";
 import { SlotRow } from "../TransactionHistoryCardWrapper";
 import { Signature } from "components/common/Signature";
 
-export function TokenBalancesDetails({
+export function TransfersDetails({
   pubkey,
   slotRows,
 }: {
@@ -34,10 +34,11 @@ export function TokenBalancesDetails({
   }, [history]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const hasTimestamps = !!slotRows.find((element) => !!element.blockTime);
+  const hasFailed = !!slotRows.find((element) => element.failed);
   const detailsList: React.ReactNode[] = [];
 
   slotRows.forEach(
-    ({ slot, signature, blockTime, statusClass, statusText }) => {
+    ({ slot, signature, blockTime, failed }) => {
       const parsed = detailedHistoryMap.get(signature);
       if (!parsed) return;
 
@@ -57,23 +58,11 @@ export function TokenBalancesDetails({
 
       if (rows.length < 1) {
         detailsList.push(
-          <tr key={signature}>
+          <tr key={signature}  className={`${failed && "transaction-failed"}`}
+          title={`${failed && "Transaction Failed"}`}>
             <td className="w-1">
               <Slot slot={slot} link />
             </td>
-
-            {hasTimestamps && (
-              <td className="text-muted">
-                {blockTime ? displayTimestamp(blockTime * 1000, true) : "---"}
-              </td>
-            )}
-
-            <td>
-              <span className={`badge badge-soft-${statusClass}`}>
-                {statusText}
-              </span>
-            </td>
-
             <td className="text-muted">No token balances changed</td>
 
             <td>
@@ -85,8 +74,14 @@ export function TokenBalancesDetails({
             </td>
 
             <td>
-              <Signature signature={signature} link />
+              <Signature signature={signature} link truncate />
             </td>
+
+            {hasTimestamps && (
+              <td className="text-muted">
+                {blockTime ? displayTimestamp(blockTime * 1000, true) : "---"}
+              </td>
+            )}
           </tr>
         );
 
@@ -102,25 +97,14 @@ export function TokenBalancesDetails({
         const units = tokenRegistry.get(mint)?.symbol || "tokens";
 
         detailsList.push(
-          <tr key={key}>
+          <tr key={key}  className={`${failed && "transaction-failed"}`}
+          title={`${failed && "Transaction Failed"}`}>
             <td className="w-1">
               <Slot slot={slot} link />
             </td>
 
-            {hasTimestamps && (
-              <td className="text-muted">
-                {blockTime ? displayTimestamp(blockTime * 1000, true) : "---"}
-              </td>
-            )}
-
             <td>
-              <span className={`badge badge-soft-${statusClass}`}>
-                {statusText}
-              </span>
-            </td>
-
-            <td>
-              <Address pubkey={account} link />
+              <Address pubkey={account} link truncate />
             </td>
 
             <td>
@@ -132,8 +116,14 @@ export function TokenBalancesDetails({
             </td>
 
             <td>
-              <Signature signature={signature} link />
+              <Signature signature={signature} link truncate />
             </td>
+
+            {hasTimestamps && (
+              <td className="text-muted">
+                {blockTime ? displayTimestamp(blockTime * 1000, true) : "---"}
+              </td>
+            )}
           </tr>
         );
       });
@@ -146,12 +136,11 @@ export function TokenBalancesDetails({
         <thead>
           <tr>
             <th className="text-muted w-1">Slot</th>
-            {hasTimestamps && <th className="text-muted">Timestamp</th>}
-            <th className="text-muted">Result</th>
             <th className="text-muted">Account</th>
             <th className="text-muted">Balance Change</th>
             <th className="text-muted">Post Balance</th>
             <th className="text-muted">Transaction Signature</th>
+            {hasTimestamps && <th className="text-muted">Timestamp</th>}
           </tr>
         </thead>
         <tbody className="list">{detailsList}</tbody>

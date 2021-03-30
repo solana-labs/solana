@@ -97,9 +97,11 @@ async function fetchDetailedAccountHistory(
     const fetched = await connection.getParsedConfirmedTransactions(signatures);
 
     const transactionMap = new Map();
-    fetched.forEach((parsed: ParsedConfirmedTransaction, index: number) =>
-      transactionMap.set(signatures[index], parsed)
-    );
+    fetched.forEach((parsed: ParsedConfirmedTransaction | null, index: number) => {
+      if (parsed !== null) {
+        transactionMap.set(signatures[index], parsed)
+      }
+    });
 
     dispatch({
       type: ActionType.Update,

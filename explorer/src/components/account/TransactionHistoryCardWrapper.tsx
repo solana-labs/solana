@@ -7,7 +7,7 @@ import { ErrorCard } from "components/common/ErrorCard";
 import { LoadingCard } from "components/common/LoadingCard";
 import { MoreTabs } from "pages/AccountDetailsPage";
 import { TransactionHistoryDetails } from "./history/TransactionHistoryDetails";
-import { TokenBalancesDetails } from "./history/TokenBalancesDetails";
+import { TransfersDetails } from "./history/TokenTransfersDetails";
 import { TokenInstructionsDetails } from "./history/TokenInstructionsDetails";
 
 export type SlotRow = {
@@ -15,8 +15,7 @@ export type SlotRow = {
   signature: string;
   err: object | null;
   blockTime: number | null | undefined;
-  statusClass: string;
-  statusText: string;
+  failed: boolean;
   signatureInfo: ConfirmedSignatureInfo;
 };
 
@@ -81,23 +80,12 @@ export function TransactionHistoryCardWrapper({
     }
 
     for (let slotTransaction of slotTransactions) {
-      let statusText;
-      let statusClass;
-      if (slotTransaction.err) {
-        statusClass = "warning";
-        statusText = "Failed";
-      } else {
-        statusClass = "success";
-        statusText = "Success";
-      }
-
       slotRows.push({
         slot,
         signature: slotTransaction.signature,
         err: slotTransaction.err,
         blockTime: slotTransaction.blockTime,
-        statusClass,
-        statusText,
+        failed: !!slotTransaction.err,
         signatureInfo: transactions[i],
       });
     }
@@ -130,10 +118,10 @@ export function TransactionHistoryCardWrapper({
       {tab === "history" && (
         <TransactionHistoryDetails pubkey={pubkey} slotRows={slotRows} />
       )}
-      {tab === "token-balances" && (
-        <TokenBalancesDetails pubkey={pubkey} slotRows={slotRows} />
+      {tab === "transfers" && (
+        <TransfersDetails pubkey={pubkey} slotRows={slotRows} />
       )}
-      {tab === "token-instructions" && (
+      {tab === "instructions" && (
         <TokenInstructionsDetails pubkey={pubkey} slotRows={slotRows} />
       )}
 

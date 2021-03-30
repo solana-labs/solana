@@ -4,14 +4,32 @@ import { TransactionSignature } from "@solana/web3.js";
 import { clusterPath } from "utils/url";
 import { Copyable } from "./Copyable";
 
+const DEFAULT_TRUNCATE_CHARS = 8;
+
 type Props = {
   signature: TransactionSignature;
   alignRight?: boolean;
   link?: boolean;
   truncate?: boolean;
+  truncateChars?: number;
 };
 
-export function Signature({ signature, alignRight, link, truncate }: Props) {
+export function Signature({
+  signature,
+  alignRight,
+  link,
+  truncate,
+  truncateChars,
+}: Props) {
+  let signatureLabel = signature;
+
+  if (truncate) {
+    signatureLabel =
+      signature.slice(0, truncateChars || DEFAULT_TRUNCATE_CHARS) +
+      "..." +
+      signature.slice(-(truncateChars || DEFAULT_TRUNCATE_CHARS));
+  }
+
   return (
     <div
       className={`d-flex align-items-center ${
@@ -25,10 +43,10 @@ export function Signature({ signature, alignRight, link, truncate }: Props) {
               className={truncate ? "text-truncate signature-truncate" : ""}
               to={clusterPath(`/tx/${signature}`)}
             >
-              {signature}
+              {signatureLabel}
             </Link>
           ) : (
-            signature
+            signatureLabel
           )}
         </span>
       </Copyable>

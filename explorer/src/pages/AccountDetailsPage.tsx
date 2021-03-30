@@ -37,14 +37,14 @@ const IDENTICON_WIDTH = 64;
 const TABS_LOOKUP: { [id: string]: Tab[] } = {
   "spl-token:mint": [
     {
-      slug: "token-balances",
-      title: "Token Balances",
-      path: "/token-balances",
+      slug: "transfers",
+      title: "Transfers",
+      path: "/transfers",
     },
     {
-      slug: "token-instructions",
-      title: "Token Instructions",
-      path: "/token-instructions",
+      slug: "instructions",
+      title: "Instructions",
+      path: "/instructions",
     },
     {
       slug: "largest",
@@ -277,8 +277,8 @@ export type MoreTabs =
   | "slot-hashes"
   | "stake-history"
   | "blockhashes"
-  | "token-balances"
-  | "token-instructions";
+  | "transfers"
+  | "instructions";
 
 function MoreSection({
   account,
@@ -326,14 +326,14 @@ function MoreSection({
           tab={tab}
         />
       )}
-      {tab === "token-balances" && (
+      {tab === "transfers" && (
         <TransactionHistoryCardWrapper
-          title="Token Balances"
+          title="Token Transfers"
           pubkey={pubkey}
           tab={tab}
         />
       )}
-      {tab === "token-instructions" && (
+      {tab === "instructions" && (
         <TransactionHistoryCardWrapper
           title="Token Instructions"
           pubkey={pubkey}

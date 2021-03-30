@@ -33,63 +33,52 @@ export function TokenInstructionsDetails({
   const hasTimestamps = !!slotRows.find((element) => !!element.blockTime);
   const detailsList: React.ReactNode[] = [];
 
-  slotRows.forEach(
-    ({
-      slot,
-      signatureInfo,
-      signature,
-      blockTime,
-      statusClass,
-      statusText,
-    }) => {
-      const parsed = detailedHistoryMap.get(signature);
-      if (!parsed) return;
+  slotRows.forEach(({ slot, signatureInfo, signature, blockTime, failed }) => {
+    const parsed = detailedHistoryMap.get(signature);
+    if (!parsed) return;
 
-      const instructions = parsed.transaction.message.instructions;
+    const instructions = parsed.transaction.message.instructions;
 
-      instructions.forEach((ix, index) => {
-        const instructionType = getTokenInstructionType(
-          parsed,
-          ix,
-          signatureInfo,
-          index
+    instructions.forEach((ix, index) => {
+      const instructionType = getTokenInstructionType(
+        parsed,
+        ix,
+        signatureInfo,
+        index
+      );
+
+      if (instructionType) {
+        detailsList.push(
+          <tr
+            key={signature + index}
+            className={`${failed && "transaction-failed"}`}
+            title={`${failed && "Transaction Failed"}`}
+          >
+            <td className="w-1">
+              <Slot slot={slot} link />
+            </td>
+
+            <td>
+              <InstructionDetails
+                instructionType={instructionType}
+                tx={signatureInfo}
+              />
+            </td>
+
+            <td>
+              <Signature signature={signature} link truncate />
+            </td>
+
+            {hasTimestamps && (
+              <td className="text-muted">
+                {blockTime ? displayTimestamp(blockTime * 1000, true) : "---"}
+              </td>
+            )}
+          </tr>
         );
-
-        if (instructionType) {
-          detailsList.push(
-            <tr key={signature + index}>
-              <td className="w-1">
-                <Slot slot={slot} link />
-              </td>
-
-              {hasTimestamps && (
-                <td className="text-muted">
-                  {blockTime ? displayTimestamp(blockTime * 1000, true) : "---"}
-                </td>
-              )}
-
-              <td>
-                <span className={`badge badge-soft-${statusClass}`}>
-                  {statusText}
-                </span>
-              </td>
-
-              <td>
-                <InstructionDetails
-                  instructionType={instructionType}
-                  tx={signatureInfo}
-                />
-              </td>
-
-              <td>
-                <Signature signature={signature} link />
-              </td>
-            </tr>
-          );
-        }
-      });
-    }
-  );
+      }
+    });
+  });
 
   return (
     <div className="table-responsive mb-0">
@@ -97,10 +86,9 @@ export function TokenInstructionsDetails({
         <thead>
           <tr>
             <th className="text-muted w-1">Slot</th>
-            {hasTimestamps && <th className="text-muted">Timestamp</th>}
-            <th className="text-muted">Result</th>
             <th className="text-muted">Instruction</th>
             <th className="text-muted">Transaction Signature</th>
+            {hasTimestamps && <th className="text-muted w-auto">Timestamp</th>}
           </tr>
         </thead>
         <tbody className="list">{detailsList}</tbody>
