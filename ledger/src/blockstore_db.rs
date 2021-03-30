@@ -5,7 +5,7 @@ use log::*;
 use prost::Message;
 pub use rocksdb::Direction as IteratorDirection;
 use rocksdb::{
-    self, ColumnFamily, ColumnFamilyDescriptor, DBIterator, DBRawIterator, DBRecoveryMode,
+    self, ColumnFamilyDescriptor, ColumnFamilyRef, DBIterator, DBRawIterator, DBRecoveryMode,
     IteratorMode as RocksIteratorMode, Options, WriteBatch as RWriteBatch, DB,
 };
 use serde::de::DeserializeOwned;
@@ -346,23 +346,27 @@ impl Rocks {
         Ok(())
     }
 
-    fn cf_handle(&self, cf: &str) -> &ColumnFamily {
+    fn cf_handle(&self, cf: &str) -> ColumnFamilyRef {
         self.0
             .cf_handle(cf)
             .expect("should never get an unknown column")
     }
 
-    fn get_cf(&self, cf: &ColumnFamily, key: &[u8]) -> Result<Option<Vec<u8>>> {
+    fn get_cf(&self, cf: ColumnFamilyRef, key: &[u8]) -> Result<Option<Vec<u8>>> {
         let opt = self.0.get_cf(cf, key)?.map(|db_vec| db_vec.to_vec());
         Ok(opt)
     }
 
-    fn put_cf(&self, cf: &ColumnFamily, key: &[u8], value: &[u8]) -> Result<()> {
+    fn put_cf(&self, cf: ColumnFamilyRef, key: &[u8], value: &[u8]) -> Result<()> {
         self.0.put_cf(cf, key, value)?;
         Ok(())
     }
 
-    fn iterator_cf<C>(&self, cf: &ColumnFamily, iterator_mode: IteratorMode<C::Index>) -> DBIterator
+    fn iterator_cf<C>(
+        &self,
+        cf: ColumnFamilyRef,
+        iterator_mode: IteratorMode<C::Index>,
+    ) -> DBIterator
     where
         C: Column,
     {
@@ -378,7 +382,7 @@ impl Rocks {
         self.0.iterator_cf(cf, iterator_mode)
     }
 
-    fn raw_iterator_cf(&self, cf: &ColumnFamily) -> DBRawIterator {
+    fn raw_iterator_cf(&self, cf: ColumnFamilyRef) -> DBRawIterator {
         self.0.raw_iterator_cf(cf)
     }
 
@@ -725,7 +729,7 @@ where
 
 pub struct WriteBatch<'a> {
     write_batch: RWriteBatch,
-    map: HashMap<&'static str, &'a ColumnFamily>,
+    map: HashMap<&'static str, ColumnFamilyRef<'a>>,
 }
 
 impl Database {
@@ -774,7 +778,7 @@ impl Database {
     }
 
     #[inline]
-    pub fn cf_handle<C: ColumnName>(&self) -> &ColumnFamily
+    pub fn cf_handle<C: ColumnName>(&self) -> ColumnFamilyRef
     where
         C: Column + ColumnName,
     {
@@ -792,7 +796,7 @@ impl Database {
     }
 
     #[inline]
-    pub fn raw_iterator_cf(&self, cf: &ColumnFamily) -> Result<DBRawIterator> {
+    pub fn raw_iterator_cf(&self, cf: ColumnFamilyRef) -> Result<DBRawIterator> {
         Ok(self.backend.raw_iterator_cf(cf))
     }
 
@@ -895,7 +899,7 @@ where
     }
 
     #[inline]
-    pub fn handle(&self) -> &ColumnFamily {
+    pub fn handle(&self) -> ColumnFamilyRef {
         self.backend.cf_handle(C::NAME)
     }
 
@@ -991,13 +995,13 @@ impl<'a> WriteBatch<'a> {
     }
 
     #[inline]
-    fn get_cf<C: Column + ColumnName>(&self) -> &'a ColumnFamily {
+    fn get_cf<C: Column + ColumnName>(&self) -> ColumnFamilyRef<'a> {
         self.map[C::NAME]
     }
 
     pub fn delete_range_cf<C: Column>(
         &mut self,
-        cf: &ColumnFamily,
+        cf: ColumnFamilyRef,
         from: C::Index,
         to: C::Index,
     ) -> Result<()> {
