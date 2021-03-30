@@ -4364,6 +4364,16 @@ impl AccountsDb {
                     self.stats.store_total_data.swap(0, Ordering::Relaxed),
                     i64
                 ),
+                (
+                    "read_only_accounts_cache_entries",
+                    self.read_only_accounts_cache.cache_len(),
+                    i64
+                ),
+                (
+                    "read_only_accounts_cache_data_size",
+                    self.read_only_accounts_cache.data_size(),
+                    i64
+                ),
             );
 
             let recycle_stores = self.recycle_stores.read().unwrap();
