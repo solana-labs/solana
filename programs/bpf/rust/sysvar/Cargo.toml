@@ -1,12 +1,12 @@
 [package]
-name = "solana-bpf-rust-sysval"
+name = "solana-bpf-rust-sysvar"
 version = "1.7.0"
 description = "Solana BPF test program written in Rust"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
-documentation = "https://docs.rs/solana-bpf-rust-sysval"
+documentation = "https://docs.rs/solana-bpf-rust-sysvar"
 edition = "2018"
 
 [dependencies]

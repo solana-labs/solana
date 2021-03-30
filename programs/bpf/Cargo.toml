@@ -73,7 +73,7 @@ members = [
     "rust/sha256",
     "rust/spoof1",
     "rust/spoof1_system",
-    "rust/sysval",
+    "rust/sysvar",
     "rust/upgradeable",
     "rust/upgraded",
 ]
