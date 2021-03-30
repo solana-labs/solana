@@ -8595,14 +8595,6 @@ pub mod tests {
             .unwrap();
         assert_eq!(account.lamports, 0);
         assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
-
-        // Flush, then clean again. Should not need another root to initiate the cleaning
-        // because `accounts_index.uncleaned_roots` should be correct
-        db.flush_accounts_cache(true, None);
-        db.clean_accounts(None);
-        assert!(db
-            .do_load(&Ancestors::default(), &account_key, Some(0))
-            .is_none());
     }
 
     #[test]
