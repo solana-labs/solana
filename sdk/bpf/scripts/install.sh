@@ -170,6 +170,7 @@ if [[ ! -e rust-bpf-$machine-$version.md || ! -e rust-bpf-$machine ]]; then
   touch rust-bpf-$machine-$version.md
 fi
 set -ex
+./rust-bpf-$machine/bin/rustc --version
 ./rust-bpf-$machine/bin/rustc --print sysroot
 set +e
 rustup toolchain uninstall bpf
