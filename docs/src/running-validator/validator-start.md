@@ -202,11 +202,11 @@ Wallet Config Updated: /home/solana/.config/solana/wallet/config.yml
 Airdrop yourself some SOL to get started:
 
 ```bash
-solana airdrop 10
+solana airdrop 1
 ```
 
 Note that airdrops are only available on Devnet and Testnet. Both are limited
-to 10 SOL per request.
+to 1 SOL per request.
 
 To view your current balance:
 
