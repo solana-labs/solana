@@ -1140,7 +1140,7 @@ impl AccountsDb {
             }
         };
 
-        new.start_store_hasher();
+        new.start_background_hasher();
         {
             for path in new.paths.iter() {
                 std::fs::create_dir_all(path).expect("Create directory failed.");
@@ -1313,8 +1313,9 @@ impl AccountsDb {
             let result = receiver.recv();
             match result {
                 Ok(account) => {
-                    // if we hold the only ref, then this account doesn't need to be hashed
+                    // if we hold the only ref, then this account doesn't need to be hashed, we ignore this account and it will disappear
                     if Arc::strong_count(&account) > 1 {
+                        // this will cause the hash to be calculated and store inside account if it needs to be calculated
                         let _ = (*account).hash();
                     };
                 }
@@ -1323,17 +1324,16 @@ impl AccountsDb {
                 }
             }
         }
-        //let map = DashMapLazyHasher::default();
     }
 
-    fn start_store_hasher(&mut self) {
+    fn start_background_hasher(&mut self) {
         let (sender, receiver) = channel();
         Builder::new()
             .name("solana-accounts-db-store-hasher".to_string())
             .spawn(move || {
                 Self::background_hasher(receiver);
             })
-            .unwrap(); //);
+            .unwrap();
         self.sender_bg_hasher = Some(Mutex::new(sender));
     }
 
