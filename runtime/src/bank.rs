@@ -12291,8 +12291,9 @@ pub(crate) mod tests {
             _data: &[u8],
             _invoke_context: &mut dyn InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
-            let data = &mut ka[1].try_account_ref_mut()?.data;
-            Arc::make_mut(data)[0] = 5;
+            use solana_sdk::account::WritableAccount;
+            let mut data = ka[1].try_account_ref_mut()?;
+            data.data_as_mut_slice()[0] = 5;
             Ok(())
         }
 
