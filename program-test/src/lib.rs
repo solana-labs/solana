@@ -30,6 +30,7 @@ use {
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount},
         clock::Slot,
+        feature_set::demote_sysvar_write_locks,
         genesis_config::{ClusterType, GenesisConfig},
         keyed_account::KeyedAccount,
         process_instruction::{
@@ -244,12 +245,14 @@ impl program_stubs::SyscallStubs for SyscallStubs {
             }
             panic!("Program id {} wasn't found in account_infos", program_id);
         };
+        let demote_sysvar_write_locks =
+            invoke_context.is_feature_active(&demote_sysvar_write_locks::id());
         // TODO don't have the caller's keyed_accounts so can't validate writer or signer escalation or deescalation yet
         let caller_privileges = message
             .account_keys
             .iter()
             .enumerate()
-            .map(|(i, _)| message.is_writable(i))
+            .map(|(i, _)| message.is_writable(i, demote_sysvar_write_locks))
             .collect::<Vec<bool>>();
 
         stable_log::program_invoke(&logger, &program_id, invoke_context.invoke_depth());
