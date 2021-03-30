@@ -2863,7 +2863,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-bpf-rust-sysval"
+name = "solana-bpf-rust-sysvar"
 version = "1.7.0"
 dependencies = [
  "solana-program 1.7.0",

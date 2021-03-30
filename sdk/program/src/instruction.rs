@@ -176,30 +176,39 @@ pub enum InstructionError {
     #[error("Cross-program invocation with unauthorized signer or writable account")]
     PrivilegeEscalation,
 
+    /// Failed to create program execution environment
     #[error("Failed to create program execution environment")]
     ProgramEnvironmentSetupFailure,
 
+    /// Program failed to complete
     #[error("Program failed to complete")]
     ProgramFailedToComplete,
 
+    /// Program failed to compile
     #[error("Program failed to compile")]
     ProgramFailedToCompile,
 
+    /// Account is immutable
     #[error("Account is immutable")]
     Immutable,
 
+    /// Incorrect authority provided
     #[error("Incorrect authority provided")]
     IncorrectAuthority,
 
+    /// Failed to serialize or deserialize account data
     #[error("Failed to serialize or deserialize account data: {0}")]
     BorshIoError(String),
 
+    /// An account does not have enough lamports to be rent-exempt
     #[error("An account does not have enough lamports to be rent-exempt")]
     AccountNotRentExempt,
 
+    /// Invalid account owner
     #[error("Invalid account owner")]
     InvalidAccountOwner,
 
+    /// Program arithmetic overflowed
     #[error("Program arithmetic overflowed")]
     ArithmeticOverflow,
 }

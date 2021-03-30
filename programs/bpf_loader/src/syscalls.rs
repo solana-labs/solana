@@ -111,13 +111,6 @@ pub fn register_syscalls(
 
     syscall_registry.register_syscall_by_name(b"sol_log_pubkey", SyscallLogPubkey::call)?;
 
-    syscall_registry.register_syscall_by_name(b"sol_sha256", SyscallSha256::call)?;
-
-    if invoke_context.is_feature_active(&ristretto_mul_syscall_enabled::id()) {
-        syscall_registry
-            .register_syscall_by_name(b"sol_ristretto_mul", SyscallRistrettoMul::call)?;
-    }
-
     syscall_registry.register_syscall_by_name(
         b"sol_create_program_address",
         SyscallCreateProgramAddress::call,
@@ -126,6 +119,14 @@ pub fn register_syscalls(
         b"sol_try_find_program_address",
         SyscallTryFindProgramAddress::call,
     )?;
+
+    syscall_registry.register_syscall_by_name(b"sol_sha256", SyscallSha256::call)?;
+
+    if invoke_context.is_feature_active(&ristretto_mul_syscall_enabled::id()) {
+        syscall_registry
+            .register_syscall_by_name(b"sol_ristretto_mul", SyscallRistrettoMul::call)?;
+    }
+
     syscall_registry
         .register_syscall_by_name(b"sol_invoke_signed_c", SyscallInvokeSignedC::call)?;
     syscall_registry
@@ -204,6 +205,24 @@ pub fn bind_syscall_context_objects<'a>(
     )?;
 
     vm.bind_syscall_context_object(
+        Box::new(SyscallCreateProgramAddress {
+            cost: bpf_compute_budget.create_program_address_units,
+            compute_meter: invoke_context.get_compute_meter(),
+            loader_id,
+        }),
+        None,
+    )?;
+
+    vm.bind_syscall_context_object(
+        Box::new(SyscallTryFindProgramAddress {
+            cost: bpf_compute_budget.create_program_address_units,
+            compute_meter: invoke_context.get_compute_meter(),
+            loader_id,
+        }),
+        None,
+    )?;
+
+    vm.bind_syscall_context_object(
         Box::new(SyscallSha256 {
             sha256_base_cost: bpf_compute_budget.sha256_base_cost,
             sha256_byte_cost: bpf_compute_budget.sha256_byte_cost,
@@ -223,24 +242,6 @@ pub fn bind_syscall_context_objects<'a>(
             loader_id,
         }),
     );
-
-    vm.bind_syscall_context_object(
-        Box::new(SyscallCreateProgramAddress {
-            cost: bpf_compute_budget.create_program_address_units,
-            compute_meter: invoke_context.get_compute_meter(),
-            loader_id,
-        }),
-        None,
-    )?;
-
-    vm.bind_syscall_context_object(
-        Box::new(SyscallTryFindProgramAddress {
-            cost: bpf_compute_budget.create_program_address_units,
-            compute_meter: invoke_context.get_compute_meter(),
-            loader_id,
-        }),
-        None,
-    )?;
 
     // Cross-program invocation syscalls
 
