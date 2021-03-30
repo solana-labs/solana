@@ -695,8 +695,6 @@ pub struct AccountsDb {
 
     sender_bg_hasher: Option<Mutex<Sender<CachedAccount>>>,
 
-    store_hasher: Option<Arc<JoinHandle<()>>>,
-
     recycle_stores: RwLock<RecycleStores>,
 
     /// distribute the accounts across storage lists
@@ -1074,7 +1072,6 @@ impl Default for AccountsDb {
             accounts_index: AccountsIndex::default(),
             storage: AccountStorage::default(),
             accounts_cache: AccountsCache::default(),
-            store_hasher: None,
             sender_bg_hasher: None,
             recycle_stores: RwLock::new(RecycleStores::default()),
             uncleaned_pubkeys: DashMap::new(),
