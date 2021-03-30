@@ -24,6 +24,11 @@ import { displayTimestamp } from "utils/date";
 import { Address } from "components/common/Address";
 import { normalizeTokenAmount } from "utils";
 
+type MintDetails = {
+  decimals: number;
+  mint: string;
+};
+
 export function TransfersDetails({
   pubkey,
   slotRows,
@@ -46,7 +51,7 @@ export function TransfersDetails({
 
   const hasTimestamps = !!slotRows.find((element) => !!element.blockTime);
   const detailsList: React.ReactNode[] = [];
-  const mintDecimalsMap = new Map<PublicKey, number>();
+  const mintDecimalsMap = new Map<string, MintDetails>();
 
   slotRows.forEach(({ slot, signature, signatureInfo, blockTime, failed }) => {
     const parsed = detailedHistoryMap.get(signature);
@@ -58,7 +63,10 @@ export function TransfersDetails({
       parsed.meta.preTokenBalances.forEach((balance) => {
         const account =
           parsed.transaction.message.accountKeys[balance.accountIndex];
-        mintDecimalsMap.set(account.pubkey, balance.uiTokenAmount.decimals);
+        mintDecimalsMap.set(account.pubkey.toBase58(), {
+          decimals: balance.uiTokenAmount.decimals,
+          mint: balance.mint,
+        });
       });
     }
 
@@ -66,11 +74,15 @@ export function TransfersDetails({
       parsed.meta.postTokenBalances.forEach((balance) => {
         const account =
           parsed.transaction.message.accountKeys[balance.accountIndex];
-        mintDecimalsMap.set(account.pubkey, balance.uiTokenAmount.decimals);
+        mintDecimalsMap.set(account.pubkey.toBase58(), {
+          decimals: balance.uiTokenAmount.decimals,
+          mint: balance.mint,
+        });
       });
     }
 
-    const transfers: (Transfer | TransferChecked)[] = [];
+    // Extract all transfers from transaction
+    let transfers: (Transfer | TransferChecked)[] = [];
     InstructionContainer.create(parsed).instructions.forEach(
       ({ instruction, inner }) => {
         const transfer = getTransfer(instruction);
@@ -85,6 +97,26 @@ export function TransfersDetails({
         });
       }
     );
+
+    // Filter out transfers not belonging to this mint
+    transfers = transfers.filter((transfer) => {
+      if ("tokenAmount" in transfer && transfer.mint !== pubkey) {
+        return false;
+      } else if (
+        mintDecimalsMap.has(transfer.source.toBase58()) &&
+        mintDecimalsMap.get(transfer.source.toBase58())?.mint !==
+          pubkey.toBase58()
+      ) {
+        return false;
+      } else if (
+        mintDecimalsMap.has(transfer.destination.toBase58()) &&
+        mintDecimalsMap.get(transfer.destination.toBase58())?.mint !==
+          pubkey.toBase58()
+      ) {
+        return false;
+      }
+      return true;
+    });
 
     transfers.forEach((transfer) => {
       let units = "Tokens";
@@ -101,8 +133,12 @@ export function TransfersDetails({
 
         if (mintDetails?.decimals) {
           decimals = mintDetails.decimals;
-        } else if (mintDecimalsMap.has(transfer.source)) {
-          decimals = mintDecimalsMap.get(transfer.source) || 0;
+        } else if (mintDecimalsMap.has(transfer.source.toBase58())) {
+          decimals =
+            mintDecimalsMap.get(transfer.source.toBase58())?.decimals || 0;
+        } else if (mintDecimalsMap.has(transfer.destination.toBase58())) {
+          decimals =
+            mintDecimalsMap.get(transfer.destination.toBase58())?.decimals || 0;
         }
 
         amountString = new Intl.NumberFormat("en-US", {
