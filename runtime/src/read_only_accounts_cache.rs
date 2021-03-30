@@ -2,7 +2,10 @@
 //! which can be large, loaded many times, and rarely change.
 use dashmap::DashMap;
 use std::{
-    sync::{Arc, RwLock},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, RwLock,
+    },
     time::Instant,
 };
 
@@ -23,6 +26,8 @@ pub struct ReadOnlyAccountsCache {
     cache: DashMap<(Pubkey, Slot), ReadOnlyAccountCacheEntry>,
     max_data_size: usize,
     data_size: Arc<RwLock<usize>>,
+    hits: AtomicUsize,
+    misses: AtomicUsize,
 }
 
 impl ReadOnlyAccountsCache {
@@ -31,17 +36,26 @@ impl ReadOnlyAccountsCache {
             max_data_size,
             cache: DashMap::default(),
             data_size: Arc::new(RwLock::new(0)),
+            hits: AtomicUsize::new(0),
+            misses: AtomicUsize::new(0),
         }
     }
 
     pub fn load(&self, pubkey: &Pubkey, slot: Slot) -> Option<AccountSharedData> {
-        self.cache.get(&(*pubkey, slot)).map(|account_ref| {
-            let value = account_ref.value();
-            // remember last use
-            let now = Instant::now();
-            *value.last_used.write().unwrap() = now;
-            value.account.clone()
-        })
+        self.cache
+            .get(&(*pubkey, slot))
+            .map(|account_ref| {
+                self.hits.fetch_add(1, Ordering::Relaxed);
+                let value = account_ref.value();
+                // remember last use
+                let now = Instant::now();
+                *value.last_used.write().unwrap() = now;
+                value.account.clone()
+            })
+            .or_else(|| {
+                self.misses.fetch_add(1, Ordering::Relaxed);
+                None
+            })
     }
 
     pub fn store(&self, pubkey: &Pubkey, slot: Slot, account: &AccountSharedData) {
@@ -99,6 +113,12 @@ impl ReadOnlyAccountsCache {
 
     pub fn data_size(&self) -> usize {
         *self.data_size.read().unwrap()
+    }
+
+    pub fn get_and_reset_stats(&self) -> (usize, usize) {
+        let hits = self.hits.swap(0, Ordering::Relaxed);
+        let misses = self.misses.swap(0, Ordering::Relaxed);
+        (hits, misses)
     }
 }
 

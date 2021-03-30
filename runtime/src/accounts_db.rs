@@ -4322,6 +4322,8 @@ impl AccountsDb {
                 Ordering::Relaxed,
             ) == Ok(last)
         {
+            let (read_only_cache_hits, read_only_cache_misses) =
+                self.read_only_accounts_cache.get_and_reset_stats();
             datapoint_info!(
                 "accounts_db_store_timings",
                 (
@@ -4372,6 +4374,16 @@ impl AccountsDb {
                 (
                     "read_only_accounts_cache_data_size",
                     self.read_only_accounts_cache.data_size(),
+                    i64
+                ),
+                (
+                    "read_only_cache_hits",
+                    read_only_cache_hits,
+                    i64
+                ),
+                (
+                    "read_only_cache_misses",
+                    read_only_cache_misses,
                     i64
                 ),
             );
