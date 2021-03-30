@@ -4376,11 +4376,7 @@ impl AccountsDb {
                     self.read_only_accounts_cache.data_size(),
                     i64
                 ),
-                (
-                    "read_only_accounts_cache_hits",
-                    read_only_cache_hits,
-                    i64
-                ),
+                ("read_only_accounts_cache_hits", read_only_cache_hits, i64),
                 (
                     "read_only_accounts_cache_misses",
                     read_only_cache_misses,
