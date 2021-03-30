@@ -215,7 +215,7 @@ impl Accounts {
                     } else {
                         let (account, rent) = self
                             .accounts_db
-                            .load(ancestors, key) // replace this, too
+                            .load(ancestors, key)
                             .map(|(mut account, _)| {
                                 if message.is_writable(i, demote_sysvar_write_locks) {
                                     let rent_due = rent_collector
@@ -342,7 +342,7 @@ impl Accounts {
 
             let program = match self
                 .accounts_db
-                .load(ancestors, &program_id) // read only cache
+                .load(ancestors, &program_id)
                 .map(|(account, _)| account)
             {
                 Some(program) => program,
