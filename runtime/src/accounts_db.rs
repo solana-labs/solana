@@ -29,6 +29,7 @@ use crate::{
     contains::Contains,
 };
 use blake3::traits::digest::Digest;
+use crossbeam_channel::{unbounded, Receiver, Sender};
 use dashmap::{
     mapref::entry::Entry::{Occupied, Vacant},
     DashMap, DashSet,
@@ -57,7 +58,6 @@ use std::{
     ops::{Range, RangeBounds},
     path::{Path, PathBuf},
     sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
-    sync::mpsc::{channel, Receiver, Sender},
     sync::{Arc, Mutex, MutexGuard, RwLock},
     thread::{Builder, JoinHandle},
     time::Instant,
@@ -693,7 +693,7 @@ pub struct AccountsDb {
 
     pub accounts_cache: AccountsCache,
 
-    sender_bg_hasher: Option<Mutex<Sender<CachedAccount>>>,
+    sender_bg_hasher: Option<Sender<CachedAccount>>,
 
     recycle_stores: RwLock<RecycleStores>,
 
@@ -1324,14 +1324,14 @@ impl AccountsDb {
     }
 
     fn start_background_hasher(&mut self) {
-        let (sender, receiver) = channel();
+        let (sender, receiver) = unbounded();
         Builder::new()
             .name("solana-accounts-db-store-hasher".to_string())
             .spawn(move || {
                 Self::background_hasher(receiver);
             })
             .unwrap();
-        self.sender_bg_hasher = Some(Mutex::new(sender));
+        self.sender_bg_hasher = Some(sender);
     }
 
     fn purge_keys_exact<'a, C: 'a>(
@@ -3420,7 +3420,7 @@ impl AccountsDb {
                 // hash this account in the bg
                 match &self.sender_bg_hasher {
                     Some(ref sender) => {
-                        let _ = sender.lock().unwrap().send(cached_account);
+                        let _ = sender.send(cached_account);
                     }
                     None => (),
                 };
