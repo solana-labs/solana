@@ -69,27 +69,6 @@ pub mod programs;
 #[macro_use]
 extern crate solana_bpf_loader_program;
 
-pub fn to_instruction_error(error: ProgramError) -> InstructionError {
-    match error {
-        ProgramError::Custom(err) => InstructionError::Custom(err),
-        ProgramError::InvalidArgument => InstructionError::InvalidArgument,
-        ProgramError::InvalidInstructionData => InstructionError::InvalidInstructionData,
-        ProgramError::InvalidAccountData => InstructionError::InvalidAccountData,
-        ProgramError::AccountDataTooSmall => InstructionError::AccountDataTooSmall,
-        ProgramError::InsufficientFunds => InstructionError::InsufficientFunds,
-        ProgramError::IncorrectProgramId => InstructionError::IncorrectProgramId,
-        ProgramError::MissingRequiredSignature => InstructionError::MissingRequiredSignature,
-        ProgramError::AccountAlreadyInitialized => InstructionError::AccountAlreadyInitialized,
-        ProgramError::UninitializedAccount => InstructionError::UninitializedAccount,
-        ProgramError::NotEnoughAccountKeys => InstructionError::NotEnoughAccountKeys,
-        ProgramError::AccountBorrowFailed => InstructionError::AccountBorrowFailed,
-        ProgramError::MaxSeedLengthExceeded => InstructionError::MaxSeedLengthExceeded,
-        ProgramError::InvalidSeeds => InstructionError::InvalidSeeds,
-        ProgramError::BorshIoError(err) => InstructionError::BorshIoError(err),
-        ProgramError::AccountNotRentExempt => InstructionError::AccountNotRentExempt,
-    }
-}
-
 /// Errors from the program test environment
 #[derive(Error, Debug, PartialEq)]
 pub enum ProgramTestError {
@@ -169,21 +148,18 @@ pub fn builtin_process_instruction(
         .collect();
 
     // Execute the program
-    let result =
-        process_instruction(program_id, &account_infos, input).map_err(to_instruction_error);
+    process_instruction(program_id, &account_infos, input).map_err(u64::from)?;
 
-    if result.is_ok() {
-        // Commit AccountInfo changes back into KeyedAccounts
-        for keyed_account in keyed_accounts {
-            let mut account = keyed_account.account.borrow_mut();
-            let key = keyed_account.unsigned_key();
-            let (lamports, data, _owner) = &account_refs[key];
-            account.lamports = **lamports.borrow();
-            account.set_data(data.borrow().to_vec());
-        }
+    // Commit AccountInfo changes back into KeyedAccounts
+    for keyed_account in keyed_accounts {
+        let mut account = keyed_account.account.borrow_mut();
+        let key = keyed_account.unsigned_key();
+        let (lamports, data, _owner) = &account_refs[key];
+        account.lamports = **lamports.borrow();
+        account.set_data(data.borrow().to_vec());
     }
 
-    result
+    Ok(())
 }
 
 /// Converts a `solana-program`-style entrypoint into the runtime's entrypoint style, for
