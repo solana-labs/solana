@@ -1,11 +1,7 @@
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use solana_sdk::{
-    account::{ReadableAccount, WritableAccount},
-    bpf_loader_deprecated,
-    entrypoint::MAX_PERMITTED_DATA_INCREASE,
-    instruction::InstructionError,
-    keyed_account::KeyedAccount,
-    pubkey::Pubkey,
+    account::ReadableAccount, bpf_loader_deprecated, entrypoint::MAX_PERMITTED_DATA_INCREASE,
+    instruction::InstructionError, keyed_account::KeyedAccount, pubkey::Pubkey,
 };
 use std::{
     io::prelude::*,
