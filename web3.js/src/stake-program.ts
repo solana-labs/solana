@@ -506,13 +506,13 @@ export class StakeProgram {
     const type = STAKE_INSTRUCTION_LAYOUTS.Initialize;
     const data = encodeData(type, {
       authorized: {
-        staker: toBuffer(authorized.staker.toBytes()),
-        withdrawer: toBuffer(authorized.withdrawer.toBytes()),
+        staker: toBuffer(authorized.staker.toBuffer()),
+        withdrawer: toBuffer(authorized.withdrawer.toBuffer()),
       },
       lockup: {
         unixTimestamp: lockup.unixTimestamp,
         epoch: lockup.epoch,
-        custodian: toBuffer(lockup.custodian.toBytes()),
+        custodian: toBuffer(lockup.custodian.toBuffer()),
       },
     });
     const instructionData = {
@@ -613,7 +613,7 @@ export class StakeProgram {
 
     const type = STAKE_INSTRUCTION_LAYOUTS.Authorize;
     const data = encodeData(type, {
-      newAuthorized: toBuffer(newAuthorizedPubkey.toBytes()),
+      newAuthorized: toBuffer(newAuthorizedPubkey.toBuffer()),
       stakeAuthorizationType: stakeAuthorizationType.index,
     });
 
@@ -649,10 +649,10 @@ export class StakeProgram {
 
     const type = STAKE_INSTRUCTION_LAYOUTS.AuthorizeWithSeed;
     const data = encodeData(type, {
-      newAuthorized: toBuffer(newAuthorizedPubkey.toBytes()),
+      newAuthorized: toBuffer(newAuthorizedPubkey.toBuffer()),
       stakeAuthorizationType: stakeAuthorizationType.index,
       authoritySeed: authoritySeed,
-      authorityOwner: toBuffer(authorityOwner.toBytes()),
+      authorityOwner: toBuffer(authorityOwner.toBuffer()),
     });
 
     const keys = [
