@@ -289,7 +289,7 @@ impl<'a> LoadedAccount<'a> {
         }
     }
 
-    pub fn from_cache(&self) -> bool {
+    pub fn is_cached(&self) -> bool {
         match self {
             LoadedAccount::Stored(_) => false,
             LoadedAccount::Cached(_) => true,
@@ -2288,18 +2288,30 @@ impl AccountsDb {
         }
 
         //TODO: thread this as a ref
-        let mut from_cache = false;
+        let mut is_cached = false;
         let loaded_account = self
             .get_account_accessor_from_cache_or_storage(slot, pubkey, store_id, offset)
             .get_loaded_account()
             .map(|loaded_account| {
-                from_cache = loaded_account.from_cache();
+                is_cached = loaded_account.is_cached();
                 (loaded_account.account(), slot)
             });
 
-        if self.caching_enabled && !from_cache {
+        if self.caching_enabled && !is_cached {
             match loaded_account {
                 Some((account, slot)) => {
+                    /*
+                    We show this store into the read-only cache for account 'A' and future loads of 'A' from the read-only cache are
+                    safe/reflect 'A''s latest state on this fork.
+                    This safety holds if during replay of slot 'S', we show we only read 'A' from the write cache,
+                    not the read-only cache, after it's been updated in replay of slot 'S'.
+                    Assume for contradiction this is not true, and we read 'A' from the read-only cache *after* it had been updated in 'S'.
+                    This means an entry '(S, A)' was added to the read-only cache after 'A' had been updated in 'S'.
+                    Now when '(S, A)' was being added to the read-only cache, it must have been true that  'is_cache == false',
+                    which means '(S', A)' does not exist in the write cache yet.
+                    However, by the assumption for contradiction above ,  'A' has already been updated in 'S' which means '(S, A)'
+                    must exist in the write cache, which is a contradiction.
+                    */
                     self.read_only_accounts_cache.store(pubkey, slot, &account);
                     Some((account, slot))
                 }
