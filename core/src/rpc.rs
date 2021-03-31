@@ -1163,23 +1163,25 @@ impl JsonRpcRequestProcessor {
         mut before: Option<Signature>,
         until: Option<Signature>,
         mut limit: usize,
+        commitment: Option<CommitmentConfig>,
     ) -> Result<Vec<RpcConfirmedTransactionStatusWithSignature>> {
+        let commitment = commitment.unwrap_or_default();
+        check_is_at_least_confirmed(commitment)?;
+
         if self.config.enable_rpc_transaction_history {
-            let highest_confirmed_root = self
-                .block_commitment_cache
-                .read()
-                .unwrap()
-                .highest_confirmed_root();
+            let highest_slot = if commitment.is_confirmed() {
+                let confirmed_bank = self.bank(Some(CommitmentConfig::confirmed()));
+                confirmed_bank.slot()
+            } else {
+                self.block_commitment_cache
+                    .read()
+                    .unwrap()
+                    .highest_confirmed_root()
+            };
 
             let mut results = self
                 .blockstore
-                .get_confirmed_signatures_for_address2(
-                    address,
-                    highest_confirmed_root,
-                    before,
-                    until,
-                    limit,
-                )
+                .get_confirmed_signatures_for_address2(address, highest_slot, before, until, limit)
                 .map_err(|err| Error::invalid_params(format!("{}", err)))?;
 
             if results.len() < limit {
@@ -3087,7 +3089,13 @@ pub mod rpc_full {
                 )));
             }
 
-            meta.get_confirmed_signatures_for_address2(address, before, until, limit)
+            meta.get_confirmed_signatures_for_address2(
+                address,
+                before,
+                until,
+                limit,
+                config.commitment,
+            )
         }
 
         fn get_first_available_block(&self, meta: Self::Metadata) -> Result<Slot> {
