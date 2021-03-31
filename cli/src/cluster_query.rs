@@ -1843,9 +1843,13 @@ pub fn process_transaction_history(
                     Some(block_time) =>
                         format!("timestamp={} ", unix_timestamp_to_string(block_time)),
                 },
-                match result.err {
-                    None => "Confirmed".to_string(),
-                    Some(err) => format!("Failed: {:?}", err),
+                if let Some(err) = result.err {
+                    format!("Failed: {:?}", err)
+                } else {
+                    match result.confirmation_status {
+                        None => "Finalized".to_string(),
+                        Some(status) => format!("{:?}", status),
+                    }
                 },
                 result.memo.unwrap_or_else(|| "".to_string()),
             );

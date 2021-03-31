@@ -1169,14 +1169,16 @@ impl JsonRpcRequestProcessor {
         check_is_at_least_confirmed(commitment)?;
 
         if self.config.enable_rpc_transaction_history {
+            let highest_confirmed_root = self
+                .block_commitment_cache
+                .read()
+                .unwrap()
+                .highest_confirmed_root();
             let highest_slot = if commitment.is_confirmed() {
                 let confirmed_bank = self.bank(Some(CommitmentConfig::confirmed()));
                 confirmed_bank.slot()
             } else {
-                self.block_commitment_cache
-                    .read()
-                    .unwrap()
-                    .highest_confirmed_root()
+                highest_confirmed_root
             };
 
             let mut results = self
@@ -1210,7 +1212,24 @@ impl JsonRpcRequestProcessor {
                 }
             }
 
-            Ok(results.into_iter().map(|x| x.into()).collect())
+            Ok(results
+                .into_iter()
+                .map(|x| {
+                    let mut item: RpcConfirmedTransactionStatusWithSignature = x.into();
+                    if item.slot <= highest_confirmed_root {
+                        item.confirmation_status = Some(TransactionConfirmationStatus::Finalized);
+                    } else {
+                        item.confirmation_status = Some(TransactionConfirmationStatus::Confirmed);
+                        if item.block_time.is_none() {
+                            let r_bank_forks = self.bank_forks.read().unwrap();
+                            item.block_time = r_bank_forks
+                                .get(item.slot)
+                                .map(|bank| bank.clock().unix_timestamp);
+                        }
+                    }
+                    item
+                })
+                .collect())
         } else {
             Ok(vec![])
         }
