@@ -375,12 +375,11 @@ fn setup_fee_calculator(bank: Bank) -> Bank {
     // initialized with a non-zero fee.
     assert_eq!(bank.signature_count(), 0);
     bank.commit_transactions(
-        &[],
-        None,
-        &mut [],
-        &[],
-        0,
-        1,
+        &[],     // transactions
+        &mut [], // loaded accounts
+        &[],     // transaction execution results
+        0,       // tx count
+        1,       // signature count
         &mut ExecuteTimings::default(),
     );
     assert_eq!(bank.signature_count(), 1);

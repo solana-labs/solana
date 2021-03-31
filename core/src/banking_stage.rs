@@ -754,7 +754,6 @@ impl BankingStage {
         if num_to_commit != 0 {
             let tx_results = bank.commit_transactions(
                 txs,
-                None,
                 &mut loaded_accounts,
                 &results,
                 tx_count,
@@ -769,7 +768,6 @@ impl BankingStage {
                 transaction_status_sender.send_transaction_status_batch(
                     bank.clone(),
                     batch.transactions(),
-                    batch.iteration_order_vec(),
                     tx_results.execution_results,
                     TransactionBalancesSet::new(pre_balances, post_balances),
                     TransactionTokenBalancesSet::new(pre_token_balances, post_token_balances),
@@ -810,7 +808,7 @@ impl BankingStage {
         let mut lock_time = Measure::start("lock_time");
         // Once accounts are locked, other threads cannot encode transactions that will modify the
         // same account state
-        let batch = bank.prepare_batch(txs, None);
+        let batch = bank.prepare_batch(txs);
         lock_time.stop();
 
         let (result, mut retryable_txs) = Self::process_and_record_transactions_locked(
@@ -1003,7 +1001,6 @@ impl BankingStage {
         };
         let result = bank.check_transactions(
             transactions,
-            None,
             &filter,
             (MAX_PROCESSING_AGE)
                 .saturating_sub(max_tx_fwd_delay)

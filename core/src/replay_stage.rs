@@ -3103,7 +3103,7 @@ pub(crate) mod tests {
         let fail_tx =
             system_transaction::transfer(&mint_keypair, &keypair2.pubkey(), 2, Hash::default());
         let entry_3 = next_entry(&entry_2.hash, 1, vec![fail_tx]);
-        let entries = vec![entry_1, entry_2, entry_3];
+        let mut entries = vec![entry_1, entry_2, entry_3];
 
         let shreds = entries_to_test_shreds(entries.clone(), slot, previous_slot, true, 0);
         blockstore.insert_shreds(shreds, None, false).unwrap();
@@ -3122,7 +3122,7 @@ pub(crate) mod tests {
         // that they are matched properly by get_rooted_block
         let _result = blockstore_processor::process_entries(
             &bank,
-            &entries,
+            &mut entries,
             true,
             Some(TransactionStatusSender {
                 sender: transaction_status_sender,
