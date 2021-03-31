@@ -2282,9 +2282,11 @@ impl AccountsDb {
             // `lock` released here
         };
 
-        let result = self.read_only_accounts_cache.load(pubkey, slot);
-        if let Some(account) = result {
-            return Some((account, slot));
+        if self.caching_enabled && store_id != CACHE_VIRTUAL_STORAGE_ID {
+            let result = self.read_only_accounts_cache.load(pubkey, slot);
+            if let Some(account) = result {
+                return Some((account, slot));
+            }
         }
 
         //TODO: thread this as a ref
