@@ -302,7 +302,7 @@ fn simulate_process_entries(
         hash: next_hash(&bank.last_blockhash(), 1, &tx_vector),
         transactions: tx_vector,
     };
-    process_entries(&bank, &[entry], randomize_txs, None, None).unwrap();
+    process_entries(&bank, &mut [entry], randomize_txs, None, None).unwrap();
 }
 
 #[allow(clippy::same_item_push)]
