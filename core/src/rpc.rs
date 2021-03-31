@@ -2343,6 +2343,7 @@ pub mod rpc_full {
             config: Option<RpcEncodingConfigWrapper<RpcConfirmedTransactionConfig>>,
         ) -> Result<Option<EncodedConfirmedTransaction>>;
 
+        // DEPRECATED
         #[rpc(meta, name = "getConfirmedSignaturesForAddress")]
         fn get_confirmed_signatures_for_address(
             &self,

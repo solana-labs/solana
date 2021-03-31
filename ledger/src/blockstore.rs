@@ -2112,6 +2112,8 @@ impl Blockstore {
     // Returns all rooted signatures for an address, ordered by slot that the transaction was
     // processed in. Within each slot the transactions will be ordered by signature, and NOT by
     // the order in which the transactions exist in the block
+    //
+    // DEPRECATED
     fn find_address_signatures(
         &self,
         pubkey: Pubkey,
@@ -2176,6 +2178,7 @@ impl Blockstore {
         Ok(signatures)
     }
 
+    // DEPRECATED
     pub fn get_confirmed_signatures_for_address(
         &self,
         pubkey: Pubkey,
