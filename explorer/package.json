@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
-    "@project-serum/serum": "^0.13.31",
+    "@project-serum/serum": "^0.13.32",
     "@react-hook/debounce": "^3.0.0",
     "@sentry/react": "^6.2.4",
     "@solana/spl-token-registry": "^0.2.48",
