@@ -2194,14 +2194,14 @@ mod tests {
             arg_name: "".to_string(),
         };
 
-        let test_deploy = test_commands.clone().get_matches_from(vec![
+        let test_command = test_commands.clone().get_matches_from(vec![
             "test",
             "program",
             "deploy",
             "/Users/test/program.so",
         ]);
         assert_eq!(
-            parse_command(&test_deploy, &default_signer, &mut None).unwrap(),
+            parse_command(&test_command, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Program(ProgramCliCommand::Deploy {
                     program_location: Some("/Users/test/program.so".to_string()),
@@ -2218,7 +2218,7 @@ mod tests {
             }
         );
 
-        let test_deploy = test_commands.clone().get_matches_from(vec![
+        let test_command = test_commands.clone().get_matches_from(vec![
             "test",
             "program",
             "deploy",
@@ -2227,7 +2227,7 @@ mod tests {
             "42",
         ]);
         assert_eq!(
-            parse_command(&test_deploy, &default_signer, &mut None).unwrap(),
+            parse_command(&test_command, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Program(ProgramCliCommand::Deploy {
                     program_location: Some("/Users/test/program.so".to_string()),
@@ -2247,7 +2247,7 @@ mod tests {
         let buffer_keypair = Keypair::new();
         let buffer_keypair_file = make_tmp_path("buffer_keypair_file");
         write_keypair_file(&buffer_keypair, &buffer_keypair_file).unwrap();
-        let test_deploy = test_commands.clone().get_matches_from(vec![
+        let test_command = test_commands.clone().get_matches_from(vec![
             "test",
             "program",
             "deploy",
@@ -2255,7 +2255,7 @@ mod tests {
             &buffer_keypair_file,
         ]);
         assert_eq!(
-            parse_command(&test_deploy, &default_signer, &mut None).unwrap(),
+            parse_command(&test_command, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Program(ProgramCliCommand::Deploy {
                     program_location: None,
@@ -2337,7 +2337,7 @@ mod tests {
         let authority_keypair = Keypair::new();
         let authority_keypair_file = make_tmp_path("authority_keypair_file");
         write_keypair_file(&authority_keypair, &authority_keypair_file).unwrap();
-        let test_deploy = test_commands.clone().get_matches_from(vec![
+        let test_command = test_commands.clone().get_matches_from(vec![
             "test",
             "program",
             "deploy",
@@ -2346,7 +2346,7 @@ mod tests {
             &authority_keypair_file,
         ]);
         assert_eq!(
-            parse_command(&test_deploy, &default_signer, &mut None).unwrap(),
+            parse_command(&test_command, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Program(ProgramCliCommand::Deploy {
                     program_location: Some("/Users/test/program.so".to_string()),
@@ -2366,7 +2366,7 @@ mod tests {
             }
         );
 
-        let test_deploy = test_commands.clone().get_matches_from(vec![
+        let test_command = test_commands.clone().get_matches_from(vec![
             "test",
             "program",
             "deploy",
@@ -2374,7 +2374,7 @@ mod tests {
             "--final",
         ]);
         assert_eq!(
-            parse_command(&test_deploy, &default_signer, &mut None).unwrap(),
+            parse_command(&test_command, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Program(ProgramCliCommand::Deploy {
                     program_location: Some("/Users/test/program.so".to_string()),
@@ -2406,14 +2406,14 @@ mod tests {
         };
 
         // defaults
-        let test_deploy = test_commands.clone().get_matches_from(vec![
+        let test_command = test_commands.clone().get_matches_from(vec![
             "test",
             "program",
             "write-buffer",
             "/Users/test/program.so",
         ]);
         assert_eq!(
-            parse_command(&test_deploy, &default_signer, &mut None).unwrap(),
+            parse_command(&test_command, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Program(ProgramCliCommand::WriteBuffer {
                     program_location: "/Users/test/program.so".to_string(),
@@ -2427,7 +2427,7 @@ mod tests {
         );
 
         // specify max len
-        let test_deploy = test_commands.clone().get_matches_from(vec![
+        let test_command = test_commands.clone().get_matches_from(vec![
             "test",
             "program",
             "write-buffer",
@@ -2436,7 +2436,7 @@ mod tests {
             "42",
         ]);
         assert_eq!(
-            parse_command(&test_deploy, &default_signer, &mut None).unwrap(),
+            parse_command(&test_command, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Program(ProgramCliCommand::WriteBuffer {
                     program_location: "/Users/test/program.so".to_string(),
@@ -2453,7 +2453,7 @@ mod tests {
         let buffer_keypair = Keypair::new();
         let buffer_keypair_file = make_tmp_path("buffer_keypair_file");
         write_keypair_file(&buffer_keypair, &buffer_keypair_file).unwrap();
-        let test_deploy = test_commands.clone().get_matches_from(vec![
+        let test_command = test_commands.clone().get_matches_from(vec![
             "test",
             "program",
             "write-buffer",
@@ -2462,7 +2462,7 @@ mod tests {
             &buffer_keypair_file,
         ]);
         assert_eq!(
-            parse_command(&test_deploy, &default_signer, &mut None).unwrap(),
+            parse_command(&test_command, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Program(ProgramCliCommand::WriteBuffer {
                     program_location: "/Users/test/program.so".to_string(),
@@ -2482,7 +2482,7 @@ mod tests {
         let authority_keypair = Keypair::new();
         let authority_keypair_file = make_tmp_path("authority_keypair_file");
         write_keypair_file(&authority_keypair, &authority_keypair_file).unwrap();
-        let test_deploy = test_commands.clone().get_matches_from(vec![
+        let test_command = test_commands.clone().get_matches_from(vec![
             "test",
             "program",
             "write-buffer",
@@ -2491,7 +2491,7 @@ mod tests {
             &authority_keypair_file,
         ]);
         assert_eq!(
-            parse_command(&test_deploy, &default_signer, &mut None).unwrap(),
+            parse_command(&test_command, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Program(ProgramCliCommand::WriteBuffer {
                     program_location: "/Users/test/program.so".to_string(),
@@ -2514,7 +2514,7 @@ mod tests {
         let authority_keypair = Keypair::new();
         let authority_keypair_file = make_tmp_path("authority_keypair_file");
         write_keypair_file(&authority_keypair, &authority_keypair_file).unwrap();
-        let test_deploy = test_commands.clone().get_matches_from(vec![
+        let test_command = test_commands.clone().get_matches_from(vec![
             "test",
             "program",
             "write-buffer",
@@ -2525,7 +2525,7 @@ mod tests {
             &authority_keypair_file,
         ]);
         assert_eq!(
-            parse_command(&test_deploy, &default_signer, &mut None).unwrap(),
+            parse_command(&test_command, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Program(ProgramCliCommand::WriteBuffer {
                     program_location: "/Users/test/program.so".to_string(),
@@ -2558,7 +2558,7 @@ mod tests {
 
         let program_pubkey = Pubkey::new_unique();
         let new_authority_pubkey = Pubkey::new_unique();
-        let test_deploy = test_commands.clone().get_matches_from(vec![
+        let test_command = test_commands.clone().get_matches_from(vec![
             "test",
             "program",
             "set-upgrade-authority",
@@ -2567,7 +2567,7 @@ mod tests {
             &new_authority_pubkey.to_string(),
         ]);
         assert_eq!(
-            parse_command(&test_deploy, &default_signer, &mut None).unwrap(),
+            parse_command(&test_command, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Program(ProgramCliCommand::SetUpgradeAuthority {
                     program_pubkey,
@@ -2582,7 +2582,7 @@ mod tests {
         let new_authority_pubkey = Keypair::new();
         let new_authority_pubkey_file = make_tmp_path("authority_keypair_file");
         write_keypair_file(&new_authority_pubkey, &new_authority_pubkey_file).unwrap();
-        let test_deploy = test_commands.clone().get_matches_from(vec![
+        let test_command = test_commands.clone().get_matches_from(vec![
             "test",
             "program",
             "set-upgrade-authority",
@@ -2591,7 +2591,7 @@ mod tests {
             &new_authority_pubkey_file,
         ]);
         assert_eq!(
-            parse_command(&test_deploy, &default_signer, &mut None).unwrap(),
+            parse_command(&test_command, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Program(ProgramCliCommand::SetUpgradeAuthority {
                     program_pubkey,
@@ -2606,7 +2606,7 @@ mod tests {
         let new_authority_pubkey = Keypair::new();
         let new_authority_pubkey_file = make_tmp_path("authority_keypair_file");
         write_keypair_file(&new_authority_pubkey, &new_authority_pubkey_file).unwrap();
-        let test_deploy = test_commands.clone().get_matches_from(vec![
+        let test_command = test_commands.clone().get_matches_from(vec![
             "test",
             "program",
             "set-upgrade-authority",
@@ -2614,7 +2614,7 @@ mod tests {
             "--final",
         ]);
         assert_eq!(
-            parse_command(&test_deploy, &default_signer, &mut None).unwrap(),
+            parse_command(&test_command, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Program(ProgramCliCommand::SetUpgradeAuthority {
                     program_pubkey,
@@ -2629,7 +2629,7 @@ mod tests {
         let authority = Keypair::new();
         let authority_keypair_file = make_tmp_path("authority_keypair_file");
         write_keypair_file(&authority, &authority_keypair_file).unwrap();
-        let test_deploy = test_commands.clone().get_matches_from(vec![
+        let test_command = test_commands.clone().get_matches_from(vec![
             "test",
             "program",
             "set-upgrade-authority",
@@ -2639,7 +2639,7 @@ mod tests {
             "--final",
         ]);
         assert_eq!(
-            parse_command(&test_deploy, &default_signer, &mut None).unwrap(),
+            parse_command(&test_command, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Program(ProgramCliCommand::SetUpgradeAuthority {
                     program_pubkey,
@@ -2669,7 +2669,7 @@ mod tests {
 
         let buffer_pubkey = Pubkey::new_unique();
         let new_authority_pubkey = Pubkey::new_unique();
-        let test_deploy = test_commands.clone().get_matches_from(vec![
+        let test_command = test_commands.clone().get_matches_from(vec![
             "test",
             "program",
             "set-buffer-authority",
@@ -2678,7 +2678,7 @@ mod tests {
             &new_authority_pubkey.to_string(),
         ]);
         assert_eq!(
-            parse_command(&test_deploy, &default_signer, &mut None).unwrap(),
+            parse_command(&test_command, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Program(ProgramCliCommand::SetBufferAuthority {
                     buffer_pubkey,
@@ -2693,7 +2693,7 @@ mod tests {
         let new_authority_keypair = Keypair::new();
         let new_authority_keypair_file = make_tmp_path("authority_keypair_file");
         write_keypair_file(&new_authority_keypair, &new_authority_keypair_file).unwrap();
-        let test_deploy = test_commands.clone().get_matches_from(vec![
+        let test_command = test_commands.clone().get_matches_from(vec![
             "test",
             "program",
             "set-buffer-authority",
@@ -2702,7 +2702,7 @@ mod tests {
             &new_authority_keypair_file,
         ]);
         assert_eq!(
-            parse_command(&test_deploy, &default_signer, &mut None).unwrap(),
+            parse_command(&test_command, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Program(ProgramCliCommand::SetBufferAuthority {
                     buffer_pubkey,
