@@ -25,6 +25,7 @@ pub type ProcessInstructionWithContext =
 pub struct InvokeContextStackFrame<'a> {
     pub key: Pubkey,
     pub keyed_accounts: Vec<KeyedAccount<'a>>,
+    pub keyed_accounts_range: std::ops::Range<usize>,
 }
 
 /// Invocation context passed to loaders
@@ -303,9 +304,14 @@ impl<'a> MockInvokeContext<'a> {
     pub fn new(keyed_accounts: Vec<KeyedAccount<'a>>) -> Self {
         let bpf_compute_budget = BpfComputeBudget::default();
         let mut invoke_stack = Vec::with_capacity(bpf_compute_budget.max_invoke_depth);
+        let keyed_accounts_range = std::ops::Range {
+            start: 0,
+            end: keyed_accounts.len(),
+        };
         invoke_stack.push(InvokeContextStackFrame {
             key: Pubkey::default(),
             keyed_accounts,
+            keyed_accounts_range,
         });
         MockInvokeContext {
             invoke_stack,
@@ -326,10 +332,15 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
         keyed_accounts: Vec<KeyedAccount>,
         key: &Pubkey,
     ) -> Result<(), InstructionError> {
+        let keyed_accounts_range = std::ops::Range {
+            start: 0,
+            end: keyed_accounts.len(),
+        };
         let keyed_accounts = unsafe { std::mem::transmute(keyed_accounts) };
         self.invoke_stack.push(InvokeContextStackFrame {
             key: *key,
             keyed_accounts,
+            keyed_accounts_range,
         });
         Ok(())
     }
@@ -359,13 +370,14 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
             .invoke_stack
             .last_mut()
             .ok_or(InstructionError::GenericError)?;
-        stack_frame.keyed_accounts.remove(0);
+        stack_frame.keyed_accounts_range.start =
+            stack_frame.keyed_accounts_range.start.saturating_add(1);
         Ok(())
     }
     fn get_keyed_accounts(&self) -> Result<&[KeyedAccount], InstructionError> {
         self.invoke_stack
             .last()
-            .map(|frame| frame.keyed_accounts.as_slice())
+            .map(|frame| &frame.keyed_accounts[frame.keyed_accounts_range.clone()])
             .ok_or(InstructionError::GenericError)
     }
     fn get_programs(&self) -> &[(Pubkey, ProcessInstructionWithContext)] {

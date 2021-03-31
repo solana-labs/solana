@@ -1108,10 +1108,12 @@ mod tests {
         );
 
         // Case: limited budget
+        let keyed_accounts_range = 0..keyed_accounts.len();
         let mut invoke_context = MockInvokeContext {
             invoke_stack: vec![InvokeContextStackFrame {
                 key: Pubkey::default(),
                 keyed_accounts,
+                keyed_accounts_range,
             }],
             logger: MockLogger::default(),
             bpf_compute_budget: BpfComputeBudget::default(),
