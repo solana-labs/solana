@@ -817,7 +817,11 @@ impl JsonRpcRequestProcessor {
         Ok(())
     }
 
-    fn get_confirmed_block_at_slot(&self, slot: Slot, commitment: Option<CommitmentConfig>) -> Result<ConfirmedBlock> {
+    fn get_confirmed_block_at_slot(
+        &self,
+        slot: Slot,
+        commitment: Option<CommitmentConfig>,
+    ) -> Result<ConfirmedBlock> {
         if self.config.enable_rpc_transaction_history {
             let commitment = commitment.unwrap_or_default();
             check_is_at_least_confirmed(commitment)?;
@@ -838,11 +842,12 @@ impl JsonRpcRequestProcessor {
                             .runtime
                             .block_on(bigtable_ledger_storage.get_confirmed_block(slot));
                         self.check_bigtable_result(&bigtable_result)?;
-                        return bigtable_result.or(Err(RpcCustomError::BlockNotAvailable { slot }.into()));
+                        return bigtable_result
+                            .map_err(|_| Err(RpcCustomError::BlockNotAvailable { slot }.into()));
                     }
                 }
                 self.check_slot_cleaned_up(&result, slot)?;
-                return result.or(Err(RpcCustomError::BlockNotAvailable { slot }.into()));
+                return result.map_err(|_| Err(RpcCustomError::BlockNotAvailable { slot }.into()));
             } else if commitment.is_confirmed() {
                 // Check if block is confirmed
                 let confirmed_bank = self.bank(Some(CommitmentConfig::confirmed()));
@@ -853,14 +858,15 @@ impl JsonRpcRequestProcessor {
                             .load(Ordering::SeqCst)
                 {
                     let result = self.blockstore.get_complete_block(slot, true);
-                    return result.or(Err(RpcCustomError::BlockNotAvailable { slot }.into()));
+                    return result
+                        .map_err(|_| Err(RpcCustomError::BlockNotAvailable { slot }.into()));
                 }
             }
         }
 
         Err(RpcCustomError::BlockNotAvailable { slot }.into())
-    }                
-               
+    }
+
     pub fn get_confirmed_block(
         &self,
         slot: Slot,
@@ -878,12 +884,11 @@ impl JsonRpcRequestProcessor {
             Ok(Some(confirmed_block.configure(
                 encoding,
                 transaction_details,
-                show_rewards.into(),
+                show_rewards,
             )))
         } else {
             Err(RpcCustomError::BlockNotAvailable { slot }.into())
         }
-        
     }
 
     pub fn get_confirmed_blocks(
