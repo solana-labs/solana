@@ -1730,7 +1730,7 @@ fn call<'a>(
                     }
                     account_ref
                         .data
-                        .clone_from_slice(&account.data()[0..account_ref.data.len()]);
+                        .copy_from_slice(&account.data()[0..account_ref.data.len()]);
                 }
             }
         }
