@@ -204,17 +204,9 @@ impl PreAccount {
 
     pub fn update(&mut self, account: &AccountSharedData) {
         let mut pre = self.account.borrow_mut();
-
-        pre.lamports = account.lamports;
-        pre.owner = account.owner;
-        pre.executable = account.executable;
-        if pre.data().len() != account.data().len() {
-            // Only system account can change data size, copy with alloc
-            pre.set_data(account.data().clone());
-        } else {
-            // Copy without allocate
-            pre.data_as_mut_slice().clone_from_slice(&account.data());
-        }
+        let rent_epoch = pre.rent_epoch();
+        *pre = account.clone();
+        pre.set_rent_epoch(rent_epoch);
 
         self.changed = true;
     }
