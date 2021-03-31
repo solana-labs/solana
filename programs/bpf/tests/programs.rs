@@ -438,7 +438,7 @@ fn test_program_bpf_sanity() {
             ("solana_bpf_rust_ristretto", true),
             ("solana_bpf_rust_sanity", true),
             ("solana_bpf_rust_sha256", true),
-            ("solana_bpf_rust_sysval", true),
+            ("solana_bpf_rust_sysvar", true),
         ]);
     }
 
