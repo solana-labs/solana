@@ -41,6 +41,8 @@ pub trait InvokeContext {
     ) -> Result<(), InstructionError>;
     /// Get the program ID of the currently executing program
     fn get_caller(&self) -> Result<&Pubkey, InstructionError>;
+    /// Removes the first keyed account
+    fn pop_first_keyed_account(&mut self);
     /// Get the list of keyed accounts
     fn get_keyed_accounts(&self) -> &[KeyedAccount];
     /// Get a list of built-in programs
@@ -328,6 +330,13 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
     }
     fn get_caller(&self) -> Result<&Pubkey, InstructionError> {
         Ok(&self.key)
+    }
+    // TODO [KeyedAccounts to InvokeContext refactoring]
+    /*fn set_keyed_accounts(&mut self, keyed_accounts: &'a [KeyedAccount<'a>]) {
+        self.keyed_accounts = keyed_accounts;
+    }*/
+    fn pop_first_keyed_account(&mut self) {
+        self.keyed_accounts = &self.keyed_accounts[1..];
     }
     fn get_keyed_accounts(&self) -> &[KeyedAccount] {
         self.keyed_accounts

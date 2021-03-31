@@ -137,7 +137,7 @@ impl NativeLoader {
         program_id: &Pubkey,
         keyed_accounts: &[KeyedAccount],
         instruction_data: &[u8],
-        invoke_context: &dyn InvokeContext,
+        invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
         let program = keyed_account_at_index(keyed_accounts, 0)?;
         if native_loader::id() != *program_id {
@@ -149,6 +149,9 @@ impl NativeLoader {
             return Err(InstructionError::IncorrectProgramId);
         }
 
+        // TODO [KeyedAccounts to InvokeContext refactoring]
+        // invoke_context.set_keyed_accounts(&keyed_accounts[1..]);
+        invoke_context.pop_first_keyed_account();
         let params = &keyed_accounts[1..];
         let account = &program.try_account_ref()?;
         let name = match str::from_utf8(account.data()) {

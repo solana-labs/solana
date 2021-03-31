@@ -356,6 +356,13 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             .last()
             .ok_or(InstructionError::GenericError)
     }
+    // TODO [KeyedAccounts to InvokeContext refactoring]
+    /*fn set_keyed_accounts(&mut self, keyed_accounts: &'a [KeyedAccount<'a>]) {
+        self.keyed_accounts = keyed_accounts;
+    }*/
+    fn pop_first_keyed_account(&mut self) {
+        self.keyed_accounts = &self.keyed_accounts[1..];
+    }
     fn get_keyed_accounts(&self) -> &[KeyedAccount] {
         self.keyed_accounts
     }
@@ -595,6 +602,9 @@ impl MessageProcessor {
             if native_loader::check_id(&root_account.owner()?) {
                 for (id, process_instruction) in &self.programs {
                     if id == root_id {
+                        // TODO [KeyedAccounts to InvokeContext refactoring]
+                        // invoke_context.set_keyed_accounts(&keyed_accounts[1..]);
+                        invoke_context.pop_first_keyed_account();
                         // Call the builtin program
                         return process_instruction(
                             &program_id,
@@ -886,6 +896,9 @@ impl MessageProcessor {
                 accounts,
                 demote_sysvar_write_locks,
             );
+            // TODO [KeyedAccounts to InvokeContext refactoring]
+            // let previous_keyed_accounts = invoke_context.get_keyed_accounts();
+            // invoke_context.set_keyed_accounts(&keyed_accounts);
 
             // Invoke callee
             invoke_context.push(program_id)?;
@@ -906,6 +919,8 @@ impl MessageProcessor {
                 result = invoke_context.verify_and_update(message, instruction, accounts, None);
             }
             invoke_context.pop();
+            // TODO [KeyedAccounts to InvokeContext refactoring]
+            // invoke_context.set_keyed_accounts(previous_keyed_accounts);
 
             result
         } else {

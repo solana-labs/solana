@@ -219,6 +219,9 @@ fn process_instruction_common(
                         );
                         return Err(InstructionError::InvalidArgument);
                     }
+                    // TODO [KeyedAccounts to InvokeContext refactoring]
+                    // invoke_context.set_keyed_accounts(&keyed_accounts[1..]);
+                    invoke_context.pop_first_keyed_account();
                     (
                         programdata,
                         &keyed_accounts[1..],
@@ -778,6 +781,9 @@ impl Executor for BpfExecutor {
         let invoke_depth = invoke_context.invoke_depth();
 
         let mut serialize_time = Measure::start("serialize");
+        // TODO [KeyedAccounts to InvokeContext refactoring]
+        // invoke_context.set_keyed_accounts(&keyed_accounts[1..]);
+        invoke_context.pop_first_keyed_account();
         let parameter_accounts = &keyed_accounts[1..];
         let mut parameter_bytes =
             serialize_parameters(loader_id, program_id, parameter_accounts, &instruction_data)?;
