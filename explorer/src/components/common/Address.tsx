@@ -7,8 +7,6 @@ import { useCluster } from "providers/cluster";
 import { Copyable } from "./Copyable";
 import { useTokenRegistry } from "providers/mints/token-registry";
 
-const DEFAULT_TRUNCATE_CHARS = 8;
-
 type Props = {
   pubkey: PublicKey;
   alignRight?: boolean;
@@ -43,11 +41,8 @@ export function Address({
     ? address
     : displayAddress(address, cluster, tokenRegistry);
 
-  if (truncate && addressLabel === address) {
-    addressLabel =
-      addressLabel.slice(0, truncateChars || DEFAULT_TRUNCATE_CHARS) +
-      "..." +
-      addressLabel.slice(-(truncateChars || DEFAULT_TRUNCATE_CHARS));
+  if (truncateChars && addressLabel === address) {
+    addressLabel = addressLabel.slice(0, truncateChars) + "...";
   }
 
   const content = (

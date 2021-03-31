@@ -1,8 +1,6 @@
 import React from "react";
 import { PublicKey } from "@solana/web3.js";
 import { useAccountHistory } from "providers/accounts";
-import { Slot } from "components/common/Slot";
-import { displayTimestamp } from "utils/date";
 import {
   useDetailedAccountHistory,
   useFetchDetailedAccountHistory,
@@ -11,6 +9,7 @@ import { SlotRow } from "../TransactionHistoryCardWrapper";
 import { Signature } from "components/common/Signature";
 import { getTokenInstructionType } from "utils/instruction";
 import { InstructionDetails } from "components/common/InstructionDetails";
+import Moment from "react-moment";
 
 export function TokenInstructionsDetails({
   pubkey,
@@ -54,8 +53,8 @@ export function TokenInstructionsDetails({
             className={`${failed && "transaction-failed"}`}
             title={`${failed && "Transaction Failed"}`}
           >
-            <td className="w-1">
-              <Slot slot={slot} link />
+            <td>
+              <Signature signature={signature} link truncateChars={48} />
             </td>
 
             <td>
@@ -65,13 +64,9 @@ export function TokenInstructionsDetails({
               />
             </td>
 
-            <td>
-              <Signature signature={signature} link truncate />
-            </td>
-
             {hasTimestamps && (
               <td className="text-muted">
-                {blockTime ? displayTimestamp(blockTime * 1000, true) : "---"}
+                {blockTime && <Moment date={blockTime * 1000} fromNow />}
               </td>
             )}
           </tr>
@@ -85,10 +80,9 @@ export function TokenInstructionsDetails({
       <table className="table table-sm table-nowrap card-table">
         <thead>
           <tr>
-            <th className="text-muted w-1">Slot</th>
+            <th className="text-muted w-1">Transaction Signature</th>
             <th className="text-muted">Instruction</th>
-            <th className="text-muted">Transaction Signature</th>
-            {hasTimestamps && <th className="text-muted w-auto">Timestamp</th>}
+            {hasTimestamps && <th className="text-muted">Age</th>}
           </tr>
         </thead>
         <tbody className="list">{detailsList}</tbody>

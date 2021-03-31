@@ -18,11 +18,10 @@ import {
   TransferChecked,
 } from "components/instruction/token/types";
 import { InstructionContainer } from "utils/instruction";
-import { Slot } from "components/common/Slot";
 import { Signature } from "components/common/Signature";
-import { displayTimestamp } from "utils/date";
 import { Address } from "components/common/Address";
 import { normalizeTokenAmount } from "utils";
+import Moment from "react-moment";
 
 type MintDetails = {
   decimals: number;
@@ -153,31 +152,27 @@ export function TransfersDetails({
           className={`${failed && "transaction-failed"}`}
           title={`${failed && "Transaction Failed"}`}
         >
-          <td className="w-1">
-            <Slot slot={slot} link />
+          <td>
+            <Signature signature={signature} link truncateChars={24} />
+          </td>
+
+          {hasTimestamps && (
+            <td className="text-muted">
+              {blockTime && <Moment date={blockTime * 1000} fromNow />}
+            </td>
+          )}
+
+          <td>
+            <Address pubkey={transfer.source} link truncateChars={16} />
           </td>
 
           <td>
-            <Address pubkey={transfer.source} link truncate />
-          </td>
-
-          <td>
-            <Address pubkey={transfer.destination} link truncate />
+            <Address pubkey={transfer.destination} link truncateChars={16} />
           </td>
 
           <td>
             {amountString} {units}
           </td>
-
-          <td>
-            <Signature signature={signature} link truncate />
-          </td>
-
-          {hasTimestamps && (
-            <td className="text-muted">
-              {blockTime ? displayTimestamp(blockTime * 1000, true) : "---"}
-            </td>
-          )}
         </tr>
       );
     });
@@ -188,12 +183,11 @@ export function TransfersDetails({
       <table className="table table-sm table-nowrap card-table">
         <thead>
           <tr>
-            <th className="text-muted w-1">Slot</th>
+            <th className="text-muted">Transaction Signature</th>
+            {hasTimestamps && <th className="text-muted">Age</th>}
             <th className="text-muted">Source</th>
             <th className="text-muted">Destination</th>
             <th className="text-muted">Amount</th>
-            <th className="text-muted">Transaction Signature</th>
-            {hasTimestamps && <th className="text-muted">Timestamp</th>}
           </tr>
         </thead>
         <tbody className="list">{detailsList}</tbody>
