@@ -4,9 +4,8 @@ use solana_ledger::{
     blockstore::Blockstore,
     blockstore_processor::{TransactionStatusBatch, TransactionStatusMessage},
 };
-use solana_runtime::{
-    bank::{Bank, InnerInstructionsList, NonceRollbackInfo, TransactionLogMessages},
-    transaction_utils::OrderedIterator,
+use solana_runtime::bank::{
+    Bank, InnerInstructionsList, NonceRollbackInfo, TransactionLogMessages,
 };
 use solana_transaction_status::{InnerInstructions, TransactionStatusMeta};
 use std::{
@@ -58,7 +57,6 @@ impl TransactionStatusService {
             TransactionStatusMessage::Batch(TransactionStatusBatch {
                 bank,
                 transactions,
-                iteration_order,
                 statuses,
                 balances,
                 token_balances,
@@ -80,7 +78,7 @@ impl TransactionStatusService {
                         Box::new(std::iter::repeat_with(Vec::new))
                     };
                 for (
-                    (_, transaction),
+                    transaction,
                     (status, nonce_rollback),
                     pre_balances,
                     post_balances,
@@ -89,7 +87,7 @@ impl TransactionStatusService {
                     inner_instructions,
                     log_messages,
                 ) in izip!(
-                    OrderedIterator::new(&transactions, iteration_order.as_deref()),
+                    &transactions,
                     statuses,
                     balances.pre_balances,
                     balances.post_balances,
