@@ -104,6 +104,7 @@ impl PreAccount {
         rent: &Rent,
         post: &AccountSharedData,
         timings: &mut ExecuteDetailsTimings,
+        outermost_call: bool,
     ) -> Result<(), InstructionError> {
         let pre = self.account.borrow();
 
@@ -186,17 +187,19 @@ impl PreAccount {
             return Err(InstructionError::RentEpochModified);
         }
 
-        timings.total_account_count += 1;
-        timings.total_data_size += post.data().len();
-        if owner_changed
-            || lamports_changed
-            || data_len_changed
-            || executable_changed
-            || rent_epoch_changed
-            || self.changed
-        {
-            timings.changed_account_count += 1;
-            timings.data_size_changed += post.data().len();
+        if outermost_call {
+            timings.total_account_count += 1;
+            timings.total_data_size += post.data().len();
+            if owner_changed
+                || lamports_changed
+                || data_len_changed
+                || executable_changed
+                || rent_epoch_changed
+                || self.changed
+            {
+                timings.changed_account_count += 1;
+                timings.data_size_changed += post.data().len();
+            }
         }
 
         Ok(())
@@ -942,6 +945,7 @@ impl MessageProcessor {
                     rent,
                     &account,
                     timings,
+                    true,
                 )?;
                 pre_sum += u128::from(pre_accounts[unique_index].lamports());
                 post_sum += u128::from(account.lamports);
@@ -990,7 +994,14 @@ impl MessageProcessor {
                                 .map_err(|_| InstructionError::AccountBorrowOutstanding)?;
                         }
                         let account = account.borrow();
-                        pre_account.verify(&program_id, is_writable, &rent, &account, timings)?;
+                        pre_account.verify(
+                            &program_id,
+                            is_writable,
+                            &rent,
+                            &account,
+                            timings,
+                            false,
+                        )?;
                         pre_sum += u128::from(pre_account.lamports());
                         post_sum += u128::from(account.lamports);
                         if is_writable && !account.executable {
@@ -1360,6 +1371,7 @@ mod tests {
                 &self.rent,
                 &self.post,
                 &mut ExecuteDetailsTimings::default(),
+                false,
             )
         }
     }
