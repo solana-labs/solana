@@ -894,7 +894,7 @@ describe('Connection', () => {
       ],
     });
 
-    const result = await connection.getParsedConfirmedTransactions([
+    let result = await connection.getParsedConfirmedTransactions([
       confirmedTransaction,
       confirmedTransaction,
     ]);
@@ -913,6 +913,14 @@ describe('Connection', () => {
     if (result[1] !== null) {
       expect(result[1].transaction.signatures).not.to.be.null;
     }
+
+    result = await connection.getParsedConfirmedTransactions([]);
+    if (!result) {
+      expect(result).to.be.ok;
+      return;
+    }
+
+    expect(result).to.be.empty;
   });
 
   it('get confirmed transaction', async () => {

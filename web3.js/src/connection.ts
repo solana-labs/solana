@@ -722,6 +722,9 @@ function createRpcRequest(client: RpcClient): RpcRequest {
 function createRpcBatchRequest(client: RpcClient): RpcBatchRequest {
   return (requests: RpcParams[]) => {
     return new Promise((resolve, reject) => {
+      // Do nothing if requests is empty
+      if (requests.length === 0) resolve([]);
+
       const batch = requests.map((params: RpcParams) => {
         return client.request(params.methodName, params.args);
       });
