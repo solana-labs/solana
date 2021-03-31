@@ -2411,15 +2411,21 @@ impl Bank {
             .map_or(Ok(()), |sig| self.get_signature_status(sig).unwrap())
     }
 
+    pub fn demote_sysvar_write_locks(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::demote_sysvar_write_locks::id())
+    }
+
     pub fn prepare_batch<'a, 'b>(
         &'a self,
         txs: &'b [Transaction],
         iteration_order: Option<Vec<usize>>,
     ) -> TransactionBatch<'a, 'b> {
-        let results = self
-            .rc
-            .accounts
-            .lock_accounts(txs, iteration_order.as_deref());
+        let results = self.rc.accounts.lock_accounts(
+            txs,
+            iteration_order.as_deref(),
+            self.demote_sysvar_write_locks(),
+        );
         TransactionBatch::new(results, &self, txs, iteration_order)
     }
 
@@ -2484,6 +2490,7 @@ impl Bank {
                 batch.transactions(),
                 batch.iteration_order(),
                 batch.lock_results(),
+                self.demote_sysvar_write_locks(),
             )
         }
     }
@@ -3210,6 +3217,7 @@ impl Bank {
             &self.rent_collector,
             &self.last_blockhash_with_fee_calculator(),
             self.fix_recent_blockhashes_sysvar_delay(),
+            self.demote_sysvar_write_locks(),
         );
         self.collect_rent(executed, loaded_accounts);
 
@@ -12260,6 +12268,74 @@ pub(crate) mod tests {
         assert_eq!(
             bank.get_largest_accounts(2, &exclude, AccountAddressFilter::Exclude),
             vec![pubkeys_balances[3], pubkeys_balances[1]]
+        );
+    }
+
+    #[test]
+    fn test_transfer_sysvar() {
+        solana_logger::setup();
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config_with_leader(
+            1_000_000_000_000_000,
+            &Pubkey::new_unique(),
+            bootstrap_validator_stake_lamports(),
+        );
+        let mut bank = Bank::new(&genesis_config);
+
+        fn mock_ix_processor(
+            _pubkey: &Pubkey,
+            ka: &[KeyedAccount],
+            _data: &[u8],
+            _invoke_context: &mut dyn InvokeContext,
+        ) -> std::result::Result<(), InstructionError> {
+            use solana_sdk::account::WritableAccount;
+            let mut data = ka[1].try_account_ref_mut()?;
+            data.data_as_mut_slice()[0] = 5;
+            Ok(())
+        }
+
+        let program_id = solana_sdk::pubkey::new_rand();
+        bank.add_builtin("mock_program1", program_id, mock_ix_processor);
+
+        let blockhash = bank.last_blockhash();
+        let blockhash_sysvar = sysvar::recent_blockhashes::id();
+        let orig_lamports = bank
+            .get_account(&sysvar::recent_blockhashes::id())
+            .unwrap()
+            .lamports;
+        info!("{:?}", bank.get_account(&sysvar::recent_blockhashes::id()));
+        let tx = system_transaction::transfer(&mint_keypair, &blockhash_sysvar, 10, blockhash);
+        assert_eq!(
+            bank.process_transaction(&tx),
+            Err(TransactionError::InstructionError(
+                0,
+                InstructionError::ReadonlyLamportChange
+            ))
+        );
+        assert_eq!(
+            bank.get_account(&sysvar::recent_blockhashes::id())
+                .unwrap()
+                .lamports,
+            orig_lamports
+        );
+        info!("{:?}", bank.get_account(&sysvar::recent_blockhashes::id()));
+
+        let accounts = vec![
+            AccountMeta::new(mint_keypair.pubkey(), true),
+            AccountMeta::new(blockhash_sysvar, false),
+        ];
+        let ix = Instruction::new_with_bincode(program_id, &0, accounts);
+        let message = Message::new(&[ix], Some(&mint_keypair.pubkey()));
+        let tx = Transaction::new(&[&mint_keypair], message, blockhash);
+        assert_eq!(
+            bank.process_transaction(&tx),
+            Err(TransactionError::InstructionError(
+                0,
+                InstructionError::ReadonlyDataModified
+            ))
         );
     }
 }
