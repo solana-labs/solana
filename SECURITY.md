@@ -46,7 +46,7 @@ Out of Scope:
 The following components are out of scope for the bounty program
 * Metrics: `/metrics` in the monorepo as well as https://metrics.solana.com
 * Explorer: `/explorer` in the monorepo as well as https://explorer.solana.com
-* Any credentials, auth tokens, etc. checked into the repo
+* Any encrypted credentials, auth tokens, etc. checked into the repo
 * Bugs in dependencies. Please take them upstream!
 * Attacks that require social engineering
 
