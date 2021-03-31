@@ -3,7 +3,7 @@
 use dashmap::DashMap;
 use std::{
     sync::{
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicU64, Ordering},
         Arc, RwLock,
     },
     time::Instant,
@@ -26,8 +26,8 @@ pub struct ReadOnlyAccountsCache {
     cache: DashMap<(Pubkey, Slot), ReadOnlyAccountCacheEntry>,
     max_data_size: usize,
     data_size: Arc<RwLock<usize>>,
-    hits: AtomicUsize,
-    misses: AtomicUsize,
+    hits: AtomicU64,
+    misses: AtomicU64,
 }
 
 impl ReadOnlyAccountsCache {
@@ -36,8 +36,8 @@ impl ReadOnlyAccountsCache {
             max_data_size,
             cache: DashMap::default(),
             data_size: Arc::new(RwLock::new(0)),
-            hits: AtomicUsize::new(0),
-            misses: AtomicUsize::new(0),
+            hits: AtomicU64::new(0),
+            misses: AtomicU64::new(0),
         }
     }
 
@@ -115,7 +115,7 @@ impl ReadOnlyAccountsCache {
         *self.data_size.read().unwrap()
     }
 
-    pub fn get_and_reset_stats(&self) -> (usize, usize) {
+    pub fn get_and_reset_stats(&self) -> (u64, u64) {
         let hits = self.hits.swap(0, Ordering::Relaxed);
         let misses = self.misses.swap(0, Ordering::Relaxed);
         (hits, misses)
