@@ -2863,13 +2863,8 @@ dependencies = [
 ]
 
 [[package]]
-<<<<<<< HEAD
-name = "solana-bpf-rust-sysval"
-version = "1.6.3"
-=======
 name = "solana-bpf-rust-sysvar"
-version = "1.7.0"
->>>>>>> f84e88f0a... Cleanup nits (#16211)
+version = "1.6.3"
 dependencies = [
  "solana-program 1.6.3",
 ]
