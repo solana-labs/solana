@@ -385,7 +385,7 @@ impl JsonRpcRequestProcessor {
 
     pub fn get_inflation_reward(
         &self,
-        address: String,
+        pubkey: &Pubkey,
         lowest_epoch: Epoch,
     ) -> Result<Vec<RpcEpochReward>> {
         let mut all_epoch_rewards = vec![];
@@ -406,7 +406,7 @@ impl JsonRpcRequestProcessor {
             }
 
             let first_confirmed_block_in_epoch = *self
-                .get_confirmed_blocks_with_limit(first_slot_in_epoch, 1, None)? //TODO revisit
+                .get_confirmed_blocks_with_limit(first_slot_in_epoch, 1, None)?
                 .get(0)
                 .ok_or(RpcCustomError::BlockNotAvailable {
                     slot: first_slot_in_epoch,
@@ -438,7 +438,7 @@ impl JsonRpcRequestProcessor {
 
                 if let Some(reward) = epoch_rewards
                     .into_iter()
-                    .find(|reward| reward.pubkey == address)
+                    .find(|reward| reward.pubkey == pubkey.to_string())
                 {
                     if reward.post_balance > reward.lamports.try_into().unwrap() {
                         let rate_change = reward.lamports.abs() as f64
@@ -843,11 +843,11 @@ impl JsonRpcRequestProcessor {
                             .block_on(bigtable_ledger_storage.get_confirmed_block(slot));
                         self.check_bigtable_result(&bigtable_result)?;
                         return bigtable_result
-                            .map_err(|_| Err(RpcCustomError::BlockNotAvailable { slot }.into()));
+                            .map_err(|_| RpcCustomError::BlockNotAvailable { slot }.into());
                     }
                 }
                 self.check_slot_cleaned_up(&result, slot)?;
-                return result.map_err(|_| Err(RpcCustomError::BlockNotAvailable { slot }.into()));
+                return result.map_err(|_| RpcCustomError::BlockNotAvailable { slot }.into());
             } else if commitment.is_confirmed() {
                 // Check if block is confirmed
                 let confirmed_bank = self.bank(Some(CommitmentConfig::confirmed()));
@@ -858,8 +858,7 @@ impl JsonRpcRequestProcessor {
                             .load(Ordering::SeqCst)
                 {
                     let result = self.blockstore.get_complete_block(slot, true);
-                    return result
-                        .map_err(|_| Err(RpcCustomError::BlockNotAvailable { slot }.into()));
+                    return result.map_err(|_| RpcCustomError::BlockNotAvailable { slot }.into());
                 }
             }
         }
@@ -2292,7 +2291,7 @@ pub mod rpc_full {
         fn get_inflation_reward(
             &self,
             meta: Self::Metadata,
-            address: String,
+            pubkey_str: String,
             lowest_epoch: Epoch,
         ) -> Result<Vec<RpcEpochReward>>;
 
@@ -3252,11 +3251,15 @@ pub mod rpc_full {
         fn get_inflation_reward(
             &self,
             meta: Self::Metadata,
-            address: String,
+            pubkey_str: String,
             lowest_epoch: Epoch,
         ) -> Result<Vec<RpcEpochReward>> {
-            debug!("get_inflation_reward rpc request received: {:?}", address);
-            meta.get_inflation_reward(address, lowest_epoch)
+            debug!(
+                "get_inflation_reward rpc request received: {:?}",
+                pubkey_str
+            );
+            let pubkey = verify_pubkey(pubkey_str)?;
+            meta.get_inflation_reward(&pubkey, lowest_epoch)
         }
 
         fn get_token_account_balance(
