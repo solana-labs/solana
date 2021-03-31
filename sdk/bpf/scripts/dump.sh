@@ -7,17 +7,17 @@ source "$bpf_sdk"/env.sh
 so=$1
 dump=$2
 if [[ -z $so ]] || [[ -z $dump ]]; then
-  echo "Usage: $0 bpf-program.so dump.txt"
+  echo "Usage: $0 bpf-program.so dump.txt" >&2
   exit 1
 fi
 
 if [[ ! -r $so ]]; then
-  echo "Error: File not found or readable: $so"
+  echo "Error: File not found or readable: $so" >&2
   exit 1
 fi
 
 if ! command -v rustfilt > /dev/null; then
-  echo "Error: rustfilt not found.  It can be installed by running: cargo install rustfilt"
+  echo "Error: rustfilt not found.  It can be installed by running: cargo install rustfilt" >&2
   exit 1
 fi
 
@@ -38,8 +38,9 @@ dump_mangled=$dump.mangled
 rm -f "$dump_mangled"
 
 if [[ ! -f "$dump" ]]; then
-  echo "Error: Failed to create $dump"
+  echo "Error: Failed to create $dump" >&2
   exit 1
 fi
 
-echo "Wrote $dump"
+echo >&2
+echo "Wrote $dump" >&2
