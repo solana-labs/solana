@@ -9,7 +9,7 @@
     "@solana/spl-token-registry": "^0.2.47",
     "@solana/web3.js": "^1.2.3",
     "@testing-library/jest-dom": "^5.11.9",
-    "@testing-library/react": "^11.2.5",
+    "@testing-library/react": "^11.2.6",
     "@testing-library/user-event": "^13.1.1",
     "@types/bn.js": "^5.1.0",
     "@types/bs58": "^4.0.1",
