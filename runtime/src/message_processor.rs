@@ -314,18 +314,18 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         &mut self,
         keyed_accounts: &[KeyedAccount],
         key: &Pubkey,
-    ) -> Result<&[KeyedAccount], InstructionError> {
+    ) -> Result<(), InstructionError> {
         if self.invoke_stack.len() > self.bpf_compute_budget.max_invoke_depth {
             return Err(InstructionError::CallDepth);
         }
         let frame_index = self.invoke_stack.iter().position(|frame| frame.0 == *key);
-        if frame_index != None && frame_index != Some(self.invoke_stack.len() - 1) {
+        if frame_index != None && frame_index != Some(self.invoke_stack.len().saturating_sub(1)) {
             // Reentrancy not allowed unless caller is calling itself
             return Err(InstructionError::ReentrancyNotAllowed);
         }
         let keyed_accounts = unsafe { std::mem::transmute(keyed_accounts) };
         self.invoke_stack.push((*key, keyed_accounts));
-        Ok(&self.invoke_stack[self.invoke_stack.len() - 2].1)
+        Ok(())
     }
     fn pop(&mut self) {
         self.invoke_stack.pop();
@@ -340,20 +340,21 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         accounts: &[Rc<RefCell<AccountSharedData>>],
         caller_write_privileges: Option<&[bool]>,
     ) -> Result<(), InstructionError> {
-        match self.invoke_stack.last() {
-            Some((program_id, _keyed_accounts)) => MessageProcessor::verify_and_update(
-                message,
-                instruction,
-                &mut self.pre_accounts,
-                accounts,
-                program_id,
-                &self.rent,
-                caller_write_privileges,
-                &mut self.timings,
-                self.feature_set.is_active(&demote_sysvar_write_locks::id()),
-            ),
-            None => Err(InstructionError::GenericError), // Should never happen
-        }
+        let (program_id, _keyed_accounts) = self
+            .invoke_stack
+            .last()
+            .ok_or(InstructionError::GenericError)?;
+        MessageProcessor::verify_and_update(
+            message,
+            instruction,
+            &mut self.pre_accounts,
+            accounts,
+            program_id,
+            &self.rent,
+            caller_write_privileges,
+            &mut self.timings,
+            self.feature_set.is_active(&demote_sysvar_write_locks::id()),
+        )
     }
     fn get_caller(&self) -> Result<&Pubkey, InstructionError> {
         self.invoke_stack
@@ -362,12 +363,20 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             .ok_or(InstructionError::GenericError)
     }
     fn remove_first_keyed_account(&mut self) {
-        let index = self.invoke_stack.len() - 1;
-        let last_frame = &mut self.invoke_stack[index];
-        last_frame.1 = &last_frame.1[1..];
+        let mut stack_frame = &mut self
+            .invoke_stack
+            .last_mut()
+            .ok_or(InstructionError::GenericError)
+            .unwrap();
+        stack_frame.1 = &stack_frame.1[1..];
     }
     fn get_keyed_accounts(&self) -> &[KeyedAccount] {
-        &self.invoke_stack[self.invoke_stack.len() - 1].1
+        &self
+            .invoke_stack
+            .last()
+            .ok_or(InstructionError::GenericError)
+            .unwrap()
+            .1
     }
     fn get_programs(&self) -> &[(Pubkey, ProcessInstructionWithContext)] {
         self.programs
