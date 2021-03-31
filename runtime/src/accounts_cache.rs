@@ -54,7 +54,6 @@ impl SlotCacheInner {
         account: AccountSharedData,
         hash: Option<Hash>,
         slot: Slot,
-        cluster_type: ClusterType,
     ) -> CachedAccount {
         if self.cache.contains_key(pubkey) {
             self.same_account_writes.fetch_add(1, Ordering::Relaxed);
@@ -68,7 +67,6 @@ impl SlotCacheInner {
             account,
             hash: RwLock::new(hash),
             slot,
-            cluster_type,
             pubkey: *pubkey,
         });
         self.cache.insert(*pubkey, item.clone());
@@ -112,12 +110,11 @@ pub struct CachedAccountInner {
     pub account: AccountSharedData,
     hash: RwLock<Option<Hash>>,
     slot: Slot,
-    cluster_type: ClusterType,
     pubkey: Pubkey,
 }
 
 impl CachedAccountInner {
-    pub fn hash(&self) -> Hash {
+    pub fn hash(&self, cluster_type: ClusterType) -> Hash {
         let hash = self.hash.read().unwrap();
         match *hash {
             Some(hash) => hash,
@@ -127,7 +124,7 @@ impl CachedAccountInner {
                     self.slot,
                     &self.account,
                     &self.pubkey,
-                    &self.cluster_type,
+                    &cluster_type,
                 );
                 *self.hash.write().unwrap() = Some(hash);
                 hash
@@ -175,7 +172,6 @@ impl AccountsCache {
         pubkey: &Pubkey,
         account: AccountSharedData,
         hash: Option<Hash>,
-        cluster_type: ClusterType,
     ) -> CachedAccount {
         let slot_cache = self.slot_cache(slot).unwrap_or_else(||
             // DashMap entry.or_insert() returns a RefMut, essentially a write lock,
@@ -188,7 +184,7 @@ impl AccountsCache {
                 .or_insert(Arc::new(SlotCacheInner::default()))
                 .clone());
 
-        slot_cache.insert(pubkey, account, hash, slot, cluster_type)
+        slot_cache.insert(pubkey, account, hash, slot)
     }
 
     pub fn load(&self, slot: Slot, pubkey: &Pubkey) -> Option<CachedAccount> {
@@ -290,7 +286,6 @@ pub mod tests {
             &Pubkey::new_unique(),
             AccountSharedData::new(1, 0, &Pubkey::default()),
             Some(Hash::default()),
-            ClusterType::Development,
         );
         // If the cache is told the size limit is 0, it should return the one slot
         let removed = cache.remove_slots_le(0);
@@ -309,7 +304,6 @@ pub mod tests {
             &Pubkey::new_unique(),
             AccountSharedData::new(1, 0, &Pubkey::default()),
             Some(Hash::default()),
-            ClusterType::Development,
         );
 
         // If the cache is told the size limit is 0, it should return nothing because there's only

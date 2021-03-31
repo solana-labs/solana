@@ -232,10 +232,10 @@ impl<'a> LoadedAccount<'a> {
         }
     }
 
-    pub fn loaded_hash(&self) -> Hash {
+    pub fn loaded_hash(&self, cluster_type: ClusterType) -> Hash {
         match self {
             LoadedAccount::Stored(stored_account_meta) => *stored_account_meta.hash,
-            LoadedAccount::Cached((_, cached_account)) => cached_account.hash(),
+            LoadedAccount::Cached((_, cached_account)) => cached_account.hash(cluster_type),
         }
     }
 
@@ -1305,7 +1305,7 @@ impl AccountsDb {
         }
     }
 
-    fn background_hasher(receiver: Receiver<CachedAccount>) {
+    fn background_hasher(receiver: Receiver<CachedAccount>, cluster_type: ClusterType) {
         loop {
             let result = receiver.recv();
             match result {
@@ -1313,7 +1313,7 @@ impl AccountsDb {
                     // if we hold the only ref, then this account doesn't need to be hashed, we ignore this account and it will disappear
                     if Arc::strong_count(&account) > 1 {
                         // this will cause the hash to be calculated and store inside account if it needs to be calculated
-                        let _ = (*account).hash();
+                        let _ = (*account).hash(cluster_type);
                     };
                 }
                 Err(_) => {
@@ -1325,10 +1325,11 @@ impl AccountsDb {
 
     fn start_background_hasher(&mut self) {
         let (sender, receiver) = unbounded();
+        let cluster_type = self.expected_cluster_type();
         Builder::new()
             .name("solana-accounts-db-store-hasher".to_string())
             .spawn(move || {
-                Self::background_hasher(receiver);
+                Self::background_hasher(receiver, cluster_type);
             })
             .unwrap();
         self.sender_bg_hasher = Some(sender);
@@ -2295,7 +2296,7 @@ impl AccountsDb {
 
         self.get_account_accessor_from_cache_or_storage(slot, pubkey, store_id, offset)
             .get_loaded_account()
-            .map(|loaded_account| loaded_account.loaded_hash())
+            .map(|loaded_account| loaded_account.loaded_hash(self.expected_cluster_type()))
             .unwrap()
     }
 
@@ -3316,7 +3317,7 @@ impl AccountsDb {
                         .map(|should_flush_f| should_flush_f(key, account))
                         .unwrap_or(true);
                     if should_flush {
-                        let hash = iter_item.value().hash();
+                        let hash = iter_item.value().hash(self.expected_cluster_type());
                         total_size += (account.data().len() + STORE_META_OVERHEAD) as u64;
                         num_flushed += 1;
                         Some(((key, account), hash))
@@ -3401,13 +3402,9 @@ impl AccountsDb {
             .enumerate()
             .map(|(i, (meta, account))| {
                 let hash = hashes.map(|hashes| hashes[i]);
-                let cached_account = self.accounts_cache.store(
-                    slot,
-                    &meta.pubkey,
-                    (*account).clone(),
-                    hash,
-                    self.expected_cluster_type(),
-                );
+                let cached_account =
+                    self.accounts_cache
+                        .store(slot, &meta.pubkey, (*account).clone(), hash);
                 // hash this account in the bg
                 match &self.sender_bg_hasher {
                     Some(ref sender) => {
@@ -3624,7 +3621,8 @@ impl AccountsDb {
                                         .get_loaded_account()
                                         .and_then(
                                             |loaded_account| {
-                                                let loaded_hash = loaded_account.loaded_hash();
+                                                let loaded_hash = loaded_account
+                                                    .loaded_hash(self.expected_cluster_type());
                                                 let balance =
                                                     Self::account_balance_for_capitalization(
                                                         account_info.lamports,
@@ -3753,6 +3751,7 @@ impl AccountsDb {
             Self::calculate_accounts_hash_without_index(
                 &combined_maps,
                 Some(&self.thread_pool_clean),
+                self.expected_cluster_type(),
             )
         } else {
             self.calculate_accounts_hash(slot, ancestors, false)
@@ -3791,6 +3790,7 @@ impl AccountsDb {
         mut stats: &mut crate::accounts_hash::HashStats,
         bins: usize,
         bin_range: &Range<usize>,
+        cluster_type: ClusterType,
     ) -> Vec<Vec<Vec<CalculateHashIntermediate>>> {
         let max_plus_1 = std::u8::MAX as usize + 1;
         assert!(bins <= max_plus_1 && bins > 0);
@@ -3824,7 +3824,7 @@ impl AccountsDb {
 
                 let source_item = CalculateHashIntermediate::new(
                     version,
-                    loaded_account.loaded_hash(),
+                    loaded_account.loaded_hash(cluster_type),
                     balance,
                     slot,
                     pubkey,
@@ -3846,6 +3846,7 @@ impl AccountsDb {
     pub fn calculate_accounts_hash_without_index(
         storages: &[SnapshotStorage],
         thread_pool: Option<&ThreadPool>,
+        cluster_type: ClusterType,
     ) -> (Hash, u64) {
         let scan_and_hash = || {
             let mut stats = HashStats::default();
@@ -3878,6 +3879,7 @@ impl AccountsDb {
                     &mut stats,
                     PUBKEY_BINS_FOR_CALCULATING_HASHES,
                     &bounds,
+                    cluster_type,
                 );
 
                 let (hash, lamports, for_next_pass) = AccountsHash::rest_of_hash_calculation(
@@ -3941,11 +3943,14 @@ impl AccountsDb {
                 slot,
                 |loaded_account: LoadedAccount| {
                     // Cache only has one version per key, don't need to worry about versioning
-                    Some((*loaded_account.pubkey(), loaded_account.loaded_hash()))
+                    Some((
+                        *loaded_account.pubkey(),
+                        loaded_account.loaded_hash(self.expected_cluster_type()),
+                    ))
                 },
                 |accum: &DashMap<Pubkey, (u64, Hash)>, loaded_account: LoadedAccount| {
                     let loaded_write_version = loaded_account.write_version();
-                    let loaded_hash = loaded_account.loaded_hash();
+                    let loaded_hash = loaded_account.loaded_hash(self.expected_cluster_type());
                     let should_insert =
                         if let Some(existing_entry) = accum.get(loaded_account.pubkey()) {
                             loaded_write_version > existing_entry.value().version()
@@ -5123,7 +5128,7 @@ pub mod tests {
         let mut stats = HashStats::default();
         let bounds = Range { start: 0, end: 0 };
 
-        AccountsDb::scan_snapshot_stores(&[], &mut stats, 257, &bounds);
+        AccountsDb::scan_snapshot_stores(&[], &mut stats, 257, &bounds, ClusterType::Development);
     }
     #[test]
     #[should_panic(expected = "assertion failed: bins <= max_plus_1 && bins > 0")]
@@ -5131,7 +5136,7 @@ pub mod tests {
         let mut stats = HashStats::default();
         let bounds = Range { start: 0, end: 0 };
 
-        AccountsDb::scan_snapshot_stores(&[], &mut stats, 0, &bounds);
+        AccountsDb::scan_snapshot_stores(&[], &mut stats, 0, &bounds, ClusterType::Development);
     }
 
     #[test]
@@ -5142,7 +5147,7 @@ pub mod tests {
         let mut stats = HashStats::default();
         let bounds = Range { start: 2, end: 2 };
 
-        AccountsDb::scan_snapshot_stores(&[], &mut stats, 2, &bounds);
+        AccountsDb::scan_snapshot_stores(&[], &mut stats, 2, &bounds, ClusterType::Development);
     }
     #[test]
     #[should_panic(
@@ -5152,7 +5157,7 @@ pub mod tests {
         let mut stats = HashStats::default();
         let bounds = Range { start: 1, end: 3 };
 
-        AccountsDb::scan_snapshot_stores(&[], &mut stats, 2, &bounds);
+        AccountsDb::scan_snapshot_stores(&[], &mut stats, 2, &bounds, ClusterType::Development);
     }
 
     #[test]
@@ -5163,7 +5168,7 @@ pub mod tests {
         let mut stats = HashStats::default();
         let bounds = Range { start: 1, end: 0 };
 
-        AccountsDb::scan_snapshot_stores(&[], &mut stats, 2, &bounds);
+        AccountsDb::scan_snapshot_stores(&[], &mut stats, 2, &bounds, ClusterType::Development);
     }
 
     fn sample_storages_and_accounts() -> (SnapshotStorages, Vec<CalculateHashIntermediate>) {
@@ -5259,6 +5264,7 @@ pub mod tests {
                 start: 0,
                 end: bins,
             },
+            ClusterType::Development,
         );
         assert_eq!(result, vec![vec![raw_expected.clone()]]);
 
@@ -5271,6 +5277,7 @@ pub mod tests {
                 start: 0,
                 end: bins,
             },
+            ClusterType::Development,
         );
         let mut expected = vec![Vec::new(); bins];
         expected[0].push(raw_expected[0].clone());
@@ -5288,6 +5295,7 @@ pub mod tests {
                 start: 0,
                 end: bins,
             },
+            ClusterType::Development,
         );
         let mut expected = vec![Vec::new(); bins];
         expected[0].push(raw_expected[0].clone());
@@ -5305,6 +5313,7 @@ pub mod tests {
                 start: 0,
                 end: bins,
             },
+            ClusterType::Development,
         );
         let mut expected = vec![Vec::new(); bins];
         expected[0].push(raw_expected[0].clone());
@@ -5334,6 +5343,7 @@ pub mod tests {
                 start: 0,
                 end: bins,
             },
+            ClusterType::Development,
         );
         assert_eq!(result.len(), 2); // 2 chunks
         assert_eq!(result[0].len(), 0); // nothing found in first slots
@@ -5356,6 +5366,7 @@ pub mod tests {
                 start: 0,
                 end: bins / 2,
             },
+            ClusterType::Development,
         );
         let mut expected = vec![Vec::new(); bins];
         expected[0].push(raw_expected[0].clone());
@@ -5371,6 +5382,7 @@ pub mod tests {
                 start: 1,
                 end: bins,
             },
+            ClusterType::Development,
         );
 
         let mut expected = vec![Vec::new(); bins];
@@ -5389,6 +5401,7 @@ pub mod tests {
                     start: bin,
                     end: bin + 1,
                 },
+                ClusterType::Development,
             );
             let mut expected = vec![Vec::new(); bins];
             expected[bin].push(raw_expected[bin].clone());
@@ -5406,6 +5419,7 @@ pub mod tests {
                     start: bin,
                     end: bin + 1,
                 },
+                ClusterType::Development,
             );
             let mut expected = vec![];
             if let Some(index) = bin_locations.iter().position(|&r| r == bin) {
@@ -5437,6 +5451,7 @@ pub mod tests {
                 start: 127,
                 end: 128,
             },
+            ClusterType::Development,
         );
         assert_eq!(result.len(), 2); // 2 chunks
         assert_eq!(result[0].len(), 0); // nothing found in first slots
@@ -5451,7 +5466,11 @@ pub mod tests {
         solana_logger::setup();
 
         let (storages, _size, _slot_expected) = sample_storage();
-        let result = AccountsDb::calculate_accounts_hash_without_index(&storages, None);
+        let result = AccountsDb::calculate_accounts_hash_without_index(
+            &storages,
+            None,
+            ClusterType::Development,
+        );
         let expected_hash = Hash::from_str("GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn").unwrap();
         assert_eq!(result, (expected_hash, 0));
     }
@@ -5466,7 +5485,11 @@ pub mod tests {
                 item.hash
             });
         let sum = raw_expected.iter().map(|item| item.lamports).sum();
-        let result = AccountsDb::calculate_accounts_hash_without_index(&storages, None);
+        let result = AccountsDb::calculate_accounts_hash_without_index(
+            &storages,
+            None,
+            ClusterType::Development,
+        );
 
         assert_eq!(result, (expected_hash, sum));
     }

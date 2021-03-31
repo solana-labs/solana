@@ -187,6 +187,7 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
         snapshot_package_output_path.as_ref().to_path_buf(),
         bank.capitalization(),
         hash_for_testing,
+        bank.cluster_type(),
     );
 
     Ok(package)
@@ -978,6 +979,7 @@ pub fn process_accounts_package_pre(
         let (hash, lamports) = AccountsDb::calculate_accounts_hash_without_index(
             &accounts_package.storages,
             thread_pool,
+            accounts_package.cluster_type,
         );
 
         assert_eq!(accounts_package.expected_capitalization, lamports);
