@@ -15,6 +15,10 @@ use solana_sdk::{
     pubkey::Pubkey,
 };
 
+type ReadOnlyCacheKey = (Pubkey, Slot);
+type LruEntry = (Instant, usize, ReadOnlyCacheKey);
+type LruList = Arc<RwLock<Vec<LruEntry>>>;
+
 #[derive(Debug)]
 pub struct ReadOnlyAccountCacheEntry {
     pub account: AccountSharedData,
@@ -23,11 +27,12 @@ pub struct ReadOnlyAccountCacheEntry {
 
 #[derive(Debug)]
 pub struct ReadOnlyAccountsCache {
-    cache: DashMap<(Pubkey, Slot), ReadOnlyAccountCacheEntry>,
+    cache: DashMap<ReadOnlyCacheKey, ReadOnlyAccountCacheEntry>,
     max_data_size: usize,
     data_size: Arc<RwLock<usize>>,
     hits: AtomicU64,
     misses: AtomicU64,
+    lru: LruList,
 }
 
 impl ReadOnlyAccountsCache {
@@ -38,6 +43,7 @@ impl ReadOnlyAccountsCache {
             data_size: Arc::new(RwLock::new(0)),
             hits: AtomicU64::new(0),
             misses: AtomicU64::new(0),
+            lru: Arc::new(RwLock::new(Vec::new())),
         }
     }
 
@@ -79,30 +85,76 @@ impl ReadOnlyAccountsCache {
         self.cache.remove(&(*pubkey, slot));
     }
 
-    fn maybe_purge_lru_items(&self, new_item_len: usize) -> usize {
-        let mut new_size = *self.data_size.read().unwrap() + new_item_len;
-        if new_size <= self.max_data_size {
-            return new_size;
-        }
+    fn purge_lru_list(
+        &self,
+        lru: &mut Vec<LruEntry>,
+        verify_timestamp: bool,
+        mut current_size: usize,
+    ) -> usize {
+        let mut processed = 0;
+        for lru_item in lru.iter() {
+            let (timestamp, size, key) = lru_item;
+            processed += 1;
+            let mut try_remove = true;
+            if verify_timestamp {
+                let item = self.cache.get(key);
+                match item {
+                    Some(item) => {
+                        if *timestamp != *item.last_used.read().unwrap() {
+                            // this item was used more recently than our list indicates, so skip it
+                            continue;
+                        }
+                        // item is as old as we thought, so fall through and delete it
+                    }
+                    None => {
+                        try_remove = false;
+                    }
+                }
+            }
 
+            if try_remove {
+                self.cache.remove(&key);
+            }
+            current_size = current_size.saturating_sub(*size); // we don't subtract on remove, so subtract now
+            if current_size <= self.max_data_size {
+                break;
+            }
+        }
+        lru.drain(0..processed);
+        current_size
+    }
+
+    fn calculate_lru_list(&self, lru: &mut Vec<LruEntry>) -> usize {
         // purge in lru order
-        let mut lru = Vec::with_capacity(self.cache.len());
-        new_size = 0;
+        let mut new_size = 0;
         for item in self.cache.iter() {
             let value = item.value();
             let item_len = value.account.data().len();
             new_size += item_len;
             lru.push((*value.last_used.read().unwrap(), item_len, *item.key()));
         }
+        new_size
+    }
+
+    fn maybe_purge_lru_items(&self, new_item_len: usize) -> usize {
+        let mut new_size = *self.data_size.read().unwrap() + new_item_len;
+        if new_size <= self.max_data_size {
+            return new_size;
+        }
+
+        // purge from the lru list we last made
+        let mut list = self.lru.write().unwrap();
+        new_size = self.purge_lru_list(&mut list, true, new_size);
+        if new_size <= self.max_data_size {
+            return new_size;
+        }
+
+        // we didn't get enough, so calculate a new list and keep purging
+        new_size = self.calculate_lru_list(&mut list);
         if new_size > self.max_data_size {
-            lru.sort();
-            for oldest in lru.into_iter() {
-                self.cache.remove(&oldest.2);
-                new_size = new_size.saturating_sub(oldest.1);
-                if new_size <= self.max_data_size {
-                    break;
-                }
-            }
+            list.sort();
+            new_size = self.purge_lru_list(&mut list, false, new_size);
+            // the list is stored in self so we use it to purge next time
         }
         new_size
     }
