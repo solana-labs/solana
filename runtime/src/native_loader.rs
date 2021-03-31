@@ -149,7 +149,9 @@ impl NativeLoader {
                 error!("Executable account now owned by loader");
                 return Err(InstructionError::IncorrectProgramId);
             }
-            // TODO [KeyedAccounts to InvokeContext refactoring]
+            // TODO: Remove these two copies (* deref is also a copy)
+            // Both could be avoided as we know that the first KeyedAccount
+            // still exists even after invoke_context.pop_first_keyed_account() is called
             (
                 *program.unsigned_key(),
                 &program.try_account_ref()?.data().clone(),

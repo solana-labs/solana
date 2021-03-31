@@ -25,9 +25,16 @@ pub type ProcessInstructionWithContext =
 /// Invocation context passed to loaders
 pub trait InvokeContext {
     /// Push a program ID on to the invocation stack
-    fn push(&mut self, key: &Pubkey) -> Result<(), InstructionError>;
+    ///
+    /// It returns the keyed_accounts_to_restore
+    /// to be used in the matching pop call.
+    fn push(
+        &mut self,
+        keyed_accounts: &[KeyedAccount],
+        key: &Pubkey,
+    ) -> Result<&[KeyedAccount], InstructionError>;
     /// Pop a program ID off of the invocation stack
-    fn pop(&mut self);
+    fn pop(&mut self, keyed_accounts_to_restore: &[KeyedAccount]);
     /// Current depth of the invocation stake
     fn invoke_depth(&self) -> usize;
     /// Verify and update PreAccount state based on program execution
@@ -40,8 +47,6 @@ pub trait InvokeContext {
     ) -> Result<(), InstructionError>;
     /// Get the program ID of the currently executing program
     fn get_caller(&self) -> Result<&Pubkey, InstructionError>;
-    /// Set the list of keyed accounts
-    fn set_keyed_accounts(&mut self, keyed_accounts: &[KeyedAccount]);
     /// Removes the first keyed account
     fn pop_first_keyed_account(&mut self);
     /// Get the list of keyed accounts
@@ -309,12 +314,19 @@ impl<'a> MockInvokeContext<'a> {
     }
 }
 impl<'a> InvokeContext for MockInvokeContext<'a> {
-    fn push(&mut self, _key: &Pubkey) -> Result<(), InstructionError> {
+    fn push(
+        &mut self,
+        keyed_accounts: &[KeyedAccount],
+        _key: &Pubkey,
+    ) -> Result<&[KeyedAccount], InstructionError> {
         self.invoke_depth = self.invoke_depth.saturating_add(1);
-        Ok(())
+        let mut keyed_accounts = unsafe { std::mem::transmute(keyed_accounts) };
+        std::mem::swap(&mut self.keyed_accounts, &mut keyed_accounts);
+        Ok(keyed_accounts)
     }
-    fn pop(&mut self) {
+    fn pop(&mut self, keyed_accounts: &[KeyedAccount]) {
         self.invoke_depth = self.invoke_depth.saturating_sub(1);
+        self.keyed_accounts = unsafe { std::mem::transmute(keyed_accounts) };
     }
     fn invoke_depth(&self) -> usize {
         self.invoke_depth
@@ -330,10 +342,6 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
     }
     fn get_caller(&self) -> Result<&Pubkey, InstructionError> {
         Ok(&self.key)
-    }
-    // TODO [KeyedAccounts to InvokeContext refactoring]
-    fn set_keyed_accounts(&mut self, keyed_accounts: &[KeyedAccount]) {
-        self.keyed_accounts = unsafe { std::mem::transmute(keyed_accounts) };
     }
     fn pop_first_keyed_account(&mut self) {
         self.keyed_accounts = &self.keyed_accounts[1..];

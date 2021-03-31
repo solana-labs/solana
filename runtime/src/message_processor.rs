@@ -312,7 +312,11 @@ impl<'a> ThisInvokeContext<'a> {
     }
 }
 impl<'a> InvokeContext for ThisInvokeContext<'a> {
-    fn push(&mut self, key: &Pubkey) -> Result<(), InstructionError> {
+    fn push(
+        &mut self,
+        keyed_accounts: &[KeyedAccount],
+        key: &Pubkey,
+    ) -> Result<&[KeyedAccount], InstructionError> {
         if self.program_ids.len() > self.bpf_compute_budget.max_invoke_depth {
             return Err(InstructionError::CallDepth);
         }
@@ -321,10 +325,13 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             return Err(InstructionError::ReentrancyNotAllowed);
         }
         self.program_ids.push(*key);
-        Ok(())
+        let mut keyed_accounts = unsafe { std::mem::transmute(keyed_accounts) };
+        std::mem::swap(&mut self.keyed_accounts, &mut keyed_accounts);
+        Ok(keyed_accounts)
     }
-    fn pop(&mut self) {
+    fn pop(&mut self, keyed_accounts: &[KeyedAccount]) {
         self.program_ids.pop();
+        self.keyed_accounts = unsafe { std::mem::transmute(keyed_accounts) };
     }
     fn invoke_depth(&self) -> usize {
         self.program_ids.len()
@@ -355,10 +362,6 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         self.program_ids
             .last()
             .ok_or(InstructionError::GenericError)
-    }
-    // TODO [KeyedAccounts to InvokeContext refactoring]
-    fn set_keyed_accounts(&mut self, keyed_accounts: &[KeyedAccount]) {
-        self.keyed_accounts = unsafe { std::mem::transmute(keyed_accounts) };
     }
     fn pop_first_keyed_account(&mut self) {
         self.keyed_accounts = &self.keyed_accounts[1..];
@@ -889,18 +892,15 @@ impl MessageProcessor {
                 accounts,
                 demote_sysvar_write_locks,
             );
-            // TODO [KeyedAccounts to InvokeContext refactoring]
-            let previous_keyed_accounts = {
-                let previous_keyed_accounts = invoke_context.get_keyed_accounts();
-                (
-                    previous_keyed_accounts.as_ptr() as u64,
-                    previous_keyed_accounts.len(),
-                )
-            };
-            invoke_context.set_keyed_accounts(&keyed_accounts);
 
             // Invoke callee
-            invoke_context.push(program_id)?;
+            let previous_keyed_accounts = invoke_context.push(&keyed_accounts, program_id)?;
+
+            // Make Rust forget about lifetimes for a moment.
+            // Otherwise we can not keep this slice to restore it later,
+            // as it is also borrowed in invoke_context.
+            let previous_keyed_accounts =
+                unsafe { std::mem::transmute::<_, &[KeyedAccount]>(previous_keyed_accounts) };
 
             let mut message_processor = MessageProcessor::default();
             for (program_id, process_instruction) in invoke_context.get_programs().iter() {
@@ -916,15 +916,9 @@ impl MessageProcessor {
                 // Verify the called program has not misbehaved
                 result = invoke_context.verify_and_update(message, instruction, accounts, None);
             }
-            invoke_context.pop();
-            // TODO [KeyedAccounts to InvokeContext refactoring]
-            // invoke_context.set_keyed_accounts(previous_keyed_accounts);
-            invoke_context.set_keyed_accounts(unsafe {
-                std::slice::from_raw_parts(
-                    previous_keyed_accounts.0 as *const _,
-                    previous_keyed_accounts.1,
-                )
-            });
+
+            // Restore previous state
+            invoke_context.pop(previous_keyed_accounts);
             result
         } else {
             // This function is always called with a valid instruction, if that changes return an error
@@ -1258,7 +1252,7 @@ mod tests {
         // Check call depth increases and has a limit
         let mut depth_reached = 1;
         for program_id in program_ids.iter().skip(1) {
-            if Err(InstructionError::CallDepth) == invoke_context.push(program_id) {
+            if Err(InstructionError::CallDepth) == invoke_context.push(&[], program_id) {
                 break;
             }
             depth_reached += 1;
@@ -1324,7 +1318,7 @@ mod tests {
             );
             accounts[not_owned_index].borrow_mut().data_as_mut_slice()[0] = data;
 
-            invoke_context.pop();
+            invoke_context.pop(&[]);
         }
     }
 

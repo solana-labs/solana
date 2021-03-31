@@ -747,8 +747,6 @@ impl Executor for BpfExecutor {
         let logger = invoke_context.get_logger();
         let invoke_depth = invoke_context.invoke_depth();
 
-        // TODO [KeyedAccounts to InvokeContext refactoring]
-        // invoke_context.set_keyed_accounts(&keyed_accounts[1..]);
         invoke_context.pop_first_keyed_account();
 
         let mut serialize_time = Measure::start("serialize");
