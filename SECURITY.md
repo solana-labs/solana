@@ -42,6 +42,14 @@ RPC DoS/Crashes:
 $5,000 USD in locked SOL tokens (locked for 12 months)
 * RPC attacks
 
+Out of Scope:
+The following components are out of scope for the bounty program
+* Metrics: `/metrics` in the monorepo as well as https://metrics.solana.com
+* Explorer: `/explorer` in the monorepo as well as https://explorer.solana.com
+* Any credentials, auth tokens, etc. checked into the repo
+* Bugs in dependencies. Please take them upstream!
+* Attacks that require social engineering
+
 Eligibility:
 * The participant submitting the bug bounty shall follow the process outlined within this document
 * Valid exploits can be eligible even if they are not successfully executed on the cluster
