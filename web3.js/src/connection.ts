@@ -112,8 +112,6 @@ export type ConfirmOptions = {
 
 /**
  * Options for getConfirmedSignaturesForAddress2
- *
- * @typedef {Object} ConfirmedSignaturesForAddress2Options
  */
 export type ConfirmedSignaturesForAddress2Options = {
   /**
@@ -208,8 +206,6 @@ function notificationResultAndContext<T, U>(value: Struct<T, U>) {
  *   'confirmed': Query the most recent block which has reached 1 confirmation by the cluster
  *   'finalized': Query the most recent block which has been finalized by the cluster
  * </pre>
- *
- * @typedef {'processed' | 'confirmed' | 'finalized'} Commitment
  */
 export type Commitment =
   | 'processed'
@@ -227,95 +223,76 @@ export type Commitment =
  *   'circulating':    Return the largest accounts that are part of the circulating supply
  *   'nonCirculating': Return the largest accounts that are not part of the circulating supply
  * </pre>
- *
- * @typedef {'circulating' | 'nonCirculating'} LargestAccountsFilter
  */
 export type LargestAccountsFilter = 'circulating' | 'nonCirculating';
 
 /**
  * Configuration object for changing `getLargestAccounts` query behavior
- *
- * @typedef {Object} GetLargestAccountsConfig
- * @property {Commitment|undefined} commitment The level of commitment desired
- * @property {LargestAccountsFilter|undefined} filter Filter largest accounts by whether they are part of the circulating supply
  */
 export type GetLargestAccountsConfig = {
+  /** The level of commitment desired */
   commitment?: Commitment;
+  /** Filter largest accounts by whether they are part of the circulating supply */
   filter?: LargestAccountsFilter;
 };
 
 /**
  * Configuration object for changing query behavior
- *
- * @typedef {Object} SignatureStatusConfig
- * @property {boolean} searchTransactionHistory enable searching status history, not needed for recent transactions
  */
 export type SignatureStatusConfig = {
+  /** enable searching status history, not needed for recent transactions */
   searchTransactionHistory: boolean;
 };
 
 /**
  * Information describing a cluster node
- *
- * @typedef {Object} ContactInfo
- * @property {string} pubkey Identity public key of the node
- * @property {string|null} gossip Gossip network address for the node
- * @property {string|null} tpu TPU network address for the node (null if not available)
- * @property {string|null} rpc JSON RPC network address for the node (null if not available)
- * @property {string|null} version Software version of the node (null if not available)
  */
 export type ContactInfo = {
+  /** Identity public key of the node */
   pubkey: string;
+  /** Gossip network address for the node */
   gossip: string | null;
+  /** TPU network address for the node (null if not available) */
   tpu: string | null;
+  /** JSON RPC network address for the node (null if not available) */
   rpc: string | null;
+  /** Software version of the node (null if not available) */
   version: string | null;
 };
 
 /**
  * Information describing a vote account
- *
- * @typedef {Object} VoteAccountInfo
- * @property {string} votePubkey Public key of the vote account
- * @property {string} nodePubkey Identity public key of the node voting with this account
- * @property {number} activatedStake The stake, in lamports, delegated to this vote account and activated
- * @property {boolean} epochVoteAccount Whether the vote account is staked for this epoch
- * @property {Array<Array<number>>} epochCredits Recent epoch voting credit history for this voter
- * @property {number} commission A percentage (0-100) of rewards payout owed to the voter
- * @property {number} lastVote Most recent slot voted on by this vote account
  */
 export type VoteAccountInfo = {
+  /** Public key of the vote account */
   votePubkey: string;
+  /** Identity public key of the node voting with this account */
   nodePubkey: string;
+  /** The stake, in lamports, delegated to this vote account and activated */
   activatedStake: number;
+  /** Whether the vote account is staked for this epoch */
   epochVoteAccount: boolean;
+  /** Recent epoch voting credit history for this voter */
   epochCredits: Array<[number, number, number]>;
+  /** A percentage (0-100) of rewards payout owed to the voter */
   commission: number;
+  /** Most recent slot voted on by this vote account */
   lastVote: number;
 };
 
 /**
  * A collection of cluster vote accounts
- *
- * @typedef {Object} VoteAccountStatus
- * @property {Array<VoteAccountInfo>} current Active vote accounts
- * @property {Array<VoteAccountInfo>} delinquent Inactive vote accounts
  */
 export type VoteAccountStatus = {
+  /** Active vote accounts */
   current: Array<VoteAccountInfo>;
+  /** Inactive vote accounts */
   delinquent: Array<VoteAccountInfo>;
 };
 
 /**
  * Network Inflation
  * (see https://docs.solana.com/implemented-proposals/ed_overview)
- *
- * @typedef {Object} InflationGovernor
- * @property {number} foundation
- * @property {number} foundation_term
- * @property {number} initial
- * @property {number} taper
- * @property {number} terminal
  */
 export type InflationGovernor = {
   foundation: number;
@@ -335,14 +312,6 @@ const GetInflationGovernorResult = pick({
 
 /**
  * Information about the current epoch
- *
- * @typedef {Object} EpochInfo
- * @property {number} epoch
- * @property {number} slotIndex
- * @property {number} slotsInEpoch
- * @property {number} absoluteSlot
- * @property {number} blockHeight
- * @property {number} transactionCount
  */
 export type EpochInfo = {
   epoch: number;
@@ -365,19 +334,17 @@ const GetEpochInfoResult = pick({
 /**
  * Epoch schedule
  * (see https://docs.solana.com/terminology#epoch)
- *
- * @typedef {Object} EpochSchedule
- * @property {number} slotsPerEpoch The maximum number of slots in each epoch
- * @property {number} leaderScheduleSlotOffset The number of slots before beginning of an epoch to calculate a leader schedule for that epoch
- * @property {boolean} warmup Indicates whether epochs start short and grow
- * @property {number} firstNormalEpoch The first epoch with `slotsPerEpoch` slots
- * @property {number} firstNormalSlot The first slot of `firstNormalEpoch`
  */
 export type EpochSchedule = {
+  /** The maximum number of slots in each epoch */
   slotsPerEpoch: number;
+  /** The number of slots before beginning of an epoch to calculate a leader schedule for that epoch */
   leaderScheduleSlotOffset: number;
+  /** Indicates whether epochs start short and grow */
   warmup: boolean;
+  /** The first epoch with `slotsPerEpoch` slots */
   firstNormalEpoch: number;
+  /** The first slot of `firstNormalEpoch` */
   firstNormalSlot: number;
 };
 
@@ -392,8 +359,6 @@ const GetEpochScheduleResult = pick({
 /**
  * Leader schedule
  * (see https://docs.solana.com/terminology#leader-schedule)
- *
- * @typedef {Object} LeaderSchedule
  */
 export type LeaderSchedule = {
   [address: string]: number[];
@@ -418,17 +383,15 @@ const SignatureStatusResult = pick({
  */
 const SignatureReceivedResult = literal('receivedSignature');
 
+/**
+ * Version info for a node
+ */
 export type Version = {
+  /** Version of solana-core */
   'solana-core': string;
   'feature-set'?: number;
 };
 
-/**
- * Version info for a node
- *
- * @typedef {Object} Version
- * @property {string} solana-core Version of solana-core
- */
 const VersionResult = pick({
   'solana-core': string(),
   'feature-set': optional(number()),
@@ -459,25 +422,23 @@ export type TokenBalance = {
 
 /**
  * Metadata for a parsed confirmed transaction on the ledger
- *
- * @typedef {Object} ParsedConfirmedTransactionMeta
- * @property {number} fee The fee charged for processing the transaction
- * @property {Array<ParsedInnerInstruction>} innerInstructions An array of cross program invoked parsed instructions
- * @property {Array<number>} preBalances The balances of the transaction accounts before processing
- * @property {Array<number>} postBalances The balances of the transaction accounts after processing
- * @property {Array<string>} logMessages An array of program log messages emitted during a transaction
- * @property {Array<TokenBalance>} preTokenBalances The token balances of the transaction accounts before processing
- * @property {Array<TokenBalance>} postTokenBalances The token balances of the transaction accounts after processing
- * @property {object|null} err The error result of transaction processing
  */
 export type ParsedConfirmedTransactionMeta = {
+  /** The fee charged for processing the transaction */
   fee: number;
+  /** An array of cross program invoked parsed instructions */
   innerInstructions?: ParsedInnerInstruction[] | null;
+  /** The balances of the transaction accounts before processing */
   preBalances: Array<number>;
+  /** The balances of the transaction accounts after processing */
   postBalances: Array<number>;
+  /** An array of program log messages emitted during a transaction */
   logMessages?: Array<string> | null;
+  /** The token balances of the transaction accounts before processing */
   preTokenBalances?: Array<TokenBalance> | null;
+  /** The token balances of the transaction accounts after processing */
   postTokenBalances?: Array<TokenBalance> | null;
+  /** The error result of transaction processing */
   err: TransactionError | null;
 };
 
@@ -488,41 +449,37 @@ export type CompiledInnerInstruction = {
 
 /**
  * Metadata for a confirmed transaction on the ledger
- *
- * @typedef {Object} ConfirmedTransactionMeta
- * @property {number} fee The fee charged for processing the transaction
- * @property {Array<CompiledInnerInstruction>} innerInstructions An array of cross program invoked instructions
- * @property {Array<number>} preBalances The balances of the transaction accounts before processing
- * @property {Array<number>} postBalances The balances of the transaction accounts after processing
- * @property {Array<string>} logMessages An array of program log messages emitted during a transaction
- * @property {Array<TokenBalance>} preTokenBalances The token balances of the transaction accounts before processing
- * @property {Array<TokenBalance>} postTokenBalances The token balances of the transaction accounts after processing
- * @property {object|null} err The error result of transaction processing
  */
 export type ConfirmedTransactionMeta = {
+  /** The fee charged for processing the transaction */
   fee: number;
+  /** An array of cross program invoked instructions */
   innerInstructions?: CompiledInnerInstruction[] | null;
+  /** The balances of the transaction accounts before processing */
   preBalances: Array<number>;
+  /** The balances of the transaction accounts after processing */
   postBalances: Array<number>;
+  /** An array of program log messages emitted during a transaction */
   logMessages?: Array<string> | null;
+  /** The token balances of the transaction accounts before processing */
   preTokenBalances?: Array<TokenBalance> | null;
+  /** The token balances of the transaction accounts after processing */
   postTokenBalances?: Array<TokenBalance> | null;
+  /** The error result of transaction processing */
   err: TransactionError | null;
 };
 
 /**
  * A confirmed transaction on the ledger
- *
- * @typedef {Object} ConfirmedTransaction
- * @property {number} slot The slot during which the transaction was processed
- * @property {Transaction} transaction The details of the transaction
- * @property {ConfirmedTransactionMeta|null} meta Metadata produced from the transaction
- * @property {number|null|undefined} blockTime The unix timestamp of when the transaction was processed
  */
 export type ConfirmedTransaction = {
+  /** The slot during which the transaction was processed */
   slot: number;
+  /** The details of the transaction */
   transaction: Transaction;
+  /** Metadata produced from the transaction */
   meta: ConfirmedTransactionMeta | null;
+  /** The unix timestamp of when the transaction was processed */
   blockTime?: number | null;
 };
 
@@ -540,115 +497,101 @@ export type PartiallyDecodedInstruction = {
 
 /**
  * A parsed transaction message account
- *
- * @typedef {Object} ParsedMessageAccount
- * @property {PublicKey} pubkey Public key of the account
- * @property {boolean} signer Indicates if the account signed the transaction
- * @property {boolean} writable Indicates if the account is writable for this transaction
  */
 export type ParsedMessageAccount = {
+  /** Public key of the account */
   pubkey: PublicKey;
+  /** Indicates if the account signed the transaction */
   signer: boolean;
+  /** Indicates if the account is writable for this transaction */
   writable: boolean;
 };
 
 /**
  * A parsed transaction instruction
- *
- * @typedef {Object} ParsedInstruction
- * @property {string} program Name of the program for this instruction
- * @property {PublicKey} programId ID of the program for this instruction
- * @property {any} parsed Parsed instruction info
  */
 export type ParsedInstruction = {
+  /** Name of the program for this instruction */
   program: string;
+  /** ID of the program for this instruction */
   programId: PublicKey;
+  /** Parsed instruction info */
   parsed: any;
 };
 
 /**
  * A parsed transaction message
- *
- * @typedef {Object} ParsedMessage
- * @property {Array<ParsedMessageAccount>} accountKeys Accounts used in the instructions
- * @property {Array<ParsedInstruction | PartiallyDecodedInstruction>} instructions The atomically executed instructions for the transaction
- * @property {string} recentBlockhash Recent blockhash
  */
 export type ParsedMessage = {
+  /** Accounts used in the instructions */
   accountKeys: ParsedMessageAccount[];
+  /** The atomically executed instructions for the transaction */
   instructions: (ParsedInstruction | PartiallyDecodedInstruction)[];
+  /** Recent blockhash */
   recentBlockhash: string;
 };
 
 /**
  * A parsed transaction
- *
- * @typedef {Object} ParsedTransaction
- * @property {Array<string>} signatures Signatures for the transaction
- * @property {ParsedMessage} message Message of the transaction
  */
 export type ParsedTransaction = {
+  /** Signatures for the transaction */
   signatures: Array<string>;
+  /** Message of the transaction */
   message: ParsedMessage;
 };
 
 /**
  * A parsed and confirmed transaction on the ledger
- *
- * @typedef {Object} ParsedConfirmedTransaction
- * @property {number} slot The slot during which the transaction was processed
- * @property {ParsedTransaction} transaction The details of the transaction
- * @property {ConfirmedTransactionMeta|null} meta Metadata produced from the transaction
- * @property {number|null|undefined} blockTime The unix timestamp of when the transaction was processed
  */
 export type ParsedConfirmedTransaction = {
+  /** The slot during which the transaction was processed */
   slot: number;
+  /** The details of the transaction */
   transaction: ParsedTransaction;
+  /** Metadata produced from the transaction */
   meta: ParsedConfirmedTransactionMeta | null;
+  /** The unix timestamp of when the transaction was processed */
   blockTime?: number | null;
 };
 
 /**
  * A ConfirmedBlock on the ledger
- *
- * @typedef {Object} ConfirmedBlock
- * @property {Blockhash} blockhash Blockhash of this block
- * @property {Blockhash} previousBlockhash Blockhash of this block's parent
- * @property {number} parentSlot Slot index of this block's parent
- * @property {Array<object>} transactions Vector of transactions and status metas
- * @property {Array<object>} rewards Vector of block rewards
- * @property {number|null} blockTime The unix timestamp of when the block was processed
  */
 export type ConfirmedBlock = {
+  /** Blockhash of this block */
   blockhash: Blockhash;
+  /** Blockhash of this block's parent */
   previousBlockhash: Blockhash;
+  /** Slot index of this block's parent */
   parentSlot: number;
+  /** Vector of transactions and status metas */
   transactions: Array<{
     transaction: Transaction;
     meta: ConfirmedTransactionMeta | null;
   }>;
+  /** Vector of block rewards */
   rewards?: Array<{
     pubkey: string;
     lamports: number;
     postBalance: number | null;
     rewardType: string | null;
   }>;
+  /** The unix timestamp of when the block was processed */
   blockTime: number | null;
 };
 
 /**
  * A performance sample
- *
- * @typedef {Object} PerfSample
- * @property {number} slot Slot number of sample
- * @property {number} numTransactions Number of transactions in a sample window
- * @property {number} numSlots Number of slots in a sample window
- * @property {number} samplePeriodSecs Sample window in seconds
  */
 export type PerfSample = {
+  /** Slot number of sample */
   slot: number;
+  /** Number of transactions in a sample window */
   numTransactions: number;
+  /** Number of slots in a sample window */
   numSlots: number;
+  /** Sample window in seconds */
   samplePeriodSecs: number;
 };
 
@@ -767,17 +710,15 @@ const SlotRpcResult = jsonRpcResult(number());
 
 /**
  * Supply
- *
- * @typedef {Object} Supply
- * @property {number} total Total supply in lamports
- * @property {number} circulating Circulating supply in lamports
- * @property {number} nonCirculating Non-circulating supply in lamports
- * @property {Array<PublicKey>} nonCirculatingAccounts List of non-circulating account addresses
  */
 export type Supply = {
+  /** Total supply in lamports */
   total: number;
+  /** Circulating supply in lamports */
   circulating: number;
+  /** Non-circulating supply in lamports */
   nonCirculating: number;
+  /** List of non-circulating account addresses */
   nonCirculatingAccounts: Array<PublicKey>;
 };
 
@@ -796,17 +737,15 @@ const GetSupplyRpcResult = jsonRpcResultAndContext(
 /**
  * Token amount object which returns a token amount in different formats
  * for various client use cases.
- *
- * @typedef {Object} TokenAmount
- * @property {string} amount Raw amount of tokens as string ignoring decimals
- * @property {number} decimals Number of decimals configured for token's mint
- * @property {number | null} uiAmount Token amount as float, accounts for decimals
- * @property {string | undefined} uiAmountString Token amount as string, accounts for decimals
  */
 export type TokenAmount = {
+  /** Raw amount of tokens as string ignoring decimals */
   amount: string;
+  /** Number of decimals configured for token's mint */
   decimals: number;
+  /** Token amount as float, accounts for decimals */
   uiAmount: number | null;
+  /** Token amount as string, accounts for decimals */
   uiAmountString?: string;
 };
 
@@ -822,19 +761,17 @@ const TokenAmountResult = pick({
 
 /**
  * Token address and balance.
- *
- * @typedef {Object} TokenAccountBalancePair
- * @property {PublicKey} address Address of the token account
- * @property {string} amount Raw amount of tokens as string ignoring decimals
- * @property {number} decimals Number of decimals configured for token's mint
- * @property {number | null} uiAmount Token amount as float, accounts for decimals
- * @property {string | undefined} uiAmountString Token amount as string, accounts for decimals
  */
 export type TokenAccountBalancePair = {
+  /** Address of the token account */
   address: PublicKey;
+  /** Raw amount of tokens as string ignoring decimals */
   amount: string;
+  /** Number of decimals configured for token's mint */
   decimals: number;
+  /** Token amount as float, accounts for decimals */
   uiAmount: number | null;
+  /** Token amount as string, accounts for decimals */
   uiAmountString?: string;
 };
 
@@ -897,10 +834,6 @@ const GetParsedTokenAccountsByOwner = jsonRpcResultAndContext(
 
 /**
  * Pair of an account address and its balance
- *
- * @typedef {Object} AccountBalancePair
- * @property {PublicKey} address
- * @property {number} lamports
  */
 export type AccountBalancePair = {
   address: PublicKey;
@@ -1375,68 +1308,56 @@ const SendTransactionRpcResult = jsonRpcResult(string());
 
 /**
  * Information about the latest slot being processed by a node
- *
- * @typedef {Object} SlotInfo
- * @property {number} slot Currently processing slot
- * @property {number} parent Parent of the current slot
- * @property {number} root The root block of the current slot's fork
  */
 export type SlotInfo = {
+  /** Currently processing slot */
   slot: number;
+  /** Parent of the current slot */
   parent: number;
+  /** The root block of the current slot's fork */
   root: number;
 };
 
 /**
  * Parsed account data
- *
- * @typedef {Object} ParsedAccountData
- * @property {string} program Name of the program that owns this account
- * @property {any} parsed Parsed account data
- * @property {number} space Space used by account data
  */
 export type ParsedAccountData = {
+  /** Name of the program that owns this account */
   program: string;
+  /** Parsed account data */
   parsed: any;
+  /** Space used by account data */
   space: number;
 };
 
 /**
  * Stake Activation data
- *
- * @typedef {Object} StakeActivationData
- * @property {string} state: <string - the stake account's activation state, one of: active, inactive, activating, deactivating
- * @property {number} active: stake active during the epoch
- * @property {number} inactive: stake inactive during the epoch
  */
 export type StakeActivationData = {
+  /** the stake account's activation state */
   state: 'active' | 'inactive' | 'activating' | 'deactivating';
+  /** stake active during the epoch */
   active: number;
+  /** stake inactive during the epoch */
   inactive: number;
 };
 
 /**
  * Information describing an account
- *
- * @typedef {Object} AccountInfo
- * @property {number} lamports Number of lamports assigned to the account
- * @property {PublicKey} owner Identifier of the program that owns the account
- * @property {T} data Optional data assigned to the account
- * @property {boolean} executable `true` if this account's data contains a loaded program
  */
 export type AccountInfo<T> = {
+  /** `true` if this account's data contains a loaded program */
   executable: boolean;
+  /** Identifier of the program that owns the account */
   owner: PublicKey;
+  /** Number of lamports assigned to the account */
   lamports: number;
+  /** Optional data assigned to the account */
   data: T;
 };
 
 /**
  * Account information identified by pubkey
- *
- * @typedef {Object} KeyedAccountInfo
- * @property {PublicKey} accountId
- * @property {AccountInfo<Buffer>} accountInfo
  */
 export type KeyedAccountInfo = {
   accountId: PublicKey;
@@ -1570,8 +1491,6 @@ const LogsResult = pick({
 
 /**
  * Logs result.
- *
- * @typedef {Object} Logs.
  */
 export type Logs = {
   err: TransactionError | null;
@@ -1609,8 +1528,6 @@ type LogsSubscriptionInfo = {
 
 /**
  * Signature result
- *
- * @typedef {Object} SignatureResult
  */
 export type SignatureResult = {
   err: TransactionError | null;
@@ -1618,8 +1535,6 @@ export type SignatureResult = {
 
 /**
  * Transaction error
- *
- * @typedef {Object} TransactionError
  */
 export type TransactionError = {};
 
@@ -1652,19 +1567,17 @@ export type SignatureStatus = {
 
 /**
  * A confirmed signature with its status
- *
- * @typedef {Object} ConfirmedSignatureInfo
- * @property {string} signature the transaction signature
- * @property {number} slot when the transaction was processed
- * @property {TransactionError | null} err error, if any
- * @property {string | null} memo memo associated with the transaction, if any
- * @property {number | null | undefined} blockTime The unix timestamp of when the transaction was processed
  */
 export type ConfirmedSignatureInfo = {
+  /** the transaction signature */
   signature: string;
+  /** when the transaction was processed */
   slot: number;
+  /** error, if any */
   err: TransactionError | null;
+  /** memo associated with the transaction, if any */
   memo: string | null;
+  /** The unix timestamp of when the transaction was processed */
   blockTime?: number | null;
 };
 

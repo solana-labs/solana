@@ -4,13 +4,12 @@ import * as BufferLayout from 'buffer-layout';
 import * as Layout from './layout';
 
 /**
- * @typedef {Object} InstructionType
- * @property (index} The Instruction index (from solana upstream program)
- * @property (BufferLayout} The BufferLayout to use to build data
  * @internal
  */
 export type InstructionType = {
+  /** The Instruction index (from solana upstream program) */
   index: number;
+  /** The BufferLayout to use to build data */
   layout: typeof BufferLayout;
 };
 
