@@ -6,7 +6,7 @@
     "@project-serum/serum": "^0.13.31",
     "@react-hook/debounce": "^3.0.0",
     "@sentry/react": "^6.2.2",
-    "@solana/spl-token-registry": "^0.2.47",
+    "@solana/spl-token-registry": "^0.2.48",
     "@solana/web3.js": "^1.2.3",
     "@testing-library/jest-dom": "^5.11.9",
     "@testing-library/react": "^11.2.6",
