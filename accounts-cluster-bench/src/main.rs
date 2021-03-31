@@ -32,6 +32,10 @@ use std::{
     time::{Duration, Instant},
 };
 
+// Create and close messages both require 2 signatures; if transaction construction changes, update
+// this magic number
+const NUM_SIGNATURES: u64 = 2;
+
 pub fn airdrop_lamports(
     client: &RpcClient,
     faucet_addr: &SocketAddr,
@@ -405,16 +409,10 @@ fn run_accounts_bench(
             last_blockhash = Instant::now();
         }
 
-        let message = make_create_message(
-            keypair,
-            &base_keypair,
-            seed_tracker.max_created.clone(),
-            num_instructions,
-            min_balance,
-            maybe_space,
-            mint,
-        );
-        let fee = recent_blockhash.1.calculate_fee(&message);
+        let fee = recent_blockhash
+            .1
+            .lamports_per_signature
+            .saturating_mul(NUM_SIGNATURES);
         let lamports = min_balance + fee;
 
         if balance < lamports || last_balance.elapsed().as_millis() > 2000 {
@@ -561,7 +559,13 @@ fn main() {
                 .long("close-frequency")
                 .takes_value(true)
                 .value_name("BYTES")
-                .help("Send close transactions after this many accounts created"),
+                .help(
+                    "Send close transactions after this many accounts created. \
+                    Note: a `close-frequency` value near or below `batch-size` \
+                    may result in transaction-simulation errors, as the close \
+                    transactions will be submitted before the corresponding \
+                    create transactions have been confirmed",
+                ),
         )
         .arg(
             Arg::with_name("num_instructions")
