@@ -803,6 +803,7 @@ address backwards in time from the provided signature or most recent confirmed b
   * `before: <string>` - (optional) start searching backwards from this transaction signature.
                          If not provided the search starts from the top of the highest max confirmed block.
   * `until: <string>` - (optional) search until this transaction signature, if found before limit reached.
+  * (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
 
 #### Results:
 The result field will be an array of transaction signature information, ordered
