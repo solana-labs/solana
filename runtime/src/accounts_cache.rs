@@ -53,7 +53,7 @@ impl SlotCacheInner {
         pubkey: &Pubkey,
         account: AccountSharedData,
         hash: Option<Hash>,
-        hash_slot: Slot,
+        slot: Slot,
         cluster_type: ClusterType,
     ) -> CachedAccount {
         if self.cache.contains_key(pubkey) {
@@ -67,7 +67,7 @@ impl SlotCacheInner {
         let item = Arc::new(CachedAccountInner {
             account,
             hash: RwLock::new(hash),
-            hash_slot,
+            slot,
             cluster_type,
             pubkey: *pubkey,
         });
@@ -111,7 +111,7 @@ pub type CachedAccount = Arc<CachedAccountInner>;
 pub struct CachedAccountInner {
     pub account: AccountSharedData,
     hash: RwLock<Option<Hash>>,
-    hash_slot: Slot,
+    slot: Slot,
     cluster_type: ClusterType,
     pubkey: Pubkey,
 }
@@ -124,7 +124,7 @@ impl CachedAccountInner {
             None => {
                 drop(hash);
                 let hash = crate::accounts_db::AccountsDb::hash_account(
-                    self.hash_slot,
+                    self.slot,
                     &self.account,
                     &self.pubkey,
                     &self.cluster_type,
