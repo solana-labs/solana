@@ -14,7 +14,7 @@ use solana_sdk::{
     },
     ic_msg,
     instruction::{CompiledInstruction, Instruction, InstructionError},
-    keyed_account::{create_keyed_readonly_accounts, KeyedAccount},
+    keyed_account::{create_keyed_readonly_accounts, keyed_account_at_index, KeyedAccount},
     message::Message,
     native_loader,
     process_instruction::{
@@ -721,7 +721,7 @@ impl MessageProcessor {
     pub fn native_invoke(
         invoke_context: &mut dyn InvokeContext,
         instruction: Instruction,
-        keyed_accounts: &[&KeyedAccount],
+        keyed_account_indices: &[usize],
         signers_seeds: &[&[&[u8]]],
     ) -> Result<(), InstructionError> {
         let invoke_context = RefCell::new(invoke_context);
@@ -730,7 +730,7 @@ impl MessageProcessor {
             message,
             executables,
             accounts,
-            account_refs,
+            keyed_account_indices_reordered,
             caller_write_privileges,
             demote_sysvar_write_locks,
         ) = {
@@ -744,20 +744,28 @@ impl MessageProcessor {
                 .iter()
                 .map(|seeds| Pubkey::create_program_address(&seeds, caller_program_id))
                 .collect::<Result<Vec<_>, solana_sdk::pubkey::PubkeyError>>()?;
-            let mut caller_write_privileges = keyed_accounts
+            let keyed_accounts = invoke_context.get_keyed_accounts();
+            let keyed_accounts = keyed_account_indices
                 .iter()
-                .map(|keyed_account| keyed_account.is_writable())
-                .collect::<Vec<bool>>();
-            caller_write_privileges.insert(0, false);
+                .map(|index| keyed_account_at_index(keyed_accounts, *index))
+                .collect::<Result<Vec<&KeyedAccount>, InstructionError>>()?;
             let (message, callee_program_id, _) =
                 Self::create_message(&instruction, &keyed_accounts, &signers, &invoke_context)?;
+            let keyed_accounts = invoke_context.get_keyed_accounts();
+            let mut caller_write_privileges = keyed_account_indices
+                .iter()
+                .map(|index| keyed_accounts[*index].is_writable())
+                .collect::<Vec<bool>>();
+            caller_write_privileges.insert(0, false);
             let mut accounts = vec![];
-            let mut account_refs = vec![];
+            let mut keyed_account_indices_reordered = vec![];
+            let keyed_accounts = invoke_context.get_keyed_accounts();
             'root: for account_key in message.account_keys.iter() {
-                for keyed_account in keyed_accounts {
+                for keyed_account_index in keyed_account_indices {
+                    let keyed_account = &keyed_accounts[*keyed_account_index];
                     if account_key == keyed_account.unsigned_key() {
                         accounts.push(Rc::new(keyed_account.account.clone()));
-                        account_refs.push(keyed_account);
+                        keyed_account_indices_reordered.push(*keyed_account_index);
                         continue 'root;
                     }
                 }
@@ -788,42 +796,41 @@ impl MessageProcessor {
                 );
                 return Err(InstructionError::AccountNotExecutable);
             }
-            let programdata_executable =
-                if program_account.borrow().owner == bpf_loader_upgradeable::id() {
-                    if let UpgradeableLoaderState::Program {
-                        programdata_address,
-                    } = program_account.borrow().state()?
-                    {
-                        if let Some(account) = invoke_context.get_account(&programdata_address) {
-                            Some((programdata_address, account))
-                        } else {
-                            ic_msg!(
-                                invoke_context,
-                                "Unknown upgradeable programdata account {}",
-                                programdata_address,
-                            );
-                            return Err(InstructionError::MissingAccount);
-                        }
+            let programdata = if program_account.borrow().owner == bpf_loader_upgradeable::id() {
+                if let UpgradeableLoaderState::Program {
+                    programdata_address,
+                } = program_account.borrow().state()?
+                {
+                    if let Some(account) = invoke_context.get_account(&programdata_address) {
+                        Some((programdata_address, account))
                     } else {
                         ic_msg!(
                             invoke_context,
-                            "Upgradeable program account state not valid {}",
-                            callee_program_id,
+                            "Unknown upgradeable programdata account {}",
+                            programdata_address,
                         );
                         return Err(InstructionError::MissingAccount);
                     }
                 } else {
-                    None
-                };
+                    ic_msg!(
+                        invoke_context,
+                        "Upgradeable program account state not valid {}",
+                        callee_program_id,
+                    );
+                    return Err(InstructionError::MissingAccount);
+                }
+            } else {
+                None
+            };
             let mut executables = vec![(callee_program_id, program_account)];
-            if let Some(programdata) = programdata_executable {
+            if let Some(programdata) = programdata {
                 executables.push(programdata);
             }
             (
                 message,
                 executables,
                 accounts,
-                account_refs,
+                keyed_account_indices_reordered,
                 caller_write_privileges,
                 invoke_context.is_feature_active(&demote_sysvar_write_locks::id()),
             )
@@ -842,13 +849,19 @@ impl MessageProcessor {
 
         {
             let invoke_context = invoke_context.borrow();
-            for (i, (account, account_ref)) in accounts.iter().zip(account_refs).enumerate() {
-                let account = account.borrow();
-                if message.is_writable(i, demote_sysvar_write_locks) && !account.executable {
-                    account_ref.try_account_ref_mut()?.lamports = account.lamports;
-                    account_ref.try_account_ref_mut()?.owner = account.owner;
-                    if account_ref.data_len()? != account.data().len()
-                        && account_ref.data_len()? != 0
+            let keyed_accounts = invoke_context.get_keyed_accounts();
+            for (src_keyed_account_index, (account, dst_keyed_account_index)) in accounts
+                .iter()
+                .zip(keyed_account_indices_reordered)
+                .enumerate()
+            {
+                let dst_keyed_account = &keyed_accounts[dst_keyed_account_index];
+                let src_keyed_account = account.borrow();
+                if message.is_writable(src_keyed_account_index, demote_sysvar_write_locks)
+                    && !src_keyed_account.executable
+                {
+                    if dst_keyed_account.data_len()? != src_keyed_account.data().len()
+                        && dst_keyed_account.data_len()? != 0
                     {
                         // Only support for `CreateAccount` at this time.
                         // Need a way to limit total realloc size across multiple CPI calls
@@ -858,9 +871,11 @@ impl MessageProcessor {
                         );
                         return Err(InstructionError::InvalidRealloc);
                     }
-                    account_ref
+                    dst_keyed_account.try_account_ref_mut()?.lamports = src_keyed_account.lamports;
+                    dst_keyed_account.try_account_ref_mut()?.owner = src_keyed_account.owner;
+                    dst_keyed_account
                         .try_account_ref_mut()?
-                        .set_data(account.data().clone());
+                        .set_data(src_keyed_account.data().clone());
                 }
             }
         }

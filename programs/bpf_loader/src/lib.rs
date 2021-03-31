@@ -346,7 +346,8 @@ fn process_loader_upgradeable_instruction(
             let buffer = keyed_account_at_index(keyed_accounts, 3)?;
             let rent = from_keyed_account::<Rent>(keyed_account_at_index(keyed_accounts, 4)?)?;
             let clock = from_keyed_account::<Clock>(keyed_account_at_index(keyed_accounts, 5)?)?;
-            let system = keyed_account_at_index(keyed_accounts, 6)?;
+            // TODO [KeyedAccounts to InvokeContext refactoring]
+            // let _system = keyed_account_at_index(keyed_accounts, 6)?;
             let authority = keyed_account_at_index(keyed_accounts, 7)?;
             let upgrade_authority_address = Some(*authority.unsigned_key());
             let upgrade_authority_signer = authority.signer_key().is_none();
@@ -420,7 +421,7 @@ fn process_loader_upgradeable_instruction(
                     programdata_len as u64,
                     program_id,
                 ),
-                &[payer, programdata, system],
+                &[0, 1, 6],
                 &[&[program.unsigned_key().as_ref(), &[bump_seed]]],
             )?;
 
