@@ -24,17 +24,15 @@ type ConfigKey = {
 
 /**
  * Info used to identity validators.
- *
- * @typedef {Object} Info
- * @property {string} name validator name
- * @property {?string} website optional, validator website
- * @property {?string} details optional, extra information the validator chose to share
- * @property {?string} keybaseUsername optional, used to identify validators on keybase.io
  */
 export type Info = {
+  /** validator name */
   name: string;
+  /** optional, validator website */
   website?: string;
+  /** optional, extra information the validator chose to share */
   details?: string;
+  /** optional, used to identify validators on keybase.io */
   keybaseUsername?: string;
 };
 

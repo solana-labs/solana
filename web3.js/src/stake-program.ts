@@ -454,10 +454,10 @@ export const STAKE_INSTRUCTION_LAYOUTS: {
 });
 
 /**
- * @typedef {Object} StakeAuthorizationType
- * @property (index} The Stake Authorization index (from solana-stake-program)
+ * Stake authorization type
  */
 export type StakeAuthorizationType = {
+  /** The Stake Authorization index (from solana-stake-program) */
   index: number;
 };
 

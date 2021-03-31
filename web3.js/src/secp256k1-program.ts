@@ -17,11 +17,6 @@ const SIGNATURE_OFFSETS_SERIALIZED_SIZE = 11;
 
 /**
  * Params for creating an secp256k1 instruction using a public key
- * @typedef {Object} CreateSecp256k1InstructionWithPublicKeyParams
- * @property {Buffer | Uint8Array | Array<number>} publicKey
- * @property {Buffer | Uint8Array | Array<number>} message
- * @property {Buffer | Uint8Array | Array<number>} signature
- * @property {number} recoveryId
  */
 export type CreateSecp256k1InstructionWithPublicKeyParams = {
   publicKey: Buffer | Uint8Array | Array<number>;
@@ -32,11 +27,6 @@ export type CreateSecp256k1InstructionWithPublicKeyParams = {
 
 /**
  * Params for creating an secp256k1 instruction using an Ethereum address
- * @typedef {Object} CreateSecp256k1InstructionWithEthAddressParams
- * @property {Buffer | Uint8Array | Array<number>} ethAddress
- * @property {Buffer | Uint8Array | Array<number>} message
- * @property {Buffer | Uint8Array | Array<number>} signature
- * @property {number} recoveryId
  */
 export type CreateSecp256k1InstructionWithEthAddressParams = {
   ethAddress: Buffer | Uint8Array | Array<number> | string;
@@ -47,9 +37,6 @@ export type CreateSecp256k1InstructionWithEthAddressParams = {
 
 /**
  * Params for creating an secp256k1 instruction using a private key
- * @typedef {Object} CreateSecp256k1InstructionWithPrivateKeyParams
- * @property {Buffer | Uint8Array | Array<number>} privateKey
- * @property {Buffer | Uint8Array | Array<number>} message
  */
 export type CreateSecp256k1InstructionWithPrivateKeyParams = {
   privateKey: Buffer | Uint8Array | Array<number>;
