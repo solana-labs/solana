@@ -24,9 +24,9 @@ use solana_client::{
     pubsub_client::PubsubClient,
     rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClient},
     rpc_config::{
-        RpcAccountInfoConfig, RpcConfirmedBlockConfig, RpcLargestAccountsConfig,
-        RpcLargestAccountsFilter, RpcProgramAccountsConfig, RpcTransactionLogsConfig,
-        RpcTransactionLogsFilter,
+        RpcAccountInfoConfig, RpcConfirmedBlockConfig, RpcConfirmedTransactionConfig,
+        RpcLargestAccountsConfig, RpcLargestAccountsFilter, RpcProgramAccountsConfig,
+        RpcTransactionLogsConfig, RpcTransactionLogsFilter,
     },
     rpc_filter,
     rpc_response::SlotInfo,
@@ -1826,6 +1826,7 @@ pub fn process_transaction_history(
             before,
             until,
             limit: Some(limit),
+            commitment: Some(CommitmentConfig::confirmed()),
         },
     )?;
 
@@ -1854,9 +1855,13 @@ pub fn process_transaction_history(
 
         if show_transactions {
             if let Ok(signature) = result.signature.parse::<Signature>() {
-                match rpc_client
-                    .get_confirmed_transaction(&signature, UiTransactionEncoding::Base64)
-                {
+                match rpc_client.get_confirmed_transaction_with_config(
+                    &signature,
+                    RpcConfirmedTransactionConfig {
+                        encoding: Some(UiTransactionEncoding::Base64),
+                        commitment: Some(CommitmentConfig::confirmed()),
+                    },
+                ) {
                     Ok(confirmed_transaction) => {
                         println_transaction(
                             &confirmed_transaction
