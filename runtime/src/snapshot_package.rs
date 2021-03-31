@@ -2,6 +2,7 @@ use crate::bank_forks::ArchiveFormat;
 use crate::snapshot_utils::SnapshotVersion;
 use crate::{accounts_db::SnapshotStorages, bank::BankSlotDelta};
 use solana_sdk::clock::Slot;
+use solana_sdk::genesis_config::ClusterType;
 use solana_sdk::hash::Hash;
 use std::{
     path::PathBuf,
@@ -26,6 +27,7 @@ pub struct AccountsPackagePre {
     pub snapshot_output_dir: PathBuf,
     pub expected_capitalization: u64,
     pub hash_for_testing: Option<Hash>,
+    pub cluster_type: ClusterType,
 }
 
 impl AccountsPackagePre {
@@ -42,6 +44,7 @@ impl AccountsPackagePre {
         snapshot_output_dir: PathBuf,
         expected_capitalization: u64,
         hash_for_testing: Option<Hash>,
+        cluster_type: ClusterType,
     ) -> Self {
         Self {
             slot,
@@ -55,6 +58,7 @@ impl AccountsPackagePre {
             snapshot_output_dir,
             expected_capitalization,
             hash_for_testing,
+            cluster_type,
         }
     }
 }
