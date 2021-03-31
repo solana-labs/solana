@@ -175,7 +175,6 @@ impl AccountsCache {
         pubkey: &Pubkey,
         account: AccountSharedData,
         hash: Option<Hash>,
-        hash_slot: Slot,
         cluster_type: ClusterType,
     ) -> CachedAccount {
         let slot_cache = self.slot_cache(slot).unwrap_or_else(||
@@ -189,7 +188,7 @@ impl AccountsCache {
                 .or_insert(Arc::new(SlotCacheInner::default()))
                 .clone());
 
-        slot_cache.insert(pubkey, account, hash, hash_slot, cluster_type)
+        slot_cache.insert(pubkey, account, hash, slot, cluster_type)
     }
 
     pub fn load(&self, slot: Slot, pubkey: &Pubkey) -> Option<CachedAccount> {
@@ -291,7 +290,6 @@ pub mod tests {
             &Pubkey::new_unique(),
             AccountSharedData::new(1, 0, &Pubkey::default()),
             Some(Hash::default()),
-            inserted_slot,
             ClusterType::Development,
         );
         // If the cache is told the size limit is 0, it should return the one slot
@@ -311,7 +309,6 @@ pub mod tests {
             &Pubkey::new_unique(),
             AccountSharedData::new(1, 0, &Pubkey::default()),
             Some(Hash::default()),
-            inserted_slot,
             ClusterType::Development,
         );
 

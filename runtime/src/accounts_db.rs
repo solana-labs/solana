@@ -3391,30 +3391,21 @@ impl AccountsDb {
         accounts_and_meta_to_store: &[(StoredMeta, &AccountSharedData)],
     ) -> Vec<AccountInfo> {
         let len = accounts_and_meta_to_store.len();
-        let empty = vec![];
-        let hashes = match hashes {
-            Some(hashes) => {
-                assert_eq!(hashes.len(), len);
-                hashes
-            }
-            None => &empty,
-        };
+        let hashes = hashes.map(|hashes| {
+            assert_eq!(hashes.len(), len);
+            hashes
+        });
 
         accounts_and_meta_to_store
             .iter()
             .enumerate()
             .map(|(i, (meta, account))| {
-                let hash = if hashes.is_empty() {
-                    None
-                } else {
-                    Some(hashes[i])
-                };
+                let hash = hashes.map(|hashes| hashes[i]);
                 let cached_account = self.accounts_cache.store(
                     slot,
                     &meta.pubkey,
                     (*account).clone(),
                     hash,
-                    slot,
                     self.expected_cluster_type(),
                 );
                 // hash this account in the bg
