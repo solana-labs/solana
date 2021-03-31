@@ -3400,10 +3400,10 @@ impl AccountsDb {
             None => &empty,
         };
 
-        (0..len)
-            .into_iter()
-            .map(|i| {
-                let (meta, account) = &accounts_and_meta_to_store[i];
+        accounts_and_meta_to_store
+            .iter()
+            .enumerate()
+            .map(|(i, (meta, account))| {
                 let hash = if hashes.is_empty() {
                     None
                 } else {
