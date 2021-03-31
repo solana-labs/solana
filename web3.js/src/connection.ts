@@ -2808,16 +2808,20 @@ export class Connection {
           throw new Error('!signature'); // should never happen
         }
 
-        // If the signature of this transaction has not been seen before with the
-        // current recentBlockhash, all done.
         const signature = transaction.signature.toString('base64');
         if (
           !this._blockhashInfo.simulatedSignatures.includes(signature) &&
           !this._blockhashInfo.transactionSignatures.includes(signature)
         ) {
+          // The signature of this transaction has not been seen before with the
+          // current recentBlockhash, all done. Let's break
           this._blockhashInfo.simulatedSignatures.push(signature);
           break;
         } else {
+          // This transaction would be treated as duplicate (its derived signature
+          // matched to one of already recorded signatures).
+          // So, we must fetch a new blockhash for a different signature by disabling
+          // our cache not to wait for the cache expiration (BLOCKHASH_CACHE_TIMEOUT_MS).
           disableCache = true;
         }
       }
@@ -2863,13 +2867,17 @@ export class Connection {
           throw new Error('!signature'); // should never happen
         }
 
-        // If the signature of this transaction has not been seen before with the
-        // current recentBlockhash, all done.
         const signature = transaction.signature.toString('base64');
         if (!this._blockhashInfo.transactionSignatures.includes(signature)) {
+          // The signature of this transaction has not been seen before with the
+          // current recentBlockhash, all done. Let's break
           this._blockhashInfo.transactionSignatures.push(signature);
           break;
         } else {
+          // This transaction would be treated as duplicate (its derived signature
+          // matched to one of already recorded signatures).
+          // So, we must fetch a new blockhash for a different signature by disabling
+          // our cache not to wait for the cache expiration (BLOCKHASH_CACHE_TIMEOUT_MS).
           disableCache = true;
         }
       }
