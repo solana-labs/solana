@@ -2529,12 +2529,12 @@ mod tests {
         );
 
         // Test Deploy Subcommand
-        let test_deploy =
+        let test_command =
             test_commands
                 .clone()
                 .get_matches_from(vec!["test", "deploy", "/Users/test/program.o"]);
         assert_eq!(
-            parse_command(&test_deploy, &default_signer, &mut None).unwrap(),
+            parse_command(&test_command, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Deploy {
                     program_location: "/Users/test/program.o".to_string(),
@@ -2549,14 +2549,14 @@ mod tests {
         let custom_address = Keypair::new();
         let custom_address_file = make_tmp_path("custom_address_file");
         write_keypair_file(&custom_address, &custom_address_file).unwrap();
-        let test_deploy = test_commands.clone().get_matches_from(vec![
+        let test_command = test_commands.clone().get_matches_from(vec![
             "test",
             "deploy",
             "/Users/test/program.o",
             &custom_address_file,
         ]);
         assert_eq!(
-            parse_command(&test_deploy, &default_signer, &mut None).unwrap(),
+            parse_command(&test_command, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Deploy {
                     program_location: "/Users/test/program.o".to_string(),
