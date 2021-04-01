@@ -27,6 +27,7 @@ use crate::{
     },
     append_vec::{AppendVec, StoredAccountMeta, StoredMeta},
     contains::Contains,
+    read_only_accounts_cache::ReadOnlyAccountsCache,
 };
 use blake3::traits::digest::Digest;
 use crossbeam_channel::{unbounded, Receiver, Sender};
@@ -285,6 +286,13 @@ impl<'a> LoadedAccount<'a> {
                 Cow::Owned(cached_account) => cached_account.account.clone(),
                 Cow::Borrowed(cached_account) => cached_account.account.clone(),
             },
+        }
+    }
+
+    pub fn is_cached(&self) -> bool {
+        match self {
+            LoadedAccount::Stored(_) => false,
+            LoadedAccount::Cached(_) => true,
         }
     }
 }
@@ -694,6 +702,7 @@ pub struct AccountsDb {
     pub accounts_cache: AccountsCache,
 
     sender_bg_hasher: Option<Sender<CachedAccount>>,
+    pub read_only_accounts_cache: ReadOnlyAccountsCache,
 
     recycle_stores: RwLock<RecycleStores>,
 
@@ -1065,6 +1074,7 @@ impl solana_frozen_abi::abi_example::AbiExample for AccountsDb {
 impl Default for AccountsDb {
     fn default() -> Self {
         let num_threads = get_thread_count();
+        const MAX_READ_ONLY_CACHE_DATA_SIZE: usize = 200_000_000;
 
         let mut bank_hashes = HashMap::new();
         bank_hashes.insert(0, BankHashInfo::default());
@@ -1073,6 +1083,7 @@ impl Default for AccountsDb {
             storage: AccountStorage::default(),
             accounts_cache: AccountsCache::default(),
             sender_bg_hasher: None,
+            read_only_accounts_cache: ReadOnlyAccountsCache::new(MAX_READ_ONLY_CACHE_DATA_SIZE),
             recycle_stores: RwLock::new(RecycleStores::default()),
             uncleaned_pubkeys: DashMap::new(),
             next_id: AtomicUsize::new(0),
@@ -2271,10 +2282,46 @@ impl AccountsDb {
             // `lock` released here
         };
 
+        if self.caching_enabled && store_id != CACHE_VIRTUAL_STORAGE_ID {
+            let result = self.read_only_accounts_cache.load(pubkey, slot);
+            if let Some(account) = result {
+                return Some((account, slot));
+            }
+        }
+
         //TODO: thread this as a ref
-        self.get_account_accessor_from_cache_or_storage(slot, pubkey, store_id, offset)
+        let mut is_cached = false;
+        let loaded_account = self
+            .get_account_accessor_from_cache_or_storage(slot, pubkey, store_id, offset)
             .get_loaded_account()
-            .map(|loaded_account| (loaded_account.account(), slot))
+            .map(|loaded_account| {
+                is_cached = loaded_account.is_cached();
+                (loaded_account.account(), slot)
+            });
+
+        if self.caching_enabled && !is_cached {
+            match loaded_account {
+                Some((account, slot)) => {
+                    /*
+                    We show this store into the read-only cache for account 'A' and future loads of 'A' from the read-only cache are
+                    safe/reflect 'A''s latest state on this fork.
+                    This safety holds if during replay of slot 'S', we show we only read 'A' from the write cache,
+                    not the read-only cache, after it's been updated in replay of slot 'S'.
+                    Assume for contradiction this is not true, and we read 'A' from the read-only cache *after* it had been updated in 'S'.
+                    This means an entry '(S, A)' was added to the read-only cache after 'A' had been updated in 'S'.
+                    Now when '(S, A)' was being added to the read-only cache, it must have been true that  'is_cache == false',
+                    which means '(S', A)' does not exist in the write cache yet.
+                    However, by the assumption for contradiction above ,  'A' has already been updated in 'S' which means '(S, A)'
+                    must exist in the write cache, which is a contradiction.
+                    */
+                    self.read_only_accounts_cache.store(pubkey, slot, &account);
+                    Some((account, slot))
+                }
+                _ => None,
+            }
+        } else {
+            loaded_account
+        }
     }
 
     pub fn load_account_hash(&self, ancestors: &Ancestors, pubkey: &Pubkey) -> Hash {
@@ -3439,6 +3486,7 @@ impl AccountsDb {
         let accounts_and_meta_to_store: Vec<(StoredMeta, &AccountSharedData)> = accounts
             .iter()
             .map(|(pubkey, account)| {
+                self.read_only_accounts_cache.remove(pubkey, slot);
                 let account = if account.lamports == 0 {
                     &default_account
                 } else {
@@ -4288,6 +4336,8 @@ impl AccountsDb {
                 Ordering::Relaxed,
             ) == Ok(last)
         {
+            let (read_only_cache_hits, read_only_cache_misses) =
+                self.read_only_accounts_cache.get_and_reset_stats();
             datapoint_info!(
                 "accounts_db_store_timings",
                 (
@@ -4328,6 +4378,22 @@ impl AccountsDb {
                 (
                     "total_data",
                     self.stats.store_total_data.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "read_only_accounts_cache_entries",
+                    self.read_only_accounts_cache.cache_len(),
+                    i64
+                ),
+                (
+                    "read_only_accounts_cache_data_size",
+                    self.read_only_accounts_cache.data_size(),
+                    i64
+                ),
+                ("read_only_accounts_cache_hits", read_only_cache_hits, i64),
+                (
+                    "read_only_accounts_cache_misses",
+                    read_only_cache_misses,
                     i64
                 ),
             );
@@ -8522,6 +8588,53 @@ pub mod tests {
     }
 
     #[test]
+    fn test_read_only_accounts_cache() {
+        let caching_enabled = true;
+        let db = Arc::new(AccountsDb::new_with_config(
+            Vec::new(),
+            &ClusterType::Development,
+            HashSet::new(),
+            caching_enabled,
+        ));
+
+        let account_key = Pubkey::new_unique();
+        let zero_lamport_account =
+            AccountSharedData::new(0, 0, &AccountSharedData::default().owner);
+        let slot1_account = AccountSharedData::new(1, 1, &AccountSharedData::default().owner);
+        db.store_cached(0, &[(&account_key, &zero_lamport_account)]);
+        db.store_cached(1, &[(&account_key, &slot1_account)]);
+
+        db.add_root(0);
+        db.add_root(1);
+        db.clean_accounts(None);
+        db.flush_accounts_cache(true, None);
+        db.clean_accounts(None);
+        db.add_root(2);
+
+        assert_eq!(db.read_only_accounts_cache.cache_len(), 0);
+        let account = db
+            .load(&Ancestors::default(), &account_key)
+            .map(|(account, _)| account)
+            .unwrap();
+        assert_eq!(account.lamports, 1);
+        assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
+        let account = db
+            .load(&Ancestors::default(), &account_key)
+            .map(|(account, _)| account)
+            .unwrap();
+        assert_eq!(account.lamports, 1);
+        assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
+        db.store_cached(2, &[(&account_key, &zero_lamport_account)]);
+        assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
+        let account = db
+            .load(&Ancestors::default(), &account_key)
+            .map(|(account, _)| account)
+            .unwrap();
+        assert_eq!(account.lamports, 0);
+        assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
+    }
+
+    #[test]
     fn test_flush_cache_clean() {
         let caching_enabled = true;
         let db = Arc::new(AccountsDb::new_with_config(
@@ -8547,6 +8660,8 @@ pub mod tests {
             .do_load(&Ancestors::default(), &account_key, Some(0))
             .unwrap();
         assert_eq!(account.0.lamports, 0);
+        // since this item is in the cache, it should not be in the read only cache
+        assert_eq!(db.read_only_accounts_cache.cache_len(), 0);
 
         // Flush, then clean again. Should not need another root to initiate the cleaning
         // because `accounts_index.uncleaned_roots` should be correct
