@@ -1005,7 +1005,7 @@ impl JsonRpcRequestProcessor {
                 Some(status)
             } else if self.config.enable_rpc_transaction_history && search_transaction_history {
                 self.blockstore
-                    .get_transaction_status(signature, true)
+                    .get_rooted_transaction_status(signature)
                     .map_err(|_| Error::internal_error())?
                     .filter(|(slot, _status_meta)| {
                         slot <= &self
@@ -1092,20 +1092,22 @@ impl JsonRpcRequestProcessor {
         check_is_at_least_confirmed(commitment)?;
 
         if self.config.enable_rpc_transaction_history {
-            match self
-                .blockstore
-                .get_complete_transaction(signature)
-                .unwrap_or(None)
-            {
+            let confirmed_bank = self.bank(Some(CommitmentConfig::confirmed()));
+            let transaction = if commitment.is_confirmed() {
+                let highest_confirmed_slot = confirmed_bank.slot();
+                self.blockstore
+                    .get_complete_transaction(signature, highest_confirmed_slot)
+            } else {
+                self.blockstore.get_rooted_transaction(signature)
+            };
+            match transaction.unwrap_or(None) {
                 Some(confirmed_transaction) => {
-                    if commitment.is_confirmed() {
-                        let confirmed_bank = self.bank(Some(CommitmentConfig::confirmed()));
-                        if confirmed_bank
+                    if commitment.is_confirmed()
+                        && confirmed_bank // should be redundant
                             .status_cache_ancestors()
                             .contains(&confirmed_transaction.slot)
-                        {
-                            return Ok(Some(confirmed_transaction.encode(encoding)));
-                        }
+                    {
+                        return Ok(Some(confirmed_transaction.encode(encoding)));
                     }
                     if confirmed_transaction.slot
                         <= self
