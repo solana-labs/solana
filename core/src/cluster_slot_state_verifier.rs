@@ -630,21 +630,22 @@ mod test {
             ancestors,
             descendants,
             slot,
-            ..
+            bank_forks,
         } = setup();
 
         // MarkSlotDuplicate should mark progress map and remove
         // the slot from fork choice
+        let slot_hash = bank_forks.read().unwrap().get(slot).unwrap().hash();
         apply_state_changes(
             slot,
             &mut progress,
             &mut heaviest_subtree_fork_choice,
             &ancestors,
             &descendants,
-            vec![ResultingStateChange::MarkSlotDuplicate(Hash::default())],
+            vec![ResultingStateChange::MarkSlotDuplicate(slot_hash)],
         );
         assert!(!heaviest_subtree_fork_choice
-            .is_candidate_slot(&(slot, Hash::default()))
+            .is_candidate_slot(&(slot, slot_hash))
             .unwrap());
         for child_slot in descendants
             .get(&slot)
@@ -668,7 +669,7 @@ mod test {
             &ancestors,
             &descendants,
             vec![ResultingStateChange::DuplicateConfirmedSlotMatchesCluster(
-                Hash::default(),
+                slot_hash,
             )],
         );
         for child_slot in descendants
@@ -682,7 +683,7 @@ mod test {
                 .is_none());
         }
         assert!(heaviest_subtree_fork_choice
-            .is_candidate_slot(&(slot, Hash::default()))
+            .is_candidate_slot(&(slot, slot_hash))
             .unwrap());
     }
 
@@ -698,9 +699,10 @@ mod test {
             ..
         } = setup();
 
+        let slot3_hash = bank_forks.read().unwrap().get(3).unwrap().hash();
         assert_eq!(
             heaviest_subtree_fork_choice.best_overall_slot(),
-            (3, Hash::default())
+            (3, slot3_hash)
         );
         let root = 0;
         let mut gossip_duplicate_confirmed_slots = GossipDuplicateConfirmedSlots::default();
@@ -722,14 +724,14 @@ mod test {
 
         assert_eq!(
             heaviest_subtree_fork_choice.best_overall_slot(),
-            (3, Hash::default())
+            (3, slot3_hash)
         );
 
         // Mark 3 as duplicate, should not remove slot 2 from fork choice
         check_slot_agrees_with_cluster(
             3,
             root,
-            Some(bank_forks.read().unwrap().get(3).unwrap().hash()),
+            Some(slot3_hash),
             &gossip_duplicate_confirmed_slots,
             &ancestors,
             &descendants,
@@ -740,7 +742,7 @@ mod test {
 
         assert_eq!(
             heaviest_subtree_fork_choice.best_overall_slot(),
-            (3, Hash::default())
+            (2, slot2_hash)
         );
     }
 
@@ -756,9 +758,10 @@ mod test {
             ..
         } = setup();
 
+        let slot3_hash = bank_forks.read().unwrap().get(3).unwrap().hash();
         assert_eq!(
             heaviest_subtree_fork_choice.best_overall_slot(),
-            (3, Hash::default())
+            (3, slot3_hash)
         );
         let root = 0;
         let mut gossip_duplicate_confirmed_slots = GossipDuplicateConfirmedSlots::default();
@@ -775,13 +778,13 @@ mod test {
             SlotStateUpdate::Duplicate,
         );
 
+        let slot1_hash = bank_forks.read().unwrap().get(1).unwrap().hash();
         assert_eq!(
             heaviest_subtree_fork_choice.best_overall_slot(),
-            (1, Hash::default())
+            (1, slot1_hash)
         );
 
         // Mark slot 3 as duplicate confirmed, should mark slot 2 as duplicate confirmed as well
-        let slot3_hash = bank_forks.read().unwrap().get(3).unwrap().hash();
         gossip_duplicate_confirmed_slots.insert(3, slot3_hash);
         check_slot_agrees_with_cluster(
             3,
@@ -797,7 +800,7 @@ mod test {
 
         assert_eq!(
             heaviest_subtree_fork_choice.best_overall_slot(),
-            (3, Hash::default())
+            (3, slot3_hash)
         );
     }
 }

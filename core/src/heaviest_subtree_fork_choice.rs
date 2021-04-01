@@ -224,9 +224,10 @@ impl HeaviestSubtreeForkChoice {
                 .remove(&node_key)
                 .expect("Slots reachable from old root must exist in tree");
         }
-        self.fork_infos
-            .get_mut(&new_root)
-            .expect("new root must exist in fork_infos map")
+        let root_fork_info = self.fork_infos.get_mut(&new_root);
+
+        root_fork_info
+            .unwrap_or_else(|| panic!("New root: {:?}, didn't exist in fork choice", new_root))
             .parent = None;
         self.root = new_root;
         self.last_root_time = Instant::now();
@@ -1082,54 +1083,62 @@ mod test {
             .collect();
         frozen_banks.sort_by_key(|bank| bank.slot());
 
-        let root = bank_forks.read().unwrap().root();
-        let heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new_from_frozen_banks(
-            (root, Hash::default()),
-            &frozen_banks,
-        );
+        let root_bank = bank_forks.read().unwrap().root_bank();
+        let root = root_bank.slot();
+        let root_hash = root_bank.hash();
+        let heaviest_subtree_fork_choice =
+            HeaviestSubtreeForkChoice::new_from_frozen_banks((root, root_hash), &frozen_banks);
+
+        let bank0_hash = bank_forks.read().unwrap().get(0).unwrap().hash();
         assert!(heaviest_subtree_fork_choice
-            .parent(&(0, Hash::default()))
+            .parent(&(0, bank0_hash))
             .is_none());
+
+        let bank1_hash = bank_forks.read().unwrap().get(1).unwrap().hash();
         assert_eq!(
             heaviest_subtree_fork_choice
-                .children(&(0, Hash::default()))
+                .children(&(0, bank0_hash))
                 .unwrap(),
-            &[(1, Hash::default())]
+            &[(1, bank1_hash)]
         );
+
         assert_eq!(
-            heaviest_subtree_fork_choice.parent(&(1, Hash::default())),
-            Some((0, Hash::default()))
+            heaviest_subtree_fork_choice.parent(&(1, bank1_hash)),
+            Some((0, bank0_hash))
         );
+        let bank2_hash = bank_forks.read().unwrap().get(2).unwrap().hash();
+        let bank3_hash = bank_forks.read().unwrap().get(3).unwrap().hash();
         assert_eq!(
             heaviest_subtree_fork_choice
-                .children(&(1, Hash::default()))
+                .children(&(1, bank1_hash))
                 .unwrap(),
-            &[(2, Hash::default()), (3, Hash::default())]
+            &[(2, bank2_hash), (3, bank3_hash)]
         );
         assert_eq!(
-            heaviest_subtree_fork_choice.parent(&(2, Hash::default())),
-            Some((1, Hash::default()))
+            heaviest_subtree_fork_choice.parent(&(2, bank2_hash)),
+            Some((1, bank1_hash))
         );
+        let bank4_hash = bank_forks.read().unwrap().get(4).unwrap().hash();
         assert_eq!(
             heaviest_subtree_fork_choice
-                .children(&(2, Hash::default()))
+                .children(&(2, bank2_hash))
                 .unwrap(),
-            &[(4, Hash::default())]
+            &[(4, bank4_hash)]
         );
         assert_eq!(
-            heaviest_subtree_fork_choice.parent(&(3, Hash::default())),
-            Some((1, Hash::default()))
+            heaviest_subtree_fork_choice.parent(&(3, bank3_hash)),
+            Some((1, bank1_hash))
         );
         assert!(heaviest_subtree_fork_choice
-            .children(&(3, Hash::default()))
+            .children(&(3, bank3_hash))
             .unwrap()
             .is_empty());
         assert_eq!(
-            heaviest_subtree_fork_choice.parent(&(4, Hash::default())),
-            Some((2, Hash::default()))
+            heaviest_subtree_fork_choice.parent(&(4, bank4_hash)),
+            Some((2, bank2_hash))
         );
         assert!(heaviest_subtree_fork_choice
-            .children(&(4, Hash::default()))
+            .children(&(4, bank4_hash))
             .unwrap()
             .is_empty());
     }

@@ -2581,15 +2581,19 @@ pub(crate) mod tests {
         let genesis_config = create_genesis_config(10_000).genesis_config;
         let bank0 = Bank::new(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank0)));
+
         let root = 3;
-        let mut heaviest_subtree_fork_choice =
-            HeaviestSubtreeForkChoice::new((root, Hash::default()));
         let root_bank = Bank::new_from_parent(
             bank_forks.read().unwrap().get(0).unwrap(),
             &Pubkey::default(),
             root,
         );
+        root_bank.freeze();
+        let root_hash = root_bank.hash();
         bank_forks.write().unwrap().insert(root_bank);
+
+        let mut heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new((root, root_hash));
+
         let mut progress = ProgressMap::default();
         for i in 0..=root {
             progress.insert(
@@ -2651,9 +2655,10 @@ pub(crate) mod tests {
             &Pubkey::default(),
             root,
         );
+        root_bank.freeze();
+        let root_hash = root_bank.hash();
         bank_forks.write().unwrap().insert(root_bank);
-        let mut heaviest_subtree_fork_choice =
-            HeaviestSubtreeForkChoice::new((root, Hash::default()));
+        let mut heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new((root, root_hash));
         let mut progress = ProgressMap::default();
         for i in 0..=root {
             progress.insert(
@@ -3347,8 +3352,7 @@ pub(crate) mod tests {
 
         // Create the tree of banks in a BankForks object
         let forks = tr(0) / (tr(1)) / (tr(2));
-        vote_simulator.fill_bank_forks(forks.clone(), &HashMap::new());
-        let mut heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new_from_tree(forks);
+        vote_simulator.fill_bank_forks(forks, &HashMap::new());
         let mut frozen_banks: Vec<_> = vote_simulator
             .bank_forks
             .read()
@@ -3357,6 +3361,7 @@ pub(crate) mod tests {
             .values()
             .cloned()
             .collect();
+        let mut heaviest_subtree_fork_choice = &mut vote_simulator.heaviest_subtree_fork_choice;
 
         let ancestors = vote_simulator.bank_forks.read().unwrap().ancestors();
         ReplayStage::compute_bank_stats(

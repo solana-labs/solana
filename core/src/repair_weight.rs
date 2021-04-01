@@ -686,15 +686,14 @@ mod test {
         // Should contain two trees, one for main fork, one for the orphan
         // branch
         assert_eq!(repair_weight.trees.len(), 2);
-        assert!(repair_weight
-            .trees
-            .get(&0)
-            .unwrap()
-            .ancestors((1, Hash::default()))
-            .into_iter()
-            .map(|slot_hash| slot_hash.0)
-            .next()
-            .is_none());
+        assert_eq!(
+            repair_weight
+                .trees
+                .get(&0)
+                .unwrap()
+                .ancestors((1, Hash::default())),
+            vec![(0, Hash::default())]
+        );
         assert!(repair_weight
             .trees
             .get(&8)
@@ -719,22 +718,16 @@ mod test {
                 .trees
                 .get(&0)
                 .unwrap()
-                .ancestors((1, Hash::default()))
-                .into_iter()
-                .map(|slot_hash| slot_hash.0)
-                .collect::<Vec<_>>(),
-            vec![0]
+                .ancestors((1, Hash::default())),
+            vec![(0, Hash::default())]
         );
         assert_eq!(
             repair_weight
                 .trees
                 .get(&8)
                 .unwrap()
-                .ancestors((10, Hash::default()))
-                .into_iter()
-                .map(|slot_hash| slot_hash.0)
-                .collect::<Vec<_>>(),
-            vec![8]
+                .ancestors((10, Hash::default())),
+            vec![(8, Hash::default())]
         );
 
         // Connect orphan back to main fork
