@@ -173,12 +173,14 @@ impl<T: 'static + Clone + IsCached> WriteAccountMapEntry<T> {
     }
 }
 
+use bv::BitVec;
+
 #[derive(Debug, Default)]
 pub struct RollingBitField {
-    max_width: usize,
+    max_width: u64,
     min: u64,
     max: u64, // exclusive
-    bits: Vec<u64>,
+    bits: BitVec,
     count: usize,
 }
 
@@ -192,12 +194,11 @@ struct RollingBitFieldAddress {
 // Relies on there being a sliding window of key values. The key values continue to increase.
 // Old key values are removed from the lesser values and do not accumulate.
 impl RollingBitField {
-    pub fn new(max_width: usize) -> Self {
+    pub fn new(max_width: u64) -> Self {
         assert!(max_width > 0);
         assert!(max_width.is_power_of_two()); // power of 2 to make dividing a shift
                                               // calculate the array length required using the max width - 1
-        let address = Self::calc_address(max_width, max_width as u64 - 1);
-        let bits = vec![0u64; address.array_index + 1];
+        let bits = BitVec::new_fill(false, max_width);
         Self {
             max_width,
             bits,
@@ -207,18 +208,13 @@ impl RollingBitField {
         }
     }
 
-    fn get_address(&self, key: u64) -> RollingBitFieldAddress {
+    fn get_address(&self, key: u64) -> u64 {
         Self::calc_address(self.max_width, key)
     }
 
-    // find the array index and mask in the u64 where this key maps
-    fn calc_address(max_width: usize, key: u64) -> RollingBitFieldAddress {
-        let key = key as usize;
-        let bits_in_u64 = 64;
-        let array_index = (key % max_width) / bits_in_u64;
-        let bit_index = key % bits_in_u64;
-        let mask: u64 = 1u64 << bit_index;
-        RollingBitFieldAddress { array_index, mask }
+    // find the array index
+    fn calc_address(max_width: u64, key: u64) -> u64 {
+        key % max_width
     }
 
     pub fn insert(&mut self, key: &u64) {
@@ -236,10 +232,10 @@ impl RollingBitField {
             );
         }
         let address = self.get_address(key);
-        let value = self.bits[address.array_index];
-        if (value & address.mask) == 0 {
+        let value = self.bits.get(address);
+        if !value {
             self.count += 1;
-            self.bits[address.array_index] |= address.mask;
+            self.bits.set(address, true);
             self.max = std::cmp::max(self.max, key + 1);
         }
     }
@@ -253,10 +249,10 @@ impl RollingBitField {
             );
         }
         let address = self.get_address(key);
-        let value = self.bits[address.array_index];
-        if (value & address.mask) != 0 {
+        let value = self.bits.get(address);
+        if value {
             self.count -= 1; // TODO saturating? or would we rather panic?
-            self.bits[address.array_index] &= !address.mask;
+            self.bits.set(address, false);
         }
     }
 
@@ -269,7 +265,7 @@ impl RollingBitField {
             );
         }
         let address = self.get_address(key);
-        (self.bits[address.array_index] & address.mask) != 0
+        self.bits.get(address)
     }
 
     pub fn len(&self) -> usize {
@@ -309,7 +305,7 @@ impl Default for RootsTracker {
 }
 
 impl RootsTracker {
-    pub fn new(max_width: usize) -> Self {
+    pub fn new(max_width: u64) -> Self {
         Self {
             roots: RollingBitField::new(max_width),
             max_root: 0,
