@@ -174,11 +174,155 @@ impl<T: 'static + Clone + IsCached> WriteAccountMapEntry<T> {
 }
 
 #[derive(Debug, Default)]
+pub struct RollingBitField {
+    max_width: usize,
+    min: u64,
+    max: u64, // exclusive
+    bits: Vec<u64>,
+    count: usize,
+}
+
+#[derive(Debug, Default)]
+struct RollingBitFieldAddress {
+    array_index: usize,
+    mask: u64,
+}
+
+// functionally similar to a hashset
+// Relies on there being a sliding window of key values. The key values continue to increase.
+// Old key values are removed from the lesser values and do not accumulate.
+impl RollingBitField {
+    pub fn new(max_width: usize) -> Self {
+        assert!(max_width > 0);
+        assert!(max_width.is_power_of_two()); // power of 2 to make dividing a shift
+                                              // calculate the array length required using the max width - 1
+        let address = Self::calc_address(max_width, max_width as u64 - 1);
+        let bits = vec![0u64; address.array_index + 1];
+        Self {
+            max_width,
+            bits,
+            count: 0,
+            min: 0,
+            max: 0,
+        }
+    }
+
+    fn get_address(&self, key: u64) -> RollingBitFieldAddress {
+        Self::calc_address(self.max_width, key)
+    }
+
+    // find the array index and mask in the u64 where this key maps
+    fn calc_address(max_width: usize, key: u64) -> RollingBitFieldAddress {
+        let key = key as usize;
+        let bits_in_u64 = 64;
+        let array_index = (key % max_width) / bits_in_u64;
+        let bit_index = key % bits_in_u64;
+        let mask: u64 = 1u64 << bit_index;
+        RollingBitFieldAddress { array_index, mask }
+    }
+
+    pub fn insert(&mut self, key: &u64) {
+        let key = *key;
+        if self.max.saturating_sub(key) > self.max_width as u64 {
+            panic!(
+                "acting on an item at key: {}, that is too far behind the recent max: {}",
+                key, self.max
+            );
+        }
+        if self.max > 0 && key.saturating_sub(self.max) > self.max_width as u64 {
+            panic!(
+                "acting on an item at key: {}, that is too far ahead of the recent max: {}",
+                key, self.max
+            );
+        }
+        let address = self.get_address(key);
+        let value = self.bits[address.array_index];
+        if (value & address.mask) == 0 {
+            self.count += 1;
+            self.bits[address.array_index] |= address.mask;
+            self.max = std::cmp::max(self.max, key + 1);
+        }
+    }
+
+    pub fn remove(&mut self, key: &u64) {
+        let key = *key;
+        if self.max.saturating_sub(key) > self.max_width as u64 {
+            panic!(
+                "acting on an item at key: {}, that is too far behind the recent max: {}",
+                key, self.max
+            );
+        }
+        let address = self.get_address(key);
+        let value = self.bits[address.array_index];
+        if (value & address.mask) != 0 {
+            self.count -= 1; // TODO saturating? or would we rather panic?
+            self.bits[address.array_index] &= !address.mask;
+        }
+    }
+
+    pub fn contains(&self, key: &u64) -> bool {
+        let key = *key;
+        if self.max.saturating_sub(key) > self.max_width as u64 {
+            panic!(
+                "acting on an item at key: {}, that is too far behind the recent max: {}",
+                key, self.max
+            );
+        }
+        let address = self.get_address(key);
+        (self.bits[address.array_index] & address.mask) != 0
+    }
+
+    pub fn len(&self) -> usize {
+        self.count
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    pub fn clear(&mut self) {
+        let mut n = Self::new(self.max_width);
+        std::mem::swap(&mut n, self);
+    }
+
+    pub fn get_all(&self, all: &mut Vec<u64>) {
+        for key in self.min..self.max {
+            if self.contains(&(key as u64)) {
+                all.push(key as u64);
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct RootsTracker {
-    roots: HashSet<Slot>,
+    roots: RollingBitField,
     max_root: Slot,
     uncleaned_roots: HashSet<Slot>,
     previous_uncleaned_roots: HashSet<Slot>,
+}
+
+impl Default for RootsTracker {
+    fn default() -> Self {
+        RootsTracker::new(2097152)
+    }
+}
+
+impl RootsTracker {
+    pub fn new(max_width: usize) -> Self {
+        Self {
+            roots: RollingBitField::new(max_width),
+            max_root: 0,
+            uncleaned_roots: HashSet::new(),
+            previous_uncleaned_roots: HashSet::new(),
+        }
+    }
+    pub fn roots_clear(&mut self) {
+        self.roots.clear();
+        self.max_root = 0;
+        self.uncleaned_roots = HashSet::new();
+        self.previous_uncleaned_roots = HashSet::new();
+    }
 }
 
 #[derive(Debug, Default)]
@@ -801,7 +945,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
 
     // Get the maximum root <= `max_allowed_root` from the given `slice`
     fn get_max_root(
-        roots: &HashSet<Slot>,
+        roots: &RollingBitField,
         slice: SlotSlice<T>,
         max_allowed_root: Option<Slot>,
     ) -> Slot {
@@ -1029,7 +1173,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
 
     pub fn add_root(&self, slot: Slot, caching_enabled: bool) {
         let mut w_roots_tracker = self.roots_tracker.write().unwrap();
-        w_roots_tracker.roots.insert(slot);
+        w_roots_tracker.roots.insert(&slot);
         // we delay cleaning until flushing!
         if !caching_enabled {
             w_roots_tracker.uncleaned_roots.insert(slot);
@@ -1122,13 +1266,10 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
     }
 
     pub fn all_roots(&self) -> Vec<Slot> {
-        self.roots_tracker
-            .read()
-            .unwrap()
-            .roots
-            .iter()
-            .cloned()
-            .collect()
+        let mut roots = Vec::new();
+        let tracker = self.roots_tracker.read().unwrap();
+        tracker.roots.get_all(&mut roots);
+        roots
     }
 
     #[cfg(test)]
