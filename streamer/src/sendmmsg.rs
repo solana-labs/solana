@@ -43,12 +43,14 @@ fn mmsghdr_for_packet(
 
     match InetAddr::from_std(dest) {
         InetAddr::V4(addr) => {
-            addr_in.insert(index, addr);
+            let index = addr_in.len();
+            addr_in.push(addr);
             hdr.msg_hdr.msg_name = &mut addr_in[index] as *mut _ as *mut _;
             hdr.msg_hdr.msg_namelen = addr_in_len;
         }
         InetAddr::V6(addr) => {
-            addr_in6.insert(index, addr);
+            let index = addr_in6.len();
+            addr_in6.push(addr);
             hdr.msg_hdr.msg_name = &mut addr_in6[index] as *mut _ as *mut _;
             hdr.msg_hdr.msg_namelen = addr_in6_len;
         }
@@ -152,7 +154,7 @@ mod tests {
     use crate::recvmmsg::recv_mmsg;
     use crate::sendmmsg::{multicast, send_mmsg};
     use solana_sdk::packet::PACKET_DATA_SIZE;
-    use std::net::UdpSocket;
+    use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
 
     #[test]
     pub fn test_send_mmsg_one_dest() {
@@ -241,5 +243,15 @@ mod tests {
         let mut packets = vec![Packet::default(); 32];
         let recv = recv_mmsg(&reader4, &mut packets[..]).unwrap().1;
         assert_eq!(1, recv);
+    }
+
+    #[test]
+    fn test_message_header_from_packet() {
+        let packets: Vec<_> = (0..2).map(|_| vec![0u8; PACKET_DATA_SIZE]).collect();
+        let ip4 = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
+        let ip6 = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0)), 8080);
+        let packet_refs: Vec<_> = vec![(&packets[0], &ip4), (&packets[1], &ip6)];
+        let sender = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        send_mmsg(&sender, &packet_refs).unwrap();
     }
 }
