@@ -1163,23 +1163,27 @@ impl JsonRpcRequestProcessor {
         mut before: Option<Signature>,
         until: Option<Signature>,
         mut limit: usize,
+        commitment: Option<CommitmentConfig>,
     ) -> Result<Vec<RpcConfirmedTransactionStatusWithSignature>> {
+        let commitment = commitment.unwrap_or_default();
+        check_is_at_least_confirmed(commitment)?;
+
         if self.config.enable_rpc_transaction_history {
             let highest_confirmed_root = self
                 .block_commitment_cache
                 .read()
                 .unwrap()
                 .highest_confirmed_root();
+            let highest_slot = if commitment.is_confirmed() {
+                let confirmed_bank = self.bank(Some(CommitmentConfig::confirmed()));
+                confirmed_bank.slot()
+            } else {
+                highest_confirmed_root
+            };
 
             let mut results = self
                 .blockstore
-                .get_confirmed_signatures_for_address2(
-                    address,
-                    highest_confirmed_root,
-                    before,
-                    until,
-                    limit,
-                )
+                .get_confirmed_signatures_for_address2(address, highest_slot, before, until, limit)
                 .map_err(|err| Error::invalid_params(format!("{}", err)))?;
 
             if results.len() < limit {
@@ -1208,7 +1212,24 @@ impl JsonRpcRequestProcessor {
                 }
             }
 
-            Ok(results.into_iter().map(|x| x.into()).collect())
+            Ok(results
+                .into_iter()
+                .map(|x| {
+                    let mut item: RpcConfirmedTransactionStatusWithSignature = x.into();
+                    if item.slot <= highest_confirmed_root {
+                        item.confirmation_status = Some(TransactionConfirmationStatus::Finalized);
+                    } else {
+                        item.confirmation_status = Some(TransactionConfirmationStatus::Confirmed);
+                        if item.block_time.is_none() {
+                            let r_bank_forks = self.bank_forks.read().unwrap();
+                            item.block_time = r_bank_forks
+                                .get(item.slot)
+                                .map(|bank| bank.clock().unix_timestamp);
+                        }
+                    }
+                    item
+                })
+                .collect())
         } else {
             Ok(vec![])
         }
@@ -2341,6 +2362,7 @@ pub mod rpc_full {
             config: Option<RpcEncodingConfigWrapper<RpcConfirmedTransactionConfig>>,
         ) -> Result<Option<EncodedConfirmedTransaction>>;
 
+        // DEPRECATED
         #[rpc(meta, name = "getConfirmedSignaturesForAddress")]
         fn get_confirmed_signatures_for_address(
             &self,
@@ -3087,7 +3109,13 @@ pub mod rpc_full {
                 )));
             }
 
-            meta.get_confirmed_signatures_for_address2(address, before, until, limit)
+            meta.get_confirmed_signatures_for_address2(
+                address,
+                before,
+                until,
+                limit,
+                config.commitment,
+            )
         }
 
         fn get_first_available_block(&self, meta: Self::Metadata) -> Result<Slot> {

@@ -652,6 +652,7 @@ impl RpcClient {
             before: config.before.map(|signature| signature.to_string()),
             until: config.until.map(|signature| signature.to_string()),
             limit: config.limit,
+            commitment: config.commitment,
         };
 
         let result: Vec<RpcConfirmedTransactionStatusWithSignature> = self.send(
@@ -1632,6 +1633,7 @@ pub struct GetConfirmedSignaturesForAddress2Config {
     pub before: Option<Signature>,
     pub until: Option<Signature>,
     pub limit: Option<usize>,
+    pub commitment: Option<CommitmentConfig>,
 }
 
 fn new_spinner_progress_bar() -> ProgressBar {
