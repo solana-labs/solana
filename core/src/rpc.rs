@@ -70,7 +70,7 @@ use solana_sdk::{
 };
 use solana_stake_program::stake_state::StakeState;
 use solana_transaction_status::{
-    ConfirmedBlock, EncodedConfirmedTransaction, TransactionConfirmationStatus, TransactionStatus,
+    EncodedConfirmedTransaction, TransactionConfirmationStatus, TransactionStatus,
     UiConfirmedBlock, UiTransactionEncoding,
 };
 use solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
@@ -390,16 +390,26 @@ impl JsonRpcRequestProcessor {
         let epoch_schedule = self.get_epoch_schedule();
         let first_available_block = self.get_first_available_block();
         let epoch = epoch.unwrap_or_else(|| {
-            epoch_schedule.get_epoch(self.get_slot(Some(CommitmentConfig::finalized()))) - 1
+            epoch_schedule
+                .get_epoch(self.get_slot(Some(CommitmentConfig::finalized())))
+                .saturating_sub(1)
         });
 
         // Rewards for this epoch are found in the first confirmed block of the next epoch
-        let first_slot_in_epoch = epoch_schedule.get_first_slot_in_epoch(epoch + 1);
+        let first_slot_in_epoch = epoch_schedule.get_first_slot_in_epoch(epoch.saturating_add(1));
         if first_slot_in_epoch < first_available_block {
-            return Err(RpcCustomError::BlockNotAvailable {
-                slot: first_slot_in_epoch,
+            if self.bigtable_ledger_storage.is_some() {
+                return Err(RpcCustomError::LongTermStorageSlotSkipped {
+                    slot: first_slot_in_epoch,
+                }
+                .into());
+            } else {
+                return Err(RpcCustomError::BlockCleanedUp {
+                    slot: first_slot_in_epoch,
+                    first_available_block: first_available_block,
+                }
+                .into());
             }
-            .into());
         }
 
         let first_confirmed_block_in_epoch = *self
@@ -413,10 +423,12 @@ impl JsonRpcRequestProcessor {
                 slot: first_slot_in_epoch,
             })?;
 
-        let first_confirmed_block = if let Ok(first_confirmed_block) = self
-            .get_confirmed_block_at_slot(
+        let first_confirmed_block = if let Ok(Some(first_confirmed_block)) = self
+            .get_confirmed_block(
                 first_confirmed_block_in_epoch,
-                Some(CommitmentConfig::finalized()),
+                Some(RpcEncodingConfigWrapper::Current(Some(
+                    RpcConfirmedBlockConfig::rewards_only(),
+                ))),
             ) {
             first_confirmed_block
         } else {
@@ -428,6 +440,7 @@ impl JsonRpcRequestProcessor {
 
         if let Some(reward) = first_confirmed_block
             .rewards
+            .unwrap_or_default()
             .into_iter()
             .find(|reward| reward.pubkey == pubkey.to_string())
         {
@@ -788,13 +801,19 @@ impl JsonRpcRequestProcessor {
         Ok(())
     }
 
-    fn get_confirmed_block_at_slot(
+    pub fn get_confirmed_block(
         &self,
         slot: Slot,
-        commitment: Option<CommitmentConfig>,
-    ) -> Result<ConfirmedBlock> {
+        config: Option<RpcEncodingConfigWrapper<RpcConfirmedBlockConfig>>,
+    ) -> Result<Option<UiConfirmedBlock>> {
         if self.config.enable_rpc_transaction_history {
-            let commitment = commitment.unwrap_or_default();
+            let config = config
+                .map(|config| config.convert_to_current())
+                .unwrap_or_default();
+            let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Json);
+            let transaction_details = config.transaction_details.unwrap_or_default();
+            let show_rewards = config.rewards.unwrap_or(true);
+            let commitment = config.commitment.unwrap_or_default();
             check_is_at_least_confirmed(commitment)?;
 
             // Block is old enough to be finalized
@@ -813,12 +832,15 @@ impl JsonRpcRequestProcessor {
                             .runtime
                             .block_on(bigtable_ledger_storage.get_confirmed_block(slot));
                         self.check_bigtable_result(&bigtable_result)?;
-                        return bigtable_result
-                            .map_err(|_| RpcCustomError::BlockNotAvailable { slot }.into());
+                        return Ok(bigtable_result.ok().map(|confirmed_block| {
+                            confirmed_block.configure(encoding, transaction_details, show_rewards)
+                        }));
                     }
                 }
                 self.check_slot_cleaned_up(&result, slot)?;
-                return result.map_err(|_| RpcCustomError::BlockNotAvailable { slot }.into());
+                return Ok(result.ok().map(|confirmed_block| {
+                    confirmed_block.configure(encoding, transaction_details, show_rewards)
+                }));
             } else if commitment.is_confirmed() {
                 // Check if block is confirmed
                 let confirmed_bank = self.bank(Some(CommitmentConfig::confirmed()));
@@ -829,36 +851,13 @@ impl JsonRpcRequestProcessor {
                             .load(Ordering::SeqCst)
                 {
                     let result = self.blockstore.get_complete_block(slot, true);
-                    return result.map_err(|_| RpcCustomError::BlockNotAvailable { slot }.into());
+                    return Ok(result.ok().map(|confirmed_block| {
+                        confirmed_block.configure(encoding, transaction_details, show_rewards)
+                    }));
                 }
             }
         }
-
         Err(RpcCustomError::BlockNotAvailable { slot }.into())
-    }
-
-    pub fn get_confirmed_block(
-        &self,
-        slot: Slot,
-        config: Option<RpcEncodingConfigWrapper<RpcConfirmedBlockConfig>>,
-    ) -> Result<Option<UiConfirmedBlock>> {
-        let config = config
-            .map(|config| config.convert_to_current())
-            .unwrap_or_default();
-        let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Json);
-        let transaction_details = config.transaction_details.unwrap_or_default();
-        let show_rewards = config.rewards.unwrap_or(true);
-        let commitment = config.commitment.unwrap_or_default();
-
-        if let Ok(confirmed_block) = self.get_confirmed_block_at_slot(slot, Some(commitment)) {
-            Ok(Some(confirmed_block.configure(
-                encoding,
-                transaction_details,
-                show_rewards,
-            )))
-        } else {
-            Err(RpcCustomError::BlockNotAvailable { slot }.into())
-        }
     }
 
     pub fn get_confirmed_blocks(
