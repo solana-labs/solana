@@ -36,8 +36,8 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
 use solana_sdk::timing::timestamp;
 use std::cmp;
-use std::collections::{hash_map, HashMap};
-use std::ops::{Index, IndexMut};
+use std::collections::{hash_map, BTreeSet, HashMap};
+use std::ops::{Bound, Index, IndexMut};
 
 const CRDS_SHARDS_BITS: u32 = 8;
 // Limit number of crds values associated with each unique pubkey. This
@@ -52,6 +52,8 @@ pub struct Crds {
     shards: CrdsShards,
     nodes: IndexSet<usize>, // Indices of nodes' ContactInfo.
     votes: IndexSet<usize>, // Indices of Vote crds values.
+    // Indices of EpochSlots crds values ordered by insert timestamp.
+    epoch_slots: BTreeSet<(u64 /*insert timestamp*/, usize)>,
     // Indices of all crds values associated with a node.
     records: HashMap<Pubkey, IndexSet<usize>>,
 }
@@ -113,6 +115,7 @@ impl Default for Crds {
             shards: CrdsShards::new(CRDS_SHARDS_BITS),
             nodes: IndexSet::default(),
             votes: IndexSet::default(),
+            epoch_slots: BTreeSet::default(),
             records: HashMap::default(),
         }
     }
@@ -152,6 +155,10 @@ impl Crds {
                     CrdsData::Vote(_, _) => {
                         self.votes.insert(entry_index);
                     }
+                    CrdsData::EpochSlots(_, _) => {
+                        self.epoch_slots
+                            .insert((new_value.insert_timestamp, entry_index));
+                    }
                     _ => (),
                 };
                 self.records
@@ -163,9 +170,15 @@ impl Crds {
                 Ok(None)
             }
             Entry::Occupied(mut entry) if *entry.get() < new_value => {
-                let index = entry.index();
-                self.shards.remove(index, entry.get());
-                self.shards.insert(index, &new_value);
+                let entry_index = entry.index();
+                self.shards.remove(entry_index, entry.get());
+                self.shards.insert(entry_index, &new_value);
+                if let CrdsData::EpochSlots(_, _) = new_value.value.data {
+                    self.epoch_slots
+                        .remove(&(entry.get().insert_timestamp, entry_index));
+                    self.epoch_slots
+                        .insert((new_value.insert_timestamp, entry_index));
+                }
                 self.num_inserts += 1;
                 // As long as the pubkey does not change, self.records
                 // does not need to be updated.
@@ -228,6 +241,17 @@ impl Crds {
     /// Returns all entries which are Vote.
     pub(crate) fn get_votes(&self) -> impl Iterator<Item = &VersionedCrdsValue> {
         self.votes.iter().map(move |i| self.table.index(*i))
+    }
+
+    /// Returns epoch-slots inserted since (or at) the given timestamp.
+    pub(crate) fn get_epoch_slots_since(
+        &self,
+        timestamp: u64,
+    ) -> impl Iterator<Item = &VersionedCrdsValue> {
+        let range = (Bound::Included((timestamp, 0)), Bound::Unbounded);
+        self.epoch_slots
+            .range(range)
+            .map(move |(_, i)| self.table.index(*i))
     }
 
     /// Returns all records associated with a pubkey.
@@ -354,6 +378,9 @@ impl Crds {
             CrdsData::Vote(_, _) => {
                 self.votes.swap_remove(&index);
             }
+            CrdsData::EpochSlots(_, _) => {
+                self.epoch_slots.remove(&(value.insert_timestamp, index));
+            }
             _ => (),
         }
         // Remove the index from records associated with the value's pubkey.
@@ -384,6 +411,10 @@ impl Crds {
                 CrdsData::Vote(_, _) => {
                     self.votes.swap_remove(&size);
                     self.votes.insert(index);
+                }
+                CrdsData::EpochSlots(_, _) => {
+                    self.epoch_slots.remove(&(value.insert_timestamp, size));
+                    self.epoch_slots.insert((value.insert_timestamp, index));
                 }
                 _ => (),
             };
@@ -643,7 +674,27 @@ mod test {
 
     #[test]
     fn test_crds_value_indices() {
-        fn check_crds_value_indices(crds: &Crds) -> (usize, usize) {
+        fn check_crds_value_indices<R: rand::Rng>(
+            rng: &mut R,
+            crds: &Crds,
+        ) -> (usize, usize, usize) {
+            if !crds.table.is_empty() {
+                let since = crds.table[rng.gen_range(0, crds.table.len())].insert_timestamp;
+                let num_epoch_slots = crds
+                    .table
+                    .values()
+                    .filter(|value| value.insert_timestamp >= since)
+                    .filter(|value| matches!(value.value.data, CrdsData::EpochSlots(_, _)))
+                    .count();
+                assert_eq!(num_epoch_slots, crds.get_epoch_slots_since(since).count());
+                for value in crds.get_epoch_slots_since(since) {
+                    assert!(value.insert_timestamp >= since);
+                    match value.value.data {
+                        CrdsData::EpochSlots(_, _) => (),
+                        _ => panic!("not an epoch-slot!"),
+                    }
+                }
+            }
             let num_nodes = crds
                 .table
                 .values()
@@ -654,15 +705,27 @@ mod test {
                 .values()
                 .filter(|value| matches!(value.value.data, CrdsData::Vote(_, _)))
                 .count();
+            let num_epoch_slots = crds
+                .table
+                .values()
+                .filter(|value| matches!(value.value.data, CrdsData::EpochSlots(_, _)))
+                .count();
             assert_eq!(num_nodes, crds.get_nodes_contact_info().count());
             assert_eq!(num_votes, crds.get_votes().count());
+            assert_eq!(num_epoch_slots, crds.get_epoch_slots_since(0).count());
             for vote in crds.get_votes() {
                 match vote.value.data {
                     CrdsData::Vote(_, _) => (),
                     _ => panic!("not a vote!"),
                 }
             }
-            (num_nodes, num_votes)
+            for epoch_slots in crds.get_epoch_slots_since(0) {
+                match epoch_slots.value.data {
+                    CrdsData::EpochSlots(_, _) => (),
+                    _ => panic!("not an epoch-slot!"),
+                }
+            }
+            (num_nodes, num_votes, num_epoch_slots)
         }
         let mut rng = thread_rng();
         let keypairs: Vec<_> = repeat_with(Keypair::new).take(128).collect();
@@ -683,7 +746,7 @@ mod test {
                 Err(_) => (),
             }
             if k % 64 == 0 {
-                check_crds_value_indices(&crds);
+                check_crds_value_indices(&mut rng, &crds);
             }
         }
         assert_eq!(num_inserts, crds.num_inserts);
@@ -691,17 +754,22 @@ mod test {
         assert!(num_overrides > 500);
         assert!(crds.table.len() > 200);
         assert!(num_inserts > crds.table.len());
-        let (num_nodes, num_votes) = check_crds_value_indices(&crds);
+        let (num_nodes, num_votes, num_epoch_slots) = check_crds_value_indices(&mut rng, &crds);
         assert!(num_nodes * 3 < crds.table.len());
         assert!(num_nodes > 100, "num nodes: {}", num_nodes);
         assert!(num_votes > 100, "num votes: {}", num_votes);
+        assert!(
+            num_epoch_slots > 100,
+            "num epoch slots: {}",
+            num_epoch_slots
+        );
         // Remove values one by one and assert that nodes indices stay valid.
         while !crds.table.is_empty() {
             let index = rng.gen_range(0, crds.table.len());
             let key = crds.table.get_index(index).unwrap().0.clone();
             crds.remove(&key);
             if crds.table.len() % 64 == 0 {
-                check_crds_value_indices(&crds);
+                check_crds_value_indices(&mut rng, &crds);
             }
         }
     }
