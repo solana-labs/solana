@@ -685,9 +685,11 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
     }
 
     pub fn get_rooted_entries(&self, slice: SlotSlice<T>, max: Option<Slot>) -> SlotList<T> {
+        let max = max.unwrap_or(Slot::MAX);
+        let lock = &self.roots_tracker.read().unwrap().roots;
         slice
             .iter()
-            .filter(|(slot, _)| self.is_root(*slot) && max.map_or(true, |max| *slot <= max))
+            .filter(|(slot, _)| *slot <= max && lock.contains(slot))
             .cloned()
             .collect()
     }
