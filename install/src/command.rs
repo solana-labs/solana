@@ -863,6 +863,7 @@ fn semver_of(string: &str) -> Result<semver::Version, String> {
 
 fn check_for_newer_github_release(
     version_filter: Option<semver::VersionReq>,
+    prerelease_allowed: bool,
 ) -> reqwest::Result<Option<String>> {
     let url =
         reqwest::Url::parse("https://api.github.com/repos/solana-labs/solana/releases").unwrap();
@@ -882,7 +883,7 @@ fn check_for_newer_github_release(
                  prerelease,
              }| {
                 if let Ok(version) = semver_of(&tag_name) {
-                    if !prerelease
+                    if (prerelease_allowed || !prerelease)
                         && version_filter
                             .as_ref()
                             .map_or(true, |version_filter| version_filter.matches(&version))
@@ -937,6 +938,7 @@ pub fn init_or_update(config_file: &str, is_init: bool, check_only: bool) -> Res
                         current_release_semver
                     ))
                     .ok(),
+                    is_init,
                 )
                 .map_err(|err| err.to_string())?;
                 progress_bar.finish_and_clear();
