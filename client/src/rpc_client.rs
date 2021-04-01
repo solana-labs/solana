@@ -23,14 +23,10 @@ use solana_account_decoder::{
 };
 use solana_sdk::{
     account::Account,
-<<<<<<< HEAD
     clock::{
-        Slot, UnixTimestamp, DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT,
+        Epoch, Slot, UnixTimestamp, DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT,
         MAX_HASH_AGE_IN_SECONDS,
     },
-=======
-    clock::{Epoch, Slot, UnixTimestamp, DEFAULT_MS_PER_SLOT, MAX_HASH_AGE_IN_SECONDS},
->>>>>>> 5791b95b1... Add RpcClient::get_stake_activation()
     commitment_config::{CommitmentConfig, CommitmentLevel},
     epoch_info::EpochInfo,
     epoch_schedule::EpochSchedule,
