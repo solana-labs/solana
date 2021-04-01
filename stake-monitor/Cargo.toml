@@ -11,7 +11,7 @@ documentation = "https://docs.rs/solana-stake-monitor"
 
 [dependencies]
 clap = "2.33.1"
-console = "0.11.3"
+console = "0.14.1"
 log = "0.4.11"
 serde = "1.0.122"
 serde_yaml = "0.8.13"
