@@ -6,7 +6,9 @@ use solana_sdk::{
     inflation::Inflation,
     transaction::{Result, TransactionError},
 };
-use solana_transaction_status::ConfirmedTransactionStatusWithSignature;
+use solana_transaction_status::{
+    ConfirmedTransactionStatusWithSignature, TransactionConfirmationStatus,
+};
 use std::{collections::HashMap, fmt, net::SocketAddr};
 
 pub type RpcResult<T> = client_error::Result<Response<T>>;
@@ -346,6 +348,7 @@ pub struct RpcConfirmedTransactionStatusWithSignature {
     pub err: Option<TransactionError>,
     pub memo: Option<String>,
     pub block_time: Option<UnixTimestamp>,
+    pub confirmation_status: Option<TransactionConfirmationStatus>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -372,6 +375,7 @@ impl From<ConfirmedTransactionStatusWithSignature> for RpcConfirmedTransactionSt
             err,
             memo,
             block_time,
+            confirmation_status: None,
         }
     }
 }
