@@ -385,15 +385,21 @@ impl JsonRpcRequestProcessor {
     pub fn get_inflation_reward(
         &self,
         pubkey: &Pubkey,
-        epoch: Epoch,
+        epoch: Option<Epoch>,
     ) -> Result<Option<RpcInflationReward>> {
         let epoch_schedule = self.get_epoch_schedule();
         let first_available_block = self.get_first_available_block();
+        let epoch = epoch.unwrap_or_else(|| {
+            epoch_schedule.get_epoch(self.get_slot(Some(CommitmentConfig::finalized()))) - 1
+        });
 
         // Rewards for this epoch are found in the first confirmed block of the next epoch
         let first_slot_in_epoch = epoch_schedule.get_first_slot_in_epoch(epoch + 1);
         if first_slot_in_epoch < first_available_block {
-            return Err(Error::internal_error());
+            return Err(RpcCustomError::BlockNotAvailable {
+                slot: first_slot_in_epoch,
+            }
+            .into());
         }
 
         let first_confirmed_block_in_epoch = *self
@@ -2257,7 +2263,7 @@ pub mod rpc_full {
             &self,
             meta: Self::Metadata,
             pubkey_str: String,
-            epoch: Epoch,
+            epoch: Option<Epoch>,
         ) -> Result<Option<RpcInflationReward>>;
 
         #[rpc(meta, name = "getInflationGovernor")]
@@ -3217,7 +3223,7 @@ pub mod rpc_full {
             &self,
             meta: Self::Metadata,
             pubkey_str: String,
-            epoch: Epoch,
+            epoch: Option<Epoch>,
         ) -> Result<Option<RpcInflationReward>> {
             debug!(
                 "get_inflation_reward rpc request received: {:?}",
