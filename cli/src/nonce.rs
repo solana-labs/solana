@@ -623,6 +623,7 @@ mod tests {
                 command: CliCommand::AuthorizeNonceAccount {
                     nonce_account: nonce_account_pubkey,
                     nonce_authority: 0,
+                    memo: None,
                     new_authority: Pubkey::default(),
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
@@ -644,6 +645,7 @@ mod tests {
                 command: CliCommand::AuthorizeNonceAccount {
                     nonce_account: read_keypair_file(&keypair_file).unwrap().pubkey(),
                     nonce_authority: 1,
+                    memo: None,
                     new_authority: Pubkey::default(),
                 },
                 signers: vec![
@@ -667,6 +669,7 @@ mod tests {
                     nonce_account: 1,
                     seed: None,
                     nonce_authority: None,
+                    memo: None,
                     amount: SpendAmount::Some(50_000_000_000),
                 },
                 signers: vec![
@@ -692,6 +695,7 @@ mod tests {
                     nonce_account: 1,
                     seed: None,
                     nonce_authority: Some(nonce_authority_keypair.pubkey()),
+                    memo: None,
                     amount: SpendAmount::Some(50_000_000_000),
                 },
                 signers: vec![
@@ -727,6 +731,7 @@ mod tests {
                 command: CliCommand::NewNonce {
                     nonce_account: nonce_account.pubkey(),
                     nonce_authority: 0,
+                    memo: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
@@ -747,6 +752,7 @@ mod tests {
                 command: CliCommand::NewNonce {
                     nonce_account: nonce_account.pubkey(),
                     nonce_authority: 1,
+                    memo: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -791,6 +797,7 @@ mod tests {
                 command: CliCommand::WithdrawFromNonceAccount {
                     nonce_account: read_keypair_file(&keypair_file).unwrap().pubkey(),
                     nonce_authority: 0,
+                    memo: None,
                     destination_account_pubkey: nonce_account_pubkey,
                     lamports: 42_000_000_000
                 },
@@ -819,6 +826,7 @@ mod tests {
                 command: CliCommand::WithdrawFromNonceAccount {
                     nonce_account: read_keypair_file(&keypair_file).unwrap().pubkey(),
                     nonce_authority: 1,
+                    memo: None,
                     destination_account_pubkey: nonce_account_pubkey,
                     lamports: 42_000_000_000
                 },

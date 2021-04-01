@@ -819,7 +819,8 @@ mod tests {
                 command: CliCommand::VoteAuthorize {
                     vote_account_pubkey: pubkey,
                     new_authorized_pubkey: pubkey2,
-                    vote_authorize: VoteAuthorize::Voter
+                    vote_authorize: VoteAuthorize::Voter,
+                    memo: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
@@ -842,7 +843,8 @@ mod tests {
                 command: CliCommand::VoteAuthorize {
                     vote_account_pubkey: pubkey,
                     new_authorized_pubkey: pubkey2,
-                    vote_authorize: VoteAuthorize::Voter
+                    vote_authorize: VoteAuthorize::Voter,
+                    memo: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -876,6 +878,7 @@ mod tests {
                     authorized_voter: None,
                     authorized_withdrawer: None,
                     commission: 10,
+                    memo: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -905,6 +908,7 @@ mod tests {
                     authorized_voter: None,
                     authorized_withdrawer: None,
                     commission: 100,
+                    memo: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -937,7 +941,8 @@ mod tests {
                     identity_account: 2,
                     authorized_voter: Some(authed),
                     authorized_withdrawer: None,
-                    commission: 100
+                    commission: 100,
+                    memo: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -968,7 +973,8 @@ mod tests {
                     identity_account: 2,
                     authorized_voter: None,
                     authorized_withdrawer: Some(authed),
-                    commission: 100
+                    commission: 100,
+                    memo: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -992,6 +998,7 @@ mod tests {
                     vote_account_pubkey: pubkey,
                     new_identity_account: 2,
                     withdraw_authority: 1,
+                    memo: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -1015,6 +1022,7 @@ mod tests {
                     vote_account_pubkey: pubkey,
                     commission: 42,
                     withdraw_authority: 1,
+                    memo: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -1039,6 +1047,7 @@ mod tests {
                     destination_account_pubkey: pubkey,
                     withdraw_authority: 0,
                     withdraw_amount: SpendAmount::Some(42_000_000_000),
+                    memo: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
@@ -1060,6 +1069,7 @@ mod tests {
                     destination_account_pubkey: pubkey,
                     withdraw_authority: 0,
                     withdraw_amount: SpendAmount::All,
+                    memo: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
@@ -1086,6 +1096,7 @@ mod tests {
                     destination_account_pubkey: pubkey,
                     withdraw_authority: 1,
                     withdraw_amount: SpendAmount::Some(42_000_000_000),
+                    memo: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),

@@ -2707,6 +2707,7 @@ mod tests {
             authorized_voter: Some(bob_pubkey),
             authorized_withdrawer: Some(bob_pubkey),
             commission: 0,
+            memo: None,
         };
         config.signers = vec![&keypair, &bob_keypair, &identity_keypair];
         let result = process_command(&config);
@@ -2718,6 +2719,7 @@ mod tests {
             vote_account_pubkey: bob_pubkey,
             new_authorized_pubkey,
             vote_authorize: VoteAuthorize::Voter,
+            memo: None,
         };
         let result = process_command(&config);
         assert!(result.is_ok());
@@ -2728,6 +2730,7 @@ mod tests {
             vote_account_pubkey: bob_pubkey,
             new_identity_account: 2,
             withdraw_authority: 1,
+            memo: None,
         };
         let result = process_command(&config);
         assert!(result.is_ok());
@@ -2904,6 +2907,7 @@ mod tests {
             authorized_voter: Some(bob_pubkey),
             authorized_withdrawer: Some(bob_pubkey),
             commission: 0,
+            memo: None,
         };
         config.signers = vec![&keypair, &bob_keypair, &identity_keypair];
         assert!(process_command(&config).is_err());
@@ -2912,6 +2916,7 @@ mod tests {
             vote_account_pubkey: bob_pubkey,
             new_authorized_pubkey: bob_pubkey,
             vote_authorize: VoteAuthorize::Voter,
+            memo: None,
         };
         assert!(process_command(&config).is_err());
 
@@ -2919,6 +2924,7 @@ mod tests {
             vote_account_pubkey: bob_pubkey,
             new_identity_account: 1,
             withdraw_authority: 1,
+            memo: None,
         };
         assert!(process_command(&config).is_err());
 
