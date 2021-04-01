@@ -24,9 +24,9 @@ use solana_client::{
     pubsub_client::PubsubClient,
     rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClient},
     rpc_config::{
-        RpcAccountInfoConfig, RpcConfirmedBlockConfig, RpcLargestAccountsConfig,
-        RpcLargestAccountsFilter, RpcProgramAccountsConfig, RpcTransactionLogsConfig,
-        RpcTransactionLogsFilter,
+        RpcAccountInfoConfig, RpcConfirmedBlockConfig, RpcConfirmedTransactionConfig,
+        RpcLargestAccountsConfig, RpcLargestAccountsFilter, RpcProgramAccountsConfig,
+        RpcTransactionLogsConfig, RpcTransactionLogsFilter,
     },
     rpc_filter,
     rpc_response::SlotInfo,
@@ -1828,6 +1828,7 @@ pub fn process_transaction_history(
             before,
             until,
             limit: Some(limit),
+            commitment: Some(CommitmentConfig::confirmed()),
         },
     )?;
 
@@ -1844,9 +1845,13 @@ pub fn process_transaction_history(
                     Some(block_time) =>
                         format!("timestamp={} ", unix_timestamp_to_string(block_time)),
                 },
-                match result.err {
-                    None => "Confirmed".to_string(),
-                    Some(err) => format!("Failed: {:?}", err),
+                if let Some(err) = result.err {
+                    format!("Failed: {:?}", err)
+                } else {
+                    match result.confirmation_status {
+                        None => "Finalized".to_string(),
+                        Some(status) => format!("{:?}", status),
+                    }
                 },
                 result.memo.unwrap_or_else(|| "".to_string()),
             );
@@ -1856,9 +1861,13 @@ pub fn process_transaction_history(
 
         if show_transactions {
             if let Ok(signature) = result.signature.parse::<Signature>() {
-                match rpc_client
-                    .get_confirmed_transaction(&signature, UiTransactionEncoding::Base64)
-                {
+                match rpc_client.get_confirmed_transaction_with_config(
+                    &signature,
+                    RpcConfirmedTransactionConfig {
+                        encoding: Some(UiTransactionEncoding::Base64),
+                        commitment: Some(CommitmentConfig::confirmed()),
+                    },
+                ) {
                     Ok(confirmed_transaction) => {
                         println_transaction(
                             &confirmed_transaction
