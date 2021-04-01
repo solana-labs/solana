@@ -364,13 +364,11 @@ pub struct RpcPerfSample {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RpcEpochReward {
+pub struct RpcInflationReward {
     pub epoch: Epoch,
     pub effective_slot: Slot,
     pub amount: u64,       // lamports
     pub post_balance: u64, // lamports
-    pub percent_change: f64,
-    pub apr: Option<f64>,
 }
 
 impl From<ConfirmedTransactionStatusWithSignature> for RpcConfirmedTransactionStatusWithSignature {

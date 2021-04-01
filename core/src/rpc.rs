@@ -55,7 +55,7 @@ use solana_runtime::{
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount},
     account_utils::StateMut,
-    clock::{Epoch, Slot, UnixTimestamp, MAX_RECENT_BLOCKHASHES, SECONDS_PER_DAY},
+    clock::{Epoch, Slot, UnixTimestamp, MAX_RECENT_BLOCKHASHES},
     commitment_config::{CommitmentConfig, CommitmentLevel},
     epoch_info::EpochInfo,
     epoch_schedule::EpochSchedule,
@@ -81,7 +81,6 @@ use spl_token_v2_0::{
 use std::{
     cmp::{max, min},
     collections::{HashMap, HashSet},
-    convert::TryInto,
     net::SocketAddr,
     str::FromStr,
     sync::{
@@ -386,89 +385,55 @@ impl JsonRpcRequestProcessor {
     pub fn get_inflation_reward(
         &self,
         pubkey: &Pubkey,
-        lowest_epoch: Epoch,
-    ) -> Result<Vec<RpcEpochReward>> {
-        let mut all_epoch_rewards = vec![];
-
+        epoch: Epoch,
+    ) -> Result<Option<RpcInflationReward>> {
         let epoch_schedule = self.get_epoch_schedule();
-        let slot = self.get_slot(Some(CommitmentConfig::finalized()));
         let first_available_block = self.get_first_available_block();
 
-        let mut epoch = epoch_schedule.get_epoch_and_slot_index(slot).0;
-        let mut epoch_info: Option<(Slot, UnixTimestamp, solana_transaction_status::Rewards)> =
-            None;
-
-        while epoch > lowest_epoch {
-            let first_slot_in_epoch = epoch_schedule.get_first_slot_in_epoch(epoch);
-            if first_slot_in_epoch < first_available_block {
-                // RPC node is out of history data
-                break;
-            }
-
-            let first_confirmed_block_in_epoch = *self
-                .get_confirmed_blocks_with_limit(first_slot_in_epoch, 1, None)?
-                .get(0)
-                .ok_or(RpcCustomError::BlockNotAvailable {
-                    slot: first_slot_in_epoch,
-                })?;
-
-            let first_confirmed_block = if let Ok(first_confirmed_block) =
-                self.get_confirmed_block_at_slot(first_confirmed_block_in_epoch, None)
-            {
-                first_confirmed_block
-            } else {
-                break; // doesn't have this block
-            };
-
-            let epoch_start_time = if let Some(block_time) = first_confirmed_block.block_time {
-                block_time
-            } else {
-                break;
-            };
-
-            // Rewards for the previous epoch are found in the first confirmed block of the current epoch
-            let previous_epoch_rewards = first_confirmed_block.rewards;
-
-            if let Some((effective_slot, epoch_end_time, epoch_rewards)) = epoch_info {
-                let epoch_duration = if epoch_end_time > epoch_start_time {
-                    Some((epoch_end_time - epoch_start_time) as f64)
-                } else {
-                    None
-                };
-
-                if let Some(reward) = epoch_rewards
-                    .into_iter()
-                    .find(|reward| reward.pubkey == pubkey.to_string())
-                {
-                    if reward.post_balance > reward.lamports.try_into().unwrap() {
-                        let rate_change = reward.lamports.abs() as f64
-                            / (reward.post_balance as f64 - reward.lamports as f64);
-
-                        let apr = epoch_duration.map(|epoch_duration| {
-                            let epochs_per_year = (SECONDS_PER_DAY * 356) as f64 / epoch_duration;
-                            rate_change * epochs_per_year
-                        });
-
-                        all_epoch_rewards.push(RpcEpochReward {
-                            epoch,
-                            effective_slot,
-                            amount: reward.lamports.abs() as u64,
-                            post_balance: reward.post_balance,
-                            percent_change: rate_change * 100.0,
-                            apr: apr.map(|r| r * 100.0),
-                        });
-                    }
-                }
-            }
-            epoch -= 1;
-            epoch_info = Some((
-                first_confirmed_block_in_epoch,
-                epoch_start_time,
-                previous_epoch_rewards,
-            ));
+        // Rewards for this epoch are found in the first confirmed block of the next epoch
+        let first_slot_in_epoch = epoch_schedule.get_first_slot_in_epoch(epoch + 1);
+        if first_slot_in_epoch < first_available_block {
+            return Err(Error::internal_error());
         }
 
-        Ok(all_epoch_rewards)
+        let first_confirmed_block_in_epoch = *self
+            .get_confirmed_blocks_with_limit(
+                first_slot_in_epoch,
+                1,
+                Some(CommitmentConfig::finalized()),
+            )?
+            .get(0)
+            .ok_or(RpcCustomError::BlockNotAvailable {
+                slot: first_slot_in_epoch,
+            })?;
+
+        let first_confirmed_block = if let Ok(first_confirmed_block) = self
+            .get_confirmed_block_at_slot(
+                first_confirmed_block_in_epoch,
+                Some(CommitmentConfig::finalized()),
+            ) {
+            first_confirmed_block
+        } else {
+            return Err(RpcCustomError::BlockNotAvailable {
+                slot: first_confirmed_block_in_epoch,
+            }
+            .into());
+        };
+
+        if let Some(reward) = first_confirmed_block
+            .rewards
+            .into_iter()
+            .find(|reward| reward.pubkey == pubkey.to_string())
+        {
+            Ok(Some(RpcInflationReward {
+                epoch,
+                effective_slot: first_confirmed_block_in_epoch,
+                amount: reward.lamports.abs() as u64,
+                post_balance: reward.post_balance,
+            }))
+        } else {
+            Ok(None)
+        }
     }
 
     pub fn get_inflation_governor(
@@ -2292,8 +2257,8 @@ pub mod rpc_full {
             &self,
             meta: Self::Metadata,
             pubkey_str: String,
-            lowest_epoch: Epoch,
-        ) -> Result<Vec<RpcEpochReward>>;
+            epoch: Epoch,
+        ) -> Result<Option<RpcInflationReward>>;
 
         #[rpc(meta, name = "getInflationGovernor")]
         fn get_inflation_governor(
@@ -3252,14 +3217,14 @@ pub mod rpc_full {
             &self,
             meta: Self::Metadata,
             pubkey_str: String,
-            lowest_epoch: Epoch,
-        ) -> Result<Vec<RpcEpochReward>> {
+            epoch: Epoch,
+        ) -> Result<Option<RpcInflationReward>> {
             debug!(
                 "get_inflation_reward rpc request received: {:?}",
                 pubkey_str
             );
             let pubkey = verify_pubkey(pubkey_str)?;
-            meta.get_inflation_reward(&pubkey, lowest_epoch)
+            meta.get_inflation_reward(&pubkey, epoch)
         }
 
         fn get_token_account_balance(
