@@ -406,7 +406,7 @@ impl JsonRpcRequestProcessor {
             } else {
                 return Err(RpcCustomError::BlockCleanedUp {
                     slot: first_slot_in_epoch,
-                    first_available_block: first_available_block,
+                    first_available_block,
                 }
                 .into());
             }
@@ -426,9 +426,7 @@ impl JsonRpcRequestProcessor {
         let first_confirmed_block = if let Ok(Some(first_confirmed_block)) = self
             .get_confirmed_block(
                 first_confirmed_block_in_epoch,
-                Some(RpcEncodingConfigWrapper::Current(Some(
-                    RpcConfirmedBlockConfig::rewards_only(),
-                ))),
+                Some(RpcConfirmedBlockConfig::rewards_only().into()),
             ) {
             first_confirmed_block
         } else {

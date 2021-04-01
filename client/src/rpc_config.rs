@@ -161,6 +161,12 @@ impl RpcConfirmedBlockConfig {
     }
 }
 
+impl From<RpcConfirmedBlockConfig> for RpcEncodingConfigWrapper<RpcConfirmedBlockConfig> {
+    fn from(config: RpcConfirmedBlockConfig) -> Self {
+        RpcEncodingConfigWrapper::Current(Some(config))
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcConfirmedTransactionConfig {
