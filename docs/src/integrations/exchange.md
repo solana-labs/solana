@@ -714,4 +714,4 @@ Be sure to test your complete workflow on Solana devnet and testnet
 [clusters](../clusters.md) before moving to production on mainnet-beta. Devnet
 is the most open and flexible, and ideal for initial development, while testnet
 offers more realistic cluster configuration. Both devnet and testnet support a faucet,
-run `solana airdrop 10` to obtain some devnet or testnet SOL for developement and testing.
+run `solana airdrop 1` to obtain some devnet or testnet SOL for developement and testing.
