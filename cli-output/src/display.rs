@@ -5,10 +5,10 @@ use {
     indicatif::{ProgressBar, ProgressStyle},
     solana_sdk::{
         clock::UnixTimestamp, hash::Hash, message::Message, native_token::lamports_to_sol,
-        program_utils::limited_deserialize, transaction::Transaction,
+        program_utils::limited_deserialize, pubkey::Pubkey, transaction::Transaction,
     },
     solana_transaction_status::UiTransactionStatusMeta,
-    std::{collections::HashMap, fmt, io},
+    std::{collections::HashMap, fmt, io, str::FromStr},
 };
 
 #[derive(Clone, Debug)]
@@ -26,6 +26,19 @@ impl Default for BuildBalanceMessageConfig {
             trim_trailing_zeros: true,
         }
     }
+}
+
+fn is_memo_program(k: &Pubkey) -> bool {
+    let memo_v1 = Pubkey::from_str("Memo1UhkJRfHyvLMcVucJwxXeuD728EqVDDwQDxFMNo")
+        .unwrap()
+        .to_bytes();
+    let memo_v2 = Pubkey::from_str("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr")
+        .unwrap()
+        .to_bytes();
+
+    let k = k.to_bytes();
+
+    (k == memo_v1) || (k == memo_v2)
 }
 
 pub fn build_balance_message_with_config(
@@ -251,6 +264,11 @@ pub fn write_transaction<W: io::Write>(
             >(&instruction.data)
             {
                 writeln!(w, "{}  {:?}", prefix, system_instruction)?;
+                raw = false;
+            }
+        } else if is_memo_program(&program_pubkey) {
+            if let Ok(s) = std::str::from_utf8(&instruction.data) {
+                writeln!(w, "{}  Data: \"{}\"", prefix, s)?;
                 raw = false;
             }
         }
