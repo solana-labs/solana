@@ -109,6 +109,8 @@ pub struct RpcGetConfirmedSignaturesForAddress2Config {
     pub before: Option<String>, // Signature as base-58 string
     pub until: Option<String>,  // Signature as base-58 string
     pub limit: Option<usize>,
+    #[serde(flatten)]
+    pub commitment: Option<CommitmentConfig>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
