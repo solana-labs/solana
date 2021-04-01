@@ -3359,6 +3359,7 @@ dependencies = [
  "solana-sdk",
  "solana-stake-program",
  "solana-vote-program",
+ "spl-associated-token-account",
  "spl-memo 2.0.1",
  "spl-memo 3.0.0",
  "spl-token",
@@ -3421,6 +3422,16 @@ name = "spin"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
+
+[[package]]
+name = "spl-associated-token-account"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4adc47eebe5d2b662cbaaba1843719c28a67e5ec5d0460bc3ca60900a51f74e2"
+dependencies = [
+ "solana-program 1.5.8",
+ "spl-token",
+]
 
 [[package]]
 name = "spl-memo"

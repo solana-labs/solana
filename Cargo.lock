@@ -5377,6 +5377,7 @@ dependencies = [
  "solana-sdk",
  "solana-stake-program",
  "solana-vote-program",
+ "spl-associated-token-account",
  "spl-memo 2.0.1",
  "spl-memo 3.0.0",
  "spl-token",
