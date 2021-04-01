@@ -1,6 +1,6 @@
 [package]
 name = "solana-faucet"
-version = "1.5.18"
+version = "1.5.19"
 description = "Solana Faucet"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -16,12 +16,12 @@ clap = "2.33"
 log = "0.4.11"
 serde = "1.0.118"
 serde_derive = "1.0.103"
-solana-clap-utils = { path = "../clap-utils", version = "=1.5.18" }
-solana-cli-config = { path = "../cli-config", version = "=1.5.18" }
-solana-logger = { path = "../logger", version = "=1.5.18" }
-solana-metrics = { path = "../metrics", version = "=1.5.18" }
-solana-sdk = { path = "../sdk", version = "=1.5.18" }
-solana-version = { path = "../version", version = "=1.5.18" }
+solana-clap-utils = { path = "../clap-utils", version = "=1.5.19" }
+solana-cli-config = { path = "../cli-config", version = "=1.5.19" }
+solana-logger = { path = "../logger", version = "=1.5.19" }
+solana-metrics = { path = "../metrics", version = "=1.5.19" }
+solana-sdk = { path = "../sdk", version = "=1.5.19" }
+solana-version = { path = "../version", version = "=1.5.19" }
 tokio = { version = "0.3.5", features = ["full"] }
 
 [lib]
