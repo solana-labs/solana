@@ -44,6 +44,8 @@ macro_rules! socketaddr {
     }};
 }
 
+const ERROR_RESPONSE: [u8; 2] = 0u16.to_le_bytes();
+
 pub const TIME_SLICE: u64 = 60;
 pub const REQUEST_CAP: u64 = solana_sdk::native_token::LAMPORTS_PER_SOL * 10_000_000;
 pub const FAUCET_PORT: u16 = 9900;
@@ -338,6 +340,17 @@ async fn process(
     let mut request = vec![0u8; serialized_size(&FaucetRequest::default()).unwrap() as usize];
     while stream.read_exact(&mut request).await.is_ok() {
         trace!("{:?}", request);
+
+        match stream.peer_addr() {
+            Err(e) => {
+                info!("{:?}", e.into_inner());
+                stream.write_all(&ERROR_RESPONSE).await?;
+                break;
+            }
+            Ok(peer_addr) => {
+                info!("Request IP: {:?}", peer_addr.ip());
+            }
+        }
 
         let response = match faucet.lock().unwrap().process_faucet_request(&request) {
             Ok(response_bytes) => {
