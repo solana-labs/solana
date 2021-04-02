@@ -141,7 +141,7 @@ pub struct BpfComputeBudget {
     pub max_cpi_instruction_size: usize,
     /// Number of account data bytes per conpute unit charged during a cross-program invocation
     pub cpi_bytes_per_unit: u64,
-    /// Base number of compute units consumed to to get a sysvar
+    /// Base number of compute units consumed to get a sysvar
     pub sysvar_base_cost: u64,
 }
 impl Default for BpfComputeBudget {

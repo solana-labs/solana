@@ -250,11 +250,6 @@ impl ComputeMeter for ThisComputeMeter {
         self.remaining
     }
 }
-#[derive(Default)]
-pub struct SysvarsHolder {
-    pub clock: Option<Clock>,
-    pub rent: Option<Rent>,
-}
 pub struct ThisInvokeContext<'a> {
     program_ids: Vec<Pubkey>,
     rent: Rent,
