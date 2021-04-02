@@ -44,6 +44,8 @@ macro_rules! socketaddr {
     }};
 }
 
+const ERROR_RESPONSE: [u8; 2] = 0u16.to_le_bytes();
+
 pub const TIME_SLICE: u64 = 60;
 pub const REQUEST_CAP: u64 = solana_sdk::native_token::LAMPORTS_PER_SOL * 10_000_000;
 pub const FAUCET_PORT: u16 = 9900;
@@ -349,14 +351,26 @@ async fn process(
     while stream.read_exact(&mut request).await.is_ok() {
         trace!("{:?}", request);
 
-        let response = match faucet.lock().unwrap().process_faucet_request(&request) {
-            Ok(response_bytes) => {
-                trace!("Airdrop response_bytes: {:?}", response_bytes);
-                response_bytes
-            }
-            Err(e) => {
-                info!("Error in request: {:?}", e);
-                0u16.to_le_bytes().to_vec()
+        let response = {
+            match stream.peer_addr() {
+                Err(e) => {
+                    info!("{:?}", e.into_inner());
+                    ERROR_RESPONSE.to_vec()
+                }
+                Ok(peer_addr) => {
+                    info!("Request IP: {:?}", peer_addr.ip());
+
+                    match faucet.lock().unwrap().process_faucet_request(&request) {
+                        Ok(response_bytes) => {
+                            trace!("Airdrop response_bytes: {:?}", response_bytes);
+                            response_bytes
+                        }
+                        Err(e) => {
+                            info!("Error in request: {:?}", e);
+                            ERROR_RESPONSE.to_vec()
+                        }
+                    }
+                }
             }
         };
         stream.write_all(&response).await?;
