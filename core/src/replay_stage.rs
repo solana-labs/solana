@@ -934,7 +934,6 @@ impl ReplayStage {
         for (duplicate_slot, bank_hash) in duplicate_slots.into_iter().zip(bank_hashes.into_iter())
         {
             // WindowService should only send the signal once per slot
-
             check_slot_agrees_with_cluster(
                 duplicate_slot,
                 root_slot,
