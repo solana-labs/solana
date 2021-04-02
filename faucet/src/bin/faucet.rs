@@ -37,7 +37,7 @@ async fn main() {
                 .long("slice")
                 .value_name("SECS")
                 .takes_value(true)
-                .help("Time slice over which to limit requests to faucet"),
+                .help("Time slice over which to limit requests to faucet by SOL"),
         )
         .arg(
             Arg::with_name("per_time_cap")
@@ -54,6 +54,13 @@ async fn main() {
                 .takes_value(true)
                 .help("Request limit for a single request, in SOL"),
         )
+        .arg(
+            Arg::with_name("ip_rate_limit")
+                .long("ip-rate-limit")
+                .value_name("NUM")
+                .takes_value(true)
+                .help("Request count limit for a single IP, per second"),
+        )
         .get_matches();
 
     let faucet_keypair = read_keypair_file(matches.value_of("keypair").unwrap())
@@ -62,6 +69,7 @@ async fn main() {
     let time_slice = value_of(&matches, "slice");
     let per_time_cap = lamports_of_sol(&matches, "per_time_cap");
     let per_request_cap = lamports_of_sol(&matches, "per_request_cap");
+    let ip_rate_limit = value_of(&matches, "ip_rate_limit");
 
     let faucet_addr = socketaddr!(0, FAUCET_PORT);
 
@@ -70,6 +78,7 @@ async fn main() {
         time_slice,
         per_time_cap,
         per_request_cap,
+        ip_rate_limit,
     )));
 
     let faucet1 = faucet.clone();

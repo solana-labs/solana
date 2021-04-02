@@ -7,7 +7,9 @@
 use {
     bincode::{deserialize, serialize, serialized_size},
     byteorder::{ByteOrder, LittleEndian},
+    governor::{clock::MonotonicClock, state::keyed::DefaultKeyedStateStore, Quota, RateLimiter},
     log::*,
+    nonzero_ext::nonzero,
     serde_derive::{Deserialize, Serialize},
     solana_metrics::datapoint_info,
     solana_sdk::{
@@ -22,9 +24,10 @@ use {
     std::{
         io::{self, Error, ErrorKind, Read, Write},
         net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream},
+        num::NonZeroU32,
         sync::{mpsc::Sender, Arc, Mutex},
         thread,
-        time::Duration,
+        time::{Duration, Instant},
     },
     tokio::{
         io::{AsyncReadExt, AsyncWriteExt},
@@ -45,6 +48,7 @@ macro_rules! socketaddr {
 }
 
 const ERROR_RESPONSE: [u8; 2] = 0u16.to_le_bytes();
+const IP_REQUEST_BURST_LIMIT: u32 = 1;
 
 pub const TIME_SLICE: u64 = 60;
 pub const REQUEST_CAP: u64 = solana_sdk::native_token::LAMPORTS_PER_SOL * 10_000_000;
@@ -70,12 +74,15 @@ impl Default for FaucetRequest {
     }
 }
 
+type KeyedRateLimiter = RateLimiter<IpAddr, DefaultKeyedStateStore<IpAddr>, MonotonicClock>;
+
 pub struct Faucet {
     faucet_keypair: Keypair,
     pub time_slice: Duration,
     per_time_cap: u64,
     per_request_cap: Option<u64>,
     pub request_current: u64,
+    per_ip_rate_limiter: Option<KeyedRateLimiter>,
 }
 
 impl Faucet {
@@ -84,6 +91,7 @@ impl Faucet {
         time_input: Option<u64>,
         per_time_cap: Option<u64>,
         per_request_cap: Option<u64>,
+        ip_rate_limit: Option<NonZeroU32>,
     ) -> Faucet {
         let time_slice = Duration::new(time_input.unwrap_or(TIME_SLICE), 0);
         let per_time_cap = per_time_cap.unwrap_or(REQUEST_CAP);
@@ -93,6 +101,13 @@ impl Faucet {
             per_time_cap,
             per_request_cap,
             request_current: 0,
+            per_ip_rate_limiter: ip_rate_limit.map(|ip_requests_per_sec| {
+                RateLimiter::dashmap_with_clock(
+                    Quota::per_second(ip_requests_per_sec)
+                        .allow_burst(nonzero!(IP_REQUEST_BURST_LIMIT)),
+                    &MonotonicClock::default(),
+                )
+            }),
         }
     }
 
@@ -188,6 +203,22 @@ impl Faucet {
             }
         }
     }
+
+    fn check_ip_limit(&self, peer_ip: &IpAddr) -> Result<(), io::Error> {
+        if let Some(rate_limiter) = &self.per_ip_rate_limiter {
+            return rate_limiter.check_key(peer_ip).map_err(|e| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!(
+                        "IP rate limit reached for {:?}, expected wait secs: {:?}",
+                        peer_ip,
+                        e.wait_time_from(Instant::now()).as_secs()
+                    ),
+                )
+            });
+        };
+        Ok(())
+    }
 }
 
 impl Drop for Faucet {
@@ -270,6 +301,7 @@ pub fn run_local_faucet_with_port(
             None,
             per_time_cap,
             None,
+            None,
         )));
         let runtime = Runtime::new().unwrap();
         runtime.block_on(run_faucet(faucet, faucet_addr, Some(sender)));
@@ -341,25 +373,26 @@ async fn process(
     while stream.read_exact(&mut request).await.is_ok() {
         trace!("{:?}", request);
 
-        match stream.peer_addr() {
-            Err(e) => {
-                info!("{:?}", e.into_inner());
-                stream.write_all(&ERROR_RESPONSE).await?;
-                break;
-            }
-            Ok(peer_addr) => {
-                info!("Request IP: {:?}", peer_addr.ip());
-            }
-        }
-
-        let response = match faucet.lock().unwrap().process_faucet_request(&request) {
-            Ok(response_bytes) => {
-                trace!("Airdrop response_bytes: {:?}", response_bytes);
-                response_bytes
-            }
-            Err(e) => {
-                info!("Error in request: {:?}", e);
-                0u16.to_le_bytes().to_vec()
+        let response = {
+            let mut faucet = faucet.lock().unwrap();
+            if let Err(err) = stream.peer_addr().and_then(|peer_addr| {
+                faucet.check_ip_limit(&peer_addr.ip()).map(|_| {
+                    info!("Request IP: {:?}", peer_addr.ip());
+                })
+            }) {
+                info!("{:?}", err.into_inner());
+                ERROR_RESPONSE.to_vec()
+            } else {
+                match faucet.process_faucet_request(&request) {
+                    Ok(response_bytes) => {
+                        trace!("Airdrop response_bytes: {:?}", response_bytes);
+                        response_bytes
+                    }
+                    Err(e) => {
+                        info!("Error in request: {:?}", e);
+                        ERROR_RESPONSE.to_vec()
+                    }
+                }
             }
         };
         stream.write_all(&response).await?;
@@ -377,7 +410,7 @@ mod tests {
     #[test]
     fn test_check_time_request_limit() {
         let keypair = Keypair::new();
-        let mut faucet = Faucet::new(keypair, None, Some(3), None);
+        let mut faucet = Faucet::new(keypair, None, Some(3), None, None);
         assert!(faucet.check_time_request_limit(1));
         faucet.request_current = 3;
         assert!(!faucet.check_time_request_limit(1));
@@ -388,7 +421,7 @@ mod tests {
     #[test]
     fn test_clear_request_count() {
         let keypair = Keypair::new();
-        let mut faucet = Faucet::new(keypair, None, None, None);
+        let mut faucet = Faucet::new(keypair, None, None, None, None);
         faucet.request_current += 256;
         assert_eq!(faucet.request_current, 256);
         faucet.clear_request_count();
@@ -400,10 +433,23 @@ mod tests {
         let keypair = Keypair::new();
         let time_slice: Option<u64> = None;
         let request_cap: Option<u64> = None;
-        let faucet = Faucet::new(keypair, time_slice, request_cap, Some(100));
+        let faucet = Faucet::new(keypair, time_slice, request_cap, Some(100), None);
         assert_eq!(faucet.time_slice, Duration::new(TIME_SLICE, 0));
         assert_eq!(faucet.per_time_cap, REQUEST_CAP);
         assert_eq!(faucet.per_request_cap, Some(100));
+    }
+
+    #[test]
+    fn test_faucet_check_ip_limit() {
+        let keypair = Keypair::new();
+        let faucet = Faucet::new(keypair, None, None, None, Some(NonZeroU32::new(1).unwrap()));
+        let ip = socketaddr!([203, 0, 113, 1], 1234).ip();
+        for _ in 0..IP_REQUEST_BURST_LIMIT {
+            assert!(faucet.check_ip_limit(&ip).is_ok());
+        }
+        for _ in IP_REQUEST_BURST_LIMIT..IP_REQUEST_BURST_LIMIT + 2 {
+            assert!(faucet.check_ip_limit(&ip).is_err());
+        }
     }
 
     #[test]
@@ -418,7 +464,7 @@ mod tests {
 
         let mint = Keypair::new();
         let mint_pubkey = mint.pubkey();
-        let mut faucet = Faucet::new(mint, None, None, None);
+        let mut faucet = Faucet::new(mint, None, None, None, None);
 
         let tx = faucet.build_airdrop_transaction(request).unwrap();
         let message = tx.message();
@@ -436,13 +482,13 @@ mod tests {
 
         // Test per-time request cap
         let mint = Keypair::new();
-        faucet = Faucet::new(mint, None, Some(1), None);
+        faucet = Faucet::new(mint, None, Some(1), None, None);
         let tx = faucet.build_airdrop_transaction(request);
         assert!(tx.is_err());
 
         // Test per-request cap
         let mint = Keypair::new();
-        faucet = Faucet::new(mint, None, None, Some(1));
+        faucet = Faucet::new(mint, None, None, Some(1), None);
         let tx = faucet.build_airdrop_transaction(request);
         assert!(tx.is_err());
     }
@@ -468,7 +514,7 @@ mod tests {
         LittleEndian::write_u16(&mut expected_vec_with_length, expected_bytes.len() as u16);
         expected_vec_with_length.extend_from_slice(&expected_bytes);
 
-        let mut faucet = Faucet::new(keypair, None, None, None);
+        let mut faucet = Faucet::new(keypair, None, None, None, None);
         let response = faucet.process_faucet_request(&req);
         let response_vec = response.unwrap().to_vec();
         assert_eq!(expected_vec_with_length, response_vec);
