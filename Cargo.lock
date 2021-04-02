@@ -4984,12 +4984,7 @@ dependencies = [
  "solana-banks-client",
  "solana-banks-server",
  "solana-bpf-loader-program",
-<<<<<<< HEAD
  "solana-logger 1.6.3",
- "solana-program 1.6.3",
-=======
- "solana-logger 1.7.0",
->>>>>>> dee655df3... Cleanup use (#16327)
  "solana-runtime",
  "solana-sdk",
  "solana-stake-program",
