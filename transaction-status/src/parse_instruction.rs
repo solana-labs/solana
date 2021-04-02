@@ -1,4 +1,5 @@
 use crate::{
+    parse_associated_token::{parse_associated_token, spl_associated_token_id_v1_0},
     parse_bpf_loader::{parse_bpf_loader, parse_bpf_upgradeable_loader},
     parse_stake::parse_stake,
     parse_system::parse_system,
@@ -16,6 +17,7 @@ use std::{
 use thiserror::Error;
 
 lazy_static! {
+    static ref ASSOCIATED_TOKEN_PROGRAM_ID: Pubkey = spl_associated_token_id_v1_0();
     static ref BPF_LOADER_PROGRAM_ID: Pubkey = solana_sdk::bpf_loader::id();
     static ref BPF_UPGRADEABLE_LOADER_PROGRAM_ID: Pubkey = solana_sdk::bpf_loader_upgradeable::id();
     static ref MEMO_V1_PROGRAM_ID: Pubkey =
@@ -28,6 +30,10 @@ lazy_static! {
     static ref VOTE_PROGRAM_ID: Pubkey = solana_vote_program::id();
     static ref PARSABLE_PROGRAM_IDS: HashMap<Pubkey, ParsableProgram> = {
         let mut m = HashMap::new();
+        m.insert(
+            *ASSOCIATED_TOKEN_PROGRAM_ID,
+            ParsableProgram::SplAssociatedTokenAccount,
+        );
         m.insert(*MEMO_V1_PROGRAM_ID, ParsableProgram::SplMemo);
         m.insert(*MEMO_V3_PROGRAM_ID, ParsableProgram::SplMemo);
         m.insert(*TOKEN_PROGRAM_ID, ParsableProgram::SplToken);
@@ -78,6 +84,7 @@ pub struct ParsedInstructionEnum {
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum ParsableProgram {
+    SplAssociatedTokenAccount,
     SplMemo,
     SplToken,
     BpfLoader,
@@ -96,6 +103,9 @@ pub fn parse(
         .get(program_id)
         .ok_or(ParseInstructionError::ProgramNotParsable)?;
     let parsed_json = match program_name {
+        ParsableProgram::SplAssociatedTokenAccount => {
+            serde_json::to_value(parse_associated_token(instruction, account_keys)?)?
+        }
         ParsableProgram::SplMemo => parse_memo(instruction),
         ParsableProgram::SplToken => serde_json::to_value(parse_token(instruction, account_keys)?)?,
         ParsableProgram::BpfLoader => {
