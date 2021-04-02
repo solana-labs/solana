@@ -1,9 +1,12 @@
-use solana_sdk::{
-    hash::Hash, pubkey::Pubkey, signature::Keypair, system_transaction, transaction::Transaction,
-};
-use std::{
-    io::{Error, ErrorKind},
-    net::SocketAddr,
+use {
+    solana_sdk::{
+        hash::Hash, pubkey::Pubkey, signature::Keypair, system_transaction,
+        transaction::Transaction,
+    },
+    std::{
+        io::{Error, ErrorKind},
+        net::SocketAddr,
+    },
 };
 
 pub fn request_airdrop_transaction(

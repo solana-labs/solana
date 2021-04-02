@@ -1,14 +1,16 @@
-use clap::{crate_description, crate_name, App, Arg};
-use solana_clap_utils::input_parsers::{lamports_of_sol, value_of};
-use solana_faucet::{
-    faucet::{run_faucet, Faucet, FAUCET_PORT},
-    socketaddr,
-};
-use solana_sdk::signature::read_keypair_file;
-use std::{
-    net::{Ipv4Addr, SocketAddr},
-    sync::{Arc, Mutex},
-    thread,
+use {
+    clap::{crate_description, crate_name, App, Arg},
+    solana_clap_utils::input_parsers::{lamports_of_sol, value_of},
+    solana_faucet::{
+        faucet::{run_faucet, Faucet, FAUCET_PORT},
+        socketaddr,
+    },
+    solana_sdk::signature::read_keypair_file,
+    std::{
+        net::{Ipv4Addr, SocketAddr},
+        sync::{Arc, Mutex},
+        thread,
+    },
 };
 
 #[tokio::main]
