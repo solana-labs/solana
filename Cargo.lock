@@ -4985,7 +4985,6 @@ dependencies = [
  "solana-banks-server",
  "solana-bpf-loader-program",
  "solana-logger 1.7.0",
- "solana-program 1.7.0",
  "solana-runtime",
  "solana-sdk",
  "solana-stake-program",

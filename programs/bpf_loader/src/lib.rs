@@ -878,11 +878,7 @@ impl Executor for BpfExecutor {
 mod tests {
     use super::*;
     use rand::Rng;
-    use solana_runtime::{
-        bank::Bank,
-        bank_client::BankClient,
-        message_processor::{Executors, ThisInvokeContext},
-    };
+    use solana_runtime::{bank::Bank, bank_client::BankClient};
     use solana_sdk::{
         account::{
             create_account_shared_data_for_test as create_account_for_test, AccountSharedData,
@@ -895,7 +891,7 @@ mod tests {
         instruction::Instruction,
         instruction::{AccountMeta, InstructionError},
         message::Message,
-        process_instruction::{BpfComputeBudget, MockInvokeContext},
+        process_instruction::{MockComputeMeter, MockInvokeContext},
         pubkey::Pubkey,
         rent::Rent,
         signature::{Keypair, Signer},
@@ -1128,33 +1124,11 @@ mod tests {
 
         // Case: limited budget
         let program_id = Pubkey::default();
-        let mut invoke_context = ThisInvokeContext::new(
-            &program_id,
-            Rent::default(),
-            vec![],
-            &[],
-            &[],
-            &[],
-            None,
-            BpfComputeBudget {
-                max_units: 1,
-                log_units: 100,
-                log_64_units: 100,
-                create_program_address_units: 1500,
-                invoke_units: 1000,
-                max_invoke_depth: 2,
-                sha256_base_cost: 85,
-                sha256_byte_cost: 1,
-                max_call_depth: 20,
-                stack_frame_size: 4096,
-                log_pubkey_units: 100,
-                max_cpi_instruction_size: usize::MAX,
-                cpi_bytes_per_unit: 250,
-            },
-            Rc::new(RefCell::new(Executors::default())),
-            None,
-            Arc::new(FeatureSet::default()),
-        );
+        let mut invoke_context = MockInvokeContext {
+            key: program_id,
+            compute_meter: MockComputeMeter::default(),
+            ..MockInvokeContext::default()
+        };
         assert_eq!(
             Err(InstructionError::ProgramFailedToComplete),
             process_instruction(&program_key, &keyed_accounts, &[], &mut invoke_context)

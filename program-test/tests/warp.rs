@@ -1,6 +1,7 @@
 #![allow(clippy::integer_arithmetic)]
 use {
-    solana_program::{
+    solana_program_test::{processor, ProgramTest, ProgramTestError},
+    solana_sdk::{
         account_info::{next_account_info, AccountInfo},
         clock::Clock,
         entrypoint::ProgramResult,
@@ -8,12 +9,9 @@ use {
         program_error::ProgramError,
         pubkey::Pubkey,
         rent::Rent,
+        signature::{Keypair, Signer},
         system_instruction, system_program,
         sysvar::{clock, Sysvar},
-    },
-    solana_program_test::{processor, ProgramTest, ProgramTestError},
-    solana_sdk::{
-        signature::{Keypair, Signer},
         transaction::{Transaction, TransactionError},
     },
     solana_stake_program::{

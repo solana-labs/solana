@@ -7,20 +7,6 @@ use {
     log::*,
     solana_banks_client::start_client,
     solana_banks_server::banks_server::start_local_server,
-    solana_program::{
-        account_info::AccountInfo,
-        entrypoint::ProgramResult,
-        fee_calculator::{FeeCalculator, FeeRateGovernor},
-        hash::Hash,
-        instruction::Instruction,
-        instruction::InstructionError,
-        message::Message,
-        native_token::sol_to_lamports,
-        program_error::ProgramError,
-        program_stubs,
-        pubkey::Pubkey,
-        rent::Rent,
-    },
     solana_runtime::{
         bank::{Bank, Builtin, ExecuteTimings},
         bank_forks::BankForks,
@@ -29,13 +15,24 @@ use {
     },
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount},
+        account_info::AccountInfo,
         clock::Slot,
+        entrypoint::ProgramResult,
         feature_set::demote_sysvar_write_locks,
+        fee_calculator::{FeeCalculator, FeeRateGovernor},
         genesis_config::{ClusterType, GenesisConfig},
+        hash::Hash,
+        instruction::Instruction,
+        instruction::InstructionError,
         keyed_account::KeyedAccount,
+        message::Message,
+        native_token::sol_to_lamports,
         process_instruction::{
             stable_log, BpfComputeBudget, InvokeContext, ProcessInstructionWithContext,
         },
+        program_error::ProgramError,
+        pubkey::Pubkey,
+        rent::Rent,
         signature::{Keypair, Signer},
     },
     solana_vote_program::vote_state::{VoteState, VoteStateVersions},
@@ -94,7 +91,7 @@ fn get_invoke_context<'a>() -> &'a mut dyn InvokeContext {
 }
 
 pub fn builtin_process_instruction(
-    process_instruction: solana_program::entrypoint::ProcessInstruction,
+    process_instruction: solana_sdk::entrypoint::ProcessInstruction,
     program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
     input: &[u8],
@@ -185,7 +182,7 @@ macro_rules! processor {
 }
 
 struct SyscallStubs {}
-impl program_stubs::SyscallStubs for SyscallStubs {
+impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
     fn sol_log(&self, message: &str) {
         let invoke_context = get_invoke_context();
         let logger = invoke_context.get_logger();
@@ -529,7 +526,7 @@ impl ProgramTest {
         program_id: Pubkey,
         process_instruction: Option<ProcessInstructionWithContext>,
     ) {
-        let loader = solana_program::bpf_loader::id();
+        let loader = solana_sdk::bpf_loader::id();
         let program_file = find_file(&format!("{}.so", program_name));
 
         if process_instruction.is_none() && program_file.is_none() {
@@ -604,7 +601,7 @@ impl ProgramTest {
             static ONCE: Once = Once::new();
 
             ONCE.call_once(|| {
-                program_stubs::set_syscall_stubs(Box::new(SyscallStubs {}));
+                solana_sdk::program_stubs::set_syscall_stubs(Box::new(SyscallStubs {}));
             });
         }
 
