@@ -384,9 +384,9 @@ impl JsonRpcRequestProcessor {
 
     pub fn get_inflation_reward(
         &self,
-        pubkey: &Pubkey,
+        pubkeys: Vec<Pubkey>,
         epoch: Option<Epoch>,
-    ) -> Result<Option<RpcInflationReward>> {
+    ) -> Result<Vec<RpcInflationReward>> {
         let commitment = Some(CommitmentConfig::finalized());
         let epoch_schedule = self.get_epoch_schedule();
         let first_available_block = self.get_first_available_block();
@@ -433,21 +433,23 @@ impl JsonRpcRequestProcessor {
             .into());
         };
 
-        if let Some(reward) = first_confirmed_block
+        let rewards = first_confirmed_block
             .rewards
             .unwrap_or_default()
             .into_iter()
-            .find(|reward| reward.pubkey == pubkey.to_string())
-        {
-            Ok(Some(RpcInflationReward {
+            .filter(|reward| {
+                pubkeys.contains(&Pubkey::from_str(&reward.pubkey).unwrap_or_default())
+            })
+            .map(|reward| RpcInflationReward {
+                address: reward.pubkey,
                 epoch,
                 effective_slot: first_confirmed_block_in_epoch,
                 amount: reward.lamports.abs() as u64,
                 post_balance: reward.post_balance,
-            }))
-        } else {
-            Ok(None)
-        }
+            })
+            .collect::<Vec<RpcInflationReward>>();
+
+        Ok(rewards)
     }
 
     pub fn get_inflation_governor(
@@ -2256,9 +2258,9 @@ pub mod rpc_full {
         fn get_inflation_reward(
             &self,
             meta: Self::Metadata,
-            pubkey_str: String,
+            pubkey_strs: Vec<String>,
             epoch: Option<Epoch>,
-        ) -> Result<Option<RpcInflationReward>>;
+        ) -> Result<Vec<RpcInflationReward>>;
 
         #[rpc(meta, name = "getInflationGovernor")]
         fn get_inflation_governor(
@@ -3216,15 +3218,20 @@ pub mod rpc_full {
         fn get_inflation_reward(
             &self,
             meta: Self::Metadata,
-            pubkey_str: String,
+            pubkey_strs: Vec<String>,
             epoch: Option<Epoch>,
-        ) -> Result<Option<RpcInflationReward>> {
+        ) -> Result<Vec<RpcInflationReward>> {
             debug!(
                 "get_inflation_reward rpc request received: {:?}",
-                pubkey_str
+                pubkey_strs.len()
             );
-            let pubkey = verify_pubkey(pubkey_str)?;
-            meta.get_inflation_reward(&pubkey, epoch)
+
+            let mut pubkeys: Vec<Pubkey> = vec![];
+            for pubkey_str in pubkey_strs {
+                pubkeys.push(verify_pubkey(pubkey_str)?);
+            }
+
+            meta.get_inflation_reward(pubkeys, epoch)
         }
 
         fn get_token_account_balance(

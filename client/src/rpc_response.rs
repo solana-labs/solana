@@ -365,6 +365,7 @@ pub struct RpcPerfSample {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcInflationReward {
+    pub address: String,
     pub epoch: Epoch,
     pub effective_slot: Slot,
     pub amount: u64,       // lamports
