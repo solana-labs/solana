@@ -115,9 +115,10 @@ impl TransactionRecorder {
             //  the max tick height to stop transaction processing and flush any transactions in the pipeline.
             return Err(PohRecorderError::MaxHeightReached);
         }
+        // Besides validator exit, this timeout should primarily be seen to affect test execution environments where the various pieces can be shutdown abruptly
         let res = self
             .result_receiver
-            .recv_timeout(std::time::Duration::from_millis(2000));
+            .recv_timeout(std::time::Duration::from_millis(5000));
         match res {
             Err(_err) => Err(PohRecorderError::MaxHeightReached),
             Ok(result) => result,
