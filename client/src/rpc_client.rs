@@ -764,6 +764,15 @@ impl RpcClient {
         self.send(RpcRequest::GetInflationRate, Value::Null)
     }
 
+    pub fn get_inflation_reward(
+        &self,
+        pubkeys: &[Pubkey],
+        epoch: Epoch,
+    ) -> ClientResult<Vec<RpcInflationReward>> {
+        let pubkeys: Vec<_> = pubkeys.iter().map(|pubkey| pubkey.to_string()).collect();
+        self.send(RpcRequest::GetInflationReward, json!([pubkeys, epoch]))
+    }
+
     pub fn get_version(&self) -> ClientResult<RpcVersionInfo> {
         self.send(RpcRequest::GetVersion, Value::Null)
     }
