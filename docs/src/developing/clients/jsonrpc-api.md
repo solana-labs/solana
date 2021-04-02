@@ -1468,6 +1468,38 @@ Result:
 {"jsonrpc":"2.0","result":{"epoch":100,"foundation":0.001,"total":0.149,"validator":0.148},"id":1}
 ```
 
+### getInflationReward
+
+Returns the inflation reward for a list of addresses and an epoch
+
+#### Parameters:
+- `<array>` - An array of addresses to query, as base-58 encoded strings
+- `<u64>` - (optional) An epoch for which the reward occurs (if omitted, the most recent epoch reward will be returned)
+
+#### Results
+
+The result field will be a JSON array with the following fields:
+
+#### Example
+
+Request:
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getInflationReward",
+    "params": [
+      ["HMjrM2gMkxWPNVRKcqa98ptjgaMvaUxfyTKeZDws2KTE", "BGsqMegLpV6n6Ve146sSX2dTjUMj3M92HnU8BbNRMhF2"], 170
+    ]
+  }
+'
+```
+
+Response:
+
+
+
 ### getLargestAccounts
 
 Returns the 20 largest accounts, by lamport balance (results may be cached up to two hours)

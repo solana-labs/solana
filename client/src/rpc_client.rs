@@ -768,7 +768,7 @@ impl RpcClient {
         &self,
         pubkeys: &[Pubkey],
         epoch: Epoch,
-    ) -> ClientResult<Vec<RpcInflationReward>> {
+    ) -> ClientResult<Vec<Option<RpcInflationReward>>> {
         let pubkeys: Vec<_> = pubkeys.iter().map(|pubkey| pubkey.to_string()).collect();
         self.send(RpcRequest::GetInflationReward, json!([pubkeys, epoch]))
     }

@@ -70,7 +70,7 @@ use solana_sdk::{
 };
 use solana_stake_program::stake_state::StakeState;
 use solana_transaction_status::{
-    EncodedConfirmedTransaction, TransactionConfirmationStatus, TransactionStatus,
+    EncodedConfirmedTransaction, Reward, TransactionConfirmationStatus, TransactionStatus,
     UiConfirmedBlock, UiTransactionEncoding,
 };
 use solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
@@ -386,7 +386,7 @@ impl JsonRpcRequestProcessor {
         &self,
         pubkeys: Vec<Pubkey>,
         epoch: Option<Epoch>,
-    ) -> Result<Vec<RpcInflationReward>> {
+    ) -> Result<Vec<Option<RpcInflationReward>>> {
         let commitment = Some(CommitmentConfig::finalized());
         let epoch_schedule = self.get_epoch_schedule();
         let first_available_block = self.get_first_available_block();
@@ -433,21 +433,30 @@ impl JsonRpcRequestProcessor {
             .into());
         };
 
-        let rewards = first_confirmed_block
+        let mut reward_hash: HashMap<String, Reward> = HashMap::new();
+        for reward in first_confirmed_block
             .rewards
             .unwrap_or_default()
             .into_iter()
-            .filter(|reward| {
-                pubkeys.contains(&Pubkey::from_str(&reward.pubkey).unwrap_or_default())
+        {
+            reward_hash.insert(reward.clone().pubkey, reward);
+        }
+
+        let rewards = pubkeys
+            .iter()
+            .map(|pubkey| {
+                if let Some(reward) = reward_hash.get(&pubkey.to_string()) {
+                    Some(RpcInflationReward {
+                        epoch,
+                        effective_slot: first_confirmed_block_in_epoch,
+                        amount: reward.lamports.abs() as u64,
+                        post_balance: reward.post_balance,
+                    })
+                } else {
+                    None
+                }
             })
-            .map(|reward| RpcInflationReward {
-                address: reward.pubkey,
-                epoch,
-                effective_slot: first_confirmed_block_in_epoch,
-                amount: reward.lamports.abs() as u64,
-                post_balance: reward.post_balance,
-            })
-            .collect::<Vec<RpcInflationReward>>();
+            .collect();
 
         Ok(rewards)
     }
@@ -2260,7 +2269,7 @@ pub mod rpc_full {
             meta: Self::Metadata,
             pubkey_strs: Vec<String>,
             epoch: Option<Epoch>,
-        ) -> Result<Vec<RpcInflationReward>>;
+        ) -> Result<Vec<Option<RpcInflationReward>>>;
 
         #[rpc(meta, name = "getInflationGovernor")]
         fn get_inflation_governor(
@@ -3220,7 +3229,7 @@ pub mod rpc_full {
             meta: Self::Metadata,
             pubkey_strs: Vec<String>,
             epoch: Option<Epoch>,
-        ) -> Result<Vec<RpcInflationReward>> {
+        ) -> Result<Vec<Option<RpcInflationReward>>> {
             debug!(
                 "get_inflation_reward rpc request received: {:?}",
                 pubkey_strs.len()
