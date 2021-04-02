@@ -3181,7 +3181,7 @@ Result:
 
 ### logsSubscribe
 
-Subscribe to transaction logging.  **UNSTABLE**
+Subscribe to transaction logging
 
 #### Parameters:
 
