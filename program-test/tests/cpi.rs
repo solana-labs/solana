@@ -1,14 +1,15 @@
 use {
-    solana_program::{
+    solana_program_test::{processor, ProgramTest},
+    solana_sdk::{
         account_info::{next_account_info, AccountInfo},
         entrypoint::ProgramResult,
         instruction::{AccountMeta, Instruction},
         msg,
         program::invoke,
         pubkey::Pubkey,
+        signature::Signer,
+        transaction::Transaction,
     },
-    solana_program_test::{processor, ProgramTest},
-    solana_sdk::{signature::Signer, transaction::Transaction},
 };
 
 // Process instruction to invoke into another program
@@ -44,20 +45,19 @@ fn invoked_process_instruction(
 #[tokio::test]
 async fn cpi() {
     let invoker_program_id = Pubkey::new_unique();
-    // Initialize and start the test network
     let mut program_test = ProgramTest::new(
-        "program-test-fuzz-invoker",
+        "invoker",
         invoker_program_id,
         processor!(invoker_process_instruction),
     );
     let invoked_program_id = Pubkey::new_unique();
     program_test.add_program(
-        "program-test-fuzz-invoked",
+        "invoked",
         invoked_program_id,
         processor!(invoked_process_instruction),
     );
 
-    let mut test_state = program_test.start_with_context().await;
+    let mut context = program_test.start_with_context().await;
     let instructions = vec![Instruction::new_with_bincode(
         invoker_program_id,
         &[0],
@@ -66,12 +66,12 @@ async fn cpi() {
 
     let transaction = Transaction::new_signed_with_payer(
         &instructions,
-        Some(&test_state.payer.pubkey()),
-        &[&test_state.payer],
-        test_state.last_blockhash,
+        Some(&context.payer.pubkey()),
+        &[&context.payer],
+        context.last_blockhash,
     );
 
-    test_state
+    context
         .banks_client
         .process_transaction(transaction)
         .await
