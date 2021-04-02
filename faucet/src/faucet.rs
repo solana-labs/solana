@@ -70,7 +70,6 @@ impl Default for FaucetRequest {
 
 pub struct Faucet {
     faucet_keypair: Keypair,
-    ip_cache: Vec<IpAddr>,
     pub time_slice: Duration,
     per_time_cap: u64,
     per_request_cap: Option<u64>,
@@ -88,7 +87,6 @@ impl Faucet {
         let per_time_cap = per_time_cap.unwrap_or(REQUEST_CAP);
         Faucet {
             faucet_keypair,
-            ip_cache: Vec::new(),
             time_slice,
             per_time_cap,
             per_request_cap,
@@ -105,14 +103,6 @@ impl Faucet {
 
     pub fn clear_request_count(&mut self) {
         self.request_current = 0;
-    }
-
-    pub fn add_ip_to_cache(&mut self, ip: IpAddr) {
-        self.ip_cache.push(ip);
-    }
-
-    pub fn clear_ip_cache(&mut self) {
-        self.ip_cache.clear();
     }
 
     pub fn build_airdrop_transaction(
@@ -390,30 +380,6 @@ mod tests {
         assert_eq!(faucet.request_current, 256);
         faucet.clear_request_count();
         assert_eq!(faucet.request_current, 0);
-    }
-
-    #[test]
-    fn test_add_ip_to_cache() {
-        let keypair = Keypair::new();
-        let mut faucet = Faucet::new(keypair, None, None, None);
-        let ip = "127.0.0.1".parse().expect("create IpAddr from string");
-        assert_eq!(faucet.ip_cache.len(), 0);
-        faucet.add_ip_to_cache(ip);
-        assert_eq!(faucet.ip_cache.len(), 1);
-        assert!(faucet.ip_cache.contains(&ip));
-    }
-
-    #[test]
-    fn test_clear_ip_cache() {
-        let keypair = Keypair::new();
-        let mut faucet = Faucet::new(keypair, None, None, None);
-        let ip = "127.0.0.1".parse().expect("create IpAddr from string");
-        assert_eq!(faucet.ip_cache.len(), 0);
-        faucet.add_ip_to_cache(ip);
-        assert_eq!(faucet.ip_cache.len(), 1);
-        faucet.clear_ip_cache();
-        assert_eq!(faucet.ip_cache.len(), 0);
-        assert!(faucet.ip_cache.is_empty());
     }
 
     #[test]
