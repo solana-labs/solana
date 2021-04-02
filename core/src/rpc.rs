@@ -387,11 +387,12 @@ impl JsonRpcRequestProcessor {
         pubkey: &Pubkey,
         epoch: Option<Epoch>,
     ) -> Result<Option<RpcInflationReward>> {
+        let commitment = Some(CommitmentConfig::finalized());
         let epoch_schedule = self.get_epoch_schedule();
         let first_available_block = self.get_first_available_block();
         let epoch = epoch.unwrap_or_else(|| {
             epoch_schedule
-                .get_epoch(self.get_slot(Some(CommitmentConfig::finalized())))
+                .get_epoch(self.get_slot(commitment))
                 .saturating_sub(1)
         });
 
@@ -413,11 +414,7 @@ impl JsonRpcRequestProcessor {
         }
 
         let first_confirmed_block_in_epoch = *self
-            .get_confirmed_blocks_with_limit(
-                first_slot_in_epoch,
-                1,
-                Some(CommitmentConfig::finalized()),
-            )?
+            .get_confirmed_blocks_with_limit(first_slot_in_epoch, 1, commitment)?
             .get(0)
             .ok_or(RpcCustomError::BlockNotAvailable {
                 slot: first_slot_in_epoch,
