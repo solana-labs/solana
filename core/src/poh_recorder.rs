@@ -10,6 +10,7 @@
 //! For Entries:
 //! * recorded entry must be >= WorkingBank::min_tick_height && entry must be < WorkingBank::max_tick_height
 //!
+use crate::poh_service::PohService;
 use solana_ledger::blockstore::Blockstore;
 use solana_ledger::entry::Entry;
 use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
@@ -151,6 +152,7 @@ pub struct PohRecorder {
     leader_schedule_cache: Arc<LeaderScheduleCache>,
     poh_config: Arc<PohConfig>,
     ticks_per_slot: u64,
+    target_ns_per_tick: u64,
     record_lock_contention_us: u64,
     flush_cache_no_tick_us: u64,
     flush_cache_tick_us: u64,
@@ -158,6 +160,7 @@ pub struct PohRecorder {
     send_us: u64,
     tick_lock_contention_us: u64,
     tick_overhead_us: u64,
+    total_sleep_us: u64,
     record_us: u64,
     ticks_from_record: u64,
     last_metric: Instant,
@@ -462,7 +465,17 @@ impl PohRecorder {
 
     pub fn tick(&mut self) {
         let now = Instant::now();
-        let poh_entry = self.poh.lock().unwrap().tick();
+        let (poh_entry, target_time) = {
+            let mut poh_l = self.poh.lock().unwrap();
+            let poh_entry = poh_l.tick();
+            let target_time = if poh_entry.is_some() {
+                Some(poh_l.target_poh_time(self.target_ns_per_tick))
+            } else {
+                None
+            };
+
+            (poh_entry, target_time)
+        };
         self.tick_lock_contention_us += timing::duration_as_us(&now.elapsed());
         let now = Instant::now();
         if let Some(poh_entry) = poh_entry {
@@ -485,6 +498,15 @@ impl PohRecorder {
             self.tick_cache.push((entry, self.tick_height));
             let _ = self.flush_cache(true);
             self.flush_cache_tick_us += timing::duration_as_us(&now.elapsed());
+            let target_time = target_time.unwrap();
+            // sleep is not accurate enough to get a predictable time.
+            // Kernel can not schedule the thread for a while.
+            let started_waiting = Instant::now();
+            while Instant::now() < target_time {
+                // TODO: a caller could possibly desire to reset or record while we're spinning here
+                std::hint::spin_loop();
+            }
+            self.total_sleep_us += started_waiting.elapsed().as_nanos() as u64 / 1000;
         }
     }
 
@@ -500,6 +522,7 @@ impl PohRecorder {
                 ("prepare_send_us", self.prepare_send_us, i64),
                 ("send_us", self.send_us, i64),
                 ("ticks_from_record", self.ticks_from_record, i64),
+                ("total_sleep_us", self.total_sleep_us, i64),
                 ("tick_overhead", self.tick_overhead_us, i64),
                 (
                     "record_lock_contention",
@@ -511,6 +534,7 @@ impl PohRecorder {
             self.tick_lock_contention_us = 0;
             self.record_us = 0;
             self.tick_overhead_us = 0;
+            self.total_sleep_us = 0;
             self.record_lock_contention_us = 0;
             self.flush_cache_no_tick_us = 0;
             self.flush_cache_tick_us = 0;
@@ -588,10 +612,18 @@ impl PohRecorder {
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         poh_config: &Arc<PohConfig>,
     ) -> (Self, Receiver<WorkingBankEntry>, Receiver<Record>) {
-        let poh = Arc::new(Mutex::new(Poh::new(
+        let tick_number = 0;
+        let poh = Arc::new(Mutex::new(Poh::new_with_slot_info(
             last_entry_hash,
             poh_config.hashes_per_tick,
+            ticks_per_slot,
+            tick_number,
         )));
+
+        let target_ns_per_tick = PohService::target_ns_per_tick(
+            ticks_per_slot,
+            poh_config.target_tick_duration.as_nanos() as u64,
+        );
         let (sender, receiver) = channel();
         let (record_sender, record_receiver) = channel();
         let (leader_first_tick_height, leader_last_tick_height, grace_ticks) =
@@ -613,6 +645,7 @@ impl PohRecorder {
                 blockstore: blockstore.clone(),
                 leader_schedule_cache: leader_schedule_cache.clone(),
                 ticks_per_slot,
+                target_ns_per_tick,
                 poh_config: poh_config.clone(),
                 record_lock_contention_us: 0,
                 flush_cache_tick_us: 0,
@@ -622,6 +655,7 @@ impl PohRecorder {
                 tick_lock_contention_us: 0,
                 record_us: 0,
                 tick_overhead_us: 0,
+                total_sleep_us: 0,
                 ticks_from_record: 0,
                 last_metric: Instant::now(),
                 record_sender,

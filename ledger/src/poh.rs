@@ -8,6 +8,9 @@ pub struct Poh {
     num_hashes: u64,
     hashes_per_tick: u64,
     remaining_hashes: u64,
+    ticks_per_slot: u64,
+    tick_number: u64,
+    slot_start_time: Instant,
 }
 
 #[derive(Debug)]
@@ -18,23 +21,47 @@ pub struct PohEntry {
 
 impl Poh {
     pub fn new(hash: Hash, hashes_per_tick: Option<u64>) -> Self {
+        Self::new_with_slot_info(hash, hashes_per_tick, 0, 0)
+    }
+
+    pub fn new_with_slot_info(
+        hash: Hash,
+        hashes_per_tick: Option<u64>,
+        ticks_per_slot: u64,
+        tick_number: u64,
+    ) -> Self {
         let hashes_per_tick = hashes_per_tick.unwrap_or(std::u64::MAX);
         assert!(hashes_per_tick > 1);
+        let now = Instant::now();
         Poh {
             hash,
             num_hashes: 0,
             hashes_per_tick,
             remaining_hashes: hashes_per_tick,
+            ticks_per_slot,
+            tick_number,
+            slot_start_time: now,
         }
     }
 
     pub fn reset(&mut self, hash: Hash, hashes_per_tick: Option<u64>) {
-        let mut poh = Poh::new(hash, hashes_per_tick);
+        // retains ticks_per_slot: this cannot change without restarting the validator
+        let tick_number = 0;
+        let mut poh =
+            Poh::new_with_slot_info(hash, hashes_per_tick, self.ticks_per_slot, tick_number);
         std::mem::swap(&mut poh, self);
+    }
+
+    pub fn target_poh_time(&self, target_ns_per_tick: u64) -> Instant {
+        assert!(self.hashes_per_tick > 0);
+        let offset_tick_ns = target_ns_per_tick * self.tick_number;
+        let offset_ns = target_ns_per_tick * self.num_hashes / self.hashes_per_tick;
+        self.slot_start_time + Duration::from_nanos(offset_ns + offset_tick_ns)
     }
 
     pub fn hash(&mut self, max_num_hashes: u64) -> bool {
         let num_hashes = std::cmp::min(self.remaining_hashes - 1, max_num_hashes);
+
         for _ in 0..num_hashes {
             self.hash = hash(&self.hash.as_ref());
         }
@@ -75,6 +102,7 @@ impl Poh {
         let num_hashes = self.num_hashes;
         self.remaining_hashes = self.hashes_per_tick;
         self.num_hashes = 0;
+        self.tick_number += 1;
         Some(PohEntry {
             num_hashes,
             hash: self.hash,
@@ -102,6 +130,7 @@ mod tests {
     use crate::poh::{Poh, PohEntry};
     use matches::assert_matches;
     use solana_sdk::hash::{hash, hashv, Hash};
+    use std::time::Duration;
 
     fn verify(initial_hash: Hash, entries: &[(PohEntry, Option<Hash>)]) -> bool {
         let mut current_hash = initial_hash;
@@ -122,6 +151,42 @@ mod tests {
         }
 
         true
+    }
+
+    #[test]
+    fn test_target_poh_time() {
+        let zero = Hash::default();
+        for target_ns_per_tick in 10..12 {
+            let mut poh = Poh::new(zero, None);
+            assert_eq!(poh.target_poh_time(target_ns_per_tick), poh.slot_start_time);
+            poh.tick_number = 2;
+            assert_eq!(
+                poh.target_poh_time(target_ns_per_tick),
+                poh.slot_start_time + Duration::from_nanos(target_ns_per_tick * 2)
+            );
+            let mut poh = Poh::new(zero, Some(5));
+            assert_eq!(poh.target_poh_time(target_ns_per_tick), poh.slot_start_time);
+            poh.tick_number = 2;
+            assert_eq!(
+                poh.target_poh_time(target_ns_per_tick),
+                poh.slot_start_time + Duration::from_nanos(target_ns_per_tick * 2)
+            );
+            poh.num_hashes = 3;
+            assert_eq!(
+                poh.target_poh_time(target_ns_per_tick),
+                poh.slot_start_time
+                    + Duration::from_nanos(target_ns_per_tick * 2 + target_ns_per_tick * 3 / 5)
+            );
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "assertion failed: hashes_per_tick > 1")]
+    fn test_target_poh_time_hashes_per_tick() {
+        let zero = Hash::default();
+        let poh = Poh::new(zero, Some(0));
+        let target_ns_per_tick = 10;
+        poh.target_poh_time(target_ns_per_tick);
     }
 
     #[test]
