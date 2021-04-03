@@ -504,7 +504,9 @@ impl BankingStage {
         hold: bool,
     ) {
         if !enable_forwarding {
-            buffered_packets.clear(); // TODO: What if hold is true?
+            if !hold {
+                buffered_packets.clear();
+            }
             return;
         }
         let next_leader = match poh_recorder
