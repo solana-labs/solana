@@ -114,16 +114,8 @@ pub const DEFAULT_CONTACT_DEBUG_INTERVAL_MILLIS: u64 = 10_000;
 pub const DEFAULT_CONTACT_SAVE_INTERVAL_MILLIS: u64 = 60_000;
 /// Minimum serialized size of a Protocol::PullResponse packet.
 const PULL_RESPONSE_MIN_SERIALIZED_SIZE: usize = 161;
-<<<<<<< HEAD
-=======
 // Limit number of unique pubkeys in the crds table.
 pub(crate) const CRDS_UNIQUE_PUBKEY_CAPACITY: usize = 4096;
-/// Minimum stake that a node should have so that its CRDS values are
-/// propagated through gossip (few types are exempted).
-const MIN_STAKE_FOR_GOSSIP: u64 = solana_sdk::native_token::LAMPORTS_PER_SOL;
-/// Minimum number of staked nodes for enforcing stakes in gossip.
-const MIN_NUM_STAKED_NODES: usize = 500;
->>>>>>> a6c23648c... limits CrdsGossipPull::pull_request_time size (#15793)
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ClusterInfoError {
