@@ -384,7 +384,7 @@ impl JsonRpcRequestProcessor {
 
     pub fn get_inflation_reward(
         &self,
-        pubkeys: Vec<Pubkey>,
+        addresses: Vec<Pubkey>,
         epoch: Option<Epoch>,
     ) -> Result<Vec<Option<RpcInflationReward>>> {
         let commitment = Some(CommitmentConfig::finalized());
@@ -442,7 +442,7 @@ impl JsonRpcRequestProcessor {
             reward_hash.insert(reward.clone().pubkey, reward);
         }
 
-        let rewards = pubkeys
+        let rewards = addresses
             .iter()
             .map(|pubkey| {
                 if let Some(reward) = reward_hash.get(&pubkey.to_string()) {
@@ -2267,7 +2267,7 @@ pub mod rpc_full {
         fn get_inflation_reward(
             &self,
             meta: Self::Metadata,
-            pubkey_strs: Vec<String>,
+            address_strs: Vec<String>,
             epoch: Option<Epoch>,
         ) -> Result<Vec<Option<RpcInflationReward>>>;
 
@@ -3227,20 +3227,20 @@ pub mod rpc_full {
         fn get_inflation_reward(
             &self,
             meta: Self::Metadata,
-            pubkey_strs: Vec<String>,
+            address_strs: Vec<String>,
             epoch: Option<Epoch>,
         ) -> Result<Vec<Option<RpcInflationReward>>> {
             debug!(
                 "get_inflation_reward rpc request received: {:?}",
-                pubkey_strs.len()
+                address_strs.len()
             );
 
-            let mut pubkeys: Vec<Pubkey> = vec![];
-            for pubkey_str in pubkey_strs {
-                pubkeys.push(verify_pubkey(pubkey_str)?);
+            let mut addresses: Vec<Pubkey> = vec![];
+            for address_str in address_strs {
+                addresses.push(verify_pubkey(address_str)?);
             }
 
-            meta.get_inflation_reward(pubkeys, epoch)
+            meta.get_inflation_reward(addresses, epoch)
         }
 
         fn get_token_account_balance(
