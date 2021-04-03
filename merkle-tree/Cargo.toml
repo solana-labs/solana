@@ -13,6 +13,10 @@ edition = "2018"
 solana-program = { path = "../sdk/program", version = "=1.7.0" }
 fast-math = "0.1"
 
+# This can go once the BPF toolchain target Rust 1.42.0+
+[target.bpfel-unknown-unknown.dependencies]
+matches = "0.1.8"
+
 [dev-dependencies]
 hex = "0.4.2"
 
