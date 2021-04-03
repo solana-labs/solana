@@ -223,6 +223,11 @@ impl<'a> LoadedAccountAccessor<'a> {
 
     fn get_loaded_account(&mut self) -> Option<LoadedAccount> {
         match self {
+            LoadedAccountAccessor::Cached(maybe_cached_account) => {
+                // cached account may not be present if slot was flushed in between,
+                // assuming that retry_to_get_account_accessor() isn't used
+                maybe_cached_account.take().map(LoadedAccount::Cached)
+            }
             LoadedAccountAccessor::Stored(maybe_storage_entry) => {
                 // storage entry may not be present if slot was cleaned up in
                 // between reading the accounts index and calling this function to
@@ -234,11 +239,6 @@ impl<'a> LoadedAccountAccessor<'a> {
                             .get_stored_account_meta(*offset)
                             .map(LoadedAccount::Stored)
                     })
-            }
-            LoadedAccountAccessor::Cached(maybe_cached_account) => {
-                // cached account may not be present if slot was flushed in between,
-                // assuming that retry_to_get_account_accessor() isn't used
-                maybe_cached_account.take().map(LoadedAccount::Cached)
             }
         }
     }
