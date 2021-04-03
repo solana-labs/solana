@@ -116,17 +116,9 @@ impl PohService {
                     if let Some(cores) = core_affinity::get_core_ids() {
                         core_affinity::set_for_current(cores[pinned_cpu_core]);
                     }
-                    // Account for some extra time outside of PoH generation to account
-                    // for processing time outside PoH.
-                    let adjustment_per_tick = if ticks_per_slot > 0 {
-                        TARGET_SLOT_ADJUSTMENT_NS / ticks_per_slot
-                    } else {
-                        0
-                    };
                     Self::tick_producer(
                         poh_recorder,
                         &poh_exit_,
-                        poh_config.target_tick_duration.as_nanos() as u64 - adjustment_per_tick,
                         ticks_per_slot,
                         hashes_per_batch,
                         record_receiver,
@@ -137,6 +129,17 @@ impl PohService {
             .unwrap();
 
         Self { tick_producer }
+    }
+
+    pub fn target_ns_per_tick(ticks_per_slot: u64, target_tick_duration_ns: u64) -> u64 {
+        // Account for some extra time outside of PoH generation to account
+        // for processing time outside PoH.
+        let adjustment_per_tick = if ticks_per_slot > 0 {
+            TARGET_SLOT_ADJUSTMENT_NS / ticks_per_slot
+        } else {
+            0
+        };
+        target_tick_duration_ns.saturating_sub(adjustment_per_tick)
     }
 
     fn sleepy_tick_producer(
@@ -199,6 +202,7 @@ impl PohService {
         }
     }
 
+    // returns true if we need to tick
     fn record_or_hash(
         next_record: &mut Option<Record>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
@@ -253,7 +257,8 @@ impl PohService {
                     hash_time.stop();
                     timing.total_hash_time_ns += hash_time.as_ns();
                     if should_tick {
-                        return true; // nothing else can be done. tick required.
+                        // nothing else can be done. tick required.
+                        return true;
                     }
                     // check to see if a record request has been sent
                     let get_again = record_receiver.try_recv();
@@ -276,13 +281,11 @@ impl PohService {
     fn tick_producer(
         poh_recorder: Arc<Mutex<PohRecorder>>,
         poh_exit: &AtomicBool,
-        target_tick_ns: u64,
         ticks_per_slot: u64,
         hashes_per_batch: u64,
         record_receiver: Receiver<Record>,
     ) {
         let poh = poh_recorder.lock().unwrap().poh.clone();
-        let mut now = Instant::now();
         let mut timing = PohTiming::new();
         let mut next_record = None;
         loop {
@@ -307,14 +310,6 @@ impl PohService {
                     timing.total_tick_time_ns += tick_time.as_ns();
                 }
                 timing.num_ticks += 1;
-                let elapsed_ns = now.elapsed().as_nanos() as u64;
-                // sleep is not accurate enough to get a predictable time.
-                // Kernel can not schedule the thread for a while.
-                while (now.elapsed().as_nanos() as u64) < target_tick_ns {
-                    std::hint::spin_loop();
-                }
-                timing.total_sleep_us += (now.elapsed().as_nanos() as u64 - elapsed_ns) / 1000;
-                now = Instant::now();
 
                 timing.report(ticks_per_slot);
                 if poh_exit.load(Ordering::Relaxed) {
