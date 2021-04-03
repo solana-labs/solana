@@ -2290,6 +2290,7 @@ impl AccountsDb {
         pubkey: &Pubkey,
         // Load transactions for a block which is descended from the current root,
         // and at the tip of its fork
+        // true if the root will not move during this load
         is_root_fixed: bool,
     ) -> Option<(AccountSharedData, Slot)> {
         self.do_load(ancestors, pubkey, None, is_root_fixed)
@@ -2557,7 +2558,6 @@ impl AccountsDb {
         ancestors: &Ancestors,
         pubkey: &Pubkey,
         max_root: Option<Slot>,
-        // true if the root will not move during this load
         is_root_fixed: bool,
     ) -> Option<(AccountSharedData, Slot)> {
         let (slot, store_id, offset) = self.read_index_for_accessor(ancestors, pubkey, max_root)?;
