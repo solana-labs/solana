@@ -444,8 +444,8 @@ impl JsonRpcRequestProcessor {
 
         let rewards = addresses
             .iter()
-            .map(|pubkey| {
-                if let Some(reward) = reward_hash.get(&pubkey.to_string()) {
+            .map(|address| {
+                if let Some(reward) = reward_hash.get(&address.to_string()) {
                     Some(RpcInflationReward {
                         epoch,
                         effective_slot: first_confirmed_block_in_epoch,
