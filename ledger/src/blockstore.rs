@@ -2855,6 +2855,13 @@ impl Blockstore {
         Ok(dead_slots_iterator.map(|(slot, _)| slot))
     }
 
+    pub fn duplicate_slots_iterator(&self, slot: Slot) -> Result<impl Iterator<Item = Slot> + '_> {
+        let duplicate_slots_iterator = self
+            .db
+            .iter::<cf::DuplicateSlots>(IteratorMode::From(slot, IteratorDirection::Forward))?;
+        Ok(duplicate_slots_iterator.map(|(slot, _)| slot))
+    }
+
     pub fn last_root(&self) -> Slot {
         *self.last_root.read().unwrap()
     }
