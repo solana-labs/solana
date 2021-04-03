@@ -4792,6 +4792,7 @@ version = "1.6.5"
 dependencies = [
  "fast-math",
  "hex",
+ "matches",
  "solana-program 1.6.5",
 ]
 
