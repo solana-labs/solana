@@ -916,7 +916,7 @@ pub fn parse_command(
                     blockhash_query,
                     nonce_account,
                     nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
-                    memo: memo,
+                    memo,
                     fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
                     from: signer_info.index_of(from_pubkey).unwrap(),
                     derived_address_seed,

@@ -1,6 +1,6 @@
 use solana_sdk::instruction::Instruction;
 use solana_sdk::pubkey::Pubkey;
-use std::str::FromStr;
+use spl_memo::id;
 
 pub trait WithMemo {
     fn with_memo<T: AsRef<str>>(self, memo: Option<T>) -> Self;
@@ -11,8 +11,7 @@ impl WithMemo for Vec<Instruction> {
         if let Some(memo) = &memo {
             let memo = memo.as_ref();
             let memo_ix = Instruction {
-                program_id: Pubkey::from_str("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr")
-                    .unwrap(),
+                program_id: Pubkey::new(&id().to_bytes()),
                 accounts: vec![],
                 data: memo.as_bytes().to_vec(),
             };
