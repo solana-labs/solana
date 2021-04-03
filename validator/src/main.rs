@@ -121,6 +121,7 @@ fn wait_for_restart_window(
     let mut current_epoch = None;
     let mut leader_schedule = VecDeque::new();
     let mut restart_snapshot = None;
+    let mut upcoming_idle_windows = vec![]; // Vec<(starting slot, idle window length in slots)>
 
     let progress_bar = new_spinner_progress_bar();
     let monitor_start_time = SystemTime::now();
@@ -166,7 +167,32 @@ fn wait_for_restart_window(
                 .unwrap_or_default()
                 .into_iter()
                 .map(|slot_index| first_slot_in_epoch.saturating_add(slot_index as u64))
+                .filter(|slot| *slot > epoch_info.absolute_slot)
                 .collect::<VecDeque<_>>();
+
+            upcoming_idle_windows.clear();
+            {
+                let mut leader_schedule = leader_schedule.clone();
+                let mut max_idle_window = 0;
+
+                let mut idle_window_start_slot = epoch_info.absolute_slot;
+                while let Some(next_leader_slot) = leader_schedule.pop_front() {
+                    let idle_window = next_leader_slot - idle_window_start_slot;
+                    max_idle_window = max_idle_window.max(idle_window);
+                    if idle_window > min_idle_slots {
+                        upcoming_idle_windows.push((idle_window_start_slot, idle_window));
+                    }
+                    idle_window_start_slot = next_leader_slot;
+                }
+                if upcoming_idle_windows.is_empty() {
+                    return Err(format!(
+                        "Validator has no idle window of at least {} slots. Largest idle window for epoch {} is {} slots",
+                        min_idle_slots, epoch_info.epoch, max_idle_window
+                    )
+                    .into());
+                }
+            }
+
             current_epoch = Some(epoch_info.epoch);
         }
 
@@ -175,35 +201,53 @@ fn wait_for_restart_window(
                 style("Node is unhealthy").red().to_string()
             } else {
                 // Wait until a hole in the leader schedule before restarting the node
-                let in_leader_schedule_hole =
-                    if epoch_info.slot_index + min_idle_slots as u64 > epoch_info.slots_in_epoch {
-                        Err("Current epoch is almost complete".to_string())
-                    } else {
-                        while leader_schedule
-                            .get(0)
-                            .map(|slot_index| *slot_index < epoch_info.absolute_slot)
-                            .unwrap_or(false)
-                        {
-                            leader_schedule.pop_front();
+                let in_leader_schedule_hole = if epoch_info.slot_index + min_idle_slots as u64
+                    > epoch_info.slots_in_epoch
+                {
+                    Err("Current epoch is almost complete".to_string())
+                } else {
+                    while leader_schedule
+                        .get(0)
+                        .map(|slot| *slot < epoch_info.absolute_slot)
+                        .unwrap_or(false)
+                    {
+                        leader_schedule.pop_front();
+                    }
+                    while upcoming_idle_windows
+                        .get(0)
+                        .map(|(slot, _)| *slot < epoch_info.absolute_slot)
+                        .unwrap_or(false)
+                    {
+                        upcoming_idle_windows.pop();
+                    }
+
+                    match leader_schedule.get(0) {
+                        None => {
+                            Ok(()) // Validator has no leader slots
                         }
-                        match leader_schedule.get(0) {
-                            None => {
-                                Ok(()) // Validator has no leader slots
-                            }
-                            Some(next_leader_slot) => {
-                                let idle_slots =
-                                    next_leader_slot.saturating_sub(epoch_info.absolute_slot);
-                                if idle_slots >= min_idle_slots {
-                                    Ok(())
-                                } else {
-                                    Err(format!(
+                        Some(next_leader_slot) => {
+                            let idle_slots =
+                                next_leader_slot.saturating_sub(epoch_info.absolute_slot);
+                            if idle_slots >= min_idle_slots {
+                                Ok(())
+                            } else {
+                                Err(match upcoming_idle_windows.get(0) {
+                                    Some((starting_slot, length_in_slots)) => {
+                                        format!(
+                                            "Next idle window in {} slots, for {} slots",
+                                            starting_slot.saturating_sub(epoch_info.absolute_slot),
+                                            length_in_slots
+                                        )
+                                    }
+                                    None => format!(
                                         "Validator will be leader soon. Next leader slot is {}",
                                         next_leader_slot
-                                    ))
-                                }
+                                    ),
+                                })
                             }
                         }
-                    };
+                    }
+                };
 
                 match in_leader_schedule_hole {
                     Ok(_) => {
