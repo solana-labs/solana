@@ -208,7 +208,7 @@ impl CrdsGossip {
             gossip_validators,
             &self.id,
             self.shred_version,
-            self.pull.pull_request_time.len(),
+            self.crds.num_nodes(),
             CRDS_GOSSIP_NUM_ACTIVE,
         )
     }
@@ -342,7 +342,7 @@ impl CrdsGossip {
         Self {
             crds: self.crds.clone(),
             push: self.push.mock_clone(),
-            pull: self.pull.clone(),
+            pull: self.pull.mock_clone(),
             ..*self
         }
     }
