@@ -239,6 +239,15 @@ pub(crate) fn check_slot_agrees_with_cluster(
     fork_choice: &mut HeaviestSubtreeForkChoice,
     slot_state_update: SlotStateUpdate,
 ) {
+    info!(
+        "check_slot_agrees_with_cluster()
+        slot: {},
+        root: {},
+        frozen_hash: {:?},
+        update: {:?}",
+        slot, root, frozen_hash, slot_state_update
+    );
+
     if slot <= root {
         return;
     }
@@ -252,6 +261,7 @@ pub(crate) fn check_slot_agrees_with_cluster(
 
     let frozen_hash = frozen_hash.unwrap();
     let gossip_duplicate_confirmed_hash = gossip_duplicate_confirmed_slots.get(&slot);
+
     let is_local_replay_duplicate_confirmed = progress.is_duplicate_confirmed(slot).expect("If the frozen hash exists, then the slot must exist in bank forks and thus in progress map");
     let cluster_duplicate_confirmed_hash = get_cluster_duplicate_confirmed_hash(
         slot,
@@ -272,6 +282,18 @@ pub(crate) fn check_slot_agrees_with_cluster(
         }
     }
     let is_dead = progress.is_dead(slot).expect("If the frozen hash exists, then the slot must exist in bank forks and thus in progress map");
+
+    info!(
+        "check_slot_agrees_with_cluster() state
+        is_local_replay_duplicate_confirmed: {:?},
+        cluster_duplicate_confirmed_hash: {:?},
+        is_slot_duplicate: {:?},
+        is_dead: {:?}",
+        is_local_replay_duplicate_confirmed,
+        cluster_duplicate_confirmed_hash,
+        is_slot_duplicate,
+        is_dead,
+    );
 
     let state_handler = slot_state_update.to_handler();
     let state_changes = state_handler(

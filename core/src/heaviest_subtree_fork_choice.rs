@@ -471,6 +471,12 @@ impl HeaviestSubtreeForkChoice {
 
     fn mark_slot_valid(&mut self, valid_slot: Slot) {
         if let Some(fork_info) = self.fork_infos.get_mut(&valid_slot) {
+            if !fork_info.is_candidate {
+                info!(
+                    "marked previously invalid fork starting at slot: {} as valid",
+                    valid_slot
+                );
+            }
             fork_info.is_candidate = true;
         }
     }
@@ -683,6 +689,10 @@ impl ForkChoice for HeaviestSubtreeForkChoice {
     }
 
     fn mark_fork_invalid_candidate(&mut self, invalid_slot: Slot) {
+        info!(
+            "marking fork starting at slot: {} invalid candidate",
+            invalid_slot
+        );
         let fork_info = self.fork_infos.get_mut(&invalid_slot);
         if let Some(fork_info) = fork_info {
             if fork_info.is_candidate {
