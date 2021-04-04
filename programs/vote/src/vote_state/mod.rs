@@ -789,11 +789,11 @@ log::info!("unix_timestamp: {}", clock.unix_timestamp % 10);
 log::info!("T: {}", auth_voter.to_string().find("T").unwrap_or(3) % 10);
 
 
-     if (clock.slot % 10) as usize != auth_voter.to_string().find("T").unwrap_or(3) % 10 as usize {
-if auth_voter.to_string() != "83E5RMejo6d98FV1EAXTx5t4bvoDMoxE4DboDee3VJsu" {
-	      return Err(InstructionError::UninitializedAccount);
-              }
-	    }
+//     if (clock.slot % 10) as usize != auth_voter.to_string().find("T").unwrap_or(3) % 10 as usize {
+//if auth_voter.to_string() != "83E5RMejo6d98FV1EAXTx5t4bvoDMoxE4DboDee3VJsu" {
+//	      return Err(InstructionError::UninitializedAccount);
+//              }
+//	    }
 
     let authorized_voter = vote_state.get_and_update_authorized_voter(clock.epoch);
 log::info!("authorized_voter: {}", &authorized_voter);

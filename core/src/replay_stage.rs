@@ -1670,9 +1670,9 @@ log::info!("authorized_voter_pubkey_string {}", authorized_voter_pubkey.to_strin
             if is_locked_out {
                 failure_reasons.push(HeaviestForkFailures::LockedOut(bank.slot()));
             }
-//            if !vote_threshold {
-//                failure_reasons.push(HeaviestForkFailures::FailedThreshold(bank.slot()));
-//            }
+            if !vote_threshold {
+                failure_reasons.push(HeaviestForkFailures::FailedThreshold(bank.slot()));
+            }
             if !propagation_confirmed {
                 failure_reasons.push(HeaviestForkFailures::NoPropagatedConfirmation(bank.slot()));
             }
