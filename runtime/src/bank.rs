@@ -3000,7 +3000,10 @@ impl Bank {
                     }
                 }
             }
-            if transaction_log_collector_config.filter != TransactionLogCollectorFilter::None {
+
+            if Self::can_commit(r) // Skip log collection for unprocessed transactions
+                && transaction_log_collector_config.filter != TransactionLogCollectorFilter::None
+            {
                 let mut transaction_log_collector = self.transaction_log_collector.write().unwrap();
                 let transaction_log_index = transaction_log_collector.logs.len();
 
