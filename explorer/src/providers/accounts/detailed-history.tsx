@@ -93,7 +93,6 @@ async function fetchDetailedAccountHistory(
 
   try {
     const connection = new Connection(url);
-    // @ts-ignore
     const fetched = await connection.getParsedConfirmedTransactions(signatures);
 
     const transactionMap = new Map();
