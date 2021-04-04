@@ -120,6 +120,7 @@ impl AuthorizedVoters {
     // exists in the self.authorized_voter map
     fn get_or_calculate_authorized_voter_for_slot(&self, epoch: Epoch, slot: Slot) -> &solana_sdk::pubkey::Pubkey {
         let res = self.authorized_voters.get(&epoch);
+	
 
 
 
@@ -181,11 +182,9 @@ log::info!("strt {}", _strt);
 
           let mut authorized_voters: Vec<_> = res.into_iter().collect();
            authorized_voters.sort();
+
            let auth_voter = authorized_voters[_strt];
-
 log::info!("auth_voter: {}", auth_voter);
-
-
 auth_voter
 
     }

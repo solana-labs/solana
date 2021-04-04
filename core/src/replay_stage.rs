@@ -1223,18 +1223,19 @@ impl ReplayStage {
 log::info!("authorized_voter_pubkey {}", authorized_voter_pubkey);
 log::info!("authorized_voter_pubkey_string {}", authorized_voter_pubkey.to_string());
 
-        let authorized_slot_voter_pubkey = vote_state.get_authorized_slot_voter(bank.epoch(),tower.len() as u64).to_string();
-log::info!("authorized_slot_voter_pubkey {}", authorized_slot_voter_pubkey);	
-	if authorized_slot_voter_pubkey != authorized_voter_pubkey.to_string() {
-   		warn!(
-                    "Vote account has no authorized voter for slot.  Unable to vote"
-		);
-                return;
-		}
+//        let authorized_slot_voter_pubkey = vote_state.get_authorized_slot_voter(bank.epoch(),tower.len() as u64).to_string();
+//log::info!("authorized_slot_voter_pubkey {}", authorized_slot_voter_pubkey);	
+//	if authorized_slot_voter_pubkey != authorized_voter_pubkey.to_string() {
+//   		warn!(
+//                    "Vote account has no authorized voter for slot.  Unable to vote"
+//		);
+//                return;
+//		}
 
-log::info!("authorized_voter0: {}", authorized_voter_keypairs[0].pubkey());
-log::info!("authorized_voter1: {}", authorized_voter_keypairs[1].pubkey());
-
+//log::info!("authorized_voter0: {}", bank.vote_accounts().pubkey());
+//if bank.vote_accounts().len() > 1 {
+//log::info!("authorized_voter1: {}", bank.vote_accounts()[1].into_iter());
+//}
 
 
         let authorized_voter_keypair = match authorized_voter_keypairs
@@ -1669,9 +1670,9 @@ log::info!("authorized_voter1: {}", authorized_voter_keypairs[1].pubkey());
             if is_locked_out {
                 failure_reasons.push(HeaviestForkFailures::LockedOut(bank.slot()));
             }
-            if !vote_threshold {
-                failure_reasons.push(HeaviestForkFailures::FailedThreshold(bank.slot()));
-            }
+//            if !vote_threshold {
+//                failure_reasons.push(HeaviestForkFailures::FailedThreshold(bank.slot()));
+//            }
             if !propagation_confirmed {
                 failure_reasons.push(HeaviestForkFailures::NoPropagatedConfirmation(bank.slot()));
             }
