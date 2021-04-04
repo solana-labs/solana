@@ -84,38 +84,36 @@ fn main() {
             time.as_us() / iterations as u64
         );
         
-        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))] {
-            if is_x86_feature_detected!("avx2") && entry::api().is_some() {
-                let mut time = Measure::start("time");
-                for _ in 0..iterations {
-                    assert!(ticks[..num_entries]
-                        .verify_cpu_x86_simd(&start_hash, 8)
-                        .finish_verify(&ticks[..num_entries]));
-                }
-                time.stop();
-                println!(
-                    "{},cpu_simd_avx2,{}",
-                    num_entries,
-                    time.as_us() / iterations as u64
-                );
+        if is_x86_feature_detected!("avx2") && entry::api().is_some() {
+            let mut time = Measure::start("time");
+            for _ in 0..iterations {
+                assert!(ticks[..num_entries]
+                    .verify_cpu_x86_simd(&start_hash, 8)
+                    .finish_verify(&ticks[..num_entries]));
             }
-
-            if is_x86_feature_detected!("avx512f") && entry::api().is_some() {
-                let mut time = Measure::start("time");
-                for _ in 0..iterations {
-                    assert!(ticks[..num_entries]
-                        .verify_cpu_x86_simd(&start_hash, 16)
-                        .finish_verify(&ticks[..num_entries]));
-                }
-                time.stop();
-                println!(
-                    "{},cpu_simd_avx512,{}",
-                    num_entries,
-                    time.as_us() / iterations as u64
-                );
-            }
+            time.stop();
+            println!(
+                "{},cpu_simd_avx2,{}",
+                num_entries,
+                time.as_us() / iterations as u64
+            );
         }
 
+        if is_x86_feature_detected!("avx512f") && entry::api().is_some() {
+            let mut time = Measure::start("time");
+            for _ in 0..iterations {
+                assert!(ticks[..num_entries]
+                    .verify_cpu_x86_simd(&start_hash, 16)
+                    .finish_verify(&ticks[..num_entries]));
+            }
+            time.stop();
+            println!(
+                "{},cpu_simd_avx512,{}",
+                num_entries,
+                time.as_us() / iterations as u64
+            );
+        }
+        
         if perf_libs::api().is_some() {
             let mut time = Measure::start("time");
             let recyclers = VerifyRecyclers::default();
