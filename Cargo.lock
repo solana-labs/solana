@@ -259,26 +259,21 @@ dependencies = [
 
 [[package]]
 name = "bindgen"
-version = "0.54.0"
+version = "0.57.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "66c0bb6167449588ff70803f4127f0684f9063097eca5016f37eb52b92c2cf36"
+checksum = "fd4865004a46a0aafb2a0a5eb19d3c9fc46ee5f063a6cfc605c69ac9ecf5263d"
 dependencies = [
  "bitflags",
  "cexpr",
- "cfg-if 0.1.10",
  "clang-sys",
- "clap",
- "env_logger 0.7.1",
  "lazy_static",
  "lazycell",
- "log 0.4.11",
  "peeking_take_while",
  "proc-macro2 1.0.24",
  "quote 1.0.6",
  "regex",
  "rustc-hash",
  "shlex",
- "which",
 ]
 
 [[package]]
@@ -528,12 +523,11 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.0.49"
+version = "1.0.67"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e450b8da92aa6f274e7c6437692f9f2ce6d701fb73bacfcf87897b3f89a4c20e"
+checksum = "e3c69b077ad434294d3ce9f1f6143a2a4b89a8a2d54ef813d85003a4fd1137fd"
 dependencies = [
  "jobserver",
- "num_cpus",
 ]
 
 [[package]]
@@ -582,13 +576,13 @@ dependencies = [
 
 [[package]]
 name = "clang-sys"
-version = "0.29.3"
+version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe6837df1d5cba2397b835c8530f51723267e16abbf83892e9e5af4f0e5dd10a"
+checksum = "f54d78e30b388d4815220c8dd03fea5656b6c6d32adb59e89061552a102f8da1"
 dependencies = [
  "glob",
  "libc",
- "libloading 0.5.2",
+ "libloading 0.7.0",
 ]
 
 [[package]]
@@ -1152,25 +1146,12 @@ dependencies = [
 
 [[package]]
 name = "env_logger"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44533bbbb3bb3c1fa17d9f2e4e38bbbaf8396ba82193c4cb1b6445d711445d36"
-dependencies = [
- "atty",
- "humantime 1.3.0",
- "log 0.4.11",
- "regex",
- "termcolor",
-]
-
-[[package]]
-name = "env_logger"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "17392a012ea30ef05a610aa97dfb49496e71c9f676b27879922ea5bdf60d9d3f"
 dependencies = [
  "atty",
- "humantime 2.0.1",
+ "humantime",
  "log 0.4.11",
  "regex",
  "termcolor",
@@ -1722,15 +1703,6 @@ checksum = "494b4d60369511e7dea41cf646832512a94e542f68bb9c49e54518e0f468eb47"
 
 [[package]]
 name = "humantime"
-version = "1.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df004cfca50ef23c36850aaaa59ad52cc70d0e90243c3c7737a4dd32dc7a3c4f"
-dependencies = [
- "quick-error",
-]
-
-[[package]]
-name = "humantime"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3c1ad908cc71012b7bea4d0c53ba96a8cba9962f048fa68d143376143d863b7a"
@@ -2160,16 +2132,6 @@ checksum = "1482821306169ec4d07f6aca392a4681f66c75c9918aa49641a2595db64053cb"
 
 [[package]]
 name = "libloading"
-version = "0.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2b111a074963af1d37a139918ac6d49ad1d0d5e47f72fd55388619691a7d753"
-dependencies = [
- "cc",
- "winapi 0.3.8",
-]
-
-[[package]]
-name = "libloading"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2cadb8e769f070c45df05c78c7520eb4cd17061d4ab262e43cfc68b4d00ac71c"
@@ -2178,10 +2140,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "librocksdb-sys"
-version = "6.11.4"
+name = "libloading"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb5b56f651c204634b936be2f92dbb42c36867e00ff7fe2405591f3b9fa66f09"
+checksum = "6f84d96438c15fcd6c3f244c8fce01d1e2b9c6b5623e9c711dc9286d8fc92d6a"
+dependencies = [
+ "cfg-if 1.0.0",
+ "winapi 0.3.8",
+]
+
+[[package]]
+name = "librocksdb-sys"
+version = "6.17.3"
+source = "git+https://github.com/rust-rocksdb/rust-rocksdb.git?rev=bc59596da15867510133d60822e615ef6e3a1ca4#bc59596da15867510133d60822e615ef6e3a1ca4"
 dependencies = [
  "bindgen",
  "cc",
@@ -3047,12 +3018,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "quick-error"
-version = "1.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1d01941d82fa2ab50be1e79e6714289dd7cde78eba4c074bc5a4374f650dfe0"
-
-[[package]]
 name = "quote"
 version = "0.6.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3343,8 +3308,6 @@ dependencies = [
 [[package]]
 name = "reed-solomon-erasure"
 version = "4.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a415a013dd7c5d4221382329a5a3482566da675737494935cbbbcdec04662f9d"
 dependencies = [
  "cc",
  "libc",
@@ -3434,13 +3397,13 @@ checksum = "53552c6c49e1e13f1a203ef0080ab3bbef0beb570a528993e83df057a9d9bba1"
 
 [[package]]
 name = "ring"
-version = "0.16.12"
+version = "0.16.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ba5a8ec64ee89a76c98c549af81ff14813df09c3e6dc4766c3856da48597a0c"
+checksum = "3053cf52e236a3ed746dfc745aa9cacf1b791d846bdaf412f60a8d7d6e17c8fc"
 dependencies = [
  "cc",
- "lazy_static",
  "libc",
+ "once_cell",
  "spin",
  "untrusted",
  "web-sys",
@@ -3450,8 +3413,7 @@ dependencies = [
 [[package]]
 name = "rocksdb"
 version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23d83c02c429044d58474eaf5ae31e062d0de894e21125b47437ec0edc1397e6"
+source = "git+https://github.com/rust-rocksdb/rust-rocksdb.git?rev=bc59596da15867510133d60822e615ef6e3a1ca4#bc59596da15867510133d60822e615ef6e3a1ca4"
 dependencies = [
  "libc",
  "librocksdb-sys",
@@ -4161,7 +4123,7 @@ dependencies = [
  "criterion-stats",
  "ctrlc",
  "dirs-next",
- "humantime 2.0.1",
+ "humantime",
  "indicatif",
  "log 0.4.11",
  "num-traits",
@@ -4215,7 +4177,7 @@ dependencies = [
  "base64 0.13.0",
  "chrono",
  "console",
- "humantime 2.0.1",
+ "humantime",
  "indicatif",
  "serde",
  "serde_derive",
@@ -4377,6 +4339,7 @@ dependencies = [
  "rand_chacha 0.2.2",
  "regex-syntax",
  "reqwest",
+ "ring",
  "serde",
  "syn 0.15.44",
  "syn 1.0.60",
@@ -4754,7 +4717,7 @@ version = "1.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7fa7bddd7b89c26c6e3ef4af9b47d6bc8d60888559affb5160f5ade18c0cd058"
 dependencies = [
- "env_logger 0.8.3",
+ "env_logger",
  "lazy_static",
  "log 0.4.11",
 ]
@@ -4763,7 +4726,7 @@ dependencies = [
 name = "solana-logger"
 version = "1.7.0"
 dependencies = [
- "env_logger 0.8.3",
+ "env_logger",
  "lazy_static",
  "log 0.4.11",
 ]
@@ -4806,7 +4769,7 @@ dependencies = [
 name = "solana-metrics"
 version = "1.7.0"
 dependencies = [
- "env_logger 0.8.3",
+ "env_logger",
  "gethostname",
  "lazy_static",
  "log 0.4.11",
@@ -5494,7 +5457,7 @@ name = "solana-watchtower"
 version = "1.7.0"
 dependencies = [
  "clap",
- "humantime 2.0.1",
+ "humantime",
  "log 0.4.11",
  "solana-clap-utils",
  "solana-cli-config",
@@ -5741,7 +5704,7 @@ dependencies = [
  "anyhow",
  "fnv",
  "futures 0.3.8",
- "humantime 2.0.1",
+ "humantime",
  "log 0.4.11",
  "pin-project 1.0.1",
  "rand 0.7.3",
@@ -6784,15 +6747,6 @@ dependencies = [
  "tokio-io",
  "tokio-tcp",
  "tokio-tls",
-]
-
-[[package]]
-name = "which"
-version = "3.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d011071ae14a2f6671d0b74080ae0cd8ebf3a6f8c9589a2cd45f23126fe29724"
-dependencies = [
- "libc",
 ]
 
 [[package]]
