@@ -2281,24 +2281,25 @@ describe('Connection', () => {
       let listener: number | undefined;
       const owner = new Account();
       const [logsRes, ctx] = await new Promise(resolve => {
+        let received = false;
         listener = connection.onLogs(
-          'all',
+          owner.publicKey,
           (logs, ctx) => {
-            resolve([logs, ctx]);
+            if (!logs.err) {
+              received = true;
+              resolve([logs, ctx]);
+            }
           },
           'processed',
         );
-        // Sleep to allow the subscription time to be setup.
-        //
-        // Without this, there's a race condition between setting up the log
-        // subscription and executing the transaction to trigger the log.
-        // If the transaction to trigger the log executes before the
-        // subscription is setup, the log event listener never fires and so the
-        // promise never resolves.
-        sleep(1000).then(() => {
-          // Execute a transaction so that we can pickup its logs.
-          connection.requestAirdrop(owner.publicKey, 1);
-        });
+
+        // Send transactions until the log subscription receives an event
+        (async () => {
+          while (!received) {
+            // Execute a transaction so that we can pickup its logs.
+            await connection.requestAirdrop(owner.publicKey, 1);
+          }
+        })();
       });
       expect(ctx.slot).to.be.greaterThan(0);
       expect(logsRes.logs.length).to.eq(2);
