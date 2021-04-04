@@ -5400,6 +5400,7 @@ dependencies = [
  "rustc_version",
  "serde",
  "serde_derive",
+ "serde_json",
  "solana-frozen-abi 1.6.0",
  "solana-frozen-abi-macro 1.6.0",
  "solana-logger 1.6.0",

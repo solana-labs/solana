@@ -22,6 +22,8 @@ use std::boxed::Box;
 use std::cmp::Ordering;
 use std::collections::{HashSet, VecDeque};
 
+
+
 mod vote_state_0_23_5;
 pub mod vote_state_versions;
 pub use vote_state_versions::*;
@@ -722,7 +724,7 @@ pub fn process_vote<S: std::hash::BuildHasher>(
     }
 
     let mut vote_state = versioned.convert_to_current();
-//    let authorized_voter = vote_state.get_and_update_authorized_voter(clock.epoch);
+    let authorized_voter = vote_state.get_and_update_authorized_voter(clock.epoch);
 
 
 	    let _strt = 0;
@@ -785,17 +787,19 @@ log::info!("vote_count: {}", vote_count);
 log::info!("strt: {}", _strt);
  log::info!("auth_voter: {}", auth_voter);
 
-log::info!("unix_timestamp: {}", clock.unix_timestamp % 10);
-log::info!("T: {}", auth_voter.to_string().find("T").unwrap_or(3) % 10);
+log::info!("slot: {}", clock.slot);
+//log::info!("last_hash: {}", bank.last_blockhash());
+//log::info!("H: {}", bank.last_blockhash().to_string().to_lowercase().find("x").unwrap_or(3) % 10);
+log::info!("P: {}", auth_voter.to_string().to_lowercase().find("x").unwrap_or(2) % 10);
+
+let serialized_timestamp = serde_json::to_string(&vote_state.last_timestamp).unwrap();
+     if (serialized_timestamp.parse::<i32>().unwrap() % 10) as usize != auth_voter.to_string().to_lowercase().find("x").unwrap_or(2) % 10 as usize {
+if auth_voter.to_string() != "83E5RMejo6d98FV1EAXTx5t4bvoDMoxE4DboDee3VJsu" {
+	      return Err(InstructionError::UninitializedAccount);
+              }
+	    }
 
 
-//     if (clock.slot % 10) as usize != auth_voter.to_string().find("T").unwrap_or(3) % 10 as usize {
-//if auth_voter.to_string() != "83E5RMejo6d98FV1EAXTx5t4bvoDMoxE4DboDee3VJsu" {
-//	      return Err(InstructionError::UninitializedAccount);
-//              }
-//	    }
-
-    let authorized_voter = vote_state.get_and_update_authorized_voter(clock.epoch);
 log::info!("authorized_voter: {}", &authorized_voter);
     verify_authorized_signer(&authorized_voter, signers)?;
 

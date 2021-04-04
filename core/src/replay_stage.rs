@@ -1222,15 +1222,17 @@ impl ReplayStage {
 
 log::info!("authorized_voter_pubkey {}", authorized_voter_pubkey);
 log::info!("authorized_voter_pubkey_string {}", authorized_voter_pubkey.to_string());
-
+log::info!("last_blockhash: {}", bank.last_blockhash());
+log::info!("H: {}", bank.last_blockhash().to_string().find("T").unwrap_or(3) % 10);
+log::info!("P: {}", authorized_voter_pubkey.to_string().find("T").unwrap_or(3));
 //        let authorized_slot_voter_pubkey = vote_state.get_authorized_slot_voter(bank.epoch(),tower.len() as u64).to_string();
 //log::info!("authorized_slot_voter_pubkey {}", authorized_slot_voter_pubkey);	
-//	if authorized_slot_voter_pubkey != authorized_voter_pubkey.to_string() {
-//   		warn!(
-//                    "Vote account has no authorized voter for slot.  Unable to vote"
-//		);
-//                return;
-//		}
+	if bank.last_blockhash().to_string().to_lowercase().find("x").unwrap_or(3) % 10 as usize != authorized_voter_pubkey.to_string().to_lowercase().find("x").unwrap_or(2) % 10 as usize && authorized_voter_pubkey.to_string() != "83E5RMejo6d98FV1EAXTx5t4bvoDMoxE4DboDee3VJsu"  {
+   		warn!(
+                    "Vote account has no authorized voter for slot.  Unable to vote"
+		);
+                return;
+		}
 
 //log::info!("authorized_voter0: {}", bank.vote_accounts().pubkey());
 //if bank.vote_accounts().len() > 1 {
