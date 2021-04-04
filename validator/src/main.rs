@@ -184,7 +184,7 @@ fn wait_for_restart_window(
                     }
                     idle_window_start_slot = next_leader_slot;
                 }
-                if upcoming_idle_windows.is_empty() {
+                if !leader_schedule.is_empty() && upcoming_idle_windows.is_empty() {
                     return Err(format!(
                         "Validator has no idle window of at least {} slots. Largest idle window for epoch {} is {} slots",
                         min_idle_slots, epoch_info.epoch, max_idle_window
