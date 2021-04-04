@@ -446,15 +446,14 @@ impl JsonRpcRequestProcessor {
             .iter()
             .map(|address| {
                 if let Some(reward) = reward_hash.get(&address.to_string()) {
-                    Some(RpcInflationReward {
+                    return Some(RpcInflationReward {
                         epoch,
                         effective_slot: first_confirmed_block_in_epoch,
                         amount: reward.lamports.abs() as u64,
                         post_balance: reward.post_balance,
-                    })
-                } else {
-                    None
+                    });
                 }
+                None
             })
             .collect();
 
