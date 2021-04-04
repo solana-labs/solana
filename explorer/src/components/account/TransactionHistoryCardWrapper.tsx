@@ -15,7 +15,8 @@ export type SlotRow = {
   signature: string;
   err: object | null;
   blockTime: number | null | undefined;
-  failed: boolean;
+  statusClass: string;
+  statusText: string;
   signatureInfo: ConfirmedSignatureInfo;
 };
 
@@ -78,12 +79,22 @@ export function TransactionHistoryCardWrapper({
     }
 
     for (let slotTransaction of slotTransactions) {
+      let statusText;
+      let statusClass;
+      if (slotTransaction.err) {
+        statusClass = "warning";
+        statusText = "Failed";
+      } else {
+        statusClass = "success";
+        statusText = "Success";
+      }
       slotRows.push({
         slot,
         signature: slotTransaction.signature,
         err: slotTransaction.err,
         blockTime: slotTransaction.blockTime,
-        failed: !!slotTransaction.err,
+        statusClass,
+        statusText,
         signatureInfo: transactions[i],
       });
     }
@@ -113,9 +124,7 @@ export function TransactionHistoryCardWrapper({
         </button>
       </div>
 
-      {tab === "history" && (
-        <TransactionHistoryDetails pubkey={pubkey} slotRows={slotRows} />
-      )}
+      {tab === "history" && <TransactionHistoryDetails slotRows={slotRows} />}
       {tab === "transfers" && (
         <TransfersDetails pubkey={pubkey} slotRows={slotRows} />
       )}

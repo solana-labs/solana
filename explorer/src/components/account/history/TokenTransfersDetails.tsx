@@ -50,19 +50,19 @@ export function TransfersDetails({
 
   const hasTimestamps = !!slotRows.find((element) => !!element.blockTime);
   const detailsList: React.ReactNode[] = [];
-  const mintDecimalsMap = new Map<string, MintDetails>();
+  const mintMap = new Map<string, MintDetails>();
 
-  slotRows.forEach(({ slot, signature, signatureInfo, blockTime, failed }) => {
+  slotRows.forEach(({ signature, blockTime, statusText, statusClass }) => {
     const parsed = detailedHistoryMap.get(signature);
     if (!parsed) return;
 
-    // Extract mint decimals from token deltas
-    // if all else fails for old Transfer ix types
+    // Extract mint information from token deltas
+    // (used to filter out non-checked tokens transfers not belonging to this mint)
     if (parsed.meta?.preTokenBalances) {
       parsed.meta.preTokenBalances.forEach((balance) => {
         const account =
           parsed.transaction.message.accountKeys[balance.accountIndex];
-        mintDecimalsMap.set(account.pubkey.toBase58(), {
+        mintMap.set(account.pubkey.toBase58(), {
           decimals: balance.uiTokenAmount.decimals,
           mint: balance.mint,
         });
@@ -73,7 +73,7 @@ export function TransfersDetails({
       parsed.meta.postTokenBalances.forEach((balance) => {
         const account =
           parsed.transaction.message.accountKeys[balance.accountIndex];
-        mintDecimalsMap.set(account.pubkey.toBase58(), {
+        mintMap.set(account.pubkey.toBase58(), {
           decimals: balance.uiTokenAmount.decimals,
           mint: balance.mint,
         });
@@ -102,15 +102,13 @@ export function TransfersDetails({
       if ("tokenAmount" in transfer && transfer.mint !== pubkey) {
         return false;
       } else if (
-        mintDecimalsMap.has(transfer.source.toBase58()) &&
-        mintDecimalsMap.get(transfer.source.toBase58())?.mint !==
-          pubkey.toBase58()
+        mintMap.has(transfer.source.toBase58()) &&
+        mintMap.get(transfer.source.toBase58())?.mint !== pubkey.toBase58()
       ) {
         return false;
       } else if (
-        mintDecimalsMap.has(transfer.destination.toBase58()) &&
-        mintDecimalsMap.get(transfer.destination.toBase58())?.mint !==
-          pubkey.toBase58()
+        mintMap.has(transfer.destination.toBase58()) &&
+        mintMap.get(transfer.destination.toBase58())?.mint !== pubkey.toBase58()
       ) {
         return false;
       }
@@ -132,12 +130,11 @@ export function TransfersDetails({
 
         if (mintDetails?.decimals) {
           decimals = mintDetails.decimals;
-        } else if (mintDecimalsMap.has(transfer.source.toBase58())) {
+        } else if (mintMap.has(transfer.source.toBase58())) {
+          decimals = mintMap.get(transfer.source.toBase58())?.decimals || 0;
+        } else if (mintMap.has(transfer.destination.toBase58())) {
           decimals =
-            mintDecimalsMap.get(transfer.source.toBase58())?.decimals || 0;
-        } else if (mintDecimalsMap.has(transfer.destination.toBase58())) {
-          decimals =
-            mintDecimalsMap.get(transfer.destination.toBase58())?.decimals || 0;
+            mintMap.get(transfer.destination.toBase58())?.decimals || 0;
         }
 
         amountString = new Intl.NumberFormat("en-US", {
@@ -147,11 +144,7 @@ export function TransfersDetails({
       }
 
       detailsList.push(
-        <tr
-          key={signature + transfer.source + transfer.destination}
-          className={`${failed && "transaction-failed"}`}
-          title={`${failed && "Transaction Failed"}`}
-        >
+        <tr key={signature + transfer.source + transfer.destination}>
           <td>
             <Signature signature={signature} link truncateChars={24} />
           </td>
@@ -173,6 +166,12 @@ export function TransfersDetails({
           <td>
             {amountString} {units}
           </td>
+
+          <td>
+            <span className={`badge badge-soft-${statusClass}`}>
+              {statusText}
+            </span>
+          </td>
         </tr>
       );
     });
@@ -188,6 +187,7 @@ export function TransfersDetails({
             <th className="text-muted">Source</th>
             <th className="text-muted">Destination</th>
             <th className="text-muted">Amount</th>
+            <th className="text-muted">Result</th>
           </tr>
         </thead>
         <tbody className="list">{detailsList}</tbody>
