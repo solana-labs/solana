@@ -83,7 +83,7 @@ fn main() {
             num_entries,
             time.as_us() / iterations as u64
         );
-        
+
         if is_x86_feature_detected!("avx2") && entry::api().is_some() {
             let mut time = Measure::start("time");
             for _ in 0..iterations {
@@ -113,7 +113,7 @@ fn main() {
                 time.as_us() / iterations as u64
             );
         }
-        
+
         if perf_libs::api().is_some() {
             let mut time = Measure::start("time");
             let recyclers = VerifyRecyclers::default();
