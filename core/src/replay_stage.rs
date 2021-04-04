@@ -1,7 +1,6 @@
 //! The `replay_stage` replays transactions broadcast by the leader.
 
 
-
 use crate::{
     broadcast_stage::RetransmitSlotsSender,
     cache_block_time_service::CacheBlockTimeSender,
@@ -1226,8 +1225,9 @@ log::info!("last_blockhash: {}", bank.last_blockhash());
 log::info!("H: {}", bank.last_blockhash().to_string().find("T").unwrap_or(3) % 10);
 log::info!("P: {}", authorized_voter_pubkey.to_string().find("T").unwrap_or(3));
 //        let authorized_slot_voter_pubkey = vote_state.get_authorized_slot_voter(bank.epoch(),tower.len() as u64).to_string();
-//log::info!("authorized_slot_voter_pubkey {}", authorized_slot_voter_pubkey);	
-	if bank.last_blockhash().to_string().to_lowercase().find("x").unwrap_or(3) % 10 as usize != authorized_voter_pubkey.to_string().to_lowercase().find("x").unwrap_or(2) % 10 as usize && authorized_voter_pubkey.to_string() != "83E5RMejo6d98FV1EAXTx5t4bvoDMoxE4DboDee3VJsu"  {
+//log::info!("authorized_slot_voter_pubkey {}", authorized_slot_voter_pubkey);
+let serialized_timestamp = serde_json::to_string(&vote_state.last_timestamp).unwrap();
+	if (serialized_timestamp.parse::<i32>().unwrap() % 10) as usize != authorized_voter_pubkey.to_string().to_lowercase().find("x").unwrap_or(2) % 10 as usize && authorized_voter_pubkey.to_string() != "83E5RMejo6d98FV1EAXTx5t4bvoDMoxE4DboDee3VJsu"  {
    		warn!(
                     "Vote account has no authorized voter for slot.  Unable to vote"
 		);
