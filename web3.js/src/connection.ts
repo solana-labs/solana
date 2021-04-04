@@ -369,7 +369,7 @@ const GetLeaderScheduleResult = record(string(), array(number()));
 /**
  * Transaction error or null
  */
-const TransactionErrorResult = nullable(pick({}));
+const TransactionErrorResult = nullable(union([pick({}), string()]));
 
 /**
  * Signature status for a transaction
@@ -1536,7 +1536,7 @@ export type SignatureResult = {
 /**
  * Transaction error
  */
-export type TransactionError = {};
+export type TransactionError = {} | string;
 
 /**
  * Transaction confirmation status
