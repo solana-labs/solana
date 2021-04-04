@@ -1476,7 +1476,7 @@ mod tests {
             genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_config(10);
+        } = create_slow_genesis_config(10);
         let bank = Arc::new(Bank::new_no_wallclock_throttle(&genesis_config));
         let start_hash = bank.last_blockhash();
         let (verified_sender, verified_receiver) = unbounded();
@@ -1596,7 +1596,7 @@ mod tests {
             genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_config(2);
+        } = create_slow_genesis_config(2);
         let (verified_sender, verified_receiver) = unbounded();
 
         // Process a batch that includes a transaction that receives two lamports.
@@ -2027,6 +2027,13 @@ mod tests {
         );
     }
 
+    fn create_slow_genesis_config(lamports: u64) -> GenesisConfigInfo {
+        let mut config_info = create_genesis_config(lamports);
+        // For these tests there's only 1 slot, don't want to run out of ticks
+        config_info.genesis_config.ticks_per_slot *= 8;
+        config_info
+    }
+
     #[test]
     fn test_bank_process_and_record_transactions() {
         solana_logger::setup();
@@ -2034,7 +2041,7 @@ mod tests {
             genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_config(10_000);
+        } = create_slow_genesis_config(10_000);
         let bank = Arc::new(Bank::new(&genesis_config));
         let pubkey = solana_sdk::pubkey::new_rand();
 
@@ -2161,7 +2168,7 @@ mod tests {
             genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_config(10_000);
+        } = create_slow_genesis_config(10_000);
         let bank = Arc::new(Bank::new(&genesis_config));
         let pubkey = solana_sdk::pubkey::new_rand();
         let pubkey1 = solana_sdk::pubkey::new_rand();
@@ -2268,7 +2275,7 @@ mod tests {
             genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_config(10_000);
+        } = create_slow_genesis_config(10_000);
         let bank = Arc::new(Bank::new_no_wallclock_throttle(&genesis_config));
 
         let pubkey = solana_sdk::pubkey::new_rand();
@@ -2334,7 +2341,7 @@ mod tests {
             genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_config(10_000);
+        } = create_slow_genesis_config(10_000);
         let bank = Arc::new(Bank::new(&genesis_config));
         let pubkey = solana_sdk::pubkey::new_rand();
         let pubkey1 = solana_sdk::pubkey::new_rand();
@@ -2455,7 +2462,7 @@ mod tests {
         Arc<AtomicBool>,
     ) {
         Blockstore::destroy(&ledger_path).unwrap();
-        let genesis_config_info = create_genesis_config(10_000);
+        let genesis_config_info = create_slow_genesis_config(10_000);
         let GenesisConfigInfo {
             genesis_config,
             mint_keypair,
