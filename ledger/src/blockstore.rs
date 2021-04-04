@@ -2055,7 +2055,7 @@ impl Blockstore {
         );
         let confirmed_unrooted_slots: Vec<_> =
             AncestorIterator::new_inclusive(highest_confirmed_slot, self)
-                .filter(|&slot| slot > self.last_root())
+                .take_while(|&slot| slot > self.last_root())
                 .collect();
         self.get_transaction_with_status(signature, &confirmed_unrooted_slots)
     }
@@ -2214,7 +2214,7 @@ impl Blockstore {
             )
         );
         let confirmed_unrooted_slots: Vec<_> = AncestorIterator::new_inclusive(highest_slot, self)
-            .filter(|&slot| slot > self.last_root())
+            .take_while(|&slot| slot > self.last_root())
             .collect();
 
         // Figure the `slot` to start listing signatures at, based on the ledger location of the
