@@ -1390,7 +1390,7 @@ fn report_target_features() {
         }
     );
 
-    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), not(target_os = "macos")))]
     {
         unsafe { check_avx() };
     }

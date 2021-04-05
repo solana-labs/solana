@@ -2,11 +2,10 @@
 pub mod measure;
 pub mod thread_mem_usage;
 
-// #[cfg(all(unix, not(all(target_os = "macos", target_arch="aarch64-app-darwin"))))]
-// #[cfg(unix)]
+#[cfg(target_os = "linux")]
 extern crate jemallocator;
 
 #[cfg(not(feature = "no-jemalloc"))]
-#[cfg(all(unix, not(all(target_os = "macos", target_arch="aarch64-apple-darwin"))))]
+#[cfg(target_os = "linux")]
 #[global_allocator]
 static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;

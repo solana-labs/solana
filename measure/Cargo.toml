@@ -15,7 +15,7 @@ log = "0.4.11"
 solana-sdk = { path = "../sdk", version = "=1.7.0" }
 solana-metrics = { path = "../metrics", version = "=1.7.0" }
 
-[target."cfg(unix)".dependencies]
+[target.'cfg(target_os = "linux")'.dependencies]
 jemallocator = "0.3.2"
 jemalloc-ctl = "0.3.2"
 
