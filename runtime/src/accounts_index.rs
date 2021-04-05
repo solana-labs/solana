@@ -1370,9 +1370,8 @@ pub mod tests {
             if slot % dead == 0 {
                 continue;
             }
-            let s2 = slot.clone();
-            hash.insert(s2);
-            bitfield.insert(s2);
+            hash.insert(slot);
+            bitfield.insert(slot);
         }
 
         let max = slot + 1;
@@ -1424,9 +1423,8 @@ pub mod tests {
             if slot % dead == 0 {
                 continue;
             }
-            let s2 = slot.clone();
-            hash.insert(s2);
-            bitfield.insert(s2);
+            hash.insert(slot);
+            bitfield.insert(slot);
         }
 
         let max = slot + 1;
