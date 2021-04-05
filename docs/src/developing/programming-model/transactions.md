@@ -92,7 +92,7 @@ array and operates on the accounts specified by the instructions. The program
 can return successfully, or with an error code. An error return causes the
 entire transaction to fail immediately.
 
-Program's typically provide helper functions to construct instruction they
+Programs typically provide helper functions to construct instructions they
 support. For example, the system program provides the following Rust helper to
 construct a
 [`SystemInstruction::CreateAccount`](https://github.com/solana-labs/solana/blob/6606590b8132e56dab9e60b3f7d20ba7412a736c/sdk/program/src/system_instruction.rs#L63)

@@ -4,10 +4,17 @@ use {
     console::style,
     indicatif::{ProgressBar, ProgressStyle},
     solana_sdk::{
+<<<<<<< HEAD
         clock::UnixTimestamp, hash::Hash, native_token::lamports_to_sol,
         program_utils::limited_deserialize, transaction::Transaction,
+=======
+        clock::UnixTimestamp, hash::Hash, message::Message, native_token::lamports_to_sol,
+        program_utils::limited_deserialize, pubkey::Pubkey, transaction::Transaction,
+>>>>>>> 364af3a3e... issue #10831: added --with-memo option to all cli commands that submit (#16291)
     },
     solana_transaction_status::UiTransactionStatusMeta,
+    spl_memo::id as spl_memo_id,
+    spl_memo::v1::id as spl_memo_v1_id,
     std::{collections::HashMap, fmt, io},
 };
 
@@ -26,6 +33,11 @@ impl Default for BuildBalanceMessageConfig {
             trim_trailing_zeros: true,
         }
     }
+}
+
+fn is_memo_program(k: &Pubkey) -> bool {
+    let k_str = k.to_string();
+    (k_str == spl_memo_v1_id().to_string()) || (k_str == spl_memo_id().to_string())
 }
 
 pub fn build_balance_message_with_config(
@@ -211,6 +223,11 @@ pub fn write_transaction<W: io::Write>(
             >(&instruction.data)
             {
                 writeln!(w, "{}  {:?}", prefix, system_instruction)?;
+                raw = false;
+            }
+        } else if is_memo_program(&program_pubkey) {
+            if let Ok(s) = std::str::from_utf8(&instruction.data) {
+                writeln!(w, "{}  Data: \"{}\"", prefix, s)?;
                 raw = false;
             }
         }

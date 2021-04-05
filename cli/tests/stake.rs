@@ -56,6 +56,7 @@ fn test_stake_delegation_force() {
         authorized_voter: None,
         authorized_withdrawer: None,
         commission: 0,
+        memo: None,
     };
     process_command(&config).unwrap();
 
@@ -74,6 +75,7 @@ fn test_stake_delegation_force() {
         blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
         nonce_account: None,
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
         from: 0,
     };
@@ -91,6 +93,7 @@ fn test_stake_delegation_force() {
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
     };
     process_command(&config).unwrap_err();
@@ -106,6 +109,7 @@ fn test_stake_delegation_force() {
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
     };
     process_command(&config).unwrap();
@@ -158,6 +162,7 @@ fn test_seed_stake_delegation_and_deactivation() {
         blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
         nonce_account: None,
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
         from: 0,
     };
@@ -174,6 +179,7 @@ fn test_seed_stake_delegation_and_deactivation() {
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
     };
     process_command(&config_validator).unwrap();
@@ -187,6 +193,7 @@ fn test_seed_stake_delegation_and_deactivation() {
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
     };
     process_command(&config_validator).unwrap();
@@ -234,6 +241,7 @@ fn test_stake_delegation_and_deactivation() {
         blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
         nonce_account: None,
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
         from: 0,
     };
@@ -251,6 +259,7 @@ fn test_stake_delegation_and_deactivation() {
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
     };
     process_command(&config_validator).unwrap();
@@ -264,6 +273,7 @@ fn test_stake_delegation_and_deactivation() {
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
     };
     process_command(&config_validator).unwrap();
@@ -332,6 +342,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
         nonce_account: None,
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
         from: 0,
     };
@@ -349,6 +360,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         blockhash_query: BlockhashQuery::None(blockhash),
         nonce_account: None,
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
     };
     config_offline.output_format = OutputFormat::JsonCompact;
@@ -369,6 +381,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         blockhash_query: BlockhashQuery::FeeCalculator(blockhash_query::Source::Cluster, blockhash),
         nonce_account: None,
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
     };
     process_command(&config_payer).unwrap();
@@ -383,6 +396,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         blockhash_query: BlockhashQuery::None(blockhash),
         nonce_account: None,
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
     };
     let sig_response = process_command(&config_offline).unwrap();
@@ -400,6 +414,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         blockhash_query: BlockhashQuery::FeeCalculator(blockhash_query::Source::Cluster, blockhash),
         nonce_account: None,
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
     };
     process_command(&config_payer).unwrap();
@@ -449,6 +464,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
         blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
         nonce_account: None,
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
         from: 0,
     };
@@ -461,6 +477,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
         nonce_account: 1,
         seed: None,
         nonce_authority: Some(config.signers[0].pubkey()),
+        memo: None,
         amount: SpendAmount::Some(minimum_nonce_balance),
     };
     process_command(&config).unwrap();
@@ -490,6 +507,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
         ),
         nonce_account: Some(nonce_account.pubkey()),
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
     };
     process_command(&config).unwrap();
@@ -516,6 +534,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
         ),
         nonce_account: Some(nonce_account.pubkey()),
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
     };
     process_command(&config).unwrap();
@@ -580,6 +599,7 @@ fn test_stake_authorize() {
         blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
         nonce_account: None,
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
         from: 0,
     };
@@ -597,6 +617,7 @@ fn test_stake_authorize() {
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
         custodian: None,
     };
@@ -626,6 +647,7 @@ fn test_stake_authorize() {
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
         custodian: None,
     };
@@ -650,6 +672,7 @@ fn test_stake_authorize() {
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
         custodian: None,
     };
@@ -674,6 +697,7 @@ fn test_stake_authorize() {
         blockhash_query: BlockhashQuery::None(blockhash),
         nonce_account: None,
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
         custodian: None,
     };
@@ -691,6 +715,7 @@ fn test_stake_authorize() {
         blockhash_query: BlockhashQuery::FeeCalculator(blockhash_query::Source::Cluster, blockhash),
         nonce_account: None,
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
         custodian: None,
     };
@@ -713,6 +738,7 @@ fn test_stake_authorize() {
         nonce_account: 1,
         seed: None,
         nonce_authority: Some(offline_authority_pubkey),
+        memo: None,
         amount: SpendAmount::Some(minimum_nonce_balance),
     };
     process_command(&config).unwrap();
@@ -739,6 +765,7 @@ fn test_stake_authorize() {
         blockhash_query: BlockhashQuery::None(nonce_hash),
         nonce_account: Some(nonce_account.pubkey()),
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
         custodian: None,
     };
@@ -760,6 +787,7 @@ fn test_stake_authorize() {
         ),
         nonce_account: Some(nonce_account.pubkey()),
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
         custodian: None,
     };
@@ -846,6 +874,7 @@ fn test_stake_authorize_with_fee_payer() {
         blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
         nonce_account: None,
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
         from: 0,
     };
@@ -863,6 +892,7 @@ fn test_stake_authorize_with_fee_payer() {
         blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
         nonce_account: None,
         nonce_authority: 0,
+        memo: None,
         fee_payer: 1,
         custodian: None,
     };
@@ -883,6 +913,7 @@ fn test_stake_authorize_with_fee_payer() {
         blockhash_query: BlockhashQuery::None(blockhash),
         nonce_account: None,
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
         custodian: None,
     };
@@ -900,6 +931,7 @@ fn test_stake_authorize_with_fee_payer() {
         blockhash_query: BlockhashQuery::FeeCalculator(blockhash_query::Source::Cluster, blockhash),
         nonce_account: None,
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
         custodian: None,
     };
@@ -969,6 +1001,7 @@ fn test_stake_split() {
         blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
         nonce_account: None,
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
         from: 0,
     };
@@ -989,6 +1022,7 @@ fn test_stake_split() {
         nonce_account: 1,
         seed: None,
         nonce_authority: Some(offline_pubkey),
+        memo: None,
         amount: SpendAmount::Some(minimum_nonce_balance),
     };
     process_command(&config).unwrap();
@@ -1016,6 +1050,7 @@ fn test_stake_split() {
         blockhash_query: BlockhashQuery::None(nonce_hash),
         nonce_account: Some(nonce_account.pubkey()),
         nonce_authority: 0,
+        memo: None,
         split_stake_account: 1,
         seed: None,
         lamports: 2 * minimum_stake_balance,
@@ -1038,6 +1073,7 @@ fn test_stake_split() {
         ),
         nonce_account: Some(nonce_account.pubkey()),
         nonce_authority: 0,
+        memo: None,
         split_stake_account: 1,
         seed: None,
         lamports: 2 * minimum_stake_balance,
@@ -1121,6 +1157,7 @@ fn test_stake_set_lockup() {
         blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
         nonce_account: None,
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
         from: 0,
     };
@@ -1147,6 +1184,7 @@ fn test_stake_set_lockup() {
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
     };
     process_command(&config).unwrap();
@@ -1181,6 +1219,7 @@ fn test_stake_set_lockup() {
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
     };
     process_command(&config).unwrap();
@@ -1200,6 +1239,7 @@ fn test_stake_set_lockup() {
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
     };
     process_command(&config).unwrap();
@@ -1231,6 +1271,7 @@ fn test_stake_set_lockup() {
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
     };
     process_command(&config).unwrap();
@@ -1246,6 +1287,7 @@ fn test_stake_set_lockup() {
         nonce_account: 1,
         seed: None,
         nonce_authority: Some(offline_pubkey),
+        memo: None,
         amount: SpendAmount::Some(minimum_nonce_balance),
     };
     process_command(&config).unwrap();
@@ -1276,6 +1318,7 @@ fn test_stake_set_lockup() {
         blockhash_query: BlockhashQuery::None(nonce_hash),
         nonce_account: Some(nonce_account_pubkey),
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
     };
     config_offline.output_format = OutputFormat::JsonCompact;
@@ -1296,6 +1339,7 @@ fn test_stake_set_lockup() {
         ),
         nonce_account: Some(nonce_account_pubkey),
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
     };
     process_command(&config).unwrap();
@@ -1362,6 +1406,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         nonce_account: 1,
         seed: None,
         nonce_authority: Some(offline_pubkey),
+        memo: None,
         amount: SpendAmount::Some(minimum_nonce_balance),
     };
     process_command(&config).unwrap();
@@ -1392,6 +1437,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         blockhash_query: BlockhashQuery::None(nonce_hash),
         nonce_account: Some(nonce_pubkey),
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
         from: 0,
     };
@@ -1417,6 +1463,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         ),
         nonce_account: Some(nonce_pubkey),
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
         from: 0,
     };
@@ -1448,6 +1495,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         blockhash_query: BlockhashQuery::None(nonce_hash),
         nonce_account: Some(nonce_pubkey),
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
     };
     let sig_response = process_command(&config_offline).unwrap();
@@ -1468,6 +1516,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         ),
         nonce_account: Some(nonce_pubkey),
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
     };
     process_command(&config).unwrap();
@@ -1498,6 +1547,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         blockhash_query: BlockhashQuery::None(nonce_hash),
         nonce_account: Some(nonce_pubkey),
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
         from: 0,
     };
@@ -1521,6 +1571,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         ),
         nonce_account: Some(nonce_pubkey),
         nonce_authority: 0,
+        memo: None,
         fee_payer: 0,
         from: 0,
     };
