@@ -277,12 +277,13 @@ fn verify_rent_exemption(
 
 pub fn process_instruction(
     _program_id: &Pubkey,
-    keyed_accounts: &[KeyedAccount],
+    _keyed_accounts: &[KeyedAccount],
     data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
+    let keyed_accounts = invoke_context.get_keyed_accounts();
     // TODO [KeyedAccounts to InvokeContext refactoring]
-    assert_eq!(keyed_accounts, invoke_context.get_keyed_accounts());
+    assert_eq!(_keyed_accounts, keyed_accounts);
 
     trace!("process_instruction: {:?}", data);
     trace!("keyed_accounts: {:?}", keyed_accounts);

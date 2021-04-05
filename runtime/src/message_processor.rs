@@ -1787,12 +1787,13 @@ mod tests {
 
         fn mock_system_process_instruction(
             _program_id: &Pubkey,
-            keyed_accounts: &[KeyedAccount],
+            _keyed_accounts: &[KeyedAccount],
             data: &[u8],
             invoke_context: &mut dyn InvokeContext,
         ) -> Result<(), InstructionError> {
+            let keyed_accounts = invoke_context.get_keyed_accounts();
             // TODO [KeyedAccounts to InvokeContext refactoring]
-            assert_eq!(keyed_accounts, invoke_context.get_keyed_accounts());
+            assert_eq!(_keyed_accounts, keyed_accounts);
             if let Ok(instruction) = bincode::deserialize(data) {
                 match instruction {
                     MockSystemInstruction::Correct => Ok(()),
@@ -1942,12 +1943,13 @@ mod tests {
 
         fn mock_system_process_instruction(
             _program_id: &Pubkey,
-            keyed_accounts: &[KeyedAccount],
+            _keyed_accounts: &[KeyedAccount],
             data: &[u8],
             invoke_context: &mut dyn InvokeContext,
         ) -> Result<(), InstructionError> {
+            let keyed_accounts = invoke_context.get_keyed_accounts();
             // TODO [KeyedAccounts to InvokeContext refactoring]
-            assert_eq!(keyed_accounts, invoke_context.get_keyed_accounts());
+            assert_eq!(_keyed_accounts, keyed_accounts);
             if let Ok(instruction) = bincode::deserialize(data) {
                 match instruction {
                     MockSystemInstruction::BorrowFail => {
@@ -2123,12 +2125,13 @@ mod tests {
 
         fn mock_process_instruction(
             program_id: &Pubkey,
-            keyed_accounts: &[KeyedAccount],
+            _keyed_accounts: &[KeyedAccount],
             data: &[u8],
             invoke_context: &mut dyn InvokeContext,
         ) -> Result<(), InstructionError> {
+            let keyed_accounts = invoke_context.get_keyed_accounts();
             // TODO [KeyedAccounts to InvokeContext refactoring]
-            assert_eq!(keyed_accounts, invoke_context.get_keyed_accounts());
+            assert_eq!(_keyed_accounts, keyed_accounts);
             assert_eq!(*program_id, keyed_accounts[0].owner()?);
             assert_ne!(
                 keyed_accounts[1].owner()?,
@@ -2274,12 +2277,12 @@ mod tests {
         #[allow(clippy::unnecessary_wraps)]
         fn mock_process_instruction(
             _program_id: &Pubkey,
-            keyed_accounts: &[KeyedAccount],
+            _keyed_accounts: &[KeyedAccount],
             _data: &[u8],
             invoke_context: &mut dyn InvokeContext,
         ) -> Result<(), InstructionError> {
             // TODO [KeyedAccounts to InvokeContext refactoring]
-            assert_eq!(keyed_accounts, invoke_context.get_keyed_accounts());
+            assert_eq!(_keyed_accounts, invoke_context.get_keyed_accounts());
             Ok(())
         }
         #[allow(clippy::unnecessary_wraps)]
