@@ -2878,33 +2878,20 @@ impl AccountsDb {
     pub fn hash_stored_account(
         slot: Slot,
         account: &StoredAccountMeta,
-        cluster_type: &ClusterType,
+        _cluster_type: &ClusterType,
     ) -> Hash {
-        let include_owner = Self::include_owner(cluster_type, slot);
+        let include_owner = true;
 
-        if slot > Self::get_blake3_slot(cluster_type) {
-            Self::blake3_hash_account_data(
-                slot,
-                account.account_meta.lamports,
-                &account.account_meta.owner,
-                account.account_meta.executable,
-                account.account_meta.rent_epoch,
-                account.data,
-                &account.meta.pubkey,
-                include_owner,
-            )
-        } else {
-            Self::hash_account_data(
-                slot,
-                account.account_meta.lamports,
-                &account.account_meta.owner,
-                account.account_meta.executable,
-                account.account_meta.rent_epoch,
-                account.data,
-                &account.meta.pubkey,
-                include_owner,
-            )
-        }
+        Self::blake3_hash_account_data(
+            slot,
+            account.account_meta.lamports,
+            &account.account_meta.owner,
+            account.account_meta.executable,
+            account.account_meta.rent_epoch,
+            account.data,
+            &account.meta.pubkey,
+            include_owner,
+        )
     }
 
     pub fn hash_account(
