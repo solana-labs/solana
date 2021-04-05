@@ -20,6 +20,7 @@ use {
         transaction::Transaction,
     },
     std::{
+        collections::HashMap,
         io::{self, Error, ErrorKind, Read, Write},
         net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream},
         sync::{mpsc::Sender, Arc, Mutex},
@@ -47,7 +48,6 @@ macro_rules! socketaddr {
 const ERROR_RESPONSE: [u8; 2] = 0u16.to_le_bytes();
 
 pub const TIME_SLICE: u64 = 60;
-pub const REQUEST_CAP: u64 = solana_sdk::native_token::LAMPORTS_PER_SOL * 10_000_000;
 pub const FAUCET_PORT: u16 = 9900;
 pub const FAUCET_PORT_STR: &str = "9900";
 
@@ -72,11 +72,10 @@ impl Default for FaucetRequest {
 
 pub struct Faucet {
     faucet_keypair: Keypair,
-    ip_cache: Vec<IpAddr>,
+    ip_cache: HashMap<IpAddr, u64>,
     pub time_slice: Duration,
-    per_time_cap: u64,
+    per_time_cap: Option<u64>,
     per_request_cap: Option<u64>,
-    pub request_current: u64,
 }
 
 impl Faucet {
@@ -87,30 +86,52 @@ impl Faucet {
         per_request_cap: Option<u64>,
     ) -> Faucet {
         let time_slice = Duration::new(time_input.unwrap_or(TIME_SLICE), 0);
-        let per_time_cap = per_time_cap.unwrap_or(REQUEST_CAP);
+        if let Some((per_request_cap, per_time_cap)) = per_request_cap.zip(per_time_cap) {
+            if per_time_cap < per_request_cap {
+                warn!(
+                    "Ip per_time_cap {} < per_request_cap {}; \
+                    maximum single requests will fail",
+                    per_time_cap, per_request_cap,
+                );
+            }
+        }
         Faucet {
             faucet_keypair,
-            ip_cache: Vec::new(),
+            ip_cache: HashMap::new(),
             time_slice,
             per_time_cap,
             per_request_cap,
-            request_current: 0,
         }
     }
 
-    pub fn check_time_request_limit(&mut self, request_amount: u64) -> bool {
-        self.request_current
-            .checked_add(request_amount)
-            .map(|s| s <= self.per_time_cap)
-            .unwrap_or(false)
-    }
-
-    pub fn clear_request_count(&mut self) {
-        self.request_current = 0;
-    }
-
-    pub fn add_ip_to_cache(&mut self, ip: IpAddr) {
-        self.ip_cache.push(ip);
+    pub fn check_ip_time_request_limit(
+        &mut self,
+        request_amount: u64,
+        ip: IpAddr,
+    ) -> Result<(), io::Error> {
+        let ip_new_total = self
+            .ip_cache
+            .entry(ip)
+            .and_modify(|total| *total = total.saturating_add(request_amount))
+            .or_insert(request_amount);
+        datapoint_info!(
+            "faucet-airdrop",
+            ("request_amount", request_amount, i64),
+            ("ip", ip.to_string(), String),
+            ("ip_new_total", *ip_new_total, i64)
+        );
+        if let Some(cap) = self.per_time_cap {
+            if *ip_new_total > cap {
+                return Err(Error::new(
+                    ErrorKind::Other,
+                    format!(
+                        "token limit reached; req: {} ip: {} current: {} cap: {}",
+                        request_amount, ip, *ip_new_total, cap
+                    ),
+                ));
+            }
+        }
+        Ok(())
     }
 
     pub fn clear_ip_cache(&mut self) {
@@ -120,6 +141,7 @@ impl Faucet {
     pub fn build_airdrop_transaction(
         &mut self,
         req: FaucetRequest,
+        ip: IpAddr,
     ) -> Result<Transaction, io::Error> {
         trace!("build_airdrop_transaction: {:?}", req);
         match req {
@@ -136,37 +158,25 @@ impl Faucet {
                         ));
                     }
                 }
-                if self.check_time_request_limit(lamports) {
-                    self.request_current = self.request_current.saturating_add(lamports);
-                    datapoint_info!(
-                        "faucet-airdrop",
-                        ("request_amount", lamports, i64),
-                        ("request_current", self.request_current, i64)
-                    );
-                    info!("Requesting airdrop of {} to {:?}", lamports, to);
+                self.check_ip_time_request_limit(lamports, ip)?;
+                info!("Requesting airdrop of {} to {:?}", lamports, to);
 
-                    let mint_pubkey = self.faucet_keypair.pubkey();
-                    let create_instruction =
-                        system_instruction::transfer(&mint_pubkey, &to, lamports);
-                    let message = Message::new(&[create_instruction], Some(&mint_pubkey));
-                    Ok(Transaction::new(
-                        &[&self.faucet_keypair],
-                        message,
-                        blockhash,
-                    ))
-                } else {
-                    Err(Error::new(
-                        ErrorKind::Other,
-                        format!(
-                            "token limit reached; req: {} current: {} cap: {}",
-                            lamports, self.request_current, self.per_time_cap
-                        ),
-                    ))
-                }
+                let mint_pubkey = self.faucet_keypair.pubkey();
+                let create_instruction = system_instruction::transfer(&mint_pubkey, &to, lamports);
+                let message = Message::new(&[create_instruction], Some(&mint_pubkey));
+                Ok(Transaction::new(
+                    &[&self.faucet_keypair],
+                    message,
+                    blockhash,
+                ))
             }
         }
     }
-    pub fn process_faucet_request(&mut self, bytes: &[u8]) -> Result<Vec<u8>, io::Error> {
+    pub fn process_faucet_request(
+        &mut self,
+        bytes: &[u8],
+        ip: IpAddr,
+    ) -> Result<Vec<u8>, io::Error> {
         let req: FaucetRequest = deserialize(bytes).map_err(|err| {
             io::Error::new(
                 io::ErrorKind::Other,
@@ -175,7 +185,7 @@ impl Faucet {
         })?;
 
         info!("Airdrop transaction requested...{:?}", req);
-        let res = self.build_airdrop_transaction(req);
+        let res = self.build_airdrop_transaction(req, ip);
         match res {
             Ok(tx) => {
                 let response_vec = bincode::serialize(&tx).map_err(|err| {
@@ -358,9 +368,10 @@ async fn process(
                     ERROR_RESPONSE.to_vec()
                 }
                 Ok(peer_addr) => {
-                    info!("Request IP: {:?}", peer_addr.ip());
+                    let ip = peer_addr.ip();
+                    info!("Request IP: {:?}", ip);
 
-                    match faucet.lock().unwrap().process_faucet_request(&request) {
+                    match faucet.lock().unwrap().process_faucet_request(&request, ip) {
                         Ok(response_bytes) => {
                             trace!("Airdrop response_bytes: {:?}", response_bytes);
                             response_bytes
@@ -386,35 +397,13 @@ mod tests {
     use std::time::Duration;
 
     #[test]
-    fn test_check_time_request_limit() {
+    fn test_check_ip_time_request_limit() {
         let keypair = Keypair::new();
-        let mut faucet = Faucet::new(keypair, None, Some(3), None);
-        assert!(faucet.check_time_request_limit(1));
-        faucet.request_current = 3;
-        assert!(!faucet.check_time_request_limit(1));
-        faucet.request_current = 1;
-        assert!(!faucet.check_time_request_limit(u64::MAX));
-    }
-
-    #[test]
-    fn test_clear_request_count() {
-        let keypair = Keypair::new();
-        let mut faucet = Faucet::new(keypair, None, None, None);
-        faucet.request_current += 256;
-        assert_eq!(faucet.request_current, 256);
-        faucet.clear_request_count();
-        assert_eq!(faucet.request_current, 0);
-    }
-
-    #[test]
-    fn test_add_ip_to_cache() {
-        let keypair = Keypair::new();
-        let mut faucet = Faucet::new(keypair, None, None, None);
-        let ip = "127.0.0.1".parse().expect("create IpAddr from string");
-        assert_eq!(faucet.ip_cache.len(), 0);
-        faucet.add_ip_to_cache(ip);
-        assert_eq!(faucet.ip_cache.len(), 1);
-        assert!(faucet.ip_cache.contains(&ip));
+        let mut faucet = Faucet::new(keypair, None, Some(2), None);
+        let ip = socketaddr!([203, 0, 113, 1], 1234).ip();
+        assert!(faucet.check_ip_time_request_limit(1, ip).is_ok());
+        assert!(faucet.check_ip_time_request_limit(1, ip).is_ok());
+        assert!(faucet.check_ip_time_request_limit(1, ip).is_err());
     }
 
     #[test]
@@ -423,7 +412,7 @@ mod tests {
         let mut faucet = Faucet::new(keypair, None, None, None);
         let ip = "127.0.0.1".parse().expect("create IpAddr from string");
         assert_eq!(faucet.ip_cache.len(), 0);
-        faucet.add_ip_to_cache(ip);
+        faucet.check_ip_time_request_limit(1, ip).unwrap();
         assert_eq!(faucet.ip_cache.len(), 1);
         faucet.clear_ip_cache();
         assert_eq!(faucet.ip_cache.len(), 0);
@@ -434,11 +423,12 @@ mod tests {
     fn test_faucet_default_init() {
         let keypair = Keypair::new();
         let time_slice: Option<u64> = None;
-        let request_cap: Option<u64> = None;
-        let faucet = Faucet::new(keypair, time_slice, request_cap, Some(100));
+        let per_time_cap: Option<u64> = Some(200);
+        let per_request_cap: Option<u64> = Some(100);
+        let faucet = Faucet::new(keypair, time_slice, per_time_cap, per_request_cap);
         assert_eq!(faucet.time_slice, Duration::new(TIME_SLICE, 0));
-        assert_eq!(faucet.per_time_cap, REQUEST_CAP);
-        assert_eq!(faucet.per_request_cap, Some(100));
+        assert_eq!(faucet.per_time_cap, per_time_cap);
+        assert_eq!(faucet.per_request_cap, per_request_cap);
     }
 
     #[test]
@@ -450,12 +440,13 @@ mod tests {
             to,
             blockhash,
         };
+        let ip = socketaddr!([203, 0, 113, 1], 1234).ip();
 
         let mint = Keypair::new();
         let mint_pubkey = mint.pubkey();
         let mut faucet = Faucet::new(mint, None, None, None);
 
-        let tx = faucet.build_airdrop_transaction(request).unwrap();
+        let tx = faucet.build_airdrop_transaction(request, ip).unwrap();
         let message = tx.message();
 
         assert_eq!(tx.signatures.len(), 1);
@@ -472,13 +463,13 @@ mod tests {
         // Test per-time request cap
         let mint = Keypair::new();
         faucet = Faucet::new(mint, None, Some(1), None);
-        let tx = faucet.build_airdrop_transaction(request);
+        let tx = faucet.build_airdrop_transaction(request, ip);
         assert!(tx.is_err());
 
         // Test per-request cap
         let mint = Keypair::new();
         faucet = Faucet::new(mint, None, None, Some(1));
-        let tx = faucet.build_airdrop_transaction(request);
+        let tx = faucet.build_airdrop_transaction(request, ip);
         assert!(tx.is_err());
     }
 
@@ -492,6 +483,7 @@ mod tests {
             blockhash,
             to,
         };
+        let ip = socketaddr!([203, 0, 113, 1], 1234).ip();
         let req = serialize(&req).unwrap();
 
         let keypair = Keypair::new();
@@ -504,11 +496,11 @@ mod tests {
         expected_vec_with_length.extend_from_slice(&expected_bytes);
 
         let mut faucet = Faucet::new(keypair, None, None, None);
-        let response = faucet.process_faucet_request(&req);
+        let response = faucet.process_faucet_request(&req, ip);
         let response_vec = response.unwrap().to_vec();
         assert_eq!(expected_vec_with_length, response_vec);
 
         let bad_bytes = "bad bytes".as_bytes();
-        assert!(faucet.process_faucet_request(&bad_bytes).is_err());
+        assert!(faucet.process_faucet_request(&bad_bytes, ip).is_err());
     }
 }

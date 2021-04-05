@@ -1,5 +1,6 @@
 use {
     clap::{crate_description, crate_name, App, Arg},
+    log::*,
     solana_clap_utils::input_parsers::{lamports_of_sol, value_of},
     solana_faucet::{
         faucet::{run_faucet, Faucet, FAUCET_PORT},
@@ -76,7 +77,8 @@ async fn main() {
     thread::spawn(move || loop {
         let time = faucet1.lock().unwrap().time_slice;
         thread::sleep(time);
-        faucet1.lock().unwrap().clear_request_count();
+        debug!("clearing ip cache");
+        faucet1.lock().unwrap().clear_ip_cache();
     });
 
     run_faucet(faucet, faucet_addr, None).await;
