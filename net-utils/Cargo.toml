@@ -18,17 +18,10 @@ rand = "0.7.0"
 serde = "1.0.122"
 serde_derive = "1.0.103"
 socket2 = "0.3.17"
-<<<<<<< HEAD
 solana-clap-utils = { path = "../clap-utils", version = "=1.6.5" }
 solana-logger = { path = "../logger", version = "=1.6.5" }
 solana-version = { path = "../version", version = "=1.6.5" }
-tokio = { version = "1.1", features = ["full"] }
-=======
-solana-clap-utils = { path = "../clap-utils", version = "=1.7.0" }
-solana-logger = { path = "../logger", version = "=1.7.0" }
-solana-version = { path = "../version", version = "=1.7.0" }
 tokio = { version = "1", features = ["full"] }
->>>>>>> 43feef736... Adjust tokio version to just "1"
 url = "2.1.1"
 
 [lib]
