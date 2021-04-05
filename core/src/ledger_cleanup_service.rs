@@ -48,10 +48,6 @@ impl LedgerCleanupService {
         compaction_interval: Option<u64>,
         max_compaction_jitter: Option<u64>,
     ) -> Self {
-        info!(
-            "LedgerCleanupService active. Max Ledger Slots {}",
-            max_ledger_shreds
-        );
         let exit = exit.clone();
         let mut last_purge_slot = 0;
         let mut last_compaction_slot = 0;
@@ -59,6 +55,11 @@ impl LedgerCleanupService {
         let compaction_interval = compaction_interval.unwrap_or(DEFAULT_COMPACTION_SLOT_INTERVAL);
         let last_compact_slot = Arc::new(AtomicU64::new(0));
         let last_compact_slot2 = last_compact_slot.clone();
+
+        info!(
+            "LedgerCleanupService active. max ledger shreds={}, compaction interval={}",
+            max_ledger_shreds, compaction_interval,
+        );
 
         let exit_compact = exit.clone();
         let blockstore_compact = blockstore.clone();
