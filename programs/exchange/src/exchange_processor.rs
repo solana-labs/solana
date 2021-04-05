@@ -487,13 +487,10 @@ impl ExchangeProcessor {
 
 pub fn process_instruction(
     _program_id: &Pubkey,
-    _keyed_accounts: &[KeyedAccount],
     data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     let keyed_accounts = invoke_context.get_keyed_accounts();
-    // TODO [KeyedAccounts to InvokeContext refactoring]
-    assert_eq!(_keyed_accounts, keyed_accounts);
 
     solana_logger::setup();
     match limited_deserialize::<ExchangeInstruction>(data)? {

@@ -10,7 +10,7 @@ use solana_sdk::{
     decode_error::DecodeError,
     entrypoint_native::ProgramEntrypoint,
     instruction::InstructionError,
-    keyed_account::{keyed_account_at_index, KeyedAccount},
+    keyed_account::keyed_account_at_index,
     native_loader,
     process_instruction::{InvokeContext, LoaderEntrypoint},
     pubkey::Pubkey,
@@ -135,28 +135,28 @@ impl NativeLoader {
     pub fn process_instruction(
         &self,
         program_id: &Pubkey,
-        keyed_accounts: &[KeyedAccount],
         instruction_data: &[u8],
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
-        // TODO [KeyedAccounts to InvokeContext refactoring]
-        assert_eq!(keyed_accounts, invoke_context.get_keyed_accounts());
-        let program = keyed_account_at_index(keyed_accounts, 0)?;
-        if native_loader::id() != *program_id {
-            error!("Program id mismatch");
-            return Err(InstructionError::IncorrectProgramId);
-        }
-        if program.owner()? != *program_id {
-            error!("Executable account now owned by loader");
-            return Err(InstructionError::IncorrectProgramId);
-        }
+        let (program_id, name_vec) = {
+            let keyed_accounts = invoke_context.get_keyed_accounts();
+            let program = keyed_account_at_index(keyed_accounts, 0)?;
+            if native_loader::id() != *program_id {
+                error!("Program id mismatch");
+                return Err(InstructionError::IncorrectProgramId);
+            }
+            if program.owner()? != *program_id {
+                error!("Executable account now owned by loader");
+                return Err(InstructionError::IncorrectProgramId);
+            }
+            // TODO [KeyedAccounts to InvokeContext refactoring]
+            (
+                *program.unsigned_key(),
+                &program.try_account_ref()?.data().clone(),
+            )
+        };
 
-        // TODO [KeyedAccounts to InvokeContext refactoring]
-        // invoke_context.set_keyed_accounts(&keyed_accounts[1..]);
-        invoke_context.pop_first_keyed_account();
-        let params = &keyed_accounts[1..];
-        let account = &program.try_account_ref()?;
-        let name = match str::from_utf8(account.data()) {
+        let name = match str::from_utf8(name_vec) {
             Ok(v) => v,
             Err(e) => {
                 error!("Invalid UTF-8 sequence: {}", e);
@@ -168,21 +168,21 @@ impl NativeLoader {
             return Err(NativeLoaderError::InvalidAccountData.into());
         }
         trace!("Call native {:?}", name);
+        invoke_context.pop_first_keyed_account();
         if name.ends_with("loader_program") {
             let entrypoint =
                 Self::get_entrypoint::<LoaderEntrypoint>(name, &self.loader_symbol_cache)?;
-            unsafe {
-                entrypoint(
-                    program.unsigned_key(),
-                    params,
-                    instruction_data,
-                    invoke_context,
-                )
-            }
+            unsafe { entrypoint(&program_id, instruction_data, invoke_context) }
         } else {
             let entrypoint =
                 Self::get_entrypoint::<ProgramEntrypoint>(name, &self.program_symbol_cache)?;
-            unsafe { entrypoint(program.unsigned_key(), params, instruction_data) }
+            unsafe {
+                entrypoint(
+                    &program_id,
+                    invoke_context.get_keyed_accounts(),
+                    instruction_data,
+                )
+            }
         }
     }
 }

@@ -277,13 +277,10 @@ fn verify_rent_exemption(
 
 pub fn process_instruction(
     _program_id: &Pubkey,
-    _keyed_accounts: &[KeyedAccount],
     data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     let keyed_accounts = invoke_context.get_keyed_accounts();
-    // TODO [KeyedAccounts to InvokeContext refactoring]
-    assert_eq!(_keyed_accounts, keyed_accounts);
 
     trace!("process_instruction: {:?}", data);
     trace!("keyed_accounts: {:?}", keyed_accounts);
@@ -356,12 +353,7 @@ mod tests {
     #[test]
     fn test_vote_process_instruction_decode_bail() {
         assert_eq!(
-            super::process_instruction(
-                &Pubkey::default(),
-                &[],
-                &[],
-                &mut MockInvokeContext::new(&[])
-            ),
+            super::process_instruction(&Pubkey::default(), &[], &mut MockInvokeContext::new(&[])),
             Err(InstructionError::NotEnoughAccountKeys),
         );
     }
@@ -404,7 +396,6 @@ mod tests {
                 .collect();
             super::process_instruction(
                 &Pubkey::default(),
-                &keyed_accounts,
                 &instruction.data,
                 &mut MockInvokeContext::new(&keyed_accounts),
             )

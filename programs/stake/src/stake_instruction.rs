@@ -10,7 +10,7 @@ use solana_sdk::{
     decode_error::DecodeError,
     feature_set,
     instruction::{AccountMeta, Instruction, InstructionError},
-    keyed_account::{from_keyed_account, get_signers, keyed_account_at_index, KeyedAccount},
+    keyed_account::{from_keyed_account, get_signers, keyed_account_at_index},
     process_instruction::InvokeContext,
     program_utils::limited_deserialize,
     pubkey::Pubkey,
@@ -483,13 +483,10 @@ pub fn set_lockup(
 
 pub fn process_instruction(
     _program_id: &Pubkey,
-    _keyed_accounts: &[KeyedAccount],
     data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     let keyed_accounts = invoke_context.get_keyed_accounts();
-    // TODO [KeyedAccounts to InvokeContext refactoring]
-    assert_eq!(_keyed_accounts, keyed_accounts);
 
     trace!("process_instruction: {:?}", data);
     trace!("keyed_accounts: {:?}", keyed_accounts);
@@ -630,6 +627,7 @@ mod tests {
     use bincode::serialize;
     use solana_sdk::{
         account::{self, Account, AccountSharedData},
+        keyed_account::KeyedAccount,
         process_instruction::MockInvokeContext,
         rent::Rent,
         sysvar::stake_history::StakeHistory,
@@ -714,7 +712,6 @@ mod tests {
                 .collect();
             super::process_instruction(
                 &Pubkey::default(),
-                &keyed_accounts,
                 &instruction.data,
                 &mut MockInvokeContext::new(&keyed_accounts),
             )
@@ -925,7 +922,6 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &[],
                 &serialize(&StakeInstruction::Initialize(
                     Authorized::default(),
                     Lockup::default()
@@ -943,7 +939,6 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &keyed_accounts,
                 &serialize(&StakeInstruction::Initialize(
                     Authorized::default(),
                     Lockup::default()
@@ -966,7 +961,6 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &keyed_accounts,
                 &serialize(&StakeInstruction::Initialize(
                     Authorized::default(),
                     Lockup::default()
@@ -991,7 +985,6 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &keyed_accounts,
                 &serialize(&StakeInstruction::Initialize(
                     Authorized::default(),
                     Lockup::default()
@@ -1009,7 +1002,6 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &keyed_accounts,
                 &serialize(&StakeInstruction::DelegateStake).unwrap(),
                 &mut MockInvokeContext::new(&keyed_accounts)
             ),
@@ -1023,7 +1015,6 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &keyed_accounts,
                 &serialize(&StakeInstruction::DelegateStake).unwrap(),
                 &mut MockInvokeContext::new(&keyed_accounts)
             ),
@@ -1056,7 +1047,6 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &keyed_accounts,
                 &serialize(&StakeInstruction::DelegateStake).unwrap(),
                 &mut MockInvokeContext::new(&keyed_accounts)
             ),
@@ -1085,7 +1075,6 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &keyed_accounts,
                 &serialize(&StakeInstruction::Withdraw(42)).unwrap(),
                 &mut MockInvokeContext::new(&keyed_accounts)
             ),
@@ -1099,7 +1088,6 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &keyed_accounts,
                 &serialize(&StakeInstruction::Withdraw(42)).unwrap(),
                 &mut MockInvokeContext::new(&keyed_accounts)
             ),
@@ -1120,7 +1108,6 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &keyed_accounts,
                 &serialize(&StakeInstruction::Deactivate).unwrap(),
                 &mut MockInvokeContext::new(&keyed_accounts)
             ),
@@ -1131,7 +1118,6 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &keyed_accounts,
                 &serialize(&StakeInstruction::Deactivate).unwrap(),
                 &mut MockInvokeContext::new(&[])
             ),

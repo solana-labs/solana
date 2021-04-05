@@ -489,7 +489,6 @@ impl std::fmt::Debug for MessageProcessor {
         // These are just type aliases for work around of Debug-ing above pointers
         type ErasedProcessInstructionWithContext = fn(
             &'static Pubkey,
-            &'static [KeyedAccount<'static>],
             &'static [u8],
             &'static mut dyn InvokeContext,
         ) -> Result<(), InstructionError>;
@@ -593,33 +592,22 @@ impl MessageProcessor {
     fn process_instruction(
         &self,
         program_id: &Pubkey,
-        keyed_accounts: &[KeyedAccount],
         instruction_data: &[u8],
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
-        // TODO [KeyedAccounts to InvokeContext refactoring]
-        assert_eq!(keyed_accounts, invoke_context.get_keyed_accounts());
-        if let Some(root_account) = keyed_accounts.iter().next() {
+        if let Some(root_account) = invoke_context.get_keyed_accounts().iter().next() {
             let root_id = root_account.unsigned_key();
             if native_loader::check_id(&root_account.owner()?) {
                 for (id, process_instruction) in &self.programs {
                     if id == root_id {
-                        // TODO [KeyedAccounts to InvokeContext refactoring]
-                        // invoke_context.set_keyed_accounts(&keyed_accounts[1..]);
                         invoke_context.pop_first_keyed_account();
                         // Call the builtin program
-                        return process_instruction(
-                            &program_id,
-                            &keyed_accounts[1..],
-                            instruction_data,
-                            invoke_context,
-                        );
+                        return process_instruction(&program_id, instruction_data, invoke_context);
                     }
                 }
                 // Call the program via the native loader
                 return self.native_loader.process_instruction(
                     &native_loader::id(),
-                    keyed_accounts,
                     instruction_data,
                     invoke_context,
                 );
@@ -628,12 +616,7 @@ impl MessageProcessor {
                 for (id, process_instruction) in &self.programs {
                     if id == owner_id {
                         // Call the program via a builtin loader
-                        return process_instruction(
-                            &program_id,
-                            keyed_accounts,
-                            instruction_data,
-                            invoke_context,
-                        );
+                        return process_instruction(&program_id, instruction_data, invoke_context);
                     }
                 }
             }
@@ -926,7 +909,6 @@ impl MessageProcessor {
 
             let mut result = message_processor.process_instruction(
                 program_id,
-                &keyed_accounts,
                 &instruction.data,
                 invoke_context,
             );
@@ -1156,12 +1138,7 @@ impl MessageProcessor {
             account_db,
             ancestors,
         );
-        self.process_instruction(
-            program_id,
-            &keyed_accounts,
-            &instruction.data,
-            &mut invoke_context,
-        )?;
+        self.process_instruction(program_id, &instruction.data, &mut invoke_context)?;
         Self::verify(
             message,
             instruction,
@@ -1787,13 +1764,10 @@ mod tests {
 
         fn mock_system_process_instruction(
             _program_id: &Pubkey,
-            _keyed_accounts: &[KeyedAccount],
             data: &[u8],
             invoke_context: &mut dyn InvokeContext,
         ) -> Result<(), InstructionError> {
             let keyed_accounts = invoke_context.get_keyed_accounts();
-            // TODO [KeyedAccounts to InvokeContext refactoring]
-            assert_eq!(_keyed_accounts, keyed_accounts);
             if let Ok(instruction) = bincode::deserialize(data) {
                 match instruction {
                     MockSystemInstruction::Correct => Ok(()),
@@ -1943,13 +1917,10 @@ mod tests {
 
         fn mock_system_process_instruction(
             _program_id: &Pubkey,
-            _keyed_accounts: &[KeyedAccount],
             data: &[u8],
             invoke_context: &mut dyn InvokeContext,
         ) -> Result<(), InstructionError> {
             let keyed_accounts = invoke_context.get_keyed_accounts();
-            // TODO [KeyedAccounts to InvokeContext refactoring]
-            assert_eq!(_keyed_accounts, keyed_accounts);
             if let Ok(instruction) = bincode::deserialize(data) {
                 match instruction {
                     MockSystemInstruction::BorrowFail => {
@@ -2125,13 +2096,10 @@ mod tests {
 
         fn mock_process_instruction(
             program_id: &Pubkey,
-            _keyed_accounts: &[KeyedAccount],
             data: &[u8],
             invoke_context: &mut dyn InvokeContext,
         ) -> Result<(), InstructionError> {
             let keyed_accounts = invoke_context.get_keyed_accounts();
-            // TODO [KeyedAccounts to InvokeContext refactoring]
-            assert_eq!(_keyed_accounts, keyed_accounts);
             assert_eq!(*program_id, keyed_accounts[0].owner()?);
             assert_ne!(
                 keyed_accounts[1].owner()?,
@@ -2277,18 +2245,14 @@ mod tests {
         #[allow(clippy::unnecessary_wraps)]
         fn mock_process_instruction(
             _program_id: &Pubkey,
-            _keyed_accounts: &[KeyedAccount],
             _data: &[u8],
-            invoke_context: &mut dyn InvokeContext,
+            _invoke_context: &mut dyn InvokeContext,
         ) -> Result<(), InstructionError> {
-            // TODO [KeyedAccounts to InvokeContext refactoring]
-            assert_eq!(_keyed_accounts, invoke_context.get_keyed_accounts());
             Ok(())
         }
         #[allow(clippy::unnecessary_wraps)]
         fn mock_ix_processor(
             _pubkey: &Pubkey,
-            _ka: &[KeyedAccount],
             _data: &[u8],
             _context: &mut dyn InvokeContext,
         ) -> Result<(), InstructionError> {

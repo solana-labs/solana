@@ -255,13 +255,10 @@ fn transfer_with_seed(
 
 pub fn process_instruction(
     _owner: &Pubkey,
-    _keyed_accounts: &[KeyedAccount],
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     let keyed_accounts = invoke_context.get_keyed_accounts();
-    // TODO [KeyedAccounts to InvokeContext refactoring]
-    assert_eq!(_keyed_accounts, keyed_accounts);
     let instruction = limited_deserialize(instruction_data)?;
 
     trace!("process_instruction: {:?}", instruction);
@@ -491,7 +488,6 @@ mod tests {
     ) -> Result<(), InstructionError> {
         super::process_instruction(
             owner,
-            keyed_accounts,
             instruction_data,
             &mut MockInvokeContext::new(keyed_accounts),
         )

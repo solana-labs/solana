@@ -33,7 +33,7 @@ use solana_sdk::{
     feature_set::{skip_ro_deserialization, upgradeable_close_instruction},
     ic_logger_msg, ic_msg,
     instruction::InstructionError,
-    keyed_account::{from_keyed_account, keyed_account_at_index, KeyedAccount},
+    keyed_account::{from_keyed_account, keyed_account_at_index},
     loader_instruction::LoaderInstruction,
     loader_upgradeable_instruction::UpgradeableLoaderInstruction,
     process_instruction::{stable_log, ComputeMeter, Executor, InvokeContext},
@@ -158,7 +158,6 @@ pub fn create_vm<'a>(
 
 pub fn process_instruction(
     program_id: &Pubkey,
-    _keyed_accounts: &[KeyedAccount],
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
@@ -167,7 +166,6 @@ pub fn process_instruction(
 
 pub fn process_instruction_jit(
     program_id: &Pubkey,
-    _keyed_accounts: &[KeyedAccount],
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
@@ -860,6 +858,7 @@ mod tests {
         genesis_config::create_genesis_config,
         instruction::Instruction,
         instruction::{AccountMeta, InstructionError},
+        keyed_account::KeyedAccount,
         message::Message,
         process_instruction::{BpfComputeBudget, MockComputeMeter, MockInvokeContext, MockLogger},
         pubkey::Pubkey,
@@ -932,7 +931,6 @@ mod tests {
             Err(InstructionError::NotEnoughAccountKeys),
             process_instruction(
                 &bpf_loader::id(),
-                &[],
                 &instruction_data,
                 &mut MockInvokeContext::new(&[])
             )
@@ -943,7 +941,6 @@ mod tests {
             Err(InstructionError::MissingRequiredSignature),
             process_instruction(
                 &bpf_loader::id(),
-                &keyed_accounts,
                 &instruction_data,
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -957,7 +954,6 @@ mod tests {
             Ok(()),
             process_instruction(
                 &bpf_loader::id(),
-                &keyed_accounts,
                 &instruction_data,
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -975,7 +971,6 @@ mod tests {
             Err(InstructionError::AccountDataTooSmall),
             process_instruction(
                 &bpf_loader::id(),
-                &keyed_accounts,
                 &instruction_data,
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -1001,7 +996,6 @@ mod tests {
             Err(InstructionError::NotEnoughAccountKeys),
             process_instruction(
                 &bpf_loader::id(),
-                &[],
                 &instruction_data,
                 &mut MockInvokeContext::new(&[])
             )
@@ -1012,7 +1006,6 @@ mod tests {
             Err(InstructionError::MissingRequiredSignature),
             process_instruction(
                 &bpf_loader::id(),
-                &keyed_accounts,
                 &instruction_data,
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -1024,7 +1017,6 @@ mod tests {
             Ok(()),
             process_instruction(
                 &bpf_loader::id(),
-                &keyed_accounts,
                 &instruction_data,
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -1040,7 +1032,6 @@ mod tests {
             Err(InstructionError::InvalidAccountData),
             process_instruction(
                 &bpf_loader::id(),
-                &keyed_accounts,
                 &instruction_data,
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -1065,7 +1056,7 @@ mod tests {
         // Case: Empty keyed accounts
         assert_eq!(
             Err(InstructionError::NotEnoughAccountKeys),
-            process_instruction(&program_id, &[], &[], &mut MockInvokeContext::new(&[]))
+            process_instruction(&program_id, &[], &mut MockInvokeContext::new(&[]))
         );
 
         // Case: Only a program account
@@ -1073,7 +1064,6 @@ mod tests {
             Ok(()),
             process_instruction(
                 &program_key,
-                &keyed_accounts,
                 &[],
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -1085,7 +1075,6 @@ mod tests {
             Err(InstructionError::InvalidInstructionData),
             process_instruction(
                 &program_id,
-                &keyed_accounts,
                 &[],
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -1099,7 +1088,6 @@ mod tests {
             Ok(()),
             process_instruction(
                 &program_key,
-                &keyed_accounts,
                 &[],
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -1119,7 +1107,7 @@ mod tests {
         };
         assert_eq!(
             Err(InstructionError::ProgramFailedToComplete),
-            process_instruction(&program_key, &keyed_accounts, &[], &mut invoke_context)
+            process_instruction(&program_key, &[], &mut invoke_context)
         );
 
         // Case: With duplicate accounts
@@ -1132,7 +1120,6 @@ mod tests {
             Ok(()),
             process_instruction(
                 &program_key,
-                &keyed_accounts,
                 &[],
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -1160,7 +1147,6 @@ mod tests {
             Ok(()),
             process_instruction(
                 &program_key,
-                &keyed_accounts,
                 &[],
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -1176,7 +1162,6 @@ mod tests {
             Ok(()),
             process_instruction(
                 &program_key,
-                &keyed_accounts,
                 &[],
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -1204,7 +1189,6 @@ mod tests {
             Ok(()),
             process_instruction(
                 &program_key,
-                &keyed_accounts,
                 &[],
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -1220,7 +1204,6 @@ mod tests {
             Ok(()),
             process_instruction(
                 &program_key,
-                &keyed_accounts,
                 &[],
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -1253,7 +1236,6 @@ mod tests {
             Ok(()),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &instruction,
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -1275,7 +1257,6 @@ mod tests {
             Err(InstructionError::AccountAlreadyInitialized),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &instruction,
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -1312,7 +1293,6 @@ mod tests {
             Err(InstructionError::InvalidAccountData),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &instruction,
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -1338,7 +1318,6 @@ mod tests {
             Ok(()),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &instruction,
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -1381,7 +1360,6 @@ mod tests {
             Ok(()),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &instruction,
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -1419,7 +1397,6 @@ mod tests {
             Err(InstructionError::MissingRequiredSignature),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &instruction,
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -1445,7 +1422,6 @@ mod tests {
             Err(InstructionError::AccountDataTooSmall),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &instruction,
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -1471,7 +1447,6 @@ mod tests {
             Err(InstructionError::AccountDataTooSmall),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &instruction,
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -1498,7 +1473,6 @@ mod tests {
             Err(InstructionError::IncorrectAuthority),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &instruction,
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -1525,7 +1499,6 @@ mod tests {
             Err(InstructionError::Immutable),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &instruction,
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -2302,7 +2275,6 @@ mod tests {
             Ok(()),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &instruction,
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -2365,7 +2337,6 @@ mod tests {
             Err(InstructionError::Immutable),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &instruction,
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -2400,7 +2371,6 @@ mod tests {
             Err(InstructionError::IncorrectAuthority),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &instruction,
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -2434,7 +2404,6 @@ mod tests {
             Err(InstructionError::MissingRequiredSignature),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &instruction,
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -2469,7 +2438,6 @@ mod tests {
             Err(InstructionError::AccountNotExecutable),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &instruction,
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -2504,7 +2472,6 @@ mod tests {
             Err(InstructionError::IncorrectProgramId),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &instruction,
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -2538,7 +2505,6 @@ mod tests {
             Err(InstructionError::InvalidArgument),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &instruction,
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -2576,7 +2542,6 @@ mod tests {
             Err(InstructionError::InvalidAccountData),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &instruction,
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -2611,7 +2576,6 @@ mod tests {
             Err(InstructionError::InvalidArgument),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &instruction,
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -2649,7 +2613,6 @@ mod tests {
             Err(InstructionError::InvalidArgument),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &instruction,
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -2694,7 +2657,6 @@ mod tests {
             Err(InstructionError::AccountDataTooSmall),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &instruction,
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -2735,7 +2697,6 @@ mod tests {
             Err(InstructionError::InvalidAccountData),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &instruction,
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -2769,7 +2730,6 @@ mod tests {
             Err(InstructionError::IncorrectAuthority),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &instruction,
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -2809,7 +2769,6 @@ mod tests {
             Err(InstructionError::IncorrectAuthority),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &instruction,
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -2856,7 +2815,6 @@ mod tests {
             Err(InstructionError::IncorrectAuthority),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &instruction,
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -2905,7 +2863,6 @@ mod tests {
             Ok(()),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &instruction,
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -2939,7 +2896,6 @@ mod tests {
             Ok(()),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &instruction,
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -2973,7 +2929,6 @@ mod tests {
             Err(InstructionError::MissingRequiredSignature),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &instruction,
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -3005,7 +2960,6 @@ mod tests {
             Err(InstructionError::IncorrectAuthority),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &instruction,
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -3032,7 +2986,6 @@ mod tests {
             Err(InstructionError::Immutable),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &bincode::serialize(&UpgradeableLoaderInstruction::SetAuthority).unwrap(),
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -3058,7 +3011,6 @@ mod tests {
             Err(InstructionError::InvalidArgument),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &bincode::serialize(&UpgradeableLoaderInstruction::SetAuthority).unwrap(),
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -3095,7 +3047,6 @@ mod tests {
             Ok(()),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &instruction,
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -3123,7 +3074,6 @@ mod tests {
             Err(InstructionError::IncorrectAuthority),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &instruction,
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -3152,7 +3102,6 @@ mod tests {
             Err(InstructionError::MissingRequiredSignature),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &instruction,
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -3175,7 +3124,6 @@ mod tests {
             Err(InstructionError::IncorrectAuthority),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &instruction,
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -3198,7 +3146,6 @@ mod tests {
             Err(InstructionError::Immutable),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &bincode::serialize(&UpgradeableLoaderInstruction::SetAuthority).unwrap(),
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -3220,7 +3167,6 @@ mod tests {
             Err(InstructionError::InvalidArgument),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &bincode::serialize(&UpgradeableLoaderInstruction::SetAuthority).unwrap(),
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -3241,7 +3187,6 @@ mod tests {
             Err(InstructionError::IncorrectAuthority),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &instruction,
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
@@ -3278,7 +3223,6 @@ mod tests {
             Ok(()),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &instruction,
                 &mut MockInvokeContext::new(&keyed_accounts),
             )
@@ -3308,7 +3252,6 @@ mod tests {
             Err(InstructionError::IncorrectAuthority),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &instruction,
                 &mut MockInvokeContext::new(&keyed_accounts),
             )
@@ -3330,7 +3273,6 @@ mod tests {
             Err(InstructionError::InvalidArgument),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
-                &keyed_accounts,
                 &instruction,
                 &mut MockInvokeContext::new(&keyed_accounts),
             )
@@ -3391,7 +3333,6 @@ mod tests {
 
                 let _result = process_instruction(
                     &bpf_loader::id(),
-                    &keyed_accounts,
                     &[],
                     &mut MockInvokeContext::new(&keyed_accounts),
                 );

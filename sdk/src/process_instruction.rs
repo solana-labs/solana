@@ -15,13 +15,12 @@ use std::{cell::RefCell, fmt::Debug, rc::Rc, sync::Arc};
 /// invoke_context: Invocation context
 pub type LoaderEntrypoint = unsafe extern "C" fn(
     program_id: &Pubkey,
-    keyed_accounts: &[KeyedAccount],
     instruction_data: &[u8],
     invoke_context: &dyn InvokeContext,
 ) -> Result<(), InstructionError>;
 
 pub type ProcessInstructionWithContext =
-    fn(&Pubkey, &[KeyedAccount], &[u8], &mut dyn InvokeContext) -> Result<(), InstructionError>;
+    fn(&Pubkey, &[u8], &mut dyn InvokeContext) -> Result<(), InstructionError>;
 
 /// Invocation context passed to loaders
 pub trait InvokeContext {
