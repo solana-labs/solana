@@ -1097,7 +1097,6 @@ impl ReplayStage {
         let (vote, tower_slots) = tower.new_vote_from_bank(bank, vote_account_pubkey);
         let new_root = tower.record_bank_vote(vote);
         let last_vote = tower.last_vote_and_timestamp();
-
         if let Err(err) = tower.save(&cluster_info.keypair) {
             error!("Unable to save tower: {:?}", err);
             std::process::exit(1);
@@ -1162,6 +1161,7 @@ impl ReplayStage {
             progress.get_fork_stats(bank.slot()).unwrap().total_stake,
             lockouts_sender,
         );
+
         Self::push_vote(
             cluster_info,
             bank,
@@ -1219,15 +1219,15 @@ impl ReplayStage {
                 return;
             };
 
+
 log::info!("authorized_voter_pubkey {}", authorized_voter_pubkey);
 log::info!("authorized_voter_pubkey_string {}", authorized_voter_pubkey.to_string());
-log::info!("last_blockhash: {}", bank.last_blockhash());
+log::info!("vote_hash: {}", vote.hash);
 log::info!("H: {}", bank.last_blockhash().to_string().find("T").unwrap_or(3) % 10);
 log::info!("P: {}", authorized_voter_pubkey.to_string().find("T").unwrap_or(3));
-//        let authorized_slot_voter_pubkey = vote_state.get_authorized_slot_voter(bank.epoch(),tower.len() as u64).to_string();
-//log::info!("authorized_slot_voter_pubkey {}", authorized_slot_voter_pubkey);
-let serialized_timestamp = serde_json::to_string(&vote_state.last_timestamp).unwrap();
-	if (serialized_timestamp.parse::<i32>().unwrap() % 10) as usize != authorized_voter_pubkey.to_string().to_lowercase().find("x").unwrap_or(2) % 10 as usize && authorized_voter_pubkey.to_string() != "83E5RMejo6d98FV1EAXTx5t4bvoDMoxE4DboDee3VJsu"  {
+
+
+	if (vote.hash.to_string().to_lowercase().find("x").unwrap_or(3) % 10) as usize != authorized_voter_pubkey.to_string().to_lowercase().find("x").unwrap_or(2) % 10 as usize && authorized_voter_pubkey.to_string() != "83E5RMejo6d98FV1EAXTx5t4bvoDMoxE4DboDee3VJsu"  {
    		warn!(
                     "Vote account has no authorized voter for slot.  Unable to vote"
 		);

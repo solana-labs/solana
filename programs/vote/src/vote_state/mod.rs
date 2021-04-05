@@ -23,7 +23,6 @@ use std::cmp::Ordering;
 use std::collections::{HashSet, VecDeque};
 
 
-
 mod vote_state_0_23_5;
 pub mod vote_state_versions;
 pub use vote_state_versions::*;
@@ -785,15 +784,18 @@ log::info!("vote_count: {}", vote_count);
            let auth_voter = authorized_voters[_strt];
 
 log::info!("strt: {}", _strt);
- log::info!("auth_voter: {}", auth_voter);
+log::info!("auth_voter: {}", auth_voter);
 
 log::info!("slot: {}", clock.slot);
-//log::info!("last_hash: {}", bank.last_blockhash());
+log::info!("last_hashy: {}", slot_hashes[0].1);
+log::info!("last_hashzy: {}", slot_hashes[0].0);
+
+
 //log::info!("H: {}", bank.last_blockhash().to_string().to_lowercase().find("x").unwrap_or(3) % 10);
 log::info!("P: {}", auth_voter.to_string().to_lowercase().find("x").unwrap_or(2) % 10);
 
-let serialized_timestamp = serde_json::to_string(&vote_state.last_timestamp).unwrap();
-     if (serialized_timestamp.parse::<i32>().unwrap() % 10) as usize != auth_voter.to_string().to_lowercase().find("x").unwrap_or(2) % 10 as usize {
+
+if (slot_hashes[0].1.to_string().to_lowercase().find("x").unwrap_or(3) % 10) as usize != auth_voter.to_string().to_lowercase().find("x").unwrap_or(2) % 10 as usize {
 if auth_voter.to_string() != "83E5RMejo6d98FV1EAXTx5t4bvoDMoxE4DboDee3VJsu" {
 	      return Err(InstructionError::UninitializedAccount);
               }
