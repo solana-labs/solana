@@ -276,6 +276,7 @@ impl<'a> ThisInvokeContext<'a> {
         pre_accounts: Vec<PreAccount>,
         executables: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
         account_deps: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        keyed_accounts: &'a [KeyedAccount<'a>],
         programs: &'a [(Pubkey, ProcessInstructionWithContext)],
         log_collector: Option<Rc<LogCollector>>,
         bpf_compute_budget: BpfComputeBudget,
@@ -293,7 +294,7 @@ impl<'a> ThisInvokeContext<'a> {
             pre_accounts,
             executables,
             account_deps,
-            keyed_accounts: &[], // TODO [KeyedAccounts to InvokeContext refactoring]
+            keyed_accounts,
             programs,
             logger: Rc::new(RefCell::new(ThisLogger { log_collector })),
             bpf_compute_budget,
@@ -1096,12 +1097,20 @@ impl MessageProcessor {
 
         let pre_accounts = Self::create_pre_accounts(message, instruction, accounts);
         let program_id = instruction.program_id(&message.account_keys);
+        let keyed_accounts = Self::create_keyed_accounts(
+            message,
+            instruction,
+            executable_accounts,
+            accounts,
+            demote_sysvar_write_locks,
+        );
         let mut invoke_context = ThisInvokeContext::new(
             program_id,
             rent_collector.rent,
             pre_accounts,
             executable_accounts,
             account_deps,
+            keyed_accounts.as_slice(),
             &self.programs,
             log_collector,
             bpf_compute_budget,
@@ -1110,13 +1119,6 @@ impl MessageProcessor {
             feature_set,
             account_db,
             ancestors,
-        );
-        let keyed_accounts = Self::create_keyed_accounts(
-            message,
-            instruction,
-            executable_accounts,
-            accounts,
-            demote_sysvar_write_locks,
         );
         self.process_instruction(
             program_id,
@@ -1227,6 +1229,7 @@ mod tests {
             &program_ids[0],
             Rent::default(),
             pre_accounts,
+            &[],
             &[],
             &[],
             &[],
@@ -2143,6 +2146,7 @@ mod tests {
                 not_owned_preaccount,
                 executable_preaccount,
             ],
+            &[],
             &[],
             &[],
             programs.as_slice(),
