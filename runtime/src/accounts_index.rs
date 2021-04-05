@@ -763,20 +763,23 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
             }
         }
 
-        let max_root = max_root.unwrap_or(Slot::MAX);
-        let mut tracker = None;
+        // if we find a slot in ancestors, we don't need to look in roots at all
+        if rv.is_none() {
+            let max_root = max_root.unwrap_or(Slot::MAX);
+            let mut tracker = None;
 
-        for (i, (slot, _t)) in slice.iter().rev().enumerate() {
-            if *slot >= current_max && *slot <= max_root {
-                let lock = match tracker {
-                    Some(inner) => inner,
-                    None => self.roots_tracker.read().unwrap(),
-                };
-                if lock.roots.contains(&slot) {
-                    rv = Some(i);
-                    current_max = *slot;
+            for (i, (slot, _t)) in slice.iter().rev().enumerate() {
+                if *slot >= current_max && *slot <= max_root {
+                    let lock = match tracker {
+                        Some(inner) => inner,
+                        None => self.roots_tracker.read().unwrap(),
+                    };
+                    if lock.roots.contains(&slot) {
+                        rv = Some(i);
+                        current_max = *slot;
+                    }
+                    tracker = Some(lock);
                 }
-                tracker = Some(lock);
             }
         }
 
