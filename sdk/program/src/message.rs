@@ -387,7 +387,7 @@ impl Message {
     //  3..2 * num_instructions table of instruction offsets
     //
     // Each instruction is then encoded as:
-    //   0..1 - num_accounts
+    //   0..2 - num_accounts
     //   2 - meta_byte -> (bit 0 signer, bit 1 is_writable)
     //   3..35 - pubkey - 32 bytes
     //   35..67 - program_id
