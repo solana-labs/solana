@@ -13,6 +13,7 @@ use {
     solana_sdk::{
         hash::Hash,
         message::Message,
+        native_token::lamports_to_sol,
         packet::PACKET_DATA_SIZE,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
@@ -89,9 +90,10 @@ impl Faucet {
         if let Some((per_request_cap, per_time_cap)) = per_request_cap.zip(per_time_cap) {
             if per_time_cap < per_request_cap {
                 warn!(
-                    "Ip per_time_cap {} < per_request_cap {}; \
+                    "Ip per_time_cap {} SOL < per_request_cap {} SOL; \
                     maximum single requests will fail",
-                    per_time_cap, per_request_cap,
+                    lamports_to_sol(per_time_cap),
+                    lamports_to_sol(per_request_cap),
                 );
             }
         }
@@ -125,8 +127,11 @@ impl Faucet {
                 return Err(Error::new(
                     ErrorKind::Other,
                     format!(
-                        "token limit reached; req: {} ip: {} current: {} cap: {}",
-                        request_amount, ip, *ip_new_total, cap
+                        "token limit reached; req: {} ip: {} current: {} SOL cap: {} SOL",
+                        request_amount,
+                        ip,
+                        lamports_to_sol(*ip_new_total),
+                        lamports_to_sol(cap)
                     ),
                 ));
             }
@@ -154,12 +159,20 @@ impl Faucet {
                     if lamports > cap {
                         return Err(Error::new(
                             ErrorKind::Other,
-                            format!("request too large; req: {} cap: {}", lamports, cap),
+                            format!(
+                                "request too large; req: {} SOL cap: {} SOL",
+                                lamports_to_sol(lamports),
+                                lamports_to_sol(cap)
+                            ),
                         ));
                     }
                 }
                 self.check_ip_time_request_limit(lamports, ip)?;
-                info!("Requesting airdrop of {} to {:?}", lamports, to);
+                info!(
+                    "Requesting airdrop of {} SOL to {:?}",
+                    lamports_to_sol(lamports),
+                    to
+                );
 
                 let mint_pubkey = self.faucet_keypair.pubkey();
                 let create_instruction = system_instruction::transfer(&mint_pubkey, &to, lamports);
