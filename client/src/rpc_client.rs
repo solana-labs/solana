@@ -1693,6 +1693,21 @@ mod tests {
 
     #[test]
     fn test_send() {
+        _test_send();
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    #[should_panic(expected = "can call blocking only when running on the multi-threaded runtime")]
+    async fn test_send_async_current_thread_should_panic() {
+        _test_send();
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_send_async_multi_thread() {
+        _test_send();
+    }
+
+    fn _test_send() {
         let (sender, receiver) = channel();
         thread::spawn(move || {
             let rpc_addr = "0.0.0.0:0".parse().unwrap();
