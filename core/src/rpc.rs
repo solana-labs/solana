@@ -395,10 +395,6 @@ impl JsonRpcRequestProcessor {
                 .get_epoch(self.get_slot(commitment))
                 .saturating_sub(1)
         });
-        let addresses: Vec<String> = addresses
-            .into_iter()
-            .map(|pubkey| pubkey.to_string())
-            .collect();
 
         // Rewards for this epoch are found in the first confirmed block of the next epoch
         let first_slot_in_epoch = epoch_schedule.get_first_slot_in_epoch(epoch.saturating_add(1));
@@ -437,20 +433,26 @@ impl JsonRpcRequestProcessor {
             .into());
         };
 
-        let mut reward_hash: HashMap<String, Reward> = HashMap::new();
-        for reward in first_confirmed_block
+        let addresses: Vec<String> = addresses
+            .into_iter()
+            .map(|pubkey| pubkey.to_string())
+            .collect();
+
+        let reward_hash: HashMap<String, Reward> = first_confirmed_block
             .rewards
             .unwrap_or_default()
             .into_iter()
-            .filter(|reward| addresses.contains(&reward.pubkey))
-        {
-            reward_hash.insert(reward.clone().pubkey, reward);
-        }
+            .filter_map(|reward| {
+                addresses
+                    .contains(&reward.pubkey)
+                    .then(|| (reward.clone().pubkey, reward))
+            })
+            .collect();
 
         let rewards = addresses
             .iter()
             .map(|address| {
-                if let Some(reward) = reward_hash.get(&address.to_string()) {
+                if let Some(reward) = reward_hash.get(address) {
                     return Some(RpcInflationReward {
                         epoch,
                         effective_slot: first_confirmed_block_in_epoch,
