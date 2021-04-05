@@ -907,7 +907,8 @@ impl ClusterInfo {
 
     pub fn contact_info_trace(&self) -> String {
         let now = timestamp();
-        let mut spy_nodes = 0;
+        let mut shred_spy_nodes = 0;
+        let mut total_spy_nodes = 0;
         let mut different_shred_nodes = 0;
         let my_pubkey = self.id();
         let my_shred_version = self.my_shred_version();
@@ -915,8 +916,9 @@ impl ClusterInfo {
             .all_peers()
             .into_iter()
             .filter_map(|(node, last_updated)| {
-                if Self::is_spy_node(&node) {
-                    spy_nodes += 1;
+                let is_spy_node = Self::is_spy_node(&node);
+                if is_spy_node {
+                    total_spy_nodes += 1;
                 }
 
                 let node_version = self.get_node_version(&node.id);
@@ -924,6 +926,9 @@ impl ClusterInfo {
                     different_shred_nodes += 1;
                     None
                 } else {
+                    if is_spy_node {
+                        shred_spy_nodes += 1;
+                    }
                     fn addr_to_string(default_ip: &IpAddr, addr: &SocketAddr) -> String {
                         if ContactInfo::is_valid_address(addr) {
                             if &addr.ip() == default_ip {
@@ -972,9 +977,9 @@ impl ClusterInfo {
              {}\
              Nodes: {}{}{}",
             nodes.join(""),
-            nodes.len() - spy_nodes,
-            if spy_nodes > 0 {
-                format!("\nSpies: {}", spy_nodes)
+            nodes.len() - shred_spy_nodes,
+            if total_spy_nodes > 0 {
+                format!("\nSpies: {}", total_spy_nodes)
             } else {
                 "".to_string()
             },
