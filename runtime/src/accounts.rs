@@ -587,15 +587,9 @@ impl Accounts {
             |total_capitalization: &mut u64, (_pubkey, loaded_account, _slot)| {
                 let lamports = loaded_account.lamports();
                 if Self::is_loadable(lamports) {
-                    let account_cap = AccountsDb::account_balance_for_capitalization(
-                        lamports,
-                        &loaded_account.owner(),
-                        loaded_account.executable(),
-                    );
-
                     *total_capitalization = AccountsDb::checked_iterative_sum_for_capitalization(
                         *total_capitalization,
-                        account_cap,
+                        lamports,
                     );
                 }
             },
