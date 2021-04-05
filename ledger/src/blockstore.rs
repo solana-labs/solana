@@ -2053,9 +2053,10 @@ impl Blockstore {
             "blockstore-rpc-api",
             ("method", "get_complete_transaction".to_string(), String)
         );
+        let last_root = self.last_root();
         let confirmed_unrooted_slots: Vec<_> =
             AncestorIterator::new_inclusive(highest_confirmed_slot, self)
-                .take_while(|&slot| slot > self.last_root())
+                .take_while(|&slot| slot > last_root)
                 .collect();
         self.get_transaction_with_status(signature, &confirmed_unrooted_slots)
     }
@@ -2213,8 +2214,9 @@ impl Blockstore {
                 String
             )
         );
+        let last_root = self.last_root();
         let confirmed_unrooted_slots: Vec<_> = AncestorIterator::new_inclusive(highest_slot, self)
-            .take_while(|&slot| slot > self.last_root())
+            .take_while(|&slot| slot > last_root)
             .collect();
 
         // Figure the `slot` to start listing signatures at, based on the ledger location of the
