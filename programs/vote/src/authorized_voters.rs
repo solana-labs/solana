@@ -1,6 +1,6 @@
 use log::*;
 use serde_derive::{Deserialize, Serialize};
-use solana_sdk::{clock::Epoch, clock::Slot, pubkey::Pubkey};
+use solana_sdk::{clock::Epoch, pubkey::Pubkey};
 use std::collections::BTreeMap;
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone, AbiExample)]
@@ -81,11 +81,6 @@ impl AuthorizedVoters {
     }
 
 
-    pub fn get_authorized_slot_voter(&self, epoch: Epoch, slot: Slot) -> &solana_sdk::pubkey::Pubkey {
-        self.get_or_calculate_authorized_voter_for_slot(epoch, slot)
-    }
-    
-
     // Returns the authorized voter at the given epoch if the epoch is >= the
     // current epoch, and a bool indicating whether the entry for this epoch
     // exists in the self.authorized_voter map
@@ -110,84 +105,6 @@ impl AuthorizedVoters {
         }
     }
 
-
-
-
-
-
-    // Returns the authorized voter at the given epoch if the epoch is >= the
-    // current epoch, and a bool indicating whether the entry for this epoch
-    // exists in the self.authorized_voter map
-    fn get_or_calculate_authorized_voter_for_slot(&self, epoch: Epoch, slot: Slot) -> &solana_sdk::pubkey::Pubkey {
-        let res = self.authorized_voters.get(&epoch);
-	
-
-
-
-            let _strt = 0;
-            let vote_count = res.iter().count() as u64;
-
-log::info!("Vote_Count {}", vote_count);
-
-            if vote_count > 1 {
-            let _strt = slot % 10;
-                 if _strt > vote_count {
-                 let _strt = _strt/2;
-                 }
-                 if _strt > vote_count {
-                 let _strt = _strt/2;
-                 }
-                 if _strt > vote_count {
-                 let _strt = _strt/2;
-                 }
-            }
-            if vote_count > 9 {
-            let _strt = (slot % 100)/5;
-                 if _strt > vote_count {
-                 let _strt = _strt/2;
-                 }
-                 if _strt > vote_count {
-                 let _strt = _strt/2;
-                 }
-                 if _strt > vote_count {
-                 let _strt = _strt/2;
-                 }
-                 if _strt > vote_count {
-                 let _strt = _strt/2;
-                 }
-            }
-            if vote_count > 99 {
-            let _strt = (slot % 1000)/5;
-                 if _strt > vote_count {
-                 let _strt = _strt/2;
-                 }
-                 if _strt > vote_count {
-                 let _strt = _strt/2;
-                 }
-                 if _strt > vote_count {
-                 let _strt = _strt/2;
-                 }
-                 if _strt > vote_count {
-                 let _strt = _strt/2;
-                 }
-                 if _strt > vote_count {
-                 let _strt = _strt/2;
-                 }
-            }
-            let _strt = _strt as usize;
-
-
-log::info!("strt {}", _strt);
-
-
-          let mut authorized_voters: Vec<_> = res.into_iter().collect();
-           authorized_voters.sort();
-
-           let auth_voter = authorized_voters[_strt];
-log::info!("auth_voter: {}", auth_voter);
-auth_voter
-
-    }
 
 
 

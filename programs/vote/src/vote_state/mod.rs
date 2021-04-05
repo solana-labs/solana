@@ -201,16 +201,7 @@ impl VoteState {
         self.authorized_voters.get_authorized_voter(epoch)
     }
 
-    pub fn get_authorized_slot_voter(&self, epoch: Epoch, slot: Slot) -> &solana_sdk::pubkey::Pubkey {
-	self.authorized_voters.get_authorized_slot_voter(epoch, slot)
-    }
-
-
     pub fn authorized_voters(&self) -> &AuthorizedVoters {
-        &self.authorized_voters
-    }
-
-    pub fn authorized_slot_voters(&self) -> &AuthorizedVoters {
         &self.authorized_voters
     }
 
