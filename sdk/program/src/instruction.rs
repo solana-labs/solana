@@ -211,6 +211,10 @@ pub enum InstructionError {
     /// Program arithmetic overflowed
     #[error("Program arithmetic overflowed")]
     ArithmeticOverflow,
+
+    /// Unsupported sysvar
+    #[error("Unsupported sysvar")]
+    UnsupportedSysvar,
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]

@@ -35,7 +35,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{keypair_from_seed, Keypair, Signer},
     system_instruction,
-    sysvar::{clock, fees, rent, slot_hashes, stake_history},
+    sysvar::{clock, fees, rent, slot_hashes, slot_history, stake_history, instructions},
     transaction::{Transaction, TransactionError},
 };
 use solana_transaction_status::{
@@ -465,11 +465,14 @@ fn test_program_bpf_sanity() {
         let account_metas = vec![
             AccountMeta::new(mint_keypair.pubkey(), true),
             AccountMeta::new(Keypair::new().pubkey(), false),
-            AccountMeta::new(clock::id(), false),
-            AccountMeta::new(fees::id(), false),
-            AccountMeta::new(slot_hashes::id(), false),
-            AccountMeta::new(stake_history::id(), false),
-            AccountMeta::new(rent::id(), false),
+            AccountMeta::new_readonly(clock::id(), false),
+            AccountMeta::new_readonly(fees::id(), false),
+            AccountMeta::new_readonly(instructions::id(), false),
+            AccountMeta::new_readonly(rent::id(), false),
+            AccountMeta::new_readonly(slot_hashes::id(), false),
+            AccountMeta::new_readonly(slot_history::id(), false),
+            AccountMeta::new_readonly(stake_history::id(), false),
+
         ];
         let instruction = Instruction::new_with_bytes(program_id, &[1], account_metas);
         let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
