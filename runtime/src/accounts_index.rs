@@ -752,30 +752,35 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
     ) -> Option<usize> {
         let mut current_max = 0;
         let mut rv = None;
-        for (i, (slot, _t)) in slice.iter().rev().enumerate() {
-            if *slot >= current_max && self.is_ancestor_or_root(*slot, ancestors, max_root) {
-                rv = Some((slice.len() - 1) - i);
-                current_max = *slot;
+        if let Some(ancestors) = ancestors {
+            if !ancestors.is_empty() {
+                for (i, (slot, _t)) in slice.iter().rev().enumerate() {
+                    if *slot >= current_max && ancestors.contains_key(slot) {
+                        rv = Some(i);
+                        current_max = *slot;
+                    }
+                }
             }
         }
 
-        rv
-    }
+        let max_root = max_root.unwrap_or(Slot::MAX);
+        let mut tracker = None;
 
-    // Checks that the given slot is either:
-    // 1) in the `ancestors` set
-    // 2) or is a root
-    fn is_ancestor_or_root(
-        &self,
-        slot: Slot,
-        ancestors: Option<&Ancestors>,
-        max_root: Option<Slot>,
-    ) -> bool {
-        ancestors.map_or(false, |ancestors| ancestors.contains_key(&slot)) ||
-        // If the slot is a root, it must be less than the maximum root specified. This
-        // allows scans on non-rooted slots to specify and read data from
-        // ancestors > max_root, while not seeing rooted data update during the scan
-        (max_root.map_or(true, |max_root| slot <= max_root) && (self.is_root(slot)))
+        for (i, (slot, _t)) in slice.iter().rev().enumerate() {
+            if *slot >= current_max && *slot <= max_root {
+                let lock = match tracker {
+                    Some(inner) => inner,
+                    None => self.roots_tracker.read().unwrap(),
+                };
+                if lock.roots.contains(&slot) {
+                    rv = Some(i);
+                    current_max = *slot;
+                }
+                tracker = Some(lock);
+            }
+        }
+
+        rv.map(|index| slice.len() - 1 - index)
     }
 
     /// Get an account
