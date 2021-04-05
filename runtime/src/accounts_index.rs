@@ -184,12 +184,6 @@ pub struct RollingBitField {
     count: usize,
 }
 
-#[derive(Debug, Default)]
-struct RollingBitFieldAddress {
-    array_index: usize,
-    mask: u64,
-}
-
 // functionally similar to a hashset
 // Relies on there being a sliding window of key values. The key values continue to increase.
 // Old key values are removed from the lesser values and do not accumulate.
@@ -197,7 +191,6 @@ impl RollingBitField {
     pub fn new(max_width: u64) -> Self {
         assert!(max_width > 0);
         assert!(max_width.is_power_of_two()); // power of 2 to make dividing a shift
-                                              // calculate the array length required using the max width - 1
         let bits = BitVec::new_fill(false, max_width);
         Self {
             max_width,
@@ -208,41 +201,45 @@ impl RollingBitField {
         }
     }
 
-    fn get_address(&self, key: u64) -> u64 {
+    fn get_address(&self, key: &u64) -> u64 {
         Self::calc_address(self.max_width, key)
     }
 
     // find the array index
-    fn calc_address(max_width: u64, key: u64) -> u64 {
+    fn calc_address(max_width: u64, key: &u64) -> u64 {
         key % max_width
     }
 
-    pub fn insert(&mut self, key: &u64) {
-        let key = *key;
-        if self.max.saturating_sub(key) > self.max_width as u64 {
+    pub fn insert(&mut self, key: u64) {
+        if self.count > 0 && self.max.saturating_sub(key) > self.max_width as u64 {
             panic!(
                 "acting on an item at key: {}, that is too far behind the recent max: {}",
                 key, self.max
             );
         }
-        if self.max > 0 && key.saturating_sub(self.max) > self.max_width as u64 {
+        if self.count > 0 && self.max > 0 && key.saturating_sub(self.max) > self.max_width as u64 {
             panic!(
                 "acting on an item at key: {}, that is too far ahead of the recent max: {}",
                 key, self.max
             );
         }
-        let address = self.get_address(key);
+        let address = self.get_address(&key);
         let value = self.bits.get(address);
         if !value {
-            self.count += 1;
             self.bits.set(address, true);
-            self.max = std::cmp::max(self.max, key + 1);
+            if self.count == 0 {
+                self.min = key;
+                self.max = key + 1;
+            } else {
+                self.min = std::cmp::min(self.min, key);
+                self.max = std::cmp::max(self.max, key + 1);
+            }
+            self.count += 1;
         }
     }
 
     pub fn remove(&mut self, key: &u64) {
-        let key = *key;
-        if self.max.saturating_sub(key) > self.max_width as u64 {
+        if self.count > 0 && self.max.saturating_sub(*key) > self.max_width as u64 {
             panic!(
                 "acting on an item at key: {}, that is too far behind the recent max: {}",
                 key, self.max
@@ -251,21 +248,31 @@ impl RollingBitField {
         let address = self.get_address(key);
         let value = self.bits.get(address);
         if value {
-            self.count -= 1; // TODO saturating? or would we rather panic?
+            self.count -= 1; // this will underflow if it tries to go below 0. That is like an assert.
             self.bits.set(address, false);
+            self.purge(key);
+        }
+    }
+
+    fn purge(&mut self, key: &u64) {
+        if key == &self.min && self.count > 0 {
+            let start = self.min;
+            for key in start..self.max {
+                if self.bits.get(key) {
+                    self.min = key;
+                    break;
+                }
+            }
         }
     }
 
     pub fn contains(&self, key: &u64) -> bool {
-        let key = *key;
-        if self.max.saturating_sub(key) > self.max_width as u64 {
-            panic!(
-                "acting on an item at key: {}, that is too far behind the recent max: {}",
-                key, self.max
-            );
-        }
         let address = self.get_address(key);
-        self.bits.get(address)
+        let result = self.bits.get(address);
+        if result && (self.count == 0 || key < &self.min || key >= &self.max) {
+            return false;
+        }
+        result
     }
 
     pub fn len(&self) -> usize {
@@ -282,9 +289,13 @@ impl RollingBitField {
     }
 
     pub fn get_all(&self, all: &mut Vec<u64>) {
+        *all = Vec::with_capacity(self.count);
         for key in self.min..self.max {
             if self.contains(&(key as u64)) {
                 all.push(key as u64);
+                if all.len() == self.count {
+                    break;
+                }
             }
         }
     }
@@ -300,6 +311,9 @@ pub struct RootsTracker {
 
 impl Default for RootsTracker {
     fn default() -> Self {
+        // we expect to keep a rolling set of 400k slots around at a time
+        // 2M gives us plenty of extra room to handle a width 5x what we should need.
+        // cost is 2M bits of memory
         RootsTracker::new(2097152)
     }
 }
@@ -1169,7 +1183,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
 
     pub fn add_root(&self, slot: Slot, caching_enabled: bool) {
         let mut w_roots_tracker = self.roots_tracker.write().unwrap();
-        w_roots_tracker.roots.insert(&slot);
+        w_roots_tracker.roots.insert(slot);
         // we delay cleaning until flushing!
         if !caching_enabled {
             w_roots_tracker.uncleaned_roots.insert(slot);
@@ -1295,6 +1309,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use log::*;
     use solana_sdk::signature::{Keypair, Signer};
 
     pub enum SecondaryIndexTypes<'a> {
@@ -1336,6 +1351,115 @@ pub mod tests {
             SPL_TOKEN_ACCOUNT_OWNER_OFFSET + PUBKEY_BYTES,
             spl_token_owner_index_enabled(),
         )
+    }
+
+    #[test]
+    fn test_bitfield() {
+        solana_logger::setup();
+
+        let mut bitfield = RollingBitField::new(2097152);
+        let mut hash = HashSet::new();
+
+        let min = 101_000;
+        let width = 400_000;
+        let dead = 19;
+
+        let mut slot = min;
+        while hash.len() < width {
+            slot += 1;
+            if slot % dead == 0 {
+                continue;
+            }
+            let s2 = slot.clone();
+            hash.insert(s2);
+            bitfield.insert(s2);
+        }
+
+        let max = slot + 1;
+
+        let mut time = Measure::start("");
+        let mut count = 0;
+        for _ in 0..10 {
+            for slot in (min - 10)..max + 100 {
+                if hash.contains(&slot) {
+                    count += 1;
+                }
+            }
+        }
+        time.stop();
+
+        let mut time2 = Measure::start("");
+        let mut count2 = 0;
+        for _ in 0..10 {
+            for slot in (min - 10)..max + 100 {
+                if bitfield.contains(&slot) {
+                    count2 += 1;
+                }
+            }
+        }
+        time2.stop();
+        info!(
+            "{}, {}, {}",
+            time.as_ms(),
+            time2.as_ms(),
+            time.as_ns() / time2.as_ns()
+        );
+        assert_eq!(count, count2);
+    }
+
+    #[test]
+    fn test_bitfield_smaller() {
+        solana_logger::setup();
+
+        let mut bitfield = RollingBitField::new(4096);
+        let mut hash = HashSet::new();
+
+        let min = 101_000;
+        let width = 0;
+        let dead = 19;
+
+        let mut slot = min;
+        while hash.len() < width {
+            slot += 1;
+            if slot % dead == 0 {
+                continue;
+            }
+            let s2 = slot.clone();
+            hash.insert(s2);
+            bitfield.insert(s2);
+        }
+
+        let max = slot + 1;
+        let passes = 100_000;
+
+        let mut time = Measure::start("");
+        let mut count = 0;
+        for _ in 0..passes {
+            for slot in (min - 10)..max + 100 {
+                if hash.contains(&slot) {
+                    count += 1;
+                }
+            }
+        }
+        time.stop();
+
+        let mut time2 = Measure::start("");
+        let mut count2 = 0;
+        for _ in 0..passes {
+            for slot in (min - 10)..max + 100 {
+                if bitfield.contains(&slot) {
+                    count2 += 1;
+                }
+            }
+        }
+        time2.stop();
+        info!(
+            "{}, {}, {}",
+            time.as_ms(),
+            time2.as_ms(),
+            time.as_ns() / time2.as_ns()
+        );
+        assert_eq!(count, count2);
     }
 
     #[test]
