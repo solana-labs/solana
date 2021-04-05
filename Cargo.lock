@@ -4656,7 +4656,8 @@ version = "1.5.19"
 dependencies = [
  "fast-math",
  "hex",
- "solana-sdk",
+ "matches",
+ "solana-program 1.5.19",
 ]
 
 [[package]]
