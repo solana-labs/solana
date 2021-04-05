@@ -1,7 +1,6 @@
 use crate::ArgConstant;
 use clap::Arg;
 
-
 pub const MEMO_ARG: ArgConstant<'static> = ArgConstant {
     name: "memo",
     long: "--with-memo",

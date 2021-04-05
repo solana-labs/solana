@@ -33,9 +33,9 @@ impl Default for BuildBalanceMessageConfig {
 
 fn is_memo_program(k: &Pubkey) -> bool {
     let k_str = k.to_string();
-    (k_str == spl_memo_v1_id().to_string()) ||
-    (k_str == spl_memo_v2_id().to_string()) ||
-    (k_str == spl_memo_v3_id().to_string())
+    (k_str == spl_memo_v1_id().to_string())
+        || (k_str == spl_memo_v2_id().to_string())
+        || (k_str == spl_memo_v3_id().to_string())
 }
 
 pub fn build_balance_message_with_config(

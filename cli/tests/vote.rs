@@ -50,7 +50,7 @@ fn test_vote_authorize_and_withdraw() {
         authorized_voter: None,
         authorized_withdrawer: Some(config.signers[0].pubkey()),
         commission: 0,
-        memo : None,
+        memo: None,
     };
     process_command(&config).unwrap();
     let vote_account = rpc_client
@@ -78,7 +78,7 @@ fn test_vote_authorize_and_withdraw() {
         blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
         nonce_account: None,
         nonce_authority: 0,
-        memo : None,
+        memo: None,
         fee_payer: 0,
         derived_address_seed: None,
         derived_address_program_id: None,
@@ -112,7 +112,7 @@ fn test_vote_authorize_and_withdraw() {
         withdraw_authority: 1,
         withdraw_amount: SpendAmount::Some(100),
         destination_account_pubkey: destination_account,
-        memo : None,
+        memo: None,
     };
     process_command(&config).unwrap();
     check_recent_balance(expected_balance - 100, &rpc_client, &vote_account_pubkey);
@@ -125,7 +125,7 @@ fn test_vote_authorize_and_withdraw() {
         vote_account_pubkey,
         new_identity_account: 2,
         withdraw_authority: 1,
-        memo : None,
+        memo: None,
     };
     process_command(&config).unwrap();
 }
