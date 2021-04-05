@@ -4188,6 +4188,7 @@ dependencies = [
  "solana-version",
  "solana-vote-program",
  "solana_rbpf",
+ "spl-memo 3.0.1",
  "tempfile",
  "thiserror",
  "tiny-bip39 0.7.3",
@@ -4226,6 +4227,7 @@ dependencies = [
  "solana-stake-program",
  "solana-transaction-status",
  "solana-vote-program",
+ "spl-memo 3.0.1",
 ]
 
 [[package]]
@@ -4460,9 +4462,9 @@ dependencies = [
 
 [[package]]
 name = "solana-frozen-abi"
-version = "1.5.8"
+version = "1.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc44c8096d5847d8cf7f3af3cce565de554cb56371decf93b060633ca8588913"
+checksum = "f81ac3925c8995d935d3af27390cf7b748a81837a29feb75a00e115f40dae6dc"
 dependencies = [
  "bs58",
  "bv",
@@ -4473,8 +4475,8 @@ dependencies = [
  "serde",
  "serde_derive",
  "sha2 0.9.2",
- "solana-frozen-abi-macro 1.5.8",
- "solana-logger 1.5.8",
+ "solana-frozen-abi-macro 1.6.4",
+ "solana-logger 1.6.4",
  "thiserror",
 ]
 
@@ -4498,9 +4500,9 @@ dependencies = [
 
 [[package]]
 name = "solana-frozen-abi-macro"
-version = "1.5.8"
+version = "1.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f905159beff1b53e4ba8b018a9d13d96ba164c3973bf3b9d587e730bcc14fc18"
+checksum = "ae448159038e470f3b2dd1ab0d219246211f940a10bf1e656a02cb5c2d897437"
 dependencies = [
  "lazy_static",
  "proc-macro2 1.0.24",
@@ -4744,9 +4746,9 @@ dependencies = [
 
 [[package]]
 name = "solana-logger"
-version = "1.5.8"
+version = "1.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d83a006d97da5514a4475141573383d3fcd71c729ff78494f96bb531cf734d21"
+checksum = "7fa7bddd7b89c26c6e3ef4af9b47d6bc8d60888559affb5160f5ade18c0cd058"
 dependencies = [
  "env_logger 0.8.3",
  "lazy_static",
@@ -4912,11 +4914,13 @@ dependencies = [
 
 [[package]]
 name = "solana-program"
-version = "1.5.8"
+version = "1.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2007bf285617f8a783e96b20ccd2f8d813549090a5b520f22e5f65b3cd9b157"
+checksum = "231bf4cd42997b6f34e7c74a1449e8a1e8816fd83662fc3a5a0922da48fc667b"
 dependencies = [
  "bincode",
+ "borsh",
+ "borsh-derive",
  "bs58",
  "bv",
  "curve25519-dalek 2.1.0",
@@ -4933,10 +4937,10 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "sha2 0.9.2",
- "solana-frozen-abi 1.5.8",
- "solana-frozen-abi-macro 1.5.8",
- "solana-logger 1.5.8",
- "solana-sdk-macro 1.5.8",
+ "solana-frozen-abi 1.6.4",
+ "solana-frozen-abi-macro 1.6.4",
+ "solana-logger 1.6.4",
+ "solana-sdk-macro 1.6.4",
  "thiserror",
 ]
 
@@ -5147,9 +5151,9 @@ dependencies = [
 
 [[package]]
 name = "solana-sdk-macro"
-version = "1.5.8"
+version = "1.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8a6635f1798c8ff1b88bb0fad1d4693c011f36a73c9ae03f198203144edcabb"
+checksum = "3c805f1e32677f8ec0cc0b2f470833a0d5ab0922f068e52be3a4a93b468c9c70"
 dependencies = [
  "bs58",
  "proc-macro2 1.0.24",
@@ -5379,7 +5383,7 @@ dependencies = [
  "solana-vote-program",
  "spl-associated-token-account",
  "spl-memo 2.0.1",
- "spl-memo 3.0.0",
+ "spl-memo 3.0.1",
  "spl-token",
  "thiserror",
 ]
@@ -5530,7 +5534,7 @@ version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4adc47eebe5d2b662cbaaba1843719c28a67e5ec5d0460bc3ca60900a51f74e2"
 dependencies = [
- "solana-program 1.5.8",
+ "solana-program 1.6.4",
  "spl-token",
 ]
 
@@ -5540,16 +5544,16 @@ version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fb2b771f6146dec14ef5fbf498f9374652c54badc3befc8c40c1d426dd45d720"
 dependencies = [
- "solana-program 1.5.8",
+ "solana-program 1.6.4",
 ]
 
 [[package]]
 name = "spl-memo"
-version = "3.0.0"
+version = "3.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e76b60c6f58279b5469beb1705744e9778ee94d643c8e3e2ff91874c59bb3c63"
+checksum = "bd0dc6f70db6bacea7ff25870b016a65ba1d1b6013536f08e4fd79a8f9005325"
 dependencies = [
- "solana-program 1.5.8",
+ "solana-program 1.6.4",
 ]
 
 [[package]]
@@ -5562,7 +5566,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "num_enum",
- "solana-program 1.5.8",
+ "solana-program 1.6.4",
  "thiserror",
 ]
 
