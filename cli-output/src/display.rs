@@ -4,13 +4,8 @@ use {
     console::style,
     indicatif::{ProgressBar, ProgressStyle},
     solana_sdk::{
-<<<<<<< HEAD
         clock::UnixTimestamp, hash::Hash, native_token::lamports_to_sol,
-        program_utils::limited_deserialize, transaction::Transaction,
-=======
-        clock::UnixTimestamp, hash::Hash, message::Message, native_token::lamports_to_sol,
         program_utils::limited_deserialize, pubkey::Pubkey, transaction::Transaction,
->>>>>>> 364af3a3e... issue #10831: added --with-memo option to all cli commands that submit (#16291)
     },
     solana_transaction_status::UiTransactionStatusMeta,
     spl_memo::id as spl_memo_id,

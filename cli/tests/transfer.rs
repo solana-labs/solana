@@ -437,57 +437,6 @@ fn test_transfer_all() {
 }
 
 #[test]
-<<<<<<< HEAD
-=======
-fn test_transfer_unfunded_recipient() {
-    solana_logger::setup();
-    let mint_keypair = Keypair::new();
-    let test_validator = TestValidator::with_custom_fees(mint_keypair.pubkey(), 1);
-    let faucet_addr = run_local_faucet(mint_keypair, None);
-
-    let rpc_client =
-        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
-
-    let default_signer = Keypair::new();
-
-    let mut config = CliConfig::recent_for_tests();
-    config.json_rpc_url = test_validator.rpc_url();
-    config.signers = vec![&default_signer];
-
-    let sender_pubkey = config.signers[0].pubkey();
-    let recipient_pubkey = Pubkey::new(&[1u8; 32]);
-
-    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &sender_pubkey, 50_000, &config)
-        .unwrap();
-    check_recent_balance(50_000, &rpc_client, &sender_pubkey);
-    check_recent_balance(0, &rpc_client, &recipient_pubkey);
-
-    check_ready(&rpc_client);
-
-    // Plain ole transfer
-    config.command = CliCommand::Transfer {
-        amount: SpendAmount::All,
-        to: recipient_pubkey,
-        from: 0,
-        sign_only: false,
-        dump_transaction_message: false,
-        allow_unfunded_recipient: false,
-        no_wait: false,
-        blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
-        nonce_account: None,
-        nonce_authority: 0,
-        memo: None,
-        fee_payer: 0,
-        derived_address_seed: None,
-        derived_address_program_id: None,
-    };
-
-    // Expect failure due to unfunded recipient and the lack of the `allow_unfunded_recipient` flag
-    process_command(&config).unwrap_err();
-}
-
-#[test]
->>>>>>> 364af3a3e... issue #10831: added --with-memo option to all cli commands that submit (#16291)
 fn test_transfer_with_seed() {
     solana_logger::setup();
     let mint_keypair = Keypair::new();
