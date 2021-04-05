@@ -191,7 +191,7 @@ mod tests {
             process_instruction(
                 &id(),
                 &instructions[1].data,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             ),
             Ok(())
         );
@@ -225,7 +225,7 @@ mod tests {
             process_instruction(
                 &id(),
                 &instruction.data,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             ),
             Ok(())
         );
@@ -251,7 +251,7 @@ mod tests {
             process_instruction(
                 &id(),
                 &instruction.data,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             ),
             Err(InstructionError::InvalidInstructionData)
         );
@@ -273,7 +273,7 @@ mod tests {
             process_instruction(
                 &id(),
                 &instruction.data,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             ),
             Err(InstructionError::MissingRequiredSignature)
         );
@@ -307,7 +307,7 @@ mod tests {
             process_instruction(
                 &id(),
                 &instruction.data,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             ),
             Ok(())
         );
@@ -340,7 +340,7 @@ mod tests {
             process_instruction(
                 &id(),
                 &instruction.data,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             ),
             Err(InstructionError::InvalidAccountData)
         );
@@ -370,7 +370,7 @@ mod tests {
             process_instruction(
                 &id(),
                 &instruction.data,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             ),
             Err(InstructionError::MissingRequiredSignature)
         );
@@ -385,7 +385,7 @@ mod tests {
             process_instruction(
                 &id(),
                 &instruction.data,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             ),
             Err(InstructionError::MissingRequiredSignature)
         );
@@ -421,7 +421,7 @@ mod tests {
             process_instruction(
                 &id(),
                 &instruction.data,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             ),
             Ok(())
         );
@@ -440,7 +440,7 @@ mod tests {
             process_instruction(
                 &id(),
                 &instruction.data,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             ),
             Ok(())
         );
@@ -465,7 +465,7 @@ mod tests {
             process_instruction(
                 &id(),
                 &instruction.data,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             ),
             Err(InstructionError::MissingRequiredSignature)
         );
@@ -487,7 +487,7 @@ mod tests {
             process_instruction(
                 &id(),
                 &instruction.data,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             ),
             Err(InstructionError::MissingRequiredSignature)
         );
@@ -524,7 +524,7 @@ mod tests {
             process_instruction(
                 &id(),
                 &instruction.data,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             ),
             Ok(())
         );
@@ -542,7 +542,7 @@ mod tests {
             process_instruction(
                 &id(),
                 &instruction.data,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             ),
             Ok(())
         );
@@ -563,7 +563,7 @@ mod tests {
             process_instruction(
                 &id(),
                 &instruction.data,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             ),
             Err(InstructionError::MissingRequiredSignature)
         );
@@ -581,7 +581,7 @@ mod tests {
             process_instruction(
                 &id(),
                 &instructions[1].data,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             ),
             Err(InstructionError::NotEnoughAccountKeys)
         );
@@ -611,7 +611,7 @@ mod tests {
             process_instruction(
                 &id(),
                 &instruction.data,
-                &mut MockInvokeContext::new(&keyed_accounts),
+                &mut MockInvokeContext::new(keyed_accounts),
             ),
             Err(InstructionError::InvalidAccountOwner)
         );

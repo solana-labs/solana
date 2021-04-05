@@ -353,7 +353,11 @@ mod tests {
     #[test]
     fn test_vote_process_instruction_decode_bail() {
         assert_eq!(
-            super::process_instruction(&Pubkey::default(), &[], &mut MockInvokeContext::new(&[])),
+            super::process_instruction(
+                &Pubkey::default(),
+                &[],
+                &mut MockInvokeContext::new(vec![])
+            ),
             Err(InstructionError::NotEnoughAccountKeys),
         );
     }
@@ -397,7 +401,7 @@ mod tests {
             super::process_instruction(
                 &Pubkey::default(),
                 &instruction.data,
-                &mut MockInvokeContext::new(&keyed_accounts),
+                &mut MockInvokeContext::new(keyed_accounts),
             )
         }
     }

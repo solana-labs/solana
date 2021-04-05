@@ -300,7 +300,7 @@ mod test {
                     &authorized,
                     &recent_blockhashes,
                     &rent,
-                    &MockInvokeContext::new(&[]),
+                    &MockInvokeContext::new(vec![]),
                 )
                 .unwrap();
             let state = AccountUtilsState::<Versions>::state(keyed_account)
@@ -315,7 +315,11 @@ mod test {
             assert_eq!(state, State::Initialized(data.clone()));
             let recent_blockhashes = create_test_recent_blockhashes(63);
             keyed_account
-                .advance_nonce_account(&recent_blockhashes, &signers, &MockInvokeContext::new(&[]))
+                .advance_nonce_account(
+                    &recent_blockhashes,
+                    &signers,
+                    &MockInvokeContext::new(vec![]),
+                )
                 .unwrap();
             let state = AccountUtilsState::<Versions>::state(keyed_account)
                 .unwrap()
@@ -329,7 +333,11 @@ mod test {
             assert_eq!(state, State::Initialized(data.clone()));
             let recent_blockhashes = create_test_recent_blockhashes(31);
             keyed_account
-                .advance_nonce_account(&recent_blockhashes, &signers, &MockInvokeContext::new(&[]))
+                .advance_nonce_account(
+                    &recent_blockhashes,
+                    &signers,
+                    &MockInvokeContext::new(vec![]),
+                )
                 .unwrap();
             let state = AccountUtilsState::<Versions>::state(keyed_account)
                 .unwrap()
@@ -354,7 +362,7 @@ mod test {
                         &recent_blockhashes,
                         &rent,
                         &signers,
-                        &MockInvokeContext::new(&[]),
+                        &MockInvokeContext::new(vec![]),
                     )
                     .unwrap();
                 // Empties Account balance
@@ -388,7 +396,7 @@ mod test {
                     &authority,
                     &recent_blockhashes,
                     &rent,
-                    &MockInvokeContext::new(&[]),
+                    &MockInvokeContext::new(vec![]),
                 )
                 .unwrap();
             let pubkey = nonce_account.account.borrow().owner;
@@ -407,7 +415,7 @@ mod test {
             let result = nonce_account.advance_nonce_account(
                 &recent_blockhashes,
                 &signers,
-                &MockInvokeContext::new(&[]),
+                &MockInvokeContext::new(vec![]),
             );
             assert_eq!(result, Err(InstructionError::MissingRequiredSignature),);
         })
@@ -430,14 +438,14 @@ mod test {
                     &authorized,
                     &recent_blockhashes,
                     &rent,
-                    &MockInvokeContext::new(&[]),
+                    &MockInvokeContext::new(vec![]),
                 )
                 .unwrap();
             let recent_blockhashes = vec![].into_iter().collect();
             let result = keyed_account.advance_nonce_account(
                 &recent_blockhashes,
                 &signers,
-                &MockInvokeContext::new(&[]),
+                &MockInvokeContext::new(vec![]),
             );
             assert_eq!(result, Err(NonceError::NoRecentBlockhashes.into()));
         })
@@ -460,13 +468,13 @@ mod test {
                     &authorized,
                     &recent_blockhashes,
                     &rent,
-                    &MockInvokeContext::new(&[]),
+                    &MockInvokeContext::new(vec![]),
                 )
                 .unwrap();
             let result = keyed_account.advance_nonce_account(
                 &recent_blockhashes,
                 &signers,
-                &MockInvokeContext::new(&[]),
+                &MockInvokeContext::new(vec![]),
             );
             assert_eq!(result, Err(NonceError::NotExpired.into()));
         })
@@ -486,7 +494,7 @@ mod test {
             let result = keyed_account.advance_nonce_account(
                 &recent_blockhashes,
                 &signers,
-                &MockInvokeContext::new(&[]),
+                &MockInvokeContext::new(vec![]),
             );
             assert_eq!(result, Err(NonceError::BadAccountState.into()));
         })
@@ -510,7 +518,7 @@ mod test {
                         &authorized,
                         &recent_blockhashes,
                         &rent,
-                        &MockInvokeContext::new(&[]),
+                        &MockInvokeContext::new(vec![]),
                     )
                     .unwrap();
                 let mut signers = HashSet::new();
@@ -519,7 +527,7 @@ mod test {
                 let result = nonce_account.advance_nonce_account(
                     &recent_blockhashes,
                     &signers,
-                    &MockInvokeContext::new(&[]),
+                    &MockInvokeContext::new(vec![]),
                 );
                 assert_eq!(result, Ok(()));
             });
@@ -544,13 +552,13 @@ mod test {
                         &authorized,
                         &recent_blockhashes,
                         &rent,
-                        &MockInvokeContext::new(&[]),
+                        &MockInvokeContext::new(vec![]),
                     )
                     .unwrap();
                 let result = nonce_account.advance_nonce_account(
                     &recent_blockhashes,
                     &signers,
-                    &MockInvokeContext::new(&[]),
+                    &MockInvokeContext::new(vec![]),
                 );
                 assert_eq!(result, Err(InstructionError::MissingRequiredSignature),);
             });
@@ -584,7 +592,7 @@ mod test {
                         &recent_blockhashes,
                         &rent,
                         &signers,
-                        &MockInvokeContext::new(&[]),
+                        &MockInvokeContext::new(vec![]),
                     )
                     .unwrap();
                 let state = AccountUtilsState::<Versions>::state(nonce_keyed)
@@ -623,7 +631,7 @@ mod test {
                     &recent_blockhashes,
                     &rent,
                     &signers,
-                    &MockInvokeContext::new(&[]),
+                    &MockInvokeContext::new(vec![]),
                 );
                 assert_eq!(result, Err(InstructionError::MissingRequiredSignature),);
             })
@@ -653,7 +661,7 @@ mod test {
                     &recent_blockhashes,
                     &rent,
                     &signers,
-                    &MockInvokeContext::new(&[]),
+                    &MockInvokeContext::new(vec![]),
                 );
                 assert_eq!(result, Err(InstructionError::InsufficientFunds));
             })
@@ -683,7 +691,7 @@ mod test {
                         &recent_blockhashes,
                         &rent,
                         &signers,
-                        &MockInvokeContext::new(&[]),
+                        &MockInvokeContext::new(vec![]),
                     )
                     .unwrap();
                 let state = AccountUtilsState::<Versions>::state(nonce_keyed)
@@ -703,7 +711,7 @@ mod test {
                         &recent_blockhashes,
                         &rent,
                         &signers,
-                        &MockInvokeContext::new(&[]),
+                        &MockInvokeContext::new(vec![]),
                     )
                     .unwrap();
                 let state = AccountUtilsState::<Versions>::state(nonce_keyed)
@@ -733,7 +741,7 @@ mod test {
                     &authority,
                     &recent_blockhashes,
                     &rent,
-                    &MockInvokeContext::new(&[]),
+                    &MockInvokeContext::new(vec![]),
                 )
                 .unwrap();
             let state = AccountUtilsState::<Versions>::state(nonce_keyed)
@@ -757,7 +765,7 @@ mod test {
                         &recent_blockhashes,
                         &rent,
                         &signers,
-                        &MockInvokeContext::new(&[]),
+                        &MockInvokeContext::new(vec![]),
                     )
                     .unwrap();
                 let state = AccountUtilsState::<Versions>::state(nonce_keyed)
@@ -783,7 +791,7 @@ mod test {
                         &recent_blockhashes,
                         &rent,
                         &signers,
-                        &MockInvokeContext::new(&[]),
+                        &MockInvokeContext::new(vec![]),
                     )
                     .unwrap();
                 let state = AccountUtilsState::<Versions>::state(nonce_keyed)
@@ -811,7 +819,7 @@ mod test {
                     &authorized,
                     &recent_blockhashes,
                     &rent,
-                    &MockInvokeContext::new(&[]),
+                    &MockInvokeContext::new(vec![]),
                 )
                 .unwrap();
             with_test_keyed_account(42, false, |to_keyed| {
@@ -824,7 +832,7 @@ mod test {
                     &recent_blockhashes,
                     &rent,
                     &signers,
-                    &MockInvokeContext::new(&[]),
+                    &MockInvokeContext::new(vec![]),
                 );
                 assert_eq!(result, Err(NonceError::NotExpired.into()));
             })
@@ -846,7 +854,7 @@ mod test {
                     &authorized,
                     &recent_blockhashes,
                     &rent,
-                    &MockInvokeContext::new(&[]),
+                    &MockInvokeContext::new(vec![]),
                 )
                 .unwrap();
             with_test_keyed_account(42, false, |to_keyed| {
@@ -860,7 +868,7 @@ mod test {
                     &recent_blockhashes,
                     &rent,
                     &signers,
-                    &MockInvokeContext::new(&[]),
+                    &MockInvokeContext::new(vec![]),
                 );
                 assert_eq!(result, Err(InstructionError::InsufficientFunds));
             })
@@ -882,7 +890,7 @@ mod test {
                     &authorized,
                     &recent_blockhashes,
                     &rent,
-                    &MockInvokeContext::new(&[]),
+                    &MockInvokeContext::new(vec![]),
                 )
                 .unwrap();
             with_test_keyed_account(42, false, |to_keyed| {
@@ -896,7 +904,7 @@ mod test {
                     &recent_blockhashes,
                     &rent,
                     &signers,
-                    &MockInvokeContext::new(&[]),
+                    &MockInvokeContext::new(vec![]),
                 );
                 assert_eq!(result, Err(InstructionError::InsufficientFunds));
             })
@@ -918,7 +926,7 @@ mod test {
                     &authorized,
                     &recent_blockhashes,
                     &rent,
-                    &MockInvokeContext::new(&[]),
+                    &MockInvokeContext::new(vec![]),
                 )
                 .unwrap();
             with_test_keyed_account(55, false, |to_keyed| {
@@ -932,7 +940,7 @@ mod test {
                     &recent_blockhashes,
                     &rent,
                     &signers,
-                    &MockInvokeContext::new(&[]),
+                    &MockInvokeContext::new(vec![]),
                 );
                 assert_eq!(result, Err(InstructionError::InsufficientFunds));
             })
@@ -959,7 +967,7 @@ mod test {
                 &authority,
                 &recent_blockhashes,
                 &rent,
-                &MockInvokeContext::new(&[]),
+                &MockInvokeContext::new(vec![]),
             );
             let data = nonce::state::Data {
                 authority,
@@ -990,7 +998,7 @@ mod test {
                 &authorized,
                 &recent_blockhashes,
                 &rent,
-                &MockInvokeContext::new(&[]),
+                &MockInvokeContext::new(vec![]),
             );
             assert_eq!(result, Err(NonceError::NoRecentBlockhashes.into()));
         })
@@ -1011,7 +1019,7 @@ mod test {
                     &authorized,
                     &recent_blockhashes,
                     &rent,
-                    &MockInvokeContext::new(&[]),
+                    &MockInvokeContext::new(vec![]),
                 )
                 .unwrap();
             let recent_blockhashes = create_test_recent_blockhashes(0);
@@ -1019,7 +1027,7 @@ mod test {
                 &authorized,
                 &recent_blockhashes,
                 &rent,
-                &MockInvokeContext::new(&[]),
+                &MockInvokeContext::new(vec![]),
             );
             assert_eq!(result, Err(NonceError::BadAccountState.into()));
         })
@@ -1039,7 +1047,7 @@ mod test {
                 &authorized,
                 &recent_blockhashes,
                 &rent,
-                &MockInvokeContext::new(&[]),
+                &MockInvokeContext::new(vec![]),
             );
             assert_eq!(result, Err(InstructionError::InsufficientFunds));
         })
@@ -1062,7 +1070,7 @@ mod test {
                     &authorized,
                     &recent_blockhashes,
                     &rent,
-                    &MockInvokeContext::new(&[]),
+                    &MockInvokeContext::new(vec![]),
                 )
                 .unwrap();
             let authority = Pubkey::default();
@@ -1074,7 +1082,7 @@ mod test {
             let result = nonce_account.authorize_nonce_account(
                 &Pubkey::default(),
                 &signers,
-                &MockInvokeContext::new(&[]),
+                &MockInvokeContext::new(vec![]),
             );
             assert_eq!(result, Ok(()));
             let state = AccountUtilsState::<Versions>::state(nonce_account)
@@ -1097,7 +1105,7 @@ mod test {
             let result = nonce_account.authorize_nonce_account(
                 &Pubkey::default(),
                 &signers,
-                &MockInvokeContext::new(&[]),
+                &MockInvokeContext::new(vec![]),
             );
             assert_eq!(result, Err(NonceError::BadAccountState.into()));
         })
@@ -1120,13 +1128,13 @@ mod test {
                     &authorized,
                     &recent_blockhashes,
                     &rent,
-                    &MockInvokeContext::new(&[]),
+                    &MockInvokeContext::new(vec![]),
                 )
                 .unwrap();
             let result = nonce_account.authorize_nonce_account(
                 &Pubkey::default(),
                 &signers,
-                &MockInvokeContext::new(&[]),
+                &MockInvokeContext::new(vec![]),
             );
             assert_eq!(result, Err(InstructionError::MissingRequiredSignature));
         })
@@ -1147,7 +1155,7 @@ mod test {
                     &authorized,
                     &recent_blockhashes,
                     &Rent::free(),
-                    &MockInvokeContext::new(&[]),
+                    &MockInvokeContext::new(vec![]),
                 )
                 .unwrap();
             assert!(verify_nonce_account(
@@ -1182,7 +1190,7 @@ mod test {
                     &authorized,
                     &recent_blockhashes,
                     &Rent::free(),
-                    &MockInvokeContext::new(&[]),
+                    &MockInvokeContext::new(vec![]),
                 )
                 .unwrap();
             assert!(!verify_nonce_account(

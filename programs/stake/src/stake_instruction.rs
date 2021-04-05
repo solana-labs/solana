@@ -713,7 +713,7 @@ mod tests {
             super::process_instruction(
                 &Pubkey::default(),
                 &instruction.data,
-                &mut MockInvokeContext::new(&keyed_accounts),
+                &mut MockInvokeContext::new(keyed_accounts),
             )
         }
     }
@@ -927,7 +927,7 @@ mod tests {
                     Lockup::default()
                 ))
                 .unwrap(),
-                &mut MockInvokeContext::new(&[])
+                &mut MockInvokeContext::new(vec![])
             ),
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -935,7 +935,7 @@ mod tests {
         // no account for rent
         let stake_address = Pubkey::default();
         let stake_account = create_default_stake_account();
-        let keyed_accounts = [KeyedAccount::new(&stake_address, false, &stake_account)];
+        let keyed_accounts = vec![KeyedAccount::new(&stake_address, false, &stake_account)];
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
@@ -944,7 +944,7 @@ mod tests {
                     Lockup::default()
                 ))
                 .unwrap(),
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             ),
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -954,7 +954,7 @@ mod tests {
         let stake_account = create_default_stake_account();
         let rent_address = sysvar::rent::id();
         let rent_account = create_default_account();
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&stake_address, false, &stake_account),
             KeyedAccount::new(&rent_address, false, &rent_account),
         ];
@@ -966,7 +966,7 @@ mod tests {
                     Lockup::default()
                 ))
                 .unwrap(),
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             ),
             Err(InstructionError::InvalidArgument),
         );
@@ -978,7 +978,7 @@ mod tests {
         let rent_account = RefCell::new(account::create_account_shared_data_for_test(
             &Rent::default(),
         ));
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&stake_address, false, &stake_account),
             KeyedAccount::new(&rent_address, false, &rent_account),
         ];
@@ -990,7 +990,7 @@ mod tests {
                     Lockup::default()
                 ))
                 .unwrap(),
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             ),
             Err(InstructionError::InvalidAccountData),
         );
@@ -998,12 +998,12 @@ mod tests {
         // gets the first check in delegate, wrong number of accounts
         let stake_address = Pubkey::default();
         let stake_account = create_default_stake_account();
-        let keyed_accounts = [KeyedAccount::new(&stake_address, false, &stake_account)];
+        let keyed_accounts = vec![KeyedAccount::new(&stake_address, false, &stake_account)];
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
                 &serialize(&StakeInstruction::DelegateStake).unwrap(),
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             ),
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -1011,12 +1011,12 @@ mod tests {
         // gets the sub-check for number of args
         let stake_address = Pubkey::default();
         let stake_account = create_default_stake_account();
-        let keyed_accounts = [KeyedAccount::new(&stake_address, false, &stake_account)];
+        let keyed_accounts = vec![KeyedAccount::new(&stake_address, false, &stake_account)];
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
                 &serialize(&StakeInstruction::DelegateStake).unwrap(),
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             ),
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -1037,7 +1037,7 @@ mod tests {
         ));
         let config_address = config::id();
         let config_account = RefCell::new(config::create_account(0, &config::Config::default()));
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&stake_address, true, &stake_account),
             KeyedAccount::new(&vote_address, false, &bad_vote_account),
             KeyedAccount::new(&clock_address, false, &clock_account),
@@ -1048,7 +1048,7 @@ mod tests {
             super::process_instruction(
                 &Pubkey::default(),
                 &serialize(&StakeInstruction::DelegateStake).unwrap(),
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             ),
             Err(InstructionError::InvalidAccountData),
         );
@@ -1066,7 +1066,7 @@ mod tests {
         let stake_history_account = RefCell::new(account::create_account_shared_data_for_test(
             &StakeHistory::default(),
         ));
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&stake_address, false, &stake_account),
             KeyedAccount::new(&vote_address, false, &vote_account),
             KeyedAccount::new(&rewards_address, false, &rewards_account),
@@ -1076,7 +1076,7 @@ mod tests {
             super::process_instruction(
                 &Pubkey::default(),
                 &serialize(&StakeInstruction::Withdraw(42)).unwrap(),
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             ),
             Err(InstructionError::InvalidArgument),
         );
@@ -1084,12 +1084,12 @@ mod tests {
         // Tests correct number of accounts are provided in withdraw
         let stake_address = Pubkey::default();
         let stake_account = create_default_stake_account();
-        let keyed_accounts = [KeyedAccount::new(&stake_address, false, &stake_account)];
+        let keyed_accounts = vec![KeyedAccount::new(&stake_address, false, &stake_account)];
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
                 &serialize(&StakeInstruction::Withdraw(42)).unwrap(),
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             ),
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -1101,7 +1101,7 @@ mod tests {
         let rewards_account = RefCell::new(account::create_account_shared_data_for_test(
             &sysvar::rewards::Rewards::new(0.0),
         ));
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&stake_address, false, &stake_account),
             KeyedAccount::new(&rewards_address, false, &rewards_account),
         ];
@@ -1109,7 +1109,7 @@ mod tests {
             super::process_instruction(
                 &Pubkey::default(),
                 &serialize(&StakeInstruction::Deactivate).unwrap(),
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             ),
             Err(InstructionError::InvalidArgument),
         );
@@ -1119,7 +1119,7 @@ mod tests {
             super::process_instruction(
                 &Pubkey::default(),
                 &serialize(&StakeInstruction::Deactivate).unwrap(),
-                &mut MockInvokeContext::new(&[])
+                &mut MockInvokeContext::new(vec![])
             ),
             Err(InstructionError::NotEnoughAccountKeys),
         );

@@ -275,7 +275,7 @@ impl<'a> ThisInvokeContext<'a> {
         pre_accounts: Vec<PreAccount>,
         executables: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
         account_deps: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
-        keyed_accounts: &'a [KeyedAccount<'a>],
+        keyed_accounts: Vec<KeyedAccount<'a>>,
         programs: &'a [(Pubkey, ProcessInstructionWithContext)],
         log_collector: Option<Rc<LogCollector>>,
         bpf_compute_budget: BpfComputeBudget,
@@ -315,7 +315,7 @@ impl<'a> ThisInvokeContext<'a> {
 impl<'a> InvokeContext for ThisInvokeContext<'a> {
     fn push(
         &mut self,
-        keyed_accounts: &[KeyedAccount],
+        keyed_accounts: Vec<KeyedAccount>,
         key: &Pubkey,
     ) -> Result<(), InstructionError> {
         if self.invoke_stack.len() > self.bpf_compute_budget.max_invoke_depth {
@@ -369,17 +369,17 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             .ok_or(InstructionError::GenericError)
     }
     fn remove_first_keyed_account(&mut self) -> Result<(), InstructionError> {
-        let mut stack_frame = &mut self
+        let stack_frame = &mut self
             .invoke_stack
             .last_mut()
             .ok_or(InstructionError::GenericError)?;
-        stack_frame.keyed_accounts = &stack_frame.keyed_accounts[1..];
+        stack_frame.keyed_accounts.remove(0);
         Ok(())
     }
     fn get_keyed_accounts(&self) -> Result<&[KeyedAccount], InstructionError> {
         self.invoke_stack
             .last()
-            .map(|frame| frame.keyed_accounts)
+            .map(|frame| frame.keyed_accounts.as_slice())
             .ok_or(InstructionError::GenericError)
     }
     fn get_programs(&self) -> &[(Pubkey, ProcessInstructionWithContext)] {
@@ -907,7 +907,7 @@ impl MessageProcessor {
             );
 
             // Invoke callee
-            invoke_context.push(&keyed_accounts, program_id)?;
+            invoke_context.push(keyed_accounts, program_id)?;
 
             let mut message_processor = MessageProcessor::default();
             for (program_id, process_instruction) in invoke_context.get_programs().iter() {
@@ -1129,7 +1129,7 @@ impl MessageProcessor {
             pre_accounts,
             executable_accounts,
             account_deps,
-            keyed_accounts.as_slice(),
+            keyed_accounts,
             &self.programs,
             log_collector,
             bpf_compute_budget,
@@ -1245,7 +1245,7 @@ mod tests {
             pre_accounts,
             &[],
             &[],
-            &[],
+            vec![],
             &[],
             None,
             BpfComputeBudget::default(),
@@ -1259,7 +1259,7 @@ mod tests {
         // Check call depth increases and has a limit
         let mut depth_reached = 1;
         for program_id in invoke_stack.iter().skip(1) {
-            if Err(InstructionError::CallDepth) == invoke_context.push(&[], program_id) {
+            if Err(InstructionError::CallDepth) == invoke_context.push(vec![], program_id) {
                 break;
             }
             depth_reached += 1;
@@ -2179,7 +2179,7 @@ mod tests {
             pre_accounts,
             &executable_accounts,
             &[],
-            keyed_accounts.as_slice(),
+            keyed_accounts,
             programs.as_slice(),
             None,
             BpfComputeBudget::default(),
@@ -2244,7 +2244,7 @@ mod tests {
                 pre_accounts,
                 &executable_accounts,
                 &[],
-                keyed_accounts.as_slice(),
+                keyed_accounts,
                 programs.as_slice(),
                 None,
                 BpfComputeBudget::default(),

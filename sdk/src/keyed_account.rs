@@ -10,7 +10,7 @@ use std::{
 };
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct KeyedAccount<'a> {
     is_signer: bool, // Transaction was signed by this account's key
     is_writable: bool,

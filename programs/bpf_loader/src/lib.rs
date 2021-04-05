@@ -933,7 +933,7 @@ mod tests {
             process_instruction(
                 &bpf_loader::id(),
                 &instruction_data,
-                &mut MockInvokeContext::new(&[])
+                &mut MockInvokeContext::new(vec![])
             )
         );
 
@@ -943,7 +943,7 @@ mod tests {
             process_instruction(
                 &bpf_loader::id(),
                 &instruction_data,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
 
@@ -951,14 +951,12 @@ mod tests {
         #[allow(unused_mut)]
         let mut keyed_accounts = vec![KeyedAccount::new(&program_key, true, &program_account)];
         keyed_accounts[0].account.borrow_mut().set_data(vec![0; 6]);
+        let mut invoke_context = MockInvokeContext::new(keyed_accounts);
         assert_eq!(
             Ok(()),
-            process_instruction(
-                &bpf_loader::id(),
-                &instruction_data,
-                &mut MockInvokeContext::new(&keyed_accounts)
-            )
+            process_instruction(&bpf_loader::id(), &instruction_data, &mut invoke_context)
         );
+        let keyed_accounts = invoke_context.get_keyed_accounts().unwrap();
         assert_eq!(
             &vec![0, 0, 0, 1, 2, 3],
             keyed_accounts[0].account.borrow().data()
@@ -973,7 +971,7 @@ mod tests {
             process_instruction(
                 &bpf_loader::id(),
                 &instruction_data,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
     }
@@ -998,7 +996,7 @@ mod tests {
             process_instruction(
                 &bpf_loader::id(),
                 &instruction_data,
-                &mut MockInvokeContext::new(&[])
+                &mut MockInvokeContext::new(vec![])
             )
         );
 
@@ -1008,20 +1006,18 @@ mod tests {
             process_instruction(
                 &bpf_loader::id(),
                 &instruction_data,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
 
         // Case: Finalize
         let keyed_accounts = vec![KeyedAccount::new(&program_key, true, &program_account)];
+        let mut invoke_context = MockInvokeContext::new(keyed_accounts);
         assert_eq!(
             Ok(()),
-            process_instruction(
-                &bpf_loader::id(),
-                &instruction_data,
-                &mut MockInvokeContext::new(&keyed_accounts)
-            )
+            process_instruction(&bpf_loader::id(), &instruction_data, &mut invoke_context)
         );
+        let keyed_accounts = invoke_context.get_keyed_accounts().unwrap();
         assert!(keyed_accounts[0].account.borrow().executable);
 
         program_account.borrow_mut().executable = false; // Un-finalize the account
@@ -1034,7 +1030,7 @@ mod tests {
             process_instruction(
                 &bpf_loader::id(),
                 &instruction_data,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
     }
@@ -1057,7 +1053,7 @@ mod tests {
         // Case: Empty keyed accounts
         assert_eq!(
             Err(InstructionError::NotEnoughAccountKeys),
-            process_instruction(&program_id, &[], &mut MockInvokeContext::new(&[]))
+            process_instruction(&program_id, &[], &mut MockInvokeContext::new(vec![]))
         );
 
         // Case: Only a program account
@@ -1066,7 +1062,7 @@ mod tests {
             process_instruction(
                 &program_key,
                 &[],
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts.clone())
             )
         );
 
@@ -1077,7 +1073,7 @@ mod tests {
             process_instruction(
                 &program_id,
                 &[],
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts.clone())
             )
         );
         keyed_accounts[0].account.borrow_mut().executable = true;
@@ -1090,22 +1086,24 @@ mod tests {
             process_instruction(
                 &program_key,
                 &[],
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts.clone())
             )
         );
 
         // Case: With duplicate accounts
         let duplicate_key = solana_sdk::pubkey::new_rand();
         let parameter_account = AccountSharedData::new_ref(1, 0, &program_id);
-        let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &program_account)];
-        keyed_accounts.push(KeyedAccount::new(&duplicate_key, false, &parameter_account));
-        keyed_accounts.push(KeyedAccount::new(&duplicate_key, false, &parameter_account));
+        let keyed_accounts = vec![
+            KeyedAccount::new(&program_key, false, &program_account),
+            KeyedAccount::new(&duplicate_key, false, &parameter_account),
+            KeyedAccount::new(&duplicate_key, false, &parameter_account),
+        ];
         assert_eq!(
             Ok(()),
             process_instruction(
                 &program_key,
                 &[],
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts.clone())
             )
         );
 
@@ -1150,7 +1148,7 @@ mod tests {
             process_instruction(
                 &program_key,
                 &[],
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
 
@@ -1165,7 +1163,7 @@ mod tests {
             process_instruction(
                 &program_key,
                 &[],
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
     }
@@ -1192,7 +1190,7 @@ mod tests {
             process_instruction(
                 &program_key,
                 &[],
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
 
@@ -1207,7 +1205,7 @@ mod tests {
             process_instruction(
                 &program_key,
                 &[],
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
     }
@@ -1230,7 +1228,7 @@ mod tests {
         );
 
         // Case: Success
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&buffer_address, false, &buffer_account),
             KeyedAccount::new(&authority_address, false, &authority_account),
         ];
@@ -1239,7 +1237,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &instruction,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
         let state: UpgradeableLoaderState = buffer_account.borrow().state().unwrap();
@@ -1251,7 +1249,7 @@ mod tests {
         );
 
         // Case: Already initialized
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&buffer_address, false, &buffer_account),
             KeyedAccount::new(&authority_address, false, &authority_account),
         ];
@@ -1260,7 +1258,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &instruction,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
         let state: UpgradeableLoaderState = buffer_account.borrow().state().unwrap();
@@ -1287,7 +1285,7 @@ mod tests {
             bytes: vec![42; 9],
         })
         .unwrap();
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&buffer_address, false, &buffer_account),
             KeyedAccount::new(&buffer_address, true, &buffer_account),
         ];
@@ -1296,7 +1294,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &instruction,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
 
@@ -1312,7 +1310,7 @@ mod tests {
                 authority_address: Some(buffer_address),
             })
             .unwrap();
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&buffer_address, false, &buffer_account),
             KeyedAccount::new(&buffer_address, true, &buffer_account),
         ];
@@ -1321,7 +1319,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &instruction,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
         let state: UpgradeableLoaderState = buffer_account.borrow().state().unwrap();
@@ -1354,7 +1352,7 @@ mod tests {
                 authority_address: Some(buffer_address),
             })
             .unwrap();
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&buffer_address, false, &buffer_account),
             KeyedAccount::new(&buffer_address, true, &buffer_account),
         ];
@@ -1363,7 +1361,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &instruction,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
         let state: UpgradeableLoaderState = buffer_account.borrow().state().unwrap();
@@ -1391,7 +1389,7 @@ mod tests {
                 authority_address: Some(buffer_address),
             })
             .unwrap();
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&buffer_address, false, &buffer_account),
             KeyedAccount::new(&buffer_address, false, &buffer_account),
         ];
@@ -1400,7 +1398,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &instruction,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
 
@@ -1416,7 +1414,7 @@ mod tests {
                 authority_address: Some(buffer_address),
             })
             .unwrap();
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&buffer_address, false, &buffer_account),
             KeyedAccount::new(&buffer_address, true, &buffer_account),
         ];
@@ -1425,7 +1423,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &instruction,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
 
@@ -1441,7 +1439,7 @@ mod tests {
                 authority_address: Some(buffer_address),
             })
             .unwrap();
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&buffer_address, false, &buffer_account),
             KeyedAccount::new(&buffer_address, true, &buffer_account),
         ];
@@ -1450,7 +1448,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &instruction,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
 
@@ -1467,7 +1465,7 @@ mod tests {
                 authority_address: Some(buffer_address),
             })
             .unwrap();
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&buffer_address, false, &buffer_account),
             KeyedAccount::new(&authority_address, true, &buffer_account),
         ];
@@ -1476,7 +1474,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &instruction,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
 
@@ -1493,7 +1491,7 @@ mod tests {
                 authority_address: None,
             })
             .unwrap();
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&buffer_address, false, &buffer_account),
             KeyedAccount::new(&authority_address, true, &buffer_account),
         ];
@@ -1502,7 +1500,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &instruction,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
     }
@@ -2260,7 +2258,7 @@ mod tests {
             min_program_balance,
             min_programdata_balance,
         );
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&programdata_address, false, &programdata_account),
             KeyedAccount::new(&program_address, false, &program_account),
             KeyedAccount::new(&buffer_address, false, &buffer_account),
@@ -2278,7 +2276,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &instruction,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
         assert_eq!(0, buffer_account.borrow().lamports);
@@ -2322,7 +2320,7 @@ mod tests {
                 upgrade_authority_address: None,
             })
             .unwrap();
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&programdata_address, false, &programdata_account),
             KeyedAccount::new(&program_address, false, &program_account),
             KeyedAccount::new(&buffer_address, false, &buffer_account),
@@ -2340,7 +2338,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &instruction,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
 
@@ -2356,7 +2354,7 @@ mod tests {
             min_programdata_balance,
         );
         let invalid_upgrade_authority_address = Pubkey::new_unique();
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&programdata_address, false, &programdata_account),
             KeyedAccount::new(&program_address, false, &program_account),
             KeyedAccount::new(&buffer_address, false, &buffer_account),
@@ -2374,7 +2372,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &instruction,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
 
@@ -2389,7 +2387,7 @@ mod tests {
             min_program_balance,
             min_programdata_balance,
         );
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&programdata_address, false, &programdata_account),
             KeyedAccount::new(&program_address, false, &program_account),
             KeyedAccount::new(&buffer_address, false, &buffer_account),
@@ -2407,7 +2405,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &instruction,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
 
@@ -2423,7 +2421,7 @@ mod tests {
             min_programdata_balance,
         );
         program_account.borrow_mut().executable = false;
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&programdata_address, false, &programdata_account),
             KeyedAccount::new(&program_address, false, &program_account),
             KeyedAccount::new(&buffer_address, false, &buffer_account),
@@ -2441,7 +2439,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &instruction,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
 
@@ -2457,7 +2455,7 @@ mod tests {
             min_programdata_balance,
         );
         program_account.borrow_mut().owner = Pubkey::new_unique();
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&programdata_address, false, &programdata_account),
             KeyedAccount::new(&program_address, false, &program_account),
             KeyedAccount::new(&buffer_address, false, &buffer_account),
@@ -2475,7 +2473,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &instruction,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
 
@@ -2490,7 +2488,7 @@ mod tests {
             min_program_balance,
             min_programdata_balance,
         );
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&programdata_address, false, &programdata_account),
             KeyedAccount::new_readonly(&program_address, false, &program_account),
             KeyedAccount::new(&buffer_address, false, &buffer_account),
@@ -2508,7 +2506,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &instruction,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
 
@@ -2527,7 +2525,7 @@ mod tests {
             .borrow_mut()
             .set_state(&UpgradeableLoaderState::Uninitialized)
             .unwrap();
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&programdata_address, false, &programdata_account),
             KeyedAccount::new(&program_address, false, &program_account),
             KeyedAccount::new(&buffer_address, false, &buffer_account),
@@ -2545,7 +2543,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &instruction,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
 
@@ -2561,7 +2559,7 @@ mod tests {
             min_programdata_balance,
         );
         let invalid_programdata_address = Pubkey::new_unique();
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&invalid_programdata_address, false, &programdata_account),
             KeyedAccount::new(&program_address, false, &program_account),
             KeyedAccount::new(&buffer_address, false, &buffer_account),
@@ -2579,7 +2577,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &instruction,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
 
@@ -2598,7 +2596,7 @@ mod tests {
             .borrow_mut()
             .set_state(&UpgradeableLoaderState::Uninitialized)
             .unwrap();
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&programdata_address, false, &programdata_account),
             KeyedAccount::new(&program_address, false, &program_account),
             KeyedAccount::new(&buffer_address, false, &buffer_account),
@@ -2616,7 +2614,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &instruction,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
 
@@ -2642,7 +2640,7 @@ mod tests {
                 authority_address: Some(upgrade_authority_address),
             })
             .unwrap();
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&programdata_address, false, &programdata_account),
             KeyedAccount::new(&program_address, false, &program_account),
             KeyedAccount::new(&buffer_address, false, &buffer_account),
@@ -2660,7 +2658,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &instruction,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
 
@@ -2682,7 +2680,7 @@ mod tests {
             })
             .unwrap();
         truncate_data(&mut buffer_account.borrow_mut(), 5);
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&programdata_address, false, &programdata_account),
             KeyedAccount::new(&program_address, false, &program_account),
             KeyedAccount::new(&buffer_address, false, &buffer_account),
@@ -2700,7 +2698,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &instruction,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
 
@@ -2715,7 +2713,7 @@ mod tests {
             min_program_balance,
             min_programdata_balance,
         );
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&programdata_address, false, &programdata_account),
             KeyedAccount::new(&program_address, false, &program_account),
             KeyedAccount::new(&buffer_address, false, &buffer_account),
@@ -2733,7 +2731,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &instruction,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
 
@@ -2754,7 +2752,7 @@ mod tests {
                 authority_address: None,
             })
             .unwrap();
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&programdata_address, false, &programdata_account),
             KeyedAccount::new(&program_address, false, &program_account),
             KeyedAccount::new(&buffer_address, false, &buffer_account),
@@ -2772,7 +2770,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &instruction,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
 
@@ -2800,7 +2798,7 @@ mod tests {
                 upgrade_authority_address: None,
             })
             .unwrap();
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&programdata_address, false, &programdata_account),
             KeyedAccount::new(&program_address, false, &program_account),
             KeyedAccount::new(&buffer_address, false, &buffer_account),
@@ -2818,7 +2816,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &instruction,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
     }
@@ -2848,7 +2846,7 @@ mod tests {
                 upgrade_authority_address: Some(upgrade_authority_address),
             })
             .unwrap();
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&programdata_address, false, &programdata_account),
             KeyedAccount::new_readonly(
                 &upgrade_authority_address,
@@ -2866,7 +2864,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &instruction,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
         let state: UpgradeableLoaderState = programdata_account.borrow().state().unwrap();
@@ -2886,7 +2884,7 @@ mod tests {
                 upgrade_authority_address: Some(upgrade_authority_address),
             })
             .unwrap();
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&programdata_address, false, &programdata_account),
             KeyedAccount::new_readonly(
                 &upgrade_authority_address,
@@ -2899,7 +2897,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &instruction,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
         let state: UpgradeableLoaderState = programdata_account.borrow().state().unwrap();
@@ -2919,7 +2917,7 @@ mod tests {
                 upgrade_authority_address: Some(upgrade_authority_address),
             })
             .unwrap();
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&programdata_address, false, &programdata_account),
             KeyedAccount::new_readonly(
                 &upgrade_authority_address,
@@ -2932,7 +2930,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &instruction,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
 
@@ -2945,7 +2943,7 @@ mod tests {
             })
             .unwrap();
         let invalid_upgrade_authority_address = Pubkey::new_unique();
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&programdata_address, false, &programdata_account),
             KeyedAccount::new_readonly(
                 &invalid_upgrade_authority_address,
@@ -2963,7 +2961,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &instruction,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
 
@@ -2976,7 +2974,7 @@ mod tests {
             })
             .unwrap();
         let invalid_upgrade_authority_address = Pubkey::new_unique();
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&programdata_address, false, &programdata_account),
             KeyedAccount::new_readonly(
                 &invalid_upgrade_authority_address,
@@ -2989,7 +2987,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &bincode::serialize(&UpgradeableLoaderInstruction::SetAuthority).unwrap(),
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
 
@@ -3001,7 +2999,7 @@ mod tests {
             })
             .unwrap();
         let invalid_upgrade_authority_address = Pubkey::new_unique();
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&programdata_address, false, &programdata_account),
             KeyedAccount::new_readonly(
                 &invalid_upgrade_authority_address,
@@ -3014,7 +3012,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &bincode::serialize(&UpgradeableLoaderInstruction::SetAuthority).unwrap(),
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
     }
@@ -3040,7 +3038,7 @@ mod tests {
                 authority_address: Some(authority_address),
             })
             .unwrap();
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&buffer_address, false, &buffer_account),
             KeyedAccount::new_readonly(&authority_address, true, &authority_account),
             KeyedAccount::new_readonly(&new_authority_address, false, &new_authority_account),
@@ -3050,7 +3048,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &instruction,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
         let state: UpgradeableLoaderState = buffer_account.borrow().state().unwrap();
@@ -3068,7 +3066,7 @@ mod tests {
                 authority_address: Some(authority_address),
             })
             .unwrap();
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&buffer_address, false, &buffer_account),
             KeyedAccount::new_readonly(&authority_address, true, &authority_account),
         ];
@@ -3077,7 +3075,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &instruction,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
         let state: UpgradeableLoaderState = buffer_account.borrow().state().unwrap();
@@ -3095,7 +3093,7 @@ mod tests {
                 authority_address: Some(authority_address),
             })
             .unwrap();
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&buffer_address, false, &buffer_account),
             KeyedAccount::new_readonly(&authority_address, false, &authority_account),
             KeyedAccount::new_readonly(&new_authority_address, false, &new_authority_account),
@@ -3105,7 +3103,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &instruction,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
 
@@ -3117,7 +3115,7 @@ mod tests {
             })
             .unwrap();
         let invalid_authority_address = Pubkey::new_unique();
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&buffer_address, false, &buffer_account),
             KeyedAccount::new_readonly(&invalid_authority_address, true, &authority_account),
             KeyedAccount::new_readonly(&new_authority_address, false, &new_authority_account),
@@ -3127,7 +3125,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &instruction,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
 
@@ -3139,7 +3137,7 @@ mod tests {
             })
             .unwrap();
         let invalid_authority_address = Pubkey::new_unique();
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&buffer_address, false, &buffer_account),
             KeyedAccount::new_readonly(&invalid_authority_address, true, &authority_account),
             KeyedAccount::new_readonly(&new_authority_address, false, &new_authority_account),
@@ -3149,7 +3147,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &bincode::serialize(&UpgradeableLoaderInstruction::SetAuthority).unwrap(),
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
 
@@ -3161,7 +3159,7 @@ mod tests {
             })
             .unwrap();
         let invalid_authority_address = Pubkey::new_unique();
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&buffer_address, false, &buffer_account),
             KeyedAccount::new_readonly(&invalid_authority_address, true, &authority_account),
         ];
@@ -3170,7 +3168,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &bincode::serialize(&UpgradeableLoaderInstruction::SetAuthority).unwrap(),
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
 
@@ -3181,7 +3179,7 @@ mod tests {
                 authority_address: Some(authority_address),
             })
             .unwrap();
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&buffer_address, false, &buffer_account),
             KeyedAccount::new_readonly(&authority_address, true, &authority_account),
         ];
@@ -3190,7 +3188,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &instruction,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(keyed_accounts)
             )
         );
     }
@@ -3216,7 +3214,7 @@ mod tests {
                 authority_address: Some(authority_address),
             })
             .unwrap();
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&buffer_address, false, &buffer_account),
             KeyedAccount::new(&recipient_address, false, &recipient_account),
             KeyedAccount::new_readonly(&authority_address, true, &authority_account),
@@ -3226,7 +3224,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &instruction,
-                &mut MockInvokeContext::new(&keyed_accounts),
+                &mut MockInvokeContext::new(keyed_accounts),
             )
         );
         assert_eq!(0, buffer_account.borrow().lamports());
@@ -3245,7 +3243,7 @@ mod tests {
             })
             .unwrap();
         let incorrect_authority_address = Pubkey::new_unique();
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&buffer_address, false, &buffer_account),
             KeyedAccount::new(&recipient_address, false, &recipient_account),
             KeyedAccount::new_readonly(&incorrect_authority_address, true, &authority_account),
@@ -3255,7 +3253,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &instruction,
-                &mut MockInvokeContext::new(&keyed_accounts),
+                &mut MockInvokeContext::new(keyed_accounts),
             )
         );
 
@@ -3266,7 +3264,7 @@ mod tests {
                 programdata_address: Pubkey::new_unique(),
             })
             .unwrap();
-        let keyed_accounts = [
+        let keyed_accounts = vec![
             KeyedAccount::new(&buffer_address, false, &buffer_account),
             KeyedAccount::new(&recipient_address, false, &recipient_account),
             KeyedAccount::new_readonly(&incorrect_authority_address, true, &authority_account),
@@ -3276,7 +3274,7 @@ mod tests {
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &instruction,
-                &mut MockInvokeContext::new(&keyed_accounts),
+                &mut MockInvokeContext::new(keyed_accounts),
             )
         );
     }
@@ -3336,7 +3334,7 @@ mod tests {
                 let _result = process_instruction(
                     &bpf_loader::id(),
                     &[],
-                    &mut MockInvokeContext::new(&keyed_accounts),
+                    &mut MockInvokeContext::new(keyed_accounts),
                 );
             },
         );

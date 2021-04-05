@@ -2671,7 +2671,7 @@ mod tests {
                 leader_schedule_epoch: 4,
                 unix_timestamp: 5,
             };
-            let mut invoke_context = MockInvokeContext::new(&[]);
+            let mut invoke_context = MockInvokeContext::new(vec![]);
             let mut data = vec![];
             bincode::serialize_into(&mut data, &src_clock).unwrap();
             invoke_context
@@ -2713,7 +2713,7 @@ mod tests {
                 first_normal_epoch: 3,
                 first_normal_slot: 4,
             };
-            let mut invoke_context = MockInvokeContext::new(&[]);
+            let mut invoke_context = MockInvokeContext::new(vec![]);
             let mut data = vec![];
             bincode::serialize_into(&mut data, &src_epochschedule).unwrap();
             invoke_context
@@ -2761,7 +2761,7 @@ mod tests {
                     lamports_per_signature: 1,
                 },
             };
-            let mut invoke_context = MockInvokeContext::new(&[]);
+            let mut invoke_context = MockInvokeContext::new(vec![]);
             let mut data = vec![];
             bincode::serialize_into(&mut data, &src_fees).unwrap();
             invoke_context
@@ -2801,7 +2801,7 @@ mod tests {
                 exemption_threshold: 2.0,
                 burn_percent: 3,
             };
-            let mut invoke_context = MockInvokeContext::new(&[]);
+            let mut invoke_context = MockInvokeContext::new(vec![]);
             let mut data = vec![];
             bincode::serialize_into(&mut data, &src_rent).unwrap();
             invoke_context
