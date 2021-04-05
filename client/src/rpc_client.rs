@@ -767,7 +767,7 @@ impl RpcClient {
     pub fn get_inflation_reward(
         &self,
         addresses: &[Pubkey],
-        epoch: Epoch,
+        epoch: Option<Epoch>,
     ) -> ClientResult<Vec<Option<RpcInflationReward>>> {
         let addresses: Vec<_> = addresses
             .iter()
