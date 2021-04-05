@@ -8,9 +8,8 @@ use {
         program_utils::limited_deserialize, pubkey::Pubkey, transaction::Transaction,
     },
     solana_transaction_status::UiTransactionStatusMeta,
-    spl_memo_v1::id as spl_memo_v1_id,
-    spl_memo_v2::id as spl_memo_v2_id,
-    spl_memo_v3::id as spl_memo_v3_id,
+    spl_memo::id as spl_memo_id,
+    spl_memo::v1::id as spl_memo_v1_id,
     std::{collections::HashMap, fmt, io},
 };
 
@@ -33,9 +32,7 @@ impl Default for BuildBalanceMessageConfig {
 
 fn is_memo_program(k: &Pubkey) -> bool {
     let k_str = k.to_string();
-    (k_str == spl_memo_v1_id().to_string())
-        || (k_str == spl_memo_v2_id().to_string())
-        || (k_str == spl_memo_v3_id().to_string())
+    (k_str == spl_memo_v1_id().to_string()) || (k_str == spl_memo_id().to_string())
 }
 
 pub fn build_balance_message_with_config(
