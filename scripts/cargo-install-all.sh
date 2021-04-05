@@ -23,7 +23,7 @@ maybeRustVersion=
 installDir=
 buildVariant=release
 maybeReleaseFlag=--release
-testnetMode=
+validatorOnly=
 
 while [[ -n $1 ]]; do
   if [[ ${1:0:1} = - ]]; then
@@ -31,8 +31,8 @@ while [[ -n $1 ]]; do
       maybeReleaseFlag=
       buildVariant=debug
       shift
-    elif [[ $1 = --testnet ]]; then
-      testnetMode=true
+    elif [[ $1 = --validator-only ]]; then
+      validatorOnly=true
       shift
     else
       usage "Unknown option: $1"
@@ -92,7 +92,7 @@ else
   )
 
   # Speed up net.sh deploys by excluding unused binaries
-  if [[ -z "$testnetMode" ]]; then
+  if [[ -z "$validatorOnly" ]]; then
     BINS+=(
       cargo-build-bpf
       cargo-test-bpf
@@ -124,7 +124,7 @@ mkdir -p "$installDir/bin"
   "$cargo" $maybeRustVersion build $maybeReleaseFlag "${binArgs[@]}"
 
   # Exclude `spl-token` binary for net.sh builds
-  if [[ -z "$testnetMode" ]]; then
+  if [[ -z "$validatorOnly" ]]; then
     # shellcheck disable=SC2086 # Don't want to double quote $rust_version
     "$cargo" $maybeRustVersion install spl-token-cli --root "$installDir"
   fi
