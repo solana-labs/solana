@@ -4,6 +4,7 @@ use crate::{
         log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError,
         ProcessResult,
     },
+    memo::WithMemo,
     nonce::check_nonce_account,
     spend_utils::{resolve_spend_tx_and_check_account_balances, SpendAmount},
 };
@@ -14,6 +15,7 @@ use solana_clap_utils::{
     input_parsers::*,
     input_validators::*,
     keypair::{DefaultSigner, SignerIndex},
+    memo::MEMO_ARG,
     nonce::*,
     offline::*,
     ArgConstant,
@@ -445,6 +447,7 @@ pub fn parse_stake_create_account(
     let dump_transaction_message = matches.is_present(DUMP_TRANSACTION_MESSAGE.name);
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let nonce_account = pubkey_of_signer(matches, NONCE_ARG.name, wallet_manager)?;
+    let memo = matches.value_of(MEMO_ARG.name).map(String::from);
     let (nonce_authority, nonce_authority_pubkey) =
         signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
     let (fee_payer, fee_payer_pubkey) = signer_of(matches, FEE_PAYER_ARG.name, wallet_manager)?;
@@ -476,6 +479,7 @@ pub fn parse_stake_create_account(
             blockhash_query,
             nonce_account,
             nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
+            memo,
             fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
             from: signer_info.index_of(from_pubkey).unwrap(),
         },
@@ -497,6 +501,7 @@ pub fn parse_stake_delegate_stake(
     let dump_transaction_message = matches.is_present(DUMP_TRANSACTION_MESSAGE.name);
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let nonce_account = pubkey_of(matches, NONCE_ARG.name);
+    let memo = matches.value_of(MEMO_ARG.name).map(String::from);
     let (stake_authority, stake_authority_pubkey) =
         signer_of(matches, STAKE_AUTHORITY_ARG.name, wallet_manager)?;
     let (nonce_authority, nonce_authority_pubkey) =
@@ -521,6 +526,7 @@ pub fn parse_stake_delegate_stake(
             blockhash_query,
             nonce_account,
             nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
+            memo,
             fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
         },
         signers: signer_info.signers,
@@ -573,6 +579,7 @@ pub fn parse_stake_authorize(
     let dump_transaction_message = matches.is_present(DUMP_TRANSACTION_MESSAGE.name);
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let nonce_account = pubkey_of(matches, NONCE_ARG.name);
+    let memo = matches.value_of(MEMO_ARG.name).map(String::from);
     let (nonce_authority, nonce_authority_pubkey) =
         signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
     let (fee_payer, fee_payer_pubkey) = signer_of(matches, FEE_PAYER_ARG.name, wallet_manager)?;
@@ -610,6 +617,7 @@ pub fn parse_stake_authorize(
             blockhash_query,
             nonce_account,
             nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
+            memo,
             fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
             custodian: custodian_pubkey.and_then(|_| signer_info.index_of(custodian_pubkey)),
         },
@@ -633,6 +641,7 @@ pub fn parse_split_stake(
     let dump_transaction_message = matches.is_present(DUMP_TRANSACTION_MESSAGE.name);
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let nonce_account = pubkey_of(matches, NONCE_ARG.name);
+    let memo = matches.value_of(MEMO_ARG.name).map(String::from);
     let (stake_authority, stake_authority_pubkey) =
         signer_of(matches, STAKE_AUTHORITY_ARG.name, wallet_manager)?;
     let (nonce_authority, nonce_authority_pubkey) =
@@ -655,6 +664,7 @@ pub fn parse_split_stake(
             blockhash_query,
             nonce_account,
             nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
+            memo,
             split_stake_account: signer_info.index_of(split_stake_account_pubkey).unwrap(),
             seed,
             lamports,
@@ -678,6 +688,7 @@ pub fn parse_merge_stake(
     let dump_transaction_message = matches.is_present(DUMP_TRANSACTION_MESSAGE.name);
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let nonce_account = pubkey_of(matches, NONCE_ARG.name);
+    let memo = matches.value_of(MEMO_ARG.name).map(String::from);
     let (stake_authority, stake_authority_pubkey) =
         signer_of(matches, STAKE_AUTHORITY_ARG.name, wallet_manager)?;
     let (nonce_authority, nonce_authority_pubkey) =
@@ -701,6 +712,7 @@ pub fn parse_merge_stake(
             blockhash_query,
             nonce_account,
             nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
+            memo,
             fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
         },
         signers: signer_info.signers,
@@ -718,6 +730,7 @@ pub fn parse_stake_deactivate_stake(
     let dump_transaction_message = matches.is_present(DUMP_TRANSACTION_MESSAGE.name);
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let nonce_account = pubkey_of(matches, NONCE_ARG.name);
+    let memo = matches.value_of(MEMO_ARG.name).map(String::from);
     let (stake_authority, stake_authority_pubkey) =
         signer_of(matches, STAKE_AUTHORITY_ARG.name, wallet_manager)?;
     let (nonce_authority, nonce_authority_pubkey) =
@@ -740,6 +753,7 @@ pub fn parse_stake_deactivate_stake(
             blockhash_query,
             nonce_account,
             nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
+            memo,
             fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
         },
         signers: signer_info.signers,
@@ -760,6 +774,7 @@ pub fn parse_stake_withdraw_stake(
     let dump_transaction_message = matches.is_present(DUMP_TRANSACTION_MESSAGE.name);
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let nonce_account = pubkey_of(matches, NONCE_ARG.name);
+    let memo = matches.value_of(MEMO_ARG.name).map(String::from);
     let (withdraw_authority, withdraw_authority_pubkey) =
         signer_of(matches, WITHDRAW_AUTHORITY_ARG.name, wallet_manager)?;
     let (nonce_authority, nonce_authority_pubkey) =
@@ -788,6 +803,7 @@ pub fn parse_stake_withdraw_stake(
             blockhash_query,
             nonce_account,
             nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
+            memo,
             fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
             custodian: custodian_pubkey.and_then(|_| signer_info.index_of(custodian_pubkey)),
         },
@@ -810,6 +826,7 @@ pub fn parse_stake_set_lockup(
     let dump_transaction_message = matches.is_present(DUMP_TRANSACTION_MESSAGE.name);
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let nonce_account = pubkey_of(matches, NONCE_ARG.name);
+    let memo = matches.value_of(MEMO_ARG.name).map(String::from);
 
     let (custodian, custodian_pubkey) = signer_of(matches, "custodian", wallet_manager)?;
     let (nonce_authority, nonce_authority_pubkey) =
@@ -837,6 +854,7 @@ pub fn parse_stake_set_lockup(
             blockhash_query,
             nonce_account,
             nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
+            memo,
             fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
         },
         signers: signer_info.signers,
@@ -882,6 +900,7 @@ pub fn process_create_stake_account(
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<&Pubkey>,
     nonce_authority: SignerIndex,
+    memo: Option<&String>,
     fee_payer: SignerIndex,
     from: SignerIndex,
 ) -> ProcessResult {
@@ -916,6 +935,7 @@ pub fn process_create_stake_account(
                 lockup,
                 lamports,
             )
+            .with_memo(memo)
         } else {
             stake_instruction::create_account(
                 &from.pubkey(),
@@ -924,6 +944,7 @@ pub fn process_create_stake_account(
                 lockup,
                 lamports,
             )
+            .with_memo(memo)
         };
         if let Some(nonce_account) = &nonce_account {
             Message::new_with_nonce(
@@ -1014,6 +1035,7 @@ pub fn process_stake_authorize(
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<Pubkey>,
     nonce_authority: SignerIndex,
+    memo: Option<&String>,
     fee_payer: SignerIndex,
 ) -> ProcessResult {
     let mut ixs = Vec::new();
@@ -1032,6 +1054,7 @@ pub fn process_stake_authorize(
             custodian.map(|signer| signer.pubkey()).as_ref(),
         ));
     }
+    ixs = ixs.with_memo(memo);
 
     let (recent_blockhash, fee_calculator) =
         blockhash_query.get_blockhash_and_fee_calculator(rpc_client, config.commitment)?;
@@ -1093,6 +1116,7 @@ pub fn process_deactivate_stake_account(
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<Pubkey>,
     nonce_authority: SignerIndex,
+    memo: Option<&String>,
     fee_payer: SignerIndex,
 ) -> ProcessResult {
     let (recent_blockhash, fee_calculator) =
@@ -1101,7 +1125,8 @@ pub fn process_deactivate_stake_account(
     let ixs = vec![stake_instruction::deactivate_stake(
         stake_account_pubkey,
         &stake_authority.pubkey(),
-    )];
+    )]
+    .with_memo(memo);
     let nonce_authority = config.signers[nonce_authority];
     let fee_payer = config.signers[fee_payer];
 
@@ -1162,6 +1187,7 @@ pub fn process_withdraw_stake(
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<&Pubkey>,
     nonce_authority: SignerIndex,
+    memo: Option<&String>,
     fee_payer: SignerIndex,
 ) -> ProcessResult {
     let (recent_blockhash, fee_calculator) =
@@ -1175,7 +1201,8 @@ pub fn process_withdraw_stake(
         destination_account_pubkey,
         lamports,
         custodian.map(|signer| signer.pubkey()).as_ref(),
-    )];
+    )]
+    .with_memo(memo);
 
     let fee_payer = config.signers[fee_payer];
     let nonce_authority = config.signers[nonce_authority];
@@ -1234,6 +1261,7 @@ pub fn process_split_stake(
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<Pubkey>,
     nonce_authority: SignerIndex,
+    memo: Option<&String>,
     split_stake_account: SignerIndex,
     split_stake_account_seed: &Option<String>,
     lamports: u64,
@@ -1315,6 +1343,7 @@ pub fn process_split_stake(
             &split_stake_account.pubkey(),
             seed,
         )
+        .with_memo(memo)
     } else {
         stake_instruction::split(
             &stake_account_pubkey,
@@ -1322,6 +1351,7 @@ pub fn process_split_stake(
             lamports,
             &split_stake_account_address,
         )
+        .with_memo(memo)
     };
 
     let nonce_authority = config.signers[nonce_authority];
@@ -1381,6 +1411,7 @@ pub fn process_merge_stake(
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<Pubkey>,
     nonce_authority: SignerIndex,
+    memo: Option<&String>,
     fee_payer: SignerIndex,
 ) -> ProcessResult {
     let fee_payer = config.signers[fee_payer];
@@ -1427,7 +1458,8 @@ pub fn process_merge_stake(
         &stake_account_pubkey,
         &source_stake_account_pubkey,
         &stake_authority.pubkey(),
-    );
+    )
+    .with_memo(memo);
 
     let nonce_authority = config.signers[nonce_authority];
 
@@ -1490,6 +1522,7 @@ pub fn process_stake_set_lockup(
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<Pubkey>,
     nonce_authority: SignerIndex,
+    memo: Option<&String>,
     fee_payer: SignerIndex,
 ) -> ProcessResult {
     let (recent_blockhash, fee_calculator) =
@@ -1500,7 +1533,8 @@ pub fn process_stake_set_lockup(
         stake_account_pubkey,
         lockup,
         &custodian.pubkey(),
-    )];
+    )]
+    .with_memo(memo);
     let nonce_authority = config.signers[nonce_authority];
     let fee_payer = config.signers[fee_payer];
 
@@ -1842,6 +1876,7 @@ pub fn process_delegate_stake(
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<Pubkey>,
     nonce_authority: SignerIndex,
+    memo: Option<&String>,
     fee_payer: SignerIndex,
 ) -> ProcessResult {
     check_unique_pubkeys(
@@ -1905,7 +1940,8 @@ pub fn process_delegate_stake(
         stake_account_pubkey,
         &stake_authority.pubkey(),
         vote_account_pubkey,
-    )];
+    )]
+    .with_memo(memo);
     let nonce_authority = config.signers[nonce_authority];
     let fee_payer = config.signers[fee_payer];
 
@@ -2030,6 +2066,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
+                    memo: None,
                     fee_payer: 0,
                     custodian: None,
                 },
@@ -2066,6 +2103,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
+                    memo: None,
                     fee_payer: 0,
                     custodian: None,
                 },
@@ -2106,6 +2144,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
+                    memo: None,
                     fee_payer: 0,
                     custodian: None,
                 },
@@ -2135,6 +2174,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
+                    memo: None,
                     fee_payer: 0,
                     custodian: None,
                 },
@@ -2161,6 +2201,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
+                    memo: None,
                     fee_payer: 0,
                     custodian: None,
                 },
@@ -2193,6 +2234,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
+                    memo: None,
                     fee_payer: 0,
                     custodian: None,
                 },
@@ -2226,6 +2268,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
+                    memo: None,
                     fee_payer: 0,
                     custodian: None,
                 },
@@ -2256,6 +2299,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
+                    memo: None,
                     fee_payer: 0,
                     custodian: None,
                 },
@@ -2292,6 +2336,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::None(blockhash),
                     nonce_account: None,
                     nonce_authority: 0,
+                    memo: None,
                     fee_payer: 0,
                     custodian: None,
                 },
@@ -2330,6 +2375,7 @@ mod tests {
                     ),
                     nonce_account: None,
                     nonce_authority: 0,
+                    memo: None,
                     fee_payer: 1,
                     custodian: None,
                 },
@@ -2378,6 +2424,7 @@ mod tests {
                     ),
                     nonce_account: Some(nonce_account),
                     nonce_authority: 2,
+                    memo: None,
                     fee_payer: 1,
                     custodian: None,
                 },
@@ -2412,6 +2459,7 @@ mod tests {
                     ),
                     nonce_account: None,
                     nonce_authority: 0,
+                    memo: None,
                     fee_payer: 0,
                     custodian: None,
                 },
@@ -2451,6 +2499,7 @@ mod tests {
                     ),
                     nonce_account: Some(nonce_account_pubkey),
                     nonce_authority: 1,
+                    memo: None,
                     fee_payer: 0,
                     custodian: None,
                 },
@@ -2486,6 +2535,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
+                    memo: None,
                     fee_payer: 1,
                     custodian: None,
                 },
@@ -2525,6 +2575,7 @@ mod tests {
                     ),
                     nonce_account: None,
                     nonce_authority: 0,
+                    memo: None,
                     fee_payer: 1,
                     custodian: None,
                 },
@@ -2573,6 +2624,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
+                    memo: None,
                     fee_payer: 0,
                     from: 0,
                 },
@@ -2611,6 +2663,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
+                    memo: None,
                     fee_payer: 0,
                     from: 0,
                 },
@@ -2668,6 +2721,7 @@ mod tests {
                     ),
                     nonce_account: Some(nonce_account),
                     nonce_authority: 0,
+                    memo: None,
                     fee_payer: 0,
                     from: 0,
                 },
@@ -2700,6 +2754,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
                     nonce_authority: 0,
+                    memo: None,
                     fee_payer: 0,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
@@ -2730,6 +2785,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
                     nonce_authority: 0,
+                    memo: None,
                     fee_payer: 0,
                 },
                 signers: vec![
@@ -2762,6 +2818,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
                     nonce_authority: 0,
+                    memo: None,
                     fee_payer: 0,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
@@ -2795,6 +2852,7 @@ mod tests {
                     ),
                     nonce_account: None,
                     nonce_authority: 0,
+                    memo: None,
                     fee_payer: 0,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
@@ -2823,6 +2881,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::None(blockhash),
                     nonce_account: None,
                     nonce_authority: 0,
+                    memo: None,
                     fee_payer: 0,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
@@ -2861,6 +2920,7 @@ mod tests {
                     ),
                     nonce_account: None,
                     nonce_authority: 0,
+                    memo: None,
                     fee_payer: 1,
                 },
                 signers: vec![
@@ -2908,6 +2968,7 @@ mod tests {
                     ),
                     nonce_account: Some(nonce_account),
                     nonce_authority: 2,
+                    memo: None,
                     fee_payer: 1,
                 },
                 signers: vec![
@@ -2943,6 +3004,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
+                    memo: None,
                     fee_payer: 1,
                 },
                 signers: vec![
@@ -2975,6 +3037,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
+                    memo: None,
                     fee_payer: 0,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
@@ -3006,6 +3069,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
+                    memo: None,
                     fee_payer: 0,
                 },
                 signers: vec![
@@ -3042,6 +3106,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
+                    memo: None,
                     fee_payer: 0,
                 },
                 signers: vec![
@@ -3089,6 +3154,7 @@ mod tests {
                     ),
                     nonce_account: Some(nonce_account),
                     nonce_authority: 1,
+                    memo: None,
                     fee_payer: 1,
                 },
                 signers: vec![
@@ -3117,6 +3183,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
                     nonce_authority: 0,
+                    memo: None,
                     fee_payer: 0,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
@@ -3142,6 +3209,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
                     nonce_authority: 0,
+                    memo: None,
                     fee_payer: 0,
                 },
                 signers: vec![
@@ -3177,6 +3245,7 @@ mod tests {
                     ),
                     nonce_account: None,
                     nonce_authority: 0,
+                    memo: None,
                     fee_payer: 0,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
@@ -3202,6 +3271,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::None(blockhash),
                     nonce_account: None,
                     nonce_authority: 0,
+                    memo: None,
                     fee_payer: 0,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
@@ -3237,6 +3307,7 @@ mod tests {
                     ),
                     nonce_account: None,
                     nonce_authority: 0,
+                    memo: None,
                     fee_payer: 1,
                 },
                 signers: vec![
@@ -3281,6 +3352,7 @@ mod tests {
                     ),
                     nonce_account: Some(nonce_account),
                     nonce_authority: 2,
+                    memo: None,
                     fee_payer: 1,
                 },
                 signers: vec![
@@ -3310,6 +3382,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,
                     nonce_authority: 0,
+                    memo: None,
                     fee_payer: 1,
                 },
                 signers: vec![
@@ -3345,6 +3418,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
                     nonce_authority: 0,
+                    memo: None,
                     split_stake_account: 1,
                     seed: None,
                     lamports: 50_000_000_000,
@@ -3410,6 +3484,7 @@ mod tests {
                     ),
                     nonce_account: Some(nonce_account),
                     nonce_authority: 1,
+                    memo: None,
                     split_stake_account: 2,
                     seed: None,
                     lamports: 50_000_000_000,
@@ -3449,6 +3524,7 @@ mod tests {
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
                     nonce_authority: 0,
+                    memo: None,
                     fee_payer: 0,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into(),],

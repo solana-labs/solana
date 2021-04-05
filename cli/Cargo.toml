@@ -39,12 +39,22 @@ solana-faucet = { path = "../faucet", version = "=1.6.5" }
 solana-logger = { path = "../logger", version = "=1.6.5" }
 solana-net-utils = { path = "../net-utils", version = "=1.6.5" }
 solana_rbpf = "=0.2.5"
+<<<<<<< HEAD
 solana-remote-wallet = { path = "../remote-wallet", version = "=1.6.5" }
 solana-sdk = { path = "../sdk", version = "=1.6.5" }
 solana-stake-program = { path = "../programs/stake", version = "=1.6.5" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.6.5" }
 solana-version = { path = "../version", version = "=1.6.5" }
 solana-vote-program = { path = "../programs/vote", version = "=1.6.5" }
+=======
+solana-remote-wallet = { path = "../remote-wallet", version = "=1.7.0" }
+solana-sdk = { path = "../sdk", version = "=1.7.0" }
+solana-stake-program = { path = "../programs/stake", version = "=1.7.0" }
+solana-transaction-status = { path = "../transaction-status", version = "=1.7.0" }
+solana-version = { path = "../version", version = "=1.7.0" }
+solana-vote-program = { path = "../programs/vote", version = "=1.7.0" }
+spl-memo = { version = "=3.0.1", features = ["no-entrypoint"] }
+>>>>>>> 364af3a3e... issue #10831: added --with-memo option to all cli commands that submit (#16291)
 thiserror = "1.0.21"
 tiny-bip39 = "0.7.0"
 url = "2.1.1"
