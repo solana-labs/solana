@@ -6,7 +6,7 @@ use solana_sdk::{
     account::{ReadableAccount, WritableAccount},
     feature_set, ic_msg,
     instruction::InstructionError,
-    keyed_account::{next_keyed_account, KeyedAccount},
+    keyed_account::{keyed_account_at_index, KeyedAccount},
     process_instruction::InvokeContext,
     program_utils::limited_deserialize,
     pubkey::Pubkey,
@@ -19,9 +19,7 @@ pub fn process_instruction(
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     let key_list: ConfigKeys = limited_deserialize(data)?;
-    let keyed_accounts_iter = &mut keyed_accounts.iter();
-    let config_keyed_account = &mut next_keyed_account(keyed_accounts_iter)?;
-
+    let config_keyed_account = &mut keyed_account_at_index(keyed_accounts, 0)?;
     let current_data: ConfigKeys = {
         let config_account = config_keyed_account.try_account_ref_mut()?;
         if invoke_context.is_feature_active(&feature_set::check_program_owner::id())
@@ -55,6 +53,7 @@ pub fn process_instruction(
     }
 
     let mut counter = 0;
+    let mut keyed_accounts_iter = keyed_accounts.iter().skip(1);
     for (signer, _) in key_list.keys.iter().filter(|(_, is_signer)| *is_signer) {
         counter += 1;
         if signer != config_keyed_account.unsigned_key() {
@@ -628,7 +627,7 @@ mod tests {
                 &id(),
                 &keyed_accounts,
                 &instruction.data,
-                &mut MockInvokeContext::new(&keyed_accounts)
+                &mut MockInvokeContext::new(&keyed_accounts),
             ),
             Err(InstructionError::InvalidAccountOwner)
         );

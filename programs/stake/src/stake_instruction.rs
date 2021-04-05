@@ -10,7 +10,7 @@ use solana_sdk::{
     decode_error::DecodeError,
     feature_set,
     instruction::{AccountMeta, Instruction, InstructionError},
-    keyed_account::{from_keyed_account, get_signers, next_keyed_account, KeyedAccount},
+    keyed_account::{from_keyed_account, get_signers, keyed_account_at_index, KeyedAccount},
     process_instruction::InvokeContext,
     program_utils::limited_deserialize,
     pubkey::Pubkey,
@@ -492,8 +492,7 @@ pub fn process_instruction(
 
     let signers = get_signers(keyed_accounts);
 
-    let keyed_accounts = &mut keyed_accounts.iter();
-    let me = &next_keyed_account(keyed_accounts)?;
+    let me = &keyed_account_at_index(keyed_accounts, 0)?;
 
     if me.owner()? != id() {
         if invoke_context.is_feature_active(&feature_set::check_program_owner::id()) {
@@ -507,7 +506,7 @@ pub fn process_instruction(
         StakeInstruction::Initialize(authorized, lockup) => me.initialize(
             &authorized,
             &lockup,
-            &from_keyed_account::<Rent>(next_keyed_account(keyed_accounts)?)?,
+            &from_keyed_account::<Rent>(keyed_account_at_index(keyed_accounts, 1)?)?,
         ),
         StakeInstruction::Authorize(authorized_pubkey, stake_authorize) => {
             let require_custodian_for_locked_stake_authorize = invoke_context.is_feature_active(
@@ -515,9 +514,11 @@ pub fn process_instruction(
             );
 
             if require_custodian_for_locked_stake_authorize {
-                let clock = from_keyed_account::<Clock>(next_keyed_account(keyed_accounts)?)?;
-                let _current_authority = next_keyed_account(keyed_accounts)?;
-                let custodian = keyed_accounts.next().map(|ka| ka.unsigned_key());
+                let clock =
+                    from_keyed_account::<Clock>(keyed_account_at_index(keyed_accounts, 1)?)?;
+                let _current_authority = keyed_account_at_index(keyed_accounts, 2)?;
+                let custodian =
+                    keyed_account_at_index(keyed_accounts, 3).map(|ka| ka.unsigned_key());
 
                 me.authorize(
                     &signers,
@@ -525,7 +526,7 @@ pub fn process_instruction(
                     stake_authorize,
                     require_custodian_for_locked_stake_authorize,
                     &clock,
-                    custodian,
+                    custodian.ok(),
                 )
             } else {
                 me.authorize(
@@ -539,14 +540,16 @@ pub fn process_instruction(
             }
         }
         StakeInstruction::AuthorizeWithSeed(args) => {
-            let authority_base = next_keyed_account(keyed_accounts)?;
+            let authority_base = keyed_account_at_index(keyed_accounts, 1)?;
             let require_custodian_for_locked_stake_authorize = invoke_context.is_feature_active(
                 &feature_set::require_custodian_for_locked_stake_authorize::id(),
             );
 
             if require_custodian_for_locked_stake_authorize {
-                let clock = from_keyed_account::<Clock>(next_keyed_account(keyed_accounts)?)?;
-                let custodian = keyed_accounts.next().map(|ka| ka.unsigned_key());
+                let clock =
+                    from_keyed_account::<Clock>(keyed_account_at_index(keyed_accounts, 2)?)?;
+                let custodian =
+                    keyed_account_at_index(keyed_accounts, 3).map(|ka| ka.unsigned_key());
 
                 me.authorize_with_seed(
                     &authority_base,
@@ -556,7 +559,7 @@ pub fn process_instruction(
                     args.stake_authorize,
                     require_custodian_for_locked_stake_authorize,
                     &clock,
-                    custodian,
+                    custodian.ok(),
                 )
             } else {
                 me.authorize_with_seed(
@@ -572,44 +575,44 @@ pub fn process_instruction(
             }
         }
         StakeInstruction::DelegateStake => {
-            let vote = next_keyed_account(keyed_accounts)?;
+            let vote = keyed_account_at_index(keyed_accounts, 1)?;
 
             me.delegate(
                 &vote,
-                &from_keyed_account::<Clock>(next_keyed_account(keyed_accounts)?)?,
-                &from_keyed_account::<StakeHistory>(next_keyed_account(keyed_accounts)?)?,
-                &config::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
+                &from_keyed_account::<Clock>(keyed_account_at_index(keyed_accounts, 2)?)?,
+                &from_keyed_account::<StakeHistory>(keyed_account_at_index(keyed_accounts, 3)?)?,
+                &config::from_keyed_account(keyed_account_at_index(keyed_accounts, 4)?)?,
                 &signers,
             )
         }
         StakeInstruction::Split(lamports) => {
-            let split_stake = &next_keyed_account(keyed_accounts)?;
+            let split_stake = &keyed_account_at_index(keyed_accounts, 1)?;
             me.split(lamports, split_stake, &signers)
         }
         StakeInstruction::Merge => {
-            let source_stake = &next_keyed_account(keyed_accounts)?;
+            let source_stake = &keyed_account_at_index(keyed_accounts, 1)?;
             me.merge(
                 invoke_context,
                 source_stake,
-                &from_keyed_account::<Clock>(next_keyed_account(keyed_accounts)?)?,
-                &from_keyed_account::<StakeHistory>(next_keyed_account(keyed_accounts)?)?,
+                &from_keyed_account::<Clock>(keyed_account_at_index(keyed_accounts, 2)?)?,
+                &from_keyed_account::<StakeHistory>(keyed_account_at_index(keyed_accounts, 3)?)?,
                 &signers,
             )
         }
 
         StakeInstruction::Withdraw(lamports) => {
-            let to = &next_keyed_account(keyed_accounts)?;
+            let to = &keyed_account_at_index(keyed_accounts, 1)?;
             me.withdraw(
                 lamports,
                 to,
-                &from_keyed_account::<Clock>(next_keyed_account(keyed_accounts)?)?,
-                &from_keyed_account::<StakeHistory>(next_keyed_account(keyed_accounts)?)?,
-                next_keyed_account(keyed_accounts)?,
-                keyed_accounts.next(),
+                &from_keyed_account::<Clock>(keyed_account_at_index(keyed_accounts, 2)?)?,
+                &from_keyed_account::<StakeHistory>(keyed_account_at_index(keyed_accounts, 3)?)?,
+                keyed_account_at_index(keyed_accounts, 4)?,
+                keyed_account_at_index(keyed_accounts, 5).ok(),
             )
         }
         StakeInstruction::Deactivate => me.deactivate(
-            &from_keyed_account::<Clock>(next_keyed_account(keyed_accounts)?)?,
+            &from_keyed_account::<Clock>(keyed_account_at_index(keyed_accounts, 1)?)?,
             &signers,
         ),
 

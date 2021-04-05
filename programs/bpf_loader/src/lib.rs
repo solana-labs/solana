@@ -33,7 +33,7 @@ use solana_sdk::{
     feature_set::{skip_ro_deserialization, upgradeable_close_instruction},
     ic_logger_msg, ic_msg,
     instruction::InstructionError,
-    keyed_account::{from_keyed_account, next_keyed_account, KeyedAccount},
+    keyed_account::{from_keyed_account, keyed_account_at_index, KeyedAccount},
     loader_instruction::LoaderInstruction,
     loader_upgradeable_instruction::UpgradeableLoaderInstruction,
     process_instruction::{stable_log, ComputeMeter, Executor, InvokeContext},
@@ -198,8 +198,7 @@ fn process_instruction_common(
 ) -> Result<(), InstructionError> {
     let logger = invoke_context.get_logger();
 
-    let account_iter = &mut keyed_accounts.iter();
-    let first_account = next_keyed_account(account_iter)?;
+    let first_account = keyed_account_at_index(keyed_accounts, 0)?;
     if first_account.executable()? {
         if first_account.unsigned_key() != program_id {
             ic_logger_msg!(logger, "Program id mismatch");
@@ -212,7 +211,7 @@ fn process_instruction_common(
                     programdata_address,
                 } = first_account.state()?
                 {
-                    let programdata = next_keyed_account(account_iter)?;
+                    let programdata = keyed_account_at_index(keyed_accounts, 1)?;
                     if programdata_address != *programdata.unsigned_key() {
                         ic_logger_msg!(
                             logger,
@@ -292,26 +291,25 @@ fn process_loader_upgradeable_instruction(
     use_jit: bool,
 ) -> Result<(), InstructionError> {
     let logger = invoke_context.get_logger();
-    let account_iter = &mut keyed_accounts.iter();
 
     match limited_deserialize(instruction_data)? {
         UpgradeableLoaderInstruction::InitializeBuffer => {
-            let buffer = next_keyed_account(account_iter)?;
+            let buffer = keyed_account_at_index(keyed_accounts, 0)?;
 
             if UpgradeableLoaderState::Uninitialized != buffer.state()? {
                 ic_logger_msg!(logger, "Buffer account already initialized");
                 return Err(InstructionError::AccountAlreadyInitialized);
             }
 
-            let authority = next_keyed_account(account_iter)?;
+            let authority = keyed_account_at_index(keyed_accounts, 1)?;
 
             buffer.set_state(&UpgradeableLoaderState::Buffer {
                 authority_address: Some(*authority.unsigned_key()),
             })?;
         }
         UpgradeableLoaderInstruction::Write { offset, bytes } => {
-            let buffer = next_keyed_account(account_iter)?;
-            let authority = next_keyed_account(account_iter)?;
+            let buffer = keyed_account_at_index(keyed_accounts, 0)?;
+            let authority = keyed_account_at_index(keyed_accounts, 1)?;
 
             if let UpgradeableLoaderState::Buffer { authority_address } = buffer.state()? {
                 if authority_address.is_none() {
@@ -338,14 +336,14 @@ fn process_loader_upgradeable_instruction(
             )?;
         }
         UpgradeableLoaderInstruction::DeployWithMaxDataLen { max_data_len } => {
-            let payer = next_keyed_account(account_iter)?;
-            let programdata = next_keyed_account(account_iter)?;
-            let program = next_keyed_account(account_iter)?;
-            let buffer = next_keyed_account(account_iter)?;
-            let rent = from_keyed_account::<Rent>(next_keyed_account(account_iter)?)?;
-            let clock = from_keyed_account::<Clock>(next_keyed_account(account_iter)?)?;
-            let system = next_keyed_account(account_iter)?;
-            let authority = next_keyed_account(account_iter)?;
+            let payer = keyed_account_at_index(keyed_accounts, 0)?;
+            let programdata = keyed_account_at_index(keyed_accounts, 1)?;
+            let program = keyed_account_at_index(keyed_accounts, 2)?;
+            let buffer = keyed_account_at_index(keyed_accounts, 3)?;
+            let rent = from_keyed_account::<Rent>(keyed_account_at_index(keyed_accounts, 4)?)?;
+            let clock = from_keyed_account::<Clock>(keyed_account_at_index(keyed_accounts, 5)?)?;
+            let system = keyed_account_at_index(keyed_accounts, 6)?;
+            let authority = keyed_account_at_index(keyed_accounts, 7)?;
             let upgrade_authority_address = Some(*authority.unsigned_key());
             let upgrade_authority_signer = authority.signer_key().is_none();
 
@@ -452,13 +450,13 @@ fn process_loader_upgradeable_instruction(
             ic_logger_msg!(logger, "Deployed program {:?}", program.unsigned_key());
         }
         UpgradeableLoaderInstruction::Upgrade => {
-            let programdata = next_keyed_account(account_iter)?;
-            let program = next_keyed_account(account_iter)?;
-            let buffer = next_keyed_account(account_iter)?;
-            let spill = next_keyed_account(account_iter)?;
-            let rent = from_keyed_account::<Rent>(next_keyed_account(account_iter)?)?;
-            let clock = from_keyed_account::<Clock>(next_keyed_account(account_iter)?)?;
-            let authority = next_keyed_account(account_iter)?;
+            let programdata = keyed_account_at_index(keyed_accounts, 0)?;
+            let program = keyed_account_at_index(keyed_accounts, 1)?;
+            let buffer = keyed_account_at_index(keyed_accounts, 2)?;
+            let spill = keyed_account_at_index(keyed_accounts, 3)?;
+            let rent = from_keyed_account::<Rent>(keyed_account_at_index(keyed_accounts, 4)?)?;
+            let clock = from_keyed_account::<Clock>(keyed_account_at_index(keyed_accounts, 5)?)?;
+            let authority = keyed_account_at_index(keyed_accounts, 6)?;
 
             // Verify Program account
 
@@ -581,9 +579,9 @@ fn process_loader_upgradeable_instruction(
             ic_logger_msg!(logger, "Upgraded program {:?}", program.unsigned_key());
         }
         UpgradeableLoaderInstruction::SetAuthority => {
-            let account = next_keyed_account(account_iter)?;
-            let present_authority = next_keyed_account(account_iter)?;
-            let new_authority = next_keyed_account(account_iter)
+            let account = keyed_account_at_index(keyed_accounts, 0)?;
+            let present_authority = keyed_account_at_index(keyed_accounts, 1)?;
+            let new_authority = keyed_account_at_index(keyed_accounts, 2)
                 .ok()
                 .map(|account| account.unsigned_key());
 
@@ -642,9 +640,9 @@ fn process_loader_upgradeable_instruction(
             if !invoke_context.is_feature_active(&upgradeable_close_instruction::id()) {
                 return Err(InstructionError::InvalidInstructionData);
             }
-            let close_account = next_keyed_account(account_iter)?;
-            let recipient_account = next_keyed_account(account_iter)?;
-            let authority = next_keyed_account(account_iter)?;
+            let close_account = keyed_account_at_index(keyed_accounts, 0)?;
+            let recipient_account = keyed_account_at_index(keyed_accounts, 1)?;
+            let authority = keyed_account_at_index(keyed_accounts, 2)?;
 
             if close_account.unsigned_key() == recipient_account.unsigned_key() {
                 ic_logger_msg!(logger, "Recipient is the same as the account being closed");
@@ -689,9 +687,7 @@ fn process_loader_instruction(
     invoke_context: &mut dyn InvokeContext,
     use_jit: bool,
 ) -> Result<(), InstructionError> {
-    let account_iter = &mut keyed_accounts.iter();
-
-    let program = next_keyed_account(account_iter)?;
+    let program = keyed_account_at_index(keyed_accounts, 0)?;
     if program.owner()? != *program_id {
         ic_msg!(
             invoke_context,
@@ -781,10 +777,8 @@ impl Executor for BpfExecutor {
         let logger = invoke_context.get_logger();
         let invoke_depth = invoke_context.invoke_depth();
 
-        let mut keyed_accounts_iter = keyed_accounts.iter();
-        let _ = next_keyed_account(&mut keyed_accounts_iter)?;
-        let parameter_accounts = keyed_accounts_iter.as_slice();
         let mut serialize_time = Measure::start("serialize");
+        let parameter_accounts = &keyed_accounts[1..];
         let mut parameter_bytes =
             serialize_parameters(loader_id, program_id, parameter_accounts, &instruction_data)?;
         serialize_time.stop();

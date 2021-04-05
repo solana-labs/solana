@@ -186,11 +186,22 @@ where
         .collect::<A>()
 }
 
+#[deprecated(since = "1.7.0", note = "Please use keyed_account_at_index instead")]
 /// Return the next KeyedAccount or a NotEnoughAccountKeys error
 pub fn next_keyed_account<'a, 'b, I: Iterator<Item = &'a KeyedAccount<'b>>>(
     iter: &mut I,
 ) -> Result<I::Item, InstructionError> {
     iter.next().ok_or(InstructionError::NotEnoughAccountKeys)
+}
+
+/// Return the KeyedAccount at the specified index or a NotEnoughAccountKeys error
+pub fn keyed_account_at_index<'a>(
+    keyed_accounts: &'a [KeyedAccount],
+    index: usize,
+) -> Result<&'a KeyedAccount<'a>, InstructionError> {
+    keyed_accounts
+        .get(index)
+        .ok_or(InstructionError::NotEnoughAccountKeys)
 }
 
 /// Return true if the first keyed_account is executable, used to determine if
