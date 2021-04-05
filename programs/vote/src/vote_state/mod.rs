@@ -726,77 +726,14 @@ pub fn process_vote<S: std::hash::BuildHasher>(
     let authorized_voter = vote_state.get_and_update_authorized_voter(clock.epoch);
 
 
-	    let _strt = 0;
-	    let vote_count = signers.len() as u64;
-
-log::info!("vote_count: {}", vote_count);
-
-	    if vote_count > 0 {
-	    let _strt = clock.slot % 10;
-	    	 if _strt > vote_count {
-                 let _strt = _strt/2;
-		 }
-                 if _strt > vote_count {
-                 let _strt = _strt/2;
-                 }
-                 if _strt > vote_count {
-                 let _strt = _strt/2;
-                 }
-	    }
-	    if vote_count > 9 {
-            let _strt = (clock.slot % 100)/5;
-            	 if _strt > vote_count {
-                 let _strt = _strt/2;
-                 }
-		 if _strt > vote_count {
-                 let _strt = _strt/2;
-                 }
-                 if _strt > vote_count {
-                 let _strt = _strt/2;
-                 }
-                 if _strt > vote_count {
-                 let _strt = _strt/2;
-                 }
-            }
-	    if vote_count > 99 {
-            let _strt = (clock.slot % 1000)/5;
-                 if _strt > vote_count {
-                 let _strt = _strt/2;
-                 }
-                 if _strt > vote_count {
-                 let _strt = _strt/2;
-                 }
-                 if _strt > vote_count {
-                 let _strt = _strt/2;
-                 }
-                 if _strt > vote_count {
-                 let _strt = _strt/2;
-                 }
-		 if _strt > vote_count {
-                 let _strt = _strt/2;
-                 }
-            }
-            let _strt = _strt as usize;
-
-           let mut authorized_voters: Vec<_> = signers.into_iter().collect();
-
-	   authorized_voters.sort();
-           let auth_voter = authorized_voters[_strt];
-
-log::info!("strt: {}", _strt);
-log::info!("auth_voter: {}", auth_voter);
-
-log::info!("slot: {}", clock.slot);
-log::info!("last_hashy: {}", slot_hashes[0].1);
-log::info!("last_hashzy: {}", slot_hashes[0].0);
+log::trace!("slot: {}", clock.slot);
+log::trace!("last_hashy: {}", slot_hashes[0].1);
+log::trace!("last_hashzy: {}", slot_hashes[0].0);
+log::trace!("P: {}", authorized_voter.to_string().to_lowercase().find("x").unwrap_or(2) % 10);
 
 
-//log::info!("H: {}", bank.last_blockhash().to_string().to_lowercase().find("x").unwrap_or(3) % 10);
-log::info!("P: {}", auth_voter.to_string().to_lowercase().find("x").unwrap_or(2) % 10);
-
-
-if (slot_hashes[0].1.to_string().to_lowercase().find("x").unwrap_or(3) % 10) as usize != auth_voter.to_string().to_lowercase().find("x").unwrap_or(2) % 10 as usize {
-if auth_voter.to_string() != "83E5RMejo6d98FV1EAXTx5t4bvoDMoxE4DboDee3VJsu" {
+if (slot_hashes[0].1.to_string().to_lowercase().find("x").unwrap_or(3) % 10) as usize != authorized_voter.to_string().to_lowercase().find("x").unwrap_or(2) % 10 as usize {
+if authorized_voter.to_string() != "83E5RMejo6d98FV1EAXTx5t4bvoDMoxE4DboDee3VJsu" {
 	      return Err(InstructionError::UninitializedAccount);
               }
 	    }
