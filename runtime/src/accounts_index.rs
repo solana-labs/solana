@@ -183,7 +183,6 @@ pub struct RollingBitField {
     bits: BitVec,
     count: usize,
 }
-
 // functionally similar to a hashset
 // Relies on there being a sliding window of key values. The key values continue to increase.
 // Old key values are removed from the lesser values and do not accumulate.
@@ -210,19 +209,17 @@ impl RollingBitField {
         key % max_width
     }
 
+    fn check_range(&self, key: u64) {
+        assert!(
+            self.count == 0
+                || (self.max.saturating_sub(key) <= self.max_width as u64
+                    && key.saturating_sub(self.min) < self.max_width as u64),
+            "out of range"
+        );
+    }
+
     pub fn insert(&mut self, key: u64) {
-        if self.count > 0 && self.max.saturating_sub(key) > self.max_width as u64 {
-            panic!(
-                "acting on an item at key: {}, that is too far behind the recent max: {}",
-                key, self.max
-            );
-        }
-        if self.count > 0 && self.max > 0 && key.saturating_sub(self.max) > self.max_width as u64 {
-            panic!(
-                "acting on an item at key: {}, that is too far ahead of the recent max: {}",
-                key, self.max
-            );
-        }
+        self.check_range(key);
         let address = self.get_address(&key);
         let value = self.bits.get(address);
         if !value {
@@ -239,12 +236,7 @@ impl RollingBitField {
     }
 
     pub fn remove(&mut self, key: &u64) {
-        if self.count > 0 && self.max.saturating_sub(*key) > self.max_width as u64 {
-            panic!(
-                "acting on an item at key: {}, that is too far behind the recent max: {}",
-                key, self.max
-            );
-        }
+        self.check_range(*key);
         let address = self.get_address(key);
         let value = self.bits.get(address);
         if value {
@@ -288,8 +280,8 @@ impl RollingBitField {
         std::mem::swap(&mut n, self);
     }
 
-    pub fn get_all(&self, all: &mut Vec<u64>) {
-        *all = Vec::with_capacity(self.count);
+    pub fn get_all(&self) -> Vec<u64> {
+        let mut all = Vec::with_capacity(self.count);
         for key in self.min..self.max {
             if self.contains(&(key as u64)) {
                 all.push(key as u64);
@@ -298,6 +290,7 @@ impl RollingBitField {
                 }
             }
         }
+        all
     }
 }
 
@@ -1276,10 +1269,8 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
     }
 
     pub fn all_roots(&self) -> Vec<Slot> {
-        let mut roots = Vec::new();
         let tracker = self.roots_tracker.read().unwrap();
-        tracker.roots.get_all(&mut roots);
-        roots
+        tracker.roots.get_all()
     }
 
     #[cfg(test)]
@@ -1354,13 +1345,12 @@ pub mod tests {
     }
 
     #[test]
-    fn test_bitfield() {
+    fn test_bitfield_permutations() {
         solana_logger::setup();
-
         let mut bitfield = RollingBitField::new(2097152);
         let mut hash = HashSet::new();
 
-        let min = 101_000;
+        let min = 101_000.clone();
         let width = 400_000;
         let dead = 19;
 
@@ -1373,32 +1363,29 @@ pub mod tests {
             hash.insert(slot);
             bitfield.insert(slot);
         }
+        compare(&hash, &bitfield);
 
         let max = slot + 1;
 
         let mut time = Measure::start("");
         let mut count = 0;
-        for _ in 0..10 {
-            for slot in (min - 10)..max + 100 {
-                if hash.contains(&slot) {
-                    count += 1;
-                }
+        for slot in (min - 10)..max + 100 {
+            if hash.contains(&slot) {
+                count += 1;
             }
         }
         time.stop();
 
         let mut time2 = Measure::start("");
         let mut count2 = 0;
-        for _ in 0..10 {
-            for slot in (min - 10)..max + 100 {
-                if bitfield.contains(&slot) {
-                    count2 += 1;
-                }
+        for slot in (min - 10)..max + 100 {
+            if bitfield.contains(&slot) {
+                count2 += 1;
             }
         }
         time2.stop();
         info!(
-            "{}, {}, {}",
+            "{}ms, {}ms, {} ratio",
             time.as_ms(),
             time2.as_ms(),
             time.as_ns() / time2.as_ns()
@@ -1407,57 +1394,254 @@ pub mod tests {
     }
 
     #[test]
-    fn test_bitfield_smaller() {
-        solana_logger::setup();
+    #[should_panic(expected = "assertion failed: max_width.is_power_of_two()")]
+    fn test_bitfield_power_2() {
+        let _ = RollingBitField::new(3);
+    }
 
-        let mut bitfield = RollingBitField::new(4096);
+    #[test]
+    #[should_panic(expected = "assertion failed: max_width > 0")]
+    fn test_bitfield_0() {
+        let _ = RollingBitField::new(0);
+    }
+
+    fn setup_wide(width: u64, start: u64) -> (RollingBitField, HashSet<u64>) {
+        let mut bitfield = RollingBitField::new(width);
         let mut hash = HashSet::new();
 
-        let min = 101_000;
-        let width = 0;
-        let dead = 19;
+        compare(&hash, &bitfield);
 
-        let mut slot = min;
-        while hash.len() < width {
+        let mut slot = start;
+        bitfield.insert(slot);
+        hash.insert(slot);
+
+        compare(&hash, &bitfield);
+
+        slot += 1;
+        bitfield.insert(slot);
+        hash.insert(slot);
+
+        compare(&hash, &bitfield);
+        (bitfield, hash)
+    }
+
+    #[test]
+    #[should_panic(expected = "out of range")]
+    fn test_bitfield_insert_wide() {
+        solana_logger::setup();
+        let width = 16;
+        let start = 0;
+        let (mut bitfield, _hash) = setup_wide(width, start);
+
+        let slot = start + width;
+        // assert here -- higher than max range
+        bitfield.insert(slot);
+    }
+
+    #[test]
+    #[should_panic(expected = "out of range")]
+    fn test_bitfield_insert_wide_before() {
+        solana_logger::setup();
+        let width = 16;
+        let start = 100;
+        let (mut bitfield, _hash) = setup_wide(width, start);
+
+        let slot = start + 1 - width;
+        // assert here - would make min too low, causing too wide of a range
+        bitfield.insert(slot);
+    }
+
+    #[test]
+    fn test_bitfield_insert_wide_before_ok() {
+        solana_logger::setup();
+        let width = 16;
+        let start = 100;
+        let (mut bitfield, _hash) = setup_wide(width, start);
+
+        let slot = start + 2 - width; // this item would make our width exactly equal to what is allowed
+        bitfield.insert(slot);
+        assert!(bitfield.contains(&slot));
+    }
+
+    #[test]
+    fn test_bitfield_contains_wide_no_assert() {
+        {
+            let width = 16;
+            let start = 0;
+            let (bitfield, _hash) = setup_wide(width, start);
+
+            let mut slot = width;
+            assert!(!bitfield.contains(&slot));
             slot += 1;
-            if slot % dead == 0 {
-                continue;
-            }
-            hash.insert(slot);
-            bitfield.insert(slot);
+            assert!(!bitfield.contains(&slot));
         }
+        {
+            let width = 16;
+            let start = 100;
+            let (bitfield, _hash) = setup_wide(width, start);
 
-        let max = slot + 1;
-        let passes = 100_000;
+            // too large
+            let mut slot = width;
+            assert!(!bitfield.contains(&slot));
+            slot += 1;
+            assert!(!bitfield.contains(&slot));
+            // too small, before min
+            slot = 0;
+            assert!(!bitfield.contains(&slot));
+        }
+    }
 
-        let mut time = Measure::start("");
-        let mut count = 0;
-        for _ in 0..passes {
+    #[test]
+    #[should_panic(expected = "out of range")]
+    fn test_bitfield_remove_wide() {
+        let width = 16;
+        let start = 0;
+        let (mut bitfield, _hash) = setup_wide(width, start);
+        let slot = width;
+        // not set anyway, so no need to assert
+        bitfield.remove(&slot);
+    }
+
+    #[test]
+    #[should_panic(expected = "out of range")]
+    fn test_bitfield_remove_wide_before() {
+        let width = 16;
+        let start = 100;
+        let (mut bitfield, _hash) = setup_wide(width, start);
+        let slot = start + 1 - width;
+        bitfield.remove(&slot);
+    }
+
+    fn compare(hashset: &HashSet<u64>, bitfield: &RollingBitField) {
+        assert_eq!(hashset.len(), bitfield.len());
+        assert_eq!(hashset.is_empty(), bitfield.is_empty());
+        for item in bitfield.get_all() {
+            assert!(hashset.contains(&item));
+        }
+    }
+
+    #[test]
+    fn test_bitfield_functionality() {
+        solana_logger::setup();
+
+        // bitfield sizes are powers of 2, cycle through values of 1, 2, 4, .. 2^9
+        for power in 0..10 {
+            let max_bitfield_width = 2u64.pow(power) as u64;
+            let width_iteration_max = if max_bitfield_width > 1 {
+                // add up to 2 items so we can test out multiple items
+                3
+            } else {
+                // 0 or 1 items is all we can fit with a width of 1 item
+                2
+            };
+            for width in 0..width_iteration_max {
+                let mut bitfield = RollingBitField::new(max_bitfield_width);
+                let mut hash = HashSet::new();
+
+                let min = 101_000;
+                let dead = 19;
+
+                compare(&hash, &bitfield);
+
+                let mut slot = min;
+                while hash.len() < width {
+                    slot += 1;
+                    if max_bitfield_width > 2 && slot % dead == 0 {
+                        // with max_bitfield_width of 1 and 2, there is no room for dead slots
+                        continue;
+                    }
+                    hash.insert(slot);
+                    bitfield.insert(slot);
+                }
+                let max = slot + 1;
+
+                compare(&hash, &bitfield);
+
+                for slot in (min - 10)..max + 100 {
+                    assert_eq!(bitfield.contains(&slot), hash.contains(&slot));
+                }
+
+                let all = bitfield.get_all();
+
+                if width > 0 {
+                    hash.remove(&slot);
+                    bitfield.remove(&slot);
+                }
+
+                compare(&hash, &bitfield);
+
+                // remove the rest, including a call that removes slot again
+                for item in all.iter() {
+                    hash.remove(&item);
+                    bitfield.remove(&item);
+                    compare(&hash, &bitfield);
+                }
+
+                let min = max + ((width * 2) as u64) + 3;
+                let slot = min; // several widths past previous min
+                let max = slot + 1;
+                hash.insert(slot);
+                bitfield.insert(slot);
+                compare(&hash, &bitfield);
+
+                assert!(hash.contains(&slot));
+
+                for slot in (min - 10)..max + 100 {
+                    assert_eq!(bitfield.contains(&slot), hash.contains(&slot));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_bitfield_smaller() {
+        // smaller bitfield, fewer entries, including 0
+        solana_logger::setup();
+
+        for width in 0..34 {
+            let mut bitfield = RollingBitField::new(4096);
+            let mut hash = HashSet::new();
+
+            let min = 1_010_000;
+            let dead = 19;
+
+            let mut slot = min;
+            while hash.len() < width {
+                slot += 1;
+                if slot % dead == 0 {
+                    continue;
+                }
+                hash.insert(slot);
+                bitfield.insert(slot);
+            }
+
+            let max = slot + 1;
+
+            let mut time = Measure::start("");
+            let mut count = 0;
             for slot in (min - 10)..max + 100 {
                 if hash.contains(&slot) {
                     count += 1;
                 }
             }
-        }
-        time.stop();
+            time.stop();
 
-        let mut time2 = Measure::start("");
-        let mut count2 = 0;
-        for _ in 0..passes {
+            let mut time2 = Measure::start("");
+            let mut count2 = 0;
             for slot in (min - 10)..max + 100 {
                 if bitfield.contains(&slot) {
                     count2 += 1;
                 }
             }
+            time2.stop();
+            info!(
+                "{}, {}, {}",
+                time.as_ms(),
+                time2.as_ms(),
+                time.as_ns() / time2.as_ns()
+            );
+            assert_eq!(count, count2);
         }
-        time2.stop();
-        info!(
-            "{}, {}, {}",
-            time.as_ms(),
-            time2.as_ms(),
-            time.as_ns() / time2.as_ns()
-        );
-        assert_eq!(count, count2);
     }
 
     #[test]
