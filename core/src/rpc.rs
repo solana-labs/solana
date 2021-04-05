@@ -395,6 +395,10 @@ impl JsonRpcRequestProcessor {
                 .get_epoch(self.get_slot(commitment))
                 .saturating_sub(1)
         });
+        let addresses: Vec<String> = addresses
+            .into_iter()
+            .map(|pubkey| pubkey.to_string())
+            .collect();
 
         // Rewards for this epoch are found in the first confirmed block of the next epoch
         let first_slot_in_epoch = epoch_schedule.get_first_slot_in_epoch(epoch.saturating_add(1));
@@ -438,6 +442,7 @@ impl JsonRpcRequestProcessor {
             .rewards
             .unwrap_or_default()
             .into_iter()
+            .filter(|reward| addresses.contains(&reward.pubkey))
         {
             reward_hash.insert(reward.clone().pubkey, reward);
         }
