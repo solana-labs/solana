@@ -503,29 +503,30 @@ impl BankingStage {
         socket: &UdpSocket,
         hold: bool,
     ) {
-        if enable_forwarding {
-            let next_leader = poh_recorder
-                .lock()
-                .unwrap()
-                .leader_after_n_slots(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET);
-            next_leader.map_or((), |leader_pubkey| {
-                let leader_addr = {
-                    cluster_info.lookup_contact_info(&leader_pubkey, |leader| leader.tpu_forwards)
-                };
-
-                leader_addr.map_or((), |leader_addr| {
-                    let _ =
-                        Self::forward_buffered_packets(&socket, &leader_addr, &buffered_packets);
-                    if hold {
-                        buffered_packets.retain(|b| b.1.is_empty());
-                        for b in buffered_packets.iter_mut() {
-                            b.2 = true;
-                        }
-                    } else {
-                        buffered_packets.clear();
-                    }
-                })
-            })
+        if !enable_forwarding {
+            if !hold {
+                buffered_packets.clear();
+            }
+            return;
+        }
+        let next_leader = match poh_recorder
+            .lock()
+            .unwrap()
+            .leader_after_n_slots(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET)
+        {
+            Some(pubkey) => pubkey,
+            None => return,
+        };
+        let addr = match cluster_info.lookup_contact_info(&next_leader, |ci| ci.tpu_forwards) {
+            Some(addr) => addr,
+            None => return,
+        };
+        let _ = Self::forward_buffered_packets(socket, &addr, buffered_packets);
+        if hold {
+            buffered_packets.retain(|(_, index, _)| !index.is_empty());
+            for (_, _, forwarded) in buffered_packets.iter_mut() {
+                *forwarded = true;
+            }
         } else {
             buffered_packets.clear();
         }
