@@ -79,7 +79,7 @@ solana-vote-program = { path = "../programs/vote", version = "=1.7.0" }
 spl-token-v2-0 = { package = "spl-token", version = "=3.1.0", features = ["no-entrypoint"] }
 tempfile = "3.1.0"
 thiserror = "1.0"
-tokio = { version = "1.1", features = ["full"] }
+tokio = { version = "1", features = ["full"] }
 tokio_02 = { version = "0.2", package = "tokio", features = ["full"] }
 tokio-util = { version = "0.3", features = ["codec"] } # This crate needs to stay in sync with tokio_02, until that dependency can be removed
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.7.0" }
