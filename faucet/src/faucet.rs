@@ -1,8 +1,8 @@
 //! The `faucet` module provides an object for launching a Solana Faucet,
 //! which is the custodian of any remaining lamports in a mint.
-//! The Solana Faucet builds and send airdrop transactions,
-//! checking requests against a request cap for a given time time_slice
-//! and (to come) an IP rate limit.
+//! The Solana Faucet builds and sends airdrop transactions,
+//! checking requests against a single-request cap and a per-IP limit
+//! for a given time time_slice.
 
 use {
     bincode::{deserialize, serialize, serialized_size},
@@ -164,6 +164,10 @@ impl Faucet {
         self.ip_cache.clear();
     }
 
+    /// Checks per-request and per-time-ip limits; if both pass, this method returns a signed
+    /// SystemProgram::Transfer transaction from the faucet keypair to the requested recipient. If
+    /// the request exceeds this per-request limit, this method returns a signed SPL Memo
+    /// transaction with the memo: "request too large; req: <REQUEST> SOL cap: <CAP> SOL"
     pub fn build_airdrop_transaction(
         &mut self,
         req: FaucetRequest,
@@ -215,6 +219,8 @@ impl Faucet {
             }
         }
     }
+
+    /// Deserializes a received airdrop request, and returns a serialized transaction
     pub fn process_faucet_request(
         &mut self,
         bytes: &[u8],
