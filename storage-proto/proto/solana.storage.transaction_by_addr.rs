@@ -118,4 +118,5 @@ pub enum InstructionErrorType {
     AccountNotRentExempt = 45,
     InvalidAccountOwner = 46,
     ArithmeticOverflow = 47,
+    UnsupportedSysvar = 48,
 }
