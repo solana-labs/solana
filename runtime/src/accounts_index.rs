@@ -246,6 +246,7 @@ impl RollingBitField {
         }
     }
 
+    // after removing 'key' where 'key' = min, make min the correct new min value
     fn purge(&mut self, key: &u64) {
         if key == &self.min && self.count > 0 {
             let start = self.min;
@@ -261,10 +262,8 @@ impl RollingBitField {
     pub fn contains(&self, key: &u64) -> bool {
         let address = self.get_address(key);
         let result = self.bits.get(address);
-        if result && (self.count == 0 || key < &self.min || key >= &self.max) {
-            return false;
-        }
-        result
+        // a contains call outside min and max is allowed. The answer will be false.
+        result && (key >= &self.min && key < &self.max)
     }
 
     pub fn len(&self) -> usize {
@@ -1350,7 +1349,7 @@ pub mod tests {
         let mut bitfield = RollingBitField::new(2097152);
         let mut hash = HashSet::new();
 
-        let min = 101_000.clone();
+        let min = 101_000;
         let width = 400_000;
         let dead = 19;
 
