@@ -4458,6 +4458,7 @@ dependencies = [
  "solana-metrics",
  "solana-sdk",
  "solana-version",
+ "spl-memo 3.0.1",
  "thiserror",
  "tokio 1.1.1",
 ]

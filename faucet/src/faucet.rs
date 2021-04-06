@@ -12,6 +12,7 @@ use {
     solana_metrics::datapoint_info,
     solana_sdk::{
         hash::Hash,
+        instruction::Instruction,
         message::Message,
         native_token::lamports_to_sol,
         packet::PACKET_DATA_SIZE,
@@ -50,7 +51,7 @@ macro_rules! socketaddr {
 const ERROR_RESPONSE: [u8; 2] = 0u16.to_le_bytes();
 
 pub const TIME_SLICE: u64 = 60;
-pub const FAUCET_PORT: u16 = 9901;
+pub const FAUCET_PORT: u16 = 9900;
 pub const FAUCET_PORT_STR: &str = "9900";
 
 #[derive(Error, Debug)]
@@ -88,6 +89,11 @@ impl Default for FaucetRequest {
             blockhash: Hash::default(),
         }
     }
+}
+
+pub enum FaucetTransaction {
+    Airdrop(Transaction),
+    Memo((Transaction, String)),
 }
 
 pub struct Faucet {
@@ -162,7 +168,7 @@ impl Faucet {
         &mut self,
         req: FaucetRequest,
         ip: IpAddr,
-    ) -> Result<Transaction, FaucetError> {
+    ) -> Result<FaucetTransaction, FaucetError> {
         trace!("build_airdrop_transaction: {:?}", req);
         match req {
             FaucetRequest::GetAirdrop {
@@ -170,29 +176,42 @@ impl Faucet {
                 to,
                 blockhash,
             } => {
-                if let Some(cap) = self.per_request_cap {
-                    if lamports > cap {
-                        return Err(FaucetError::PerRequestCapExceeded(
-                            lamports_to_sol(lamports),
-                            lamports_to_sol(cap),
-                        ));
-                    }
-                }
-                self.check_ip_time_request_limit(lamports, ip)?;
+                let mint_pubkey = self.faucet_keypair.pubkey();
                 info!(
                     "Requesting airdrop of {} SOL to {:?}",
                     lamports_to_sol(lamports),
                     to
                 );
 
-                let mint_pubkey = self.faucet_keypair.pubkey();
-                let create_instruction = system_instruction::transfer(&mint_pubkey, &to, lamports);
-                let message = Message::new(&[create_instruction], Some(&mint_pubkey));
-                Ok(Transaction::new(
+                if let Some(cap) = self.per_request_cap {
+                    if lamports > cap {
+                        let memo = format!(
+                            "request too large; req: {} SOL cap: {} SOL",
+                            lamports_to_sol(lamports),
+                            lamports_to_sol(cap),
+                        );
+                        let memo_instruction = Instruction {
+                            program_id: Pubkey::new(&spl_memo::id().to_bytes()),
+                            accounts: vec![],
+                            data: memo.as_bytes().to_vec(),
+                        };
+                        let message = Message::new(&[memo_instruction], Some(&mint_pubkey));
+                        return Ok(FaucetTransaction::Memo((
+                            Transaction::new(&[&self.faucet_keypair], message, blockhash),
+                            memo,
+                        )));
+                    }
+                }
+                self.check_ip_time_request_limit(lamports, ip)?;
+
+                let transfer_instruction =
+                    system_instruction::transfer(&mint_pubkey, &to, lamports);
+                let message = Message::new(&[transfer_instruction], Some(&mint_pubkey));
+                Ok(FaucetTransaction::Airdrop(Transaction::new(
                     &[&self.faucet_keypair],
                     message,
                     blockhash,
-                ))
+                )))
             }
         }
     }
@@ -207,13 +226,22 @@ impl Faucet {
         let res = self.build_airdrop_transaction(req, ip);
         match res {
             Ok(tx) => {
+                let tx = match tx {
+                    FaucetTransaction::Airdrop(tx) => {
+                        info!("Airdrop transaction granted");
+                        tx
+                    }
+                    FaucetTransaction::Memo((tx, memo)) => {
+                        warn!("Memo transaction returned: {}", memo);
+                        tx
+                    }
+                };
                 let response_vec = bincode::serialize(&tx)?;
 
                 let mut response_vec_with_length = vec![0; 2];
                 LittleEndian::write_u16(&mut response_vec_with_length, response_vec.len() as u16);
                 response_vec_with_length.extend_from_slice(&response_vec);
 
-                info!("Airdrop transaction granted");
                 Ok(response_vec_with_length)
             }
             Err(err) => {
@@ -449,19 +477,25 @@ mod tests {
         let mint_pubkey = mint.pubkey();
         let mut faucet = Faucet::new(mint, None, None, None);
 
-        let tx = faucet.build_airdrop_transaction(request, ip).unwrap();
-        let message = tx.message();
+        if let FaucetTransaction::Airdrop(tx) =
+            faucet.build_airdrop_transaction(request, ip).unwrap()
+        {
+            let message = tx.message();
 
-        assert_eq!(tx.signatures.len(), 1);
-        assert_eq!(
-            message.account_keys,
-            vec![mint_pubkey, to, Pubkey::default()]
-        );
-        assert_eq!(message.recent_blockhash, blockhash);
+            assert_eq!(tx.signatures.len(), 1);
+            assert_eq!(
+                message.account_keys,
+                vec![mint_pubkey, to, Pubkey::default()]
+            );
+            assert_eq!(message.recent_blockhash, blockhash);
 
-        assert_eq!(message.instructions.len(), 1);
-        let instruction: SystemInstruction = deserialize(&message.instructions[0].data).unwrap();
-        assert_eq!(instruction, SystemInstruction::Transfer { lamports: 2 });
+            assert_eq!(message.instructions.len(), 1);
+            let instruction: SystemInstruction =
+                deserialize(&message.instructions[0].data).unwrap();
+            assert_eq!(instruction, SystemInstruction::Transfer { lamports: 2 });
+        } else {
+            panic!("airdrop should succeed");
+        }
 
         // Test per-time request cap
         let mint = Keypair::new();
@@ -471,9 +505,29 @@ mod tests {
 
         // Test per-request cap
         let mint = Keypair::new();
-        faucet = Faucet::new(mint, None, None, Some(1));
-        let tx = faucet.build_airdrop_transaction(request, ip);
-        assert!(tx.is_err());
+        let mint_pubkey = mint.pubkey();
+        let mut faucet = Faucet::new(mint, None, None, Some(1));
+
+        if let FaucetTransaction::Memo((tx, memo)) =
+            faucet.build_airdrop_transaction(request, ip).unwrap()
+        {
+            let message = tx.message();
+
+            assert_eq!(tx.signatures.len(), 1);
+            assert_eq!(
+                message.account_keys,
+                vec![mint_pubkey, Pubkey::new(&spl_memo::id().to_bytes())]
+            );
+            assert_eq!(message.recent_blockhash, blockhash);
+
+            assert_eq!(message.instructions.len(), 1);
+            let parsed_memo = std::str::from_utf8(&message.instructions[0].data).unwrap();
+            let expected_memo = "request too large; req: 0.000000002 SOL cap: 0.000000001 SOL";
+            assert_eq!(parsed_memo, expected_memo);
+            assert_eq!(memo, expected_memo);
+        } else {
+            panic!("airdrop attempt should result in memo tx");
+        }
     }
 
     #[test]
