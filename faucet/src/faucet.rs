@@ -22,12 +22,13 @@ use {
     },
     std::{
         collections::HashMap,
-        io::{self, Error, ErrorKind, Read, Write},
+        io::{Read, Write},
         net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream},
         sync::{mpsc::Sender, Arc, Mutex},
         thread,
         time::Duration,
     },
+    thiserror::Error,
     tokio::{
         io::{AsyncReadExt, AsyncWriteExt},
         net::{TcpListener, TcpStream as TokioTcpStream},
@@ -49,8 +50,26 @@ macro_rules! socketaddr {
 const ERROR_RESPONSE: [u8; 2] = 0u16.to_le_bytes();
 
 pub const TIME_SLICE: u64 = 60;
-pub const FAUCET_PORT: u16 = 9900;
+pub const FAUCET_PORT: u16 = 9901;
 pub const FAUCET_PORT_STR: &str = "9900";
+
+#[derive(Error, Debug)]
+pub enum FaucetError {
+    #[error("IO Error: {0}")]
+    IoError(#[from] std::io::Error),
+
+    #[error("serialization error: {0}")]
+    Serialize(#[from] bincode::Error),
+
+    #[error("invalid transaction_length from faucet: {0}")]
+    InvalidTransactionLength(usize),
+
+    #[error("request too large; req: {0} SOL cap: {1} SOL")]
+    PerRequestCapExceeded(f64, f64),
+
+    #[error("IP limit reached; req: {0} SOL ip: {1} current: {2} SOL cap: {3} SOL")]
+    PerTimeCapExceeded(f64, IpAddr, f64, f64),
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub enum FaucetRequest {
@@ -110,7 +129,7 @@ impl Faucet {
         &mut self,
         request_amount: u64,
         ip: IpAddr,
-    ) -> Result<(), io::Error> {
+    ) -> Result<(), FaucetError> {
         let ip_new_total = self
             .ip_cache
             .entry(ip)
@@ -124,15 +143,11 @@ impl Faucet {
         );
         if let Some(cap) = self.per_time_cap {
             if *ip_new_total > cap {
-                return Err(Error::new(
-                    ErrorKind::Other,
-                    format!(
-                        "token limit reached; req: {} ip: {} current: {} SOL cap: {} SOL",
-                        request_amount,
-                        ip,
-                        lamports_to_sol(*ip_new_total),
-                        lamports_to_sol(cap)
-                    ),
+                return Err(FaucetError::PerTimeCapExceeded(
+                    lamports_to_sol(request_amount),
+                    ip,
+                    lamports_to_sol(*ip_new_total),
+                    lamports_to_sol(cap),
                 ));
             }
         }
@@ -147,7 +162,7 @@ impl Faucet {
         &mut self,
         req: FaucetRequest,
         ip: IpAddr,
-    ) -> Result<Transaction, io::Error> {
+    ) -> Result<Transaction, FaucetError> {
         trace!("build_airdrop_transaction: {:?}", req);
         match req {
             FaucetRequest::GetAirdrop {
@@ -157,13 +172,9 @@ impl Faucet {
             } => {
                 if let Some(cap) = self.per_request_cap {
                     if lamports > cap {
-                        return Err(Error::new(
-                            ErrorKind::Other,
-                            format!(
-                                "request too large; req: {} SOL cap: {} SOL",
-                                lamports_to_sol(lamports),
-                                lamports_to_sol(cap)
-                            ),
+                        return Err(FaucetError::PerRequestCapExceeded(
+                            lamports_to_sol(lamports),
+                            lamports_to_sol(cap),
                         ));
                     }
                 }
@@ -189,24 +200,14 @@ impl Faucet {
         &mut self,
         bytes: &[u8],
         ip: IpAddr,
-    ) -> Result<Vec<u8>, io::Error> {
-        let req: FaucetRequest = deserialize(bytes).map_err(|err| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("deserialize packet in faucet: {:?}", err),
-            )
-        })?;
+    ) -> Result<Vec<u8>, FaucetError> {
+        let req: FaucetRequest = deserialize(bytes)?;
 
         info!("Airdrop transaction requested...{:?}", req);
         let res = self.build_airdrop_transaction(req, ip);
         match res {
             Ok(tx) => {
-                let response_vec = bincode::serialize(&tx).map_err(|err| {
-                    io::Error::new(
-                        io::ErrorKind::Other,
-                        format!("deserialize packet in faucet: {:?}", err),
-                    )
-                })?;
+                let response_vec = bincode::serialize(&tx)?;
 
                 let mut response_vec_with_length = vec![0; 2];
                 LittleEndian::write_u16(&mut response_vec_with_length, response_vec.len() as u16);
@@ -216,7 +217,7 @@ impl Faucet {
                 Ok(response_vec_with_length)
             }
             Err(err) => {
-                warn!("Airdrop transaction failed: {:?}", err);
+                warn!("Airdrop transaction failed: {}", err);
                 Err(err)
             }
         }
@@ -234,7 +235,7 @@ pub fn request_airdrop_transaction(
     id: &Pubkey,
     lamports: u64,
     blockhash: Hash,
-) -> Result<Transaction, Error> {
+) -> Result<Transaction, FaucetError> {
     info!(
         "request_airdrop_transaction: faucet_addr={} id={} lamports={} blockhash={}",
         faucet_addr, id, lamports, blockhash
@@ -257,17 +258,11 @@ pub fn request_airdrop_transaction(
             "request_airdrop_transaction: buffer length read_exact error: {:?}",
             err
         );
-        Error::new(ErrorKind::Other, "Airdrop failed")
+        err
     })?;
     let transaction_length = LittleEndian::read_u16(&buffer) as usize;
     if transaction_length > PACKET_DATA_SIZE || transaction_length == 0 {
-        return Err(Error::new(
-            ErrorKind::Other,
-            format!(
-                "request_airdrop_transaction: invalid transaction_length from faucet: {}",
-                transaction_length
-            ),
-        ));
+        return Err(FaucetError::InvalidTransactionLength(transaction_length));
     }
 
     // Read the transaction
@@ -278,15 +273,10 @@ pub fn request_airdrop_transaction(
             "request_airdrop_transaction: buffer read_exact error: {:?}",
             err
         );
-        Error::new(ErrorKind::Other, "Airdrop failed")
+        err
     })?;
 
-    let transaction: Transaction = deserialize(&buffer).map_err(|err| {
-        Error::new(
-            ErrorKind::Other,
-            format!("request_airdrop_transaction deserialize failure: {:?}", err),
-        )
-    })?;
+    let transaction: Transaction = deserialize(&buffer)?;
     Ok(transaction)
 }
 
@@ -390,7 +380,7 @@ async fn process(
                             response_bytes
                         }
                         Err(e) => {
-                            info!("Error in request: {:?}", e);
+                            info!("Error in request: {}", e);
                             ERROR_RESPONSE.to_vec()
                         }
                     }

@@ -4458,6 +4458,7 @@ dependencies = [
  "solana-metrics",
  "solana-sdk",
  "solana-version",
+ "thiserror",
  "tokio 1.1.1",
 ]
 
