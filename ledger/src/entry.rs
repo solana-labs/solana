@@ -283,9 +283,9 @@ impl EntryVerificationState {
                             .zip(entries)
                             .all(|((hash, tx_hash), answer)| {
                                 if answer.num_hashes == 0 {
-                                    hash == answer.hash
+                                    *hash == answer.hash
                                 } else {
-                                    let mut poh = Poh::new(hash, None);
+                                    let mut poh = Poh::new(*hash, None);
                                     if let Some(mixin) = tx_hash {
                                         poh.record(*mixin).unwrap().hash == answer.hash
                                     } else {

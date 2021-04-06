@@ -59,7 +59,8 @@ impl VerifiedVotePackets {
         }
         let packets = votes
             .into_iter()
-            .flat_map(|(_, (_, packets))| packets.packets.clone())
+            .flat_map(|(_, (_, packets))| &packets.packets)
+            .cloned()
             .collect();
         (new_update_version, Packets::new(packets))
     }
