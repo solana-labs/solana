@@ -24,6 +24,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     rent::Rent,
     system_program,
+    sysvar::instructions,
     transaction::TransactionError,
 };
 use std::{
@@ -1049,9 +1050,9 @@ impl MessageProcessor {
         // before the account pre-values are taken care of
         if feature_set.is_active(&instructions_sysvar_enabled::id()) {
             for (i, key) in message.account_keys.iter().enumerate() {
-                if solana_sdk::sysvar::instructions::check_id(key) {
+                if instructions::check_id(key) {
                     let mut mut_account_ref = accounts[i].borrow_mut();
-                    solana_sdk::sysvar::instructions::store_current_index(
+                    instructions::store_current_index(
                         mut_account_ref.data_as_mut_slice(),
                         instruction_index as u16,
                     );

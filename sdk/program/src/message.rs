@@ -384,15 +384,15 @@ impl Message {
     // [0..2 - num_instructions
     //
     // Then a table of offsets of where to find them in the data
-    //  3..2*num_instructions table of instruction offsets
+    //  3..2 * num_instructions table of instruction offsets
     //
     // Each instruction is then encoded as:
     //   0..2 - num_accounts
-    //   3 - meta_byte -> (bit 0 signer, bit 1 is_writable)
-    //   4..36 - pubkey - 32 bytes
-    //   36..64 - program_id
-    //     33..34 - data len - u16
-    //     35..data_len - data
+    //   2 - meta_byte -> (bit 0 signer, bit 1 is_writable)
+    //   3..35 - pubkey - 32 bytes
+    //   35..67 - program_id
+    //   67..69 - data len - u16
+    //   69..data_len - data
     pub fn serialize_instructions(&self, demote_sysvar_write_locks: bool) -> Vec<u8> {
         // 64 bytes is a reasonable guess, calculating exactly is slower in benchmarks
         let mut data = Vec::with_capacity(self.instructions.len() * (32 * 2));
