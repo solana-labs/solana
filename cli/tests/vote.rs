@@ -35,7 +35,6 @@ fn test_vote_authorize_and_withdraw() {
         &faucet_addr,
         &config.signers[0].pubkey(),
         100_000,
-        &config,
     )
     .unwrap();
 

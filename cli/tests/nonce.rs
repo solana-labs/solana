@@ -74,7 +74,6 @@ fn full_battery_tests(
         &faucet_addr,
         &config_payer.signers[0].pubkey(),
         2000,
-        &config_payer,
     )
     .unwrap();
     check_recent_balance(2000, &rpc_client, &config_payer.signers[0].pubkey());
@@ -228,7 +227,6 @@ fn test_create_account_with_seed() {
     let offline_nonce_authority_signer = keypair_from_seed(&[1u8; 32]).unwrap();
     let online_nonce_creator_signer = keypair_from_seed(&[2u8; 32]).unwrap();
     let to_address = Pubkey::new(&[3u8; 32]);
-    let config = CliConfig::recent_for_tests();
 
     // Setup accounts
     let rpc_client =
@@ -238,7 +236,6 @@ fn test_create_account_with_seed() {
         &faucet_addr,
         &offline_nonce_authority_signer.pubkey(),
         42,
-        &config,
     )
     .unwrap();
     request_and_confirm_airdrop(
@@ -246,7 +243,6 @@ fn test_create_account_with_seed() {
         &faucet_addr,
         &online_nonce_creator_signer.pubkey(),
         4242,
-        &config,
     )
     .unwrap();
     check_recent_balance(42, &rpc_client, &offline_nonce_authority_signer.pubkey());
