@@ -22,6 +22,8 @@ solana-logger = { path = "../logger", version = "=1.5.19" }
 solana-metrics = { path = "../metrics", version = "=1.5.19" }
 solana-sdk = { path = "../sdk", version = "=1.5.19" }
 solana-version = { path = "../version", version = "=1.5.19" }
+spl-memo = { version = "=3.0.0", features = ["no-entrypoint"] }
+thiserror = "1.0"
 tokio = { version = "0.3.5", features = ["full"] }
 
 [lib]
