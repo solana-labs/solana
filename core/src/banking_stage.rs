@@ -2022,13 +2022,8 @@ mod tests {
             genesis_config,
             mint_keypair,
             ..
-<<<<<<< HEAD
         } = create_genesis_config(10_000);
-        let bank = Arc::new(Bank::new(&genesis_config));
-=======
-        } = create_slow_genesis_config(10_000);
         let bank = Arc::new(Bank::new_no_wallclock_throttle(&genesis_config));
->>>>>>> 1219842a9... No wallclock throttle tests (#16396)
         let pubkey = solana_sdk::pubkey::new_rand();
 
         let transactions = vec![system_transaction::transfer(
@@ -2126,13 +2121,8 @@ mod tests {
             genesis_config,
             mint_keypair,
             ..
-<<<<<<< HEAD
         } = create_genesis_config(10_000);
-        let bank = Arc::new(Bank::new(&genesis_config));
-=======
-        } = create_slow_genesis_config(10_000);
         let bank = Arc::new(Bank::new_no_wallclock_throttle(&genesis_config));
->>>>>>> 1219842a9... No wallclock throttle tests (#16396)
         let pubkey = solana_sdk::pubkey::new_rand();
         let pubkey1 = solana_sdk::pubkey::new_rand();
 
@@ -2292,13 +2282,8 @@ mod tests {
             genesis_config,
             mint_keypair,
             ..
-<<<<<<< HEAD
         } = create_genesis_config(10_000);
-        let bank = Arc::new(Bank::new(&genesis_config));
-=======
-        } = create_slow_genesis_config(10_000);
         let bank = Arc::new(Bank::new_no_wallclock_throttle(&genesis_config));
->>>>>>> 1219842a9... No wallclock throttle tests (#16396)
         let pubkey = solana_sdk::pubkey::new_rand();
         let pubkey1 = solana_sdk::pubkey::new_rand();
         let keypair1 = Keypair::new();
@@ -2417,13 +2402,8 @@ mod tests {
         } = &genesis_config_info;
         let blockstore =
             Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger");
-<<<<<<< HEAD
-        let bank = Arc::new(Bank::new(&genesis_config));
-        let (poh_recorder, entry_receiver) = PohRecorder::new(
-=======
         let bank = Arc::new(Bank::new_no_wallclock_throttle(&genesis_config));
-        let (poh_recorder, entry_receiver, record_receiver) = PohRecorder::new(
->>>>>>> 1219842a9... No wallclock throttle tests (#16396)
+        let (poh_recorder, entry_receiver) = PohRecorder::new(
             bank.tick_height(),
             bank.last_blockhash(),
             bank.slot(),
