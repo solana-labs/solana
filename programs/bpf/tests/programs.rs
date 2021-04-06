@@ -25,7 +25,7 @@ use solana_sdk::{
     account::{AccountSharedData, ReadableAccount},
     bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
     client::SyncClient,
-    clock::{DEFAULT_SLOTS_PER_EPOCH, MAX_PROCESSING_AGE},
+    clock::MAX_PROCESSING_AGE,
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     feature_set::ristretto_mul_syscall_enabled,
     instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
@@ -35,7 +35,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{keypair_from_seed, Keypair, Signer},
     system_instruction,
-    sysvar::{clock, fees, rent, slot_hashes, slot_history, stake_history, instructions},
+    sysvar::{clock, fees, rent},
     transaction::{Transaction, TransactionError},
 };
 use solana_transaction_status::{
@@ -438,7 +438,6 @@ fn test_program_bpf_sanity() {
             ("solana_bpf_rust_ristretto", true),
             ("solana_bpf_rust_sanity", true),
             ("solana_bpf_rust_sha256", true),
-            ("solana_bpf_rust_sysvar", true),
         ]);
     }
 
@@ -450,13 +449,10 @@ fn test_program_bpf_sanity() {
             mint_keypair,
             ..
         } = create_genesis_config(50);
+
         let mut bank = Bank::new(&genesis_config);
         let (name, id, entrypoint) = solana_bpf_loader_program!();
         bank.add_builtin(&name, id, entrypoint);
-        let bank = Arc::new(bank);
-
-        // Create bank with a specific slot, used by solana_bpf_rust_sysvar test
-        let bank = Bank::new_from_parent(&bank, &Pubkey::default(), DEFAULT_SLOTS_PER_EPOCH + 1);
         let bank_client = BankClient::new(bank);
 
         // Call user program
@@ -465,14 +461,6 @@ fn test_program_bpf_sanity() {
         let account_metas = vec![
             AccountMeta::new(mint_keypair.pubkey(), true),
             AccountMeta::new(Keypair::new().pubkey(), false),
-            AccountMeta::new_readonly(clock::id(), false),
-            AccountMeta::new_readonly(fees::id(), false),
-            AccountMeta::new_readonly(instructions::id(), false),
-            AccountMeta::new_readonly(rent::id(), false),
-            AccountMeta::new_readonly(slot_hashes::id(), false),
-            AccountMeta::new_readonly(slot_history::id(), false),
-            AccountMeta::new_readonly(stake_history::id(), false),
-
         ];
         let instruction = Instruction::new_with_bytes(program_id, &[1], account_metas);
         let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);

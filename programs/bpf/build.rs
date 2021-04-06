@@ -88,7 +88,6 @@ fn main() {
             "sha256",
             "spoof1",
             "spoof1_system",
-            "sysvar",
             "upgradeable",
             "upgraded",
         ];

@@ -79,7 +79,6 @@ _ ci/do-audit.sh
       cd "$project"
       _ "$cargo" nightly clippy -- --deny=warnings --allow=clippy::missing_safety_doc
       _ "$cargo" stable fmt -- --check
-      _ "$cargo" nightly test
     )
   done
 }
