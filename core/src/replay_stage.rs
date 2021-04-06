@@ -1761,7 +1761,9 @@ impl ReplayStage {
 
         let newly_voted_pubkeys = slot_vote_tracker
             .as_ref()
-            .and_then(|slot_vote_tracker| slot_vote_tracker.write().unwrap().get_updates())
+            .and_then(|slot_vote_tracker| {
+                slot_vote_tracker.write().unwrap().get_voted_slot_updates()
+            })
             .unwrap_or_default();
 
         let cluster_slot_pubkeys = cluster_slot_pubkeys
@@ -3698,7 +3700,7 @@ pub(crate) mod tests {
         assert!(!progress_map.is_propagated(10));
 
         let vote_tracker = VoteTracker::new(&bank_forks.root_bank());
-        vote_tracker.insert_vote(10, vote_pubkey);
+        vote_tracker.insert_vote(10, None, vote_pubkey);
         ReplayStage::update_propagation_status(
             &mut progress_map,
             10,
@@ -3720,7 +3722,7 @@ pub(crate) mod tests {
             .unwrap()
             .write()
             .unwrap()
-            .get_updates()
+            .get_voted_slot_updates()
             .is_none());
 
         // The voter should be recorded
@@ -3786,7 +3788,7 @@ pub(crate) mod tests {
         let vote_tracker = VoteTracker::new(&bank_forks.root_bank());
         for vote_pubkey in &vote_pubkeys {
             // Insert a vote for the last bank for each voter
-            vote_tracker.insert_vote(10, *vote_pubkey);
+            vote_tracker.insert_vote(10, None, *vote_pubkey);
         }
 
         // The last bank should reach propagation threshold, and propagate it all
@@ -3873,7 +3875,7 @@ pub(crate) mod tests {
 
         let vote_tracker = VoteTracker::new(&bank_forks.root_bank());
         // Insert a new vote
-        vote_tracker.insert_vote(10, vote_pubkeys[2]);
+        vote_tracker.insert_vote(10, None, vote_pubkeys[2]);
 
         // The last bank should reach propagation threshold, and propagate it all
         // the way back through earlier leader banks
@@ -4248,7 +4250,7 @@ pub(crate) mod tests {
 
         // Add votes
         for vote_key in validator_voting_keys.values() {
-            vote_tracker.insert_vote(root_bank.slot(), *vote_key);
+            vote_tracker.insert_vote(root_bank.slot(), None, *vote_key);
         }
 
         assert!(!progress.is_propagated(root_bank.slot()));

@@ -47,6 +47,7 @@ use std::{
 
 // Map from a vote account to the authorized voter for an epoch
 pub type ThresholdConfirmedSlots = Vec<(Slot, Hash)>;
+pub type VotedHashUpdates = HashMap<Hash, Vec<Pubkey>>;
 pub type VerifiedLabelVotePacketsSender = CrossbeamSender<Vec<(CrdsValueLabel, Slot, Packets)>>;
 pub type VerifiedLabelVotePacketsReceiver = CrossbeamReceiver<Vec<(CrdsValueLabel, Slot, Packets)>>;
 pub type VerifiedVoteTransactionsSender = CrossbeamSender<Vec<Transaction>>;
@@ -65,14 +66,20 @@ pub struct SlotVoteTracker {
     // True if seen on gossip, false if only seen in replay.
     voted: HashMap<Pubkey, bool>,
     optimistic_votes_tracker: HashMap<Hash, VoteStakeTracker>,
-    updates: Option<Vec<Pubkey>>,
+    voted_slot_updates: Option<Vec<Pubkey>>,
+    // TODO: no need to include hashes from votes piped through replay, replay
+    // already has those
+    voted_hash_updates: Option<VotedHashUpdates>,
     gossip_only_stake: u64,
 }
 
 impl SlotVoteTracker {
-    #[allow(dead_code)]
-    pub fn get_updates(&mut self) -> Option<Vec<Pubkey>> {
-        self.updates.take()
+    pub fn get_voted_slot_updates(&mut self) -> Option<Vec<Pubkey>> {
+        self.voted_slot_updates.take()
+    }
+
+    pub fn get_voted_hash_updates(&mut self) -> Option<VotedHashUpdates> {
+        self.voted_hash_updates.take()
     }
 
     pub fn get_or_insert_optimistic_votes_tracker(&mut self, hash: Hash) -> &mut VoteStakeTracker {
@@ -119,7 +126,8 @@ impl VoteTracker {
             let new_slot_tracker = Arc::new(RwLock::new(SlotVoteTracker {
                 voted: HashMap::new(),
                 optimistic_votes_tracker: HashMap::default(),
-                updates: None,
+                voted_slot_updates: None,
+                voted_hash_updates: None,
                 gossip_only_stake: 0,
             }));
             self.slot_vote_trackers
@@ -162,7 +170,7 @@ impl VoteTracker {
     }
 
     #[cfg(test)]
-    pub fn insert_vote(&self, slot: Slot, pubkey: Pubkey) {
+    pub fn insert_vote(&self, slot: Slot, hash: Option<Hash>, pubkey: Pubkey) {
         let mut w_slot_vote_trackers = self.slot_vote_trackers.write().unwrap();
 
         let slot_vote_tracker = w_slot_vote_trackers.entry(slot).or_default();
@@ -170,10 +178,20 @@ impl VoteTracker {
         let mut w_slot_vote_tracker = slot_vote_tracker.write().unwrap();
 
         w_slot_vote_tracker.voted.insert(pubkey, true);
-        if let Some(ref mut updates) = w_slot_vote_tracker.updates {
-            updates.push(pubkey)
+        if let Some(ref mut voted_slot_updates) = w_slot_vote_tracker.voted_slot_updates {
+            voted_slot_updates.push(pubkey)
         } else {
-            w_slot_vote_tracker.updates = Some(vec![pubkey]);
+            w_slot_vote_tracker.voted_slot_updates = Some(vec![pubkey]);
+        }
+
+        if let Some(hash) = hash {
+            if let Some(ref mut voted_hash_updates) = w_slot_vote_tracker.voted_hash_updates {
+                voted_hash_updates.entry(hash).or_default().push(pubkey)
+            } else {
+                let mut new_map = HashMap::new();
+                new_map.insert(hash, vec![pubkey]);
+                w_slot_vote_tracker.voted_hash_updates = Some(new_map);
+            }
         }
     }
 
@@ -602,6 +620,7 @@ impl ClusterInfoVoteListener {
                     *vote_pubkey,
                     stake,
                     total_stake,
+                    is_gossip_vote,
                 );
 
                 if reached_threshold_results[0] {
@@ -742,8 +761,8 @@ impl ClusterInfoVoteListener {
                 });
             }
             let mut w_slot_tracker = slot_tracker.write().unwrap();
-            if w_slot_tracker.updates.is_none() {
-                w_slot_tracker.updates = Some(vec![]);
+            if w_slot_tracker.voted_slot_updates.is_none() {
+                w_slot_tracker.voted_slot_updates = Some(vec![]);
             }
             let mut gossip_only_stake = 0;
             let epoch = root_bank.epoch_schedule().get_epoch(slot);
@@ -764,7 +783,11 @@ impl ClusterInfoVoteListener {
                 // `is_new || is_new_from_gossip`. In both cases we want to record
                 // `is_new_from_gossip` for the `pubkey` entry.
                 w_slot_tracker.voted.insert(pubkey, seen_in_gossip_above);
-                w_slot_tracker.updates.as_mut().unwrap().push(pubkey);
+                w_slot_tracker
+                    .voted_slot_updates
+                    .as_mut()
+                    .unwrap()
+                    .push(pubkey);
             }
 
             w_slot_tracker.gossip_only_stake += gossip_only_stake
@@ -781,14 +804,33 @@ impl ClusterInfoVoteListener {
         pubkey: Pubkey,
         stake: u64,
         total_epoch_stake: u64,
+        is_gossip_vote: bool,
     ) -> (Vec<bool>, bool) {
         let slot_tracker = vote_tracker.get_or_insert_slot_tracker(slot);
         // Insert vote and check for optimistic confirmation
         let mut w_slot_tracker = slot_tracker.write().unwrap();
 
-        w_slot_tracker
+        let (reached_threshold_results, is_new) = w_slot_tracker
             .get_or_insert_optimistic_votes_tracker(hash)
-            .add_vote_pubkey(pubkey, stake, total_epoch_stake, &THRESHOLDS_TO_CHECK)
+            .add_vote_pubkey(pubkey, stake, total_epoch_stake, &THRESHOLDS_TO_CHECK);
+
+        // We don't want to notify replay stage of votes it's already seen, so check
+        // `is_gossip_vote` first
+        if is_gossip_vote && is_new {
+            if w_slot_tracker.voted_hash_updates.is_none() {
+                w_slot_tracker.voted_hash_updates = Some(HashMap::new());
+            }
+
+            w_slot_tracker
+                .voted_hash_updates
+                .as_mut()
+                .unwrap()
+                .entry(hash)
+                .or_default()
+                .push(pubkey);
+        }
+
+        (reached_threshold_results, is_new)
     }
 
     fn sum_stake(sum: &mut u64, epoch_stakes: Option<&EpochStakes>, pubkey: &Pubkey) {
@@ -919,7 +961,7 @@ mod tests {
         // Make separate copy so the original doesn't count toward
         // the ref count, which would prevent cleanup
         let new_voter_ = new_voter;
-        vote_tracker.insert_vote(bank.slot(), new_voter_);
+        vote_tracker.insert_vote(bank.slot(), None, new_voter_);
         assert!(vote_tracker
             .slot_vote_trackers
             .read()
@@ -1146,8 +1188,9 @@ mod tests {
         // Check that the received votes were pushed to other commponents
         // subscribing via `verified_vote_receiver`
         let all_expected_slots: BTreeSet<_> = gossip_vote_slots
+            .clone()
             .into_iter()
-            .chain(replay_vote_slots.into_iter())
+            .chain(replay_vote_slots.clone().into_iter())
             .collect();
         let mut pubkey_to_votes: HashMap<Pubkey, BTreeSet<Slot>> = HashMap::new();
         for (received_pubkey, new_votes) in verified_vote_receiver.try_iter() {
@@ -1175,15 +1218,17 @@ mod tests {
                 let pubkey = voting_keypairs.vote_keypair.pubkey();
                 assert!(r_slot_vote_tracker.voted.contains_key(&pubkey));
                 assert!(r_slot_vote_tracker
-                    .updates
+                    .voted_slot_updates
                     .as_ref()
                     .unwrap()
                     .contains(&Arc::new(pubkey)));
-                // Only the last vote in the stack of `gossip_votes` should count towards
-                // the `optimistic` vote set.
+                // Only the last vote in the stack of `gossip_vote` and `replay_vote_slots`
+                // should count towards the `optimistic` vote set,
                 let optimistic_votes_tracker =
                     r_slot_vote_tracker.optimistic_votes_tracker(&Hash::default());
-                if vote_slot == 2 || vote_slot == 4 {
+                if vote_slot == *gossip_vote_slots.last().unwrap()
+                    || vote_slot == *replay_vote_slots.last().unwrap()
+                {
                     let optimistic_votes_tracker = optimistic_votes_tracker.unwrap();
                     assert!(optimistic_votes_tracker.voted().contains(&pubkey));
                     assert_eq!(
@@ -1192,6 +1237,31 @@ mod tests {
                     );
                 } else {
                     assert!(optimistic_votes_tracker.is_none())
+                }
+
+                // Only the last vote in the `gossip_vote` set should count towards
+                // the `voted_hash_updates` set. Important to note here that replay votes
+                // should not count
+                let voted_hash_updates = &r_slot_vote_tracker.voted_hash_updates;
+                if vote_slot == *gossip_vote_slots.last().unwrap() {
+                    assert!(voted_hash_updates
+                        .as_ref()
+                        .unwrap()
+                        .get(&Hash::default())
+                        .unwrap()
+                        .contains(&pubkey));
+                    assert_eq!(
+                        r_slot_vote_tracker
+                            .voted_hash_updates
+                            .as_ref()
+                            .unwrap()
+                            .get(&Hash::default())
+                            .unwrap()
+                            .len(),
+                        validator_voting_keypairs.len(),
+                    );
+                } else {
+                    assert!(voted_hash_updates.is_none())
                 }
             }
         }
@@ -1281,10 +1351,20 @@ mod tests {
                 let pubkey = voting_keypairs.vote_keypair.pubkey();
                 assert!(r_slot_vote_tracker.voted.contains_key(&pubkey));
                 assert!(r_slot_vote_tracker
-                    .updates
+                    .voted_slot_updates
                     .as_ref()
                     .unwrap()
                     .contains(&Arc::new(pubkey)));
+                {
+                    let voted_hash_updates = r_slot_vote_tracker
+                        .voted_hash_updates
+                        .as_ref()
+                        .unwrap()
+                        .get(&Hash::default())
+                        .unwrap();
+                    assert_eq!(voted_hash_updates.len(), num_voters_per_slot);
+                    assert!(voted_hash_updates.contains(&pubkey));
+                }
                 // All the votes were single votes, so they should all count towards
                 // the optimistic confirmation vote set
                 let optimistic_votes_tracker = r_slot_vote_tracker
