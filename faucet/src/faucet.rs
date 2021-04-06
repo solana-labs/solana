@@ -65,10 +65,10 @@ pub enum FaucetError {
     #[error("invalid transaction_length from faucet: {0}")]
     InvalidTransactionLength(usize),
 
-    #[error("request too large; req: {0} SOL cap: {1} SOL")]
+    #[error("request too large; req: ◎{0}, cap: ◎{1}")]
     PerRequestCapExceeded(f64, f64),
 
-    #[error("IP limit reached; req: {0} SOL ip: {1} current: {2} SOL cap: {3} SOL")]
+    #[error("IP limit reached; req: ◎{0}, ip: {1}, current: ◎{2}, cap: ◎{3}")]
     PerTimeCapExceeded(f64, IpAddr, f64, f64),
 }
 
@@ -190,9 +190,11 @@ impl Faucet {
                 if let Some(cap) = self.per_request_cap {
                     if lamports > cap {
                         let memo = format!(
-                            "request too large; req: {} SOL cap: {} SOL",
-                            lamports_to_sol(lamports),
-                            lamports_to_sol(cap),
+                            "{}",
+                            FaucetError::PerRequestCapExceeded(
+                                lamports_to_sol(lamports),
+                                lamports_to_sol(cap),
+                            )
                         );
                         let memo_instruction = Instruction {
                             program_id: Pubkey::new(&spl_memo::id().to_bytes()),
@@ -528,7 +530,7 @@ mod tests {
 
             assert_eq!(message.instructions.len(), 1);
             let parsed_memo = std::str::from_utf8(&message.instructions[0].data).unwrap();
-            let expected_memo = "request too large; req: 0.000000002 SOL cap: 0.000000001 SOL";
+            let expected_memo = "request too large; req: ◎0.000000002, cap: ◎0.000000001";
             assert_eq!(parsed_memo, expected_memo);
             assert_eq!(memo, expected_memo);
         } else {
