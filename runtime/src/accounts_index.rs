@@ -319,12 +319,6 @@ impl RootsTracker {
             previous_uncleaned_roots: HashSet::new(),
         }
     }
-    pub fn roots_clear(&mut self) {
-        self.roots.clear();
-        self.max_root = 0;
-        self.uncleaned_roots = HashSet::new();
-        self.previous_uncleaned_roots = HashSet::new();
-    }
 }
 
 #[derive(Debug, Default)]
