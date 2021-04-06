@@ -35,6 +35,7 @@ use solana_client::{
 };
 #[cfg(not(test))]
 use solana_faucet::faucet::request_airdrop_transaction;
+use solana_faucet::faucet::FaucetError;
 #[cfg(test)]
 use solana_faucet::faucet_mock::request_airdrop_transaction;
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
@@ -1018,11 +1019,25 @@ fn process_airdrop(
         faucet_addr
     );
 
-    request_and_confirm_airdrop(&rpc_client, faucet_addr, &pubkey, lamports, &config)?;
+    let pre_balance = rpc_client.get_balance(&pubkey)?;
 
-    let current_balance = rpc_client.get_balance(&pubkey)?;
+    let result = request_and_confirm_airdrop(&rpc_client, faucet_addr, &pubkey, lamports);
+    if let Ok(signature) = result {
+        let signature_cli_message = log_instruction_custom_error::<SystemError>(result, &config)?;
+        println!("{}", signature_cli_message);
 
-    Ok(build_balance_message(current_balance, false, true))
+        let current_balance = rpc_client.get_balance(&pubkey)?;
+
+        if current_balance < pre_balance.saturating_add(lamports) {
+            println!("Balance unchanged");
+            println!("Run `solana confirm -v {:?}` for more info", signature);
+            Ok("".to_string())
+        } else {
+            Ok(build_balance_message(current_balance, false, true))
+        }
+    } else {
+        log_instruction_custom_error::<SystemError>(result, &config)
+    }
 }
 
 fn process_balance(
@@ -1952,7 +1967,7 @@ impl FaucetKeypair {
         to_pubkey: &Pubkey,
         lamports: u64,
         blockhash: Hash,
-    ) -> Result<Self, Box<dyn error::Error>> {
+    ) -> Result<Self, FaucetError> {
         let transaction = request_airdrop_transaction(faucet_addr, to_pubkey, lamports, blockhash)?;
         Ok(Self { transaction })
     }
@@ -1986,8 +2001,7 @@ pub fn request_and_confirm_airdrop(
     faucet_addr: &SocketAddr,
     to_pubkey: &Pubkey,
     lamports: u64,
-    config: &CliConfig,
-) -> ProcessResult {
+) -> ClientResult<Signature> {
     let (blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
     let keypair = {
         let mut retries = 5;
@@ -2001,8 +2015,7 @@ pub fn request_and_confirm_airdrop(
         }
     }?;
     let tx = keypair.airdrop_transaction();
-    let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
-    log_instruction_custom_error::<SystemError>(result, &config)
+    rpc_client.send_and_confirm_transaction_with_spinner(&tx)
 }
 
 pub fn log_instruction_custom_error<E>(

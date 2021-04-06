@@ -4252,6 +4252,7 @@ dependencies = [
  "serde_json",
  "solana-account-decoder",
  "solana-clap-utils",
+ "solana-faucet",
  "solana-logger 1.7.0",
  "solana-net-utils",
  "solana-sdk",
@@ -4458,6 +4459,8 @@ dependencies = [
  "solana-metrics",
  "solana-sdk",
  "solana-version",
+ "spl-memo",
+ "thiserror",
  "tokio 1.1.1",
 ]
 

@@ -707,6 +707,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "dirs-next"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b98cf8ebf19c3d1b223e151f99a4f9f0690dca41414773390fc824184ac833e1"
+dependencies = [
+ "cfg-if 1.0.0",
+ "dirs-sys-next",
+]
+
+[[package]]
+name = "dirs-sys-next"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ebda144c4fe02d1f7ea1a7d9641b6fc6b580adcfa024ae48797ecdeb6825b4d"
+dependencies = [
+ "libc",
+ "redox_users",
+ "winapi 0.3.8",
+]
+
+[[package]]
+name = "dtoa"
+version = "0.4.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56899898ce76aaf4a0f24d914c97ea6ed976d42fec6ad33fcbb0a1103e07b2b0"
+
+[[package]]
 name = "ed25519"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1429,6 +1456,12 @@ dependencies = [
  "subtle 2.2.2",
  "typenum",
 ]
+
+[[package]]
+name = "linked-hash-map"
+version = "0.5.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7fb9b38af92608140b86b693604b9ffcc5824240a484d1ecd4795bacb2fe88f3"
 
 [[package]]
 name = "lock_api"
@@ -2165,6 +2198,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "redox_users"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "528532f3d801c87aec9def2add9ca802fe569e44a544afe633765267840abe64"
+dependencies = [
+ "getrandom 0.2.1",
+ "redox_syscall 0.2.4",
+]
+
+[[package]]
 name = "regex"
 version = "1.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2459,6 +2502,18 @@ dependencies = [
  "itoa",
  "ryu",
  "serde",
+]
+
+[[package]]
+name = "serde_yaml"
+version = "0.8.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15654ed4ab61726bf918a39cb8d98a2e2995b002387807fa6ba58fdf7f59bb23"
+dependencies = [
+ "dtoa",
+ "linked-hash-map",
+ "serde",
+ "yaml-rust",
 ]
 
 [[package]]
@@ -2898,6 +2953,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-cli-config"
+version = "1.7.0"
+dependencies = [
+ "dirs-next",
+ "lazy_static",
+ "serde",
+ "serde_derive",
+ "serde_yaml",
+ "url",
+]
+
+[[package]]
 name = "solana-cli-output"
 version = "1.7.0"
 dependencies = [
@@ -2940,6 +3007,7 @@ dependencies = [
  "serde_json",
  "solana-account-decoder",
  "solana-clap-utils",
+ "solana-faucet",
  "solana-net-utils",
  "solana-sdk",
  "solana-transaction-status",
@@ -2984,6 +3052,27 @@ dependencies = [
  "syn 1.0.60",
  "tokio 0.1.22",
  "winapi 0.3.8",
+]
+
+[[package]]
+name = "solana-faucet"
+version = "1.7.0"
+dependencies = [
+ "bincode",
+ "byteorder 1.3.4",
+ "clap",
+ "log",
+ "serde",
+ "serde_derive",
+ "solana-clap-utils",
+ "solana-cli-config",
+ "solana-logger 1.7.0",
+ "solana-metrics",
+ "solana-sdk",
+ "solana-version",
+ "spl-memo",
+ "thiserror",
+ "tokio 1.1.1",
 ]
 
 [[package]]
@@ -4261,6 +4350,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "244c3741f4240ef46274860397c7c74e50eb23624996930e484c16679633a54c"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "yaml-rust"
+version = "0.4.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56c1936c4cc7a1c9ab21a1ebb602eb942ba868cbd44a99cb7cdc5892335e1c85"
+dependencies = [
+ "linked-hash-map",
 ]
 
 [[package]]
