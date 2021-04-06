@@ -50,7 +50,7 @@ pub struct RpcLargestAccountsConfig {
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RpcStakeConfig {
+pub struct RpcEpochConfig {
     pub epoch: Option<Epoch>,
     #[serde(flatten)]
     pub commitment: Option<CommitmentConfig>,

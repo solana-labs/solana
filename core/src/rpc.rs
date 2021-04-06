@@ -55,7 +55,7 @@ use solana_runtime::{
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount},
     account_utils::StateMut,
-    clock::{Epoch, Slot, UnixTimestamp, MAX_RECENT_BLOCKHASHES},
+    clock::{Slot, UnixTimestamp, MAX_RECENT_BLOCKHASHES},
     commitment_config::{CommitmentConfig, CommitmentLevel},
     epoch_info::EpochInfo,
     epoch_schedule::EpochSchedule,
@@ -385,12 +385,13 @@ impl JsonRpcRequestProcessor {
     pub fn get_inflation_reward(
         &self,
         addresses: Vec<Pubkey>,
-        epoch: Option<Epoch>,
+        config: Option<RpcEpochConfig>,
     ) -> Result<Vec<Option<RpcInflationReward>>> {
-        let commitment = Some(CommitmentConfig::finalized());
+        let config = config.unwrap_or_default();
+        let commitment = Some(config.commitment.unwrap_or(CommitmentConfig::finalized()));
         let epoch_schedule = self.get_epoch_schedule();
         let first_available_block = self.get_first_available_block();
-        let epoch = epoch.unwrap_or_else(|| {
+        let epoch = config.epoch.unwrap_or_else(|| {
             epoch_schedule
                 .get_epoch(self.get_slot(commitment))
                 .saturating_sub(1)
@@ -1342,7 +1343,7 @@ impl JsonRpcRequestProcessor {
     pub fn get_stake_activation(
         &self,
         pubkey: &Pubkey,
-        config: Option<RpcStakeConfig>,
+        config: Option<RpcEpochConfig>,
     ) -> Result<RpcStakeActivation> {
         let config = config.unwrap_or_default();
         let bank = self.bank(config.commitment);
@@ -2273,7 +2274,7 @@ pub mod rpc_full {
             &self,
             meta: Self::Metadata,
             address_strs: Vec<String>,
-            epoch: Option<Epoch>,
+            config: Option<RpcEpochConfig>,
         ) -> Result<Vec<Option<RpcInflationReward>>>;
 
         #[rpc(meta, name = "getInflationGovernor")]
@@ -2480,7 +2481,7 @@ pub mod rpc_full {
             &self,
             meta: Self::Metadata,
             pubkey_str: String,
-            config: Option<RpcStakeConfig>,
+            config: Option<RpcEpochConfig>,
         ) -> Result<RpcStakeActivation>;
 
         // SPL Token-specific RPC endpoints
@@ -3219,7 +3220,7 @@ pub mod rpc_full {
             &self,
             meta: Self::Metadata,
             pubkey_str: String,
-            config: Option<RpcStakeConfig>,
+            config: Option<RpcEpochConfig>,
         ) -> Result<RpcStakeActivation> {
             debug!(
                 "get_stake_activation rpc request received: {:?}",
@@ -3233,7 +3234,7 @@ pub mod rpc_full {
             &self,
             meta: Self::Metadata,
             address_strs: Vec<String>,
-            epoch: Option<Epoch>,
+            config: Option<RpcEpochConfig>,
         ) -> Result<Vec<Option<RpcInflationReward>>> {
             debug!(
                 "get_inflation_reward rpc request received: {:?}",
@@ -3245,7 +3246,7 @@ pub mod rpc_full {
                 addresses.push(verify_pubkey(address_str)?);
             }
 
-            meta.get_inflation_reward(addresses, epoch)
+            meta.get_inflation_reward(addresses, config)
         }
 
         fn get_token_account_balance(
