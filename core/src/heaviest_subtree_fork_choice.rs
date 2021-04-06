@@ -4,6 +4,7 @@ use crate::{
     progress_map::ProgressMap,
     tree_diff::TreeDiff,
 };
+use solana_measure::measure::Measure;
 use solana_runtime::{bank::Bank, bank_forks::BankForks, epoch_stakes::EpochStakes};
 use solana_sdk::{
     clock::{Epoch, Slot},
@@ -59,10 +60,10 @@ struct UpdateOperationsBatch {
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 enum UpdateOperation {
-    Aggregate,
     Add(u64),
     MarkValid,
     Subtract(u64),
+    Aggregate,
 }
 
 impl UpdateOperation {
@@ -90,6 +91,8 @@ struct ForkInfo {
     // Whether the fork rooted at this slot is a valid contender
     // for the best fork
     is_candidate: bool,
+    // Map of pubkeys that have voted on multiple versions of a duplicate slot `S`,
+    // with their stake as the value of the map.
     duplicate_votes: HashMap<(Pubkey, Slot), u64>,
 }
 
@@ -102,8 +105,6 @@ impl ForkInfo {
 #[derive(Debug, Default)]
 struct LatestVotes {
     slot: Slot,
-    // The hash of the first observed block that this validator voted on
-    // with slot == `self.slot`
     hashes: HashSet<Hash>,
 }
 
@@ -430,13 +431,6 @@ impl HeaviestSubtreeForkChoice {
                         // Ordering::Equal => If both trees have seen votes from this validator for a slot `S`, they must
                         // be votes for different versions of slot `S`, so we need to update this tree with the updates
                         // from the other tree
-
-                        // TODOs:
-                        // 1) Ensure if the latest vote in our current tree is a duplicate, make sure we properly
-                        // clean that up.
-                        // 2) Ensure if their latest vote is a duplicate, we take all the duplicates from
-                        // them, AND if the merge root is part of the duplicate ancestors, we'll have to add
-                        // all the ancestors of the merge leaf
                         Ordering::Less | Ordering::Equal => {
                             Some(pk_their_latest_vote.into_votes(pk))
                         }
@@ -454,7 +448,6 @@ impl HeaviestSubtreeForkChoice {
             .flatten()
             .collect();
 
-        // TODO: it's not safe to add votes for multiple versions of a slot per validator in same `add_votes()` batch
         self.add_votes(new_votes.iter(), epoch_stakes, epoch_schedule);
     }
 
@@ -857,28 +850,24 @@ impl HeaviestSubtreeForkChoice {
                             .map(|epoch_stakes| epoch_stakes.vote_account_stake(pubkey))
                             .unwrap_or(0);
 
-                        // TODO: this stake_update > 0 is not safe since we will have potentially
-                        // addded duplicates with stake == 0 in the past
-                        if stake_update > 0 {
-                            for old_slot_hash in old_latest_vote.into_slot_hashes() {
-                                update_operations
-                                    .entry((old_slot_hash, UpdateLabel::Subtract))
-                                    // Multiple *different* validators could have added/subtracted stake
-                                    // from this specific block, but the *same* validator could have only done one update
-                                    // (see usage of `observed_pubkeys` above), so we don't need to worry
-                                    // about duplicates here
-                                    .and_modify(|update| update.update_stake(stake_update))
-                                    .or_insert(UpdateOperation::Subtract(stake_update));
+                        for old_slot_hash in old_latest_vote.into_slot_hashes() {
+                            update_operations
+                                .entry((old_slot_hash, UpdateLabel::Subtract))
+                                // Multiple *different* validators could have added/subtracted stake
+                                // from this specific block, but the *same* validator could have only done one update
+                                // (see usage of `observed_pubkeys` above), so we don't need to worry
+                                // about duplicates here
+                                .and_modify(|update| update.update_stake(stake_update))
+                                .or_insert(UpdateOperation::Subtract(stake_update));
 
-                                // The parents of the old latest voted slot
-                                // won't subtract this validator's stake multiple times, since the
-                                // aggregate operation just sums the stakes of all the children,
-                                // and the relevant children won't have any of the validator's stake
-                                // counted toward them because the `Subtract` operations will delete
-                                // all stakes for this validator's votes from all versions of the old
-                                // voted slot
-                                self.insert_aggregate_operations(update_operations, old_slot_hash);
-                            }
+                            // The parents of the old latest voted slot
+                            // won't subtract this validator's stake multiple times, since the
+                            // aggregate operation just sums the stakes of all the children,
+                            // and the relevant children won't have any of the validator's stake
+                            // counted toward them because the `Subtract` operations will delete
+                            // all stakes for this validator's votes from all versions of the old
+                            // voted slot
+                            self.insert_aggregate_operations(update_operations, old_slot_hash);
                         }
                     }
                 }
@@ -891,8 +880,6 @@ impl HeaviestSubtreeForkChoice {
                 .map(|epoch_stakes| epoch_stakes.vote_account_stake(&pubkey))
                 .unwrap_or(0);
 
-            // TODO: handle if one version of the slot has more stake after crossing epoch
-            // boundary, should always take the greater stake when propagating
             update_operations
                 .entry((*new_vote_slot_hash, UpdateLabel::Add))
                 // Multiple *different* validators could have added/subtracted stake
@@ -1037,7 +1024,7 @@ impl ForkChoice for HeaviestSubtreeForkChoice {
         computed_bank_state: &ComputedBankState,
     ) {
         let ComputedBankState { pubkey_votes, .. } = computed_bank_state;
-
+        let mut start = Measure::start("compute_bank_stats_time");
         // Update `heaviest_subtree_fork_choice` to find the best fork to build on
         let root = self.root.0;
         let (best_overall_slot, best_overall_hash) = self.add_votes(
@@ -1059,12 +1046,14 @@ impl ForkChoice for HeaviestSubtreeForkChoice {
             bank.epoch_stakes_map(),
             bank.epoch_schedule(),
         );
+        start.stop();
 
         datapoint_info!(
             "compute_bank_stats-best_slot",
             ("computed_slot", bank.slot(), i64),
             ("overall_best_slot", best_overall_slot, i64),
             ("overall_best_hash", best_overall_hash.to_string(), String),
+            ("elapsed", start.as_us(), i64),
         );
     }
 
@@ -2035,6 +2024,14 @@ mod test {
                     ((2, Hash::default()), UpdateLabel::Aggregate),
                     UpdateOperation::Aggregate,
                 ),
+                (
+                    ((3, Hash::default()), UpdateLabel::Aggregate),
+                    UpdateOperation::Aggregate,
+                ),
+                (
+                    ((4, Hash::default()), UpdateLabel::Aggregate),
+                    UpdateOperation::Aggregate,
+                ),
             ]
             .into_iter()
             .collect();
@@ -2111,6 +2108,14 @@ mod test {
                     ((3, Hash::default()), UpdateLabel::Aggregate),
                     UpdateOperation::Aggregate,
                 ),
+                (
+                    ((4, Hash::default()), UpdateLabel::Aggregate),
+                    UpdateOperation::Aggregate,
+                ),
+                (
+                    ((5, Hash::default()), UpdateLabel::Aggregate),
+                    UpdateOperation::Aggregate,
+                ),
             ]
             .into_iter()
             .collect();
@@ -2175,7 +2180,15 @@ mod test {
                     UpdateOperation::Aggregate,
                 ),
                 (
+                    ((4, Hash::default()), UpdateLabel::Aggregate),
+                    UpdateOperation::Aggregate,
+                ),
+                (
                     ((5, Hash::default()), UpdateLabel::Aggregate),
+                    UpdateOperation::Aggregate,
+                ),
+                (
+                    ((6, Hash::default()), UpdateLabel::Aggregate),
                     UpdateOperation::Aggregate,
                 ),
             ]
@@ -2228,7 +2241,7 @@ mod test {
             duplicate_leaves_descended_from_4,
             duplicate_leaves_descended_from_5,
         ) = setup_duplicate_forks();
-        let stake = 100;
+        let stake = 10;
         let num_validators = 5;
         let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys(num_validators, stake);
 
@@ -2459,9 +2472,6 @@ mod test {
             Some(nonduplicate_parent),
         );
 
-        // TODO: Vote for a higher leaf with the same pubkeys as the earlier votes,
-        // will remove the stake voted at a duplicate slot
-
         // vote_pubkeys[0] and vote_pubkeys[2] have voted on two versions of the duplicate slot, both
         // should be erased after a vote for the higher parent
         let mut voted_slot_hashes = heaviest_subtree_fork_choice
@@ -2526,9 +2536,16 @@ mod test {
         // leaving only one vote as compared to before add the votes above
         assert_eq!(
             heaviest_subtree_fork_choice
-                .stake_voted_subtree(&duplicate_leaves_descended_from_4[0])
+                .stake_voted_at(&duplicate_leaves_descended_from_4[0])
                 .unwrap(),
             stake,
+        );
+        // The subtree, however, has 3 votes since its children have been voted on
+        assert_eq!(
+            heaviest_subtree_fork_choice
+                .stake_voted_subtree(&duplicate_leaves_descended_from_4[0])
+                .unwrap(),
+            3 * stake,
         );
         // Weight should be 0, both vote_pubkeys[0] and vote_pubkeys[1]
         // have updated to newer slots
@@ -2542,6 +2559,108 @@ mod test {
             heaviest_subtree_fork_choice.best_overall_slot(),
             higher_child_with_duplicate_parent
         );
+    }
+
+    #[test]
+    fn test_add_votes_duplicate_zero_stake() {
+        let (mut heaviest_subtree_fork_choice, duplicate_leaves_descended_from_4, _): (
+            HeaviestSubtreeForkChoice,
+            Vec<SlotHashKey>,
+            Vec<SlotHashKey>,
+        ) = setup_duplicate_forks();
+
+        let stake = 0;
+        let num_validators = 2;
+        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys(num_validators, stake);
+
+        // Make new vote with vote_pubkeys[0] for a higher slot
+        // Create new child with heaviest duplicate parent
+        let duplicate_parent = duplicate_leaves_descended_from_4[0];
+        let duplicate_slot = duplicate_parent.0;
+        let higher_child_with_duplicate_parent = (duplicate_slot + 1, Hash::new_unique());
+        heaviest_subtree_fork_choice
+            .add_new_leaf_slot(higher_child_with_duplicate_parent, Some(duplicate_parent));
+
+        let pubkey_votes: Vec<(Pubkey, SlotHashKey)> = vec![
+            (vote_pubkeys[0], duplicate_leaves_descended_from_4[0]),
+            (vote_pubkeys[0], duplicate_leaves_descended_from_4[1]),
+            (vote_pubkeys[1], duplicate_leaves_descended_from_4[1]),
+        ];
+
+        // duplicate_leaves_descended_from_4 are sorted, and fork choice will pick the smaller
+        // one in the event of a tie
+        let expected_best_slot_hash = higher_child_with_duplicate_parent;
+        assert_eq!(
+            heaviest_subtree_fork_choice.add_votes(
+                pubkey_votes.iter(),
+                bank.epoch_stakes_map(),
+                bank.epoch_schedule()
+            ),
+            expected_best_slot_hash
+        );
+
+        assert_eq!(
+            heaviest_subtree_fork_choice.best_overall_slot(),
+            expected_best_slot_hash
+        );
+
+        assert_eq!(
+            heaviest_subtree_fork_choice
+                .fork_infos
+                .get(&duplicate_leaves_descended_from_4[0])
+                .unwrap()
+                .duplicate_votes
+                .len(),
+            1
+        );
+
+        // All the ancestors of the duplicate slot should see the duplicate
+        for node in
+            heaviest_subtree_fork_choice.ancestor_iterator(higher_child_with_duplicate_parent)
+        {
+            assert_eq!(
+                heaviest_subtree_fork_choice
+                    .fork_infos
+                    .get(&node)
+                    .unwrap()
+                    .duplicate_votes
+                    .len(),
+                1
+            );
+        }
+        // The descendant of the duplciate slot shouldn't see that there
+        // was a duplicate for its parent
+        assert!(heaviest_subtree_fork_choice
+            .fork_infos
+            .get(&higher_child_with_duplicate_parent)
+            .unwrap()
+            .duplicate_votes
+            .is_empty());
+
+        let pubkey_votes: Vec<(Pubkey, SlotHashKey)> =
+            vec![(vote_pubkeys[0], higher_child_with_duplicate_parent)];
+
+        assert_eq!(
+            heaviest_subtree_fork_choice.add_votes(
+                pubkey_votes.iter(),
+                bank.epoch_stakes_map(),
+                bank.epoch_schedule()
+            ),
+            expected_best_slot_hash
+        );
+
+        // Ensure duplicates were cleaned up
+        for node in heaviest_subtree_fork_choice
+            .ancestor_iterator(higher_child_with_duplicate_parent)
+            .chain(std::iter::once(higher_child_with_duplicate_parent))
+        {
+            assert!(heaviest_subtree_fork_choice
+                .fork_infos
+                .get(&node)
+                .unwrap()
+                .duplicate_votes
+                .is_empty());
+        }
     }
 
     #[test]
