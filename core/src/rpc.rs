@@ -388,12 +388,11 @@ impl JsonRpcRequestProcessor {
         config: Option<RpcEpochConfig>,
     ) -> Result<Vec<Option<RpcInflationReward>>> {
         let config = config.unwrap_or_default();
-        let commitment = Some(config.commitment.unwrap_or(CommitmentConfig::finalized()));
         let epoch_schedule = self.get_epoch_schedule();
         let first_available_block = self.get_first_available_block();
         let epoch = config.epoch.unwrap_or_else(|| {
             epoch_schedule
-                .get_epoch(self.get_slot(commitment))
+                .get_epoch(self.get_slot(config.commitment))
                 .saturating_sub(1)
         });
 
@@ -415,7 +414,7 @@ impl JsonRpcRequestProcessor {
         }
 
         let first_confirmed_block_in_epoch = *self
-            .get_confirmed_blocks_with_limit(first_slot_in_epoch, 1, commitment)?
+            .get_confirmed_blocks_with_limit(first_slot_in_epoch, 1, config.commitment)?
             .get(0)
             .ok_or(RpcCustomError::BlockNotAvailable {
                 slot: first_slot_in_epoch,
@@ -443,9 +442,11 @@ impl JsonRpcRequestProcessor {
             .rewards
             .unwrap_or_default()
             .into_iter()
-            .filter_map(|reward| {
-                (reward.reward_type? != RewardType::Rent && addresses.contains(&reward.pubkey))
-                    .then(|| (reward.clone().pubkey, reward))
+            .filter_map(|reward| match reward.reward_type? {
+                RewardType::Staking | RewardType::Voting => addresses
+                    .contains(&reward.pubkey)
+                    .then(|| (reward.clone().pubkey, reward)),
+                _ => None,
             })
             .collect();
 

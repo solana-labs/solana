@@ -767,13 +767,22 @@ impl RpcClient {
     pub fn get_inflation_reward(
         &self,
         addresses: &[Pubkey],
-        config: Option<RpcEpochConfig>,
+        epoch: Option<Epoch>,
     ) -> ClientResult<Vec<Option<RpcInflationReward>>> {
         let addresses: Vec<_> = addresses
             .iter()
             .map(|address| address.to_string())
             .collect();
-        self.send(RpcRequest::GetInflationReward, json!([addresses, config]))
+        self.send(
+            RpcRequest::GetInflationReward,
+            json!([
+                addresses,
+                RpcEpochConfig {
+                    epoch,
+                    commitment: Some(self.commitment_config),
+                }
+            ]),
+        )
     }
 
     pub fn get_version(&self) -> ClientResult<RpcVersionInfo> {

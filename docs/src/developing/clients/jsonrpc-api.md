@@ -1475,7 +1475,9 @@ Returns the inflation reward for a list of addresses for an epoch
 
 #### Parameters:
 - `<array>` - An array of addresses to query, as base-58 encoded strings
-- `<u64>` - (optional) An epoch for which the reward occurs. If omitted, the previous epoch will be used
+* `<object>` - (optional) Configuration object containing the following optional fields:
+  * (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  * (optional) `epoch: <u64>` - An epoch for which the reward occurs. If omitted, the previous epoch will be used
 
 #### Results
 
