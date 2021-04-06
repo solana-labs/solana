@@ -70,8 +70,8 @@ use solana_sdk::{
 };
 use solana_stake_program::stake_state::StakeState;
 use solana_transaction_status::{
-    EncodedConfirmedTransaction, Reward, TransactionConfirmationStatus, TransactionStatus,
-    UiConfirmedBlock, UiTransactionEncoding,
+    EncodedConfirmedTransaction, Reward, RewardType, TransactionConfirmationStatus,
+    TransactionStatus, UiConfirmedBlock, UiTransactionEncoding,
 };
 use solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
 use spl_token_v2_0::{
@@ -443,8 +443,7 @@ impl JsonRpcRequestProcessor {
             .unwrap_or_default()
             .into_iter()
             .filter_map(|reward| {
-                addresses
-                    .contains(&reward.pubkey)
+                (reward.reward_type? != RewardType::Rent && addresses.contains(&reward.pubkey))
                     .then(|| (reward.clone().pubkey, reward))
             })
             .collect();
