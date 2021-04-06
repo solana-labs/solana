@@ -1018,11 +1018,21 @@ fn process_airdrop(
         faucet_addr
     );
 
-    request_and_confirm_airdrop(&rpc_client, faucet_addr, &pubkey, lamports, &config)?;
+    let pre_balance = rpc_client.get_balance(&pubkey)?;
+
+    let signature =
+        request_and_confirm_airdrop(&rpc_client, faucet_addr, &pubkey, lamports, &config)?;
+    println!("{}", signature);
 
     let current_balance = rpc_client.get_balance(&pubkey)?;
 
-    Ok(build_balance_message(current_balance, false, true))
+    if current_balance < pre_balance.saturating_add(lamports) {
+        println!("Balance unchanged");
+        println!("Run `solana confirm -v <SIGNATURE>` for more info");
+        Ok("".to_string())
+    } else {
+        Ok(build_balance_message(current_balance, false, true))
+    }
 }
 
 fn process_balance(
