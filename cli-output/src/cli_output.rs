@@ -708,13 +708,13 @@ fn show_epoch_rewards(
         writeln!(f, "Epoch Rewards:")?;
         writeln!(
             f,
-            "  {:<6}  {:<11}  {:<16}  {:<16}  {:>14}  {:>14}",
+            "  {:<6}  {:<11}  {:<18}  {:<18}  {:>14}  {:>14}",
             "Epoch", "Reward Slot", "Amount", "New Balance", "Percent Change", "APR"
         )?;
         for reward in epoch_rewards {
             writeln!(
                 f,
-                "  {:<6}  {:<11}  ◎{:<16.9}  ◎{:<14.9}  {:>13.2}%  {}",
+                "  {:<6}  {:<11}  ◎{:<17.9}  ◎{:<17.9}  {:>13.2}%  {}",
                 reward.epoch,
                 reward.effective_slot,
                 lamports_to_sol(reward.amount),
