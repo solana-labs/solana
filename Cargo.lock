@@ -4252,12 +4252,8 @@ dependencies = [
  "serde_json",
  "solana-account-decoder",
  "solana-clap-utils",
-<<<<<<< HEAD
- "solana-logger 1.6.5",
-=======
  "solana-faucet",
- "solana-logger 1.7.0",
->>>>>>> 03d3ae1cb... Faucet: repurpose cap and slice args to apply to single IPs (#16381)
+ "solana-logger 1.6.5",
  "solana-net-utils",
  "solana-sdk",
  "solana-transaction-status",

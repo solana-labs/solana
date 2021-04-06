@@ -2954,7 +2954,7 @@ dependencies = [
 
 [[package]]
 name = "solana-cli-config"
-version = "1.7.0"
+version = "1.6.5"
 dependencies = [
  "dirs-next",
  "lazy_static",
@@ -3055,7 +3055,7 @@ dependencies = [
 
 [[package]]
 name = "solana-faucet"
-version = "1.7.0"
+version = "1.6.5"
 dependencies = [
  "bincode",
  "byteorder 1.3.4",
@@ -3065,7 +3065,7 @@ dependencies = [
  "serde_derive",
  "solana-clap-utils",
  "solana-cli-config",
- "solana-logger 1.7.0",
+ "solana-logger 1.6.5",
  "solana-metrics",
  "solana-sdk",
  "solana-version",
