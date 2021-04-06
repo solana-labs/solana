@@ -1356,7 +1356,7 @@ mod tests {
     #[test]
     fn test_banking_stage_shutdown1() {
         let genesis_config = create_genesis_config(2).genesis_config;
-        let bank = Arc::new(Bank::new(&genesis_config));
+        let bank = Arc::new(Bank::new_no_wallclock_throttle(&genesis_config));
         let (verified_sender, verified_receiver) = unbounded();
         let (vote_sender, vote_receiver) = unbounded();
         let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
@@ -1395,7 +1395,7 @@ mod tests {
         } = create_genesis_config(2);
         genesis_config.ticks_per_slot = 4;
         let num_extra_ticks = 2;
-        let bank = Arc::new(Bank::new(&genesis_config));
+        let bank = Arc::new(Bank::new_no_wallclock_throttle(&genesis_config));
         let start_hash = bank.last_blockhash();
         let (verified_sender, verified_receiver) = unbounded();
         let (vote_sender, vote_receiver) = unbounded();
@@ -1681,7 +1681,7 @@ mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(10_000);
-        let bank = Arc::new(Bank::new(&genesis_config));
+        let bank = Arc::new(Bank::new_no_wallclock_throttle(&genesis_config));
         let start = Arc::new(Instant::now());
         let working_bank = WorkingBank {
             bank: bank.clone(),
@@ -2022,8 +2022,13 @@ mod tests {
             genesis_config,
             mint_keypair,
             ..
+<<<<<<< HEAD
         } = create_genesis_config(10_000);
         let bank = Arc::new(Bank::new(&genesis_config));
+=======
+        } = create_slow_genesis_config(10_000);
+        let bank = Arc::new(Bank::new_no_wallclock_throttle(&genesis_config));
+>>>>>>> 1219842a9... No wallclock throttle tests (#16396)
         let pubkey = solana_sdk::pubkey::new_rand();
 
         let transactions = vec![system_transaction::transfer(
@@ -2121,8 +2126,13 @@ mod tests {
             genesis_config,
             mint_keypair,
             ..
+<<<<<<< HEAD
         } = create_genesis_config(10_000);
         let bank = Arc::new(Bank::new(&genesis_config));
+=======
+        } = create_slow_genesis_config(10_000);
+        let bank = Arc::new(Bank::new_no_wallclock_throttle(&genesis_config));
+>>>>>>> 1219842a9... No wallclock throttle tests (#16396)
         let pubkey = solana_sdk::pubkey::new_rand();
         let pubkey1 = solana_sdk::pubkey::new_rand();
 
@@ -2282,8 +2292,13 @@ mod tests {
             genesis_config,
             mint_keypair,
             ..
+<<<<<<< HEAD
         } = create_genesis_config(10_000);
         let bank = Arc::new(Bank::new(&genesis_config));
+=======
+        } = create_slow_genesis_config(10_000);
+        let bank = Arc::new(Bank::new_no_wallclock_throttle(&genesis_config));
+>>>>>>> 1219842a9... No wallclock throttle tests (#16396)
         let pubkey = solana_sdk::pubkey::new_rand();
         let pubkey1 = solana_sdk::pubkey::new_rand();
         let keypair1 = Keypair::new();
@@ -2402,8 +2417,13 @@ mod tests {
         } = &genesis_config_info;
         let blockstore =
             Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger");
+<<<<<<< HEAD
         let bank = Arc::new(Bank::new(&genesis_config));
         let (poh_recorder, entry_receiver) = PohRecorder::new(
+=======
+        let bank = Arc::new(Bank::new_no_wallclock_throttle(&genesis_config));
+        let (poh_recorder, entry_receiver, record_receiver) = PohRecorder::new(
+>>>>>>> 1219842a9... No wallclock throttle tests (#16396)
             bank.tick_height(),
             bank.last_blockhash(),
             bank.slot(),
