@@ -922,6 +922,11 @@ fn main() {
             .about("Print all the dead slots in the ledger")
         )
         .subcommand(
+            SubCommand::with_name("duplicate-slots")
+            .arg(&starting_slot_arg)
+            .about("Print all the duplicate slots in the ledger")
+        )
+        .subcommand(
             SubCommand::with_name("set-dead-slot")
             .about("Mark one or more slots dead")
             .arg(
@@ -1598,6 +1603,17 @@ fn main() {
             );
             let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
             for slot in blockstore.dead_slots_iterator(starting_slot).unwrap() {
+                println!("{}", slot);
+            }
+        }
+        ("duplicate-slots", Some(arg_matches)) => {
+            let blockstore = open_blockstore(
+                &ledger_path,
+                AccessType::TryPrimaryThenSecondary,
+                wal_recovery_mode,
+            );
+            let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
+            for slot in blockstore.duplicate_slots_iterator(starting_slot).unwrap() {
                 println!("{}", slot);
             }
         }
