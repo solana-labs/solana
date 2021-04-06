@@ -62,8 +62,11 @@ pub enum FaucetError {
     #[error("serialization error: {0}")]
     Serialize(#[from] bincode::Error),
 
-    #[error("invalid transaction_length from faucet: {0}")]
-    InvalidTransactionLength(usize),
+    #[error("transaction_length from faucet exceeds limit: {0}")]
+    TransactionDataTooLarge(usize),
+
+    #[error("transaction_length from faucet: 0")]
+    NoDataReceived,
 
     #[error("request too large; req: ◎{0}, cap: ◎{1}")]
     PerRequestCapExceeded(f64, f64),
@@ -297,8 +300,10 @@ pub fn request_airdrop_transaction(
         err
     })?;
     let transaction_length = LittleEndian::read_u16(&buffer) as usize;
-    if transaction_length > PACKET_DATA_SIZE || transaction_length == 0 {
-        return Err(FaucetError::InvalidTransactionLength(transaction_length));
+    if transaction_length > PACKET_DATA_SIZE {
+        return Err(FaucetError::TransactionDataTooLarge(transaction_length));
+    } else if transaction_length == 0 {
+        return Err(FaucetError::NoDataReceived);
     }
 
     // Read the transaction
