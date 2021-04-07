@@ -927,7 +927,9 @@ pub fn parse_command(
             })
         }
         ("rent", Some(matches)) => {
-            let data_length = value_of(matches, "data_length").unwrap();
+            let data_length = value_of::<RentLengthValue>(matches, "data_length")
+                .unwrap()
+                .length();
             let use_lamports_unit = matches.is_present("lamports");
             Ok(CliCommandInfo {
                 command: CliCommand::Rent {
