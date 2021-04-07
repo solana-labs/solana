@@ -85,12 +85,6 @@ else
     solana-ledger-tool
     solana-log-analyzer
     solana-net-shaper
-<<<<<<< HEAD
-    solana-stake-accounts
-    solana-stake-monitor
-    solana-stake-o-matic
-=======
->>>>>>> 6cd4bc5e6... Speed up net.sh builds (#16360)
     solana-sys-tuner
     solana-validator
   )
@@ -104,6 +98,7 @@ else
       solana-install-init
       solana-stake-accounts
       solana-stake-monitor
+      solana-stake-o-matic
       solana-test-validator
       solana-tokens
       solana-watchtower
