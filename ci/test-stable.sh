@@ -44,14 +44,10 @@ test-stable-perf)
   ./cargo-build-bpf --manifest-path sdk/Cargo.toml
 
   # BPF Program unit tests
-  for program in programs/bpf/rust/*; do
-    if [ -d "${program}" ]; then
-      _ "$cargo" test --manifest-path "$program"/Cargo.toml
-      _ cargo-build-bpf --manifest-path "$program"/Cargo.toml --bpf-sdk sdk/bpf
-    fi
-  done
+  "$cargo" test --manifest-path programs/bpf/Cargo.toml
+  cargo-build-bpf --manifest-path programs/bpf/Cargo.toml --bpf-sdk sdk/bpf
 
-  # BPF program tests
+  # BPF program system tests
   _ make -C programs/bpf/c tests
   _ "$cargo" stable test \
     --manifest-path programs/bpf/Cargo.toml \
