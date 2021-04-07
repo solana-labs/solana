@@ -409,7 +409,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                                 .map(|_| ())
                                 .map_err(|e| e.to_string())
                         })
-                        .help("Length of data in the account to calculate rent for"),
+                        .help("Length of data in the account to calculate rent for, or moniker: [nonce, stake, system, vote]"),
                 )
                 .arg(
                     Arg::with_name("lamports")
