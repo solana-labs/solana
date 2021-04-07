@@ -35,7 +35,6 @@ impl FetchStage {
                 exit,
                 &sender,
                 &poh_recorder,
-                None,
                 coalesce_ms,
             ),
             receiver,
@@ -47,7 +46,6 @@ impl FetchStage {
         exit: &Arc<AtomicBool>,
         sender: &PacketSender,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
-        allocated_packet_limit: Option<u32>,
         coalesce_ms: u64,
     ) -> Self {
         let tx_sockets = sockets.into_iter().map(Arc::new).collect();
@@ -58,7 +56,6 @@ impl FetchStage {
             exit,
             &sender,
             &poh_recorder,
-            allocated_packet_limit,
             coalesce_ms,
         )
     }
@@ -104,11 +101,9 @@ impl FetchStage {
         exit: &Arc<AtomicBool>,
         sender: &PacketSender,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
-        limit: Option<u32>,
         coalesce_ms: u64,
     ) -> Self {
-        let recycler: PacketsRecycler =
-            Recycler::warmed(1000, 1024, limit, "fetch_stage_recycler_shrink");
+        let recycler: PacketsRecycler = Recycler::warmed(1000, 1024);
 
         let tpu_threads = sockets.into_iter().map(|socket| {
             streamer::receiver(

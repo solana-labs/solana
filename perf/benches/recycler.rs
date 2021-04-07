@@ -10,13 +10,13 @@ use test::Bencher;
 fn bench_recycler(bencher: &mut Bencher) {
     solana_logger::setup();
 
-    let recycler: PacketsRecycler = Recycler::new_without_limit("me");
+    let recycler: PacketsRecycler = Recycler::default();
 
     for _ in 0..1000 {
-        recycler.recycle_for_test(recycler.allocate().expect("There is no limit"));
+        let _packet = recycler.allocate("");
     }
 
     bencher.iter(move || {
-        recycler.recycle_for_test(recycler.allocate().expect("There is no limit"));
+        let _packet = recycler.allocate("");
     });
 }

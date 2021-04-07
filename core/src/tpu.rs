@@ -75,9 +75,6 @@ impl Tpu {
             &exit,
             &packet_sender,
             &poh_recorder,
-            // At 1024 packets per `Packet`, each packet about MTU size ~1k, this is roughly
-            // 20GB
-            Some(20_000),
             tpu_coalesce_ms,
         );
         let (verified_sender, verified_receiver) = unbounded();
