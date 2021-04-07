@@ -1949,7 +1949,7 @@ impl RentLengthValue {
 }
 
 #[derive(Debug, Error)]
-#[error("expected RentLengthValue, got \"{0}\"")]
+#[error("expected number or moniker, got \"{0}\"")]
 pub struct RentLengthValueError(pub String);
 
 impl FromStr for RentLengthValue {
