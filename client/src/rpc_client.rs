@@ -1,31 +1,13 @@
-<<<<<<< HEAD
 use crate::{
     client_error::{ClientError, ClientErrorKind, Result as ClientResult},
     http_sender::HttpSender,
     mock_sender::{MockSender, Mocks},
     rpc_config::RpcAccountInfoConfig,
     rpc_config::{
-        RpcConfirmedBlockConfig, RpcConfirmedTransactionConfig,
+        RpcConfirmedBlockConfig, RpcConfirmedTransactionConfig, RpcEpochConfig,
         RpcGetConfirmedSignaturesForAddress2Config, RpcLargestAccountsConfig,
         RpcProgramAccountsConfig, RpcSendTransactionConfig, RpcSimulateTransactionConfig,
-        RpcStakeConfig, RpcTokenAccountsFilter,
-=======
-use {
-    crate::{
-        client_error::{ClientError, ClientErrorKind, Result as ClientResult},
-        http_sender::HttpSender,
-        mock_sender::{MockSender, Mocks},
-        rpc_config::RpcAccountInfoConfig,
-        rpc_config::{
-            RpcConfirmedBlockConfig, RpcConfirmedTransactionConfig, RpcEpochConfig,
-            RpcGetConfirmedSignaturesForAddress2Config, RpcLargestAccountsConfig,
-            RpcProgramAccountsConfig, RpcSendTransactionConfig, RpcSimulateTransactionConfig,
-            RpcTokenAccountsFilter,
-        },
-        rpc_request::{RpcError, RpcRequest, RpcResponseErrorData, TokenAccountsFilter},
-        rpc_response::*,
-        rpc_sender::RpcSender,
->>>>>>> e501fa5f0... Rpc: introduce get_inflation_reward rpc call (#16278)
+        RpcTokenAccountsFilter,
     },
     rpc_request::{RpcError, RpcRequest, RpcResponseErrorData, TokenAccountsFilter},
     rpc_response::*,
