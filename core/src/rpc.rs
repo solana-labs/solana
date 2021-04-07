@@ -423,7 +423,7 @@ impl JsonRpcRequestProcessor {
         let first_confirmed_block = if let Ok(Some(first_confirmed_block)) = self
             .get_confirmed_block(
                 first_confirmed_block_in_epoch,
-                Some(RpcConfirmedBlockConfig::rewards_only().into()),
+                Some(RpcConfirmedBlockConfig::rewards_with_commitment(config.commitment).into()),
             ) {
             first_confirmed_block
         } else {
