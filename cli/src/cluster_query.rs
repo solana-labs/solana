@@ -402,7 +402,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("data_length")
                         .index(1)
-                        .value_name("DATA_LENGTH")
+                        .value_name("DATA_LENGTH_OR_MONIKER")
                         .required(true)
                         .validator(|s| {
                             RentLengthValue::from_str(&s)
