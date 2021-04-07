@@ -362,6 +362,15 @@ pub struct RpcPerfSample {
     pub sample_period_secs: u16,
 }
 
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcInflationReward {
+    pub epoch: Epoch,
+    pub effective_slot: Slot,
+    pub amount: u64,       // lamports
+    pub post_balance: u64, // lamports
+}
+
 impl From<ConfirmedTransactionStatusWithSignature> for RpcConfirmedTransactionStatusWithSignature {
     fn from(value: ConfirmedTransactionStatusWithSignature) -> Self {
         let ConfirmedTransactionStatusWithSignature {

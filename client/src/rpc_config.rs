@@ -50,7 +50,7 @@ pub struct RpcLargestAccountsConfig {
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RpcStakeConfig {
+pub struct RpcEpochConfig {
     pub epoch: Option<Epoch>,
     #[serde(flatten)]
     pub commitment: Option<CommitmentConfig>,
@@ -158,6 +158,12 @@ impl RpcConfirmedBlockConfig {
             transaction_details: Some(TransactionDetails::None),
             ..Self::default()
         }
+    }
+}
+
+impl From<RpcConfirmedBlockConfig> for RpcEncodingConfigWrapper<RpcConfirmedBlockConfig> {
+    fn from(config: RpcConfirmedBlockConfig) -> Self {
+        RpcEncodingConfigWrapper::Current(Some(config))
     }
 }
 
