@@ -42,6 +42,7 @@ Operate a configured testnet
  startnode    - Start an individual node (previously stopped with stopNode)
  stopnode     - Stop an individual node
  startclients - Start client nodes only
+ prepare      - Prepare software deployment. (Build/download the software release)
  update       - Deploy a new software update to the cluster
  upgrade      - Upgrade software on bootstrap validator. (Restart bootstrap validator manually to run it)
 
@@ -185,12 +186,12 @@ build() {
 
     buildVariant=
     if $debugBuild; then
-      buildVariant=debug
+      buildVariant=--debug
     fi
 
     $MAYBE_DOCKER bash -c "
       set -ex
-      scripts/cargo-install-all.sh farf \"$buildVariant\"
+      scripts/cargo-install-all.sh farf $buildVariant --validator-only
     "
   )
 
@@ -1054,6 +1055,9 @@ restart)
 start)
   prepareDeploy
   deploy
+  ;;
+prepare)
+  prepareDeploy
   ;;
 sanity)
   sanity
