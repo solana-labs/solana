@@ -41,6 +41,7 @@ use solana_sdk::{
     hash::Hash,
     message::Message,
     native_token::lamports_to_sol,
+    nonce::State as NonceState,
     pubkey::{self, Pubkey},
     rent::Rent,
     rpc_port::DEFAULT_RPC_PORT_STR,
@@ -53,11 +54,14 @@ use solana_sdk::{
     timing,
     transaction::Transaction,
 };
+use solana_stake_program::stake_state::StakeState;
 use solana_transaction_status::UiTransactionEncoding;
+use solana_vote_program::vote_state::VoteState;
 use std::{
     collections::{BTreeMap, HashMap, VecDeque},
     fmt,
     net::SocketAddr,
+    str::FromStr,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -65,6 +69,7 @@ use std::{
     thread::sleep,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
+use thiserror::Error;
 
 static CHECK_MARK: Emoji = Emoji("✅ ", "");
 static CROSS_MARK: Emoji = Emoji("❌ ", "");
@@ -397,9 +402,14 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("data_length")
                         .index(1)
-                        .value_name("DATA_LENGTH")
+                        .value_name("DATA_LENGTH_OR_MONIKER")
                         .required(true)
-                        .help("Length of data in the account to calculate rent for"),
+                        .validator(|s| {
+                            RentLengthValue::from_str(&s)
+                                .map(|_| ())
+                                .map_err(|e| e.to_string())
+                        })
+                        .help("Length of data in the account to calculate rent for, or moniker: [nonce, stake, system, vote]"),
                 )
                 .arg(
                     Arg::with_name("lamports")
@@ -1609,7 +1619,6 @@ pub fn process_show_stakes(
     vote_account_pubkeys: Option<&[Pubkey]>,
 ) -> ProcessResult {
     use crate::stake::build_stake_state;
-    use solana_stake_program::stake_state::StakeState;
 
     let progress_bar = new_spinner_progress_bar();
     progress_bar.set_message("Fetching stake accounts...");
@@ -1917,6 +1926,47 @@ impl fmt::Display for CliRentCalculation {
 
 impl QuietDisplay for CliRentCalculation {}
 impl VerboseDisplay for CliRentCalculation {}
+
+#[derive(Debug, PartialEq)]
+pub enum RentLengthValue {
+    Nonce,
+    Stake,
+    System,
+    Vote,
+    Bytes(usize),
+}
+
+impl RentLengthValue {
+    pub fn length(&self) -> usize {
+        match self {
+            Self::Nonce => NonceState::size(),
+            Self::Stake => std::mem::size_of::<StakeState>(),
+            Self::System => 0,
+            Self::Vote => VoteState::size_of(),
+            Self::Bytes(l) => *l,
+        }
+    }
+}
+
+#[derive(Debug, Error)]
+#[error("expected number or moniker, got \"{0}\"")]
+pub struct RentLengthValueError(pub String);
+
+impl FromStr for RentLengthValue {
+    type Err = RentLengthValueError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let s = s.to_ascii_lowercase();
+        match s.as_str() {
+            "nonce" => Ok(Self::Nonce),
+            "stake" => Ok(Self::Stake),
+            "system" => Ok(Self::System),
+            "vote" => Ok(Self::Vote),
+            _ => usize::from_str(&s)
+                .map(Self::Bytes)
+                .map_err(|_| RentLengthValueError(s)),
+        }
+    }
+}
 
 pub fn process_calculate_rent(
     rpc_client: &RpcClient,
