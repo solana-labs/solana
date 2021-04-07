@@ -7,8 +7,6 @@ src_root="$(readlink -f "${here}/..")"
 
 cd "${src_root}"
 
-source ci/rust-version.sh stable
-
 cargo_audit_ignores=(
   # failure is officially deprecated/unmaintained
   #
@@ -42,4 +40,4 @@ cargo_audit_ignores=(
   --ignore RUSTSEC-2020-0146
 
 )
-scripts/cargo-for-all-lock-files.sh +"$rust_stable" audit "${cargo_audit_ignores[@]}"
+scripts/cargo-for-all-lock-files.sh stable audit "${cargo_audit_ignores[@]}"
