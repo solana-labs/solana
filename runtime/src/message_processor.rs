@@ -215,8 +215,8 @@ impl PreAccount {
         self.changed = true;
     }
 
-    pub fn key(&self) -> Pubkey {
-        self.key
+    pub fn key(&self) -> &Pubkey {
+        &self.key
     }
 
     pub fn lamports(&self) -> u64 {
@@ -252,6 +252,7 @@ impl ComputeMeter for ThisComputeMeter {
 pub struct ThisInvokeContext<'a> {
     invoke_stack: Vec<InvokeContextStackFrame<'a>>,
     rent: Rent,
+    message: &'a Message,
     pre_accounts: Vec<PreAccount>,
     executable_accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
     account_deps: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
@@ -297,6 +298,7 @@ impl<'a> ThisInvokeContext<'a> {
         let mut invoke_context = Self {
             invoke_stack: Vec::with_capacity(bpf_compute_budget.max_invoke_depth),
             rent,
+            message,
             pre_accounts,
             executable_accounts,
             account_deps,
@@ -334,10 +336,46 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             // Reentrancy not allowed unless caller is calling itself
             return Err(InstructionError::ReentrancyNotAllowed);
         }
-        self.invoke_stack
-            .push(InvokeContextStackFrame::new(*key, unsafe {
-                std::mem::transmute(keyed_accounts)
-            }));
+        // Alias the keys and account references in the provided keyed_accounts
+        // with the ones already existing in self, so that the lifetime 'a matches.
+        let keyed_accounts = keyed_accounts
+            .iter()
+            .map(|(search_key, is_signer, is_writable, account)| {
+                self.account_deps
+                    .iter()
+                    .map(|(key, _account)| key)
+                    .chain(self.message.account_keys.iter())
+                    .position(|key| key == *search_key)
+                    .map(|mut index| {
+                        if index < self.account_deps.len() {
+                            (
+                                &self.account_deps[index].0,
+                                *is_signer,
+                                *is_writable,
+                                &self.account_deps[index].1 as &RefCell<AccountSharedData>,
+                            )
+                        } else {
+                            index = index.saturating_sub(self.account_deps.len());
+                            (
+                                &self.message.account_keys[index],
+                                *is_signer,
+                                *is_writable,
+                                // TODO
+                                // Currently we are constructing new accounts on the stack
+                                // before calling MessageProcessor::process_cross_program_instruction
+                                // Ideally we would recycle the existing accounts here like this:
+                                // &self.accounts[index] as &RefCell<AccountSharedData>,
+                                unsafe { std::mem::transmute(*account) },
+                            )
+                        }
+                    })
+            })
+            .collect::<Option<Vec<_>>>()
+            .ok_or(InstructionError::InvalidArgument)?;
+        self.invoke_stack.push(InvokeContextStackFrame::new(
+            *key,
+            keyed_accounts.as_slice(),
+        ));
         Ok(())
     }
     fn pop(&mut self) {
@@ -597,18 +635,14 @@ impl MessageProcessor {
     ) -> Vec<(&'a Pubkey, bool, bool, &'a RefCell<AccountSharedData>)> {
         executable_accounts
             .iter()
-            .map(|(key, account)| {
-                let account: &RefCell<AccountSharedData> = account;
-                (key, false, false, account)
-            })
+            .map(|(key, account)| (key, false, false, account as &RefCell<AccountSharedData>))
             .chain(instruction.accounts.iter().map(|index| {
                 let index = *index as usize;
-                let account: &RefCell<AccountSharedData> = &accounts[index];
                 (
                     &message.account_keys[index],
                     message.is_signer(index),
                     message.is_writable(index, demote_sysvar_write_locks),
-                    account,
+                    &accounts[index] as &RefCell<AccountSharedData>,
                 )
             }))
             .collect::<Vec<_>>()
@@ -1048,7 +1082,7 @@ impl MessageProcessor {
                 };
                 // Find the matching PreAccount
                 for pre_account in pre_accounts.iter_mut() {
-                    if *key == pre_account.key() {
+                    if key == pre_account.key() {
                         {
                             // Verify account has no outstanding references
                             let _ = account

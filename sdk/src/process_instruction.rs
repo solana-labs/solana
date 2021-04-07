@@ -57,16 +57,17 @@ impl<'a> InvokeContextStackFrame<'a> {
 
 /// Invocation context passed to loaders
 pub trait InvokeContext {
-    /// Push a program ID on to the invocation stack
+    /// Push a stack frame onto the invocation stack
     ///
-    /// It returns the keyed_accounts_to_restore
-    /// to be used in the matching pop call.
+    /// Used in MessageProcessor::process_cross_program_instruction
     fn push(
         &mut self,
         key: &Pubkey,
         keyed_accounts: &[(&Pubkey, bool, bool, &RefCell<AccountSharedData>)],
     ) -> Result<(), InstructionError>;
-    /// Pop a program ID off of the invocation stack
+    /// Pop a stack frame from the invocation stack
+    ///
+    /// Used in MessageProcessor::process_cross_program_instruction
     fn pop(&mut self);
     /// Current depth of the invocation stake
     fn invoke_depth(&self) -> usize;
