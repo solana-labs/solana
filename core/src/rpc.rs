@@ -1001,7 +1001,10 @@ impl JsonRpcRequestProcessor {
 
         // Maybe add confirmed blocks
         if commitment.is_confirmed() && blocks.len() < limit {
-            let last_element = blocks.last().cloned().unwrap_or_default();
+            let last_element = blocks
+                .last()
+                .cloned()
+                .unwrap_or_else(|| start_slot.saturating_sub(1));
             let confirmed_bank = self.bank(Some(CommitmentConfig::confirmed()));
             let mut confirmed_blocks = confirmed_bank
                 .status_cache_ancestors()
