@@ -17,10 +17,6 @@ case "$1" in
     toolchain="$rust_nightly"
     shift
     ;;
-  +*)
-    toolchain="${1#+}"
-    shift
-    ;;
   *)
     source "${here}"/ci/rust-version.sh stable
     # shellcheck disable=SC2054 # rust_stable is sourced from rust-version.sh

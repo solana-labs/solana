@@ -14,7 +14,7 @@ usage() {
     echo "Error: $*"
   fi
   cat <<EOF
-usage: $0 [+<cargo version>] [--debug] <install directory>
+usage: $0 [+<cargo version>] [--debug] [--validator-only] <install directory>
 EOF
   exit $exitcode
 }
