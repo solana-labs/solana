@@ -47,7 +47,7 @@ test-stable-perf)
   for program in programs/bpf/rust/*; do
     if [ -d "${program}" ]; then
       _ "$cargo" test --manifest-path "$program"/Cargo.toml
-      _ "$cargo" test-bpf --manifest-path "$program"/Cargo.toml --bpf-sdk sdk/bpf
+      _ cargo-build-bpf --manifest-path "$program"/Cargo.toml --bpf-sdk sdk/bpf
     fi
   done
 
