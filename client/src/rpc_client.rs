@@ -4,10 +4,10 @@ use crate::{
     mock_sender::{MockSender, Mocks},
     rpc_config::RpcAccountInfoConfig,
     rpc_config::{
-        RpcConfirmedBlockConfig, RpcConfirmedTransactionConfig,
+        RpcConfirmedBlockConfig, RpcConfirmedTransactionConfig, RpcEpochConfig,
         RpcGetConfirmedSignaturesForAddress2Config, RpcLargestAccountsConfig,
         RpcProgramAccountsConfig, RpcSendTransactionConfig, RpcSimulateTransactionConfig,
-        RpcStakeConfig, RpcTokenAccountsFilter,
+        RpcTokenAccountsFilter,
     },
     rpc_request::{RpcError, RpcRequest, RpcResponseErrorData, TokenAccountsFilter},
     rpc_response::*,
@@ -430,7 +430,7 @@ impl RpcClient {
             RpcRequest::GetStakeActivation,
             json!([
                 stake_account.to_string(),
-                RpcStakeConfig {
+                RpcEpochConfig {
                     epoch,
                     commitment: Some(self.commitment_config),
                 }
@@ -756,6 +756,27 @@ impl RpcClient {
 
     pub fn get_inflation_rate(&self) -> ClientResult<RpcInflationRate> {
         self.send(RpcRequest::GetInflationRate, Value::Null)
+    }
+
+    pub fn get_inflation_reward(
+        &self,
+        addresses: &[Pubkey],
+        epoch: Option<Epoch>,
+    ) -> ClientResult<Vec<Option<RpcInflationReward>>> {
+        let addresses: Vec<_> = addresses
+            .iter()
+            .map(|address| address.to_string())
+            .collect();
+        self.send(
+            RpcRequest::GetInflationReward,
+            json!([
+                addresses,
+                RpcEpochConfig {
+                    epoch,
+                    commitment: Some(self.commitment_config),
+                }
+            ]),
+        )
     }
 
     pub fn get_version(&self) -> ClientResult<RpcVersionInfo> {
