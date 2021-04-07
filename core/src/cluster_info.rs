@@ -1923,7 +1923,7 @@ impl ClusterInfo {
                 let mut last_contact_info_trace = timestamp();
                 let mut last_contact_info_save = timestamp();
                 let mut entrypoints_processed = false;
-                let recycler = PacketsRecycler::new_without_limit("gossip-recycler-shrink-stats");
+                let recycler = PacketsRecycler::default();
                 let crds_data = vec![
                     CrdsData::Version(Version::new(self.id())),
                     CrdsData::NodeInstance(self.instance.with_wallclock(timestamp())),
@@ -2187,7 +2187,7 @@ impl ClusterInfo {
             .process_pull_requests(callers.cloned(), timestamp());
         let output_size_limit =
             self.update_data_budget(stakes.len()) / PULL_RESPONSE_MIN_SERIALIZED_SIZE;
-        let mut packets = Packets::new_with_recycler(recycler.clone(), 64).unwrap();
+        let mut packets = Packets::new_with_recycler(recycler.clone(), 64, "handle_pull_requests");
         let (caller_and_filters, addrs): (Vec<_>, Vec<_>) = {
             let mut rng = rand::thread_rng();
             let check_pull_request =
@@ -2472,7 +2472,8 @@ impl ClusterInfo {
         if packets.is_empty() {
             None
         } else {
-            let packets = Packets::new_with_recycler_data(recycler, packets).unwrap();
+            let packets =
+                Packets::new_with_recycler_data(recycler, "handle_ping_messages", packets);
             Some(packets)
         }
     }
@@ -3164,8 +3165,7 @@ impl ClusterInfo {
         exit: &Arc<AtomicBool>,
     ) -> JoinHandle<()> {
         let exit = exit.clone();
-        let recycler =
-            PacketsRecycler::new_without_limit("cluster-info-listen-recycler-shrink-stats");
+        let recycler = PacketsRecycler::default();
         Builder::new()
             .name("solana-listen".to_string())
             .spawn(move || {
@@ -3611,7 +3611,7 @@ mod tests {
             .iter()
             .map(|ping| Pong::new(ping, &this_node).unwrap())
             .collect();
-        let recycler = PacketsRecycler::new_without_limit("");
+        let recycler = PacketsRecycler::default();
         let packets = cluster_info
             .handle_ping_messages(
                 remote_nodes

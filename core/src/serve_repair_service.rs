@@ -30,7 +30,7 @@ impl ServeRepairService {
             serve_repair_socket.clone(),
             &exit,
             request_sender,
-            Recycler::new_without_limit("serve-repair-receiver-recycler-shrink-stats"),
+            Recycler::default(),
             "serve_repair_receiver",
             1,
         );

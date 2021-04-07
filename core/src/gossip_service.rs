@@ -47,7 +47,7 @@ impl GossipService {
             gossip_socket.clone(),
             &exit,
             request_sender,
-            Recycler::new_without_limit("gossip-receiver-recycler-shrink-stats"),
+            Recycler::default(),
             "gossip_receiver",
             1,
         );

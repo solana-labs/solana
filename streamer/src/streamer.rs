@@ -42,10 +42,7 @@ fn recv_loop(
     let mut now = Instant::now();
     let mut num_max_received = 0; // Number of times maximum packets were received
     loop {
-        let (mut msgs, should_send) =
-            Packets::new_with_recycler(recycler.clone(), PACKETS_PER_BATCH)
-                .map(|allocated| (allocated, true))
-                .unwrap_or((Packets::with_capacity(PACKETS_PER_BATCH), false));
+        let mut msgs = Packets::new_with_recycler(recycler.clone(), PACKETS_PER_BATCH, name);
         loop {
             // Check for exit signal, even if socket is busy
             // (for instance the leader transaction socket)
@@ -58,7 +55,7 @@ fn recv_loop(
                 }
                 recv_count += len;
                 call_count += 1;
-                if len > 0 && should_send {
+                if len > 0 {
                     channel.send(msgs)?;
                 }
                 break;
@@ -211,7 +208,7 @@ mod test {
             Arc::new(read),
             &exit,
             s_reader,
-            Recycler::new_without_limit(""),
+            Recycler::default(),
             "test",
             1,
         );

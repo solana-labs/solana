@@ -25,10 +25,7 @@ impl ShredSigVerifier {
         Self {
             bank_forks,
             leader_schedule_cache,
-            recycler_cache: RecyclerCache::warmed(
-                "shred-sig-verifier-offsets-recycler-shrink-stats",
-                "shred-sig-verifier-buffer-recycler-shrink-stats",
-            ),
+            recycler_cache: RecyclerCache::warmed(),
         }
     }
     fn read_slots(batches: &[Packets]) -> HashSet<u64> {

@@ -16,7 +16,7 @@ const NUM_PACKETS: usize = 256;
 const NUM_BATCHES: usize = 1;
 #[bench]
 fn bench_sigverify_shreds_sign_gpu(bencher: &mut Bencher) {
-    let recycler_cache = RecyclerCache::new("", "");
+    let recycler_cache = RecyclerCache::default();
 
     let mut packets = Packets::default();
     packets.packets.set_pinnable();
