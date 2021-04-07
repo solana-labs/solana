@@ -603,6 +603,71 @@ pub struct CliEpochReward {
     pub apr: Option<f64>,
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliKeyedEpochReward {
+    pub address: String,
+    pub reward: Option<CliEpochReward>,
+    #[serde(skip_serializing)]
+    pub epoch: Epoch,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct CliKeyedEpochRewardVec(Vec<CliKeyedEpochReward>);
+
+impl CliKeyedEpochRewardVec {
+    pub fn new(list: Vec<CliKeyedEpochReward>) -> Self {
+        Self(list)
+    }
+}
+
+impl QuietDisplay for CliKeyedEpochRewardVec {}
+impl VerboseDisplay for CliKeyedEpochRewardVec {}
+
+impl fmt::Display for CliKeyedEpochRewardVec {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.0.is_empty() {
+            writeln!(f, "No rewards found in epoch")?;
+            return Ok(());
+        }
+
+        writeln!(f, "Epoch Rewards:")?;
+        writeln!(
+            f,
+            "  {:<44}  {:<6}  {:<11}  {:<18}  {:<18}  {:>14}  {:>14}",
+            "Address", "Epoch", "Reward Slot", "Amount", "New Balance", "Percent Change", "APR"
+        )?;
+        for keyed_reward in &self.0 {
+            match &keyed_reward.reward {
+                Some(reward) => {
+                    writeln!(
+                        f,
+                        "  {:<44}  {:<6}  {:<11}  ◎{:<17.9}  ◎{:<17.9}  {:>13.2}%  {}",
+                        keyed_reward.address,
+                        reward.epoch,
+                        reward.effective_slot,
+                        lamports_to_sol(reward.amount),
+                        lamports_to_sol(reward.post_balance),
+                        reward.percent_change,
+                        reward
+                            .apr
+                            .map(|apr| format!("{:>13.2}%", apr))
+                            .unwrap_or_default(),
+                    )?;
+                }
+                None => {
+                    writeln!(
+                        f,
+                        "  {:<44}  {:<6}  No rewards in epoch",
+                        keyed_reward.address, keyed_reward.epoch,
+                    )?;
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
 fn show_votes_and_credits(
     f: &mut fmt::Formatter,
     votes: &[CliLockout],

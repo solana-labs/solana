@@ -1701,7 +1701,7 @@ pub fn build_stake_state(
     }
 }
 
-fn get_epoch_boundary_timestamps(
+pub fn get_epoch_boundary_timestamps(
     rpc_client: &RpcClient,
     reward: &RpcInflationReward,
     epoch_schedule: &EpochSchedule,
@@ -1724,7 +1724,7 @@ fn get_epoch_boundary_timestamps(
     Ok((epoch_start_time, epoch_end_time))
 }
 
-fn make_cli_reward(
+pub fn make_cli_reward(
     reward: &RpcInflationReward,
     epoch_start_time: UnixTimestamp,
     epoch_end_time: UnixTimestamp,
