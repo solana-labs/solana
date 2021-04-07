@@ -18,38 +18,32 @@ use std::os::raw::c_int;
 
 const CUDA_SUCCESS: c_int = 0;
 
-pub fn pin<T>(_mem: &mut Vec<T>) {
+fn pin<T>(_mem: &mut Vec<T>) {
     if let Some(api) = perf_libs::api() {
-        unsafe {
-            use core::ffi::c_void;
-            use std::mem::size_of;
+        use std::ffi::c_void;
+        use std::mem::size_of;
 
-            let err = (api.cuda_host_register)(
-                _mem.as_mut_ptr() as *mut c_void,
-                _mem.capacity().saturating_mul(size_of::<T>()),
-                0,
+        let ptr = _mem.as_mut_ptr();
+        let size = _mem.capacity().saturating_mul(size_of::<T>());
+        let err = unsafe {
+            (api.cuda_host_register)(ptr as *mut c_void, size, /*flags=*/ 0)
+        };
+        if err != CUDA_SUCCESS {
+            panic!(
+                "cudaHostRegister error: {} ptr: {:?} bytes: {}",
+                err, ptr, size,
             );
-            if err != CUDA_SUCCESS {
-                panic!(
-                    "cudaHostRegister error: {} ptr: {:?} bytes: {}",
-                    err,
-                    _mem.as_ptr(),
-                    _mem.capacity().saturating_mul(size_of::<T>()),
-                );
-            }
         }
     }
 }
 
-pub fn unpin<T>(_mem: *mut T) {
+fn unpin<T>(_mem: *mut T) {
     if let Some(api) = perf_libs::api() {
-        unsafe {
-            use core::ffi::c_void;
+        use std::ffi::c_void;
 
-            let err = (api.cuda_host_unregister)(_mem as *mut c_void);
-            if err != CUDA_SUCCESS {
-                panic!("cudaHostUnregister returned: {} ptr: {:?}", err, _mem);
-            }
+        let err = unsafe { (api.cuda_host_unregister)(_mem as *mut c_void) };
+        if err != CUDA_SUCCESS {
+            panic!("cudaHostUnregister returned: {} ptr: {:?}", err, _mem);
         }
     }
 }
