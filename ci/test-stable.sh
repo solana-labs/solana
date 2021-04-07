@@ -43,6 +43,14 @@ test-stable-perf)
   # BPF solana-sdk legacy compile test
   ./cargo-build-bpf --manifest-path sdk/Cargo.toml
 
+  # BPF Program unit tests
+  for program in programs/bpf/rust/*; do
+    if [ -d "${program}" ]; then
+      _ "$cargo" test --manifest-path "$program"/Cargo.toml
+      _ "$cargo" test-bpf --manifest-path "$program"/Cargo.toml --bpf-sdk sdk/bpf
+    fi
+  done
+
   # BPF program tests
   _ make -C programs/bpf/c tests
   _ "$cargo" stable test \

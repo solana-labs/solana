@@ -22,7 +22,11 @@ pub fn load_program<T: Client>(
     let instruction = system_instruction::create_account(
         &from_keypair.pubkey(),
         &program_pubkey,
-        1,
+        1.max(
+            bank_client
+                .get_minimum_balance_for_rent_exemption(program.len())
+                .unwrap(),
+        ),
         program.len() as u64,
         loader_pubkey,
     );
