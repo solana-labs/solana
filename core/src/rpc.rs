@@ -443,13 +443,16 @@ impl JsonRpcRequestProcessor {
             .rewards
             .unwrap_or_default()
             .into_iter()
-            .filter(|reward| match reward.reward_type {
-                Some(RewardType::Staking) | Some(RewardType::Voting) => {
-                    addresses.contains(&reward.pubkey)
+            .filter_map(|reward| match reward.reward_type? {
+                RewardType::Staking | RewardType::Voting => {
+                    if addresses.contains(&reward.pubkey) {
+                        Some((reward.clone().pubkey, reward))
+                    } else {
+                        None
+                    }
                 }
-                _ => false,
+                _ => None,
             })
-            .map(|reward| (reward.clone().pubkey, reward))
             .collect();
 
         let rewards = addresses
