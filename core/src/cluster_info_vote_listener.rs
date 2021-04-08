@@ -615,7 +615,7 @@ impl ClusterInfoVoteListener {
                     total_stake,
                 );
 
-                if is_gossip_vote && is_new {
+                if is_gossip_vote && is_new && stake > 0 {
                     let _ = gossip_verified_vote_hash_sender.send((
                         *vote_pubkey,
                         last_vote_slot,
