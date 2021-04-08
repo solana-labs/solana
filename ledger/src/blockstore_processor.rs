@@ -501,7 +501,7 @@ fn do_process_blockstore_from_root(
 
     info!("ledger processing timing: {:?}", timing);
     info!(
-        "ledger processed in {}. {} root slot is {}, {} fork{} at {}, with {} frozen bank{}",
+        "ledger processed in {}. root slot is {}, {} fork{} at {}, with {} frozen bank{}",
         HumanTime::from(chrono::Duration::from_std(now.elapsed()).unwrap()).to_text_en(Accuracy::Precise, Tense::Present),
         bank_forks.root(),
         initial_forks.len(),

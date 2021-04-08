@@ -224,7 +224,6 @@ impl BankingStage {
                 Builder::new()
                     .name("solana-banking-stage-tx".to_string())
                     .spawn(move || {
-                        thread_mem_usage::datapoint("solana-banking-stage-tx");
                         Self::process_loop(
                             my_pubkey,
                             &verified_receiver,
