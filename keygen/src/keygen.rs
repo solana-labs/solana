@@ -672,69 +672,85 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
                         if done.load(Ordering::Relaxed) {
                             break;
                         }
-                        let attempts = attempts.fetch_add(1, Ordering::Relaxed);
-                        if attempts % 1_000_000 == 0 {
-                            println!(
-                                "Searched {} keypairs in {}s. {} matches found.",
-                                attempts,
-                                start.elapsed().as_secs(),
-                                found.load(Ordering::Relaxed),
-                            );
-                        }
-                        let (keypair, phrase) = if use_mnemonic {
-                            let mnemonic = Mnemonic::new(mnemonic_type, language);
-                            let seed = Seed::new(&mnemonic, &passphrase);
-                            (keypair_from_seed(seed.as_bytes()).unwrap(), mnemonic.phrase().to_string())
-                        } else {
-                            (Keypair::new(), "".to_string())
+
+                        let generator = || {
+                            if use_mnemonic {
+                                let mnemonic = Mnemonic::new(mnemonic_type, language);
+                                let seed = Seed::new(&mnemonic, &passphrase);
+                                (keypair_from_seed(seed.as_bytes()).unwrap(), mnemonic.phrase().to_string())
+                            } else {
+                                (Keypair::new(), "".to_string())
+                            }
                         };
-                        let mut pubkey = bs58::encode(keypair.pubkey()).into_string();
-                        if ignore_case {
-                            pubkey = pubkey.to_lowercase();
-                        }
-                        let mut total_matches_found = 0;
-                        for i in 0..grind_matches_thread_safe.len() {
-                            if grind_matches_thread_safe[i].count.load(Ordering::Relaxed) == 0 {
-                                total_matches_found += 1;
-                                continue;
+
+                        let validator = |pubkey| {
+                            if done.load(Ordering::Relaxed) {
+                                return None;
                             }
-                            if (!grind_matches_thread_safe[i].starts.is_empty()
-                                && grind_matches_thread_safe[i].ends.is_empty()
-                                && pubkey.starts_with(&grind_matches_thread_safe[i].starts))
-                                || (grind_matches_thread_safe[i].starts.is_empty()
-                                    && !grind_matches_thread_safe[i].ends.is_empty()
-                                    && pubkey.ends_with(&grind_matches_thread_safe[i].ends))
-                                || (!grind_matches_thread_safe[i].starts.is_empty()
-                                    && !grind_matches_thread_safe[i].ends.is_empty()
-                                    && pubkey.starts_with(&grind_matches_thread_safe[i].starts)
-                                    && pubkey.ends_with(&grind_matches_thread_safe[i].ends))
-                            {
-                                let _found = found.fetch_add(1, Ordering::Relaxed);
-                                grind_matches_thread_safe[i]
-                                    .count
-                                    .fetch_sub(1, Ordering::Relaxed);
-                                if !no_outfile {
-                                    write_keypair_file(&keypair, &format!("{}.json", keypair.pubkey()))
-                                    .unwrap();
-                                    println!(
-                                        "Wrote keypair to {}",
-                                        &format!("{}.json", keypair.pubkey())
-                                    );
+
+                            let mut pubkey = bs58::encode(pubkey).into_string();
+                            if ignore_case {
+                                pubkey = pubkey.to_lowercase();
+                            }
+                            let mut valid = false;
+                            let mut total_matches_found = 0;
+                            for i in 0..grind_matches_thread_safe.len() {
+                                if grind_matches_thread_safe[i].count.load(Ordering::Relaxed) == 0 {
+                                    total_matches_found += 1;
+                                    continue;
                                 }
-                                if use_mnemonic {
-                                    let divider = String::from_utf8(vec![b'='; phrase.len()]).unwrap();
-                                    println!(
-                                        "{}\nFound matching key {}",
-                                        &divider, keypair.pubkey());
-                                    println!(
-                                        "\nSave this seed phrase{} to recover your new keypair:\n{}\n{}",
-                                        passphrase_message, phrase, &divider
-                                    );
+                                if (!grind_matches_thread_safe[i].starts.is_empty()
+                                    && grind_matches_thread_safe[i].ends.is_empty()
+                                    && pubkey.starts_with(&grind_matches_thread_safe[i].starts))
+                                    || (grind_matches_thread_safe[i].starts.is_empty()
+                                        && !grind_matches_thread_safe[i].ends.is_empty()
+                                        && pubkey.ends_with(&grind_matches_thread_safe[i].ends))
+                                    || (!grind_matches_thread_safe[i].starts.is_empty()
+                                        && !grind_matches_thread_safe[i].ends.is_empty()
+                                        && pubkey.starts_with(&grind_matches_thread_safe[i].starts)
+                                        && pubkey.ends_with(&grind_matches_thread_safe[i].ends))
+                                {
+                                    let _found = found.fetch_add(1, Ordering::Relaxed);
+                                    grind_matches_thread_safe[i]
+                                        .count
+                                        .fetch_sub(1, Ordering::Relaxed);
+                                    valid |= true;
                                 }
                             }
-                        }
-                        if total_matches_found == grind_matches_thread_safe.len() {
-                            done.store(true, Ordering::Relaxed);
+                            let attempts = attempts.fetch_add(1, Ordering::Relaxed);
+                            if attempts % 1_000_000 == 0 {
+                                println!(
+                                    "Searched {} keypairs in {}s. {} matches found.",
+                                    attempts,
+                                    start.elapsed().as_secs(),
+                                    found.load(Ordering::Relaxed),
+                                );
+                            }
+                            if total_matches_found == grind_matches_thread_safe.len() {
+                                done.store(true, Ordering::Relaxed);
+                            }
+                            Some(valid)
+                        };
+
+                        if let Some((keypair, phrase)) = Keypair::new_with_pubkey_criteria(generator, validator) {
+                            if !no_outfile {
+                                write_keypair_file(&keypair, &format!("{}.json", keypair.pubkey()))
+                                .unwrap();
+                                println!(
+                                    "Wrote keypair to {}",
+                                    &format!("{}.json", keypair.pubkey())
+                                );
+                            }
+                            if use_mnemonic {
+                                let divider = String::from_utf8(vec![b'='; phrase.len()]).unwrap();
+                                println!(
+                                    "{}\nFound matching key {}",
+                                    &divider, keypair.pubkey());
+                                println!(
+                                    "\nSave this seed phrase{} to recover your new keypair:\n{}\n{}",
+                                    passphrase_message, phrase, &divider
+                                );
+                            }
                         }
                     })
                 })
