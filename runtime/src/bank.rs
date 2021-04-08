@@ -4693,6 +4693,11 @@ impl Bank {
             self.rewrite_stakes();
         }
 
+        if new_feature_activations.contains(&feature_set::lower_transaction_fees::id()) {
+            self.fee_rate_governor = FeeRateGovernor::default();
+            self.fee_rate_governor = FeeRateGovernor::new_derived(&self.fee_rate_governor, 0);
+        }
+
         self.ensure_feature_builtins(init_finish_or_warp, &new_feature_activations);
         self.reconfigure_token2_native_mint();
         self.ensure_no_storage_rewards_pool();

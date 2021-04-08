@@ -127,6 +127,10 @@ pub mod demote_sysvar_write_locks {
     solana_sdk::declare_id!("86LJYRuq2zgtHuL3FccR6hqFJQMQkFoun4knAxcPiF1P");
 }
 
+pub mod lower_transaction_fees {
+    solana_sdk::declare_id!("GTLPAJnx8wjdVuv99QLAXMsQC7nRTnZf3T8FMekpNGWJ");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -159,6 +163,7 @@ lazy_static! {
         (cpi_data_cost::id(), "charge the compute budget for data passed via CPI"),
         (upgradeable_close_instruction::id(), "close upgradeable buffer accounts"),
         (demote_sysvar_write_locks::id(), "demote builtins and sysvar write locks to readonly #15497"),
+        (lower_transaction_fees::id(), "lower transaction lamports_per_signature to 1/10 #16433"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
