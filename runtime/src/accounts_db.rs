@@ -206,10 +206,9 @@ impl<'a> LoadedAccountAccessor<'a> {
             LoadedAccountAccessor::Cached(Some(_cached_account)) => {
                 // Cached(Some(x)) variant always produces `Some` for get_loaded_account() since
                 // it just returns the inner `x` without additional fetches
-                self.get_loaded_account()
-                    .expect("Cache flushed should be handled before trying to fetch account")
+                self.get_loaded_account().unwrap()
             }
-            LoadedAccountAccessor::Stored(Some(_storage_entry)) => {
+            LoadedAccountAccessor::Stored(Some(_maybe_storage_entry)) => {
                 // If we do find the storage entry, we can guarantee that the storage entry is
                 // safe to read from because we grabbed a reference to the storage entry while it
                 // was still in the storage map. This means even if the storage entry is removed
@@ -223,10 +222,12 @@ impl<'a> LoadedAccountAccessor<'a> {
 
     fn get_loaded_account(&mut self) -> Option<LoadedAccount> {
         match self {
-            LoadedAccountAccessor::Cached(maybe_cached_account) => {
-                // cached account may not be present if slot was flushed in between,
-                // assuming that retry_to_get_account_accessor() isn't used
-                maybe_cached_account.take().map(LoadedAccount::Cached)
+            LoadedAccountAccessor::Cached(cached_account) => {
+                let cached_account: (Pubkey, Cow<'a, CachedAccount>) =
+                    cached_account.take().expect(
+                        "Cache flushed/purged should be handled before trying to fetch account",
+                    );
+                Some(LoadedAccount::Cached(cached_account))
             }
             LoadedAccountAccessor::Stored(maybe_storage_entry) => {
                 // storage entry may not be present if slot was cleaned up in
@@ -9841,7 +9842,7 @@ pub mod tests {
         sleep(Duration::from_secs(1));
         exit.store(true, Ordering::Relaxed);
         t_flush_accounts_cache.join().unwrap();
-        t_do_load.join().unwrap();
+        t_do_load.join().map_err(std::panic::resume_unwind).unwrap()
     }
 
     #[test]
@@ -9850,7 +9851,11 @@ pub mod tests {
     }
 
     #[test]
+    #[should_panic(
+        expected = "Cache flushed/purged should be handled before trying to fetch account"
+    )]
     fn test_load_account_and_cache_flush_race_without_retry() {
+        // this tests impossible situation
         do_test_load_account_and_cache_flush_race(false);
     }
 
@@ -9945,7 +9950,8 @@ pub mod tests {
         );
         db.load_delay = RACY_SLEEP_MS;
         let db = Arc::new(db);
-        let pubkey = Arc::new(Pubkey::new_unique());
+        let pubkey =
+            Arc::new(Pubkey::from_str("CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3").unwrap());
         let exit = Arc::new(AtomicBool::new(false));
         let slot = 1;
 
