@@ -56,6 +56,23 @@ impl Keypair {
     pub fn secret(&self) -> &ed25519_dalek::SecretKey {
         &self.0.secret
     }
+
+    pub fn new_with_pubkey_criteria<G, V, T>(generator: G, validator: V) -> Option<(Self, T)>
+    where
+        G: Fn() -> (Self, T),
+        V: Fn(Pubkey) -> Option<bool>,
+    {
+        let mut maybe;
+        loop {
+            maybe = generator();
+            match validator(maybe.0.pubkey()) {
+                Some(valid) if valid => break,
+                None => return None,
+                _ => (),
+            }
+        }
+        Some(maybe)
+    }
 }
 
 /// Number of bytes in a signature
