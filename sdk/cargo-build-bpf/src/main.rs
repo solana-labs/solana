@@ -401,8 +401,14 @@ fn build_bpf(config: Config, manifest_path: Option<PathBuf>) {
         .packages
         .iter()
         .filter(|package| {
-            package.manifest_path.with_file_name("Xargo.toml").exists()
-                && metadata.workspace_members.contains(&package.id)
+            if metadata.workspace_members.contains(&package.id) {
+                for target in package.targets.iter() {
+                    if target.kind.contains(&"cdylib".to_string()) {
+                        return true;
+                    }
+                }
+            }
+            false
         })
         .collect::<Vec<_>>();
 
