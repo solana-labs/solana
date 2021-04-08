@@ -555,11 +555,25 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
             if !silent {
                 println!("Generating a new keypair");
             }
-            let mnemonic = Mnemonic::new(mnemonic_type, language);
             let (passphrase, passphrase_message) = acquire_passphrase_and_message(matches).unwrap();
 
-            let seed = Seed::new(&mnemonic, &passphrase);
-            let keypair = keypair_from_seed(seed.as_bytes())?;
+            let generator = || {
+                let mnemonic = Mnemonic::new(mnemonic_type, language);
+                let seed = Seed::new(&mnemonic, &passphrase);
+                let keypair = keypair_from_seed(seed.as_bytes()).unwrap();
+                let phrase = mnemonic.phrase().to_string();
+                (keypair, phrase)
+            };
+
+            let validator = |pubkey: Pubkey| {
+                let pubkey = pubkey.to_string();
+                let len = pubkey.len();
+                let valid = bs58::decode(&pubkey[1..]).into_vec().unwrap().len() != 32
+                    && bs58::decode(&pubkey[..len-1]).into_vec().unwrap().len() != 32;
+                Some(valid)
+            };
+
+            let (keypair, phrase) = Keypair::new_with_pubkey_criteria(generator, validator).unwrap();
 
             if let Some(outfile) = outfile {
                 output_keypair(&keypair, &outfile, "new")
@@ -567,7 +581,6 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
             }
 
             if !silent {
-                let phrase: &str = mnemonic.phrase();
                 let divider = String::from_utf8(vec![b'='; phrase.len()]).unwrap();
                 println!(
                     "{}\npubkey: {}\n{}\nSave this seed phrase{} to recover your new keypair:\n{}\n{}",
