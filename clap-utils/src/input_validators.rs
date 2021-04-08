@@ -32,6 +32,29 @@ where
     is_parsable_generic::<T, String>(string)
 }
 
+// Return an error if string cannot be parsed as numeric type T, and value not within specified
+// range
+pub fn is_within_range<T>(string: String, range_min: T, range_max: T) -> Result<(), String>
+where
+    T: FromStr + Copy + std::fmt::Debug + PartialOrd + std::ops::Add<Output = T> + From<usize>,
+    T::Err: Display,
+{
+    match string.parse::<T>() {
+        Ok(input) => {
+            let range = range_min..range_max + 1.into();
+            if !range.contains(&input) {
+                Err(format!(
+                    "input '{:?}' out of range ({:?}..{:?}]",
+                    input, range_min, range_max
+                ))
+            } else {
+                Ok(())
+            }
+        }
+        Err(err) => Err(format!("error parsing '{}': {}", string, err)),
+    }
+}
+
 // Return an error if a pubkey cannot be parsed.
 pub fn is_pubkey<T>(string: T) -> Result<(), String>
 where

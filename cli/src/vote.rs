@@ -214,6 +214,22 @@ impl VoteSubCommands for App<'_, '_> {
                         .long("lamports")
                         .takes_value(false)
                         .help("Display balance in lamports instead of SOL"),
+                )
+                .arg(
+                    Arg::with_name("with_rewards")
+                        .long("with-rewards")
+                        .takes_value(false)
+                        .help("Display inflation rewards"),
+                )
+                .arg(
+                    Arg::with_name("num_rewards_epochs")
+                        .long("num-rewards-epochs")
+                        .takes_value(true)
+                        .value_name("NUM")
+                        .validator(|s| is_within_range(s, 1, 10))
+                        .default_value_if("with_rewards", None, "1")
+                        .requires("with_rewards")
+                        .help("Display rewards for NUM recent epochs, max 10 [default: latest epoch only]"),
                 ),
         )
         .subcommand(
@@ -389,10 +405,16 @@ pub fn parse_vote_get_account_command(
     let vote_account_pubkey =
         pubkey_of_signer(matches, "vote_account_pubkey", wallet_manager)?.unwrap();
     let use_lamports_unit = matches.is_present("lamports");
+    let with_rewards = if matches.is_present("with_rewards") {
+        Some(value_of(matches, "num_rewards_epochs").unwrap())
+    } else {
+        None
+    };
     Ok(CliCommandInfo {
         command: CliCommand::ShowVoteAccount {
             pubkey: vote_account_pubkey,
             use_lamports_unit,
+            with_rewards,
         },
         signers: vec![],
     })
@@ -674,6 +696,7 @@ pub fn process_show_vote_account(
     config: &CliConfig,
     vote_account_address: &Pubkey,
     use_lamports_unit: bool,
+    with_rewards: Option<usize>,
 ) -> ProcessResult {
     let (vote_account, vote_state) =
         get_vote_account(rpc_client, vote_account_address, config.commitment)?;
@@ -699,14 +722,16 @@ pub fn process_show_vote_account(
         }
     }
 
-    let epoch_rewards = match crate::stake::fetch_epoch_rewards(rpc_client, vote_account_address, 1)
-    {
-        Ok(rewards) => Some(rewards),
-        Err(error) => {
-            eprintln!("Failed to fetch epoch rewards: {:?}", error);
-            None
-        }
-    };
+    let epoch_rewards =
+        with_rewards.and_then(|num_epochs| {
+            match crate::stake::fetch_epoch_rewards(rpc_client, vote_account_address, num_epochs) {
+                Ok(rewards) => Some(rewards),
+                Err(error) => {
+                    eprintln!("Failed to fetch epoch rewards: {:?}", error);
+                    None
+                }
+            }
+        });
 
     let vote_account_data = CliVoteAccount {
         account_balance: vote_account.lamports,
