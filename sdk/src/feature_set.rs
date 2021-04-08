@@ -187,6 +187,10 @@ pub mod close_upgradeable_program_accounts {
     solana_sdk::declare_id!("EQMtCuSAkMVF9ZdhGuABtgvyXJLtSRF5AQKv1RNsrhj7");
 }
 
+pub mod lower_transaction_fees {
+    solana_sdk::declare_id!("GTLPAJnx8wjdVuv99QLAXMsQC7nRTnZf3T8FMekpNGWJ");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -229,6 +233,7 @@ lazy_static! {
         (libsecp256k1_fail_on_bad_count::id(), "Fail libsec256k1_verify if count appears wrong"),
         (instructions_sysvar_owned_by_sysvar::id(), "fix owner for instructions sysvar"),
         (close_upgradeable_program_accounts::id(), "enable closing upgradeable program accounts"),
+        (lower_transaction_fees::id(), "lower transaction lamports_per_signature to 1/10 #16433"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

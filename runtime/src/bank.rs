@@ -5470,6 +5470,17 @@ impl Bank {
             self.reset_all_sysvar_balances();
         }
 
+        if new_feature_activations.contains(&feature_set::lower_transaction_fees::id()) {
+            const TARGET_LAMPORTS_PER_SIGNATURE: u64 = 1_000;
+            self.fee_rate_governor = FeeRateGovernor::new_derived(
+                &FeeRateGovernor {
+                    target_lamports_per_signature: TARGET_LAMPORTS_PER_SIGNATURE,
+                    ..FeeRateGovernor::default()
+                },
+                0,
+            );
+        }
+
         if !debug_do_not_add_builtins {
             self.ensure_feature_builtins(init_finish_or_warp, &new_feature_activations);
             self.reconfigure_token2_native_mint();
