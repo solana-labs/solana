@@ -2387,7 +2387,7 @@ impl AccountsDb {
         //
         // Remarks for flusher: So, for any reading operations, it's a race condition where F4 happens
         // between R1 and R2. In that case, retrying from R1 is safu because F3 should have
-        // been occured.
+        // been occurred.
         //
         // Shrinker                             | Accessed data source for stored
         // -------------------------------------+----------------------------------
@@ -2405,9 +2405,9 @@ impl AccountsDb {
         // S4 do_shrink_slot_stores()/          | map of stores (removes old entry)
         //        dead_storages
         //
-        // Remarks for shrinker: So, for any reading operations, it's a race conditon
+        // Remarks for shrinker: So, for any reading operations, it's a race condition
         // where S4 happens between R1 and R2. In that case, retrying from R1 is safu because S3 should have
-        // been occured, and S3 atomically replaced the index accordingly.
+        // been occurred, and S3 atomically replaced the index accordingly.
         //
         // Cleaner                              | Accessed data source for stored
         // -------------------------------------+----------------------------------
@@ -2421,7 +2421,7 @@ impl AccountsDb {
         // C3 clean_accounts()/                 | map of stores (removes old entry)
         //        handle_reclaims()             |
         //
-        // Remarks for cleaner: So, for any reading operations, it's a race conditon
+        // Remarks for cleaner: So, for any reading operations, it's a race condition
         // where C3 happens between R1 and R2. In that case, retrying from R1 is safu.
         // In that case, None would be returned while bailing out at R1.
         //
@@ -2440,7 +2440,7 @@ impl AccountsDb {
         //        clean_old_rooted_accounts()     | (removes existing store_id, offset for stores)
         //                                        V
         //
-        // Remarks for purger: So, for any reading operations, it's a race conditon
+        // Remarks for purger: So, for any reading operations, it's a race condition
         // where P2 happens between R1 and R2. In that case, retrying from R1 is safu.
         // In that case, we may bail at index read retry when P3 hasn't been run
 
