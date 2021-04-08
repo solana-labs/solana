@@ -46,10 +46,7 @@ pub fn get_account_with_commitment(
                 .value
                 .ok_or_else(|| Error::Client(format!("AccountNotFound: pubkey={}", nonce_pubkey)))
         })
-        .and_then(|a| match account_identity_ok(&a) {
-            Ok(()) => Ok(a),
-            Err(e) => Err(e),
-        })
+        .and_then(|a| account_identity_ok(&a).map(|()| a))
 }
 
 pub fn account_identity_ok(account: &Account) -> Result<(), Error> {

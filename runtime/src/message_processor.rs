@@ -333,7 +333,10 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             if pre.key == *pubkey {
                 Some(pre.account.clone())
             } else {
-                None
+                self.pre_accounts
+                    .iter()
+                    .find(|pre| pre.key == *pubkey)
+                    .map(|pre| pre.account.clone())
             }
         }) {
             return Some(account);

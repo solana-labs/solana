@@ -190,8 +190,7 @@ impl ClusterSlots {
             .read()
             .unwrap()
             .keys()
-            .filter(|x| **x > root)
-            .filter(|x| !my_slots.contains(*x))
+            .filter(|x| **x > root && !my_slots.contains(*x))
             .map(|x| RepairType::HighestShred(*x, 0))
             .collect()
     }
