@@ -8,7 +8,6 @@ use crate::{
     nonce::check_nonce_account,
     spend_utils::{resolve_spend_tx_and_check_account_balances, SpendAmount},
 };
-use chrono::{Local, TimeZone};
 use clap::{App, Arg, ArgGroup, ArgMatches, SubCommand};
 use solana_clap_utils::{
     fee_payer::{fee_payer_arg, FEE_PAYER_ARG},
@@ -25,19 +24,15 @@ use solana_cli_output::{
     CliStakeState, CliStakeType, ReturnSignersConfig,
 };
 use solana_client::{
-    blockhash_query::BlockhashQuery,
-    client_error::{ClientError, ClientErrorKind},
-    nonce_utils,
-    rpc_client::RpcClient,
-    rpc_config::RpcConfirmedBlockConfig,
-    rpc_custom_error,
-    rpc_request::{self, DELINQUENT_VALIDATOR_SLOT_DISTANCE},
+    blockhash_query::BlockhashQuery, nonce_utils, rpc_client::RpcClient,
+    rpc_request::DELINQUENT_VALIDATOR_SLOT_DISTANCE, rpc_response::RpcInflationReward,
 };
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
     account::from_account,
     account_utils::StateMut,
-    clock::{Clock, Epoch, Slot, UnixTimestamp, SECONDS_PER_DAY},
+    clock::{Clock, UnixTimestamp, SECONDS_PER_DAY},
+    epoch_schedule::EpochSchedule,
     feature, feature_set,
     message::Message,
     pubkey::Pubkey,
@@ -53,7 +48,7 @@ use solana_stake_program::{
     stake_state::{Authorized, Lockup, Meta, StakeAuthorize, StakeState},
 };
 use solana_vote_program::vote_state::VoteState;
-use std::{convert::TryInto, ops::Deref, sync::Arc};
+use std::{ops::Deref, sync::Arc};
 
 pub const STAKE_AUTHORITY_ARG: ArgConstant<'static> = ArgConstant {
     name: "stake_authority",
@@ -415,6 +410,22 @@ impl StakeSubCommands for App<'_, '_> {
                         .long("lamports")
                         .takes_value(false)
                         .help("Display balance in lamports instead of SOL")
+                )
+                .arg(
+                    Arg::with_name("with_rewards")
+                        .long("with-rewards")
+                        .takes_value(false)
+                        .help("Display inflation rewards"),
+                )
+                .arg(
+                    Arg::with_name("num_rewards_epochs")
+                        .long("num-rewards-epochs")
+                        .takes_value(true)
+                        .value_name("NUM")
+                        .validator(|s| is_within_range(s, 1, 10))
+                        .default_value_if("with_rewards", None, "1")
+                        .requires("with_rewards")
+                        .help("Display rewards for NUM recent epochs, max 10 [default: latest epoch only]"),
                 ),
         )
         .subcommand(
@@ -868,10 +879,16 @@ pub fn parse_show_stake_account(
     let stake_account_pubkey =
         pubkey_of_signer(matches, "stake_account_pubkey", wallet_manager)?.unwrap();
     let use_lamports_unit = matches.is_present("lamports");
+    let with_rewards = if matches.is_present("with_rewards") {
+        Some(value_of(matches, "num_rewards_epochs").unwrap())
+    } else {
+        None
+    };
     Ok(CliCommandInfo {
         command: CliCommand::ShowStakeAccount {
             pubkey: stake_account_pubkey,
             use_lamports_unit,
+            with_rewards,
         },
         signers: vec![],
     })
@@ -1684,104 +1701,85 @@ pub fn build_stake_state(
     }
 }
 
+pub fn get_epoch_boundary_timestamps(
+    rpc_client: &RpcClient,
+    reward: &RpcInflationReward,
+    epoch_schedule: &EpochSchedule,
+) -> Result<(UnixTimestamp, UnixTimestamp), Box<dyn std::error::Error>> {
+    let epoch_end_time = rpc_client.get_block_time(reward.effective_slot)?;
+    let mut epoch_start_slot = epoch_schedule.get_first_slot_in_epoch(reward.epoch);
+    let epoch_start_time = loop {
+        if epoch_start_slot >= reward.effective_slot {
+            return Err("epoch_start_time not found".to_string().into());
+        }
+        match rpc_client.get_block_time(epoch_start_slot) {
+            Ok(block_time) => {
+                break block_time;
+            }
+            Err(_) => {
+                epoch_start_slot += 1;
+            }
+        }
+    };
+    Ok((epoch_start_time, epoch_end_time))
+}
+
+pub fn make_cli_reward(
+    reward: &RpcInflationReward,
+    epoch_start_time: UnixTimestamp,
+    epoch_end_time: UnixTimestamp,
+) -> Option<CliEpochReward> {
+    let wallclock_epoch_duration = epoch_end_time.checked_sub(epoch_start_time)?;
+    if reward.post_balance > reward.amount {
+        let rate_change = reward.amount as f64 / (reward.post_balance - reward.amount) as f64;
+
+        let wallclock_epochs_per_year =
+            (SECONDS_PER_DAY * 356) as f64 / wallclock_epoch_duration as f64;
+        let apr = rate_change * wallclock_epochs_per_year;
+
+        Some(CliEpochReward {
+            epoch: reward.epoch,
+            effective_slot: reward.effective_slot,
+            amount: reward.amount,
+            post_balance: reward.post_balance,
+            percent_change: rate_change * 100.0,
+            apr: Some(apr * 100.0),
+        })
+    } else {
+        None
+    }
+}
+
 pub(crate) fn fetch_epoch_rewards(
     rpc_client: &RpcClient,
     address: &Pubkey,
-    lowest_epoch: Epoch,
+    mut num_epochs: usize,
 ) -> Result<Vec<CliEpochReward>, Box<dyn std::error::Error>> {
     let mut all_epoch_rewards = vec![];
-
     let epoch_schedule = rpc_client.get_epoch_schedule()?;
-    let slot = rpc_client.get_slot()?;
-    let first_available_block = rpc_client.get_first_available_block()?;
+    let mut rewards_epoch = rpc_client.get_epoch_info()?.epoch;
 
-    let mut epoch = epoch_schedule.get_epoch_and_slot_index(slot).0;
-    let mut epoch_info: Option<(Slot, UnixTimestamp, solana_transaction_status::Rewards)> = None;
-    while epoch > lowest_epoch {
-        let first_slot_in_epoch = epoch_schedule.get_first_slot_in_epoch(epoch);
-        if first_slot_in_epoch < first_available_block {
-            // RPC node is out of history data
-            break;
-        }
-
-        let first_confirmed_block_in_epoch = *rpc_client
-            .get_confirmed_blocks_with_limit(first_slot_in_epoch, 1)?
-            .get(0)
-            .ok_or_else(|| format!("Unable to fetch first confirmed block for epoch {}", epoch))?;
-
-        let first_confirmed_block = match rpc_client.get_confirmed_block_with_config(
-            first_confirmed_block_in_epoch,
-            RpcConfirmedBlockConfig::rewards_only(),
-        ) {
-            Ok(first_confirmed_block) => first_confirmed_block,
-            Err(ClientError {
-                kind:
-                    ClientErrorKind::RpcError(rpc_request::RpcError::RpcResponseError {
-                        code: rpc_custom_error::JSON_RPC_SERVER_ERROR_BLOCK_NOT_AVAILABLE,
-                        ..
-                    }),
-                ..
-            }) => {
-                // RPC node doesn't have this block
-                break;
-            }
-            Err(err) => {
-                return Err(err.into());
-            }
-        };
-
-        let epoch_start_time = if let Some(block_time) = first_confirmed_block.block_time {
-            block_time
-        } else {
-            break;
-        };
-
-        // Rewards for the previous epoch are found in the first confirmed block of the current epoch
-        let previous_epoch_rewards = first_confirmed_block.rewards.unwrap_or_default();
-
-        if let Some((effective_slot, epoch_end_time, epoch_rewards)) = epoch_info {
-            let wallclock_epoch_duration = if epoch_end_time > epoch_start_time {
-                Some(
-                    { Local.timestamp(epoch_end_time, 0) - Local.timestamp(epoch_start_time, 0) }
-                        .to_std()?
-                        .as_secs_f64(),
-                )
-            } else {
-                None
-            };
-
-            if let Some(reward) = epoch_rewards
-                .into_iter()
-                .find(|reward| reward.pubkey == address.to_string())
-            {
-                if reward.post_balance > reward.lamports.try_into().unwrap_or(0) {
-                    let rate_change = reward.lamports.abs() as f64
-                        / (reward.post_balance as f64 - reward.lamports as f64);
-
-                    let apr = wallclock_epoch_duration.map(|wallclock_epoch_duration| {
-                        let wallclock_epochs_per_year =
-                            (SECONDS_PER_DAY * 356) as f64 / wallclock_epoch_duration;
-                        rate_change * wallclock_epochs_per_year
-                    });
-
-                    all_epoch_rewards.push(CliEpochReward {
-                        epoch,
-                        effective_slot,
-                        amount: reward.lamports.abs() as u64,
-                        post_balance: reward.post_balance,
-                        percent_change: rate_change * 100.0,
-                        apr: apr.map(|r| r * 100.0),
-                    });
+    let mut process_reward =
+        |reward: &Option<RpcInflationReward>| -> Result<(), Box<dyn std::error::Error>> {
+            if let Some(reward) = reward {
+                let (epoch_start_time, epoch_end_time) =
+                    get_epoch_boundary_timestamps(rpc_client, reward, &epoch_schedule)?;
+                if let Some(cli_reward) = make_cli_reward(reward, epoch_start_time, epoch_end_time)
+                {
+                    all_epoch_rewards.push(cli_reward);
                 }
             }
-        }
+            Ok(())
+        };
 
-        epoch -= 1;
-        epoch_info = Some((
-            first_confirmed_block_in_epoch,
-            epoch_start_time,
-            previous_epoch_rewards,
-        ));
+    while num_epochs > 0 && rewards_epoch > 0 {
+        rewards_epoch = rewards_epoch.saturating_sub(1);
+        if let Ok(rewards) = rpc_client.get_inflation_reward(&[*address], Some(rewards_epoch)) {
+            process_reward(&rewards[0])?;
+        } else {
+            eprintln!("Rewards not available for epoch {}", rewards_epoch);
+        }
+        num_epochs = num_epochs.saturating_sub(1);
     }
 
     Ok(all_epoch_rewards)
@@ -1792,6 +1790,7 @@ pub fn process_show_stake_account(
     config: &CliConfig,
     stake_account_address: &Pubkey,
     use_lamports_unit: bool,
+    with_rewards: Option<usize>,
 ) -> ProcessResult {
     let stake_account = rpc_client.get_account(stake_account_address)?;
     if stake_account.owner != solana_stake_program::id() {
@@ -1821,15 +1820,17 @@ pub fn process_show_stake_account(
                 is_stake_program_v2_enabled(rpc_client)?, // At v1.6, this check can be removed and simply passed as `true`
             );
 
-            if state.stake_type == CliStakeType::Stake {
-                if let Some(activation_epoch) = state.activation_epoch {
-                    let rewards =
-                        fetch_epoch_rewards(rpc_client, stake_account_address, activation_epoch);
-                    match rewards {
-                        Ok(rewards) => state.epoch_rewards = Some(rewards),
-                        Err(error) => eprintln!("Failed to fetch epoch rewards: {:?}", error),
-                    };
-                }
+            if state.stake_type == CliStakeType::Stake && state.activation_epoch.is_some() {
+                let epoch_rewards = with_rewards.and_then(|num_epochs| {
+                    match fetch_epoch_rewards(rpc_client, stake_account_address, num_epochs) {
+                        Ok(rewards) => Some(rewards),
+                        Err(error) => {
+                            eprintln!("Failed to fetch epoch rewards: {:?}", error);
+                            None
+                        }
+                    }
+                });
+                state.epoch_rewards = epoch_rewards;
             }
             Ok(config.output_format.formatted_string(&state))
         }

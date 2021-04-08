@@ -159,6 +159,14 @@ impl RpcConfirmedBlockConfig {
             ..Self::default()
         }
     }
+
+    pub fn rewards_with_commitment(commitment: Option<CommitmentConfig>) -> Self {
+        Self {
+            transaction_details: Some(TransactionDetails::None),
+            commitment,
+            ..Self::default()
+        }
+    }
 }
 
 impl From<RpcConfirmedBlockConfig> for RpcEncodingConfigWrapper<RpcConfirmedBlockConfig> {

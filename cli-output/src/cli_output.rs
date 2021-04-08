@@ -603,6 +603,76 @@ pub struct CliEpochReward {
     pub apr: Option<f64>,
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliKeyedEpochReward {
+    pub address: String,
+    pub reward: Option<CliEpochReward>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliEpochRewardshMetadata {
+    pub epoch: Epoch,
+    pub effective_slot: Slot,
+    pub block_time: UnixTimestamp,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliKeyedEpochRewards {
+    #[serde(flatten, skip_serializing_if = "Option::is_none")]
+    pub epoch_metadata: Option<CliEpochRewardshMetadata>,
+    pub rewards: Vec<CliKeyedEpochReward>,
+}
+
+impl QuietDisplay for CliKeyedEpochRewards {}
+impl VerboseDisplay for CliKeyedEpochRewards {}
+
+impl fmt::Display for CliKeyedEpochRewards {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.rewards.is_empty() {
+            writeln!(f, "No rewards found in epoch")?;
+            return Ok(());
+        }
+
+        if let Some(metadata) = &self.epoch_metadata {
+            writeln!(f, "Epoch: {}", metadata.epoch)?;
+            writeln!(f, "Reward Slot: {}", metadata.effective_slot)?;
+            let timestamp = metadata.block_time;
+            writeln!(f, "Block Time: {}", unix_timestamp_to_string(timestamp))?;
+        }
+        writeln!(f, "Epoch Rewards:")?;
+        writeln!(
+            f,
+            "  {:<44}  {:<18}  {:<18}  {:>14}  {:>14}",
+            "Address", "Amount", "New Balance", "Percent Change", "APR"
+        )?;
+        for keyed_reward in &self.rewards {
+            match &keyed_reward.reward {
+                Some(reward) => {
+                    writeln!(
+                        f,
+                        "  {:<44}  ◎{:<17.9}  ◎{:<17.9}  {:>13.2}%  {}",
+                        keyed_reward.address,
+                        lamports_to_sol(reward.amount),
+                        lamports_to_sol(reward.post_balance),
+                        reward.percent_change,
+                        reward
+                            .apr
+                            .map(|apr| format!("{:>13.2}%", apr))
+                            .unwrap_or_default(),
+                    )?;
+                }
+                None => {
+                    writeln!(f, "  {:<44}  No rewards in epoch", keyed_reward.address,)?;
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
 fn show_votes_and_credits(
     f: &mut fmt::Formatter,
     votes: &[CliLockout],
@@ -708,13 +778,13 @@ fn show_epoch_rewards(
         writeln!(f, "Epoch Rewards:")?;
         writeln!(
             f,
-            "  {:<6}  {:<11}  {:<16}  {:<16}  {:>14}  {:>14}",
+            "  {:<6}  {:<11}  {:<18}  {:<18}  {:>14}  {:>14}",
             "Epoch", "Reward Slot", "Amount", "New Balance", "Percent Change", "APR"
         )?;
         for reward in epoch_rewards {
             writeln!(
                 f,
-                "  {:<6}  {:<11}  ◎{:<16.9}  ◎{:<14.9}  {:>13.2}%  {}",
+                "  {:<6}  {:<11}  ◎{:<17.9}  ◎{:<17.9}  {:>13.2}%  {}",
                 reward.epoch,
                 reward.effective_slot,
                 lamports_to_sol(reward.amount),
