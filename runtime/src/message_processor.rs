@@ -328,12 +328,26 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     fn is_feature_active(&self, feature_id: &Pubkey) -> bool {
         self.feature_set.is_active(feature_id)
     }
+<<<<<<< HEAD
     fn get_account(&self, pubkey: &Pubkey) -> Option<RefCell<Account>> {
         if let Some(account) = self.pre_accounts.iter().find_map(|pre| {
             if pre.key == *pubkey {
                 Some(pre.account.clone())
+=======
+    fn get_account(&self, pubkey: &Pubkey) -> Option<Rc<RefCell<AccountSharedData>>> {
+        if self.is_feature_active(&cpi_share_ro_and_exec_accounts::id()) {
+            if let Some((_, account)) = self.executables.iter().find(|(key, _)| key == pubkey) {
+                Some(account.clone())
+            } else if let Some((_, account)) =
+                self.account_deps.iter().find(|(key, _)| key == pubkey)
+            {
+                Some(account.clone())
+>>>>>>> b08cff9e7... Simplify some pattern-matches (#16402)
             } else {
-                None
+                self.pre_accounts
+                    .iter()
+                    .find(|pre| pre.key == *pubkey)
+                    .map(|pre| pre.account.clone())
             }
         }) {
             return Some(account);

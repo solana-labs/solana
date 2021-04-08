@@ -3203,8 +3203,31 @@ impl RpcSol for RpcSolImpl {
             )));
         }
 
+<<<<<<< HEAD
         meta.get_confirmed_signatures_for_address2(address, before, until, limit, config.commitment)
     }
+=======
+        fn get_confirmed_signatures_for_address2(
+            &self,
+            meta: Self::Metadata,
+            address: String,
+            config: Option<RpcGetConfirmedSignaturesForAddress2Config>,
+        ) -> Result<Vec<RpcConfirmedTransactionStatusWithSignature>> {
+            let address = verify_pubkey(address)?;
+
+            let config = config.unwrap_or_default();
+            let before = config
+                .before
+                .map(|ref before| verify_signature(before))
+                .transpose()?;
+            let until = config
+                .until
+                .map(|ref until| verify_signature(until))
+                .transpose()?;
+            let limit = config
+                .limit
+                .unwrap_or(MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT);
+>>>>>>> b08cff9e7... Simplify some pattern-matches (#16402)
 
     fn get_first_available_block(&self, meta: Self::Metadata) -> Result<Slot> {
         debug!("get_first_available_block rpc request received");

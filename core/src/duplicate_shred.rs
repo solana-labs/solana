@@ -226,10 +226,7 @@ pub fn into_shreds(
         chunk_index,
         chunk,
         ..
-    } = match chunks.next() {
-        None => return Err(Error::InvalidDuplicateShreds),
-        Some(chunk) => chunk,
-    };
+    } = chunks.next().ok_or(Error::InvalidDuplicateShreds)?;
     let slot_leader = leader(slot).ok_or(Error::UnknownSlotLeader)?;
     let check_chunk = check_chunk(slot, shred_index, shred_type, num_chunks);
     let mut data = HashMap::new();

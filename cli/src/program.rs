@@ -386,22 +386,17 @@ pub fn parse_program_subcommand(
                 default_signer.signer_from_path(matches, wallet_manager)?,
             )];
 
-            let program_location = if let Some(location) = matches.value_of("program_location") {
-                Some(location.to_string())
-            } else {
-                None
-            };
+            let program_location = matches
+                .value_of("program_location")
+                .map(|location| location.to_string());
 
             let buffer_pubkey = if let Ok((buffer_signer, Some(buffer_pubkey))) =
                 signer_of(matches, "buffer", wallet_manager)
             {
                 bulk_signers.push(buffer_signer);
                 Some(buffer_pubkey)
-            } else if let Some(buffer_pubkey) = pubkey_of_signer(matches, "buffer", wallet_manager)?
-            {
-                Some(buffer_pubkey)
             } else {
-                None
+                pubkey_of_signer(matches, "buffer", wallet_manager)?
             };
 
             let program_pubkey = if let Ok((program_signer, Some(program_pubkey))) =
@@ -409,12 +404,8 @@ pub fn parse_program_subcommand(
             {
                 bulk_signers.push(program_signer);
                 Some(program_pubkey)
-            } else if let Some(program_pubkey) =
-                pubkey_of_signer(matches, "program_id", wallet_manager)?
-            {
-                Some(program_pubkey)
             } else {
-                None
+                pubkey_of_signer(matches, "program_id", wallet_manager)?
             };
 
             let upgrade_authority_pubkey =
@@ -463,11 +454,8 @@ pub fn parse_program_subcommand(
             {
                 bulk_signers.push(buffer_signer);
                 Some(buffer_pubkey)
-            } else if let Some(buffer_pubkey) = pubkey_of_signer(matches, "buffer", wallet_manager)?
-            {
-                Some(buffer_pubkey)
             } else {
-                None
+                pubkey_of_signer(matches, "buffer", wallet_manager)?
             };
 
             let buffer_authority_pubkey =
