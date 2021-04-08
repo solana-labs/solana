@@ -30,7 +30,7 @@ use solana_ledger::{
     entry::VerifyRecyclers,
     leader_schedule_cache::LeaderScheduleCache,
 };
-use solana_measure::{measure::Measure};
+use solana_measure::measure::Measure;
 use solana_metrics::inc_new_counter_info;
 use solana_runtime::{
     accounts_background_service::AbsRequestSender, bank::Bank, bank_forks::BankForks,
