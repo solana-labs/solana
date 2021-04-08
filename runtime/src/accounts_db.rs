@@ -3617,15 +3617,6 @@ impl AccountsDb {
         AccountsHash::checked_cast_for_capitalization(balances.map(|b| b as u128).sum::<u128>())
     }
 
-    // remove this by inlining and remove extra unused params upto all callchain
-    pub fn account_balance_for_capitalization(
-        lamports: u64,
-        _owner: &Pubkey,
-        _executable: bool,
-    ) -> u64 {
-        lamports
-    }
-
     fn calculate_accounts_hash(
         &self,
         slot: Slot,
@@ -3671,13 +3662,7 @@ impl AccountsDb {
                                             |loaded_account| {
                                                 let loaded_hash = loaded_account
                                                     .loaded_hash(self.expected_cluster_type());
-                                                let balance =
-                                                    Self::account_balance_for_capitalization(
-                                                        account_info.lamports,
-                                                        loaded_account.owner(),
-                                                        loaded_account.executable(),
-                                                    );
-
+                                                let balance = account_info.lamports;
                                                 if check_hash {
                                                     let computed_hash = loaded_account
                                                         .compute_hash(
@@ -3863,11 +3848,7 @@ impl AccountsDb {
                 let balance = if zero_raw_lamports {
                     crate::accounts_hash::ZERO_RAW_LAMPORTS_SENTINEL
                 } else {
-                    Self::account_balance_for_capitalization(
-                        raw_lamports,
-                        loaded_account.owner(),
-                        loaded_account.executable(),
-                    )
+                    raw_lamports
                 };
 
                 let source_item = CalculateHashIntermediate::new(
@@ -8247,66 +8228,18 @@ pub mod tests {
     }
 
     #[test]
-    fn test_account_balance_for_capitalization_normal() {
-        // system accounts
-        assert_eq!(
-            AccountsDb::account_balance_for_capitalization(10, &Pubkey::default(), false),
-            10
-        );
-        // any random program data accounts
-        assert_eq!(
-            AccountsDb::account_balance_for_capitalization(
-                10,
-                &solana_sdk::pubkey::new_rand(),
-                false,
-            ),
-            10
-        );
-    }
-
-    #[test]
     fn test_account_balance_for_capitalization_sysvar() {
         let normal_sysvar = solana_sdk::account::create_account_for_test(
             &solana_sdk::slot_history::SlotHistory::default(),
         );
-        assert_eq!(
-            AccountsDb::account_balance_for_capitalization(
-                normal_sysvar.lamports,
-                &normal_sysvar.owner,
-                normal_sysvar.executable,
-            ),
-            1
-        );
-
-        // transactions can send any lamports to sysvars although this is not sensible.
-        assert_eq!(
-            AccountsDb::account_balance_for_capitalization(10, &solana_sdk::sysvar::id(), false),
-            10
-        );
+        assert_eq!(normal_sysvar.lamports, 1);
     }
 
     #[test]
     fn test_account_balance_for_capitalization_native_program() {
         let normal_native_program =
             solana_sdk::native_loader::create_loadable_account_for_test("foo");
-        assert_eq!(
-            AccountsDb::account_balance_for_capitalization(
-                normal_native_program.lamports,
-                &normal_native_program.owner,
-                normal_native_program.executable,
-            ),
-            1
-        );
-
-        // test maliciously assigned bogus native loader account
-        assert_eq!(
-            AccountsDb::account_balance_for_capitalization(
-                1,
-                &solana_sdk::native_loader::id(),
-                false,
-            ),
-            1
-        );
+        assert_eq!(normal_native_program.lamports, 1);
     }
 
     #[test]
