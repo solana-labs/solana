@@ -43,7 +43,15 @@ test-stable-perf)
   # BPF solana-sdk legacy compile test
   ./cargo-build-bpf --manifest-path sdk/Cargo.toml
 
+<<<<<<< HEAD
   # BPF program tests
+=======
+  # BPF Program unit tests
+  "$cargo" test --manifest-path programs/bpf/Cargo.toml
+  cargo-build-bpf --manifest-path programs/bpf/Cargo.toml --bpf-sdk sdk/bpf
+
+  # BPF program system tests
+>>>>>>> 878e52f0b... Fix cargo-build/test-bpf --workspace (#16431)
   _ make -C programs/bpf/c tests
   _ "$cargo" stable test \
     --manifest-path programs/bpf/Cargo.toml \
