@@ -1661,10 +1661,11 @@ fn main() {
                     let parse_results = {
                         if let Some(slot_string) = frozen_regex.captures_iter(&line).next() {
                             Some((slot_string, &mut frozen))
-                        } else if let Some(slot_string) = full_regex.captures_iter(&line).next() {
-                            Some((slot_string, &mut full))
                         } else {
-                            None
+                            full_regex
+                                .captures_iter(&line)
+                                .next()
+                                .map(|slot_string| (slot_string, &mut full))
                         }
                     };
 

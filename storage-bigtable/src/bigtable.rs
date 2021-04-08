@@ -611,10 +611,7 @@ where
             _ => return Err(err),
         },
     }
-    match deserialize_bincode_cell_data(row_data, table, key) {
-        Ok(result) => Ok(CellData::Bincode(result)),
-        Err(err) => Err(err),
-    }
+    deserialize_bincode_cell_data(row_data, table, key).map(CellData::Bincode)
 }
 
 pub(crate) fn deserialize_protobuf_cell_data<T>(
