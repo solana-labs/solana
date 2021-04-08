@@ -1272,11 +1272,12 @@ pub mod test {
     use super::*;
     use crate::{
         cluster_info_vote_listener::VoteTracker,
+        cluster_slot_state_verifier::GossipDuplicateConfirmedSlots,
         cluster_slots::ClusterSlots,
         fork_choice::SelectVoteAndResetForkResult,
         heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
         progress_map::{DuplicateStats, ForkProgress},
-        replay_stage::{HeaviestForkFailures, ReplayStage},
+        replay_stage::{HeaviestForkFailures, ReplayStage, UnfrozenGossipVerifiedVoteHashes},
     };
     use solana_ledger::{blockstore::make_slot_entries, get_tmp_ledger_path};
     use solana_runtime::{
@@ -1300,7 +1301,7 @@ pub mod test {
         vote_transaction,
     };
     use std::{
-        collections::{BTreeMap, HashMap},
+        collections::HashMap,
         fs::{remove_file, OpenOptions},
         io::{Read, Seek, SeekFrom, Write},
         sync::RwLock,
@@ -1461,8 +1462,8 @@ pub mod test {
                 &AbsRequestSender::default(),
                 None,
                 &mut self.heaviest_subtree_fork_choice,
-                &mut BTreeMap::new(),
-                &mut BTreeMap::new(),
+                &mut GossipDuplicateConfirmedSlots::default(),
+                &mut UnfrozenGossipVerifiedVoteHashes::default(),
                 &mut true,
                 &mut Vec::new(),
             )

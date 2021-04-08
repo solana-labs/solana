@@ -5,7 +5,7 @@ use crate::{
 use solana_sdk::{clock::Slot, hash::Hash};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-pub type GossipDuplicateConfirmedSlots = BTreeMap<Slot, Hash>;
+pub(crate) type GossipDuplicateConfirmedSlots = BTreeMap<Slot, Hash>;
 type SlotStateHandler = fn(Slot, &Hash, Option<&Hash>, bool, bool) -> Vec<ResultingStateChange>;
 
 #[derive(PartialEq, Debug)]
