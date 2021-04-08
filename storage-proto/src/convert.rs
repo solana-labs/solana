@@ -161,11 +161,7 @@ impl TryFrom<generated::ConfirmedBlock> for ConfirmedBlock {
 
 impl From<TransactionWithStatusMeta> for generated::ConfirmedTransaction {
     fn from(value: TransactionWithStatusMeta) -> Self {
-        let meta = if let Some(meta) = value.meta {
-            Some(meta.into())
-        } else {
-            None
-        };
+        let meta = value.meta.map(|meta| meta.into());
         Self {
             transaction: Some(value.transaction.into()),
             meta,
@@ -176,11 +172,7 @@ impl From<TransactionWithStatusMeta> for generated::ConfirmedTransaction {
 impl TryFrom<generated::ConfirmedTransaction> for TransactionWithStatusMeta {
     type Error = bincode::Error;
     fn try_from(value: generated::ConfirmedTransaction) -> std::result::Result<Self, Self::Error> {
-        let meta = if let Some(meta) = value.meta {
-            Some(meta.try_into()?)
-        } else {
-            None
-        };
+        let meta = value.meta.map(|meta| meta.try_into()).transpose()?;
         Ok(Self {
             transaction: value.transaction.expect("transaction is required").into(),
             meta,
@@ -770,10 +762,7 @@ impl From<TransactionByAddrInfo> for tx_by_addr::TransactionByAddrInfo {
 
         Self {
             signature: <Signature as AsRef<[u8]>>::as_ref(&signature).into(),
-            err: match err {
-                None => None,
-                Some(e) => Some(e.into()),
-            },
+            err: err.map(|e| e.into()),
             index,
             memo: memo.map(|memo| tx_by_addr::Memo { memo }),
             block_time: block_time.map(|timestamp| tx_by_addr::UnixTimestamp { timestamp }),
@@ -787,11 +776,10 @@ impl TryFrom<tx_by_addr::TransactionByAddrInfo> for TransactionByAddrInfo {
     fn try_from(
         transaction_by_addr: tx_by_addr::TransactionByAddrInfo,
     ) -> Result<Self, Self::Error> {
-        let err = if let Some(err) = transaction_by_addr.err {
-            Some(err.try_into()?)
-        } else {
-            None
-        };
+        let err = transaction_by_addr
+            .err
+            .map(|err| err.try_into())
+            .transpose()?;
 
         Ok(Self {
             signature: Signature::new(&transaction_by_addr.signature),

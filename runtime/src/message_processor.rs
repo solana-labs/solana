@@ -379,10 +379,11 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
                 self.account_deps.iter().find(|(key, _)| key == pubkey)
             {
                 Some(account.clone())
-            } else if let Some(pre) = self.pre_accounts.iter().find(|pre| pre.key == *pubkey) {
-                Some(pre.account.clone())
             } else {
-                None
+                self.pre_accounts
+                    .iter()
+                    .find(|pre| pre.key == *pubkey)
+                    .map(|pre| pre.account.clone())
             }
         } else {
             if let Some(account) = self.pre_accounts.iter().find_map(|pre| {

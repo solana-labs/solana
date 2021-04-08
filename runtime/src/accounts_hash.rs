@@ -1861,11 +1861,10 @@ pub mod tests {
         // handle fanout^x -1, +0, +1 for a few 'x's
         const FANOUT: usize = 3;
         let mut hash_counts: Vec<_> = (1..6)
-            .map(|x| {
+            .flat_map(|x| {
                 let mark = FANOUT.pow(x);
                 vec![mark - 1, mark, mark + 1]
             })
-            .flatten()
             .collect();
 
         // saturate the test space for threshold to threshold + target

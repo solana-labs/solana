@@ -189,14 +189,13 @@ impl TransactionExecutor {
                         let mut start = Measure::start("sig_status");
                         let statuses: Vec<_> = sigs_w
                             .chunks(200)
-                            .map(|sig_chunk| {
+                            .flat_map(|sig_chunk| {
                                 let only_sigs: Vec<_> = sig_chunk.iter().map(|s| s.0).collect();
                                 client
                                     .get_signature_statuses(&only_sigs)
                                     .expect("status fail")
                                     .value
                             })
-                            .flatten()
                             .collect();
                         let mut num_cleared = 0;
                         let start_len = sigs_w.len();

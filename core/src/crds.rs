@@ -747,8 +747,10 @@ mod test {
                 let num_epoch_slots = crds
                     .table
                     .values()
-                    .filter(|value| value.insert_timestamp >= since)
-                    .filter(|value| matches!(value.value.data, CrdsData::EpochSlots(_, _)))
+                    .filter(|value| {
+                        value.insert_timestamp >= since
+                            && matches!(value.value.data, CrdsData::EpochSlots(_, _))
+                    })
                     .count();
                 assert_eq!(num_epoch_slots, crds.get_epoch_slots_since(since).count());
                 for value in crds.get_epoch_slots_since(since) {
