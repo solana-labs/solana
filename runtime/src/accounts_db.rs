@@ -2576,6 +2576,9 @@ impl AccountsDb {
         max_root: Option<Slot>,
         is_root_fixed: bool,
     ) -> Option<(AccountSharedData, Slot)> {
+        #[cfg(not(test))]
+        assert!(max_root.is_none());
+
         let (slot, store_id, offset) = self.read_index_for_accessor(ancestors, pubkey, max_root)?;
 
         if self.caching_enabled && store_id != CACHE_VIRTUAL_STORAGE_ID {
