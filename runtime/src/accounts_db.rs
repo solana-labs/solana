@@ -2379,7 +2379,7 @@ impl AccountsDb {
         // F4 accounts_cache.remove_slot()      | map of caches (removes old entry)
         //                                      V
         //
-        // Remarks for flusher: So, for any reading operations, it's a race conditon where F4 happens
+        // Remarks for flusher: So, for any reading operations, it's a race condition where F4 happens
         // between R1 and R2. In that case, retrying from R1 is safu because F3 should have
         // been occured.
         //
