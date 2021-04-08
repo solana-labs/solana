@@ -297,10 +297,8 @@ fn translate_type_inner<'a, T>(
         Err(SyscallError::UnalignedPointer.into())
     } else {
         unsafe {
-            match translate(memory_mapping, access_type, vm_addr, size_of::<T>() as u64) {
-                Ok(value) => Ok(&mut *(value as *mut T)),
-                Err(e) => Err(e),
-            }
+            translate(memory_mapping, access_type, vm_addr, size_of::<T>() as u64)
+                .map(|value| &mut *(value as *mut T))
         }
     }
 }
@@ -316,10 +314,8 @@ fn translate_type<'a, T>(
     vm_addr: u64,
     loader_id: &Pubkey,
 ) -> Result<&'a T, EbpfError<BpfError>> {
-    match translate_type_inner::<T>(memory_mapping, AccessType::Load, vm_addr, loader_id) {
-        Ok(value) => Ok(&*value),
-        Err(e) => Err(e),
-    }
+    translate_type_inner::<T>(memory_mapping, AccessType::Load, vm_addr, loader_id)
+        .map(|value| &*value)
 }
 
 fn translate_slice_inner<'a, T>(
@@ -361,10 +357,8 @@ fn translate_slice<'a, T>(
     len: u64,
     loader_id: &Pubkey,
 ) -> Result<&'a [T], EbpfError<BpfError>> {
-    match translate_slice_inner::<T>(memory_mapping, AccessType::Load, vm_addr, len, loader_id) {
-        Ok(value) => Ok(&*value),
-        Err(e) => Err(e),
-    }
+    translate_slice_inner::<T>(memory_mapping, AccessType::Load, vm_addr, len, loader_id)
+        .map(|value| &*value)
 }
 
 /// Take a virtual pointer to a string (points to BPF VM memory space), translate it

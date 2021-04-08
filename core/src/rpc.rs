@@ -3185,16 +3185,14 @@ pub mod rpc_full {
             let address = verify_pubkey(address)?;
 
             let config = config.unwrap_or_default();
-            let before = if let Some(before) = config.before {
-                Some(verify_signature(&before)?)
-            } else {
-                None
-            };
-            let until = if let Some(until) = config.until {
-                Some(verify_signature(&until)?)
-            } else {
-                None
-            };
+            let before = config
+                .before
+                .map(|ref before| verify_signature(before))
+                .transpose()?;
+            let until = config
+                .until
+                .map(|ref until| verify_signature(until))
+                .transpose()?;
             let limit = config
                 .limit
                 .unwrap_or(MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT);

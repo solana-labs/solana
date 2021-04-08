@@ -2424,10 +2424,7 @@ impl Blockstore {
         for (slot, signature) in address_signatures.into_iter() {
             let transaction_status =
                 self.get_transaction_status(signature, &confirmed_unrooted_slots)?;
-            let err = match transaction_status {
-                None => None,
-                Some((_slot, status)) => status.status.err(),
-            };
+            let err = transaction_status.and_then(|(_slot, status)| status.status.err());
             let block_time = self.get_block_time(slot)?;
             infos.push(ConfirmedTransactionStatusWithSignature {
                 signature,
@@ -3185,10 +3182,8 @@ fn find_slot_meta_in_cached_state<'a>(
 ) -> Option<Rc<RefCell<SlotMeta>>> {
     if let Some(entry) = working_set.get(&slot) {
         Some(entry.new_slot_meta.clone())
-    } else if let Some(entry) = chained_slots.get(&slot) {
-        Some(entry.clone())
     } else {
-        None
+        chained_slots.get(&slot).cloned()
     }
 }
 
