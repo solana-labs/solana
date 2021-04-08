@@ -15,7 +15,7 @@ use solana_ledger::{
     blockstore::Blockstore, blockstore_processor::TransactionStatusSender,
     entry::hash_transactions, leader_schedule_cache::LeaderScheduleCache,
 };
-use solana_measure::{measure::Measure, thread_mem_usage};
+use solana_measure::{measure::Measure};
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_info};
 use solana_perf::{
     cuda_runtime::PinnedVec,
