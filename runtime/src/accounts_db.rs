@@ -188,6 +188,23 @@ impl Versioned for (u64, AccountInfo) {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum LoadHint {
+    // Caller hints that it's loading transactions for a block which is
+    // descended from the current root, and at the tip of its fork.
+    // Thereby, further this assumes AccountIndex::max_root should not increase
+    // during this load, meaning there should be no squash.
+    // Overall, this paves a way for specialized optimized fast-path for account
+    // loading, while maintaining the determinism of account loading and resultant
+    // transaction execution thereof.
+    FixedMaxRoot,
+    // Caller can't hint the above safety assumption, and slower safe code path
+    // must be taken. Still, load cannot fail not-deterministically even under very
+    // rare circumstances.
+    // Generally RPC codepath falls into this category.
+    Unspecified,
+}
+
 #[derive(Debug)]
 pub enum LoadedAccountAccessor<'a> {
     // StoredAccountMeta can't be held directly here due to its lifetime dependency to
@@ -2289,20 +2306,9 @@ impl AccountsDb {
         &self,
         ancestors: &Ancestors,
         pubkey: &Pubkey,
-        // Load transactions for a block which is descended from the current root,
-        // and at the tip of its fork
-        // true if the root will not move during this load
-        is_root_fixed: bool,
+        load_hint: LoadHint,
     ) -> Option<(AccountSharedData, Slot)> {
-        self.do_load(ancestors, pubkey, None, is_root_fixed)
-    }
-
-    pub fn load_without_fixed_root(
-        &self,
-        ancestors: &Ancestors,
-        pubkey: &Pubkey,
-    ) -> Option<(AccountSharedData, Slot)> {
-        self.load(ancestors, pubkey, false)
+        self.do_load(ancestors, pubkey, None, load_hint)
     }
 
     pub fn load_with_fixed_root(
@@ -2310,16 +2316,30 @@ impl AccountsDb {
         ancestors: &Ancestors,
         pubkey: &Pubkey,
     ) -> Option<(AccountSharedData, Slot)> {
-        self.load(ancestors, pubkey, true)
+        self.load(ancestors, pubkey, LoadHint::FixedMaxRoot)
     }
 
-    fn read_index_for_accessor(
+    pub fn load_without_fixed_root(
+        &self,
+        ancestors: &Ancestors,
+        pubkey: &Pubkey,
+    ) -> Option<(AccountSharedData, Slot)> {
+        self.load(ancestors, pubkey, LoadHint::Unspecified)
+    }
+
+    fn read_index_for_accessor_or_load_slow<T>(
         &self,
         ancestors: &Ancestors,
         pubkey: &Pubkey,
         max_root: Option<Slot>,
-    ) -> Option<(Slot, AppendVecId, usize)> {
+        load_hint: LoadHint,
+        // We take an optional closure just because of lifetime handling
+        // difficulty of LoadedAccount
+        on_slow_path: Option<impl Fn(LoadedAccount) -> T>,
+    ) -> Option<(Slot, AppendVecId, usize, Option<T>)> {
         let (lock, index) = self.accounts_index.get(pubkey, Some(ancestors), max_root)?;
+        // Notice the subtle `?` at previous line, we bail out pretty early for missing.
+
         let slot_list = lock.slot_list();
         let (
             slot,
@@ -2327,8 +2347,25 @@ impl AccountsDb {
                 store_id, offset, ..
             },
         ) = slot_list[index];
-        Some((slot, store_id, offset))
-        // `lock` is dropped here, so the entry could be raced for mutation by other subsystems,
+
+        let some_from_slow_path = match load_hint {
+            LoadHint::FixedMaxRoot => None,
+            LoadHint::Unspecified => {
+                // we can't employ the fixed-max-root optimization.... so take the slower approach
+                // of copying potentially large Account::data inside the lock.
+
+                let mut accessor = self.get_account_accessor(slot, &pubkey, store_id, offset);
+                // calling check_and_get_loaded_account is safe while holding the lock and
+                // ensuring no purge could be conducted by alive ancestors held by callers
+                Some(on_slow_path.unwrap()(
+                    accessor.check_and_get_loaded_account(),
+                ))
+            }
+        };
+
+        Some((slot, store_id, offset, some_from_slow_path))
+        // `lock` is dropped here rather pretty quickly with LoadHint::FixedMaxRoot,
+        // so the entry could be raced for mutation by other subsystems,
         // before we actually provision an account data for caller's use from now on.
         // This is traded for less contention and resultant performance, introducing fair amount of
         // delicate handling in retry_to_get_account_accessor() below ;)
@@ -2343,13 +2380,15 @@ impl AccountsDb {
         ancestors: &'a Ancestors,
         pubkey: &'a Pubkey,
         max_root: Option<Slot>,
-        is_root_fixed: bool,
+        load_hint: LoadHint,
     ) -> Option<(LoadedAccountAccessor<'a>, Slot)> {
         // Happy drawing time! :)
+        // This will explain races and its handling for the case of the so-called fixed-max-root
+        // fast-path optimization
         //
         // Reader                               | Accessed data source for cached/stored
         // -------------------------------------+----------------------------------
-        // R1 read_index_for_accessor()         | cached/stored: index
+        // R1 read_index_for_accessor_or_load_slow()| cached/stored: index
         //          |                           |
         //        <(store_id, offset, ..)>      |
         //          V                           |
@@ -2444,6 +2483,8 @@ impl AccountsDb {
         // where P2 happens between R1 and R2. In that case, retrying from R1 is safu.
         // In that case, we may bail at index read retry when P3 hasn't been run
 
+        assert!(load_hint == LoadHint::FixedMaxRoot);
+
         #[cfg(test)]
         {
             // Give some time for cache flushing to occur here for unit tests
@@ -2451,7 +2492,7 @@ impl AccountsDb {
         }
 
         // Failsafe for potential race conditions with other subsystems
-        let mut num_acceptable_failed_iterations = 0;
+        let mut flush_race_already_observed = false;
         loop {
             let account_accessor = self.get_account_accessor(slot, pubkey, store_id, offset);
             match account_accessor {
@@ -2463,76 +2504,89 @@ impl AccountsDb {
                     // Cache was flushed in between checking the index and retrieving from the cache,
                     // so retry. This works because in accounts cache flush, an account is written to
                     // storage *before* it is removed from the cache
-                    num_acceptable_failed_iterations += 1;
-                    if is_root_fixed {
-                        // it's impossible for this to fail for transaction loads from replay/banking
-                        // more than once.
-                        // This is because:
-                        // 1) For a slot `X` that's being replayed, there is only one
-                        // latest ancestor containing the latest update for the account, and this
-                        // ancestor can only be flushed once.
-                        // 2) The root cannot move while replaying, so the index cannot continually
-                        // find more up to date entries than the current `slot`
-                        assert!(num_acceptable_failed_iterations <= 1);
+                    match load_hint {
+                        LoadHint::FixedMaxRoot => {
+                            // it's impossible for this to fail for transaction loads from
+                            // replaying/banking more than once.
+                            // This is because:
+                            // 1) For a slot `X` that's being replayed, there is only one
+                            // latest ancestor containing the latest update for the account, and this
+                            // ancestor can only be flushed once.
+                            // 2) The root cannot move while replaying, so the index cannot continually
+                            // find more up to date entries than the current `slot`
+                            assert!(!flush_race_already_observed);
+                        }
+                        LoadHint::Unspecified => {
+                            unreachable!()
+                            // (if this arm had actually reached...):
+                            // Because newer root can be added to the index (= not fixed),
+                            // multiple flush race conditions can be observed under very rare
+                            // condition, at least theoretically
+                        }
                     }
+                    flush_race_already_observed = true;
                 }
                 LoadedAccountAccessor::Stored(None) => {
-                    if is_root_fixed {
-                        // When running replay on the validator, or banking stage on the leader,
-                        // it should be very rare that the storage entry doesn't exist if the
-                        // entry in the accounts index is the latest version of this account.
-                        //
-                        // There are only a few places where the storage entry may not exist
-                        // after reading the index:
-                        // 1) Shrink has removed the old storage entry and rewritten to
-                        // a newer storage entry
-                        // 2) The `pubkey` asked for in this function is a zero-lamport account,
-                        // and the storage entry holding this account qualified for zero-lamport clean.
-                        //
-                        // In both these cases, it should be safe to retry and recheck the accounts
-                        // index indefinitely, without incrementing num_acceptable_failed_iterations.
-                        // That's because if the root is fixed, there should be a bounded number
-                        // of pending cleans/shrinks (depends how far behind the AccountsBackgroundService
-                        // is), termination to the desired condition is guaranteed.
-                        //
-                        // Also note that in both cases, if we do find the storage entry,
-                        // we can guarantee that the storage entry is safe to read from because
-                        // we grabbed a reference to the storage entry while it was still in the
-                        // storage map. This means even if the storage entry is removed from the storage
-                        // map after we grabbed the storage entry, the recycler should not reset the
-                        // storage entry until we drop the reference to the storage entry.
-                        //
-                        // eh, no code in this branch? yes!
-                    } else {
-                        // RPC get_account() may have fetched an old root from the index that was
-                        // either:
-                        // 1) Cleaned up by clean_accounts(), so the accounts index has been updated
-                        // and the storage entries have been removed.
-                        // 2) Dropped by purge_slots() because the slot was on a minor fork, which
-                        // removes the slots' storage entries but doesn't purge from the accounts index
-                        // (account index cleanup is left to clean for stored slots).
-                        num_acceptable_failed_iterations += 1;
+                    match load_hint {
+                        LoadHint::FixedMaxRoot => {
+                            // When running replay on the validator, or banking stage on the leader,
+                            // it should be very rare that the storage entry doesn't exist if the
+                            // entry in the accounts index is the latest version of this account.
+                            //
+                            // There are only a few places where the storage entry may not exist
+                            // after reading the index:
+                            // 1) Shrink has removed the old storage entry and rewritten to
+                            // a newer storage entry
+                            // 2) The `pubkey` asked for in this function is a zero-lamport account,
+                            // and the storage entry holding this account qualified for zero-lamport clean.
+                            //
+                            // In both these cases, it should be safe to retry and recheck the accounts
+                            // index indefinitely.
+                            // That's because if the root is fixed, there should be a bounded number
+                            // of pending cleans/shrinks (depends how far behind the AccountsBackgroundService
+                            // is), termination to the desired condition is guaranteed.
+                            //
+                            // Also note that in both cases, if we do find the storage entry,
+                            // we can guarantee that the storage entry is safe to read from because
+                            // we grabbed a reference to the storage entry while it was still in the
+                            // storage map. This means even if the storage entry is removed from the storage
+                            // map after we grabbed the storage entry, the recycler should not reset the
+                            // storage entry until we drop the reference to the storage entry.
+                            //
+                            // eh, no code in this arm? yes!
+                        }
+                        LoadHint::Unspecified => {
+                            unreachable!()
+                            // (if this arm had actually reached...):
+                            // RPC get_account() may have fetched an old root from the index that was
+                            // either:
+                            // 1) Cleaned up by clean_accounts(), so the accounts index has been updated
+                            // and the storage entries have been removed.
+                            // 2) Dropped by purge_slots() because the slot was on a minor fork, which
+                            // removes the slots' storage entries but doesn't purge from the accounts index
+                            // (account index cleanup is left to clean for stored slots). Note that
+                            // this generally is impossible to occur in the wild because the RPC
+                            // should hold the slot's bank, preventing it from being purged() to
+                            // begin with.
+                        }
                     }
                 }
-            }
-            if num_acceptable_failed_iterations >= 10 {
-                // The latest version of the account existed in the index, but could not be
-                // fetched from storage. This means a race occurred between this function and clean
-                // accounts/purge_slots
-                let message = format!(
-                    "do_load() failed to get key: {} from storage, latest attempt was for \
-                     slot: {}, storage_entry: {} offset: {}, is_root_fixed: {}",
-                    pubkey, slot, store_id, offset, is_root_fixed,
-                );
-                datapoint_warn!("accounts_db-do_load_warn", ("warn", message, String));
-                return None;
             }
 
             // Because reading from the cache/storage failed, retry from the index read
-            let (new_slot, new_store_id, new_offset) =
-                self.read_index_for_accessor(ancestors, pubkey, max_root)?;
+            let (new_slot, new_store_id, new_offset, maybe_some_from_slow_path) = self
+                .read_index_for_accessor_or_load_slow(
+                    ancestors,
+                    pubkey,
+                    max_root,
+                    load_hint,
+                    None::<fn(LoadedAccount) -> ()>,
+                )?;
+            // Notice the subtle `?` at previous line, we bail out pretty early if missing.
+            assert!(maybe_some_from_slow_path.is_none());
+
             if new_slot == slot && new_store_id == store_id {
-                // Considering that we're failed to get acccessor above and further that
+                // Considering that we're failed to get accessor above and further that
                 // the index still returned the same (slot, store_id) tuple, offset must be same
                 // too.
                 assert!(new_offset == offset);
@@ -2545,9 +2599,7 @@ impl AccountsDb {
                 // If this is not a cache entry, then this was a minor fork slot
                 // that had its storage entries cleaned up by purge_slots() but hasn't been
                 // cleaned yet. That means this must be rpc access and not replay/banking.
-                // But we can't guarantee `is_root_fixed' must be false, because
-                // the dangling bank at the tip of minor fork might not be started to freeze
-                // (!freeze_started =~> is_root_fixed)
+                // This contradicts with the above `assert!(load_hint == LoadHint::FixedMaxRoot)`
 
                 // Everything being assert!()-ed, let's panic!() here as it's an error condition
                 // after all....
@@ -2558,8 +2610,8 @@ impl AccountsDb {
                 // For details, see the comment in AccountIndex::do_checked_scan_accounts(),
                 // which is referring back here.
                 panic!(
-                    "Bad index entry detected ({}, {}, {}, {}, {})",
-                    pubkey, slot, store_id, offset, is_root_fixed
+                    "Bad index entry detected ({}, {}, {}, {}, {:?})",
+                    pubkey, slot, store_id, offset, load_hint
                 );
             }
 
@@ -2574,12 +2626,23 @@ impl AccountsDb {
         ancestors: &Ancestors,
         pubkey: &Pubkey,
         max_root: Option<Slot>,
-        is_root_fixed: bool,
+        load_hint: LoadHint,
     ) -> Option<(AccountSharedData, Slot)> {
         #[cfg(not(test))]
         assert!(max_root.is_none());
 
-        let (slot, store_id, offset) = self.read_index_for_accessor(ancestors, pubkey, max_root)?;
+        let (slot, store_id, offset, maybe_account) = self.read_index_for_accessor_or_load_slow(
+            ancestors,
+            pubkey,
+            max_root,
+            load_hint,
+            Some(|loaded_account: LoadedAccount| loaded_account.take_account()),
+        )?;
+        // Notice the subtle `?` at previous line, we bail out pretty early if missing.
+
+        if load_hint == LoadHint::Unspecified {
+            return maybe_account.map(|account| (account, slot));
+        }
 
         if self.caching_enabled && store_id != CACHE_VIRTUAL_STORAGE_ID {
             let result = self.read_only_accounts_cache.load(pubkey, slot);
@@ -2589,13 +2652,7 @@ impl AccountsDb {
         }
 
         let (mut account_accessor, slot) = self.retry_to_get_account_accessor(
-            slot,
-            store_id,
-            offset,
-            ancestors,
-            pubkey,
-            max_root,
-            is_root_fixed,
+            slot, store_id, offset, ancestors, pubkey, max_root, load_hint,
         )?;
         let loaded_account = account_accessor.check_and_get_loaded_account();
         let is_cached = loaded_account.is_cached();
@@ -2624,17 +2681,25 @@ impl AccountsDb {
         ancestors: &Ancestors,
         pubkey: &Pubkey,
         max_root: Option<Slot>,
-        is_root_fixed: bool,
+        load_hint: LoadHint,
     ) -> Option<Hash> {
-        let (slot, store_id, offset) = self.read_index_for_accessor(ancestors, pubkey, max_root)?;
-        let (mut account_accessor, _) = self.retry_to_get_account_accessor(
-            slot,
-            store_id,
-            offset,
+        let (slot, store_id, offset, maybe_hash) = self.read_index_for_accessor_or_load_slow(
             ancestors,
             pubkey,
             max_root,
-            is_root_fixed,
+            load_hint,
+            Some(|loaded_account: LoadedAccount| {
+                loaded_account.loaded_hash(self.expected_cluster_type())
+            }),
+        )?;
+        // Notice the subtle `?` at previous line, we bail out pretty early if missing.
+
+        if load_hint == LoadHint::Unspecified {
+            return maybe_hash;
+        }
+
+        let (mut account_accessor, _) = self.retry_to_get_account_accessor(
+            slot, store_id, offset, ancestors, pubkey, max_root, load_hint,
         )?;
         let loaded_account = account_accessor.check_and_get_loaded_account();
         Some(loaded_account.loaded_hash())
@@ -8835,7 +8900,12 @@ pub mod tests {
         // Clean should not remove anything yet as nothing has been flushed
         db.clean_accounts(None);
         let account = db
-            .do_load(&Ancestors::default(), &account_key, Some(0), false)
+            .do_load(
+                &Ancestors::default(),
+                &account_key,
+                Some(0),
+                LoadHint::Unspecified,
+            )
             .unwrap();
         assert_eq!(account.0.lamports, 0);
         // since this item is in the cache, it should not be in the read only cache
@@ -8846,7 +8916,12 @@ pub mod tests {
         db.flush_accounts_cache(true, None);
         db.clean_accounts(None);
         assert!(db
-            .do_load(&Ancestors::default(), &account_key, Some(0), false)
+            .do_load(
+                &Ancestors::default(),
+                &account_key,
+                Some(0),
+                LoadHint::Unspecified
+            )
             .is_none());
     }
 
@@ -8913,13 +8988,13 @@ pub mod tests {
         let max_root = None;
         // Fine to simulate a transaction load since we are not doing any out of band
         // removals, only using clean_accounts
-        let is_root_fixed = true;
+        let load_hint = LoadHint::FixedMaxRoot;
         assert_eq!(
             db.do_load(
                 &Ancestors::default(),
                 &zero_lamport_account_key,
                 max_root,
-                is_root_fixed
+                load_hint
             )
             .unwrap()
             .0
@@ -9037,7 +9112,12 @@ pub mod tests {
         // Intra cache cleaning should not clean the entry for `account_key` from slot 0,
         // even though it was updated in slot `2` because of the ongoing scan
         let account = db
-            .do_load(&Ancestors::default(), &account_key, Some(0), false)
+            .do_load(
+                &Ancestors::default(),
+                &account_key,
+                Some(0),
+                LoadHint::Unspecified,
+            )
             .unwrap();
         assert_eq!(account.0.lamports, zero_lamport_account.lamports);
 
@@ -9045,7 +9125,12 @@ pub mod tests {
         // because we're still doing a scan on it.
         db.clean_accounts(None);
         let account = db
-            .do_load(&scan_ancestors, &account_key, Some(max_scan_root), false)
+            .do_load(
+                &scan_ancestors,
+                &account_key,
+                Some(max_scan_root),
+                LoadHint::Unspecified,
+            )
             .unwrap();
         assert_eq!(account.0.lamports, slot1_account.lamports);
 
@@ -9054,14 +9139,24 @@ pub mod tests {
         scan_tracker.exit().unwrap();
         db.clean_accounts(None);
         let account = db
-            .do_load(&scan_ancestors, &account_key, Some(max_scan_root), false)
+            .do_load(
+                &scan_ancestors,
+                &account_key,
+                Some(max_scan_root),
+                LoadHint::Unspecified,
+            )
             .unwrap();
         assert_eq!(account.0.lamports, slot1_account.lamports);
 
         // Simulate dropping the bank, which finally removes the slot from the cache
         db.purge_slot(1);
         assert!(db
-            .do_load(&scan_ancestors, &account_key, Some(max_scan_root), false)
+            .do_load(
+                &scan_ancestors,
+                &account_key,
+                Some(max_scan_root),
+                LoadHint::Unspecified
+            )
             .is_none());
     }
 
@@ -9197,7 +9292,12 @@ pub mod tests {
         // a smaller max root
         for key in &keys {
             assert!(accounts_db
-                .do_load(&Ancestors::default(), key, Some(last_dead_slot), false)
+                .do_load(
+                    &Ancestors::default(),
+                    key,
+                    Some(last_dead_slot),
+                    LoadHint::Unspecified
+                )
                 .is_some());
         }
 
@@ -9220,7 +9320,12 @@ pub mod tests {
         // as those have been purged from the accounts index for the dead slots.
         for key in &keys {
             assert!(accounts_db
-                .do_load(&Ancestors::default(), key, Some(last_dead_slot), false)
+                .do_load(
+                    &Ancestors::default(),
+                    key,
+                    Some(last_dead_slot),
+                    LoadHint::Unspecified
+                )
                 .is_none());
         }
         // Each slot should only have one entry in the storage, since all other accounts were
@@ -9727,14 +9832,19 @@ pub mod tests {
     const RACY_SLEEP_MS: u64 = 10;
 
     fn start_load_thread(
-        no_account_with_retry: Option<bool>, // silly tribool!
-        is_root_fixed: bool,
+        with_retry: bool,
         ancestors: Ancestors,
         db: Arc<AccountsDb>,
         exit: Arc<AtomicBool>,
         pubkey: Arc<Pubkey>,
         expected_lamports: impl Fn(&(AccountSharedData, Slot)) -> u64 + Send + 'static,
     ) -> JoinHandle<()> {
+        let load_hint = if with_retry {
+            LoadHint::FixedMaxRoot
+        } else {
+            LoadHint::Unspecified
+        };
+
         std::thread::Builder::new()
             .name("account-do-load".to_string())
             .spawn(move || {
@@ -9743,35 +9853,7 @@ pub mod tests {
                         return;
                     }
                     // Load should never be unable to find this key
-                    let loaded_account = if let Some(no_account_with_retry) = no_account_with_retry
-                    {
-                        // simulate replaying/banking loading
-                        match db.do_load(&ancestors, &pubkey, None, is_root_fixed) {
-                            Some(account) => account,
-                            None => {
-                                if no_account_with_retry {
-                                    continue;
-                                } else {
-                                    panic!("odd!");
-                                }
-                            }
-                        }
-                    } else {
-                        // simulate rpc loading
-
-                        let (slot, store_id, offset) = db
-                            .read_index_for_accessor(&Ancestors::default(), &pubkey, None)
-                            .unwrap();
-
-                        sleep(Duration::from_millis(RACY_SLEEP_MS));
-
-                        let mut account_accessor =
-                            db.get_account_accessor(slot, &pubkey, store_id, offset);
-                        match account_accessor.get_loaded_account() {
-                            None => continue, // for RPC case, observing None is valid sometimes
-                            Some(account_accessor) => (account_accessor.take_account(), slot),
-                        }
-                    };
+                    let loaded_account = db.do_load(&ancestors, &pubkey, None, load_hint).unwrap();
                     // slot + 1 == account.lamports because of the account-cache-flush thread
                     assert_eq!(
                         loaded_account.0.lamports,
@@ -9830,11 +9912,8 @@ pub mod tests {
                 .unwrap()
         };
 
-        let is_root_fixed = true;
-        let no_account_with_retry = if with_retry { Some(false) } else { None };
         let t_do_load = start_load_thread(
-            no_account_with_retry,
-            is_root_fixed,
+            with_retry,
             Ancestors::default(),
             db,
             exit.clone(),
@@ -9854,11 +9933,7 @@ pub mod tests {
     }
 
     #[test]
-    #[should_panic(
-        expected = "Cache flushed/purged should be handled before trying to fetch account"
-    )]
     fn test_load_account_and_cache_flush_race_without_retry() {
-        // this tests impossible situation
         do_test_load_account_and_cache_flush_race(false);
     }
 
@@ -9911,11 +9986,8 @@ pub mod tests {
                 .unwrap()
         };
 
-        let is_root_fixed = true;
-        let no_account_with_retry = if with_retry { Some(false) } else { None };
         let t_do_load = start_load_thread(
-            no_account_with_retry,
-            is_root_fixed,
+            with_retry,
             Ancestors::default(),
             db,
             exit.clone(),
@@ -9926,7 +9998,7 @@ pub mod tests {
         sleep(Duration::from_secs(1));
         exit.store(true, Ordering::Relaxed);
         t_shrink_accounts.join().unwrap();
-        t_do_load.join().unwrap();
+        t_do_load.join().map_err(std::panic::resume_unwind).unwrap()
     }
 
     #[test]
@@ -9939,11 +10011,7 @@ pub mod tests {
         do_test_load_account_and_shrink_race(false);
     }
 
-    #[test]
-    #[should_panic(
-        expected = "Bad index entry detected (CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3, 1, 0, 0, false)"
-    )]
-    fn test_load_account_and_purge_race() {
+    fn do_test_load_account_and_purge_race(with_retry: bool) {
         let caching_enabled = true;
         let mut db = AccountsDb::new_with_config(
             Vec::new(),
@@ -9964,7 +10032,7 @@ pub mod tests {
         account.lamports = lamports;
         db.store_uncached(slot, &[(&pubkey, &account)]);
 
-        let t_shrink_accounts = {
+        let t_purge_slot = {
             let db = db.clone();
             let exit = exit.clone();
 
@@ -9982,23 +10050,35 @@ pub mod tests {
         };
 
         let ancestors: Ancestors = vec![(slot, 0)].into_iter().collect();
-        // purge race usually is expected to occur under is_root_fixed == false condition
-        let is_root_fixed = false;
-        let no_account_with_retry = Some(true);
-        let t_do_load = start_load_thread(
-            no_account_with_retry,
-            is_root_fixed,
-            ancestors,
-            db,
-            exit.clone(),
-            pubkey,
-            move |_| lamports,
-        );
+        let t_do_load =
+            start_load_thread(with_retry, ancestors, db, exit.clone(), pubkey, move |_| {
+                lamports
+            });
 
         sleep(Duration::from_secs(1));
         exit.store(true, Ordering::Relaxed);
-        t_shrink_accounts.join().unwrap();
-        // Propagate expected panic! occured in the do_load thread
+        t_purge_slot.join().unwrap();
+        // Propagate expected panic! occurred in the do_load thread
         t_do_load.join().map_err(std::panic::resume_unwind).unwrap()
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Bad index entry detected (CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3, 1, 0, 0, FixedMaxRoot)"
+    )]
+    fn test_load_account_and_purge_race_with_retry() {
+        // this tests impossible situation in the wild, so panic is expected
+        // Conversely, we show that we're preventing this race condition from occurring
+        do_test_load_account_and_purge_race(true);
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Should have already been taken care of when creating this LoadedAccountAccessor"
+    )]
+    fn test_load_account_and_purge_race_without_retry() {
+        // this tests impossible situation in the wild, so panic is expected
+        // Conversely, we show that we're preventing this race condition from occurring
+        do_test_load_account_and_purge_race(false);
     }
 }

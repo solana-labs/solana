@@ -7,7 +7,7 @@ use crate::{
         AccountAddressFilter, Accounts, TransactionAccountDeps, TransactionAccounts,
         TransactionLoadResult, TransactionLoaders,
     },
-    accounts_db::{ErrorCounters, SnapshotStorages},
+    accounts_db::{ErrorCounters, LoadHint, SnapshotStorages},
     accounts_index::{AccountIndex, Ancestors, IndexKey},
     blockhash_queue::BlockhashQueue,
     builtins::{self, ActivationType},
@@ -4099,10 +4099,14 @@ impl Bank {
         // get_account (= this fn caller) can be called for various on-consensus
         // code like inflation, feature activation and native program loading
         // before freezing and it's generally impossible to make static/lexical guarantee of RPC or
-        // on-consensus.. so just pass !freeze_started for is_root_fixed as a close approximation
-        self.rc
-            .accounts
-            .load_slow(ancestors, pubkey, !self.freeze_started())
+        // on-consensus.. so just pass !freeze_started for LoadHint::FixedMaxRoot as a close
+        // approximation of replaying/banking.
+        let load_hint = if !self.freeze_started() {
+            LoadHint::FixedMaxRoot
+        } else {
+            LoadHint::Unspecified
+        };
+        self.rc.accounts.load_slow(ancestors, pubkey, load_hint)
     }
 
     // Exclude self to really fetch the parent Bank's account hash and data.
