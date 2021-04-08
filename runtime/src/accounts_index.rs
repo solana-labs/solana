@@ -554,7 +554,8 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         bank 5's parent reference keeps bank 4 alive, which will prevent the `Bank::drop()` from
         running and cleaning up bank 4. Furthermore, no cleans can happen past the saved max_root == 1,
         so a potential newer max root at 3 will not clean up any of the ancestors > 1, so slot 4
-        will not be cleaned in the middle of the scan either.
+        will not be cleaned in the middle of the scan either. (NOTE similar reasoning is employed for
+        assert!() justification in AccountsDb::retry_to_get_account_accessor)
         */
         match scan_type {
             ScanTypes::Unindexed(range) => {

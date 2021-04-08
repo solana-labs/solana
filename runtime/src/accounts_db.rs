@@ -2327,6 +2327,11 @@ impl AccountsDb {
             },
         ) = slot_list[index];
         Some((slot, store_id, offset))
+        // `lock` is dropped here, so the entry could be raced for mutation by other subsystems,
+        // before we actually provision an account data for caller's use from now on.
+        // This is traded for less contention and resultant performance, introducing fair amount of
+        // delicate handling in retry_to_get_account_accessor() below ;)
+        // you're warned!
     }
 
     fn retry_to_get_account_accessor<'a>(
@@ -2515,8 +2520,8 @@ impl AccountsDb {
                 // accounts/purge_slots
                 let message = format!(
                     "do_load() failed to get key: {} from storage, latest attempt was for \
-                     slot: {}, storage_entry: {} is_root_fixed: {}",
-                    pubkey, slot, store_id, is_root_fixed,
+                     slot: {}, storage_entry: {} offset: {}, is_root_fixed: {}",
+                    pubkey, slot, store_id, offset, is_root_fixed,
                 );
                 datapoint_warn!("accounts_db-do_load_warn", ("warn", message, String));
                 return None;
@@ -2533,7 +2538,7 @@ impl AccountsDb {
 
                 // If the entry was missing from the cache, that means it must have been flushed,
                 // and the accounts index is always updated before cache flush, so store_id must
-                // not indicate being cached.
+                // not indicate being cached at this point.
                 assert!(new_store_id != CACHE_VIRTUAL_STORAGE_ID);
 
                 // If this is not a cache entry, then this was a minor fork slot
@@ -2543,8 +2548,18 @@ impl AccountsDb {
                 // the dangling bank at the tip of minor fork might not be started to freeze
                 // (!freeze_started =~> is_root_fixed)
 
-                // Everything being said, let's return None as it's an error condition after all.
-                return None;
+                // Everything being assert!()-ed, let's panic!() here as it's an error condition
+                // after all....
+                // That reasoning is based on the fact all of code-path reaching this fn
+                // retry_to_get_account_accessor() must outlive the Arc<Bank> (and its all
+                // ancestors) over this fn invocation, guaranteeing the prevention of being purged,
+                // first of all.
+                // For details, see the comment in AccountIndex::do_checked_scan_accounts(),
+                // which is referring back here.
+                panic!(
+                    "Bad index entry detected ({}, {}, {}, {}, {})",
+                    pubkey, slot, store_id, offset, is_root_fixed
+                );
             }
 
             slot = new_slot;
@@ -9917,6 +9932,9 @@ pub mod tests {
     }
 
     #[test]
+    #[should_panic(
+        expected = "Bad index entry detected (CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3, 1, 0, 0, false)"
+    )]
     fn test_load_account_and_purge_race() {
         let caching_enabled = true;
         let mut db = AccountsDb::new_with_config(
@@ -9971,6 +9989,7 @@ pub mod tests {
         sleep(Duration::from_secs(1));
         exit.store(true, Ordering::Relaxed);
         t_shrink_accounts.join().unwrap();
-        t_do_load.join().unwrap();
+        // Propagate expected panic! occured in the do_load thread
+        t_do_load.join().map_err(std::panic::resume_unwind).unwrap()
     }
 }
