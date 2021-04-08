@@ -5,7 +5,9 @@ use solana_clap_utils::{
     input_validators::is_valid_pubkey,
     keypair::*,
 };
-use solana_cli_output::{CliInflation, CliKeyedEpochReward, CliKeyedEpochRewardVec};
+use solana_cli_output::{
+    CliEpochRewardshMetadata, CliInflation, CliKeyedEpochReward, CliKeyedEpochRewards,
+};
 use solana_client::rpc_client::RpcClient;
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{clock::Epoch, pubkey::Pubkey};
@@ -111,7 +113,7 @@ fn process_rewards(
     let epoch_schedule = rpc_client.get_epoch_schedule()?;
 
     let mut epoch_rewards: Vec<CliKeyedEpochReward> = vec![];
-    if let Some(Some(first_reward)) = rewards.iter().find(|&v| v.is_some()) {
+    let epoch_metadata = if let Some(Some(first_reward)) = rewards.iter().find(|&v| v.is_some()) {
         let (epoch_start_time, epoch_end_time) =
             crate::stake::get_epoch_boundary_timestamps(rpc_client, first_reward, &epoch_schedule)?;
         for (reward, address) in rewards.iter().zip(addresses) {
@@ -121,10 +123,20 @@ fn process_rewards(
             epoch_rewards.push(CliKeyedEpochReward {
                 address: address.to_string(),
                 reward: cli_reward,
-                epoch: first_reward.epoch,
             });
         }
-    }
-    let cli_rewards = CliKeyedEpochRewardVec::new(epoch_rewards);
+        let block_time = rpc_client.get_block_time(first_reward.effective_slot)?;
+        Some(CliEpochRewardshMetadata {
+            epoch: first_reward.epoch,
+            effective_slot: first_reward.effective_slot,
+            block_time,
+        })
+    } else {
+        None
+    };
+    let cli_rewards = CliKeyedEpochRewards {
+        epoch_metadata,
+        rewards: epoch_rewards,
+    };
     Ok(config.output_format.formatted_string(&cli_rewards))
 }

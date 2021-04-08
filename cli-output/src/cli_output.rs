@@ -608,44 +608,53 @@ pub struct CliEpochReward {
 pub struct CliKeyedEpochReward {
     pub address: String,
     pub reward: Option<CliEpochReward>,
-    #[serde(skip_serializing)]
-    pub epoch: Epoch,
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct CliKeyedEpochRewardVec(Vec<CliKeyedEpochReward>);
-
-impl CliKeyedEpochRewardVec {
-    pub fn new(list: Vec<CliKeyedEpochReward>) -> Self {
-        Self(list)
-    }
+#[serde(rename_all = "camelCase")]
+pub struct CliEpochRewardshMetadata {
+    pub epoch: Epoch,
+    pub effective_slot: Slot,
+    pub block_time: UnixTimestamp,
 }
 
-impl QuietDisplay for CliKeyedEpochRewardVec {}
-impl VerboseDisplay for CliKeyedEpochRewardVec {}
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliKeyedEpochRewards {
+    #[serde(flatten, skip_serializing_if = "Option::is_none")]
+    pub epoch_metadata: Option<CliEpochRewardshMetadata>,
+    pub rewards: Vec<CliKeyedEpochReward>,
+}
 
-impl fmt::Display for CliKeyedEpochRewardVec {
+impl QuietDisplay for CliKeyedEpochRewards {}
+impl VerboseDisplay for CliKeyedEpochRewards {}
+
+impl fmt::Display for CliKeyedEpochRewards {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self.0.is_empty() {
+        if self.rewards.is_empty() {
             writeln!(f, "No rewards found in epoch")?;
             return Ok(());
         }
 
+        if let Some(metadata) = &self.epoch_metadata {
+            writeln!(f, "Epoch: {}", metadata.epoch)?;
+            writeln!(f, "Reward Slot: {}", metadata.effective_slot)?;
+            let timestamp = metadata.block_time;
+            writeln!(f, "Block Time: {}", unix_timestamp_to_string(timestamp))?;
+        }
         writeln!(f, "Epoch Rewards:")?;
         writeln!(
             f,
-            "  {:<44}  {:<6}  {:<11}  {:<18}  {:<18}  {:>14}  {:>14}",
-            "Address", "Epoch", "Reward Slot", "Amount", "New Balance", "Percent Change", "APR"
+            "  {:<44}  {:<18}  {:<18}  {:>14}  {:>14}",
+            "Address", "Amount", "New Balance", "Percent Change", "APR"
         )?;
-        for keyed_reward in &self.0 {
+        for keyed_reward in &self.rewards {
             match &keyed_reward.reward {
                 Some(reward) => {
                     writeln!(
                         f,
-                        "  {:<44}  {:<6}  {:<11}  ◎{:<17.9}  ◎{:<17.9}  {:>13.2}%  {}",
+                        "  {:<44}  ◎{:<17.9}  ◎{:<17.9}  {:>13.2}%  {}",
                         keyed_reward.address,
-                        reward.epoch,
-                        reward.effective_slot,
                         lamports_to_sol(reward.amount),
                         lamports_to_sol(reward.post_balance),
                         reward.percent_change,
@@ -656,11 +665,7 @@ impl fmt::Display for CliKeyedEpochRewardVec {
                     )?;
                 }
                 None => {
-                    writeln!(
-                        f,
-                        "  {:<44}  {:<6}  No rewards in epoch",
-                        keyed_reward.address, keyed_reward.epoch,
-                    )?;
+                    writeln!(f, "  {:<44}  No rewards in epoch", keyed_reward.address,)?;
                 }
             }
         }
