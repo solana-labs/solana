@@ -260,6 +260,7 @@ pub enum CliCommand {
     ShowStakeAccount {
         pubkey: Pubkey,
         use_lamports_unit: bool,
+        with_rewards: Option<usize>,
     },
     StakeAuthorize {
         stake_account_pubkey: Pubkey,
@@ -315,6 +316,7 @@ pub enum CliCommand {
     ShowVoteAccount {
         pubkey: Pubkey,
         use_lamports_unit: bool,
+        with_rewards: Option<usize>,
     },
     WithdrawFromVoteAccount {
         vote_account_pubkey: Pubkey,
@@ -1594,11 +1596,13 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::ShowStakeAccount {
             pubkey: stake_account_pubkey,
             use_lamports_unit,
+            with_rewards,
         } => process_show_stake_account(
             &rpc_client,
             config,
             &stake_account_pubkey,
             *use_lamports_unit,
+            *with_rewards,
         ),
         CliCommand::ShowStakeHistory { use_lamports_unit } => {
             process_show_stake_history(&rpc_client, config, *use_lamports_unit)
@@ -1719,11 +1723,13 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::ShowVoteAccount {
             pubkey: vote_account_pubkey,
             use_lamports_unit,
+            with_rewards,
         } => process_show_vote_account(
             &rpc_client,
             config,
             &vote_account_pubkey,
             *use_lamports_unit,
+            *with_rewards,
         ),
         CliCommand::WithdrawFromVoteAccount {
             vote_account_pubkey,
