@@ -163,6 +163,10 @@ impl HeaviestSubtreeForkChoice {
         heaviest_subtree_fork_choice
     }
 
+    pub fn contains_block(&self, key: &SlotHashKey) -> bool {
+        self.fork_infos.contains_key(key)
+    }
+
     pub fn best_slot(&self, key: &SlotHashKey) -> Option<SlotHashKey> {
         self.fork_infos
             .get(key)

@@ -50,6 +50,7 @@ use solana_sdk::{
 };
 use solana_vote_program::{vote_instruction, vote_state::Vote};
 use std::{
+    cmp::Reverse,
     collections::{BTreeMap, HashMap, HashSet},
     result,
     sync::{
@@ -67,8 +68,69 @@ pub const MAX_UNCONFIRMED_SLOTS: usize = 5;
 pub const DUPLICATE_LIVENESS_THRESHOLD: f64 = 0.1;
 pub const DUPLICATE_THRESHOLD: f64 = 1.0 - SWITCH_FORK_THRESHOLD - DUPLICATE_LIVENESS_THRESHOLD;
 const MAX_VOTE_SIGNATURES: usize = 200;
+const MAX_GOSSIP_VOTES_PER_VALIDATOR: usize = 2000;
 
-pub type GossipVerifiedVoteHashes = BTreeMap<Slot, HashMap<Hash, Vec<Pubkey>>>;
+#[derive(Default)]
+struct LatestValidatorVotesForFrozenBanks {
+    // TODO: Clean outdated/unstaked pubkeys from this list.
+    max_frozen_votes: HashMap<Pubkey, (Slot, Vec<Hash>)>,
+    // Pubkeys that had their `max_frozen_votes` updated since the last
+    // fork choice update
+    fork_choice_dirty_set: HashSet<(Pubkey, (Slot, Hash))>,
+}
+
+#[derive(Default)]
+struct GossipVerifiedVoteHashes {
+    votes_per_slot: BTreeMap<Slot, HashMap<Hash, Vec<Pubkey>>>,
+}
+
+impl GossipVerifiedVoteHashes {
+    fn add_vote(
+        &mut self,
+        pubkey: &Pubkey,
+        slot: &Slot,
+        hash: &Hash,
+        is_frozen: impl Fn(&Slot, &Hash) -> bool,
+        latest_validator_votes_for_frozen_banks: &mut LatestValidatorVotesForFrozenBanks,
+    ) {
+        // If his is a frozen bank, then we need to update the `latest_validator_votes_for_frozen_banks`
+        if is_frozen(slot, hash) {
+            let (latest_frozen_vote_slot, latest_frozen_vote_hashes) =
+                latest_validator_votes_for_frozen_banks
+                    .max_frozen_votes
+                    .get_mut(pubkey);
+            if slot > latest_frozen_vote_slot {
+                latest_validator_votes_for_frozen_banks
+                    .fork_choice_dirty_set
+                    .insert(pubkey, hash);
+                *latest_frozen_vote_slot = slot;
+                *max_frozen_votes = vec![hash];
+            } else if slot == latest_frozen_vote_slot && !latest_frozen_vote_hashes.contains(hash) {
+                latest_validator_votes_for_frozen_banks
+                    .fork_choice_dirty_set
+                    .insert(pubkey, hash);
+                latest_frozen_vote_hashes.push(hash);
+            } else {
+                // We have newer votes for this validator, we don't care about this vote
+                return;
+            }
+        }
+
+        // At this point, we are recording, so we check if we have hit the maximum (to prevent DOS attacks)
+        self.votes_per_slot
+            .entry(slot)
+            .or_default()
+            .entry(hash)
+            .push(pubkey);
+    }
+
+    // Cleanup `votes_per_slot` based on new roots
+    fn set_root(&mut self, new_root: Slot) {
+        let mut slots_ge_root = self.votes_per_slot.split_off(&new_root);
+        // `self.votes_per_slot` now only contains entries >= `new_root`
+        std::mem::swap(self.votes_per_slot, &mut slots_ge_root);
+    }
+}
 
 #[derive(PartialEq, Debug)]
 pub(crate) enum HeaviestForkFailures {
@@ -915,15 +977,21 @@ impl ReplayStage {
     fn process_gossip_verified_vote_hashes(
         gossip_verified_vote_hash_receiver: &GossipVerifiedVoteHashReceiver,
         gossip_verified_vote_hashes: &mut GossipVerifiedVoteHashes,
+        heaviest_subtree_fork_choice: &mut HeaviestSubtreeForkChoice,
+        latest_validator_votes_for_frozen_banks: &mut latest_validator_votes_for_frozen_banks,
     ) {
         for (pubkey, slot, hash) in gossip_verified_vote_hash_receiver.try_iter() {
+            let is_frozen = heaviest_subtree_fork_choice
+                .fork_infos
+                .contains_key((slot, hash));
             // cluster_info_vote_listener will ensure it doesn't push duplicates
-            gossip_verified_vote_hashes
-                .entry(slot)
-                .or_default()
-                .entry(hash)
-                .or_default()
-                .push(pubkey);
+            gossip_verified_vote_hashes.add_vote(
+                pubkey,
+                slot,
+                hash,
+                is_frozen,
+                latest_validator_votes_for_frozen_banks,
+            )
         }
     }
 
@@ -2222,9 +2290,7 @@ impl ReplayStage {
         // gossip_confirmed_slots now only contains entries >= `new_root`
         std::mem::swap(gossip_duplicate_confirmed_slots, &mut slots_ge_root);
 
-        let mut slots_ge_root = gossip_verified_vote_hashes.split_off(&new_root);
-        // gossip_verified_vote_hashes now only contains entries >= `new_root`
-        std::mem::swap(gossip_verified_vote_hashes, &mut slots_ge_root);
+        gossip_verified_vote_hashes.set_root(new_root);
     }
 
     fn generate_new_bank_forks(
