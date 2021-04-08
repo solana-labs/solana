@@ -4,7 +4,9 @@ use crate::{
     broadcast_stage::RetransmitSlotsSender,
     cache_block_time_service::CacheBlockTimeSender,
     cluster_info::ClusterInfo,
-    cluster_info_vote_listener::{GossipDuplicateConfirmedSlotsReceiver, VoteTracker},
+    cluster_info_vote_listener::{
+        GossipDuplicateConfirmedSlotsReceiver, GossipVerifiedVoteHashReceiver, VoteTracker,
+    },
     cluster_slot_state_verifier::*,
     cluster_slots::ClusterSlots,
     commitment_service::{AggregateCommitmentService, CommitmentAggregationData},
@@ -65,6 +67,8 @@ pub const MAX_UNCONFIRMED_SLOTS: usize = 5;
 pub const DUPLICATE_LIVENESS_THRESHOLD: f64 = 0.1;
 pub const DUPLICATE_THRESHOLD: f64 = 1.0 - SWITCH_FORK_THRESHOLD - DUPLICATE_LIVENESS_THRESHOLD;
 const MAX_VOTE_SIGNATURES: usize = 200;
+
+pub type GossipVerifiedVoteHashes = BTreeMap<Slot, HashMap<Hash, Vec<Pubkey>>>;
 
 #[derive(PartialEq, Debug)]
 pub(crate) enum HeaviestForkFailures {
@@ -134,6 +138,7 @@ pub struct ReplayTiming {
     bank_count: u64,
     process_gossip_duplicate_confirmed_slots_elapsed: u64,
     process_duplicate_slots_elapsed: u64,
+    process_gossip_verified_vote_hashes_elapsed: u64,
 }
 impl ReplayTiming {
     #[allow(clippy::too_many_arguments)]
@@ -153,6 +158,7 @@ impl ReplayTiming {
         heaviest_fork_failures_elapsed: u64,
         bank_count: u64,
         process_gossip_duplicate_confirmed_slots_elapsed: u64,
+        process_gossip_verified_vote_hashes_elapsed: u64,
         process_duplicate_slots_elapsed: u64,
     ) {
         self.collect_frozen_banks_elapsed += collect_frozen_banks_elapsed;
@@ -170,6 +176,8 @@ impl ReplayTiming {
         self.bank_count += bank_count;
         self.process_gossip_duplicate_confirmed_slots_elapsed +=
             process_gossip_duplicate_confirmed_slots_elapsed;
+        self.process_gossip_verified_vote_hashes_elapsed +=
+            process_gossip_verified_vote_hashes_elapsed;
         self.process_duplicate_slots_elapsed += process_duplicate_slots_elapsed;
         let now = timestamp();
         let elapsed_ms = now - self.last_print;
@@ -225,6 +233,11 @@ impl ReplayTiming {
                     i64
                 ),
                 (
+                    "process_gossip_verified_vote_hashes_elapsed",
+                    self.process_gossip_verified_vote_hashes_elapsed as i64,
+                    i64
+                ),
+                (
                     "wait_receive_elapsed",
                     self.wait_receive_elapsed as i64,
                     i64
@@ -270,6 +283,7 @@ impl ReplayStage {
         _duplicate_slots_reset_receiver: DuplicateSlotsResetReceiver,
         replay_vote_sender: ReplayVoteSender,
         gossip_duplicate_confirmed_slots_receiver: GossipDuplicateConfirmedSlotsReceiver,
+        gossip_verified_vote_hash_receiver: GossipVerifiedVoteHashReceiver,
     ) -> Self {
         let ReplayStageConfig {
             my_pubkey,
@@ -316,6 +330,7 @@ impl ReplayStage {
                 let mut skipped_slots_info = SkippedSlotsInfo::default();
                 let mut replay_timing = ReplayTiming::default();
                 let mut gossip_duplicate_confirmed_slots: GossipDuplicateConfirmedSlots = BTreeMap::new();
+                let mut gossip_verified_vote_hashes: GossipVerifiedVoteHashes = BTreeMap::new();
                 let mut voted_signatures = Vec::new();
                 let mut has_new_vote_been_rooted = !wait_for_vote_to_start_leader;
                 loop {
@@ -394,6 +409,18 @@ impl ReplayStage {
                         &descendants,
                     );
                     process_gossip_duplicate_confirmed_slots_time.stop();
+
+
+                    // Ingest any new verified votes from gossip. Important for fork choice
+                    // and switching proofs because these may be votes that haven't yet been
+                    // included in a block, so we may not have yet observed these votes just
+                    // by replaying blocks.
+                    let mut process_gossip_verified_vote_hashes_time = Measure::start("process_gossip_duplicate_confirmed_slots");
+                    Self::process_gossip_verified_vote_hashes(
+                        &gossip_verified_vote_hash_receiver,
+                        &mut gossip_verified_vote_hashes,
+                    );
+                    process_gossip_verified_vote_hashes_time.stop();
 
                     // Check to remove any duplicated slots from fork choice
                     let mut process_duplicate_slots_time = Measure::start("process_duplicate_slots");
@@ -529,6 +556,7 @@ impl ReplayStage {
                             &cache_block_time_sender,
                             &bank_notification_sender,
                             &mut gossip_duplicate_confirmed_slots,
+                            &mut gossip_verified_vote_hashes,
                             &mut voted_signatures,
                             &mut has_new_vote_been_rooted,
                         );
@@ -667,6 +695,7 @@ impl ReplayStage {
                         heaviest_fork_failures_time.as_us(),
                         if did_complete_bank {1} else {0},
                         process_gossip_duplicate_confirmed_slots_time.as_us(),
+                        process_gossip_verified_vote_hashes_time.as_us(),
                         process_duplicate_slots_time.as_us(),
                     );
                 }
@@ -907,6 +936,21 @@ impl ReplayStage {
                     SlotStateUpdate::DuplicateConfirmed,
                 );
             }
+        }
+    }
+
+    fn process_gossip_verified_vote_hashes(
+        gossip_verified_vote_hash_receiver: &GossipVerifiedVoteHashReceiver,
+        gossip_verified_vote_hashes: &mut GossipVerifiedVoteHashes,
+    ) {
+        for (pubkey, slot, hash) in gossip_verified_vote_hash_receiver.try_iter() {
+            // cluster_info_vote_listener will ensure it doesn't push duplicates
+            gossip_verified_vote_hashes
+                .entry(slot)
+                .or_default()
+                .entry(hash)
+                .or_default()
+                .push(pubkey);
         }
     }
 
@@ -1252,6 +1296,7 @@ impl ReplayStage {
         cache_block_time_sender: &Option<CacheBlockTimeSender>,
         bank_notification_sender: &Option<BankNotificationSender>,
         gossip_duplicate_confirmed_slots: &mut GossipDuplicateConfirmedSlots,
+        gossip_verified_vote_hashes: &mut GossipVerifiedVoteHashes,
         vote_signatures: &mut Vec<Signature>,
         has_new_vote_been_rooted: &mut bool,
     ) {
@@ -1306,6 +1351,7 @@ impl ReplayStage {
                 highest_confirmed_root,
                 heaviest_subtree_fork_choice,
                 gossip_duplicate_confirmed_slots,
+                gossip_verified_vote_hashes,
                 has_new_vote_been_rooted,
                 vote_signatures,
             );
@@ -2154,6 +2200,7 @@ impl ReplayStage {
         confirmed_forks
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn handle_new_root(
         new_root: Slot,
         bank_forks: &RwLock<BankForks>,
@@ -2162,6 +2209,7 @@ impl ReplayStage {
         highest_confirmed_root: Option<Slot>,
         heaviest_subtree_fork_choice: &mut HeaviestSubtreeForkChoice,
         gossip_duplicate_confirmed_slots: &mut GossipDuplicateConfirmedSlots,
+        gossip_verified_vote_hashes: &mut GossipVerifiedVoteHashes,
         has_new_vote_been_rooted: &mut bool,
         voted_signatures: &mut Vec<Signature>,
     ) {
@@ -2188,6 +2236,10 @@ impl ReplayStage {
         let mut slots_ge_root = gossip_duplicate_confirmed_slots.split_off(&new_root);
         // gossip_duplicate_confirmed_slots now only contains entries >= `new_root`
         std::mem::swap(gossip_duplicate_confirmed_slots, &mut slots_ge_root);
+
+        let mut slots_ge_root = gossip_verified_vote_hashes.split_off(&new_root);
+        // gossip_verified_vote_hashes now only contains entries >= `new_root`
+        std::mem::swap(gossip_verified_vote_hashes, &mut slots_ge_root);
     }
 
     fn generate_new_bank_forks(
@@ -2596,6 +2648,11 @@ pub(crate) mod tests {
                 .into_iter()
                 .map(|s| (s, Hash::default()))
                 .collect();
+        let mut gossip_verified_vote_hashes: GossipVerifiedVoteHashes =
+            vec![root - 1, root, root + 1]
+                .into_iter()
+                .map(|s| (s, HashMap::new()))
+                .collect();
         ReplayStage::handle_new_root(
             root,
             &bank_forks,
@@ -2604,6 +2661,7 @@ pub(crate) mod tests {
             None,
             &mut heaviest_subtree_fork_choice,
             &mut gossip_duplicate_confirmed_slots,
+            &mut gossip_verified_vote_hashes,
             &mut true,
             &mut Vec::new(),
         );
@@ -2613,6 +2671,13 @@ pub(crate) mod tests {
         // root - 1 is filtered out
         assert_eq!(
             gossip_duplicate_confirmed_slots
+                .keys()
+                .cloned()
+                .collect::<Vec<Slot>>(),
+            vec![root, root + 1]
+        );
+        assert_eq!(
+            gossip_verified_vote_hashes
                 .keys()
                 .cloned()
                 .collect::<Vec<Slot>>(),
@@ -2661,6 +2726,7 @@ pub(crate) mod tests {
             &AbsRequestSender::default(),
             Some(confirmed_root),
             &mut heaviest_subtree_fork_choice,
+            &mut BTreeMap::new(),
             &mut BTreeMap::new(),
             &mut true,
             &mut Vec::new(),
@@ -3700,7 +3766,7 @@ pub(crate) mod tests {
         assert!(!progress_map.is_propagated(10));
 
         let vote_tracker = VoteTracker::new(&bank_forks.root_bank());
-        vote_tracker.insert_vote(10, None, vote_pubkey);
+        vote_tracker.insert_vote(10, vote_pubkey);
         ReplayStage::update_propagation_status(
             &mut progress_map,
             10,
@@ -3788,7 +3854,7 @@ pub(crate) mod tests {
         let vote_tracker = VoteTracker::new(&bank_forks.root_bank());
         for vote_pubkey in &vote_pubkeys {
             // Insert a vote for the last bank for each voter
-            vote_tracker.insert_vote(10, None, *vote_pubkey);
+            vote_tracker.insert_vote(10, *vote_pubkey);
         }
 
         // The last bank should reach propagation threshold, and propagate it all
@@ -3875,7 +3941,7 @@ pub(crate) mod tests {
 
         let vote_tracker = VoteTracker::new(&bank_forks.root_bank());
         // Insert a new vote
-        vote_tracker.insert_vote(10, None, vote_pubkeys[2]);
+        vote_tracker.insert_vote(10, vote_pubkeys[2]);
 
         // The last bank should reach propagation threshold, and propagate it all
         // the way back through earlier leader banks
@@ -4250,7 +4316,7 @@ pub(crate) mod tests {
 
         // Add votes
         for vote_key in validator_voting_keys.values() {
-            vote_tracker.insert_vote(root_bank.slot(), None, *vote_key);
+            vote_tracker.insert_vote(root_bank.slot(), *vote_key);
         }
 
         assert!(!progress.is_propagated(root_bank.slot()));
