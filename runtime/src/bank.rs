@@ -9970,7 +9970,9 @@ pub(crate) mod tests {
         assert_eq!(bank.process_transaction(&durable_tx), Ok(()));
 
         /* Check balances */
-        assert_eq!(bank.get_balance(&custodian_pubkey), 4_640_000);
+        let mut expected_balance =
+            4_650_000 - bank.fee_calculator.calculate_fee(&durable_tx.message);
+        assert_eq!(bank.get_balance(&custodian_pubkey), expected_balance);
         assert_eq!(bank.get_balance(&nonce_pubkey), 250_000);
         assert_eq!(bank.get_balance(&alice_pubkey), 100_000);
 
@@ -9993,7 +9995,7 @@ pub(crate) mod tests {
             Err(TransactionError::BlockhashNotFound)
         );
         /* Check fee not charged and nonce not advanced */
-        assert_eq!(bank.get_balance(&custodian_pubkey), 4_640_000);
+        assert_eq!(bank.get_balance(&custodian_pubkey), expected_balance);
         assert_eq!(new_nonce, get_nonce_account(&bank, &nonce_pubkey).unwrap());
 
         let nonce_hash = new_nonce;
@@ -10021,7 +10023,8 @@ pub(crate) mod tests {
             ))
         );
         /* Check fee charged and nonce has advanced */
-        assert_eq!(bank.get_balance(&custodian_pubkey), 4_630_000);
+        expected_balance -= bank.fee_calculator.calculate_fee(&durable_tx.message);
+        assert_eq!(bank.get_balance(&custodian_pubkey), expected_balance);
         assert_ne!(nonce_hash, get_nonce_account(&bank, &nonce_pubkey).unwrap());
         /* Confirm replaying a TX that failed with InstructionError::* now
          * fails with TransactionError::BlockhashNotFound
@@ -10089,8 +10092,10 @@ pub(crate) mod tests {
     #[test]
     fn test_nonce_payer() {
         solana_logger::setup();
+        let nonce_starting_balance = 250_000;
         let (mut bank, _mint_keypair, custodian_keypair, nonce_keypair) =
-            setup_nonce_with_bank(10_000_000, |_| {}, 5_000_000, 250_000, None).unwrap();
+            setup_nonce_with_bank(10_000_000, |_| {}, 5_000_000, nonce_starting_balance, None)
+                .unwrap();
         let alice_keypair = Keypair::new();
         let alice_pubkey = alice_keypair.pubkey();
         let custodian_pubkey = custodian_keypair.pubkey();
@@ -10126,7 +10131,10 @@ pub(crate) mod tests {
             ))
         );
         /* Check fee charged and nonce has advanced */
-        assert_eq!(bank.get_balance(&nonce_pubkey), 240_000);
+        assert_eq!(
+            bank.get_balance(&nonce_pubkey),
+            nonce_starting_balance - bank.fee_calculator.calculate_fee(&durable_tx.message)
+        );
         assert_ne!(nonce_hash, get_nonce_account(&bank, &nonce_pubkey).unwrap());
     }
 
