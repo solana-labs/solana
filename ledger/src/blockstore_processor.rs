@@ -502,7 +502,8 @@ fn do_process_blockstore_from_root(
     info!("ledger processing timing: {:?}", timing);
     info!(
         "ledger processed in {}. root slot is {}, {} fork{} at {}, with {} frozen bank{}",
-        HumanTime::from(chrono::Duration::from_std(now.elapsed()).unwrap()).to_text_en(Accuracy::Precise, Tense::Present),
+        HumanTime::from(chrono::Duration::from_std(now.elapsed()).unwrap())
+            .to_text_en(Accuracy::Precise, Tense::Present),
         bank_forks.root(),
         initial_forks.len(),
         if initial_forks.len() > 1 { "s" } else { "" },
@@ -897,7 +898,6 @@ fn load_frozen_forks(
                 slots_elapsed = 0;
                 txs = 0;
             }
-
 
             let mut progress = ConfirmationProgress::new(last_entry_hash);
 
