@@ -9830,6 +9830,7 @@ pub mod tests {
     }
 
     const RACY_SLEEP_MS: u64 = 10;
+    const RACE_TIME: u64 = 5;
 
     fn start_load_thread(
         with_retry: bool,
@@ -9921,7 +9922,7 @@ pub mod tests {
             |(_, slot)| slot + 1,
         );
 
-        sleep(Duration::from_secs(1));
+        sleep(Duration::from_secs(RACE_TIME));
         exit.store(true, Ordering::Relaxed);
         t_flush_accounts_cache.join().unwrap();
         t_do_load.join().map_err(std::panic::resume_unwind).unwrap()
@@ -9995,7 +9996,7 @@ pub mod tests {
             move |_| lamports,
         );
 
-        sleep(Duration::from_secs(1));
+        sleep(Duration::from_secs(RACE_TIME));
         exit.store(true, Ordering::Relaxed);
         t_shrink_accounts.join().unwrap();
         t_do_load.join().map_err(std::panic::resume_unwind).unwrap()
@@ -10055,7 +10056,7 @@ pub mod tests {
                 lamports
             });
 
-        sleep(Duration::from_secs(1));
+        sleep(Duration::from_secs(RACE_TIME));
         exit.store(true, Ordering::Relaxed);
         t_purge_slot.join().unwrap();
         // Propagate expected panic! occurred in the do_load thread
