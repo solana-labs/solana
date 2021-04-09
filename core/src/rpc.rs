@@ -1190,12 +1190,18 @@ impl JsonRpcRequestProcessor {
                 self.blockstore.get_rooted_transaction(signature)
             };
             match transaction.unwrap_or(None) {
-                Some(confirmed_transaction) => {
+                Some(mut confirmed_transaction) => {
                     if commitment.is_confirmed()
                         && confirmed_bank // should be redundant
                             .status_cache_ancestors()
                             .contains(&confirmed_transaction.slot)
                     {
+                        if confirmed_transaction.block_time.is_none() {
+                            let r_bank_forks = self.bank_forks.read().unwrap();
+                            confirmed_transaction.block_time = r_bank_forks
+                                .get(confirmed_transaction.slot)
+                                .map(|bank| bank.clock().unix_timestamp);
+                        }
                         return Ok(Some(confirmed_transaction.encode(encoding)));
                     }
                     if confirmed_transaction.slot
