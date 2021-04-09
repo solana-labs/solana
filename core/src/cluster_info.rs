@@ -2816,7 +2816,7 @@ impl ClusterInfo {
         let packets: Vec<_> = requests_receiver.recv_timeout(RECV_TIMEOUT)?.packets.into();
         let mut packets = VecDeque::from(packets);
         while let Ok(packet) = requests_receiver.try_recv() {
-            packets.extend(packet.packets.into_iter());
+            packets.extend(packet.packets.iter().cloned());
             let excess_count = packets.len().saturating_sub(MAX_GOSSIP_TRAFFIC);
             if excess_count > 0 {
                 packets.drain(0..excess_count);
