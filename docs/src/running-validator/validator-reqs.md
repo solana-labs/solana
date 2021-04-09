@@ -55,10 +55,7 @@ Docker's containerzation overhead and resultant performance degradation unless
 specially configured.
 
 We use Docker only for development purposes. Docker Hub contains images for all
-releases at [solanalabs/solana](https://hub.docker.com/r/solanalabs/solana). We
-also provide a
-[convenience script](https://github.com/solana-labs/solana/blob/master/sdk/docker-solana/localnet.sh)
-for launching and managing containers during development.
+releases at [solanalabs/solana](https://hub.docker.com/r/solanalabs/solana).
 
 ## Software
 
