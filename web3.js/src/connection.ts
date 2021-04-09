@@ -119,6 +119,8 @@ export type ConfirmedSignaturesForAddress2Options = {
    * @remark If not provided the search starts from the highest max confirmed block.
    */
   before?: TransactionSignature;
+  /** Search until this transaction signature is reached, if found before `limit`. */
+  until?: TransactionSignature;
   /** Maximum transaction signatures to return (between 1 and 1,000, default: 1,000). */
   limit?: number;
 };
