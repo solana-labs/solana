@@ -2865,79 +2865,39 @@ impl AccountsDb {
         assert!(self.storage.get_slot_stores(remove_slot).is_none());
     }
 
-    fn include_owner(cluster_type: &ClusterType, slot: Slot) -> bool {
-        // When devnet was moved to stable release channel, it was done without
-        // hashing account.owner. That's because devnet's slot was lower than
-        // 5_800_000 and the release channel's gating lacked ClusterType at the time...
-        match cluster_type {
-            ClusterType::Devnet => slot >= 5_800_000,
-            _ => true,
-        }
-    }
-
     pub fn hash_stored_account(
         slot: Slot,
         account: &StoredAccountMeta,
-        cluster_type: &ClusterType,
+        _cluster_type: &ClusterType,
     ) -> Hash {
-        let include_owner = Self::include_owner(cluster_type, slot);
-
-        if slot > Self::get_blake3_slot(cluster_type) {
-            Self::blake3_hash_account_data(
-                slot,
-                account.account_meta.lamports,
-                &account.account_meta.owner,
-                account.account_meta.executable,
-                account.account_meta.rent_epoch,
-                account.data,
-                &account.meta.pubkey,
-                include_owner,
-            )
-        } else {
-            Self::hash_account_data(
-                slot,
-                account.account_meta.lamports,
-                &account.account_meta.owner,
-                account.account_meta.executable,
-                account.account_meta.rent_epoch,
-                account.data,
-                &account.meta.pubkey,
-                include_owner,
-            )
-        }
+        Self::blake3_hash_account_data(
+            slot,
+            account.account_meta.lamports,
+            &account.account_meta.owner,
+            account.account_meta.executable,
+            account.account_meta.rent_epoch,
+            account.data,
+            &account.meta.pubkey,
+            true,
+        )
     }
 
     pub fn hash_account(
         slot: Slot,
         account: &AccountSharedData,
         pubkey: &Pubkey,
-        cluster_type: &ClusterType,
+        _cluster_type: &ClusterType,
     ) -> Hash {
-        let include_owner = Self::include_owner(cluster_type, slot);
-
-        if slot > Self::get_blake3_slot(cluster_type) {
-            Self::blake3_hash_account_data(
-                slot,
-                account.lamports,
-                &account.owner,
-                account.executable,
-                account.rent_epoch,
-                &account.data(),
-                pubkey,
-                include_owner,
-            )
-        } else {
-            Self::hash_account_data(
-                slot,
-                account.lamports,
-                &account.owner,
-                account.executable,
-                account.rent_epoch,
-                &account.data(),
-                pubkey,
-                include_owner,
-            )
-        }
+        Self::blake3_hash_account_data(
+            slot,
+            account.lamports,
+            &account.owner,
+            account.executable,
+            account.rent_epoch,
+            &account.data(),
+            pubkey,
+            true,
+        )
     }
 
     fn hash_frozen_account_data(account: &AccountSharedData) -> Hash {
@@ -3029,18 +2989,6 @@ impl AccountsDb {
         hasher.update(&pubkey.as_ref());
 
         Hash(<[u8; solana_sdk::hash::HASH_BYTES]>::try_from(hasher.finalize().as_slice()).unwrap())
-    }
-
-    fn get_blake3_slot(cluster_type: &ClusterType) -> Slot {
-        match cluster_type {
-            ClusterType::Development => 0,
-            // Epoch 400
-            ClusterType::Devnet => 3_276_800,
-            // Epoch 78
-            ClusterType::MainnetBeta => 33_696_000,
-            // Epoch 95
-            ClusterType::Testnet => 35_516_256,
-        }
     }
 
     fn bulk_assign_write_version(&self, count: usize) -> u64 {
@@ -5230,28 +5178,28 @@ pub mod tests {
         let raw_expected = vec![
             CalculateHashIntermediate {
                 version: 0,
-                hash: Hash::from_str("2UXkyxNEXNRbLo793fkWcdqQDuU8zwFjVhH6sbrcptKH").unwrap(),
+                hash: Hash::from_str("FMcBFzviyC7JSLEAVBmnKGcoJJagV9YG6Gx8mAW746JA").unwrap(),
                 lamports: 1,
                 slot: 0,
                 pubkey: pubkey0,
             },
             CalculateHashIntermediate {
                 version: 1,
-                hash: Hash::from_str("E8cioj2q9T6QFhijrUPRnP8iy86NtQievPyRe3GY5TMC").unwrap(),
+                hash: Hash::from_str("Bw1n8zjo4yFyGmirn1p7VKJYVARnj7Ea4Dv37PSKuk9g").unwrap(),
                 lamports: 128,
                 slot: 0,
                 pubkey: pubkey127,
             },
             CalculateHashIntermediate {
                 version: 2,
-                hash: Hash::from_str("9yaXmx2ruksV1465BuMffqspjW35ggH8nTs8SW2Lq6NK").unwrap(),
+                hash: Hash::from_str("B9KRhf2qW2RsaDnZNVu4VRJhw8GvHfAbnUi7ywynvWJG").unwrap(),
                 lamports: 129,
                 slot: 0,
                 pubkey: pubkey128,
             },
             CalculateHashIntermediate {
                 version: 3,
-                hash: Hash::from_str("7nhnUMjRsaA83HgvEJVv3YrDqHd1SCoVbvsWDTXzCgfh").unwrap(),
+                hash: Hash::from_str("BcfjjoWJDE5rEPsZccCQU1pCPMCH5Z2H7uHZVk4Yz4gt").unwrap(),
                 lamports: 256,
                 slot: 0,
                 pubkey: pubkey255,
