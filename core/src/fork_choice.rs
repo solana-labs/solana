@@ -1,7 +1,8 @@
 use crate::{
     consensus::{SwitchForkDecision, Tower},
+    latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
     progress_map::ProgressMap,
-    replay_stage::{HeaviestForkFailures, LatestValidatorVotesForFrozenBanks},
+    replay_stage::HeaviestForkFailures,
 };
 use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use std::{

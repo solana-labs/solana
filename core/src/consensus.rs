@@ -1,6 +1,6 @@
 use crate::{
+    latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
     progress_map::{LockoutIntervals, ProgressMap},
-    replay_stage::LatestValidatorVotesForFrozenBanks,
 };
 use chrono::prelude::*;
 use solana_ledger::{ancestor_iterator::AncestorIterator, blockstore::Blockstore, blockstore_db};
@@ -1283,7 +1283,8 @@ pub mod test {
         fork_choice::SelectVoteAndResetForkResult,
         heaviest_subtree_fork_choice::{HeaviestSubtreeForkChoice, SlotHashKey},
         progress_map::{DuplicateStats, ForkProgress},
-        replay_stage::{HeaviestForkFailures, ReplayStage, UnfrozenGossipVerifiedVoteHashes},
+        replay_stage::{HeaviestForkFailures, ReplayStage},
+        unfrozen_gossip_verified_vote_hashes::UnfrozenGossipVerifiedVoteHashes,
     };
     use solana_ledger::{blockstore::make_slot_entries, get_tmp_ledger_path};
     use solana_runtime::{

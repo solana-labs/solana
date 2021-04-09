@@ -15,6 +15,7 @@ use crate::{
     },
     fork_choice::{ForkChoice, SelectVoteAndResetForkResult},
     heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
+    latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
     optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSender},
     poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
     progress_map::{DuplicateStats, ForkProgress, ProgressMap, PropagatedStats},
@@ -22,6 +23,7 @@ use crate::{
     result::Result,
     rewards_recorder_service::RewardsRecorderSender,
     rpc_subscriptions::RpcSubscriptions,
+    unfrozen_gossip_verified_vote_hashes::UnfrozenGossipVerifiedVoteHashes,
     window_service::DuplicateSlotReceiver,
 };
 use solana_client::rpc_response::SlotUpdate;
@@ -67,122 +69,6 @@ pub const MAX_UNCONFIRMED_SLOTS: usize = 5;
 pub const DUPLICATE_LIVENESS_THRESHOLD: f64 = 0.1;
 pub const DUPLICATE_THRESHOLD: f64 = 1.0 - SWITCH_FORK_THRESHOLD - DUPLICATE_LIVENESS_THRESHOLD;
 const MAX_VOTE_SIGNATURES: usize = 200;
-
-#[derive(Default)]
-pub(crate) struct LatestValidatorVotesForFrozenBanks {
-    // TODO: Clean outdated/unstaked pubkeys from this list.
-    max_frozen_votes: HashMap<Pubkey, (Slot, Vec<Hash>)>,
-    // Pubkeys that had their `max_frozen_votes` updated since the last
-    // fork choice update
-    fork_choice_dirty_set: HashMap<Pubkey, (Slot, Vec<Hash>)>,
-}
-
-impl LatestValidatorVotesForFrozenBanks {
-    // `hash.is_some()` if the bank with slot == `vote_slot` is frozen
-    // Returns whether the vote was actually added
-    pub(crate) fn check_add_vote(
-        &mut self,
-        vote_pubkey: Pubkey,
-        vote_slot: Slot,
-        frozen_hash: Option<Hash>,
-    ) -> (bool, Slot) {
-        let (latest_frozen_vote_slot, latest_frozen_vote_hashes) =
-            self.max_frozen_votes.entry(vote_pubkey).or_default();
-        if let Some(frozen_hash) = frozen_hash {
-            if vote_slot > *latest_frozen_vote_slot {
-                let (dirty_vote_slot, dirty_frozen_hashes) =
-                    self.fork_choice_dirty_set.entry(vote_pubkey).or_default();
-                *dirty_vote_slot = vote_slot;
-                *dirty_frozen_hashes = vec![frozen_hash];
-                *latest_frozen_vote_slot = vote_slot;
-                *latest_frozen_vote_hashes = vec![frozen_hash];
-                return (true, vote_slot);
-            } else if vote_slot == *latest_frozen_vote_slot
-                && !latest_frozen_vote_hashes.contains(&frozen_hash)
-            {
-                let (_, dirty_frozen_hashes) =
-                    self.fork_choice_dirty_set.entry(vote_pubkey).or_default();
-                assert!(!dirty_frozen_hashes.contains(&frozen_hash));
-                dirty_frozen_hashes.push(frozen_hash);
-                latest_frozen_vote_hashes.push(frozen_hash);
-                return (true, vote_slot);
-            } else {
-                // We have newer votes for this validator, we don't care about this vote
-                return (false, *latest_frozen_vote_slot);
-            }
-        }
-
-        // Non frozen banks are not inserted because we only track frozen votes in this
-        // struct
-        (false, *latest_frozen_vote_slot)
-    }
-
-    pub(crate) fn take_votes_dirty_set(&mut self, root: Slot) -> Vec<(Pubkey, (Slot, Hash))> {
-        let new_votes = std::mem::take(&mut self.fork_choice_dirty_set);
-        new_votes
-            .into_iter()
-            .filter(|(_, (slot, _))| *slot >= root)
-            .flat_map(|(pk, (slot, hashes))| {
-                hashes
-                    .into_iter()
-                    .map(|hash| (pk, (slot, hash)))
-                    .collect::<Vec<(Pubkey, (Slot, Hash))>>()
-            })
-            .collect()
-    }
-}
-
-#[derive(Default)]
-pub(crate) struct UnfrozenGossipVerifiedVoteHashes {
-    votes_per_slot: BTreeMap<Slot, HashMap<Hash, Vec<Pubkey>>>,
-}
-
-impl UnfrozenGossipVerifiedVoteHashes {
-    // Update `latest_validator_votes_for_frozen_banks` if gossip has seen a newer vote
-    // for a frozen bank
-    fn add_vote(
-        &mut self,
-        pubkey: Pubkey,
-        slot: Slot,
-        hash: Hash,
-        is_frozen: bool,
-        latest_validator_votes_for_frozen_banks: &mut LatestValidatorVotesForFrozenBanks,
-    ) {
-        // If this is a frozen bank, then we need to update the `latest_validator_votes_for_frozen_banks`
-        let frozen_hash = if is_frozen { Some(hash) } else { None };
-        let (was_added, latest_frozen_vote_slot) =
-            latest_validator_votes_for_frozen_banks.check_add_vote(pubkey, slot, frozen_hash);
-
-        if !was_added && slot >= latest_frozen_vote_slot {
-            // At this point it must be that:
-            // 1) The new voted slot was not yet frozen
-            // 2) and the new voted slot >= than the latest frozen vote slot.
-
-            // Thus we want to record this vote for later, in case a slot with this slot + hash gets
-            // frozen later
-            self.votes_per_slot
-                .entry(slot)
-                .or_default()
-                .entry(hash)
-                .or_default()
-                .push(pubkey);
-        }
-    }
-
-    // Cleanup `votes_per_slot` based on new roots
-    fn set_root(&mut self, new_root: Slot) {
-        let mut slots_ge_root = self.votes_per_slot.split_off(&new_root);
-        // `self.votes_per_slot` now only contains entries >= `new_root`
-        std::mem::swap(&mut self.votes_per_slot, &mut slots_ge_root);
-    }
-
-    fn remove_slot_hash(&mut self, slot: Slot, hash: &Hash) -> Option<Vec<Pubkey>> {
-        self.votes_per_slot.get_mut(&slot).and_then(|slot_hashes| {
-            slot_hashes.remove(hash)
-            // If `slot_hashes` becomes empty, it'll be removed by `set_root()` later
-        })
-    }
-}
 
 #[derive(PartialEq, Debug)]
 pub(crate) enum HeaviestForkFailures {

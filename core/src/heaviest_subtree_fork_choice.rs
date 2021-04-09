@@ -1,6 +1,7 @@
 use crate::{
-    consensus::Tower, fork_choice::ForkChoice, progress_map::ProgressMap,
-    replay_stage::LatestValidatorVotesForFrozenBanks, tree_diff::TreeDiff,
+    consensus::Tower, fork_choice::ForkChoice,
+    latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
+    progress_map::ProgressMap, tree_diff::TreeDiff,
 };
 use solana_measure::measure::Measure;
 use solana_runtime::{bank::Bank, bank_forks::BankForks, epoch_stakes::EpochStakes};
