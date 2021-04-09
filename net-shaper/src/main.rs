@@ -164,7 +164,7 @@ fn run(
     status_err_msg: &str,
     ignore_err: bool,
 ) -> bool {
-    println!("Running {:?}", std::process::Command::new(cmd).args(args));
+    eprintln!("Running {:?}", std::process::Command::new(cmd).args(args));
     let output = std::process::Command::new(cmd)
         .args(args)
         .output()
@@ -180,8 +180,8 @@ fn run(
             status_err_msg, output.status
         );
         use std::str::from_utf8;
-        println!("stdout: {}", from_utf8(&output.stdout).unwrap_or("?"));
-        println!("stderr: {}", from_utf8(&output.stderr).unwrap_or("?"));
+        eprintln!("stdout: {}", from_utf8(&output.stdout).unwrap_or("?"));
+        eprintln!("stderr: {}", from_utf8(&output.stderr).unwrap_or("?"));
         false
     } else {
         true
