@@ -1,7 +1,7 @@
 use crate::{
-    consensus::{ComputedBankState, SwitchForkDecision, Tower},
+    consensus::{SwitchForkDecision, Tower},
     progress_map::ProgressMap,
-    replay_stage::HeaviestForkFailures,
+    replay_stage::{HeaviestForkFailures, LatestValidatorVotesForFrozenBanks},
 };
 use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use std::{
@@ -21,8 +21,7 @@ pub(crate) trait ForkChoice {
         &mut self,
         bank: &Bank,
         tower: &Tower,
-        progress: &mut ProgressMap,
-        computed_bank_state: &ComputedBankState,
+        latest_validator_votes_for_frozen_banks: &mut LatestValidatorVotesForFrozenBanks,
     );
 
     // Returns:
