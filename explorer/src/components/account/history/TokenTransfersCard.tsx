@@ -28,8 +28,17 @@ import { ErrorCard } from "components/common/ErrorCard";
 import { FetchStatus } from "providers/cache";
 import Moment from "react-moment";
 import { extractMintDetails, MintDetails } from "./common";
+import { Cluster, useCluster } from "providers/cluster";
+import { reportError } from "utils/sentry";
+
+type IndexedTransfer = {
+  index: number;
+  childIndex?: number;
+  transfer: Transfer | TransferChecked;
+};
 
 export function TokenTransfersCard({ pubkey }: { pubkey: PublicKey }) {
+  const { cluster } = useCluster();
   const address = pubkey.toBase58();
   const history = useAccountHistory(address);
   const fetchAccountHistory = useFetchAccountHistory();
@@ -75,24 +84,31 @@ export function TokenTransfersCard({ pubkey }: { pubkey: PublicKey }) {
         extractMintDetails(parsed, mintMap);
 
         // Extract all transfers from transaction
-        let transfers: (Transfer | TransferChecked)[] = [];
+        let transfers: IndexedTransfer[] = [];
         InstructionContainer.create(parsed).instructions.forEach(
-          ({ instruction, inner }) => {
-            const transfer = getTransfer(instruction);
+          ({ instruction, inner }, index) => {
+            const transfer = getTransfer(instruction, cluster, signature);
             if (transfer) {
-              transfers.push(transfer);
+              transfers.push({
+                transfer,
+                index,
+              });
             }
-            inner.forEach((instruction) => {
-              const transfer = getTransfer(instruction);
+            inner.forEach((instruction, childIndex) => {
+              const transfer = getTransfer(instruction, cluster, signature);
               if (transfer) {
-                transfers.push(transfer);
+                transfers.push({
+                  transfer,
+                  index,
+                  childIndex,
+                });
               }
             });
           }
         );
 
         // Filter out transfers not belonging to this mint
-        transfers = transfers.filter((transfer) => {
+        transfers = transfers.filter(({ transfer }) => {
           const sourceKey = transfer.source.toBase58();
           const destinationKey = transfer.destination.toBase58();
 
@@ -113,7 +129,7 @@ export function TokenTransfersCard({ pubkey }: { pubkey: PublicKey }) {
           return false;
         });
 
-        transfers.forEach((transfer) => {
+        transfers.forEach(({ transfer, index, childIndex }) => {
           let units = "Tokens";
           let amountString = "";
 
@@ -142,7 +158,7 @@ export function TokenTransfersCard({ pubkey }: { pubkey: PublicKey }) {
           }
 
           detailsList.push(
-            <tr key={signature + transfer.source + transfer.destination}>
+            <tr key={signature + index + (childIndex || "")}>
               <td>
                 <Signature signature={signature} link truncateChars={24} />
               </td>
@@ -184,7 +200,7 @@ export function TokenTransfersCard({ pubkey }: { pubkey: PublicKey }) {
       hasTimestamps,
       detailsList,
     };
-  }, [history, transactionRows, mintDetails, pubkey, address]);
+  }, [history, transactionRows, mintDetails, pubkey, address, cluster]);
 
   if (!history) {
     return null;
@@ -231,16 +247,26 @@ export function TokenTransfersCard({ pubkey }: { pubkey: PublicKey }) {
 }
 
 function getTransfer(
-  instruction: ParsedInstruction | PartiallyDecodedInstruction
+  instruction: ParsedInstruction | PartiallyDecodedInstruction,
+  cluster: Cluster,
+  signature: string
 ): Transfer | TransferChecked | undefined {
   if ("parsed" in instruction && instruction.program === "spl-token") {
-    const { type: rawType } = instruction.parsed;
-    const type = create(rawType, TokenInstructionType);
+    try {
+      const { type: rawType } = instruction.parsed;
+      const type = create(rawType, TokenInstructionType);
 
-    if (type === "transferChecked") {
-      return create(instruction.parsed.info, TransferChecked);
-    } else if (type === "transfer") {
-      return create(instruction.parsed.info, Transfer);
+      if (type === "transferChecked") {
+        return create(instruction.parsed.info, TransferChecked);
+      } else if (type === "transfer") {
+        return create(instruction.parsed.info, Transfer);
+      }
+    } catch (error) {
+      if (cluster === Cluster.MainnetBeta) {
+        reportError(error, {
+          signature,
+        });
+      }
     }
   }
   return undefined;
