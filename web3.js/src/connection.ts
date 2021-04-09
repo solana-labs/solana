@@ -2596,8 +2596,12 @@ export class Connection {
    * Fetch a list of Transactions and transaction statuses from the cluster
    * for a confirmed block
    */
-  async getConfirmedBlock(slot: number): Promise<ConfirmedBlock> {
-    const unsafeRes = await this._rpcRequest('getConfirmedBlock', [slot]);
+  async getConfirmedBlock(
+    slot: number,
+    commitment?: Finality,
+  ): Promise<ConfirmedBlock> {
+    const args = this._buildArgsAtLeastConfirmed([slot], commitment);
+    const unsafeRes = await this._rpcRequest('getConfirmedBlock', args);
     const res = create(unsafeRes, GetConfirmedBlockRpcResult);
     if ('error' in res) {
       throw new Error('failed to get confirmed block: ' + res.error.message);
@@ -2614,11 +2618,18 @@ export class Connection {
    */
   async getConfirmedBlockSignatures(
     slot: number,
+    commitment?: Finality,
   ): Promise<ConfirmedBlockSignatures> {
-    const unsafeRes = await this._rpcRequest('getConfirmedBlock', [
-      slot,
-      {transactionDetails: 'signatures', rewards: false},
-    ]);
+    const args = this._buildArgsAtLeastConfirmed(
+      [slot],
+      commitment,
+      undefined,
+      {
+        transactionDetails: 'signatures',
+        rewards: false,
+      },
+    );
+    const unsafeRes = await this._rpcRequest('getConfirmedBlock', args);
     const res = create(unsafeRes, GetConfirmedBlockSignaturesRpcResult);
     if ('error' in res) {
       throw new Error('failed to get confirmed block: ' + res.error.message);
@@ -2635,10 +2646,10 @@ export class Connection {
    */
   async getConfirmedTransaction(
     signature: TransactionSignature,
+    commitment?: Finality,
   ): Promise<ConfirmedTransaction | null> {
-    const unsafeRes = await this._rpcRequest('getConfirmedTransaction', [
-      signature,
-    ]);
+    const args = this._buildArgsAtLeastConfirmed([signature], commitment);
+    const unsafeRes = await this._rpcRequest('getConfirmedTransaction', args);
     const res = create(unsafeRes, GetConfirmedTransactionRpcResult);
     if ('error' in res) {
       throw new Error(
@@ -2653,11 +2664,14 @@ export class Connection {
    */
   async getParsedConfirmedTransaction(
     signature: TransactionSignature,
+    commitment?: Finality,
   ): Promise<ParsedConfirmedTransaction | null> {
-    const unsafeRes = await this._rpcRequest('getConfirmedTransaction', [
-      signature,
+    const args = this._buildArgsAtLeastConfirmed(
+      [signature],
+      commitment,
       'jsonParsed',
-    ]);
+    );
+    const unsafeRes = await this._rpcRequest('getConfirmedTransaction', args);
     const res = create(unsafeRes, GetParsedConfirmedTransactionRpcResult);
     if ('error' in res) {
       throw new Error(
@@ -2672,11 +2686,17 @@ export class Connection {
    */
   async getParsedConfirmedTransactions(
     signatures: TransactionSignature[],
+    commitment?: Finality,
   ): Promise<(ParsedConfirmedTransaction | null)[]> {
     const batch = signatures.map(signature => {
+      const args = this._buildArgsAtLeastConfirmed(
+        [signature],
+        commitment,
+        'jsonParsed',
+      );
       return {
         methodName: 'getConfirmedTransaction',
-        args: [signature, 'jsonParsed'],
+        args,
       };
     });
 
@@ -2718,7 +2738,10 @@ export class Connection {
       }
 
       try {
-        const block = await this.getConfirmedBlockSignatures(startSlot);
+        const block = await this.getConfirmedBlockSignatures(
+          startSlot,
+          'finalized',
+        );
         if (block.signatures.length > 0) {
           options.until = block.signatures[
             block.signatures.length - 1
@@ -2774,10 +2797,17 @@ export class Connection {
   async getConfirmedSignaturesForAddress2(
     address: PublicKey,
     options?: ConfirmedSignaturesForAddress2Options,
+    commitment?: Finality,
   ): Promise<Array<ConfirmedSignatureInfo>> {
+    const args = this._buildArgsAtLeastConfirmed(
+      [address.toBase58()],
+      commitment,
+      undefined,
+      options,
+    );
     const unsafeRes = await this._rpcRequest(
       'getConfirmedSignaturesForAddress2',
-      [address.toBase58(), options],
+      args,
     );
     const res = create(unsafeRes, GetConfirmedSignaturesForAddress2RpcResult);
     if ('error' in res) {
@@ -3483,6 +3513,26 @@ export class Connection {
       args.push(options);
     }
     return args;
+  }
+
+  /**
+   * @internal
+   */
+  _buildArgsAtLeastConfirmed(
+    args: Array<any>,
+    override?: Finality,
+    encoding?: 'jsonParsed' | 'base64',
+    extra?: any,
+  ): Array<any> {
+    const commitment = override || this._commitment;
+    if (commitment && !['confirmed', 'finalized'].includes(commitment)) {
+      throw new Error(
+        'Using Connection with default commitment: `' +
+          this._commitment +
+          '`, but method requires at least `confirmed`',
+      );
+    }
+    return this._buildArgs(args, override, encoding, extra);
   }
 
   /**

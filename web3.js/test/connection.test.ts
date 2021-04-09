@@ -1408,7 +1408,7 @@ describe('Connection', () => {
 
       await mockRpcResponse({
         method: 'getConfirmedTransaction',
-        params: [confirmedTransaction, 'jsonParsed'],
+        params: [confirmedTransaction, {encoding: 'jsonParsed'}],
         value: getMockData({
           parsed: {},
           program: 'spl-token',
@@ -1428,7 +1428,7 @@ describe('Connection', () => {
 
       await mockRpcResponse({
         method: 'getConfirmedTransaction',
-        params: [confirmedTransaction, 'jsonParsed'],
+        params: [confirmedTransaction, {encoding: 'jsonParsed'}],
         value: getMockData({
           accounts: [
             'EeJqWk5pczNjsqqY3jia9xfFNG1dD68te4s8gsdCuEk7',
