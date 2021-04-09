@@ -30,7 +30,10 @@ import { useFlaggedAccounts } from "providers/accounts/flagged-accounts";
 import { UpgradeableLoaderAccountSection } from "components/account/UpgradeableLoaderAccountSection";
 import { useTokenRegistry } from "providers/mints/token-registry";
 import { Identicon } from "components/common/Identicon";
-import { TransactionHistoryCardWrapper } from "components/account/TransactionHistoryCardWrapper";
+import { TransactionHistoryCard } from "components/account/history/TransactionHistoryCard";
+import { TokenTransfersCard } from "components/account/history/TokenTransfersCard";
+import { TokenInstructionsCard } from "components/account/history/TokenInstructionsCard";
+
 
 const IDENTICON_WIDTH = 64;
 
@@ -319,27 +322,9 @@ function MoreSection({
           <TokenHistoryCard pubkey={pubkey} />
         </>
       )}
-      {tab === "history" && (
-        <TransactionHistoryCardWrapper
-          title="Transaction History"
-          pubkey={pubkey}
-          tab={tab}
-        />
-      )}
-      {tab === "transfers" && (
-        <TransactionHistoryCardWrapper
-          title="Token Transfers"
-          pubkey={pubkey}
-          tab={tab}
-        />
-      )}
-      {tab === "instructions" && (
-        <TransactionHistoryCardWrapper
-          title="Token Instructions"
-          pubkey={pubkey}
-          tab={tab}
-        />
-      )}
+      {tab === "history" && <TransactionHistoryCard pubkey={pubkey} />}
+      {tab === "transfers" && <TokenTransfersCard pubkey={pubkey} />}
+      {tab === "instructions" && <TokenInstructionsCard pubkey={pubkey} />}
       {tab === "largest" && <TokenLargestAccountsCard pubkey={pubkey} />}
       {tab === "vote-history" && data?.program === "vote" && (
         <VotesCard voteAccount={data.parsed} />
