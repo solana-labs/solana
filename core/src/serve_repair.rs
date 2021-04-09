@@ -11,7 +11,7 @@ use bincode::serialize;
 use rand::distributions::{Distribution, WeightedIndex};
 use solana_ledger::{blockstore::Blockstore, shred::Nonce};
 use solana_measure::measure::Measure;
-use solana_metrics::{datapoint_debug, inc_new_counter_debug};
+use solana_metrics::inc_new_counter_debug;
 use solana_perf::packet::{limited_deserialize, Packets, PacketsRecycler};
 use solana_sdk::{
     clock::Slot,
