@@ -27,7 +27,6 @@ export function TransactionHistoryCard({ pubkey }: { pubkey: PublicKey }) {
     if (history?.data?.fetched) {
       return getTransactionRows(history.data.fetched);
     }
-
     return [];
   }, [history]);
 

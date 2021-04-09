@@ -21,8 +21,8 @@ import {
   HistoryCardFooter,
   HistoryCardHeader,
 } from "../HistoryCardComponents";
-import Moment from "react-moment";
 import { extractMintDetails, MintDetails } from "./common";
+import Moment from "react-moment";
 
 export function TokenInstructionsCard({ pubkey }: { pubkey: PublicKey }) {
   const address = pubkey.toBase58();
@@ -35,7 +35,6 @@ export function TokenInstructionsCard({ pubkey }: { pubkey: PublicKey }) {
     if (history?.data?.fetched) {
       return getTransactionRows(history.data.fetched);
     }
-
     return [];
   }, [history]);
 
