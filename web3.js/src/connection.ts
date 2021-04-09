@@ -1369,12 +1369,12 @@ export type StakeActivationData = {
 };
 
 /**
- * Data slice object for getProgramAccounts
+ * Data slice argument for getProgramAccounts
  */
 export type DataSlice = {
-  /** offset of data slice limit */
+  /** offset of data slice */
   offset: number;
-  /** length of data slice limit  */
+  /** length of data slice */
   length: number;
 };
 
