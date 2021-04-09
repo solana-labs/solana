@@ -1,6 +1,9 @@
 import React from "react";
 import { ConfirmedSignatureInfo } from "@solana/web3.js";
-import { getTokenInstructionName, InstructionType } from "utils/instruction";
+import {
+  getTokenProgramInstructionName,
+  InstructionType,
+} from "utils/instruction";
 
 export function InstructionDetails({
   instructionType,
@@ -14,7 +17,7 @@ export function InstructionDetails({
   let instructionTypes = instructionType.innerInstructions
     .map((ix) => {
       if ("parsed" in ix && ix.program === "spl-token") {
-        return getTokenInstructionName(ix, tx);
+        return getTokenProgramInstructionName(ix, tx);
       }
       return undefined;
     })

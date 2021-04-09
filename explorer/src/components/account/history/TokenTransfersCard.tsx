@@ -27,11 +27,7 @@ import { useFetchAccountHistory } from "providers/accounts/history";
 import { ErrorCard } from "components/common/ErrorCard";
 import { FetchStatus } from "providers/cache";
 import Moment from "react-moment";
-
-type MintDetails = {
-  decimals: number;
-  mint: string;
-};
+import { extractMintDetails, MintDetails } from "./common";
 
 export function TokenTransfersCard({ pubkey }: { pubkey: PublicKey }) {
   const address = pubkey.toBase58();
@@ -76,27 +72,7 @@ export function TokenTransfersCard({ pubkey }: { pubkey: PublicKey }) {
 
         // Extract mint information from token deltas
         // (used to filter out non-checked tokens transfers not belonging to this mint)
-        if (parsed.meta?.preTokenBalances) {
-          parsed.meta.preTokenBalances.forEach((balance) => {
-            const account =
-              parsed.transaction.message.accountKeys[balance.accountIndex];
-            mintMap.set(account.pubkey.toBase58(), {
-              decimals: balance.uiTokenAmount.decimals,
-              mint: balance.mint,
-            });
-          });
-        }
-
-        if (parsed.meta?.postTokenBalances) {
-          parsed.meta.postTokenBalances.forEach((balance) => {
-            const account =
-              parsed.transaction.message.accountKeys[balance.accountIndex];
-            mintMap.set(account.pubkey.toBase58(), {
-              decimals: balance.uiTokenAmount.decimals,
-              mint: balance.mint,
-            });
-          });
-        }
+        extractMintDetails(parsed, mintMap);
 
         // Extract all transfers from transaction
         let transfers: (Transfer | TransferChecked)[] = [];
@@ -117,21 +93,24 @@ export function TokenTransfersCard({ pubkey }: { pubkey: PublicKey }) {
 
         // Filter out transfers not belonging to this mint
         transfers = transfers.filter((transfer) => {
-          if ("tokenAmount" in transfer && transfer.mint !== pubkey) {
-            return false;
+          const sourceKey = transfer.source.toBase58();
+          const destinationKey = transfer.destination.toBase58();
+
+          if ("tokenAmount" in transfer && transfer.mint.equals(pubkey)) {
+            return true;
           } else if (
-            mintMap.has(transfer.source.toBase58()) &&
-            mintMap.get(transfer.source.toBase58())?.mint !== pubkey.toBase58()
+            mintMap.has(sourceKey) &&
+            mintMap.get(sourceKey)?.mint === address
           ) {
-            return false;
+            return true;
           } else if (
-            mintMap.has(transfer.destination.toBase58()) &&
-            mintMap.get(transfer.destination.toBase58())?.mint !==
-              pubkey.toBase58()
+            mintMap.has(destinationKey) &&
+            mintMap.get(destinationKey)?.mint === address
           ) {
-            return false;
+            return true;
           }
-          return true;
+
+          return false;
         });
 
         transfers.forEach((transfer) => {
@@ -205,7 +184,7 @@ export function TokenTransfersCard({ pubkey }: { pubkey: PublicKey }) {
       hasTimestamps,
       detailsList,
     };
-  }, [history, transactionRows, mintDetails, pubkey]);
+  }, [history, transactionRows, mintDetails, pubkey, address]);
 
   if (!history) {
     return null;

@@ -65,7 +65,7 @@ export class InstructionContainer {
   }
 }
 
-export function getTokenInstructionName(
+export function getTokenProgramInstructionName(
   ix: ParsedInstruction,
   signatureInfo: ConfirmedSignatureInfo
 ): string {
@@ -80,28 +80,12 @@ export function getTokenInstructionName(
   }
 }
 
-export function getTokenInstructionType(
+export function getTokenInstructionName(
   transaction: ParsedConfirmedTransaction,
   ix: ParsedInstruction | PartiallyDecodedInstruction,
-  signatureInfo: ConfirmedSignatureInfo,
-  index: number
-): InstructionType | undefined {
+  signatureInfo: ConfirmedSignatureInfo
+) {
   let name = "Unknown";
-
-  const innerInstructions: (
-    | ParsedInstruction
-    | PartiallyDecodedInstruction
-  )[] = [];
-
-  if (transaction.meta?.innerInstructions) {
-    transaction.meta.innerInstructions.forEach((ix) => {
-      if (ix.index === index) {
-        ix.instructions.forEach((inner) => {
-          innerInstructions.push(inner);
-        });
-      }
-    });
-  }
 
   let transactionInstruction;
   if (transaction?.transaction) {
@@ -113,7 +97,7 @@ export function getTokenInstructionType(
 
   if ("parsed" in ix) {
     if (ix.program === "spl-token") {
-      name = getTokenInstructionName(ix, signatureInfo);
+      name = getTokenProgramInstructionName(ix, signatureInfo);
     } else {
       return undefined;
     }
@@ -156,6 +140,33 @@ export function getTokenInstructionType(
       return undefined;
     }
   }
+
+  return name;
+}
+
+export function getTokenInstructionType(
+  transaction: ParsedConfirmedTransaction,
+  ix: ParsedInstruction | PartiallyDecodedInstruction,
+  signatureInfo: ConfirmedSignatureInfo,
+  index: number
+): InstructionType | undefined {
+  const innerInstructions: (
+    | ParsedInstruction
+    | PartiallyDecodedInstruction
+  )[] = [];
+
+  if (transaction.meta?.innerInstructions) {
+    transaction.meta.innerInstructions.forEach((ix) => {
+      if (ix.index === index) {
+        ix.instructions.forEach((inner) => {
+          innerInstructions.push(inner);
+        });
+      }
+    });
+  }
+
+  let name =
+    getTokenInstructionName(transaction, ix, signatureInfo) || "Unknown";
 
   return {
     name,

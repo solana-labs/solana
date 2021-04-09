@@ -301,8 +301,7 @@ export function isSerumInstruction(instruction: TransactionInstruction) {
     SERUM_PROGRAM_IDS.includes(instruction.programId.toBase58()) ||
     MARKETS.some(
       (market) =>
-        market.programId &&
-        market.programId.toBase58() === instruction.programId.toBase58()
+        market.programId && market.programId.equals(instruction.programId)
     )
   );
 }

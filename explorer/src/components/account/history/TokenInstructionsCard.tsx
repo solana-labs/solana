@@ -1,9 +1,16 @@
 import React from "react";
-import { ParsedConfirmedTransaction, PublicKey } from "@solana/web3.js";
+import {
+  ParsedConfirmedTransaction,
+  ParsedInstruction,
+  PartiallyDecodedInstruction,
+  PublicKey,
+} from "@solana/web3.js";
 import { useAccountHistory } from "providers/accounts";
 import { Signature } from "components/common/Signature";
-import { getTokenInstructionType } from "utils/instruction";
-import { InstructionDetails } from "components/common/InstructionDetails";
+import {
+  getTokenInstructionName,
+  InstructionContainer,
+} from "utils/instruction";
 import { Address } from "components/common/Address";
 import { LoadingCard } from "components/common/LoadingCard";
 import { ErrorCard } from "components/common/ErrorCard";
@@ -15,6 +22,7 @@ import {
   HistoryCardHeader,
 } from "../HistoryCardComponents";
 import Moment from "react-moment";
+import { extractMintDetails, MintDetails } from "./common";
 
 export function TokenInstructionsCard({ pubkey }: { pubkey: PublicKey }) {
   const address = pubkey.toBase58();
@@ -43,25 +51,43 @@ export function TokenInstructionsCard({ pubkey }: { pubkey: PublicKey }) {
       new Map<string, ParsedConfirmedTransaction>();
     const hasTimestamps = transactionRows.some((element) => element.blockTime);
     const detailsList: React.ReactNode[] = [];
+    const mintMap = new Map<string, MintDetails>();
 
     transactionRows.forEach(
       ({ signatureInfo, signature, blockTime, statusClass, statusText }) => {
         const parsed = detailedHistoryMap.get(signature);
         if (!parsed) return;
 
-        const instructions = parsed.transaction.message.instructions;
+        extractMintDetails(parsed, mintMap);
+
+        let instructions: (
+          | ParsedInstruction
+          | PartiallyDecodedInstruction
+        )[] = [];
+
+        InstructionContainer.create(parsed).instructions.forEach(
+          ({ instruction, inner }, index) => {
+            if (isRelevantInstruction(pubkey, address, mintMap, instruction)) {
+              instructions.push(instruction);
+            }
+            instructions.push(
+              ...inner.filter((instruction) =>
+                isRelevantInstruction(pubkey, address, mintMap, instruction)
+              )
+            );
+          }
+        );
 
         instructions.forEach((ix, index) => {
-          const instructionType = getTokenInstructionType(
-            parsed,
-            ix,
-            signatureInfo,
-            index
-          );
-
           const programId = ix.programId;
 
-          if (instructionType) {
+          const instructionName = getTokenInstructionName(
+            parsed,
+            ix,
+            signatureInfo
+          );
+
+          if (instructionName) {
             detailsList.push(
               <tr key={signature + index}>
                 <td>
@@ -74,12 +100,7 @@ export function TokenInstructionsCard({ pubkey }: { pubkey: PublicKey }) {
                   </td>
                 )}
 
-                <td>
-                  <InstructionDetails
-                    instructionType={instructionType}
-                    tx={signatureInfo}
-                  />
-                </td>
+                <td>{instructionName}</td>
 
                 <td>
                   <Address
@@ -106,7 +127,7 @@ export function TokenInstructionsCard({ pubkey }: { pubkey: PublicKey }) {
       hasTimestamps,
       detailsList,
     };
-  }, [history, transactionRows]);
+  }, [history, transactionRows, address, pubkey]);
 
   if (!history) {
     return null;
@@ -114,10 +135,12 @@ export function TokenInstructionsCard({ pubkey }: { pubkey: PublicKey }) {
 
   if (history?.data === undefined) {
     if (history.status === FetchStatus.Fetching) {
-      return <LoadingCard message="Loading token transfers" />;
+      return <LoadingCard message="Loading token instructions" />;
     }
 
-    return <ErrorCard retry={refresh} text="Failed to fetch token transfers" />;
+    return (
+      <ErrorCard retry={refresh} text="Failed to fetch token instructions" />
+    );
   }
 
   const fetching = history.status === FetchStatus.Fetching;
@@ -149,4 +172,25 @@ export function TokenInstructionsCard({ pubkey }: { pubkey: PublicKey }) {
       />
     </div>
   );
+}
+
+function isRelevantInstruction(
+  pubkey: PublicKey,
+  address: string,
+  mintMap: Map<string, MintDetails>,
+  instruction: ParsedInstruction | PartiallyDecodedInstruction
+) {
+  if ("accounts" in instruction) {
+    return instruction.accounts.some(
+      (account) =>
+        account.equals(pubkey) ||
+        mintMap.get(account.toBase58())?.mint === address
+    );
+  } else {
+    return Object.entries(instruction.parsed.info).some(
+      ([key, value]) =>
+        value === address ||
+        (typeof value === "string" && mintMap.get(value)?.mint === address)
+    );
+  }
 }

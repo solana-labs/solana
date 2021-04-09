@@ -22,7 +22,7 @@ export function Signature({
   let signatureLabel = signature;
 
   if (truncateChars) {
-    signatureLabel = signature.slice(0, truncateChars) + "...";
+    signatureLabel = signature.slice(0, truncateChars) + "…";
   }
 
   return (

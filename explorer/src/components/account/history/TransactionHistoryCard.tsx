@@ -92,9 +92,9 @@ export function TransactionHistoryCard({ pubkey }: { pubkey: PublicKey }) {
         <table className="table table-sm table-nowrap card-table">
           <thead>
             <tr>
-              <th className="text-muted">Transaction Signature</th>
+              <th className="text-muted w-1">Transaction Signature</th>
               <th className="text-muted w-1">Slot</th>
-              {hasTimestamps && <th className="text-muted">Age</th>}
+              {hasTimestamps && <th className="text-muted w-1">Age</th>}
               <th className="text-muted">Result</th>
             </tr>
           </thead>

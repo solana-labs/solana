@@ -42,7 +42,7 @@ export function Address({
     : displayAddress(address, cluster, tokenRegistry);
 
   if (truncateChars && addressLabel === address) {
-    addressLabel = addressLabel.slice(0, truncateChars) + "...";
+    addressLabel = addressLabel.slice(0, truncateChars) + "…";
   }
 
   const content = (

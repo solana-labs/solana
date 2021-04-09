@@ -1,5 +1,5 @@
-import { ConfirmedSignatureInfo } from "@solana/web3.js";
 import React from "react";
+import { ConfirmedSignatureInfo } from "@solana/web3.js";
 
 export type TransactionRow = {
   slot: number;
