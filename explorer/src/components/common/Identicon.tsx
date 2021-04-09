@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from "react";
 
 // @ts-ignore
-import Jazzicon from "jazzicon"; // TODO: Add definition file
+import Jazzicon from "@metamask/jazzicon";
 import bs58 from "bs58";
 import { PublicKey } from "@solana/web3.js";
 
@@ -15,7 +15,7 @@ export function Identicon(props: {
     typeof props.address === "string"
       ? props.address
       : props.address?.toBase58();
-  const ref = useRef<HTMLDivElement>();
+  const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (address && ref.current) {
@@ -30,7 +30,5 @@ export function Identicon(props: {
     }
   }, [address, style, className]);
 
-  return (
-    <div className="identicon-wrapper" ref={ref as any} style={props.style} />
-  );
+  return <div className="identicon-wrapper" ref={ref} style={props.style} />;
 }

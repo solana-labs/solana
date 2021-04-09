@@ -114,7 +114,7 @@ export function AccountHeader({
   const tokenDetails = tokenRegistry.get(address);
   const account = info?.data;
   const data = account?.details?.data;
-  const isToken = data && data.program === "spl-token";
+  const isToken = data?.program === "spl-token" && data?.parsed.type === "mint";
 
   if (tokenDetails || isToken) {
     return (
