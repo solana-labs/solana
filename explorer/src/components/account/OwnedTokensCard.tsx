@@ -151,12 +151,14 @@ function HoldingsSummaryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
     const mintAddress = token.mint.toBase58();
     const totalByMint = mappedTokens.get(mintAddress);
 
-    let amount = new BigNumber(token.tokenAmount.uiAmountString);
+    let amount = token.tokenAmount.uiAmountString;
     if (totalByMint !== undefined) {
-      amount.plus(totalByMint);
+      amount = new BigNumber(totalByMint)
+        .plus(token.tokenAmount.uiAmountString)
+        .toString();
     }
 
-    mappedTokens.set(mintAddress, amount.toString());
+    mappedTokens.set(mintAddress, amount);
   }
 
   const detailsList: React.ReactNode[] = [];
