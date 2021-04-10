@@ -32,6 +32,7 @@ export function StakeAccountSection({
         account={account}
         stakeAccount={stakeAccount}
         stakeAccountType={stakeAccountType}
+        activation={activation}
       />
       {stakeAccount.meta && (
         <>
@@ -68,16 +69,40 @@ const TYPE_NAMES = {
   rewardsPool: "RewardsPool",
 };
 
+function displayStatus(
+  stakeAccountType: StakeAccountType,
+  activation?: StakeActivationData
+) {
+  let status = TYPE_NAMES[stakeAccountType];
+  let activationState = "";
+  if (stakeAccountType !== "delegated") {
+    status = "Not delegated";
+  } else {
+    activationState = activation ? `(${activation.state})` : "";
+  }
+
+  return [status, activationState].join(" ");
+}
+
 function OverviewCard({
   account,
   stakeAccount,
   stakeAccountType,
+  activation,
 }: {
   account: Account;
   stakeAccount: StakeAccountInfo;
   stakeAccountType: StakeAccountType;
+  activation?: StakeActivationData;
 }) {
   const refresh = useFetchAccountInfo();
+  const { stake } = stakeAccount;
+
+  const displayStakeStatus =
+    activation &&
+    stake &&
+    stake.delegation.stake.toString() === activation.inactive.toString();
+
   return (
     <div className="card">
       <div className="card-header">
@@ -114,12 +139,15 @@ function OverviewCard({
             </td>
           </tr>
         )}
-        {!stakeAccount.meta && (
-          <tr>
-            <td>State</td>
-            <td className="text-lg-right">{TYPE_NAMES[stakeAccountType]}</td>
-          </tr>
-        )}
+        {!stakeAccount.meta ||
+          (displayStakeStatus && (
+            <tr>
+              <td>Status</td>
+              <td className="text-lg-right">
+                {displayStatus(stakeAccountType, activation)}
+              </td>
+            </tr>
+          ))}
       </TableCardBody>
     </div>
   );
@@ -134,18 +162,6 @@ function DelegationCard({
   stakeAccountType: StakeAccountType;
   activation?: StakeActivationData;
 }) {
-  const displayStatus = () => {
-    let status = TYPE_NAMES[stakeAccountType];
-    let activationState = "";
-    if (stakeAccountType !== "delegated") {
-      status = "Not delegated";
-    } else {
-      activationState = activation ? `(${activation.state})` : "";
-    }
-
-    return [status, activationState].join(" ");
-  };
-
   let voterPubkey, activationEpoch, deactivationEpoch;
   const delegation = stakeAccount?.stake?.delegation;
   if (delegation) {
@@ -159,6 +175,16 @@ function DelegationCard({
   }
 
   const { stake } = stakeAccount;
+
+  if (
+    activation &&
+    stake &&
+    stake.delegation.stake.toString() === activation.inactive.toString()
+  ) {
+    // hide confusing state https://github.com/solana-labs/solana/issues/13740
+    return null;
+  }
+
   return (
     <div className="card">
       <div className="card-header">
@@ -169,7 +195,9 @@ function DelegationCard({
       <TableCardBody>
         <tr>
           <td>Status</td>
-          <td className="text-lg-right">{displayStatus()}</td>
+          <td className="text-lg-right">
+            {displayStatus(stakeAccountType, activation)}
+          </td>
         </tr>
 
         {stake && (
