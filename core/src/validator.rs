@@ -1390,7 +1390,20 @@ fn report_target_features() {
         }
     );
 
-    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    // We exclude Mac OS here to be compatible with computers that have Mac M1 chips.
+    // For these computers, one must install rust/cargo/brew etc. using Rosetta 2,
+    // which allows them to run software targeted for x86_64 on an aarch64.
+    // Hence the code below will run on these machines (target_arch="x86_64")
+    // if we don't exclude with target_os="macos".
+    //
+    // It's going to require more more work to get Solana building
+    // on Mac M1's without Rosetta,
+    // and when that happens we should remove this
+    // (the feature flag for code targeting that is target_arch="aarch64")
+    #[cfg(all(
+        any(target_arch = "x86", target_arch = "x86_64"),
+        not(target_os = "macos")
+    ))]
     {
         unsafe { check_avx() };
     }

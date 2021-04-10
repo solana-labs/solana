@@ -15,16 +15,5 @@ log = "0.4.11"
 solana-sdk = { path = "../sdk", version = "=1.7.0" }
 solana-metrics = { path = "../metrics", version = "=1.7.0" }
 
-[target."cfg(unix)".dependencies]
-jemallocator = "0.3.2"
-jemalloc-ctl = "0.3.2"
-
-[features]
-# mainly for heaptrack, which seems to be incompatible with jemalloc
-# opt-out ("no-" prefix) is chosen for convenience for the default case
-# (= with jemalloc), considering complexies of proper opt-in (default)
-# feature plumbing
-no-jemalloc = []
-
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

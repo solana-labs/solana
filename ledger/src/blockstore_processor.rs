@@ -12,7 +12,7 @@ use itertools::Itertools;
 use log::*;
 use rand::{seq::SliceRandom, thread_rng};
 use rayon::{prelude::*, ThreadPool};
-use solana_measure::{measure::Measure, thread_mem_usage};
+use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_error, inc_new_counter_debug};
 use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::{
@@ -423,8 +423,6 @@ fn do_process_blockstore_from_root(
     transaction_status_sender: Option<TransactionStatusSender>,
 ) -> BlockstoreProcessorResult {
     info!("processing ledger from slot {}...", bank.slot());
-    let allocated = thread_mem_usage::Allocatedp::default();
-    let initial_allocation = allocated.get();
 
     // Starting slot must be a root, and thus has no parents
     assert!(bank.parent().is_none());
@@ -503,9 +501,9 @@ fn do_process_blockstore_from_root(
 
     info!("ledger processing timing: {:?}", timing);
     info!(
-        "ledger processed in {}. {} MB allocated. root slot is {}, {} fork{} at {}, with {} frozen bank{}",
-        HumanTime::from(chrono::Duration::from_std(now.elapsed()).unwrap()).to_text_en(Accuracy::Precise, Tense::Present),
-        allocated.since(initial_allocation) / 1_000_000,
+        "ledger processed in {}. root slot is {}, {} fork{} at {}, with {} frozen bank{}",
+        HumanTime::from(chrono::Duration::from_std(now.elapsed()).unwrap())
+            .to_text_en(Accuracy::Precise, Tense::Present),
         bank_forks.root(),
         initial_forks.len(),
         if initial_forks.len() > 1 { "s" } else { "" },
@@ -824,9 +822,6 @@ fn process_next_slots(
         // Only process full slots in blockstore_processor, replay_stage
         // handles any partials
         if next_meta.is_full() {
-            let allocated = thread_mem_usage::Allocatedp::default();
-            let initial_allocation = allocated.get();
-
             let next_bank = Arc::new(Bank::new_from_parent(
                 &bank,
                 &leader_schedule_cache
@@ -835,10 +830,9 @@ fn process_next_slots(
                 *next_slot,
             ));
             trace!(
-                "New bank for slot {}, parent slot is {}. {} bytes allocated",
+                "New bank for slot {}, parent slot is {}",
                 next_slot,
                 bank.slot(),
-                allocated.since(initial_allocation)
             );
             pending_slots.push((next_meta, next_bank, bank.last_blockhash()));
         }
@@ -904,9 +898,6 @@ fn load_frozen_forks(
                 slots_elapsed = 0;
                 txs = 0;
             }
-
-            let allocated = thread_mem_usage::Allocatedp::default();
-            let initial_allocation = allocated.get();
 
             let mut progress = ConfirmationProgress::new(last_entry_hash);
 
@@ -987,10 +978,9 @@ fn load_frozen_forks(
             slots_elapsed += 1;
 
             trace!(
-                "Bank for {}slot {} is complete. {} bytes allocated",
+                "Bank for {}slot {} is complete",
                 if last_root == slot { "root " } else { "" },
                 slot,
-                allocated.since(initial_allocation)
             );
 
             process_next_slots(

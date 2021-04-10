@@ -3,7 +3,6 @@
 
 use crate::packet::{self, send_to, Packets, PacketsRecycler, PACKETS_PER_BATCH};
 use crate::recvmmsg::NUM_RCVMMSGS;
-use solana_measure::thread_mem_usage;
 use solana_sdk::timing::{duration_as_ms, timestamp};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -97,7 +96,6 @@ pub fn receiver(
     Builder::new()
         .name("solana-receiver".to_string())
         .spawn(move || {
-            thread_mem_usage::datapoint(name);
             let _ = recv_loop(
                 &sock,
                 exit,
@@ -144,7 +142,6 @@ pub fn responder(name: &'static str, sock: Arc<UdpSocket>, r: PacketReceiver) ->
             let mut last_error = None;
             let mut last_print = 0;
             loop {
-                thread_mem_usage::datapoint(name);
                 if let Err(e) = recv_send(&sock, &r) {
                     match e {
                         StreamerError::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
