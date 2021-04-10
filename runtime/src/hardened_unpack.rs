@@ -113,7 +113,14 @@ where
             Normal(c) => c.to_str(),
             _ => None, // Prefix (for Windows) and RootDir are forbidden
         });
-        if parts.clone().any(|p| p.is_none()) {
+
+        // Reject old-style BSD directory entries that aren't explicitly tagged as directories
+        let legacy_dir_entry =
+            entry.header().as_ustar().is_none() && entry.path_bytes().ends_with(b"/");
+        let kind = entry.header().entry_type();
+        let reject_legacy_dir_entry = legacy_dir_entry && (kind != Directory);
+
+        if parts.clone().any(|p| p.is_none()) || reject_legacy_dir_entry {
             return Err(UnpackError::Archive(format!(
                 "invalid path found: {:?}",
                 path_str
@@ -121,7 +128,7 @@ where
         }
 
         let parts: Vec<_> = parts.map(|p| p.unwrap()).collect();
-        let unpack_dir = match entry_checker(parts.as_slice(), entry.header().entry_type()) {
+        let unpack_dir = match entry_checker(parts.as_slice(), kind) {
             None => {
                 return Err(UnpackError::Archive(format!(
                     "extra entry found: {:?} {:?}",
@@ -147,6 +154,14 @@ where
         // unpack_in does its own sanitization
         // ref: https://docs.rs/tar/*/tar/struct.Entry.html#method.unpack_in
         check_unpack_result(entry.unpack_in(unpack_dir)?, path_str)?;
+
+        // Sanitize permissions.
+        let mode = match entry.header().entry_type() {
+            GNUSparse | Regular => 0o644,
+            _ => 0o755,
+        };
+        set_perms(&unpack_dir.join(entry.path()?), mode)?;
+
         total_entries += 1;
         let now = Instant::now();
         if now.duration_since(last_log_update).as_secs() >= 10 {
@@ -156,7 +171,22 @@ where
     }
     info!("unpacked {} entries total", total_entries);
 
-    Ok(())
+    return Ok(());
+
+    #[cfg(unix)]
+    fn set_perms(dst: &Path, mode: u32) -> std::io::Result<()> {
+        use std::os::unix::fs::PermissionsExt;
+
+        let perm = fs::Permissions::from_mode(mode as _);
+        fs::set_permissions(dst, perm)
+    }
+
+    #[cfg(windows)]
+    fn set_perms(dst: &Path, _mode: u32) -> std::io::Result<()> {
+        let mut perm = fs::metadata(dst)?.permissions();
+        perm.set_readonly(false);
+        fs::set_permissions(dst, perm)
+    }
 }
 
 // Map from AppendVec file name to unpacked file system location
@@ -321,8 +351,8 @@ fn is_valid_genesis_archive_entry(parts: &[&str], kind: tar::EntryType) -> bool 
         (["genesis.bin"], GNUSparse) => true,
         (["genesis.bin"], Regular) => true,
         (["rocksdb"], Directory) => true,
-        (["rocksdb", ..], GNUSparse) => true,
-        (["rocksdb", ..], Regular) => true,
+        (["rocksdb", _], GNUSparse) => true,
+        (["rocksdb", _], Regular) => true,
         _ => false,
     }
 }
@@ -431,6 +461,10 @@ mod tests {
             tar::EntryType::Regular
         ));
         assert!(is_valid_genesis_archive_entry(
+            &["genesis.bin"],
+            tar::EntryType::GNUSparse,
+        ));
+        assert!(is_valid_genesis_archive_entry(
             &["rocksdb"],
             tar::EntryType::Directory
         ));
@@ -439,13 +473,41 @@ mod tests {
             tar::EntryType::Regular
         ));
         assert!(is_valid_genesis_archive_entry(
-            &["rocksdb", "foo", "bar"],
-            tar::EntryType::Regular
+            &["rocksdb", "foo"],
+            tar::EntryType::GNUSparse,
         ));
 
         assert!(!is_valid_genesis_archive_entry(
             &["aaaa"],
             tar::EntryType::Regular
+        ));
+        assert!(!is_valid_genesis_archive_entry(
+            &["aaaa"],
+            tar::EntryType::GNUSparse,
+        ));
+        assert!(!is_valid_genesis_archive_entry(
+            &["rocksdb"],
+            tar::EntryType::Regular
+        ));
+        assert!(!is_valid_genesis_archive_entry(
+            &["rocksdb"],
+            tar::EntryType::GNUSparse,
+        ));
+        assert!(!is_valid_genesis_archive_entry(
+            &["rocksdb", "foo"],
+            tar::EntryType::Directory,
+        ));
+        assert!(!is_valid_genesis_archive_entry(
+            &["rocksdb", "foo", "bar"],
+            tar::EntryType::Directory,
+        ));
+        assert!(!is_valid_genesis_archive_entry(
+            &["rocksdb", "foo", "bar"],
+            tar::EntryType::Regular
+        ));
+        assert!(!is_valid_genesis_archive_entry(
+            &["rocksdb", "foo", "bar"],
+            tar::EntryType::GNUSparse
         ));
     }
 
@@ -458,7 +520,11 @@ mod tests {
         let mut archive: Archive<std::io::BufReader<&[u8]>> = Archive::new(reader);
         let temp_dir = tempfile::TempDir::new().unwrap();
 
-        checker(&mut archive, &temp_dir.into_path())
+        checker(&mut archive, temp_dir.path())?;
+        // Check that there is no bad permissions preventing deletion.
+        let result = temp_dir.close();
+        assert_matches!(result, Ok(()));
+        Ok(())
     }
 
     fn finalize_and_unpack_snapshot(archive: tar::Builder<Vec<u8>>) -> Result<()> {
@@ -503,6 +569,65 @@ mod tests {
 
         let result = finalize_and_unpack_genesis(archive);
         assert_matches!(result, Ok(()));
+    }
+
+    #[test]
+    fn test_archive_unpack_genesis_bad_perms() {
+        let mut archive = Builder::new(Vec::new());
+
+        let mut header = Header::new_gnu();
+        header.set_path("rocksdb").unwrap();
+        header.set_entry_type(Directory);
+        header.set_size(0);
+        header.set_cksum();
+        let data: &[u8] = &[];
+        archive.append(&header, data).unwrap();
+
+        let mut header = Header::new_gnu();
+        header.set_path("rocksdb/test").unwrap();
+        header.set_size(4);
+        header.set_cksum();
+        let data: &[u8] = &[1, 2, 3, 4];
+        archive.append(&header, data).unwrap();
+
+        // Removing all permissions makes it harder to delete this directory
+        // or work with files inside it.
+        let mut header = Header::new_gnu();
+        header.set_path("rocksdb").unwrap();
+        header.set_entry_type(Directory);
+        header.set_mode(0o000);
+        header.set_size(0);
+        header.set_cksum();
+        let data: &[u8] = &[];
+        archive.append(&header, data).unwrap();
+
+        let result = finalize_and_unpack_genesis(archive);
+        assert_matches!(result, Ok(()));
+    }
+
+    #[test]
+    fn test_archive_unpack_genesis_bad_rocksdb_subdir() {
+        let mut archive = Builder::new(Vec::new());
+
+        let mut header = Header::new_gnu();
+        header.set_path("rocksdb").unwrap();
+        header.set_entry_type(Directory);
+        header.set_size(0);
+        header.set_cksum();
+        let data: &[u8] = &[];
+        archive.append(&header, data).unwrap();
+
+        // tar-rs treats following entry as a Directory to support old tar formats.
+        let mut header = Header::new_gnu();
+        header.set_path("rocksdb/test/").unwrap();
+        header.set_entry_type(Regular);
+        header.set_size(0);
+        header.set_cksum();
+        let data: &[u8] = &[];
+        archive.append(&header, data).unwrap();
+
+        let result = finalize_and_unpack_genesis(archive);
+        assert_matches!(result, Err(UnpackError::Archive(ref message)) if message == "invalid path found: \"rocksdb/test/\"");
     }
 
     #[test]
