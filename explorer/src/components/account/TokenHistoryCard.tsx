@@ -317,12 +317,14 @@ const FilterDropdown = ({ filter, toggle, show, tokens }: FilterProps) => {
   };
 
   const filterOptions: string[] = [ALL_TOKENS];
-  const nameLookup: { [mint: string]: string } = {};
+  const nameLookup: Map<string, string> = new Map();
 
   tokens.forEach((token) => {
-    const pubkey = token.info.mint.toBase58();
-    filterOptions.push(pubkey);
-    nameLookup[pubkey] = formatTokenName(pubkey, cluster, tokenRegistry);
+    const address = token.info.mint.toBase58();
+    if (!nameLookup.has(address)) {
+      filterOptions.push(address);
+      nameLookup.set(address, formatTokenName(address, cluster, tokenRegistry));
+    }
   });
 
   return (
@@ -333,7 +335,7 @@ const FilterDropdown = ({ filter, toggle, show, tokens }: FilterProps) => {
         type="button"
         onClick={toggle}
       >
-        {filter === ALL_TOKENS ? "All Tokens" : nameLookup[filter]}
+        {filter === ALL_TOKENS ? "All Tokens" : nameLookup.get(filter)}
       </button>
       <div
         className={`token-filter dropdown-menu-right dropdown-menu${
