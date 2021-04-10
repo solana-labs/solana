@@ -12,11 +12,8 @@ import { ClusterStatus, useCluster } from "providers/cluster";
 import { TpsCard } from "components/TpsCard";
 import { displayTimestampWithoutDate, displayTimestampUtc } from "utils/date";
 import { Status, useFetchSupply, useSupply } from "providers/supply";
-import { PublicKey } from "@solana/web3.js";
 import { ErrorCard } from "components/common/ErrorCard";
 import { LoadingCard } from "components/common/LoadingCard";
-import { useAccountInfo, useFetchAccountInfo } from "providers/accounts";
-import { FetchStatus } from "providers/cache";
 import { useVoteAccounts } from "providers/accounts/vote-accounts";
 // @ts-ignore
 import * as CoinGecko from "coingecko-api";
@@ -29,7 +26,6 @@ enum CoingeckoStatus {
 const CoinGeckoClient = new CoinGecko();
 
 const CLUSTER_STATS_TIMEOUT = 5000;
-const STAKE_HISTORY_ACCOUNT = "SysvarStakeHistory1111111111111111111111111";
 const PRICE_REFRESH = 10000;
 
 export function ClusterStatsPage() {
@@ -55,14 +51,11 @@ function StakingComponent() {
   const { status } = useCluster();
   const supply = useSupply();
   const fetchSupply = useFetchSupply();
-  const fetchAccount = useFetchAccountInfo();
-  const stakeInfo = useAccountInfo(STAKE_HISTORY_ACCOUNT);
   const coinInfo = useCoinGecko("solana");
   const { fetchVoteAccounts, voteAccounts } = useVoteAccounts();
 
   function fetchData() {
     fetchSupply();
-    fetchAccount(new PublicKey(STAKE_HISTORY_ACCOUNT));
     fetchVoteAccounts();
   }
 
@@ -72,7 +65,7 @@ function StakingComponent() {
     }
   }, [status]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const deliquentStake = React.useMemo(() => {
+  const delinquentStake = React.useMemo(() => {
     if (voteAccounts) {
       return voteAccounts.delinquent.reduce(
         (prev, current) => prev + current.activatedStake,
@@ -81,34 +74,27 @@ function StakingComponent() {
     }
   }, [voteAccounts]);
 
-  let stakeHistory = stakeInfo?.data?.details?.data?.parsed.info;
+  const activeStake = React.useMemo(() => {
+    if (voteAccounts && delinquentStake) {
+      return (
+        voteAccounts.current.reduce(
+          (prev, current) => prev + current.activatedStake,
+          0
+        ) + delinquentStake
+      );
+    }
+  }, [voteAccounts, delinquentStake]);
 
   if (supply === Status.Disconnected) {
     // we'll return here to prevent flicker
     return null;
   }
 
-  if (
-    supply === Status.Idle ||
-    supply === Status.Connecting ||
-    !stakeInfo ||
-    !stakeHistory ||
-    !coinInfo
-  ) {
+  if (supply === Status.Idle || supply === Status.Connecting || !coinInfo) {
     return <LoadingCard />;
   } else if (typeof supply === "string") {
     return <ErrorCard text={supply} retry={fetchData} />;
-  } else if (
-    stakeInfo.status === FetchStatus.FetchFailed ||
-    (stakeInfo.status === FetchStatus.Fetched &&
-      (!stakeHistory.length || stakeHistory.length < 1))
-  ) {
-    return (
-      <ErrorCard text={"Failed to fetch active stake"} retry={fetchData} />
-    );
   }
-
-  stakeHistory = stakeHistory[0].stakeHistory;
 
   const circulatingPercentage = (
     (supply.circulating / supply.total) *
@@ -116,11 +102,10 @@ function StakingComponent() {
   ).toFixed(1);
 
   let delinquentStakePercentage;
-  if (deliquentStake) {
-    delinquentStakePercentage = (
-      (deliquentStake / stakeHistory.effective) *
-      100
-    ).toFixed(1);
+  if (delinquentStake && activeStake) {
+    delinquentStakePercentage = ((delinquentStake / activeStake) * 100).toFixed(
+      1
+    );
   }
 
   let solanaInfo;
@@ -145,10 +130,12 @@ function StakingComponent() {
           <hr className="hidden-sm-up" />
           <div className="p-2 flex-fill">
             <h4>Active Stake</h4>
-            <h1>
-              <em>{displayLamports(stakeHistory.effective)}</em> /{" "}
-              <small>{displayLamports(supply.total)}</small>
-            </h1>
+            {activeStake && (
+              <h1>
+                <em>{displayLamports(activeStake)}</em> /{" "}
+                <small>{displayLamports(supply.total)}</small>
+              </h1>
+            )}
             {delinquentStakePercentage && (
               <h5>
                 Delinquent stake: <em>{delinquentStakePercentage}%</em>
