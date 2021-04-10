@@ -199,7 +199,7 @@ impl Tower {
 
         let (best_slot, best_hash) = heaviest_subtree_fork_choice.best_overall_slot();
         let heaviest_bank = bank_forks
-            .get(best_slot)
+            .get_with_checked_hash((best_slot, best_hash))
             .expect(
                 "The best overall slot must be one of `frozen_banks` which all exist in bank_forks",
             )

@@ -105,6 +105,7 @@ impl ForkInfo {
 #[derive(Debug, Default)]
 struct LatestVotes {
     slot: Slot,
+    // The hashes of all blocks that a validator voted on with slot == `self.slot`
     hashes: HashSet<Hash>,
 }
 
@@ -382,13 +383,13 @@ impl HeaviestSubtreeForkChoice {
         true
     }
 
-    pub fn all_slots_stake_voted_subtree(&self) -> Vec<(SlotHashKey, u64)> {
+    pub fn all_slots_stake_voted_subtree(&self) -> impl Iterator<Item = (&SlotHashKey, u64)> {
         self.fork_infos
             .iter()
-            .map(|(slot_hash, fork_info)| (*slot_hash, fork_info.stake_voted_subtree))
-            .collect()
+            .map(|(slot_hash, fork_info)| (slot_hash, fork_info.stake_voted_subtree))
     }
 
+    #[cfg(test)]
     pub fn ancestors(&self, start_slot_hash_key: SlotHashKey) -> Vec<SlotHashKey> {
         AncestorIterator::new(start_slot_hash_key, &self.fork_infos).collect()
     }
@@ -694,6 +695,9 @@ impl HeaviestSubtreeForkChoice {
         for pubkey_vote in pubkey_votes {
             let (pubkey, new_vote_slot_hash) = pubkey_vote.borrow();
             let (new_vote_slot, new_vote_hash) = *new_vote_slot_hash;
+            if new_vote_slot < self.root.0 {
+                continue;
+            }
 
             // A pubkey cannot appear in pubkey votes more than once, unless it's voting for
             // a duplicate slot. This is because other than duplicate slots, later votes in
@@ -947,7 +951,7 @@ impl HeaviestSubtreeForkChoice {
     fn heaviest_slot_on_same_voted_fork(&self, tower: &Tower) -> Option<SlotHashKey> {
         tower
             .last_voted_slot_hash()
-            .map(|last_voted_slot_hash| {
+            .and_then(|last_voted_slot_hash| {
                 let heaviest_slot_hash_on_same_voted_fork = self.best_slot(&last_voted_slot_hash);
                 if heaviest_slot_hash_on_same_voted_fork.is_none() {
                     if !tower.is_stray_last_vote() {
@@ -980,7 +984,6 @@ impl HeaviestSubtreeForkChoice {
                     Some(heaviest_slot_hash_on_same_voted_fork)
                 }
             })
-            .unwrap_or(None)
     }
 
     #[cfg(test)]
@@ -1379,6 +1382,15 @@ mod test {
                 .unwrap(),
             &[(4, bank4_hash)]
         );
+        // Check parent and children of invalid hash don't exist
+        let invalid_hash = Hash::new_unique();
+        assert!(heaviest_subtree_fork_choice
+            .children(&(2, invalid_hash))
+            .is_none());
+        assert!(heaviest_subtree_fork_choice
+            .parent(&(2, invalid_hash))
+            .is_none());
+
         assert_eq!(
             heaviest_subtree_fork_choice.parent(&(3, bank3_hash)),
             Some((1, bank1_hash))

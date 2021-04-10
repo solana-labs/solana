@@ -203,7 +203,6 @@ impl RepairWeight {
             self.remove_tree_slots(
                 subtree
                     .all_slots_stake_voted_subtree()
-                    .iter()
                     .map(|((slot, _), _)| slot),
                 new_root,
             );
@@ -407,7 +406,6 @@ impl RepairWeight {
             self.remove_tree_slots(
                 orphan_tree
                     .all_slots_stake_voted_subtree()
-                    .iter()
                     .map(|((slot, _), _)| slot),
                 self.root,
             );
