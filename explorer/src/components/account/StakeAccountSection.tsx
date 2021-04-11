@@ -98,7 +98,7 @@ function OverviewCard({
   const refresh = useFetchAccountInfo();
   const { stake } = stakeAccount;
 
-  const displayStakeStatus =
+  const displayAsInitialized =
     activation &&
     stake &&
     stake.delegation.stake.toString() === activation.inactive.toString();
@@ -140,11 +140,13 @@ function OverviewCard({
           </tr>
         )}
         {!stakeAccount.meta ||
-          (displayStakeStatus && (
+          (displayAsInitialized && (
             <tr>
               <td>Status</td>
               <td className="text-lg-right">
-                {displayStatus(stakeAccountType, activation)}
+                {displayAsInitialized
+                  ? "Initialized"
+                  : displayStatus(stakeAccountType, activation)}
               </td>
             </tr>
           ))}
