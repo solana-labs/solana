@@ -205,7 +205,6 @@ impl Tower {
             )
             .clone();
 
-        assert_eq!(heaviest_bank.hash(), best_hash);
         Self::new(
             &my_pubkey,
             &vote_account,
