@@ -1454,9 +1454,10 @@ pub mod test {
                 &AbsRequestSender::default(),
                 None,
                 &mut self.heaviest_subtree_fork_choice,
+                &mut BTreeMap::new(),
+                &mut BTreeMap::new(),
                 &mut true,
                 &mut Vec::new(),
-                &mut BTreeMap::new(),
             )
         }
 

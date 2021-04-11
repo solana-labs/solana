@@ -671,6 +671,7 @@ impl Validator {
 
         let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
         let (verified_vote_sender, verified_vote_receiver) = unbounded();
+        let (gossip_verified_vote_hash_sender, gossip_verified_vote_hash_receiver) = unbounded();
         let (cluster_confirmed_slot_sender, cluster_confirmed_slot_receiver) = unbounded();
         let tvu = Tvu::new(
             vote_account,
@@ -718,6 +719,7 @@ impl Validator {
             snapshot_config_and_pending_package,
             vote_tracker.clone(),
             retransmit_slots_sender,
+            gossip_verified_vote_hash_receiver,
             verified_vote_receiver,
             replay_vote_sender.clone(),
             completed_data_sets_sender,
@@ -758,6 +760,7 @@ impl Validator {
             vote_tracker,
             bank_forks,
             verified_vote_sender,
+            gossip_verified_vote_hash_sender,
             replay_vote_receiver,
             replay_vote_sender,
             bank_notification_sender,
