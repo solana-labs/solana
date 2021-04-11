@@ -60,10 +60,11 @@ especially for the case of running staked validators.
 
 Running validator for live clusters (including mainnet-beta) inside Docker is
 not recommended and generally not supported. This is due to concerns of general
-docker's containerzation overhead and resultant performance degradation unless
+Docker's containerzation overhead and resultant performance degradation unless
 specially configured.
 
-We use docker only for development purpose.
+We use Docker only for development purposes. Docker Hub contains images for all
+releases at [solanalabs/solana](https://hub.docker.com/r/solanalabs/solana).
 
 ## Software
 
