@@ -1272,14 +1272,16 @@ mod tests {
         });
 
         // Process votes and check they were notified.
-        let (s, _r) = unbounded();
+        let (verified_vote_sender, _verified_vote_receiver) = unbounded();
+        let (gossip_verified_vote_hash_sender, _gossip_verified_vote_hash_receiver) = unbounded();
         let (_replay_votes_sender, replay_votes_receiver) = unbounded();
         ClusterInfoVoteListener::get_and_process_votes_for_tests(
             &votes_receiver,
             &vote_tracker,
             &bank,
             &rpc.subscriptions,
-            &s,
+            &gossip_verified_vote_hash_sender,
+            &verified_vote_sender,
             &replay_votes_receiver,
         )
         .unwrap();

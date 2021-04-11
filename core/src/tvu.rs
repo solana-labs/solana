@@ -7,7 +7,8 @@ use crate::{
     cache_block_time_service::CacheBlockTimeSender,
     cluster_info::ClusterInfo,
     cluster_info_vote_listener::{
-        GossipDuplicateConfirmedSlotsReceiver, VerifiedVoteReceiver, VoteTracker,
+        GossipDuplicateConfirmedSlotsReceiver, GossipVerifiedVoteHashReceiver,
+        VerifiedVoteReceiver, VoteTracker,
     },
     cluster_slots::ClusterSlots,
     completed_data_sets_service::CompletedDataSetsSender,
@@ -119,6 +120,7 @@ impl Tvu {
         snapshot_config_and_pending_package: Option<(SnapshotConfig, PendingSnapshotPackage)>,
         vote_tracker: Arc<VoteTracker>,
         retransmit_slots_sender: RetransmitSlotsSender,
+        gossip_verified_vote_hash_receiver: GossipVerifiedVoteHashReceiver,
         verified_vote_receiver: VerifiedVoteReceiver,
         replay_vote_sender: ReplayVoteSender,
         completed_data_sets_sender: CompletedDataSetsSender,
@@ -278,6 +280,7 @@ impl Tvu {
             duplicate_slots_reset_receiver,
             replay_vote_sender,
             gossip_confirmed_slots_receiver,
+            gossip_verified_vote_hash_receiver,
         );
 
         let ledger_cleanup_service = tvu_config.max_ledger_shreds.map(|max_ledger_shreds| {
@@ -377,6 +380,7 @@ pub mod tests {
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let (retransmit_slots_sender, _retransmit_slots_receiver) = unbounded();
+        let (_gossip_verified_vote_hash_sender, gossip_verified_vote_hash_receiver) = unbounded();
         let (_verified_vote_sender, verified_vote_receiver) = unbounded();
         let (replay_vote_sender, _replay_vote_receiver) = unbounded();
         let (completed_data_sets_sender, _completed_data_sets_receiver) = unbounded();
@@ -417,6 +421,7 @@ pub mod tests {
             None,
             Arc::new(VoteTracker::new(&bank)),
             retransmit_slots_sender,
+            gossip_verified_vote_hash_receiver,
             verified_vote_receiver,
             replay_vote_sender,
             completed_data_sets_sender,
