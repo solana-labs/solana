@@ -755,7 +755,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         if let Some(ancestors) = ancestors {
             if !ancestors.is_empty() {
                 for (i, (slot, _t)) in slice.iter().rev().enumerate() {
-                    if *slot >= current_max && ancestors.contains_key(slot) {
+                    if (rv.is_none() || *slot > current_max) && ancestors.contains_key(slot) {
                         rv = Some(i);
                         current_max = *slot;
                     }
@@ -767,7 +767,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         let mut tracker = None;
 
         for (i, (slot, _t)) in slice.iter().rev().enumerate() {
-            if *slot >= current_max && *slot <= max_root {
+            if (rv.is_none() || *slot > current_max) && *slot <= max_root {
                 let lock = match tracker {
                     Some(inner) => inner,
                     None => self.roots_tracker.read().unwrap(),
