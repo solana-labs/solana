@@ -244,9 +244,9 @@ impl RollingBitField {
     // after removing 'key' where 'key' = min, make min the correct new min value
     fn purge(&mut self, key: &u64) {
         if key == &self.min && self.count > 0 {
-            let start = self.min;
+            let start = self.min + 1; // min just got removed
             for key in start..self.max {
-                if self.bits.get(key) {
+                if self.contains_assume_in_range(&key) {
                     self.min = key;
                     break;
                 }
@@ -1582,6 +1582,101 @@ pub mod tests {
                 }
             }
         }
+    }
+
+    fn bitfield_insert_and_test(bitfield: &mut RollingBitField, slot: Slot) {
+        let len = bitfield.len();
+        let old_all = bitfield.get_all();
+        let (new_min, new_max) = if bitfield.is_empty() {
+            (slot, slot + 1)
+        } else {
+            (
+                std::cmp::min(bitfield.min, slot),
+                std::cmp::max(bitfield.max, slot + 1),
+            )
+        };
+        bitfield.insert(slot);
+        assert_eq!(bitfield.min, new_min);
+        assert_eq!(bitfield.max, new_max);
+        assert_eq!(bitfield.len(), len + 1);
+        assert!(!bitfield.is_empty());
+        assert!(bitfield.contains(&slot));
+        // verify aliasing is what we expect
+        assert!(bitfield.contains_assume_in_range(&(slot + bitfield.max_width)));
+        let get_all = bitfield.get_all();
+        old_all
+            .into_iter()
+            .for_each(|slot| assert!(get_all.contains(&slot)));
+        assert!(get_all.contains(&slot));
+        assert!(get_all.len() == len + 1);
+    }
+
+    #[test]
+    fn test_bitfield_clear() {
+        let mut bitfield = RollingBitField::new(4);
+        assert_eq!(bitfield.len(), 0);
+        assert!(bitfield.is_empty());
+        bitfield_insert_and_test(&mut bitfield, 0);
+        bitfield.clear();
+        assert_eq!(bitfield.len(), 0);
+        assert!(bitfield.is_empty());
+        assert!(bitfield.get_all().is_empty());
+        bitfield_insert_and_test(&mut bitfield, 1);
+        bitfield.clear();
+        assert_eq!(bitfield.len(), 0);
+        assert!(bitfield.is_empty());
+        assert!(bitfield.get_all().is_empty());
+        bitfield_insert_and_test(&mut bitfield, 4);
+    }
+
+    #[test]
+    fn test_bitfield_wrapping() {
+        let mut bitfield = RollingBitField::new(4);
+        assert_eq!(bitfield.len(), 0);
+        assert!(bitfield.is_empty());
+        bitfield_insert_and_test(&mut bitfield, 0);
+        assert_eq!(bitfield.get_all(), vec![0]);
+        bitfield_insert_and_test(&mut bitfield, 2);
+        assert_eq!(bitfield.get_all(), vec![0, 2]);
+        bitfield_insert_and_test(&mut bitfield, 3);
+        bitfield.insert(3); // redundant insert
+        assert_eq!(bitfield.get_all(), vec![0, 2, 3]);
+        bitfield.remove(&0);
+        assert_eq!(bitfield.min, 2);
+        assert_eq!(bitfield.max, 4);
+        assert_eq!(bitfield.len(), 2);
+        bitfield.remove(&0); // redundant remove
+        assert_eq!(bitfield.len(), 2);
+        assert_eq!(bitfield.get_all(), vec![2, 3]);
+        bitfield.insert(4); // wrapped around value - same bit as '0'
+        assert_eq!(bitfield.min, 2);
+        assert_eq!(bitfield.max, 5);
+        assert_eq!(bitfield.len(), 3);
+        assert_eq!(bitfield.get_all(), vec![2, 3, 4]);
+        bitfield.remove(&2);
+        assert_eq!(bitfield.min, 3);
+        assert_eq!(bitfield.max, 5);
+        assert_eq!(bitfield.len(), 2);
+        assert_eq!(bitfield.get_all(), vec![3, 4]);
+        bitfield.remove(&3);
+        assert_eq!(bitfield.min, 4);
+        assert_eq!(bitfield.max, 5);
+        assert_eq!(bitfield.len(), 1);
+        assert_eq!(bitfield.get_all(), vec![4]);
+        bitfield.remove(&4);
+        assert_eq!(bitfield.len(), 0);
+        assert!(bitfield.is_empty());
+        assert!(bitfield.get_all().is_empty());
+        bitfield_insert_and_test(&mut bitfield, 8);
+        bitfield.remove(&8);
+        assert_eq!(bitfield.len(), 0);
+        assert!(bitfield.is_empty());
+        assert!(bitfield.get_all().is_empty());
+        bitfield_insert_and_test(&mut bitfield, 9);
+        bitfield.remove(&9);
+        assert_eq!(bitfield.len(), 0);
+        assert!(bitfield.is_empty());
+        assert!(bitfield.get_all().is_empty());
     }
 
     #[test]
