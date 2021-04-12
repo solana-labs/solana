@@ -213,7 +213,7 @@ impl LocalCluster {
             &leader_keypair,
             &leader_ledger_path,
             &leader_vote_keypair.pubkey(),
-            vec![leader_vote_keypair.clone()],
+            Arc::new(RwLock::new(vec![leader_vote_keypair.clone()])),
             vec![],
             &leader_config,
             true, // should_check_duplicate_instance
@@ -355,7 +355,7 @@ impl LocalCluster {
             &validator_keypair,
             &ledger_path,
             &voting_keypair.pubkey(),
-            vec![voting_keypair.clone()],
+            Arc::new(RwLock::new(vec![voting_keypair.clone()])),
             vec![self.entry_point_info.clone()],
             &config,
             true, // should_check_duplicate_instance
@@ -670,7 +670,7 @@ impl Cluster for LocalCluster {
             &validator_info.keypair,
             &validator_info.ledger_path,
             &validator_info.voting_keypair.pubkey(),
-            vec![validator_info.voting_keypair.clone()],
+            Arc::new(RwLock::new(vec![validator_info.voting_keypair.clone()])),
             entry_point_info
                 .map(|entry_point_info| vec![entry_point_info])
                 .unwrap_or_default(),

@@ -100,7 +100,7 @@ impl Tvu {
     #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
     pub fn new(
         vote_account: &Pubkey,
-        authorized_voter_keypairs: Vec<Arc<Keypair>>,
+        authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
         bank_forks: &Arc<RwLock<BankForks>>,
         cluster_info: &Arc<ClusterInfo>,
         sockets: Sockets,
@@ -389,7 +389,7 @@ pub mod tests {
         let tower = Tower::new_with_key(&target1_keypair.pubkey());
         let tvu = Tvu::new(
             &vote_keypair.pubkey(),
-            vec![Arc::new(vote_keypair)],
+            Arc::new(RwLock::new(vec![Arc::new(vote_keypair)])),
             &bank_forks,
             &cref1,
             {

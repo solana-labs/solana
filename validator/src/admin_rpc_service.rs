@@ -6,6 +6,7 @@ use {
     jsonrpc_server_utils::tokio,
     log::*,
     solana_core::validator::{ValidatorExit, ValidatorStartProgress},
+    solana_sdk::signature::{read_keypair_file, Keypair, Signer},
     std::{
         net::SocketAddr,
         path::Path,
@@ -21,6 +22,7 @@ pub struct AdminRpcRequestMetadata {
     pub start_time: SystemTime,
     pub start_progress: Arc<RwLock<ValidatorStartProgress>>,
     pub validator_exit: Arc<RwLock<ValidatorExit>>,
+    pub authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
 }
 impl Metadata for AdminRpcRequestMetadata {}
 
@@ -42,6 +44,12 @@ pub trait AdminRpc {
 
     #[rpc(meta, name = "startProgress")]
     fn start_progress(&self, meta: Self::Metadata) -> Result<ValidatorStartProgress>;
+
+    #[rpc(meta, name = "addAuthorizedVoter")]
+    fn add_authorized_voter(&self, meta: Self::Metadata, keypair_file: String) -> Result<()>;
+
+    #[rpc(meta, name = "removeAllAuthorizedVoters")]
+    fn remove_all_authorized_voters(&self, meta: Self::Metadata) -> Result<()>;
 }
 
 pub struct AdminRpcImpl;
@@ -77,6 +85,39 @@ impl AdminRpc for AdminRpcImpl {
     fn start_progress(&self, meta: Self::Metadata) -> Result<ValidatorStartProgress> {
         debug!("start_progress admin rpc request received");
         Ok(*meta.start_progress.read().unwrap())
+    }
+
+    fn add_authorized_voter(&self, meta: Self::Metadata, keypair_file: String) -> Result<()> {
+        debug!("add_authorized_voter request received");
+
+        let authorized_voter = read_keypair_file(keypair_file)
+            .map_err(|err| jsonrpc_core::error::Error::invalid_params(format!("{}", err)))?;
+
+        let mut authorized_voter_keypairs = meta.authorized_voter_keypairs.write().unwrap();
+
+        if authorized_voter_keypairs
+            .iter()
+            .any(|x| x.pubkey() == authorized_voter.pubkey())
+        {
+            Err(jsonrpc_core::error::Error::invalid_params(
+                "Authorized voter already present",
+            ))
+        } else {
+            authorized_voter_keypairs.push(Arc::new(authorized_voter));
+            Ok(())
+        }
+    }
+
+    fn remove_all_authorized_voters(&self, meta: Self::Metadata) -> Result<()> {
+        debug!("remove_all_authorized_voters received");
+        let mut a = meta.authorized_voter_keypairs.write().unwrap();
+
+        error!("authorized_voter_keypairs pre len: {}", a.len());
+        a.clear();
+        error!("authorized_voter_keypairs post len: {}", a.len());
+
+        //meta.authorized_voter_keypairs.write().unwrap().clear();
+        Ok(())
     }
 }
 
