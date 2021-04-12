@@ -3,6 +3,7 @@ use crate::{
     inline_spl_token_v2_0::{self, SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
     secondary_index::*,
 };
+use bv::BitVec;
 use dashmap::DashSet;
 use ouroboros::self_referencing;
 use solana_measure::measure::Measure;
@@ -172,8 +173,6 @@ impl<T: 'static + Clone + IsCached> WriteAccountMapEntry<T> {
         self.slot_list_mut(|list| list.push((slot, account_info)));
     }
 }
-
-use bv::BitVec;
 
 #[derive(Debug, Default)]
 pub struct RollingBitField {
