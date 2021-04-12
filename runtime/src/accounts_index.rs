@@ -200,13 +200,9 @@ impl RollingBitField {
         }
     }
 
-    fn get_address(&self, key: &u64) -> u64 {
-        Self::calc_address(self.max_width, key)
-    }
-
     // find the array index
-    fn calc_address(max_width: u64, key: &u64) -> u64 {
-        key % max_width
+    fn get_address(&self, key: &u64) -> u64 {
+        key % self.max_width
     }
 
     fn check_range(&self, key: u64) {
@@ -240,7 +236,7 @@ impl RollingBitField {
         let address = self.get_address(key);
         let value = self.bits.get(address);
         if value {
-            self.count -= 1; // this will underflow if it tries to go below 0. That is like an assert.
+            self.count -= 1;
             self.bits.set(address, false);
             self.purge(key);
         }
@@ -282,8 +278,8 @@ impl RollingBitField {
     pub fn get_all(&self) -> Vec<u64> {
         let mut all = Vec::with_capacity(self.count);
         for key in self.min..self.max {
-            if self.contains(&(key as u64)) {
-                all.push(key as u64);
+            if self.contains(&key) {
+                all.push(key);
                 if all.len() == self.count {
                     break;
                 }
