@@ -78,7 +78,7 @@ async fn main() {
         let time = faucet1.lock().unwrap().time_slice;
         thread::sleep(time);
         debug!("clearing ip cache");
-        faucet1.lock().unwrap().clear_ip_cache();
+        faucet1.lock().unwrap().clear_caches();
     });
 
     run_faucet(faucet, faucet_addr, None).await;
