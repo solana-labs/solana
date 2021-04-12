@@ -403,6 +403,7 @@ fn main() {
             start_progress: genesis.start_progress.clone(),
             start_time: std::time::SystemTime::now(),
             validator_exit: genesis.validator_exit.clone(),
+            authorized_voter_keypairs: genesis.authorized_voter_keypairs.clone(),
         },
     );
     let dashboard = if output == Output::Dashboard {

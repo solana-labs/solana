@@ -106,7 +106,7 @@ struct SkippedSlotsInfo {
 pub struct ReplayStageConfig {
     pub my_pubkey: Pubkey,
     pub vote_account: Pubkey,
-    pub authorized_voter_keypairs: Vec<Arc<Keypair>>,
+    pub authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
     pub exit: Arc<AtomicBool>,
     pub subscriptions: Arc<RpcSubscriptions>,
     pub leader_schedule_cache: Arc<LeaderScheduleCache>,
@@ -531,7 +531,7 @@ impl ReplayStage {
                             &mut tower,
                             &mut progress,
                             &vote_account,
-                            &authorized_voter_keypairs,
+                            &authorized_voter_keypairs.read().unwrap(),
                             &cluster_info,
                             &blockstore,
                             &leader_schedule_cache,

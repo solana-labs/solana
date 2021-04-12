@@ -56,6 +56,7 @@ pub struct TestValidatorGenesis {
     epoch_schedule: Option<EpochSchedule>,
     pub validator_exit: Arc<RwLock<ValidatorExit>>,
     pub start_progress: Arc<RwLock<ValidatorStartProgress>>,
+    pub authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
 }
 
 impl TestValidatorGenesis {
@@ -399,6 +400,16 @@ impl TestValidator {
         let mut rpc_config = config.rpc_config.clone();
         rpc_config.identity_pubkey = validator_identity.pubkey();
 
+        {
+            let mut authorized_voter_keypairs = config.authorized_voter_keypairs.write().unwrap();
+            if !authorized_voter_keypairs
+                .iter()
+                .any(|x| x.pubkey() == vote_account_address)
+            {
+                authorized_voter_keypairs.push(Arc::new(validator_vote_account))
+            }
+        }
+
         let validator_config = ValidatorConfig {
             rpc_addrs: Some((
                 SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), node.info.rpc.port()),
@@ -434,8 +445,8 @@ impl TestValidator {
             node,
             &Arc::new(validator_identity),
             &ledger_path,
-            &validator_vote_account.pubkey(),
-            vec![Arc::new(validator_vote_account)],
+            &vote_account_address,
+            config.authorized_voter_keypairs.clone(),
             vec![],
             &validator_config,
             true, // should_check_duplicate_instance

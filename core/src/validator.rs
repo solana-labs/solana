@@ -297,7 +297,7 @@ impl Validator {
         identity_keypair: &Arc<Keypair>,
         ledger_path: &Path,
         vote_account: &Pubkey,
-        mut authorized_voter_keypairs: Vec<Arc<Keypair>>,
+        authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
         cluster_entrypoints: Vec<ContactInfo>,
         config: &ValidatorConfig,
         should_check_duplicate_instance: bool,
@@ -311,12 +311,13 @@ impl Validator {
 
         if config.voting_disabled {
             warn!("voting disabled");
-            authorized_voter_keypairs.clear();
+            authorized_voter_keypairs.write().unwrap().clear();
         } else {
-            for authorized_voter_keypair in &authorized_voter_keypairs {
+            for authorized_voter_keypair in authorized_voter_keypairs.read().unwrap().iter() {
                 warn!("authorized voter: {}", authorized_voter_keypair.pubkey());
             }
         }
+
         report_target_features();
 
         for cluster_entrypoint in &cluster_entrypoints {
@@ -1559,7 +1560,7 @@ mod tests {
             &Arc::new(validator_keypair),
             &validator_ledger_path,
             &voting_keypair.pubkey(),
-            vec![voting_keypair.clone()],
+            Arc::new(RwLock::new(vec![voting_keypair.clone()])),
             vec![leader_node.info],
             &config,
             true, // should_check_duplicate_instance
@@ -1635,7 +1636,7 @@ mod tests {
                     &Arc::new(validator_keypair),
                     &validator_ledger_path,
                     &vote_account_keypair.pubkey(),
-                    vec![Arc::new(vote_account_keypair)],
+                    Arc::new(RwLock::new(vec![Arc::new(vote_account_keypair)])),
                     vec![leader_node.info.clone()],
                     &config,
                     true, // should_check_duplicate_instance
