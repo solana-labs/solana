@@ -5225,35 +5225,35 @@ pub mod tests {
         let pubkey128 = Pubkey::new(&[0x80u8; 32]);
         let pubkey255 = Pubkey::new(&[0xffu8; 32]);
 
-        const SLOT: u64 = 0;
+        const SLOT: Slot = 1;
 
         let raw_expected = vec![
             CalculateHashIntermediate {
                 version: 0,
-                hash: Hash::from_str("2UXkyxNEXNRbLo793fkWcdqQDuU8zwFjVhH6sbrcptKH").unwrap(),
+                hash: Hash::from_str("5K3NW73xFHwgTWVe4LyCg4QfQda8f88uZj2ypDx2kmmH").unwrap(),
                 lamports: 1,
-                slot: 0,
+                slot: SLOT,
                 pubkey: pubkey0,
             },
             CalculateHashIntermediate {
                 version: 1,
-                hash: Hash::from_str("E8cioj2q9T6QFhijrUPRnP8iy86NtQievPyRe3GY5TMC").unwrap(),
+                hash: Hash::from_str("84ozw83MZ8oeSF4hRAg7SeW1Tqs9LMXagX1BrDRjtZEx").unwrap(),
                 lamports: 128,
-                slot: 0,
+                slot: SLOT,
                 pubkey: pubkey127,
             },
             CalculateHashIntermediate {
                 version: 2,
-                hash: Hash::from_str("9yaXmx2ruksV1465BuMffqspjW35ggH8nTs8SW2Lq6NK").unwrap(),
+                hash: Hash::from_str("5XqtnEJ41CG2JWNp7MAg9nxkRUAnyjLxfsKsdrLxQUbC").unwrap(),
                 lamports: 129,
-                slot: 0,
+                slot: SLOT,
                 pubkey: pubkey128,
             },
             CalculateHashIntermediate {
                 version: 3,
-                hash: Hash::from_str("7nhnUMjRsaA83HgvEJVv3YrDqHd1SCoVbvsWDTXzCgfh").unwrap(),
+                hash: Hash::from_str("DpvwJcznzwULYh19Zu5CuAA4AT6WTBe4H6n15prATmqj").unwrap(),
                 lamports: 256,
-                slot: 0,
+                slot: SLOT,
                 pubkey: pubkey255,
             },
         ];
