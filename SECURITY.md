@@ -57,8 +57,8 @@ Eligibility:
 * Participants must complete KYC and sign the participation agreement here when the registrations are open https://solana.com/validator-registration. Security exploits will still be assessed and open for submission at all times. This needs only be done prior to distribution of tokens.
 
 Payment of Bug Bounties:
-* Payments for eligible bugs are distributed monthly.
-* All bug bounties submitted in a given month are paid out in the middle of the
+* Payments for eligible bug reports are distributed monthly.
+* Bounties for all bug reports submitted in a given month are paid out in the middle of the
 following month.
 * The SOL/USD conversion rate used for payments is the market price at the end of
   the last day of the month for the month in which the bug was submitted.
