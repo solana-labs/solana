@@ -1,12 +1,12 @@
 [package]
-name = "solana-bpf-rust-sha256"
+name = "solana-bpf-rust-sha"
 version = "1.7.0"
 description = "Solana BPF test program written in Rust"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
-documentation = "https://docs.rs/solana-bpf-rust-sha256"
+documentation = "https://docs.rs/solana-bpf-rust-sha"
 edition = "2018"
 
 [dependencies]
