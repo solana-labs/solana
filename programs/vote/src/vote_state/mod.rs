@@ -59,6 +59,10 @@ impl Vote {
     pub fn last_voted_slot(&self) -> Option<Slot> {
         self.slots.last().copied()
     }
+
+    pub fn last_voted_slot_hash(&self) -> Option<(Slot, Hash)> {
+        self.slots.last().copied().map(|slot| (slot, self.hash))
+    }
 }
 
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample)]
