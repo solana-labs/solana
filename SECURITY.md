@@ -51,13 +51,27 @@ The following components are out of scope for the bounty program
 * Attacks that require social engineering
 
 Eligibility:
-* The participant submitting the bug bounty shall follow the process outlined within this document
+* The participant submitting the bug report shall follow the process outlined within this document
 * Valid exploits can be eligible even if they are not successfully executed on the cluster
 * Multiple submissions for the same class of exploit are still eligible for compensation, though may be compensated at a lower rate, however these will be assessed on a case-by-case basis
 * Participants must complete KYC and sign the participation agreement here when the registrations are open https://solana.com/validator-registration. Security exploits will still be assessed and open for submission at all times. This needs only be done prior to distribution of tokens.
 
-Notes:
-* All locked tokens can be staked during the lockup period
+Payment of Bug Bounties:
+* Payments for eligible bug reports are distributed monthly.
+* Bounties for all bug reports submitted in a given month are paid out in the middle of the
+following month.
+* The SOL/USD conversion rate used for payments is the market price at the end of
+  the last day of the month for the month in which the bug was submitted.
+* The reference for this price is the Closing Price given by Coingecko.com on
+  that date given here:
+  https://www.coingecko.com/en/coins/solana/historical_data/usd#panel
+* For example, for all bugs submitted in March 2021, the SOL/USD price for bug
+  payouts is the Close price on 2021-03-31 of $19.49.  This applies to all bugs
+  submitted in March 2021, to be paid in mid-April 2021.
+* Bug bounties are paid out in
+[stake accounts](https://solana.com/staking) with a
+[lockup](https://docs.solana.com/staking/stake-accounts#lockups)
+expiring 12 months from the last day of the month in which the bug was submitted.
 
 <a name="process"></a>
 ## Incident Response Process
