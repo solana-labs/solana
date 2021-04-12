@@ -10261,25 +10261,25 @@ pub(crate) mod tests {
             if bank.slot == 0 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "6oxxAqridoSSPQ1rnEh8qBhQpMmLUve3X4fsNNr2gExE"
+                    "Cn7Wmi7w1n9NbK7RGnTQ4LpbJ2LtoJoc1sufiTwb57Ya"
                 );
             }
             if bank.slot == 32 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "7AkMgAb2v4tuoiSf3NnVgaBxSvp7XidbrSwsPEn4ENTp"
+                    "BXupB8XsZukMTnDbKshJ8qPCydWnc8BKtSj7YTJ6gAH"
                 );
             }
             if bank.slot == 64 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "2JzWWRBtQgdXboaACBRXNNKsHeBtn57uYmqH1AgGUkdG"
+                    "EDkKefgSMSV1NhxnGnJP7R5AGZ2JZD6oxnoZtGuEGBCU"
                 );
             }
             if bank.slot == 128 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "FQnVhDVjhCyfBxFb3bdm3CLiuCePvWuW5TGDsLBZnKAo"
+                    "AtWu4tubU9zGFChfHtQghQx3RVWtMQu6Rj49rQymFc4z"
                 );
                 break;
             }
