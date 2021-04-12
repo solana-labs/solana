@@ -68,11 +68,10 @@ following month.
 * For example, for all bugs submitted in March 2021, the SOL/USD price for bug
   payouts is the Close price on 2021-03-31 of $19.49.  This applies to all bugs
   submitted in March 2021, to be paid in mid-April 2021.
-
-Notes:
-* All locked tokens can be staked during the lockup period.  Locked tokens are
-eligible for the same staking rewards as unlocked tokens.  Rewards earned on
-  locked stake are also locked with the same lockup expiry.
+* Bug bounties are paid out in
+[stake accounts](https://solana.com/staking) with a
+[lockup](https://docs.solana.com/staking/stake-accounts#lockups)
+expiring 12 months from the last day of the month in which the bug was submitted.
 
 <a name="process"></a>
 ## Incident Response Process
