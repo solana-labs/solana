@@ -254,10 +254,16 @@ impl RollingBitField {
         }
     }
 
-    pub fn contains(&self, key: &u64) -> bool {
+    fn contains_assume_in_range(&self, key: &u64) -> bool {
+        // the result may be aliased. Caller is responsible for determining key is in range.
         let address = self.get_address(key);
-        let result = self.bits.get(address);
-        // a contains call outside min and max is allowed. The answer will be false.
+        self.bits.get(address)
+    }
+
+    pub fn contains(&self, key: &u64) -> bool {
+        let result = self.contains_assume_in_range(key);
+        // A contains call outside min and max is allowed. The answer will be false.
+        // Only need to do range check if we found true.
         result && (key >= &self.min && key < &self.max)
     }
 
@@ -277,11 +283,8 @@ impl RollingBitField {
     pub fn get_all(&self) -> Vec<u64> {
         let mut all = Vec::with_capacity(self.count);
         for key in self.min..self.max {
-            if self.contains(&key) {
+            if self.contains_assume_in_range(&key) {
                 all.push(key);
-                if all.len() == self.count {
-                    break;
-                }
             }
         }
         all
