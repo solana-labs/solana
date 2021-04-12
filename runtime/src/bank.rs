@@ -1584,7 +1584,7 @@ impl Bank {
             .into_iter()
             .for_each(|(stake_pubkey, _delegation)| {
                 examined_count += 1;
-                if let Some(mut stake_account) = self.get_account(&stake_pubkey) {
+                if let Some(mut stake_account) = self.get_account_with_fixed_root(&stake_pubkey) {
                     if let Ok(result) =
                         stake_state::rewrite_stakes(&mut stake_account, &self.rent_collector.rent)
                     {
@@ -1769,8 +1769,8 @@ impl Bank {
             .iter()
             .for_each(|(stake_pubkey, delegation)| {
                 match (
-                    self.get_account(&stake_pubkey),
-                    self.get_account(&delegation.voter_pubkey),
+                    self.get_account_with_fixed_root(&stake_pubkey),
+                    self.get_account_with_fixed_root(&delegation.voter_pubkey),
                 ) {
                     (Some(stake_account), Some(vote_account)) => {
                         // call tracer to catch any illegal data if any
@@ -2198,27 +2198,28 @@ impl Bank {
 
     // NOTE: must hold idempotent for the same set of arguments
     pub fn add_native_program(&self, name: &str, program_id: &Pubkey, must_replace: bool) {
-        let existing_genuine_program = if let Some(mut account) = self.get_account(&program_id) {
-            // it's very unlikely to be squatted at program_id as non-system account because of burden to
-            // find victim's pubkey/hash. So, when account.owner is indeed native_loader's, it's
-            // safe to assume it's a genuine program.
-            if native_loader::check_id(&account.owner) {
-                Some(account)
+        let existing_genuine_program =
+            if let Some(mut account) = self.get_account_with_fixed_root(&program_id) {
+                // it's very unlikely to be squatted at program_id as non-system account because of burden to
+                // find victim's pubkey/hash. So, when account.owner is indeed native_loader's, it's
+                // safe to assume it's a genuine program.
+                if native_loader::check_id(&account.owner) {
+                    Some(account)
+                } else {
+                    // malicious account is pre-occupying at program_id
+                    // forcibly burn and purge it
+
+                    self.capitalization.fetch_sub(account.lamports, Relaxed);
+
+                    // Resetting account balance to 0 is needed to really purge from AccountsDb and
+                    // flush the Stakes cache
+                    account.lamports = 0;
+                    self.store_account(&program_id, &account);
+                    None
+                }
             } else {
-                // malicious account is pre-occupying at program_id
-                // forcibly burn and purge it
-
-                self.capitalization.fetch_sub(account.lamports, Relaxed);
-
-                // Resetting account balance to 0 is needed to really purge from AccountsDb and
-                // flush the Stakes cache
-                account.lamports = 0;
-                self.store_account(&program_id, &account);
                 None
-            }
-        } else {
-            None
-        };
+            };
 
         if must_replace {
             // updating native program
@@ -3361,7 +3362,9 @@ impl Bank {
                     rent_share
                 };
                 if !enforce_fix || rent_to_be_paid > 0 {
-                    let mut account = self.get_account(&pubkey).unwrap_or_default();
+                    let mut account = self
+                        .get_account_with_fixed_root(&pubkey)
+                        .unwrap_or_default();
                     account.lamports += rent_to_be_paid;
                     self.store_account(&pubkey, &account);
                     rewards.push((
@@ -3429,7 +3432,7 @@ impl Bank {
     }
 
     fn run_incinerator(&self) {
-        if let Some((account, _)) = self.get_account_modified_since_parent(&incinerator::id()) {
+        if let Some((account, _)) = self.get_account_for_incinerator(&incinerator::id()) {
             self.capitalization.fetch_sub(account.lamports, Relaxed);
             self.store_account(&incinerator::id(), &AccountSharedData::default());
         }
@@ -3986,7 +3989,7 @@ impl Bank {
         pubkey: &Pubkey,
         new_account: &AccountSharedData,
     ) {
-        if let Some(old_account) = self.get_account(&pubkey) {
+        if let Some(old_account) = self.get_account_with_fixed_root(&pubkey) {
             match new_account.lamports.cmp(&old_account.lamports) {
                 std::cmp::Ordering::Greater => {
                     self.capitalization
@@ -4006,7 +4009,7 @@ impl Bank {
     }
 
     pub fn withdraw(&self, pubkey: &Pubkey, lamports: u64) -> Result<()> {
-        match self.get_account(pubkey) {
+        match self.get_account_with_fixed_root(pubkey) {
             Some(mut account) => {
                 let min_balance = match get_system_account_kind(&account) {
                     Some(SystemAccountKind::Nonce) => self
@@ -4031,7 +4034,7 @@ impl Bank {
     pub fn deposit(&self, pubkey: &Pubkey, lamports: u64) -> u64 {
         // This doesn't collect rents intentionally.
         // Rents should only be applied to actual TXes
-        let mut account = self.get_account(pubkey).unwrap_or_default();
+        let mut account = self.get_account_with_fixed_root(pubkey).unwrap_or_default();
         account.lamports += lamports;
         self.store_account(pubkey, &account);
         account.lamports
@@ -4082,8 +4085,21 @@ impl Bank {
         self.hard_forks.clone()
     }
 
+    // Hi! leaky abstraction here....
+    // try to use get_account_with_fixed_root() if it's called ONLY from _on-chain runtime account
+    // processing_. That alternative fn provides more safety.
     pub fn get_account(&self, pubkey: &Pubkey) -> Option<AccountSharedData> {
         self.get_account_modified_slot(pubkey)
+            .map(|(acc, _slot)| acc)
+    }
+
+    // Hi! leaky abstraction here....
+    // use this over get_account() if it's called ONLY from _on-chain runtime account
+    // processing_.
+    // pro: safer assertion can be enabled inside AccountsDb
+    // con: panics!() if called from off-chain processing
+    pub fn get_account_with_fixed_root(&self, pubkey: &Pubkey) -> Option<AccountSharedData> {
+        self.load_slow_with_fixed_root(&self.ancestors, pubkey)
             .map(|(acc, _slot)| acc)
     }
 
@@ -4096,17 +4112,22 @@ impl Bank {
         ancestors: &Ancestors,
         pubkey: &Pubkey,
     ) -> Option<(AccountSharedData, Slot)> {
-        // get_account (= this fn caller) can be called for various on-consensus
-        // code like inflation, feature activation and native program loading
-        // before freezing and it's generally impossible to make static/lexical guarantee of RPC or
-        // on-consensus.. so just pass !freeze_started for LoadHint::FixedMaxRoot as a close
-        // approximation of replaying/banking.
-        let load_hint = if !self.freeze_started() {
-            LoadHint::FixedMaxRoot
-        } else {
-            LoadHint::Unspecified
-        };
-        self.rc.accounts.load_slow(ancestors, pubkey, load_hint)
+        // get_account (= primary this fn caller) may be called from on-chain Bank code even if we
+        // try hard to use get_account_with_fixed_root for that purpose...
+        // so pass safer LoadHint:Unspecified here as a fallback
+        self.rc
+            .accounts
+            .load_slow(ancestors, pubkey, LoadHint::Unspecified)
+    }
+
+    fn load_slow_with_fixed_root(
+        &self,
+        ancestors: &Ancestors,
+        pubkey: &Pubkey,
+    ) -> Option<(AccountSharedData, Slot)> {
+        self.rc
+            .accounts
+            .load_slow(ancestors, pubkey, LoadHint::FixedMaxRoot)
     }
 
     // Exclude self to really fetch the parent Bank's account hash and data.
@@ -4188,12 +4209,9 @@ impl Bank {
         self.rc.accounts.load_by_program_slot(self.slot(), None)
     }
 
-    pub fn get_account_modified_since_parent(
-        &self,
-        pubkey: &Pubkey,
-    ) -> Option<(AccountSharedData, Slot)> {
+    fn get_account_for_incinerator(&self, pubkey: &Pubkey) -> Option<(AccountSharedData, Slot)> {
         let just_self: Ancestors = vec![(self.slot(), 0)].into_iter().collect();
-        if let Some((account, slot)) = self.load_slow(&just_self, pubkey) {
+        if let Some((account, slot)) = self.load_slow_with_fixed_root(&just_self, pubkey) {
             if slot == self.slot() {
                 return Some((account, slot));
             }
@@ -4807,7 +4825,7 @@ impl Bank {
 
         for feature_id in &self.feature_set.inactive {
             let mut activated = None;
-            if let Some(mut account) = self.get_account(feature_id) {
+            if let Some(mut account) = self.get_account_with_fixed_root(feature_id) {
                 if let Some(mut feature) = feature::from_account(&account) {
                     match feature.activated_at {
                         None => {
@@ -4869,9 +4887,9 @@ impl Bank {
     }
 
     fn apply_spl_token_v2_self_transfer_fix(&mut self) {
-        if let Some(old_account) = self.get_account(&inline_spl_token_v2_0::id()) {
+        if let Some(old_account) = self.get_account_with_fixed_root(&inline_spl_token_v2_0::id()) {
             if let Some(new_account) =
-                self.get_account(&inline_spl_token_v2_0::new_token_program::id())
+                self.get_account_with_fixed_root(&inline_spl_token_v2_0::new_token_program::id())
             {
                 datapoint_info!(
                     "bank-apply_spl_token_v2_self_transfer_fix",
@@ -4915,7 +4933,7 @@ impl Bank {
             // https://github.com/solana-labs/solana-program-library/issues/374, ensure that the
             // spl-token 2 native mint account is owned by the spl-token 2 program.
             let store = if let Some(existing_native_mint_account) =
-                self.get_account(&inline_spl_token_v2_0::native_mint::id())
+                self.get_account_with_fixed_root(&inline_spl_token_v2_0::native_mint::id())
             {
                 if existing_native_mint_account.owner == solana_sdk::system_program::id() {
                     native_mint_account.lamports = existing_native_mint_account.lamports;
@@ -4951,7 +4969,7 @@ impl Bank {
 
         if purge_window_epoch {
             for reward_pubkey in self.rewards_pool_pubkeys.iter() {
-                if let Some(mut reward_account) = self.get_account(&reward_pubkey) {
+                if let Some(mut reward_account) = self.get_account_with_fixed_root(&reward_pubkey) {
                     if reward_account.lamports == u64::MAX {
                         reward_account.lamports = 0;
                         self.store_account(&reward_pubkey, &reward_account);
@@ -8291,27 +8309,27 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn test_bank_get_account_modified_since_parent() {
+    fn test_bank_get_account_for_incinerator() {
         let pubkey = solana_sdk::pubkey::new_rand();
 
         let (genesis_config, mint_keypair) = create_genesis_config(500);
         let bank1 = Arc::new(Bank::new(&genesis_config));
         bank1.transfer(1, &mint_keypair, &pubkey).unwrap();
-        let result = bank1.get_account_modified_since_parent(&pubkey);
+        let result = bank1.get_account_for_incinerator(&pubkey);
         assert!(result.is_some());
         let (account, slot) = result.unwrap();
         assert_eq!(account.lamports, 1);
         assert_eq!(slot, 0);
 
         let bank2 = Arc::new(Bank::new_from_parent(&bank1, &Pubkey::default(), 1));
-        assert!(bank2.get_account_modified_since_parent(&pubkey).is_none());
+        assert!(bank2.get_account_for_incinerator(&pubkey).is_none());
         bank2.transfer(100, &mint_keypair, &pubkey).unwrap();
-        let result = bank1.get_account_modified_since_parent(&pubkey);
+        let result = bank1.get_account_for_incinerator(&pubkey);
         assert!(result.is_some());
         let (account, slot) = result.unwrap();
         assert_eq!(account.lamports, 1);
         assert_eq!(slot, 0);
-        let result = bank2.get_account_modified_since_parent(&pubkey);
+        let result = bank2.get_account_for_incinerator(&pubkey);
         assert!(result.is_some());
         let (account, slot) = result.unwrap();
         assert_eq!(account.lamports, 101);
@@ -8320,7 +8338,7 @@ pub(crate) mod tests {
         bank1.squash();
 
         let bank3 = Bank::new_from_parent(&bank2, &Pubkey::default(), 3);
-        assert_eq!(None, bank3.get_account_modified_since_parent(&pubkey));
+        assert_eq!(None, bank3.get_account_for_incinerator(&pubkey));
     }
 
     #[test]
