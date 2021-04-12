@@ -71,8 +71,8 @@ pub enum FaucetError {
     #[error("request too large; req: ◎{0}, cap: ◎{1}")]
     PerRequestCapExceeded(f64, f64),
 
-    #[error("IP limit reached; req: ◎{0}, ip: {1}, current: ◎{2}, cap: ◎{3}")]
-    PerTimeCapExceeded(f64, IpAddr, f64, f64),
+    #[error("limit reached; req: ◎{0}, to: {1}, current: ◎{2}, cap: ◎{3}")]
+    PerTimeCapExceeded(f64, String, f64, f64),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
@@ -102,6 +102,7 @@ pub enum FaucetTransaction {
 pub struct Faucet {
     faucet_keypair: Keypair,
     ip_cache: HashMap<IpAddr, u64>,
+    address_cache: HashMap<Pubkey, u64>,
     pub time_slice: Duration,
     per_time_cap: Option<u64>,
     per_request_cap: Option<u64>,
@@ -118,7 +119,7 @@ impl Faucet {
         if let Some((per_request_cap, per_time_cap)) = per_request_cap.zip(per_time_cap) {
             if per_time_cap < per_request_cap {
                 warn!(
-                    "Ip per_time_cap {} SOL < per_request_cap {} SOL; \
+                    "per_time_cap {} SOL < per_request_cap {} SOL; \
                     maximum single requests will fail",
                     lamports_to_sol(per_time_cap),
                     lamports_to_sol(per_request_cap),
@@ -128,34 +129,26 @@ impl Faucet {
         Faucet {
             faucet_keypair,
             ip_cache: HashMap::new(),
+            address_cache: HashMap::new(),
             time_slice,
             per_time_cap,
             per_request_cap,
         }
     }
 
-    pub fn check_ip_time_request_limit(
+    pub fn check_time_request_limit<T: LimitByTime + std::fmt::Display>(
         &mut self,
         request_amount: u64,
-        ip: IpAddr,
+        to: T,
     ) -> Result<(), FaucetError> {
-        let ip_new_total = self
-            .ip_cache
-            .entry(ip)
-            .and_modify(|total| *total = total.saturating_add(request_amount))
-            .or_insert(request_amount);
-        datapoint_info!(
-            "faucet-airdrop",
-            ("request_amount", request_amount, i64),
-            ("ip", ip.to_string(), String),
-            ("ip_new_total", *ip_new_total, i64)
-        );
+        let new_total = to.check_cache(self, request_amount);
+        to.datapoint_info(request_amount, new_total);
         if let Some(cap) = self.per_time_cap {
-            if *ip_new_total > cap {
+            if new_total > cap {
                 return Err(FaucetError::PerTimeCapExceeded(
                     lamports_to_sol(request_amount),
-                    ip,
-                    lamports_to_sol(*ip_new_total),
+                    to.to_string(),
+                    lamports_to_sol(new_total),
                     lamports_to_sol(cap),
                 ));
             }
@@ -163,8 +156,9 @@ impl Faucet {
         Ok(())
     }
 
-    pub fn clear_ip_cache(&mut self) {
+    pub fn clear_caches(&mut self) {
         self.ip_cache.clear();
+        self.address_cache.clear();
     }
 
     /// Checks per-request and per-time-ip limits; if both pass, this method returns a signed
@@ -211,7 +205,10 @@ impl Faucet {
                         )));
                     }
                 }
-                self.check_ip_time_request_limit(lamports, ip)?;
+                if !ip.is_loopback() {
+                    self.check_time_request_limit(lamports, ip)?;
+                }
+                self.check_time_request_limit(lamports, to)?;
 
                 let transfer_instruction =
                     system_instruction::transfer(&mint_pubkey, &to, lamports);
@@ -434,6 +431,49 @@ async fn process(
     Ok(())
 }
 
+pub trait LimitByTime {
+    fn check_cache(&self, faucet: &mut Faucet, request_amount: u64) -> u64;
+    fn datapoint_info(&self, request_amount: u64, new_total: u64);
+}
+
+impl LimitByTime for IpAddr {
+    fn check_cache(&self, faucet: &mut Faucet, request_amount: u64) -> u64 {
+        *faucet
+            .ip_cache
+            .entry(*self)
+            .and_modify(|total| *total = total.saturating_add(request_amount))
+            .or_insert(request_amount)
+    }
+
+    fn datapoint_info(&self, request_amount: u64, new_total: u64) {
+        datapoint_info!(
+            "faucet-airdrop",
+            ("request_amount", request_amount, i64),
+            ("ip", self.to_string(), String),
+            ("new_total", new_total, i64)
+        );
+    }
+}
+
+impl LimitByTime for Pubkey {
+    fn check_cache(&self, faucet: &mut Faucet, request_amount: u64) -> u64 {
+        *faucet
+            .address_cache
+            .entry(*self)
+            .and_modify(|total| *total = total.saturating_add(request_amount))
+            .or_insert(request_amount)
+    }
+
+    fn datapoint_info(&self, request_amount: u64, new_total: u64) {
+        datapoint_info!(
+            "faucet-airdrop",
+            ("request_amount", request_amount, i64),
+            ("address", self.to_string(), String),
+            ("new_total", new_total, i64)
+        );
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -441,26 +481,39 @@ mod tests {
     use std::time::Duration;
 
     #[test]
-    fn test_check_ip_time_request_limit() {
+    fn test_check_time_request_limit() {
         let keypair = Keypair::new();
         let mut faucet = Faucet::new(keypair, None, Some(2), None);
         let ip = socketaddr!([203, 0, 113, 1], 1234).ip();
-        assert!(faucet.check_ip_time_request_limit(1, ip).is_ok());
-        assert!(faucet.check_ip_time_request_limit(1, ip).is_ok());
-        assert!(faucet.check_ip_time_request_limit(1, ip).is_err());
+        assert!(faucet.check_time_request_limit(1, ip).is_ok());
+        assert!(faucet.check_time_request_limit(1, ip).is_ok());
+        assert!(faucet.check_time_request_limit(1, ip).is_err());
+
+        let address = Pubkey::new_unique();
+        assert!(faucet.check_time_request_limit(1, address).is_ok());
+        assert!(faucet.check_time_request_limit(1, address).is_ok());
+        assert!(faucet.check_time_request_limit(1, address).is_err());
     }
 
     #[test]
-    fn test_clear_ip_cache() {
+    fn test_clear_caches() {
         let keypair = Keypair::new();
         let mut faucet = Faucet::new(keypair, None, None, None);
-        let ip = "127.0.0.1".parse().expect("create IpAddr from string");
+        let ip = socketaddr!([127, 0, 0, 1], 0).ip();
         assert_eq!(faucet.ip_cache.len(), 0);
-        faucet.check_ip_time_request_limit(1, ip).unwrap();
+        faucet.check_time_request_limit(1, ip).unwrap();
         assert_eq!(faucet.ip_cache.len(), 1);
-        faucet.clear_ip_cache();
+        faucet.clear_caches();
         assert_eq!(faucet.ip_cache.len(), 0);
         assert!(faucet.ip_cache.is_empty());
+
+        let address = Pubkey::new_unique();
+        assert_eq!(faucet.address_cache.len(), 0);
+        faucet.check_time_request_limit(1, address).unwrap();
+        assert_eq!(faucet.address_cache.len(), 1);
+        faucet.clear_caches();
+        assert_eq!(faucet.address_cache.len(), 0);
+        assert!(faucet.address_cache.is_empty());
     }
 
     #[test]
@@ -477,7 +530,7 @@ mod tests {
 
     #[test]
     fn test_faucet_build_airdrop_transaction() {
-        let to = solana_sdk::pubkey::new_rand();
+        let to = Pubkey::new_unique();
         let blockhash = Hash::default();
         let request = FaucetRequest::GetAirdrop {
             lamports: 2,
@@ -512,9 +565,27 @@ mod tests {
 
         // Test per-time request cap
         let mint = Keypair::new();
-        faucet = Faucet::new(mint, None, Some(1), None);
+        faucet = Faucet::new(mint, None, Some(2), None);
+        let _tx = faucet.build_airdrop_transaction(request, ip).unwrap(); // first request succeeds
         let tx = faucet.build_airdrop_transaction(request, ip);
         assert!(tx.is_err());
+
+        // Test multiple requests from loopback with different addresses succeed
+        let mint = Keypair::new();
+        faucet = Faucet::new(mint, None, Some(2), None);
+        let ip = socketaddr!([127, 0, 0, 1], 0).ip();
+        let other = Pubkey::new_unique();
+        let _tx0 = faucet.build_airdrop_transaction(request, ip).unwrap(); // first request succeeds
+        let request1 = FaucetRequest::GetAirdrop {
+            lamports: 2,
+            to: other,
+            blockhash,
+        };
+        let _tx1 = faucet.build_airdrop_transaction(request1, ip).unwrap(); // first request succeeds
+        let tx0 = faucet.build_airdrop_transaction(request, ip);
+        assert!(tx0.is_err());
+        let tx1 = faucet.build_airdrop_transaction(request1, ip);
+        assert!(tx1.is_err());
 
         // Test per-request cap
         let mint = Keypair::new();
