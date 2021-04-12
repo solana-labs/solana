@@ -56,8 +56,23 @@ Eligibility:
 * Multiple submissions for the same class of exploit are still eligible for compensation, though may be compensated at a lower rate, however these will be assessed on a case-by-case basis
 * Participants must complete KYC and sign the participation agreement here when the registrations are open https://solana.com/validator-registration. Security exploits will still be assessed and open for submission at all times. This needs only be done prior to distribution of tokens.
 
+Payment of Bug Bounties:
+* Payments for eligible bugs are distributed monthly.
+* All bug bounties submitted in a given month are paid out in the middle of the
+following month.
+* The SOL/USD conversion rate used for payments is the market price at the end of
+  the last day of the month for the month in which the bug was submitted.
+* The reference for this price is the Closing Price given by Coingecko.com on
+  that date given here:
+  https://www.coingecko.com/en/coins/solana/historical_data/usd#panel
+* For example, for all bugs submitted in March 2021, the SOL/USD price for bug
+  payouts is the Close price on 2021-03-31 of $19.49.  This applies to all bugs
+  submitted in March 2021, to be paid in mid-April 2021.
+
 Notes:
-* All locked tokens can be staked during the lockup period
+* All locked tokens can be staked during the lockup period.  Locked tokens are
+eligible for the same staking rewards as unlocked tokens.  Rewards earned on
+  locked stake are also locked with the same lockup expiry.
 
 <a name="process"></a>
 ## Incident Response Process
