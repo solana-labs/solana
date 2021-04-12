@@ -51,7 +51,7 @@ The following components are out of scope for the bounty program
 * Attacks that require social engineering
 
 Eligibility:
-* The participant submitting the bug bounty shall follow the process outlined within this document
+* The participant submitting the bug report shall follow the process outlined within this document
 * Valid exploits can be eligible even if they are not successfully executed on the cluster
 * Multiple submissions for the same class of exploit are still eligible for compensation, though may be compensated at a lower rate, however these will be assessed on a case-by-case basis
 * Participants must complete KYC and sign the participation agreement here when the registrations are open https://solana.com/validator-registration. Security exploits will still be assessed and open for submission at all times. This needs only be done prior to distribution of tokens.
