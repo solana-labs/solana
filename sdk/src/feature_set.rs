@@ -127,6 +127,10 @@ pub mod demote_sysvar_write_locks {
     solana_sdk::declare_id!("86LJYRuq2zgtHuL3FccR6hqFJQMQkFoun4knAxcPiF1P");
 }
 
+pub mod sysvar_via_syscall {
+    solana_sdk::declare_id!("7411E6gFQLDhQkdRjmpXwM1hzHMMoYQUjHicmvGPC1Nf");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -159,6 +163,7 @@ lazy_static! {
         (cpi_data_cost::id(), "charge the compute budget for data passed via CPI"),
         (upgradeable_close_instruction::id(), "close upgradeable buffer accounts"),
         (demote_sysvar_write_locks::id(), "demote builtins and sysvar write locks to readonly #15497"),
+        (sysvar_via_syscall::id(), "Provide sysvars via syscalls"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
