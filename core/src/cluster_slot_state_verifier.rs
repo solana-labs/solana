@@ -18,9 +18,13 @@ pub enum SlotStateUpdate {
 
 #[derive(PartialEq, Debug)]
 pub enum ResultingStateChange {
-    MarkSlotDuplicate,
+    // Hash of our current frozen version of the slot
+    MarkSlotDuplicate(Hash),
+    // Hash of the cluster confirmed slot that is not equivalent
+    // to our frozen version of the slot
     RepairDuplicateConfirmedVersion(Hash),
-    DuplicateConfirmedSlotMatchesCluster,
+    // Hash of our current frozen version of the slot
+    DuplicateConfirmedSlotMatchesCluster(Hash),
 }
 
 impl SlotStateUpdate {
@@ -56,9 +60,9 @@ fn on_dead_slot(
         // No need to check `is_slot_duplicate` and modify fork choice as dead slots
         // are never frozen, and thus never added to fork choice. The state change for
         // `MarkSlotDuplicate` will try to modify fork choice, but won't find the slot
-        // in the fork choice tree, so is equivalent to a
+        // in the fork choice tree, so is equivalent to a no-op
         return vec![
-            ResultingStateChange::MarkSlotDuplicate,
+            ResultingStateChange::MarkSlotDuplicate(Hash::default()),
             ResultingStateChange::RepairDuplicateConfirmedVersion(
                 *cluster_duplicate_confirmed_hash,
             ),
@@ -92,7 +96,7 @@ fn on_frozen_slot(
                 slot, cluster_duplicate_confirmed_hash, bank_frozen_hash
             );
             return vec![
-                ResultingStateChange::MarkSlotDuplicate,
+                ResultingStateChange::MarkSlotDuplicate(*bank_frozen_hash),
                 ResultingStateChange::RepairDuplicateConfirmedVersion(
                     *cluster_duplicate_confirmed_hash,
                 ),
@@ -101,7 +105,9 @@ fn on_frozen_slot(
             // If the versions match, then add the slot to the candidate
             // set to account for the case where it was removed earlier
             // by the `on_duplicate_slot()` handler
-            return vec![ResultingStateChange::DuplicateConfirmedSlotMatchesCluster];
+            return vec![ResultingStateChange::DuplicateConfirmedSlotMatchesCluster(
+                *bank_frozen_hash,
+            )];
         }
     }
 
@@ -115,7 +121,7 @@ fn on_frozen_slot(
         // 2) A gossip duplicate_confirmed version that didn't match our frozen
         // version.
         // In both cases, mark the progress map for this slot as duplicate
-        return vec![ResultingStateChange::MarkSlotDuplicate];
+        return vec![ResultingStateChange::MarkSlotDuplicate(*bank_frozen_hash)];
     }
 
     vec![]
@@ -202,12 +208,12 @@ fn apply_state_changes(
 ) {
     for state_change in state_changes {
         match state_change {
-            ResultingStateChange::MarkSlotDuplicate => {
+            ResultingStateChange::MarkSlotDuplicate(bank_frozen_hash) => {
                 progress.set_unconfirmed_duplicate_slot(
                     slot,
                     descendants.get(&slot).unwrap_or(&HashSet::default()),
                 );
-                fork_choice.mark_fork_invalid_candidate(slot);
+                fork_choice.mark_fork_invalid_candidate(&(slot, bank_frozen_hash));
             }
             ResultingStateChange::RepairDuplicateConfirmedVersion(
                 cluster_duplicate_confirmed_hash,
@@ -216,13 +222,13 @@ fn apply_state_changes(
                 // progress map from ReplayStage::confirm_forks to here.
                 repair_correct_version(slot, &cluster_duplicate_confirmed_hash);
             }
-            ResultingStateChange::DuplicateConfirmedSlotMatchesCluster => {
+            ResultingStateChange::DuplicateConfirmedSlotMatchesCluster(bank_frozen_hash) => {
                 progress.set_confirmed_duplicate_slot(
                     slot,
                     ancestors.get(&slot).unwrap_or(&HashSet::default()),
                     descendants.get(&slot).unwrap_or(&HashSet::default()),
                 );
-                fork_choice.mark_fork_valid_candidate(slot);
+                fork_choice.mark_fork_valid_candidate(&(slot, bank_frozen_hash));
             }
         }
     }
@@ -388,7 +394,7 @@ mod test {
                 is_slot_duplicate,
                 is_dead
             ),
-            vec![ResultingStateChange::MarkSlotDuplicate]
+            vec![ResultingStateChange::MarkSlotDuplicate(bank_frozen_hash)]
         );
     }
 
@@ -426,7 +432,9 @@ mod test {
                 is_slot_duplicate,
                 is_dead
             ),
-            vec![ResultingStateChange::DuplicateConfirmedSlotMatchesCluster,]
+            vec![ResultingStateChange::DuplicateConfirmedSlotMatchesCluster(
+                bank_frozen_hash
+            ),]
         );
 
         // If the cluster_duplicate_confirmed_hash does not match, then we
@@ -443,7 +451,7 @@ mod test {
                 is_dead
             ),
             vec![
-                ResultingStateChange::MarkSlotDuplicate,
+                ResultingStateChange::MarkSlotDuplicate(bank_frozen_hash),
                 ResultingStateChange::RepairDuplicateConfirmedVersion(mismatched_hash),
             ]
         );
@@ -483,7 +491,7 @@ mod test {
                 is_slot_duplicate,
                 is_dead
             ),
-            vec![ResultingStateChange::MarkSlotDuplicate,]
+            vec![ResultingStateChange::MarkSlotDuplicate(bank_frozen_hash),]
         );
 
         // If the cluster_duplicate_confirmed_hash matches, we just confirm
@@ -497,7 +505,9 @@ mod test {
                 is_slot_duplicate,
                 is_dead
             ),
-            vec![ResultingStateChange::DuplicateConfirmedSlotMatchesCluster,]
+            vec![ResultingStateChange::DuplicateConfirmedSlotMatchesCluster(
+                bank_frozen_hash
+            ),]
         );
 
         // If the cluster_duplicate_confirmed_hash does not match, then we
@@ -514,7 +524,7 @@ mod test {
                 is_dead
             ),
             vec![
-                ResultingStateChange::MarkSlotDuplicate,
+                ResultingStateChange::MarkSlotDuplicate(bank_frozen_hash),
                 ResultingStateChange::RepairDuplicateConfirmedVersion(mismatched_hash),
             ]
         );
@@ -589,7 +599,7 @@ mod test {
                 is_dead
             ),
             vec![
-                ResultingStateChange::MarkSlotDuplicate,
+                ResultingStateChange::MarkSlotDuplicate(bank_frozen_hash),
                 ResultingStateChange::RepairDuplicateConfirmedVersion(correct_hash),
             ]
         );
@@ -605,7 +615,7 @@ mod test {
                 is_dead
             ),
             vec![
-                ResultingStateChange::MarkSlotDuplicate,
+                ResultingStateChange::MarkSlotDuplicate(bank_frozen_hash),
                 ResultingStateChange::RepairDuplicateConfirmedVersion(correct_hash),
             ]
         );
@@ -620,21 +630,22 @@ mod test {
             ancestors,
             descendants,
             slot,
-            ..
+            bank_forks,
         } = setup();
 
         // MarkSlotDuplicate should mark progress map and remove
         // the slot from fork choice
+        let slot_hash = bank_forks.read().unwrap().get(slot).unwrap().hash();
         apply_state_changes(
             slot,
             &mut progress,
             &mut heaviest_subtree_fork_choice,
             &ancestors,
             &descendants,
-            vec![ResultingStateChange::MarkSlotDuplicate],
+            vec![ResultingStateChange::MarkSlotDuplicate(slot_hash)],
         );
         assert!(!heaviest_subtree_fork_choice
-            .is_candidate_slot(slot)
+            .is_candidate_slot(&(slot, slot_hash))
             .unwrap());
         for child_slot in descendants
             .get(&slot)
@@ -657,7 +668,9 @@ mod test {
             &mut heaviest_subtree_fork_choice,
             &ancestors,
             &descendants,
-            vec![ResultingStateChange::DuplicateConfirmedSlotMatchesCluster],
+            vec![ResultingStateChange::DuplicateConfirmedSlotMatchesCluster(
+                slot_hash,
+            )],
         );
         for child_slot in descendants
             .get(&slot)
@@ -670,7 +683,7 @@ mod test {
                 .is_none());
         }
         assert!(heaviest_subtree_fork_choice
-            .is_candidate_slot(slot)
+            .is_candidate_slot(&(slot, slot_hash))
             .unwrap());
     }
 
@@ -686,7 +699,11 @@ mod test {
             ..
         } = setup();
 
-        assert_eq!(heaviest_subtree_fork_choice.best_overall_slot(), 3);
+        let slot3_hash = bank_forks.read().unwrap().get(3).unwrap().hash();
+        assert_eq!(
+            heaviest_subtree_fork_choice.best_overall_slot(),
+            (3, slot3_hash)
+        );
         let root = 0;
         let mut gossip_duplicate_confirmed_slots = GossipDuplicateConfirmedSlots::default();
 
@@ -705,13 +722,16 @@ mod test {
             SlotStateUpdate::DuplicateConfirmed,
         );
 
-        assert_eq!(heaviest_subtree_fork_choice.best_overall_slot(), 3);
+        assert_eq!(
+            heaviest_subtree_fork_choice.best_overall_slot(),
+            (3, slot3_hash)
+        );
 
         // Mark 3 as duplicate, should not remove slot 2 from fork choice
         check_slot_agrees_with_cluster(
             3,
             root,
-            Some(bank_forks.read().unwrap().get(3).unwrap().hash()),
+            Some(slot3_hash),
             &gossip_duplicate_confirmed_slots,
             &ancestors,
             &descendants,
@@ -720,7 +740,10 @@ mod test {
             SlotStateUpdate::Duplicate,
         );
 
-        assert_eq!(heaviest_subtree_fork_choice.best_overall_slot(), 2);
+        assert_eq!(
+            heaviest_subtree_fork_choice.best_overall_slot(),
+            (2, slot2_hash)
+        );
     }
 
     #[test]
@@ -735,7 +758,11 @@ mod test {
             ..
         } = setup();
 
-        assert_eq!(heaviest_subtree_fork_choice.best_overall_slot(), 3);
+        let slot3_hash = bank_forks.read().unwrap().get(3).unwrap().hash();
+        assert_eq!(
+            heaviest_subtree_fork_choice.best_overall_slot(),
+            (3, slot3_hash)
+        );
         let root = 0;
         let mut gossip_duplicate_confirmed_slots = GossipDuplicateConfirmedSlots::default();
         // Mark 2 as duplicate confirmed
@@ -751,10 +778,13 @@ mod test {
             SlotStateUpdate::Duplicate,
         );
 
-        assert_eq!(heaviest_subtree_fork_choice.best_overall_slot(), 1);
+        let slot1_hash = bank_forks.read().unwrap().get(1).unwrap().hash();
+        assert_eq!(
+            heaviest_subtree_fork_choice.best_overall_slot(),
+            (1, slot1_hash)
+        );
 
         // Mark slot 3 as duplicate confirmed, should mark slot 2 as duplicate confirmed as well
-        let slot3_hash = bank_forks.read().unwrap().get(3).unwrap().hash();
         gossip_duplicate_confirmed_slots.insert(3, slot3_hash);
         check_slot_agrees_with_cluster(
             3,
@@ -768,6 +798,9 @@ mod test {
             SlotStateUpdate::DuplicateConfirmed,
         );
 
-        assert_eq!(heaviest_subtree_fork_choice.best_overall_slot(), 3);
+        assert_eq!(
+            heaviest_subtree_fork_choice.best_overall_slot(),
+            (3, slot3_hash)
+        );
     }
 }
