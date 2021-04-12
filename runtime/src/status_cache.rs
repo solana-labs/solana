@@ -301,11 +301,11 @@ mod tests {
         let blockhash = hash(Hash::default().as_ref());
         let status_cache = BankStatusCache::default();
         assert_eq!(
-            status_cache.get_status(&sig, &blockhash, &HashMap::new()),
+            status_cache.get_status(&sig, &blockhash, &Ancestors::default()),
             None
         );
         assert_eq!(
-            status_cache.get_status_any_blockhash(&sig, &HashMap::new()),
+            status_cache.get_status_any_blockhash(&sig, &Ancestors::default()),
             None
         );
     }
@@ -332,7 +332,7 @@ mod tests {
         let sig = Signature::default();
         let mut status_cache = BankStatusCache::default();
         let blockhash = hash(Hash::default().as_ref());
-        let ancestors = HashMap::new();
+        let ancestors = Ancestors::default();
         status_cache.insert(&blockhash, &sig, 1, ());
         assert_eq!(status_cache.get_status(&sig, &blockhash, &ancestors), None);
         assert_eq!(
@@ -346,7 +346,7 @@ mod tests {
         let sig = Signature::default();
         let mut status_cache = BankStatusCache::default();
         let blockhash = hash(Hash::default().as_ref());
-        let ancestors = HashMap::new();
+        let ancestors = Ancestors::default();
         status_cache.insert(&blockhash, &sig, 0, ());
         status_cache.add_root(0);
         assert_eq!(
@@ -376,7 +376,7 @@ mod tests {
         let sig = Signature::default();
         let mut status_cache = BankStatusCache::default();
         let blockhash = hash(Hash::default().as_ref());
-        let ancestors = HashMap::new();
+        let ancestors = Ancestors::default();
         status_cache.insert(&blockhash, &sig, 0, ());
         for i in 0..(MAX_CACHE_ENTRIES + 1) {
             status_cache.add_root(i as u64);
@@ -389,7 +389,7 @@ mod tests {
         let sig = Signature::default();
         let mut status_cache = BankStatusCache::default();
         let blockhash = hash(Hash::default().as_ref());
-        let ancestors = HashMap::new();
+        let ancestors = Ancestors::default();
         status_cache.insert(&blockhash, &sig, 0, ());
         status_cache.add_root(0);
         status_cache.clear();
@@ -401,7 +401,7 @@ mod tests {
         let sig = Signature::default();
         let mut status_cache = BankStatusCache::default();
         let blockhash = hash(Hash::default().as_ref());
-        let ancestors = HashMap::new();
+        let ancestors = Ancestors::default();
         status_cache.add_root(0);
         status_cache.clear();
         status_cache.insert(&blockhash, &sig, 0, ());
@@ -474,9 +474,9 @@ mod tests {
         status_cache.insert(&blockhash, &sig, 1, ());
         status_cache.insert(&blockhash2, &sig, 1, ());
 
-        let mut ancestors0 = HashMap::new();
+        let mut ancestors0 = Ancestors::default();
         ancestors0.insert(0, 0);
-        let mut ancestors1 = HashMap::new();
+        let mut ancestors1 = Ancestors::default();
         ancestors1.insert(1, 0);
 
         // Clear slot 0 related data
