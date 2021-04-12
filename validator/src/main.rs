@@ -1708,17 +1708,21 @@ pub fn main() {
         .arg(
             Arg::with_name("accounts_db_test_hash_calculation")
                 .long("accounts-db-test-hash-calculation")
-                .help("Enables testing of hash calculation using stores in AccountsHashVerifier. This has a computational cost."),
+                .help("Enables testing of hash calculation using stores in \
+                      AccountsHashVerifier. This has a computational cost."),
         )
         .arg(
             Arg::with_name("accounts_db_index_hashing")
                 .long("accounts-db-index-hashing")
-                .help("Enables the use of the index in hash calculation in AccountsHashVerifier/Accounts Background Service."),
+                .help("Enables the use of the index in hash calculation in \
+                       AccountsHashVerifier/Accounts Background Service."),
         )
         .arg(
             Arg::with_name("no_accounts_db_index_hashing")
                 .long("no-accounts-db-index-hashing")
-                .help("This is obsolete. See --accounts-db-index-hashing. Disables the use of the index in hash calculation in AccountsHashVerifier/Accounts Background Service."),
+                .help("This is obsolete. See --accounts-db-index-hashing. \
+                       Disables the use of the index in hash calculation in \
+                       AccountsHashVerifier/Accounts Background Service."),
         )
         .arg(
             // legacy nop argument
@@ -1736,70 +1740,70 @@ pub fn main() {
         )
         .after_help("The default subcommand is run")
         .subcommand(
-             SubCommand::with_name("exit")
-             .about("Send an exit request to the validator")
-             .arg(
-                 Arg::with_name("force")
-                     .short("f")
-                     .long("force")
-                     .takes_value(false)
-                     .help("Request the validator exit immediately instead of waiting for a restart window")
-             )
-             .arg(
-                 Arg::with_name("monitor")
-                     .short("m")
-                     .long("monitor")
-                     .takes_value(false)
-                     .help("Monitor the validator after sending the exit request")
-             )
-             .arg(
-                 Arg::with_name("min_idle_time")
-                     .takes_value(true)
-                     .long("min-idle-time")
-                     .value_name("MINUTES")
-                     .validator(is_parsable::<usize>)
-                     .default_value("10")
-                     .help("Minimum time that the validator should not be leader before restarting")
-             )
-         )
+            SubCommand::with_name("exit")
+            .about("Send an exit request to the validator")
+            .arg(
+                Arg::with_name("force")
+                    .short("f")
+                    .long("force")
+                    .takes_value(false)
+                    .help("Request the validator exit immediately instead of waiting for a restart window")
+            )
+            .arg(
+                Arg::with_name("monitor")
+                    .short("m")
+                    .long("monitor")
+                    .takes_value(false)
+                    .help("Monitor the validator after sending the exit request")
+            )
+            .arg(
+                Arg::with_name("min_idle_time")
+                    .takes_value(true)
+                    .long("min-idle-time")
+                    .value_name("MINUTES")
+                    .validator(is_parsable::<usize>)
+                    .default_value("10")
+                    .help("Minimum time that the validator should not be leader before restarting")
+            )
+        )
         .subcommand(
-             SubCommand::with_name("init")
-             .about("Initialize the ledger directory then exit")
-         )
+            SubCommand::with_name("init")
+            .about("Initialize the ledger directory then exit")
+        )
         .subcommand(
-             SubCommand::with_name("monitor")
-             .about("Monitor the validator")
-         )
+            SubCommand::with_name("monitor")
+            .about("Monitor the validator")
+        )
         .subcommand(
-             SubCommand::with_name("run")
-             .about("Run the validator")
-         )
+            SubCommand::with_name("run")
+            .about("Run the validator")
+        )
         .subcommand(
-             SubCommand::with_name("set-log-filter")
-             .about("Adjust the validator log filter")
-             .arg(
-                 Arg::with_name("filter")
-                     .takes_value(true)
-                     .index(1)
-                     .help("New filter using the same format as the RUST_LOG environment variable")
-             )
-             .after_help("Note: the new filter only applies to the currently running validator instance")
-         )
+            SubCommand::with_name("set-log-filter")
+            .about("Adjust the validator log filter")
+            .arg(
+                Arg::with_name("filter")
+                    .takes_value(true)
+                    .index(1)
+                    .help("New filter using the same format as the RUST_LOG environment variable")
+            )
+            .after_help("Note: the new filter only applies to the currently running validator instance")
+        )
         .subcommand(
-             SubCommand::with_name("wait-for-restart-window")
-             .about("Monitor the validator for a good time to restart")
-             .arg(
-                 Arg::with_name("min_idle_time")
-                     .takes_value(true)
-                     .index(1)
-                     .validator(is_parsable::<usize>)
-                     .value_name("MINUTES")
-                     .default_value("10")
-                     .help("Minimum time that the validator should not be leader before restarting")
-             )
-             .after_help("Note: If this command exits with a non-zero status \
-                          then this not a good time for a restart")
-         )
+            SubCommand::with_name("wait-for-restart-window")
+            .about("Monitor the validator for a good time to restart")
+            .arg(
+                Arg::with_name("min_idle_time")
+                    .takes_value(true)
+                    .index(1)
+                    .validator(is_parsable::<usize>)
+                    .value_name("MINUTES")
+                    .default_value("10")
+                    .help("Minimum time that the validator should not be leader before restarting")
+            )
+            .after_help("Note: If this command exits with a non-zero status \
+                         then this not a good time for a restart")
+        )
         .get_matches();
 
     let ledger_path = PathBuf::from(matches.value_of("ledger_path").unwrap());
