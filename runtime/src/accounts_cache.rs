@@ -2,7 +2,6 @@ use dashmap::DashMap;
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount},
     clock::Slot,
-    genesis_config::ClusterType,
     hash::Hash,
     pubkey::Pubkey,
 };
@@ -114,7 +113,7 @@ pub struct CachedAccountInner {
 }
 
 impl CachedAccountInner {
-    pub fn hash(&self, cluster_type: ClusterType) -> Hash {
+    pub fn hash(&self) -> Hash {
         let hash = self.hash.read().unwrap();
         match *hash {
             Some(hash) => hash,
@@ -124,7 +123,6 @@ impl CachedAccountInner {
                     self.slot,
                     &self.account,
                     &self.pubkey,
-                    &cluster_type,
                 );
                 *self.hash.write().unwrap() = Some(hash);
                 hash
