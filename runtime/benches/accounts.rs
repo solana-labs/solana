@@ -8,6 +8,7 @@ use rand::Rng;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use solana_runtime::{
     accounts::{create_test_accounts, AccountAddressFilter, Accounts},
+    accounts_index::Ancestors,
     bank::*,
 };
 use solana_sdk::{
@@ -233,7 +234,11 @@ fn bench_concurrent_read_write(bencher: &mut Bencher) {
             let mut rng = rand::thread_rng();
             loop {
                 let i = rng.gen_range(0, pubkeys.len());
-                test::black_box(accounts.load_slow(&HashMap::new(), &pubkeys[i]).unwrap());
+                test::black_box(
+                    accounts
+                        .load_slow(&Ancestors::default(), &pubkeys[i])
+                        .unwrap(),
+                );
             }
         },
     )
@@ -244,7 +249,7 @@ fn bench_concurrent_read_write(bencher: &mut Bencher) {
 fn bench_concurrent_scan_write(bencher: &mut Bencher) {
     store_accounts_with_possible_contention("concurrent_scan_write", bencher, |accounts, _| loop {
         test::black_box(
-            accounts.load_by_program(&HashMap::new(), &AccountSharedData::default().owner),
+            accounts.load_by_program(&Ancestors::default(), &AccountSharedData::default().owner),
         );
     })
 }

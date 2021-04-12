@@ -354,7 +354,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         // In both cases we can ignore the given ancestors and instead just rely on the roots
         // present as `max_root` indicates the roots present in the index are more up to date
         // than the ancestors given.
-        let empty = HashMap::new();
+        let empty = Ancestors::default();
         let ancestors = if ancestors.contains_key(&max_root) {
             ancestors
         } else {
@@ -1205,7 +1205,7 @@ pub mod tests {
     fn test_get_empty() {
         let key = Keypair::new();
         let index = AccountsIndex::<bool>::default();
-        let ancestors = HashMap::new();
+        let ancestors = Ancestors::default();
         assert!(index.get(&key.pubkey(), Some(&ancestors), None).is_none());
         assert!(index.get(&key.pubkey(), None, None).is_none());
 
@@ -1230,7 +1230,7 @@ pub mod tests {
         );
         assert!(gc.is_empty());
 
-        let ancestors = HashMap::new();
+        let ancestors = Ancestors::default();
         assert!(index.get(&key.pubkey(), Some(&ancestors), None).is_none());
         assert!(index.get(&key.pubkey(), None, None).is_none());
 
@@ -1354,7 +1354,7 @@ pub mod tests {
         };
         let pubkey_range = (pubkey_start, pubkey_end);
 
-        let ancestors: Ancestors = HashMap::new();
+        let ancestors = Ancestors::default();
         let mut scanned_keys = HashSet::new();
         index.range_scan_accounts("", &ancestors, pubkey_range, |pubkey, _index| {
             scanned_keys.insert(*pubkey);
@@ -1424,7 +1424,7 @@ pub mod tests {
 
     fn run_test_scan_accounts(num_pubkeys: usize) {
         let (index, _) = setup_accounts_index_keys(num_pubkeys);
-        let ancestors: Ancestors = HashMap::new();
+        let ancestors = Ancestors::default();
 
         let mut scanned_keys = HashSet::new();
         index.unchecked_scan_accounts("", &ancestors, |pubkey, _index| {
@@ -1713,7 +1713,7 @@ pub mod tests {
 
         let mut num = 0;
         let mut found_key = false;
-        index.unchecked_scan_accounts("", &Ancestors::new(), |pubkey, _index| {
+        index.unchecked_scan_accounts("", &Ancestors::default(), |pubkey, _index| {
             if pubkey == &key.pubkey() {
                 found_key = true;
                 assert_eq!(_index, (&true, 3));
@@ -1787,7 +1787,7 @@ pub mod tests {
 
         // Given a max_root, should filter out roots < max_root, but specified
         // ancestors should not be affected
-        let ancestors: HashMap<Slot, usize> = vec![(3, 1), (7, 1)].into_iter().collect();
+        let ancestors = vec![(3, 1), (7, 1)].into_iter().collect();
         assert_eq!(
             index
                 .latest_slot(Some(&ancestors), &slot_slice, Some(4))
