@@ -3311,10 +3311,13 @@ version = "1.7.0"
 dependencies = [
  "async-trait",
  "base64 0.12.3",
+ "bincode",
  "chrono",
  "chrono-humanize",
  "log",
  "mio 0.7.7",
+ "serde",
+ "serde_derive",
  "solana-banks-client",
  "solana-banks-server",
  "solana-bpf-loader-program",

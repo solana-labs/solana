@@ -7,7 +7,7 @@ use solana_sdk::{
 };
 use std::{cell::RefCell, fmt::Debug, rc::Rc, sync::Arc};
 
-// Prototype of a native loader entry point
+/// Prototype of a native loader entry point
 ///
 /// program_id: Program ID of the currently executing program
 /// keyed_accounts: Accounts passed as part of the instruction
@@ -68,6 +68,8 @@ pub trait InvokeContext {
         execute_us: u64,
         deserialize_us: u64,
     );
+    /// Get sysvar data
+    fn get_sysvar_data(&mut self, id: &Pubkey) -> Option<Rc<Vec<u8>>>;
 }
 
 /// Convenience macro to log a message with an `Rc<RefCell<dyn Logger>>`
@@ -130,6 +132,8 @@ pub struct BpfComputeBudget {
     pub max_cpi_instruction_size: usize,
     /// Number of account data bytes per conpute unit charged during a cross-program invocation
     pub cpi_bytes_per_unit: u64,
+    /// Base number of compute units consumed to get a sysvar
+    pub sysvar_base_cost: u64,
 }
 impl Default for BpfComputeBudget {
     fn default() -> Self {
@@ -152,6 +156,7 @@ impl BpfComputeBudget {
             log_pubkey_units: 100,
             max_cpi_instruction_size: 1280, // IPv6 Min MTU size
             cpi_bytes_per_unit: 250,        // ~50MB at 200,000 units
+            sysvar_base_cost: 100,
         }
     }
 }
@@ -277,7 +282,9 @@ pub struct MockInvokeContext {
     pub bpf_compute_budget: BpfComputeBudget,
     pub compute_meter: MockComputeMeter,
     pub programs: Vec<(Pubkey, ProcessInstructionWithContext)>,
+    pub accounts: Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>,
     pub invoke_depth: usize,
+    pub sysvars: Vec<(Pubkey, Option<Rc<Vec<u8>>>)>,
 }
 impl Default for MockInvokeContext {
     fn default() -> Self {
@@ -289,7 +296,9 @@ impl Default for MockInvokeContext {
                 remaining: std::i64::MAX as u64,
             },
             programs: vec![],
+            accounts: vec![],
             invoke_depth: 0,
+            sysvars: vec![],
         }
     }
 }
@@ -336,7 +345,12 @@ impl InvokeContext for MockInvokeContext {
     fn is_feature_active(&self, _feature_id: &Pubkey) -> bool {
         true
     }
-    fn get_account(&self, _pubkey: &Pubkey) -> Option<Rc<RefCell<AccountSharedData>>> {
+    fn get_account(&self, pubkey: &Pubkey) -> Option<Rc<RefCell<AccountSharedData>>> {
+        for (key, account) in self.accounts.iter() {
+            if key == pubkey {
+                return Some(account.clone());
+            }
+        }
         None
     }
     fn update_timing(
@@ -346,5 +360,10 @@ impl InvokeContext for MockInvokeContext {
         _execute_us: u64,
         _deserialize_us: u64,
     ) {
+    }
+    fn get_sysvar_data(&mut self, id: &Pubkey) -> Option<Rc<Vec<u8>>> {
+        self.sysvars
+            .iter()
+            .find_map(|(key, sysvar)| if id == key { sysvar.clone() } else { None })
     }
 }

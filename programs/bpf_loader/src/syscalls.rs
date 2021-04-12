@@ -15,10 +15,12 @@ use solana_sdk::{
     account_utils::StateMut,
     bpf_loader, bpf_loader_deprecated,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
+    clock::Clock,
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
+    epoch_schedule::EpochSchedule,
     feature_set::{
         cpi_data_cost, cpi_share_ro_and_exec_accounts, demote_sysvar_write_locks,
-        ristretto_mul_syscall_enabled,
+        ristretto_mul_syscall_enabled, sysvar_via_syscall,
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
@@ -27,6 +29,8 @@ use solana_sdk::{
     native_loader,
     process_instruction::{stable_log, ComputeMeter, InvokeContext, Logger},
     pubkey::{Pubkey, PubkeyError, MAX_SEEDS},
+    rent::Rent,
+    sysvar::{self, fees::Fees, Sysvar, SysvarId},
 };
 use std::{
     alloc::Layout,
@@ -127,6 +131,19 @@ pub fn register_syscalls(
             .register_syscall_by_name(b"sol_ristretto_mul", SyscallRistrettoMul::call)?;
     }
 
+    if invoke_context.is_feature_active(&sysvar_via_syscall::id()) {
+        syscall_registry
+            .register_syscall_by_name(b"sol_get_clock_sysvar", SyscallGetClockSysvar::call)?;
+        syscall_registry.register_syscall_by_name(
+            b"sol_get_epoch_schedule_sysvar",
+            SyscallGetEpochScheduleSysvar::call,
+        )?;
+        syscall_registry
+            .register_syscall_by_name(b"sol_get_fees_sysvar", SyscallGetFeesSysvar::call)?;
+        syscall_registry
+            .register_syscall_by_name(b"sol_get_rent_sysvar", SyscallGetRentSysvar::call)?;
+    }
+
     syscall_registry
         .register_syscall_by_name(b"sol_invoke_signed_c", SyscallInvokeSignedC::call)?;
     syscall_registry
@@ -137,8 +154,8 @@ pub fn register_syscalls(
 }
 
 macro_rules! bind_feature_gated_syscall_context_object {
-    ($vm:expr, $invoke_context:expr, $feature_id:expr, $syscall_context_object:expr $(,)?) => {
-        if $invoke_context.is_feature_active($feature_id) {
+    ($vm:expr, $is_feature_active:expr, $syscall_context_object:expr $(,)?) => {
+        if $is_feature_active {
             match $vm.bind_syscall_context_object($syscall_context_object, None) {
                 Err(EbpfError::SyscallNotRegistered(_)) | Ok(()) => {}
                 Err(err) => {
@@ -234,8 +251,7 @@ pub fn bind_syscall_context_objects<'a>(
 
     bind_feature_gated_syscall_context_object!(
         vm,
-        invoke_context,
-        &ristretto_mul_syscall_enabled::id(),
+        invoke_context.is_feature_active(&ristretto_mul_syscall_enabled::id()),
         Box::new(SyscallRistrettoMul {
             cost: 0,
             compute_meter: invoke_context.get_compute_meter(),
@@ -243,9 +259,44 @@ pub fn bind_syscall_context_objects<'a>(
         }),
     );
 
-    // Cross-program invocation syscalls
+    let is_sysvar_via_syscall_active = invoke_context.is_feature_active(&sysvar_via_syscall::id());
 
     let invoke_context = Rc::new(RefCell::new(invoke_context));
+
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        is_sysvar_via_syscall_active,
+        Box::new(SyscallGetClockSysvar {
+            invoke_context: invoke_context.clone(),
+            loader_id,
+        }),
+    );
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        is_sysvar_via_syscall_active,
+        Box::new(SyscallGetEpochScheduleSysvar {
+            invoke_context: invoke_context.clone(),
+            loader_id,
+        }),
+    );
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        is_sysvar_via_syscall_active,
+        Box::new(SyscallGetFeesSysvar {
+            invoke_context: invoke_context.clone(),
+            loader_id,
+        }),
+    );
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        is_sysvar_via_syscall_active,
+        Box::new(SyscallGetRentSysvar {
+            invoke_context: invoke_context.clone(),
+            loader_id,
+        }),
+    );
+
+    // Cross-program invocation syscalls
     vm.bind_syscall_context_object(
         Box::new(SyscallInvokeSignedC {
             callers_keyed_accounts,
@@ -822,6 +873,136 @@ impl<'a> SyscallObject<BpfError> for SyscallRistrettoMul<'a> {
         *output = point * scalar;
 
         *result = Ok(0);
+    }
+}
+
+fn get_sysvar<T: std::fmt::Debug + Sysvar + SysvarId>(
+    id: &Pubkey,
+    var_addr: u64,
+    loader_id: &Pubkey,
+    memory_mapping: &MemoryMapping,
+    invoke_context: Rc<RefCell<&mut dyn InvokeContext>>,
+) -> Result<u64, EbpfError<BpfError>> {
+    let mut invoke_context = invoke_context
+        .try_borrow_mut()
+        .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
+
+    invoke_context.get_compute_meter().consume(
+        invoke_context.get_bpf_compute_budget().sysvar_base_cost + size_of::<T>() as u64,
+    )?;
+    let var = translate_type_mut::<T>(memory_mapping, var_addr, loader_id)?;
+
+    let sysvar_data = invoke_context.get_sysvar_data(id).ok_or_else(|| {
+        ic_msg!(invoke_context, "Unable to get Sysvar {}", id);
+        SyscallError::InstructionError(InstructionError::UnsupportedSysvar)
+    })?;
+
+    *var = bincode::deserialize(&sysvar_data).map_err(|e| {
+        ic_msg!(invoke_context, "Unable to get Sysvar {}: {:?}", id, e);
+        SyscallError::InstructionError(InstructionError::UnsupportedSysvar)
+    })?;
+
+    Ok(SUCCESS)
+}
+
+/// Get a Clock sysvar
+struct SyscallGetClockSysvar<'a> {
+    invoke_context: Rc<RefCell<&'a mut dyn InvokeContext>>,
+    loader_id: &'a Pubkey,
+}
+impl<'a> SyscallObject<BpfError> for SyscallGetClockSysvar<'a> {
+    fn call(
+        &mut self,
+        var_addr: u64,
+        _arg2: u64,
+        _arg3: u64,
+        _arg4: u64,
+        _arg5: u64,
+        memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        *result = get_sysvar::<Clock>(
+            &sysvar::clock::id(),
+            var_addr,
+            self.loader_id,
+            memory_mapping,
+            self.invoke_context.clone(),
+        );
+    }
+}
+/// Get a EpochSchedule sysvar
+struct SyscallGetEpochScheduleSysvar<'a> {
+    invoke_context: Rc<RefCell<&'a mut dyn InvokeContext>>,
+    loader_id: &'a Pubkey,
+}
+impl<'a> SyscallObject<BpfError> for SyscallGetEpochScheduleSysvar<'a> {
+    fn call(
+        &mut self,
+        var_addr: u64,
+        _arg2: u64,
+        _arg3: u64,
+        _arg4: u64,
+        _arg5: u64,
+        memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        *result = get_sysvar::<EpochSchedule>(
+            &sysvar::epoch_schedule::id(),
+            var_addr,
+            self.loader_id,
+            memory_mapping,
+            self.invoke_context.clone(),
+        );
+    }
+}
+/// Get a Fees sysvar
+struct SyscallGetFeesSysvar<'a> {
+    invoke_context: Rc<RefCell<&'a mut dyn InvokeContext>>,
+    loader_id: &'a Pubkey,
+}
+impl<'a> SyscallObject<BpfError> for SyscallGetFeesSysvar<'a> {
+    fn call(
+        &mut self,
+        var_addr: u64,
+        _arg2: u64,
+        _arg3: u64,
+        _arg4: u64,
+        _arg5: u64,
+        memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        *result = get_sysvar::<Fees>(
+            &sysvar::fees::id(),
+            var_addr,
+            self.loader_id,
+            memory_mapping,
+            self.invoke_context.clone(),
+        );
+    }
+}
+/// Get a Rent sysvar
+struct SyscallGetRentSysvar<'a> {
+    invoke_context: Rc<RefCell<&'a mut dyn InvokeContext>>,
+    loader_id: &'a Pubkey,
+}
+impl<'a> SyscallObject<BpfError> for SyscallGetRentSysvar<'a> {
+    fn call(
+        &mut self,
+        var_addr: u64,
+        _arg2: u64,
+        _arg3: u64,
+        _arg4: u64,
+        _arg5: u64,
+        memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        *result = get_sysvar::<Rent>(
+            &sysvar::rent::id(),
+            var_addr,
+            self.loader_id,
+            memory_mapping,
+            self.invoke_context.clone(),
+        );
     }
 }
 
@@ -1739,8 +1920,9 @@ mod tests {
     use solana_rbpf::{memory_region::MemoryRegion, vm::Config};
     use solana_sdk::{
         bpf_loader,
+        fee_calculator::FeeCalculator,
         hash::hashv,
-        process_instruction::{MockComputeMeter, MockLogger},
+        process_instruction::{MockComputeMeter, MockInvokeContext, MockLogger},
     };
     use std::str::FromStr;
 
@@ -2453,5 +2635,176 @@ mod tests {
             ))),
             result
         );
+    }
+
+    #[test]
+    fn test_syscall_get_sysvar() {
+        // Test clock sysvar
+        {
+            let got_clock = Clock::default();
+            let got_clock_va = 2048;
+
+            let memory_mapping = MemoryMapping::new(
+                vec![MemoryRegion {
+                    host_addr: &got_clock as *const _ as u64,
+                    vm_addr: got_clock_va,
+                    len: size_of::<Clock>() as u64,
+                    vm_gap_shift: 63,
+                    is_writable: true,
+                }],
+                &DEFAULT_CONFIG,
+            );
+
+            let src_clock = Clock {
+                slot: 1,
+                epoch_start_timestamp: 2,
+                epoch: 3,
+                leader_schedule_epoch: 4,
+                unix_timestamp: 5,
+            };
+            let mut invoke_context = MockInvokeContext::default();
+            let mut data = vec![];
+            bincode::serialize_into(&mut data, &src_clock).unwrap();
+            invoke_context
+                .sysvars
+                .push((sysvar::clock::id(), Some(Rc::new(data))));
+
+            let mut syscall = SyscallGetClockSysvar {
+                invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
+                loader_id: &bpf_loader::id(),
+            };
+            let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+
+            syscall.call(got_clock_va, 0, 0, 0, 0, &memory_mapping, &mut result);
+            result.unwrap();
+            assert_eq!(got_clock, src_clock);
+        }
+
+        // Test epoch_schedule sysvar
+        {
+            let got_epochschedule = EpochSchedule::default();
+            let got_epochschedule_va = 2048;
+
+            let memory_mapping = MemoryMapping::new(
+                vec![MemoryRegion {
+                    host_addr: &got_epochschedule as *const _ as u64,
+                    vm_addr: got_epochschedule_va,
+                    len: size_of::<EpochSchedule>() as u64,
+                    vm_gap_shift: 63,
+                    is_writable: true,
+                }],
+                &DEFAULT_CONFIG,
+            );
+
+            let src_epochschedule = EpochSchedule {
+                slots_per_epoch: 1,
+                leader_schedule_slot_offset: 2,
+                warmup: false,
+                first_normal_epoch: 3,
+                first_normal_slot: 4,
+            };
+            let mut invoke_context = MockInvokeContext::default();
+            let mut data = vec![];
+            bincode::serialize_into(&mut data, &src_epochschedule).unwrap();
+            invoke_context
+                .sysvars
+                .push((sysvar::epoch_schedule::id(), Some(Rc::new(data))));
+
+            let mut syscall = SyscallGetEpochScheduleSysvar {
+                invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
+                loader_id: &bpf_loader::id(),
+            };
+            let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+
+            syscall.call(
+                got_epochschedule_va,
+                0,
+                0,
+                0,
+                0,
+                &memory_mapping,
+                &mut result,
+            );
+            result.unwrap();
+            assert_eq!(got_epochschedule, src_epochschedule);
+        }
+
+        // Test fees sysvar
+        {
+            let got_fees = Fees::default();
+            let got_fees_va = 2048;
+
+            let memory_mapping = MemoryMapping::new(
+                vec![MemoryRegion {
+                    host_addr: &got_fees as *const _ as u64,
+                    vm_addr: got_fees_va,
+                    len: size_of::<Fees>() as u64,
+                    vm_gap_shift: 63,
+                    is_writable: true,
+                }],
+                &DEFAULT_CONFIG,
+            );
+
+            let src_fees = Fees {
+                fee_calculator: FeeCalculator {
+                    lamports_per_signature: 1,
+                },
+            };
+            let mut invoke_context = MockInvokeContext::default();
+            let mut data = vec![];
+            bincode::serialize_into(&mut data, &src_fees).unwrap();
+            invoke_context
+                .sysvars
+                .push((sysvar::fees::id(), Some(Rc::new(data))));
+
+            let mut syscall = SyscallGetFeesSysvar {
+                invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
+                loader_id: &bpf_loader::id(),
+            };
+            let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+
+            syscall.call(got_fees_va, 0, 0, 0, 0, &memory_mapping, &mut result);
+            result.unwrap();
+            assert_eq!(got_fees, src_fees);
+        }
+
+        // Test rent sysvar
+        {
+            let got_rent = Rent::default();
+            let got_rent_va = 2048;
+
+            let memory_mapping = MemoryMapping::new(
+                vec![MemoryRegion {
+                    host_addr: &got_rent as *const _ as u64,
+                    vm_addr: got_rent_va,
+                    len: size_of::<Rent>() as u64,
+                    vm_gap_shift: 63,
+                    is_writable: true,
+                }],
+                &DEFAULT_CONFIG,
+            );
+
+            let src_rent = Rent {
+                lamports_per_byte_year: 1,
+                exemption_threshold: 2.0,
+                burn_percent: 3,
+            };
+            let mut invoke_context = MockInvokeContext::default();
+            let mut data = vec![];
+            bincode::serialize_into(&mut data, &src_rent).unwrap();
+            invoke_context
+                .sysvars
+                .push((sysvar::rent::id(), Some(Rc::new(data))));
+
+            let mut syscall = SyscallGetRentSysvar {
+                invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
+                loader_id: &bpf_loader::id(),
+            };
+            let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+
+            syscall.call(got_rent_va, 0, 0, 0, 0, &memory_mapping, &mut result);
+            result.unwrap();
+            assert_eq!(got_rent, src_rent);
+        }
     }
 }

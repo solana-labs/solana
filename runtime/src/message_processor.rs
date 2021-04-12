@@ -1,6 +1,6 @@
 use crate::{
-    instruction_recorder::InstructionRecorder, log_collector::LogCollector,
-    native_loader::NativeLoader, rent_collector::RentCollector,
+    accounts::Accounts, accounts_index::Ancestors, instruction_recorder::InstructionRecorder,
+    log_collector::LogCollector, native_loader::NativeLoader, rent_collector::RentCollector,
 };
 use log::*;
 use serde::{Deserialize, Serialize};
@@ -263,6 +263,9 @@ pub struct ThisInvokeContext<'a> {
     instruction_recorder: Option<InstructionRecorder>,
     feature_set: Arc<FeatureSet>,
     pub timings: ExecuteDetailsTimings,
+    account_db: Arc<Accounts>,
+    ancestors: &'a Ancestors,
+    sysvars: Vec<(Pubkey, Option<Rc<Vec<u8>>>)>,
 }
 impl<'a> ThisInvokeContext<'a> {
     #[allow(clippy::too_many_arguments)]
@@ -278,6 +281,8 @@ impl<'a> ThisInvokeContext<'a> {
         executors: Rc<RefCell<Executors>>,
         instruction_recorder: Option<InstructionRecorder>,
         feature_set: Arc<FeatureSet>,
+        account_db: Arc<Accounts>,
+        ancestors: &'a Ancestors,
     ) -> Self {
         let mut program_ids = Vec::with_capacity(bpf_compute_budget.max_invoke_depth);
         program_ids.push(*program_id);
@@ -297,6 +302,9 @@ impl<'a> ThisInvokeContext<'a> {
             instruction_recorder,
             feature_set,
             timings: ExecuteDetailsTimings::default(),
+            account_db,
+            ancestors,
+            sysvars: vec![],
         }
     }
 }
@@ -415,6 +423,23 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         self.timings.create_vm_us += create_vm_us;
         self.timings.execute_us += execute_us;
         self.timings.deserialize_us += deserialize_us;
+    }
+    fn get_sysvar_data(&mut self, id: &Pubkey) -> Option<Rc<Vec<u8>>> {
+        // Try share from cache
+        let mut result =
+            self.sysvars
+                .iter()
+                .find_map(|(key, sysvar)| if id == key { sysvar.clone() } else { None });
+        if result.is_none() {
+            // Load it
+            result = self
+                .account_db
+                .load_slow(self.ancestors, id)
+                .map(|(account, _)| Rc::new(account.data().clone()));
+            // Cache it
+            self.sysvars.push((*id, result.clone()));
+        }
+        result
     }
 }
 pub struct ThisLogger {
@@ -1046,6 +1071,8 @@ impl MessageProcessor {
         bpf_compute_budget: BpfComputeBudget,
         timings: &mut ExecuteDetailsTimings,
         demote_sysvar_write_locks: bool,
+        account_db: Arc<Accounts>,
+        ancestors: &Ancestors,
     ) -> Result<(), InstructionError> {
         // Fixup the special instructions key if present
         // before the account pre-values are taken care of
@@ -1076,6 +1103,8 @@ impl MessageProcessor {
             executors,
             instruction_recorder,
             feature_set,
+            account_db,
+            ancestors,
         );
         let keyed_accounts = Self::create_keyed_accounts(
             message,
@@ -1124,6 +1153,8 @@ impl MessageProcessor {
         feature_set: Arc<FeatureSet>,
         bpf_compute_budget: BpfComputeBudget,
         timings: &mut ExecuteDetailsTimings,
+        account_db: Arc<Accounts>,
+        ancestors: &Ancestors,
     ) -> Result<(), TransactionError> {
         let demote_sysvar_write_locks = feature_set.is_active(&demote_sysvar_write_locks::id());
         for (instruction_index, instruction) in message.instructions.iter().enumerate() {
@@ -1145,6 +1176,8 @@ impl MessageProcessor {
                 bpf_compute_budget,
                 timings,
                 demote_sysvar_write_locks,
+                account_db.clone(),
+                ancestors,
             )
             .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
         }
@@ -1184,6 +1217,7 @@ mod tests {
             pre_accounts.push(PreAccount::new(program_id, &account.clone()));
         }
 
+        let ancestors = Ancestors::default();
         let mut invoke_context = ThisInvokeContext::new(
             &program_ids[0],
             Rent::default(),
@@ -1196,6 +1230,8 @@ mod tests {
             Rc::new(RefCell::new(Executors::default())),
             None,
             Arc::new(FeatureSet::all_enabled()),
+            Arc::new(Accounts::default()),
+            &ancestors,
         );
 
         // Check call depth increases and has a limit
@@ -1748,6 +1784,7 @@ mod tests {
         loaders.push(vec![(mock_system_program_id, account)]);
 
         let executors = Rc::new(RefCell::new(Executors::default()));
+        let ancestors = Ancestors::default();
 
         let from_pubkey = solana_sdk::pubkey::new_rand();
         let to_pubkey = solana_sdk::pubkey::new_rand();
@@ -1776,6 +1813,8 @@ mod tests {
             Arc::new(FeatureSet::all_enabled()),
             BpfComputeBudget::new(),
             &mut ExecuteDetailsTimings::default(),
+            Arc::new(Accounts::default()),
+            &ancestors,
         );
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].borrow().lamports, 100);
@@ -1802,6 +1841,8 @@ mod tests {
             Arc::new(FeatureSet::all_enabled()),
             BpfComputeBudget::new(),
             &mut ExecuteDetailsTimings::default(),
+            Arc::new(Accounts::default()),
+            &ancestors,
         );
         assert_eq!(
             result,
@@ -1832,6 +1873,8 @@ mod tests {
             Arc::new(FeatureSet::all_enabled()),
             BpfComputeBudget::new(),
             &mut ExecuteDetailsTimings::default(),
+            Arc::new(Accounts::default()),
+            &ancestors,
         );
         assert_eq!(
             result,
@@ -1917,6 +1960,7 @@ mod tests {
         loaders.push(vec![(mock_program_id, account)]);
 
         let executors = Rc::new(RefCell::new(Executors::default()));
+        let ancestors = Ancestors::default();
 
         let from_pubkey = solana_sdk::pubkey::new_rand();
         let to_pubkey = solana_sdk::pubkey::new_rand();
@@ -1948,6 +1992,8 @@ mod tests {
             Arc::new(FeatureSet::all_enabled()),
             BpfComputeBudget::new(),
             &mut ExecuteDetailsTimings::default(),
+            Arc::new(Accounts::default()),
+            &ancestors,
         );
         assert_eq!(
             result,
@@ -1978,6 +2024,8 @@ mod tests {
             Arc::new(FeatureSet::all_enabled()),
             BpfComputeBudget::new(),
             &mut ExecuteDetailsTimings::default(),
+            Arc::new(Accounts::default()),
+            &ancestors,
         );
         assert_eq!(result, Ok(()));
 
@@ -1993,6 +2041,7 @@ mod tests {
             )],
             Some(&from_pubkey),
         );
+        let ancestors = Ancestors::default();
         let result = message_processor.process_message(
             &message,
             &loaders,
@@ -2005,6 +2054,8 @@ mod tests {
             Arc::new(FeatureSet::all_enabled()),
             BpfComputeBudget::new(),
             &mut ExecuteDetailsTimings::default(),
+            Arc::new(Accounts::default()),
+            &ancestors,
         );
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].borrow().lamports, 80);
@@ -2078,6 +2129,7 @@ mod tests {
         ];
         let programs: Vec<(_, ProcessInstructionWithContext)> =
             vec![(callee_program_id, mock_process_instruction)];
+        let ancestors = Ancestors::default();
         let mut invoke_context = ThisInvokeContext::new(
             &caller_program_id,
             Rent::default(),
@@ -2094,6 +2146,8 @@ mod tests {
             Rc::new(RefCell::new(Executors::default())),
             None,
             Arc::new(FeatureSet::all_enabled()),
+            Arc::new(Accounts::default()),
+            &ancestors,
         );
         let metas = vec![
             AccountMeta::new(owned_key, false),
