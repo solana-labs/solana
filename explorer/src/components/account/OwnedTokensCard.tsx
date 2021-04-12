@@ -14,8 +14,11 @@ import { Link } from "react-router-dom";
 import { Location } from "history";
 import { useTokenRegistry } from "providers/mints/token-registry";
 import { BigNumber } from "bignumber.js";
+import { Identicon } from "components/common/Identicon";
 
 type Display = "summary" | "detail" | null;
+
+const SMALL_IDENTICON_WIDTH = 16;
 
 const useQueryDisplay = (): Display => {
   const query = useQuery();
@@ -102,11 +105,17 @@ function HoldingsDetailTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
       <tr key={address}>
         {showLogos && (
           <td className="w-1 p-0 text-center">
-            {tokenDetails?.logoURI && (
+            {tokenDetails?.logoURI ? (
               <img
                 src={tokenDetails.logoURI}
                 alt="token icon"
                 className="token-icon rounded-circle border border-4 border-gray-dark"
+              />
+            ) : (
+              <Identicon
+                address={address}
+                className="avatar-img identicon-wrapper identicon-wrapper-small"
+                style={{ width: SMALL_IDENTICON_WIDTH }}
               />
             )}
           </td>
@@ -171,11 +180,17 @@ function HoldingsSummaryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
       <tr key={mintAddress}>
         {showLogos && (
           <td className="w-1 p-0 text-center">
-            {tokenDetails?.logoURI && (
+            {tokenDetails?.logoURI ? (
               <img
                 src={tokenDetails.logoURI}
                 alt="token icon"
                 className="token-icon rounded-circle border border-4 border-gray-dark"
+              />
+            ) : (
+              <Identicon
+                address={mintAddress}
+                className="avatar-img identicon-wrapper identicon-wrapper-small"
+                style={{ width: SMALL_IDENTICON_WIDTH }}
               />
             )}
           </td>

@@ -382,3 +382,11 @@ p.updated-time {
 .change-negative {
   color: $warning;
 }
+
+.identicon-wrapper {
+  display: flex;
+}
+
+.identicon-wrapper-small {
+  margin-left: .4rem;
+}

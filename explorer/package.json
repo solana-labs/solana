@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@metamask/jazzicon": "^2.0.0",
     "@project-serum/serum": "^0.13.33",
     "@react-hook/debounce": "^3.0.0",
     "@sentry/react": "^6.2.5",

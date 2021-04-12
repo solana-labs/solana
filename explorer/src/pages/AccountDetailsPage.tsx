@@ -1,6 +1,6 @@
 import React from "react";
 import { PublicKey } from "@solana/web3.js";
-import { FetchStatus } from "providers/cache";
+import { CacheEntry, FetchStatus } from "providers/cache";
 import {
   useFetchAccountInfo,
   useAccountInfo,
@@ -30,7 +30,9 @@ import { ConfigAccountSection } from "components/account/ConfigAccountSection";
 import { useFlaggedAccounts } from "providers/accounts/flagged-accounts";
 import { UpgradeableLoaderAccountSection } from "components/account/UpgradeableLoaderAccountSection";
 import { useTokenRegistry } from "providers/mints/token-registry";
+import { Identicon } from "components/common/Identicon";
 
+const IDENTICON_WIDTH = 64;
 const TABS_LOOKUP: { [id: string]: Tab } = {
   "spl-token:mint": {
     slug: "largest",
@@ -69,49 +71,77 @@ const TOKEN_TABS_HIDDEN = [
 
 type Props = { address: string; tab?: string };
 export function AccountDetailsPage({ address, tab }: Props) {
+  const fetchAccount = useFetchAccountInfo();
+  const { status } = useCluster();
+  const info = useAccountInfo(address);
   let pubkey: PublicKey | undefined;
 
   try {
     pubkey = new PublicKey(address);
   } catch (err) {}
 
+  // Fetch account on load
+  React.useEffect(() => {
+    if (!info && status === ClusterStatus.Connected && pubkey) {
+      fetchAccount(pubkey);
+    }
+  }, [address, status]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div className="container mt-n3">
       <div className="header">
         <div className="header-body">
-          <AccountHeader address={address} />
+          <AccountHeader address={address} info={info} />
         </div>
       </div>
       {!pubkey ? (
         <ErrorCard text={`Address "${address}" is not valid`} />
       ) : (
-        <DetailsSections pubkey={pubkey} tab={tab} />
+        <DetailsSections pubkey={pubkey} tab={tab} info={info} />
       )}
     </div>
   );
 }
 
-export function AccountHeader({ address }: { address: string }) {
+export function AccountHeader({
+  address,
+  info,
+}: {
+  address: string;
+  info?: CacheEntry<Account>;
+}) {
   const { tokenRegistry } = useTokenRegistry();
   const tokenDetails = tokenRegistry.get(address);
-  if (tokenDetails) {
+  const account = info?.data;
+  const data = account?.details?.data;
+  const isToken = data?.program === "spl-token" && data?.parsed.type === "mint";
+
+  if (tokenDetails || isToken) {
     return (
       <div className="row align-items-end">
-        {tokenDetails.logoURI && (
-          <div className="col-auto">
-            <div className="avatar avatar-lg header-avatar-top">
+        <div className="col-auto">
+          <div className="avatar avatar-lg header-avatar-top">
+            {tokenDetails?.logoURI ? (
               <img
                 src={tokenDetails.logoURI}
                 alt="token logo"
                 className="avatar-img rounded-circle border border-4 border-body"
               />
-            </div>
+            ) : (
+              <Identicon
+                address={address}
+                className="avatar-img rounded-circle border border-body identicon-wrapper"
+                style={{ width: IDENTICON_WIDTH }}
+              />
+            )}
           </div>
-        )}
+        </div>
 
         <div className="col mb-3 ml-n3 ml-md-n2">
           <h6 className="header-pretitle">Token</h6>
-          <h2 className="header-title">{tokenDetails.name}</h2>
+          <h2 className="header-title">
+            {tokenDetails?.name || "Unlisted Token"}
+          </h2>
         </div>
       </div>
     );
@@ -125,18 +155,19 @@ export function AccountHeader({ address }: { address: string }) {
   );
 }
 
-function DetailsSections({ pubkey, tab }: { pubkey: PublicKey; tab?: string }) {
+function DetailsSections({
+  pubkey,
+  tab,
+  info,
+}: {
+  pubkey: PublicKey;
+  tab?: string;
+  info?: CacheEntry<Account>;
+}) {
   const fetchAccount = useFetchAccountInfo();
   const address = pubkey.toBase58();
-  const info = useAccountInfo(address);
-  const { status } = useCluster();
   const location = useLocation();
   const { flaggedAccounts } = useFlaggedAccounts();
-
-  // Fetch account on load
-  React.useEffect(() => {
-    if (!info && status === ClusterStatus.Connected) fetchAccount(pubkey);
-  }, [address, status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!info || info.status === FetchStatus.Fetching) {
     return <LoadingCard />;
