@@ -99,6 +99,8 @@ const CACHE_VIRTUAL_WRITE_VERSION: u64 = 0;
 const CACHE_VIRTUAL_OFFSET: usize = 0;
 const CACHE_VIRTUAL_STORED_SIZE: usize = 0;
 
+const ABSURD_CONSECUTIVE_FAILED_ITERATIONS: usize = 100;
+
 type DashMapVersionHash = DashMap<Pubkey, (u64, Hash)>;
 
 lazy_static! {
@@ -188,20 +190,23 @@ impl Versioned for (u64, AccountInfo) {
     }
 }
 
+// Some hints for applicability of additional sanity checks for the do_load fast-path;
+// Slower fallback code path will be taken if the fast path has failed over the retry
+// threshold, regardless of these hints. Also, load cannot fail not-deterministically
+// even under very rare circumstances, unlike previously did allow.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum LoadHint {
     // Caller hints that it's loading transactions for a block which is
     // descended from the current root, and at the tip of its fork.
     // Thereby, further this assumes AccountIndex::max_root should not increase
     // during this load, meaning there should be no squash.
-    // Overall, this paves a way for specialized optimized fast-path for account
-    // loading, while maintaining the determinism of account loading and resultant
+    // Overall, this enables us to assert!() strictly while running the fast-path for
+    // account loading, while maintaining the determinism of account loading and resultant
     // transaction execution thereof.
     FixedMaxRoot,
-    // Caller can't hint the above safety assumption, and slower safe code path
-    // must be taken. Still, load cannot fail not-deterministically even under very
-    // rare circumstances.
-    // Generally RPC codepath falls into this category.
+    // Caller can't hint the above safety assumption. Generally RPC and miscellaneous
+    // other call-site falls into this category. The likelihood of slower path is slightly
+    // increased as well.
     Unspecified,
 }
 
@@ -216,6 +221,9 @@ pub enum LoadedAccountAccessor<'a> {
 
 impl<'a> LoadedAccountAccessor<'a> {
     fn check_and_get_loaded_account(&mut self) -> LoadedAccount {
+        // all of these following .expect() and .unwrap() are like serious logic errors,
+        // ideal for representing this as rust type system....
+
         match self {
             LoadedAccountAccessor::Cached(None) | LoadedAccountAccessor::Stored(None) => {
                 panic!("Should have already been taken care of when creating this LoadedAccountAccessor");
@@ -815,6 +823,9 @@ pub struct AccountsDb {
 
     #[cfg(test)]
     load_delay: u64,
+
+    #[cfg(test)]
+    load_limit: AtomicU64,
 }
 
 #[derive(Debug, Default)]
@@ -1165,7 +1176,9 @@ impl Default for AccountsDb {
             account_indexes: HashSet::new(),
             caching_enabled: false,
             #[cfg(test)]
-            load_delay: 0,
+            load_delay: u64::default(),
+            #[cfg(test)]
+            load_limit: AtomicU64::default(),
         }
     }
 }
@@ -2327,16 +2340,13 @@ impl AccountsDb {
         self.load(ancestors, pubkey, LoadHint::Unspecified)
     }
 
-    fn read_index_for_accessor_or_load_slow<T>(
-        &self,
+    fn read_index_for_accessor_or_load_slow<'a>(
+        &'a self,
         ancestors: &Ancestors,
-        pubkey: &Pubkey,
+        pubkey: &'a Pubkey,
         max_root: Option<Slot>,
-        load_hint: LoadHint,
-        // We take an optional closure just because of lifetime handling
-        // difficulty of LoadedAccount
-        on_slow_path: Option<impl Fn(LoadedAccount) -> T>,
-    ) -> Option<(Slot, AppendVecId, usize, Option<T>)> {
+        clone_in_lock: bool,
+    ) -> Option<(Slot, AppendVecId, usize, Option<LoadedAccountAccessor<'a>>)> {
         let (lock, index) = self.accounts_index.get(pubkey, Some(ancestors), max_root)?;
         // Notice the subtle `?` at previous line, we bail out pretty early for missing.
 
@@ -2348,23 +2358,20 @@ impl AccountsDb {
             },
         ) = slot_list[index];
 
-        let some_from_slow_path = match load_hint {
-            LoadHint::FixedMaxRoot => None,
-            LoadHint::Unspecified => {
-                // we can't employ the fixed-max-root optimization.... so take the slower approach
-                // of copying potentially large Account::data inside the lock.
+        let some_from_slow_path = if clone_in_lock {
+            // the fast path must have failed.... so take the slower approach
+            // of copying potentially large Account::data inside the lock.
 
-                let mut accessor = self.get_account_accessor(slot, &pubkey, store_id, offset);
-                // calling check_and_get_loaded_account is safe while holding the lock and
-                // ensuring no purge could be conducted by alive ancestors held by callers
-                Some(on_slow_path.unwrap()(
-                    accessor.check_and_get_loaded_account(),
-                ))
-            }
+            // calling check_and_get_loaded_account is safe as long as we're guaranteed to hold
+            // the lock during the time and there should be no purge thanks to alive ancestors
+            // held by our caller.
+            Some(self.get_account_accessor(slot, pubkey, store_id, offset))
+        } else {
+            None
         };
 
         Some((slot, store_id, offset, some_from_slow_path))
-        // `lock` is dropped here rather pretty quickly with LoadHint::FixedMaxRoot,
+        // `lock` is dropped here rather pretty quickly with clone_in_lock = false,
         // so the entry could be raced for mutation by other subsystems,
         // before we actually provision an account data for caller's use from now on.
         // This is traded for less contention and resultant performance, introducing fair amount of
@@ -2383,8 +2390,6 @@ impl AccountsDb {
         load_hint: LoadHint,
     ) -> Option<(LoadedAccountAccessor<'a>, Slot)> {
         // Happy drawing time! :)
-        // This will explain races and its handling for the case of the so-called fixed-max-root
-        // fast-path optimization
         //
         // Reader                               | Accessed data source for cached/stored
         // -------------------------------------+----------------------------------
@@ -2483,8 +2488,6 @@ impl AccountsDb {
         // where P2 happens between R1 and R2. In that case, retrying from R1 is safu.
         // In that case, we may bail at index read retry when P3 hasn't been run
 
-        assert!(load_hint == LoadHint::FixedMaxRoot);
-
         #[cfg(test)]
         {
             // Give some time for cache flushing to occur here for unit tests
@@ -2492,7 +2495,7 @@ impl AccountsDb {
         }
 
         // Failsafe for potential race conditions with other subsystems
-        let mut flush_race_already_observed = false;
+        let mut num_acceptable_failed_iterations = 0;
         loop {
             let account_accessor = self.get_account_accessor(slot, pubkey, store_id, offset);
             match account_accessor {
@@ -2501,6 +2504,7 @@ impl AccountsDb {
                     return Some((account_accessor, slot));
                 }
                 LoadedAccountAccessor::Cached(None) => {
+                    num_acceptable_failed_iterations += 1;
                     // Cache was flushed in between checking the index and retrieving from the cache,
                     // so retry. This works because in accounts cache flush, an account is written to
                     // storage *before* it is removed from the cache
@@ -2514,17 +2518,14 @@ impl AccountsDb {
                             // ancestor can only be flushed once.
                             // 2) The root cannot move while replaying, so the index cannot continually
                             // find more up to date entries than the current `slot`
-                            assert!(!flush_race_already_observed);
+                            assert!(num_acceptable_failed_iterations <= 1);
                         }
                         LoadHint::Unspecified => {
-                            unreachable!()
-                            // (if this arm had actually reached...):
                             // Because newer root can be added to the index (= not fixed),
                             // multiple flush race conditions can be observed under very rare
                             // condition, at least theoretically
                         }
                     }
-                    flush_race_already_observed = true;
                 }
                 LoadedAccountAccessor::Stored(None) => {
                     match load_hint {
@@ -2541,7 +2542,7 @@ impl AccountsDb {
                             // and the storage entry holding this account qualified for zero-lamport clean.
                             //
                             // In both these cases, it should be safe to retry and recheck the accounts
-                            // index indefinitely.
+                            // index indefinitely, without incrementing num_acceptable_failed_iterations.
                             // That's because if the root is fixed, there should be a bounded number
                             // of pending cleans/shrinks (depends how far behind the AccountsBackgroundService
                             // is), termination to the desired condition is guaranteed.
@@ -2556,8 +2557,6 @@ impl AccountsDb {
                             // eh, no code in this arm? yes!
                         }
                         LoadHint::Unspecified => {
-                            unreachable!()
-                            // (if this arm had actually reached...):
                             // RPC get_account() may have fetched an old root from the index that was
                             // either:
                             // 1) Cleaned up by clean_accounts(), so the accounts index has been updated
@@ -2568,22 +2567,41 @@ impl AccountsDb {
                             // this generally is impossible to occur in the wild because the RPC
                             // should hold the slot's bank, preventing it from being purged() to
                             // begin with.
+                            num_acceptable_failed_iterations += 1;
                         }
                     }
                 }
             }
+            #[cfg(not(test))]
+            let load_limit = ABSURD_CONSECUTIVE_FAILED_ITERATIONS;
+
+            #[cfg(test)]
+            let load_limit = self.load_limit.load(Ordering::Relaxed);
+
+            let fallback_to_slow_path = if num_acceptable_failed_iterations >= load_limit {
+                // The latest version of the account existed in the index, but could not be
+                // fetched from storage. This means a race occurred between this function and clean
+                // accounts/purge_slots
+                let message = format!(
+                    "do_load() failed to get key: {} from storage, latest attempt was for \
+                     slot: {}, storage_entry: {} offset: {}, load_hint: {:?}",
+                    pubkey, slot, store_id, offset, load_hint,
+                );
+                datapoint_warn!("accounts_db-do_load_warn", ("warn", message, String));
+                true
+            } else {
+                false
+            };
 
             // Because reading from the cache/storage failed, retry from the index read
-            let (new_slot, new_store_id, new_offset, maybe_some_from_slow_path) = self
+            let (new_slot, new_store_id, new_offset, maybe_account_accessor) = self
                 .read_index_for_accessor_or_load_slow(
                     ancestors,
                     pubkey,
                     max_root,
-                    load_hint,
-                    None::<fn(LoadedAccount) -> ()>,
+                    fallback_to_slow_path,
                 )?;
             // Notice the subtle `?` at previous line, we bail out pretty early if missing.
-            assert!(maybe_some_from_slow_path.is_none());
 
             if new_slot == slot && new_store_id == store_id {
                 // Considering that we're failed to get accessor above and further that
@@ -2598,8 +2616,10 @@ impl AccountsDb {
 
                 // If this is not a cache entry, then this was a minor fork slot
                 // that had its storage entries cleaned up by purge_slots() but hasn't been
-                // cleaned yet. That means this must be rpc access and not replay/banking.
-                // This contradicts with the above `assert!(load_hint == LoadHint::FixedMaxRoot)`
+                // cleaned yet. That means this must be rpc access and not replay/banking at the
+                // very least. Note that purge shouldn't occur even for RPC as caller must hold all
+                // of ancestor slots..
+                assert!(load_hint == LoadHint::Unspecified);
 
                 // Everything being assert!()-ed, let's panic!() here as it's an error condition
                 // after all....
@@ -2613,6 +2633,13 @@ impl AccountsDb {
                     "Bad index entry detected ({}, {}, {}, {}, {:?})",
                     pubkey, slot, store_id, offset, load_hint
                 );
+            } else if fallback_to_slow_path {
+                // the above bad-index-entry check must had been checked first to retain the same
+                // behavior
+                return Some((
+                    maybe_account_accessor.expect("must be some if clone_in_lock=true"),
+                    new_slot,
+                ));
             }
 
             slot = new_slot;
@@ -2631,18 +2658,9 @@ impl AccountsDb {
         #[cfg(not(test))]
         assert!(max_root.is_none());
 
-        let (slot, store_id, offset, maybe_account) = self.read_index_for_accessor_or_load_slow(
-            ancestors,
-            pubkey,
-            max_root,
-            load_hint,
-            Some(|loaded_account: LoadedAccount| loaded_account.take_account()),
-        )?;
+        let (slot, store_id, offset, _maybe_account_accesor) =
+            self.read_index_for_accessor_or_load_slow(ancestors, pubkey, max_root, false)?;
         // Notice the subtle `?` at previous line, we bail out pretty early if missing.
-
-        if load_hint == LoadHint::Unspecified {
-            return maybe_account.map(|account| (account, slot));
-        }
 
         if self.caching_enabled && store_id != CACHE_VIRTUAL_STORAGE_ID {
             let result = self.read_only_accounts_cache.load(pubkey, slot);
@@ -2683,20 +2701,9 @@ impl AccountsDb {
         max_root: Option<Slot>,
         load_hint: LoadHint,
     ) -> Option<Hash> {
-        let (slot, store_id, offset, maybe_hash) = self.read_index_for_accessor_or_load_slow(
-            ancestors,
-            pubkey,
-            max_root,
-            load_hint,
-            Some(|loaded_account: LoadedAccount| {
-                loaded_account.loaded_hash(self.expected_cluster_type())
-            }),
-        )?;
+        let (slot, store_id, offset, _maybe_account_accesor) =
+            self.read_index_for_accessor_or_load_slow(ancestors, pubkey, max_root, false)?;
         // Notice the subtle `?` at previous line, we bail out pretty early if missing.
-
-        if load_hint == LoadHint::Unspecified {
-            return maybe_hash;
-        }
 
         let (mut account_accessor, _) = self.retry_to_get_account_accessor(
             slot, store_id, offset, ancestors, pubkey, max_root, load_hint,
@@ -9853,6 +9860,16 @@ pub mod tests {
                     if exit.load(Ordering::Relaxed) {
                         return;
                     }
+                    // Meddle load_limit to cover all branches of implementation.
+                    // There should absolutely no behaviorial difference; the load_limit triggered
+                    // slow branch should only affect the performance.
+                    // Ordering::Relaxed is ok because of no data dependencies; the modified field is
+                    // completely free-standing cfg(test) control-flow knob.
+                    db.load_limit.store(
+                        thread_rng().gen_range(0, ABSURD_CONSECUTIVE_FAILED_ITERATIONS) as u64,
+                        Ordering::Relaxed,
+                    );
+
                     // Load should never be unable to find this key
                     let loaded_account = db.do_load(&ancestors, &pubkey, None, load_hint).unwrap();
                     // slot + 1 == account.lamports because of the account-cache-flush thread
@@ -10064,9 +10081,7 @@ pub mod tests {
     }
 
     #[test]
-    #[should_panic(
-        expected = "Bad index entry detected (CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3, 1, 0, 0, FixedMaxRoot)"
-    )]
+    #[should_panic(expected = "assertion failed: load_hint == LoadHint::Unspecified")]
     fn test_load_account_and_purge_race_with_retry() {
         // this tests impossible situation in the wild, so panic is expected
         // Conversely, we show that we're preventing this race condition from occurring
@@ -10075,7 +10090,7 @@ pub mod tests {
 
     #[test]
     #[should_panic(
-        expected = "Should have already been taken care of when creating this LoadedAccountAccessor"
+        expected = "Bad index entry detected (CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3, 1, 0, 0, Unspecified)"
     )]
     fn test_load_account_and_purge_race_without_retry() {
         // this tests impossible situation in the wild, so panic is expected
