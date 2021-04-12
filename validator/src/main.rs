@@ -1844,14 +1844,28 @@ pub fn main() {
                 ("add", Some(subcommand_matches)) => {
                     let authorized_voter_keypair =
                         value_t_or_exit!(subcommand_matches, "authorized_voter_keypair", String);
-                    println!("Adding authorized voter: {}", authorized_voter_keypair);
+
+                    let authorized_voter_keypair = fs::canonicalize(&authorized_voter_keypair)
+                        .unwrap_or_else(|err| {
+                            println!(
+                                "Unable to access path: {}: {:?}",
+                                authorized_voter_keypair, err
+                            );
+                            exit(1);
+                        });
+                    println!(
+                        "Adding authorized voter: {}",
+                        authorized_voter_keypair.display()
+                    );
 
                     let admin_client = admin_rpc_service::connect(&ledger_path);
                     admin_rpc_service::runtime()
                         .block_on(async move {
                             admin_client
                                 .await?
-                                .add_authorized_voter(authorized_voter_keypair)
+                                .add_authorized_voter(
+                                    authorized_voter_keypair.display().to_string(),
+                                )
                                 .await
                         })
                         .unwrap_or_else(|err| {
