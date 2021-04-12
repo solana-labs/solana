@@ -11,7 +11,8 @@ use {
     solana_clap_utils::{
         input_parsers::{keypair_of, keypairs_of, pubkey_of, value_of},
         input_validators::{
-            is_keypair_or_ask_keyword, is_parsable, is_pubkey, is_pubkey_or_keypair, is_slot,
+            is_keypair, is_keypair_or_ask_keyword, is_parsable, is_pubkey, is_pubkey_or_keypair,
+            is_slot,
         },
         keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
@@ -804,7 +805,7 @@ fn rpc_bootstrap(
     ledger_path: &Path,
     snapshot_output_dir: &Path,
     vote_account: &Pubkey,
-    authorized_voter_keypairs: &[Arc<Keypair>],
+    authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
     cluster_entrypoints: &[ContactInfo],
     validator_config: &mut ValidatorConfig,
     bootstrap_config: RpcBootstrapConfig,
@@ -969,6 +970,8 @@ fn rpc_bootstrap(
                     &identity_keypair.pubkey(),
                     &vote_account,
                     &authorized_voter_keypairs
+                        .read()
+                        .unwrap()
                         .iter()
                         .map(|k| k.pubkey())
                         .collect::<Vec<_>>(),
@@ -1767,6 +1770,32 @@ pub fn main() {
             )
         )
         .subcommand(
+            SubCommand::with_name("authorized-voter")
+            .about("Adjust the validator authorized voters")
+            .setting(AppSettings::SubcommandRequiredElseHelp)
+            .setting(AppSettings::InferSubcommands)
+            .subcommand(
+                SubCommand::with_name("add")
+                .about("Add an authorized voter")
+                .arg(
+                    Arg::with_name("authorized_voter_keypair")
+                        .index(1)
+                        .value_name("KEYPAIR")
+                        .takes_value(true)
+                        .validator(is_keypair)
+                        .help("Keypair of the authorized voter to add"),
+                )
+                .after_help("Note: the new authorized voter only applies to the \
+                             currently running validator instance")
+            )
+            .subcommand(
+                SubCommand::with_name("remove-all")
+                .about("Remove all authorized voters")
+                .after_help("Note: the removal only applies to the \
+                             currently running validator instance")
+            )
+        )
+        .subcommand(
             SubCommand::with_name("init")
             .about("Initialize the ledger directory then exit")
         )
@@ -1810,6 +1839,43 @@ pub fn main() {
 
     let operation = match matches.subcommand() {
         ("", _) | ("run", _) => Operation::Run,
+        ("authorized-voter", Some(authorized_voter_subcommand_matches)) => {
+            match authorized_voter_subcommand_matches.subcommand() {
+                ("add", Some(subcommand_matches)) => {
+                    let authorized_voter_keypair =
+                        value_t_or_exit!(subcommand_matches, "authorized_voter_keypair", String);
+                    println!("Adding authorized voter: {}", authorized_voter_keypair);
+
+                    let admin_client = admin_rpc_service::connect(&ledger_path);
+                    admin_rpc_service::runtime()
+                        .block_on(async move {
+                            admin_client
+                                .await?
+                                .add_authorized_voter(authorized_voter_keypair)
+                                .await
+                        })
+                        .unwrap_or_else(|err| {
+                            println!("addAuthorizedVoter request failed: {}", err);
+                            exit(1);
+                        });
+                    return;
+                }
+                ("remove-all", _) => {
+                    let admin_client = admin_rpc_service::connect(&ledger_path);
+                    admin_rpc_service::runtime()
+                        .block_on(async move {
+                            admin_client.await?.remove_all_authorized_voters().await
+                        })
+                        .unwrap_or_else(|err| {
+                            println!("removeAllAuthorizedVoters request failed: {}", err);
+                            exit(1);
+                        });
+                    println!("All authorized voters removed");
+                    return;
+                }
+                _ => unreachable!(),
+            }
+        }
         ("init", _) => Operation::Initialize,
         ("exit", Some(subcommand_matches)) => {
             let min_idle_time = value_t_or_exit!(subcommand_matches, "min_idle_time", usize);
@@ -1874,6 +1940,7 @@ pub fn main() {
     let authorized_voter_keypairs = keypairs_of(&matches, "authorized_voter_keypairs")
         .map(|keypairs| keypairs.into_iter().map(Arc::new).collect())
         .unwrap_or_else(|| vec![identity_keypair.clone()]);
+    let authorized_voter_keypairs = Arc::new(RwLock::new(authorized_voter_keypairs));
 
     let init_complete_file = matches.value_of("init_complete_file");
 
@@ -2261,6 +2328,7 @@ pub fn main() {
             start_time: std::time::SystemTime::now(),
             validator_exit: validator_config.validator_exit.clone(),
             start_progress: start_progress.clone(),
+            authorized_voter_keypairs: authorized_voter_keypairs.clone(),
         },
     );
 
@@ -2371,7 +2439,7 @@ pub fn main() {
             &ledger_path,
             &snapshot_output_dir,
             &vote_account,
-            &authorized_voter_keypairs,
+            authorized_voter_keypairs.clone(),
             &cluster_entrypoints,
             &mut validator_config,
             rpc_bootstrap_config,
@@ -2388,6 +2456,7 @@ pub fn main() {
         info!("Validator ledger initialization complete");
         return;
     }
+
     let validator = Validator::new(
         node,
         &identity_keypair,
