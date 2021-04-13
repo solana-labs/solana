@@ -2128,7 +2128,6 @@ mod tests {
 
         let mut program_account = AccountSharedData::new(1, 0, &native_loader::id());
         program_account.executable = true;
-        let executable_preaccount = PreAccount::new(&callee_program_id, &program_account);
         let executable_accounts = vec![(
             callee_program_id,
             Rc::new(RefCell::new(program_account.clone())),
@@ -2136,11 +2135,9 @@ mod tests {
 
         let owned_key = solana_sdk::pubkey::new_rand();
         let owned_account = AccountSharedData::new(42, 1, &callee_program_id);
-        let owned_preaccount = PreAccount::new(&owned_key, &owned_account);
 
         let not_owned_key = solana_sdk::pubkey::new_rand();
         let not_owned_account = AccountSharedData::new(84, 1, &solana_sdk::pubkey::new_rand());
-        let not_owned_preaccount = PreAccount::new(&not_owned_key, &not_owned_account);
 
         #[allow(unused_mut)]
         let mut accounts = vec![
@@ -2148,20 +2145,40 @@ mod tests {
             Rc::new(RefCell::new(not_owned_account)),
             Rc::new(RefCell::new(program_account)),
         ];
+
+        let compiled_instruction = CompiledInstruction::new(2, &(), vec![0, 1, 2]);
         let programs: Vec<(_, ProcessInstructionWithContext)> =
             vec![(callee_program_id, mock_process_instruction)];
+        let metas = vec![
+            AccountMeta::new(owned_key, false),
+            AccountMeta::new(not_owned_key, false),
+        ];
+
+        let instruction = Instruction::new_with_bincode(
+            callee_program_id,
+            &MockInstruction::NoopSuccess,
+            metas.clone(),
+        );
+        let message = Message::new(&[instruction], None);
+
+        let pre_accounts =
+            MessageProcessor::create_pre_accounts(&message, &compiled_instruction, &accounts);
+        let demote_sysvar_write_locks = true;
+        let keyed_accounts = MessageProcessor::create_keyed_accounts(
+            &message,
+            &compiled_instruction,
+            &executable_accounts,
+            &accounts,
+            demote_sysvar_write_locks,
+        );
         let ancestors = Ancestors::default();
         let mut invoke_context = ThisInvokeContext::new(
             &caller_program_id,
             Rent::default(),
-            vec![
-                owned_preaccount,
-                not_owned_preaccount,
-                executable_preaccount,
-            ],
+            pre_accounts,
+            &executable_accounts,
             &[],
-            &[],
-            &[],
+            keyed_accounts.as_slice(),
             programs.as_slice(),
             None,
             BpfComputeBudget::default(),
@@ -2171,26 +2188,15 @@ mod tests {
             Arc::new(Accounts::default()),
             &ancestors,
         );
-        let metas = vec![
-            AccountMeta::new(owned_key, false),
-            AccountMeta::new(not_owned_key, false),
-        ];
 
         // not owned account modified by the caller (before the invoke)
-        accounts[0].borrow_mut().data_as_mut_slice()[0] = 1;
-        let instruction = Instruction::new_with_bincode(
-            callee_program_id,
-            &MockInstruction::NoopSuccess,
-            metas.clone(),
-        );
-        let demote_sysvar_write_locks = true;
-        let message = Message::new(&[instruction], None);
         let caller_write_privileges = message
             .account_keys
             .iter()
             .enumerate()
             .map(|(i, _)| message.is_writable(i, demote_sysvar_write_locks))
             .collect::<Vec<bool>>();
+        accounts[0].borrow_mut().data_as_mut_slice()[0] = 1;
         assert_eq!(
             MessageProcessor::process_cross_program_instruction(
                 &message,
@@ -2220,6 +2226,34 @@ mod tests {
             let instruction =
                 Instruction::new_with_bincode(callee_program_id, &case.0, metas.clone());
             let message = Message::new(&[instruction], None);
+
+            let pre_accounts =
+                MessageProcessor::create_pre_accounts(&message, &compiled_instruction, &accounts);
+            let keyed_accounts = MessageProcessor::create_keyed_accounts(
+                &message,
+                &compiled_instruction,
+                &executable_accounts,
+                &accounts,
+                demote_sysvar_write_locks,
+            );
+            let ancestors = Ancestors::default();
+            let mut invoke_context = ThisInvokeContext::new(
+                &caller_program_id,
+                Rent::default(),
+                pre_accounts,
+                &executable_accounts,
+                &[],
+                keyed_accounts.as_slice(),
+                programs.as_slice(),
+                None,
+                BpfComputeBudget::default(),
+                Rc::new(RefCell::new(Executors::default())),
+                None,
+                Arc::new(FeatureSet::all_enabled()),
+                Arc::new(Accounts::default()),
+                &ancestors,
+            );
+
             let caller_write_privileges = message
                 .account_keys
                 .iter()
