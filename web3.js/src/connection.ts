@@ -2137,22 +2137,32 @@ export class Connection {
    */
   async getProgramAccounts(
     programId: PublicKey,
-    config?: GetProgramAccountsConfig,
+    configOrCommitment?: GetProgramAccountsConfig | Commitment,
   ): Promise<Array<{pubkey: PublicKey; account: AccountInfo<Buffer>}>> {
     const extra: Pick<GetProgramAccountsConfig, 'dataSlice' | 'filters'> = {};
 
-    if (config && config.dataSlice) {
-      extra.dataSlice = config.dataSlice;
-    }
+    let commitment;
+    let encoding;
+    if (configOrCommitment) {
+      if (typeof configOrCommitment === 'string') {
+        commitment = configOrCommitment;
+      } else {
+        commitment = configOrCommitment.commitment;
+        encoding = configOrCommitment.encoding;
 
-    if (config && config.filters) {
-      extra.filters = config.filters;
+        if (configOrCommitment.dataSlice) {
+          extra.dataSlice = configOrCommitment.dataSlice;
+        }
+        if (configOrCommitment.filters) {
+          extra.filters = configOrCommitment.filters;
+        }
+      }
     }
 
     const args = this._buildArgs(
       [programId.toBase58()],
-      (config && config.commitment) || undefined,
-      (config && config.encoding) || 'base64',
+      commitment,
+      encoding || 'base64',
       extra,
     );
     const unsafeRes = await this._rpcRequest('getProgramAccounts', args);
@@ -2175,7 +2185,7 @@ export class Connection {
    */
   async getParsedProgramAccounts(
     programId: PublicKey,
-    config?: GetParsedProgramAccountsConfig,
+    configOrCommitment?: GetParsedProgramAccountsConfig | Commitment,
   ): Promise<
     Array<{
       pubkey: PublicKey;
@@ -2184,13 +2194,22 @@ export class Connection {
   > {
     const extra: Pick<GetParsedProgramAccountsConfig, 'filters'> = {};
 
-    if (config && config.filters) {
-      extra.filters = config.filters;
+    let commitment;
+    if (configOrCommitment) {
+      if (typeof configOrCommitment === 'string') {
+        commitment = configOrCommitment;
+      } else {
+        commitment = configOrCommitment.commitment;
+
+        if (configOrCommitment.filters) {
+          extra.filters = configOrCommitment.filters;
+        }
+      }
     }
 
     const args = this._buildArgs(
       [programId.toBase58()],
-      (config && config.commitment) || undefined,
+      commitment,
       'jsonParsed',
       extra,
     );

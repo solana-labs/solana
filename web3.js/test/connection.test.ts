@@ -221,6 +221,57 @@ describe('Connection', () => {
         method: 'getProgramAccounts',
         params: [
           programId.publicKey.toBase58(),
+          {commitment: 'confirmed', encoding: 'base64'},
+        ],
+        value: [
+          {
+            account: {
+              data: ['', 'base64'],
+              executable: false,
+              lamports: LAMPORTS_PER_SOL - feeCalculator.lamportsPerSignature,
+              owner: programId.publicKey.toBase58(),
+              rentEpoch: 20,
+            },
+            pubkey: account0.publicKey.toBase58(),
+          },
+          {
+            account: {
+              data: ['', 'base64'],
+              executable: false,
+              lamports:
+                0.5 * LAMPORTS_PER_SOL - feeCalculator.lamportsPerSignature,
+              owner: programId.publicKey.toBase58(),
+              rentEpoch: 20,
+            },
+            pubkey: account1.publicKey.toBase58(),
+          },
+        ],
+      });
+
+      const programAccounts = await connection.getProgramAccounts(
+        programId.publicKey,
+        'confirmed',
+      );
+      expect(programAccounts).to.have.length(2);
+      programAccounts.forEach(function (keyedAccount) {
+        if (keyedAccount.pubkey.equals(account0.publicKey)) {
+          expect(keyedAccount.account.lamports).to.eq(
+            LAMPORTS_PER_SOL - feeCalculator.lamportsPerSignature,
+          );
+        } else {
+          expect(keyedAccount.pubkey).to.eql(account1.publicKey);
+          expect(keyedAccount.account.lamports).to.eq(
+            0.5 * LAMPORTS_PER_SOL - feeCalculator.lamportsPerSignature,
+          );
+        }
+      });
+    }
+
+    {
+      await mockRpcResponse({
+        method: 'getProgramAccounts',
+        params: [
+          programId.publicKey.toBase58(),
           {
             commitment: 'confirmed',
             encoding: 'base64',
@@ -1758,7 +1809,6 @@ describe('Connection', () => {
         const mintOwner = new Account();
         const accountOwner = new Account();
         const token = await Token.createMint(
-          // @ts-ignore
           connection,
           payerAccount,
           mintOwner.publicKey,
@@ -1771,7 +1821,6 @@ describe('Connection', () => {
         await token.mintTo(tokenAccount, mintOwner, [], 11111);
 
         const token2 = await Token.createMint(
-          // @ts-ignore
           connection,
           payerAccount,
           mintOwner.publicKey,
