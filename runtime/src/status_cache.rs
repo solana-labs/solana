@@ -9,7 +9,6 @@ use solana_sdk::{
 };
 use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
-    marker::PhantomData,
     sync::{Arc, Mutex},
 };
 
@@ -42,27 +41,25 @@ pub struct SignatureConfirmationStatus<T> {
 }
 
 #[derive(Clone, Debug, AbiExample)]
-pub struct StatusCache<K, T: Serialize + Clone> {
+pub struct StatusCache<T: Serialize + Clone> {
     cache: KeyStatusMap<T>,
     roots: HashSet<Slot>,
     /// all keys seen during a fork/slot
     slot_deltas: SlotDeltaMap<T>,
-    phantom: PhantomData<K>,
 }
 
-impl<K, T: Serialize + Clone> Default for StatusCache<K, T> {
+impl<T: Serialize + Clone> Default for StatusCache<T> {
     fn default() -> Self {
         Self {
             cache: HashMap::default(),
             // 0 is always a root
             roots: [0].iter().cloned().collect(),
             slot_deltas: HashMap::default(),
-            phantom: PhantomData::default(),
         }
     }
 }
 
-impl<K: AsRef<[u8]>, T: Serialize + Clone + PartialEq> PartialEq for StatusCache<K, T> {
+impl<T: Serialize + Clone + PartialEq> PartialEq for StatusCache<T> {
     fn eq(&self, other: &Self) -> bool {
         self.roots == other.roots
             && self
@@ -88,7 +85,7 @@ impl<K: AsRef<[u8]>, T: Serialize + Clone + PartialEq> PartialEq for StatusCache
     }
 }
 
-impl<K: AsRef<[u8]>, T: Serialize + Clone> StatusCache<K, T> {
+impl<T: Serialize + Clone> StatusCache<T> {
     pub fn clear_slot_entries(&mut self, slot: Slot) {
         let slot_deltas = self.slot_deltas.remove(&slot);
         if let Some(slot_deltas) = slot_deltas {
@@ -131,17 +128,19 @@ impl<K: AsRef<[u8]>, T: Serialize + Clone> StatusCache<K, T> {
 
     /// Check if the key is in any of the forks in the ancestors set and
     /// with a certain blockhash.
-    pub fn get_status(
+    pub fn get_status<K: AsRef<[u8]>>(
         &self,
-        key: &K,
+        key: K,
         transaction_blockhash: &Hash,
         ancestors: &Ancestors,
     ) -> Option<(Slot, T)> {
         let map = self.cache.get(transaction_blockhash)?;
         let (_, index, keymap) = map;
-        let mut key_slice = [0u8; CACHED_KEY_SIZE];
-        key_slice.clone_from_slice(&key.as_ref()[*index..*index + CACHED_KEY_SIZE]);
-        if let Some(stored_forks) = keymap.get(&key_slice) {
+        let max_key_index = key.as_ref().len().saturating_sub(CACHED_KEY_SIZE + 1);
+        let index = (*index).min(max_key_index);
+        let key_slice: &[u8; CACHED_KEY_SIZE] =
+            arrayref::array_ref![key.as_ref(), index, CACHED_KEY_SIZE];
+        if let Some(stored_forks) = keymap.get(key_slice) {
             let res = stored_forks
                 .iter()
                 .find(|(f, _)| ancestors.get(f).is_some() || self.roots.get(f).is_some())
@@ -156,7 +155,11 @@ impl<K: AsRef<[u8]>, T: Serialize + Clone> StatusCache<K, T> {
     /// Search for a key with any blockhash
     /// Prefer get_status for performance reasons, it doesn't need
     /// to search all blockhashes.
-    pub fn get_status_any_blockhash(&self, key: &K, ancestors: &Ancestors) -> Option<(Slot, T)> {
+    pub fn get_status_any_blockhash<K: AsRef<[u8]>>(
+        &self,
+        key: &K,
+        ancestors: &Ancestors,
+    ) -> Option<(Slot, T)> {
         let mut keys = vec![];
         let mut val: Vec<_> = self.cache.iter().map(|(k, _)| *k).collect();
         keys.append(&mut val);
@@ -183,22 +186,23 @@ impl<K: AsRef<[u8]>, T: Serialize + Clone> StatusCache<K, T> {
     }
 
     /// Insert a new key for a specific slot.
-    pub fn insert(&mut self, transaction_blockhash: &Hash, key: &K, slot: Slot, res: T) {
-        let key_index: usize;
-        if let Some(hash_map) = self.cache.get(transaction_blockhash) {
-            key_index = hash_map.1;
-        } else {
-            key_index = thread_rng().gen_range(0, std::mem::size_of::<K>() - CACHED_KEY_SIZE);
-        }
+    pub fn insert<K: AsRef<[u8]>>(
+        &mut self,
+        transaction_blockhash: &Hash,
+        key: &K,
+        slot: Slot,
+        res: T,
+    ) {
+        let max_key_index = key.as_ref().len().saturating_sub(CACHED_KEY_SIZE + 1);
+        let hash_map = self.cache.entry(*transaction_blockhash).or_insert_with(|| {
+            let key_index = thread_rng().gen_range(0, max_key_index + 1);
+            (slot, key_index, HashMap::new())
+        });
 
-        let hash_map =
-            self.cache
-                .entry(*transaction_blockhash)
-                .or_insert((slot, key_index, HashMap::new()));
         hash_map.0 = std::cmp::max(slot, hash_map.0);
-        let index = hash_map.1;
+        let key_index = hash_map.1.min(max_key_index);
         let mut key_slice = [0u8; CACHED_KEY_SIZE];
-        key_slice.clone_from_slice(&key.as_ref()[index..index + CACHED_KEY_SIZE]);
+        key_slice.clone_from_slice(&key.as_ref()[key_index..key_index + CACHED_KEY_SIZE]);
         self.insert_with_slice(transaction_blockhash, slot, key_index, key_slice, res);
     }
 
@@ -293,7 +297,7 @@ mod tests {
     use super::*;
     use solana_sdk::{hash::hash, signature::Signature};
 
-    type BankStatusCache = StatusCache<Signature, ()>;
+    type BankStatusCache = StatusCache<()>;
 
     #[test]
     fn test_empty_has_no_sigs() {
@@ -418,9 +422,9 @@ mod tests {
         status_cache.clear();
         status_cache.insert(&blockhash, &sig, 0, ());
         let (_, index, sig_map) = status_cache.cache.get(&blockhash).unwrap();
-        let mut sig_slice = [0u8; CACHED_KEY_SIZE];
-        sig_slice.clone_from_slice(&sig.as_ref()[*index..*index + CACHED_KEY_SIZE]);
-        assert!(sig_map.get(&sig_slice).is_some());
+        let sig_slice: &[u8; CACHED_KEY_SIZE] =
+            arrayref::array_ref![sig.as_ref(), *index, CACHED_KEY_SIZE];
+        assert!(sig_map.get(sig_slice).is_some());
     }
 
     #[test]
@@ -509,5 +513,27 @@ mod tests {
             .get_status(&sig, &blockhash2, &ancestors1)
             .is_none());
         assert!(status_cache.cache.is_empty());
+    }
+
+    // Status cache uses a random key offset for each blockhash. Ensure that shorter
+    // keys can still be used if the offset if greater than the key length.
+    #[test]
+    fn test_different_sized_keys() {
+        let mut status_cache = BankStatusCache::default();
+        let ancestors = vec![(0, 0)].into_iter().collect();
+        let blockhash = Hash::default();
+        for _ in 0..100 {
+            let blockhash = hash(blockhash.as_ref());
+            let sig_key = Signature::default();
+            let hash_key = Hash::new_unique();
+            status_cache.insert(&blockhash, &sig_key, 0, ());
+            status_cache.insert(&blockhash, &hash_key, 0, ());
+            assert!(status_cache
+                .get_status(&sig_key, &blockhash, &ancestors)
+                .is_some());
+            assert!(status_cache
+                .get_status(&hash_key, &blockhash, &ancestors)
+                .is_some());
+        }
     }
 }

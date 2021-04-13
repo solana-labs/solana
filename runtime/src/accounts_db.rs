@@ -118,7 +118,7 @@ pub struct ErrorCounters {
     pub blockhash_not_found: usize,
     pub blockhash_too_old: usize,
     pub call_chain_too_deep: usize,
-    pub duplicate_signature: usize,
+    pub already_processed: usize,
     pub instruction_error: usize,
     pub insufficient_funds: usize,
     pub invalid_account_for_fee: usize,

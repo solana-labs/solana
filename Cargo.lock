@@ -4233,6 +4233,7 @@ dependencies = [
  "ahash 0.6.1",
  "base64 0.12.3",
  "bincode",
+ "blake3",
  "bs58",
  "bv",
  "byteorder",
@@ -4900,6 +4901,7 @@ version = "1.7.0"
 dependencies = [
  "assert_matches",
  "bincode",
+ "blake3",
  "borsh",
  "borsh-derive",
  "bs58",
@@ -5003,6 +5005,7 @@ dependencies = [
 name = "solana-runtime"
 version = "1.7.0"
 dependencies = [
+ "arrayref",
  "assert_matches",
  "bincode",
  "blake3",

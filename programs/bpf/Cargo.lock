@@ -3280,6 +3280,7 @@ name = "solana-program"
 version = "1.7.0"
 dependencies = [
  "bincode",
+ "blake3",
  "borsh",
  "borsh-derive",
  "bs58",
@@ -3359,6 +3360,7 @@ dependencies = [
 name = "solana-runtime"
 version = "1.7.0"
 dependencies = [
+ "arrayref",
  "bincode",
  "blake3",
  "bv",

@@ -11,6 +11,7 @@ edition = "2018"
 
 [dependencies]
 bincode = "1.3.1"
+blake3 = "0.3.7"
 borsh = "0.8.1"
 borsh-derive = "0.8.1"
 bs58 = "0.3.1"
@@ -32,7 +33,8 @@ solana-sdk-macro = { path = "../macro", version = "=1.7.0" }
 thiserror = "1.0"
 
 [target.'cfg(not(target_arch = "bpf"))'.dependencies]
-curve25519-dalek = { version = "2.1.0" }
+blake3 = "0.3.6"
+curve25519-dalek = "2.1.0"
 rand = "0.7.0"
 solana-logger = { path = "../../logger", version = "=1.7.0" }
 

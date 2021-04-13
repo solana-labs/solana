@@ -520,7 +520,7 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
             3 => TransactionError::ProgramAccountNotFound,
             4 => TransactionError::InsufficientFundsForFee,
             5 => TransactionError::InvalidAccountForFee,
-            6 => TransactionError::DuplicateSignature,
+            6 => TransactionError::AlreadyProcessed,
             7 => TransactionError::BlockhashNotFound,
             9 => TransactionError::CallChainTooDeep,
             10 => TransactionError::MissingSignatureForFee,
@@ -554,8 +554,8 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                 TransactionError::InvalidAccountForFee => {
                     tx_by_addr::TransactionErrorType::InvalidAccountForFee
                 }
-                TransactionError::DuplicateSignature => {
-                    tx_by_addr::TransactionErrorType::DuplicateSignature
+                TransactionError::AlreadyProcessed => {
+                    tx_by_addr::TransactionErrorType::AlreadyProcessed
                 }
                 TransactionError::BlockhashNotFound => {
                     tx_by_addr::TransactionErrorType::BlockhashNotFound
@@ -903,7 +903,7 @@ mod test {
             tx_by_addr_transaction_error.try_into().unwrap()
         );
 
-        let transaction_error = TransactionError::DuplicateSignature;
+        let transaction_error = TransactionError::AlreadyProcessed;
         let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
             transaction_error.clone().into();
         assert_eq!(

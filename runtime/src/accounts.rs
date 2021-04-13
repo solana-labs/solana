@@ -386,10 +386,10 @@ impl Accounts {
         Ok(accounts)
     }
 
-    pub fn load_accounts(
+    pub fn load_accounts<'a>(
         &self,
         ancestors: &Ancestors,
-        txs: &[Transaction],
+        txs: impl Iterator<Item = &'a Transaction>,
         lock_results: Vec<TransactionCheckResult>,
         hash_queue: &BlockhashQueue,
         error_counters: &mut ErrorCounters,
@@ -400,8 +400,7 @@ impl Accounts {
             secp256k1_program_enabled: feature_set
                 .is_active(&feature_set::secp256k1_program_enabled::id()),
         };
-        txs.iter()
-            .zip(lock_results)
+        txs.zip(lock_results)
             .map(|etx| match etx {
                 (tx, (Ok(()), nonce_rollback)) => {
                     let fee_calculator = nonce_rollback
@@ -793,14 +792,13 @@ impl Accounts {
     /// This function will prevent multiple threads from modifying the same account state at the
     /// same time
     #[must_use]
-    pub fn lock_accounts(
+    pub fn lock_accounts<'a>(
         &self,
-        txs: &[Transaction],
+        txs: impl Iterator<Item = &'a Transaction>,
         demote_sysvar_write_locks: bool,
     ) -> Vec<Result<()>> {
         use solana_sdk::sanitize::Sanitize;
         let keys: Vec<Result<_>> = txs
-            .iter()
             .map(|tx| {
                 tx.sanitize().map_err(TransactionError::from)?;
 
@@ -825,15 +823,15 @@ impl Accounts {
     }
 
     /// Once accounts are unlocked, new transactions that modify that state can enter the pipeline
-    pub fn unlock_accounts(
+    pub fn unlock_accounts<'a>(
         &self,
-        txs: &[Transaction],
+        txs: impl Iterator<Item = &'a Transaction>,
         results: &[Result<()>],
         demote_sysvar_write_locks: bool,
     ) {
         let mut account_locks = self.account_locks.lock().unwrap();
         debug!("bank unlock accounts");
-        for (tx, lock_result) in txs.iter().zip(results) {
+        for (tx, lock_result) in txs.zip(results) {
             self.unlock_account(
                 tx,
                 lock_result,
@@ -846,12 +844,12 @@ impl Accounts {
     /// Store the accounts into the DB
     // allow(clippy) needed for various gating flags
     #[allow(clippy::too_many_arguments)]
-    pub fn store_cached(
+    pub fn store_cached<'a>(
         &self,
         slot: Slot,
-        txs: &[Transaction],
-        res: &[TransactionExecutionResult],
-        loaded: &mut [TransactionLoadResult],
+        txs: impl Iterator<Item = &'a Transaction>,
+        res: &'a [TransactionExecutionResult],
+        loaded: &'a mut [TransactionLoadResult],
         rent_collector: &RentCollector,
         last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
         fix_recent_blockhashes_sysvar_delay: bool,
@@ -882,7 +880,7 @@ impl Accounts {
 
     fn collect_accounts_to_store<'a>(
         &self,
-        txs: &'a [Transaction],
+        txs: impl Iterator<Item = &'a Transaction>,
         res: &'a [TransactionExecutionResult],
         loaded: &'a mut [TransactionLoadResult],
         rent_collector: &RentCollector,
@@ -1071,7 +1069,7 @@ mod tests {
         let ancestors = vec![(0, 0)].into_iter().collect();
         accounts.load_accounts(
             &ancestors,
-            &[tx],
+            [tx].iter(),
             vec![(Ok(()), None)],
             &hash_queue,
             error_counters,
@@ -1673,7 +1671,7 @@ mod tests {
         );
         let tx = Transaction::new(&[&keypair0], message, Hash::default());
         let results0 = accounts.lock_accounts(
-            &[tx.clone()],
+            [tx.clone()].iter(),
             true, // demote_sysvar_write_locks
         );
 
@@ -1711,7 +1709,8 @@ mod tests {
         let tx1 = Transaction::new(&[&keypair1], message, Hash::default());
         let txs = vec![tx0, tx1];
         let results1 = accounts.lock_accounts(
-            &txs, true, // demote_sysvar_write_locks
+            txs.iter(),
+            true, // demote_sysvar_write_locks
         );
 
         assert!(results1[0].is_ok()); // Read-only account (keypair1) can be referenced multiple times
@@ -1728,12 +1727,14 @@ mod tests {
         );
 
         accounts.unlock_accounts(
-            &[tx],
+            [tx].iter(),
             &results0,
             true, // demote_sysvar_write_locks
         );
         accounts.unlock_accounts(
-            &txs, &results1, true, // demote_sysvar_write_locks
+            txs.iter(),
+            &results1,
+            true, // demote_sysvar_write_locks
         );
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
         let message = Message::new_with_compiled_instructions(
@@ -1746,7 +1747,7 @@ mod tests {
         );
         let tx = Transaction::new(&[&keypair1], message, Hash::default());
         let results2 = accounts.lock_accounts(
-            &[tx],
+            [tx].iter(),
             true, // demote_sysvar_write_locks
         );
         assert!(results2[0].is_ok()); // Now keypair1 account can be locked as writable
@@ -1813,7 +1814,8 @@ mod tests {
             loop {
                 let txs = vec![writable_tx.clone()];
                 let results = accounts_clone.clone().lock_accounts(
-                    &txs, true, // demote_sysvar_write_locks
+                    txs.iter(),
+                    true, // demote_sysvar_write_locks
                 );
                 for result in results.iter() {
                     if result.is_ok() {
@@ -1821,7 +1823,9 @@ mod tests {
                     }
                 }
                 accounts_clone.unlock_accounts(
-                    &txs, &results, true, // demote_sysvar_write_locks
+                    txs.iter(),
+                    &results,
+                    true, // demote_sysvar_write_locks
                 );
                 if exit_clone.clone().load(Ordering::Relaxed) {
                     break;
@@ -1832,7 +1836,8 @@ mod tests {
         for _ in 0..5 {
             let txs = vec![readonly_tx.clone()];
             let results = accounts_arc.clone().lock_accounts(
-                &txs, true, // demote_sysvar_write_locks
+                txs.iter(),
+                true, // demote_sysvar_write_locks
             );
             if results[0].is_ok() {
                 let counter_value = counter_clone.clone().load(Ordering::SeqCst);
@@ -1840,7 +1845,9 @@ mod tests {
                 assert_eq!(counter_value, counter_clone.clone().load(Ordering::SeqCst));
             }
             accounts_arc.unlock_accounts(
-                &txs, &results, true, // demote_sysvar_write_locks
+                txs.iter(),
+                &results,
+                true, // demote_sysvar_write_locks
             );
             thread::sleep(time::Duration::from_millis(50));
         }
@@ -1922,7 +1929,7 @@ mod tests {
                 .insert_new_readonly(&pubkey);
         }
         let collected_accounts = accounts.collect_accounts_to_store(
-            &txs,
+            txs.iter(),
             &loaders,
             loaded.as_mut_slice(),
             &rent_collector,
@@ -1991,7 +1998,7 @@ mod tests {
         let mut error_counters = ErrorCounters::default();
         accounts.load_accounts(
             &ancestors,
-            &[tx],
+            [tx].iter(),
             vec![(Ok(()), None)],
             &hash_queue,
             &mut error_counters,
@@ -2286,7 +2293,7 @@ mod tests {
         let accounts =
             Accounts::new_with_config(Vec::new(), &ClusterType::Development, HashSet::new(), false);
         let collected_accounts = accounts.collect_accounts_to_store(
-            &txs,
+            txs.iter(),
             &loaders,
             loaded.as_mut_slice(),
             &rent_collector,
@@ -2397,7 +2404,7 @@ mod tests {
         let accounts =
             Accounts::new_with_config(Vec::new(), &ClusterType::Development, HashSet::new(), false);
         let collected_accounts = accounts.collect_accounts_to_store(
-            &txs,
+            txs.iter(),
             &loaders,
             loaded.as_mut_slice(),
             &rent_collector,

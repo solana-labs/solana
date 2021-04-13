@@ -3,7 +3,7 @@ use crate::{
     blockstore::Blockstore,
     blockstore_db::BlockstoreError,
     blockstore_meta::SlotMeta,
-    entry::{create_ticks, Entry, EntrySlice, EntryVerificationStatus, VerifyRecyclers},
+    entry::{create_ticks, Entry, EntrySlice, EntryType, EntryVerificationStatus, VerifyRecyclers},
     leader_schedule_cache::LeaderScheduleCache,
 };
 use chrono_humanize::{Accuracy, HumanTime, Tense};
@@ -34,6 +34,7 @@ use solana_sdk::{
     hash::Hash,
     pubkey::Pubkey,
     signature::{Keypair, Signature},
+    timing,
     transaction::{Result, Transaction, TransactionError},
 };
 use solana_transaction_status::token_balances::{
@@ -75,7 +76,7 @@ fn get_first_error(
     fee_collection_results: Vec<Result<()>>,
 ) -> Option<(Result<()>, Signature)> {
     let mut first_err = None;
-    for (result, transaction) in fee_collection_results.iter().zip(batch.transactions()) {
+    for (result, transaction) in fee_collection_results.iter().zip(batch.transactions_iter()) {
         if let Err(ref err) = result {
             if first_err.is_none() {
                 first_err = Some((result.clone(), transaction.signatures[0]));
@@ -124,7 +125,7 @@ fn execute_batch(
             timings,
         );
 
-    bank_utils::find_and_send_votes(batch.transactions(), &tx_results, replay_vote_sender);
+    bank_utils::find_and_send_votes(batch.hashed_transactions(), &tx_results, replay_vote_sender);
 
     let TransactionResults {
         fee_collection_results,
@@ -133,6 +134,7 @@ fn execute_batch(
     } = tx_results;
 
     if let Some(transaction_status_sender) = transaction_status_sender {
+        let txs = batch.transactions_iter().cloned().collect();
         let post_token_balances = if record_token_balances {
             collect_token_balances(&bank, &batch, &mut mint_decimals)
         } else {
@@ -144,7 +146,7 @@ fn execute_batch(
 
         transaction_status_sender.send_transaction_status_batch(
             bank.clone(),
-            batch.transactions(),
+            txs,
             execution_results,
             balances,
             token_balances,
@@ -209,9 +211,10 @@ pub fn process_entries(
     replay_vote_sender: Option<&ReplayVoteSender>,
 ) -> Result<()> {
     let mut timings = ExecuteTimings::default();
+    let mut entry_types: Vec<_> = entries.iter().map(EntryType::from).collect();
     let result = process_entries_with_callback(
         bank,
-        entries,
+        &mut entry_types,
         randomize,
         None,
         transaction_status_sender,
@@ -226,7 +229,7 @@ pub fn process_entries(
 // Note: If randomize is true this will shuffle entries' transactions in-place.
 fn process_entries_with_callback(
     bank: &Arc<Bank>,
-    entries: &mut [Entry],
+    entries: &mut [EntryType],
     randomize: bool,
     entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<TransactionStatusSender>,
@@ -236,76 +239,78 @@ fn process_entries_with_callback(
     // accumulator for entries that can be processed in parallel
     let mut batches = vec![];
     let mut tick_hashes = vec![];
-    if randomize {
-        let mut rng = thread_rng();
-        for entry in entries.iter_mut() {
-            entry.transactions.shuffle(&mut rng);
-        }
-    }
-    for entry in entries {
-        if entry.is_tick() {
-            // If it's a tick, save it for later
-            tick_hashes.push(entry.hash);
-            if bank.is_block_boundary(bank.tick_height() + tick_hashes.len() as u64) {
-                // If it's a tick that will cause a new blockhash to be created,
-                // execute the group and register the tick
-                execute_batches(
-                    bank,
-                    &batches,
-                    entry_callback,
-                    transaction_status_sender.clone(),
-                    replay_vote_sender,
-                    timings,
-                )?;
-                batches.clear();
-                for hash in &tick_hashes {
-                    bank.register_tick(hash);
-                }
-                tick_hashes.clear();
-            }
-            continue;
-        }
-        // else loop on processing the entry
-        loop {
-            // try to lock the accounts
-            let batch = bank.prepare_batch(&entry.transactions);
-            let first_lock_err = first_err(batch.lock_results());
+    let mut rng = thread_rng();
 
-            // if locking worked
-            if first_lock_err.is_ok() {
-                batches.push(batch);
-                // done with this entry
-                break;
+    for entry in entries {
+        match entry {
+            EntryType::Tick(hash) => {
+                // If it's a tick, save it for later
+                tick_hashes.push(hash);
+                if bank.is_block_boundary(bank.tick_height() + tick_hashes.len() as u64) {
+                    // If it's a tick that will cause a new blockhash to be created,
+                    // execute the group and register the tick
+                    execute_batches(
+                        bank,
+                        &batches,
+                        entry_callback,
+                        transaction_status_sender.clone(),
+                        replay_vote_sender,
+                        timings,
+                    )?;
+                    batches.clear();
+                    for hash in &tick_hashes {
+                        bank.register_tick(hash);
+                    }
+                    tick_hashes.clear();
+                }
             }
-            // else we failed to lock, 2 possible reasons
-            if batches.is_empty() {
-                // An entry has account lock conflicts with *itself*, which should not happen
-                // if generated by a properly functioning leader
-                datapoint_error!(
-                    "validator_process_entry_error",
-                    (
-                        "error",
-                        format!(
-                            "Lock accounts error, entry conflicts with itself, txs: {:?}",
-                            entry.transactions
-                        ),
-                        String
-                    )
-                );
-                // bail
-                first_lock_err?;
-            } else {
-                // else we have an entry that conflicts with a prior entry
-                // execute the current queue and try to process this entry again
-                execute_batches(
-                    bank,
-                    &batches,
-                    entry_callback,
-                    transaction_status_sender.clone(),
-                    replay_vote_sender,
-                    timings,
-                )?;
-                batches.clear();
+            EntryType::Transactions(transactions) => {
+                if randomize {
+                    transactions.shuffle(&mut rng);
+                }
+
+                loop {
+                    // try to lock the accounts
+                    let batch = bank.prepare_hashed_batch(transactions);
+                    let first_lock_err = first_err(batch.lock_results());
+
+                    // if locking worked
+                    if first_lock_err.is_ok() {
+                        batches.push(batch);
+                        // done with this entry
+                        break;
+                    }
+                    // else we failed to lock, 2 possible reasons
+                    if batches.is_empty() {
+                        // An entry has account lock conflicts with *itself*, which should not happen
+                        // if generated by a properly functioning leader
+                        datapoint_error!(
+                            "validator_process_entry_error",
+                            (
+                                "error",
+                                format!(
+                                    "Lock accounts error, entry conflicts with itself, txs: {:?}",
+                                    transactions
+                                ),
+                                String
+                            )
+                        );
+                        // bail
+                        first_lock_err?;
+                    } else {
+                        // else we have an entry that conflicts with a prior entry
+                        // execute the current queue and try to process this entry again
+                        execute_batches(
+                            bank,
+                            &batches,
+                            entry_callback,
+                            transaction_status_sender.clone(),
+                            replay_vote_sender,
+                            timings,
+                        )?;
+                        batches.clear();
+                    }
+                }
             }
         }
     }
@@ -668,7 +673,7 @@ pub fn confirm_slot(
 ) -> result::Result<(), BlockstoreProcessorError> {
     let slot = bank.slot();
 
-    let (mut entries, num_shreds, slot_full) = {
+    let (entries, num_shreds, slot_full) = {
         let mut load_elapsed = Measure::start("load_elapsed");
         let load_result = blockstore
             .get_slot_entries_with_shred_info(slot, progress.num_shreds, allow_dead_slots)
@@ -711,13 +716,10 @@ pub fn confirm_slot(
         })?;
     }
 
+    let last_entry_hash = entries.last().map(|e| e.hash);
     let verifier = if !skip_verification {
         datapoint_debug!("verify-batch-size", ("size", num_entries as i64, i64));
-        let entry_state = entries.start_verify(
-            &progress.last_entry,
-            recyclers.clone(),
-            bank.secp256k1_program_enabled(),
-        );
+        let entry_state = entries.start_verify(&progress.last_entry, recyclers.clone());
         if entry_state.status() == EntryVerificationStatus::Failure {
             warn!("Ledger proof of history failed at slot: {}", slot);
             return Err(BlockError::InvalidEntryHash.into());
@@ -727,6 +729,16 @@ pub fn confirm_slot(
         None
     };
 
+    let check_start = Instant::now();
+    let check_result =
+        entries.verify_and_hash_transactions(skip_verification, bank.secp256k1_program_enabled());
+    if check_result.is_none() {
+        warn!("Ledger proof of history failed at slot: {}", slot);
+        return Err(BlockError::InvalidEntryHash.into());
+    }
+    let transaction_duration_us = timing::duration_as_us(&check_start.elapsed());
+
+    let mut entries = check_result.unwrap();
     let mut replay_elapsed = Measure::start("replay_elapsed");
     let mut execute_timings = ExecuteTimings::default();
     // Note: This will shuffle entries' transactions in-place.
@@ -746,9 +758,9 @@ pub fn confirm_slot(
     timing.execute_timings.accumulate(&execute_timings);
 
     if let Some(mut verifier) = verifier {
-        let verified = verifier.finish_verify(&entries);
+        let verified = verifier.finish_verify();
         timing.poh_verify_elapsed += verifier.poh_duration_us();
-        timing.transaction_verify_elapsed += verifier.transaction_duration_us();
+        timing.transaction_verify_elapsed += transaction_duration_us;
         if !verified {
             warn!("Ledger proof of history failed at slot: {}", bank.slot());
             return Err(BlockError::InvalidEntryHash.into());
@@ -760,8 +772,8 @@ pub fn confirm_slot(
     progress.num_shreds += num_shreds;
     progress.num_entries += num_entries;
     progress.num_txs += num_txs;
-    if let Some(last_entry) = entries.last() {
-        progress.last_entry = last_entry.hash;
+    if let Some(last_entry_hash) = last_entry_hash {
+        progress.last_entry = last_entry_hash;
     }
 
     Ok(())
@@ -1070,7 +1082,7 @@ fn process_single_slot(
     timing: &mut ExecuteTimings,
 ) -> result::Result<(), BlockstoreProcessorError> {
     // Mark corrupt slots as dead so validators don't replay this slot and
-    // see DuplicateSignature errors later in ReplayStage
+    // see AlreadyProcessed errors later in ReplayStage
     confirm_full_slot(blockstore, bank, opts, recyclers, progress, transaction_status_sender, replay_vote_sender, timing).map_err(|err| {
         let slot = bank.slot();
         warn!("slot {} failed to verify: {}", slot, err);
@@ -1114,7 +1126,7 @@ impl TransactionStatusSender {
     pub fn send_transaction_status_batch(
         &self,
         bank: Arc<Bank>,
-        transactions: &[Transaction],
+        transactions: Vec<Transaction>,
         statuses: Vec<TransactionExecutionResult>,
         balances: TransactionBalancesSet,
         token_balances: TransactionTokenBalancesSet,
@@ -1131,7 +1143,7 @@ impl TransactionStatusSender {
             .sender
             .send(TransactionStatusMessage::Batch(TransactionStatusBatch {
                 bank,
-                transactions: transactions.to_vec(),
+                transactions,
                 statuses,
                 balances,
                 token_balances,
@@ -1838,22 +1850,22 @@ pub mod tests {
     fn test_first_err() {
         assert_eq!(first_err(&[Ok(())]), Ok(()));
         assert_eq!(
-            first_err(&[Ok(()), Err(TransactionError::DuplicateSignature)]),
-            Err(TransactionError::DuplicateSignature)
+            first_err(&[Ok(()), Err(TransactionError::AlreadyProcessed)]),
+            Err(TransactionError::AlreadyProcessed)
         );
         assert_eq!(
             first_err(&[
                 Ok(()),
-                Err(TransactionError::DuplicateSignature),
+                Err(TransactionError::AlreadyProcessed),
                 Err(TransactionError::AccountInUse)
             ]),
-            Err(TransactionError::DuplicateSignature)
+            Err(TransactionError::AlreadyProcessed)
         );
         assert_eq!(
             first_err(&[
                 Ok(()),
                 Err(TransactionError::AccountInUse),
-                Err(TransactionError::DuplicateSignature)
+                Err(TransactionError::AlreadyProcessed)
             ]),
             Err(TransactionError::AccountInUse)
         );
@@ -1861,7 +1873,7 @@ pub mod tests {
             first_err(&[
                 Err(TransactionError::AccountInUse),
                 Ok(()),
-                Err(TransactionError::DuplicateSignature)
+                Err(TransactionError::AlreadyProcessed)
             ]),
             Err(TransactionError::AccountInUse)
         );
@@ -2279,13 +2291,13 @@ pub mod tests {
         // Check all accounts are unlocked
         let txs1 = &entry_1_to_mint.transactions[..];
         let txs2 = &entry_2_to_3_mint_to_1.transactions[..];
-        let batch1 = bank.prepare_batch(txs1);
+        let batch1 = bank.prepare_batch(txs1.iter());
         for result in batch1.lock_results() {
             assert!(result.is_ok());
         }
         // txs1 and txs2 have accounts that conflict, so we must drop txs1 first
         drop(batch1);
-        let batch2 = bank.prepare_batch(txs2);
+        let batch2 = bank.prepare_batch(txs2.iter());
         for result in batch2.lock_results() {
             assert!(result.is_ok());
         }
@@ -2656,7 +2668,7 @@ pub mod tests {
         );
         assert_eq!(
             bank.transfer(10_001, &mint_keypair, &pubkey),
-            Err(TransactionError::DuplicateSignature)
+            Err(TransactionError::AlreadyProcessed)
         );
 
         // Make sure other errors don't update the signature cache
@@ -2964,16 +2976,7 @@ pub mod tests {
         let entry = next_entry(&new_blockhash, 1, vec![tx]);
         entries.push(entry);
 
-        process_entries_with_callback(
-            &bank0,
-            &mut entries,
-            true,
-            None,
-            None,
-            None,
-            &mut ExecuteTimings::default(),
-        )
-        .unwrap();
+        process_entries(&bank0, &mut entries, true, None, None).unwrap();
         assert_eq!(bank0.get_balance(&keypair.pubkey()), 1)
     }
 
@@ -3047,7 +3050,7 @@ pub mod tests {
         );
         account_loaded_twice.message.account_keys[1] = mint_keypair.pubkey();
         let transactions = [account_not_found_tx, account_loaded_twice];
-        let batch = bank.prepare_batch(&transactions);
+        let batch = bank.prepare_batch(transactions.iter());
         let (
             TransactionResults {
                 fee_collection_results,

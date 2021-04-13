@@ -17,10 +17,12 @@ use solana_perf::cuda_runtime::PinnedVec;
 use solana_perf::perf_libs;
 use solana_perf::recycler::Recycler;
 use solana_rayon_threadlimit::get_thread_count;
+use solana_runtime::hashed_transaction::HashedTransaction;
 use solana_sdk::hash::Hash;
 use solana_sdk::packet::PACKET_DATA_SIZE;
 use solana_sdk::timing;
 use solana_sdk::transaction::Transaction;
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::ffi::OsStr;
 use std::sync::mpsc::{Receiver, Sender};
@@ -118,6 +120,28 @@ pub struct Entry {
     pub transactions: Vec<Transaction>,
 }
 
+/// Typed entry to distinguish between transaction and tick entries
+pub enum EntryType<'a> {
+    Transactions(Vec<HashedTransaction<'a>>),
+    Tick(Hash),
+}
+
+impl<'a> From<&'a Entry> for EntryType<'a> {
+    fn from(entry: &'a Entry) -> Self {
+        if entry.transactions.is_empty() {
+            EntryType::Tick(entry.hash)
+        } else {
+            EntryType::Transactions(
+                entry
+                    .transactions
+                    .iter()
+                    .map(HashedTransaction::from)
+                    .collect(),
+            )
+        }
+    }
+}
+
 impl Entry {
     /// Creates the next Entry `num_hashes` after `start_hash`.
     pub fn new(prev_hash: &Hash, mut num_hashes: u64, transactions: Vec<Transaction>) -> Self {
@@ -207,10 +231,20 @@ pub fn next_hash(start_hash: &Hash, num_hashes: u64, transactions: &[Transaction
     }
 }
 
+/// Last action required to verify an entry
+enum VerifyAction {
+    /// Mixin a hash before computing the last hash for a transaction entry
+    Mixin(Hash),
+    /// Compute one last hash for a tick entry
+    Tick,
+    /// No action needed (tick entry with no hashes)
+    None,
+}
+
 pub struct GpuVerificationData {
     thread_h: Option<JoinHandle<u64>>,
     hashes: Option<Arc<Mutex<PinnedVec<Hash>>>>,
-    tx_hashes: Vec<Option<Hash>>,
+    verifications: Option<Vec<(VerifyAction, Hash)>>,
 }
 
 pub enum DeviceVerificationData {
@@ -221,7 +255,6 @@ pub enum DeviceVerificationData {
 pub struct EntryVerificationState {
     verification_status: EntryVerificationStatus,
     poh_duration_us: u64,
-    transaction_duration_us: u64,
     device_verification_data: DeviceVerificationData,
 }
 
@@ -256,15 +289,7 @@ impl EntryVerificationState {
         self.poh_duration_us
     }
 
-    pub fn set_transaction_duration_us(&mut self, new: u64) {
-        self.transaction_duration_us = new;
-    }
-
-    pub fn transaction_duration_us(&self) -> u64 {
-        self.transaction_duration_us
-    }
-
-    pub fn finish_verify(&mut self, entries: &[Entry]) -> bool {
+    pub fn finish_verify(&mut self) -> bool {
         match &mut self.device_verification_data {
             DeviceVerificationData::Gpu(verification_state) => {
                 let gpu_time_us = verification_state.thread_h.take().unwrap().join().unwrap();
@@ -279,19 +304,17 @@ impl EntryVerificationState {
                     thread_pool.borrow().install(|| {
                         hashes
                             .into_par_iter()
-                            .zip(&verification_state.tx_hashes)
-                            .zip(entries)
-                            .all(|((hash, tx_hash), answer)| {
-                                if answer.num_hashes == 0 {
-                                    *hash == answer.hash
-                                } else {
-                                    let mut poh = Poh::new(*hash, None);
-                                    if let Some(mixin) = tx_hash {
-                                        poh.record(*mixin).unwrap().hash == answer.hash
-                                    } else {
-                                        poh.tick().unwrap().hash == answer.hash
+                            .cloned()
+                            .zip(verification_state.verifications.take().unwrap())
+                            .all(|(hash, (action, expected))| {
+                                let actual = match action {
+                                    VerifyAction::Mixin(mixin) => {
+                                        Poh::new(hash, None).record(mixin).unwrap().hash
                                     }
-                                }
+                                    VerifyAction::Tick => Poh::new(hash, None).tick().unwrap().hash,
+                                    VerifyAction::None => hash,
+                                };
+                                actual == expected
                             })
                     })
                 });
@@ -314,17 +337,17 @@ impl EntryVerificationState {
 }
 
 fn compare_hashes(computed_hash: Hash, ref_entry: &Entry) -> bool {
-    if ref_entry.num_hashes == 0 {
-        computed_hash == ref_entry.hash
-    } else {
+    let actual = if !ref_entry.transactions.is_empty() {
+        let tx_hash = hash_transactions(&ref_entry.transactions);
         let mut poh = Poh::new(computed_hash, None);
-        if ref_entry.transactions.is_empty() {
-            poh.tick().unwrap().hash == ref_entry.hash
-        } else {
-            let tx_hash = hash_transactions(&ref_entry.transactions);
-            poh.record(tx_hash).unwrap().hash == ref_entry.hash
-        }
-    }
+        poh.record(tx_hash).unwrap().hash
+    } else if ref_entry.num_hashes > 0 {
+        let mut poh = Poh::new(computed_hash, None);
+        poh.tick().unwrap().hash
+    } else {
+        computed_hash
+    };
+    actual == ref_entry.hash
 }
 
 // an EntrySlice is a slice of Entries
@@ -333,12 +356,8 @@ pub trait EntrySlice {
     fn verify_cpu(&self, start_hash: &Hash) -> EntryVerificationState;
     fn verify_cpu_generic(&self, start_hash: &Hash) -> EntryVerificationState;
     fn verify_cpu_x86_simd(&self, start_hash: &Hash, simd_len: usize) -> EntryVerificationState;
-    fn start_verify(
-        &self,
-        start_hash: &Hash,
-        recyclers: VerifyRecyclers,
-        secp256k1_program_enabled: bool,
-    ) -> EntryVerificationState;
+    fn start_verify(&self, start_hash: &Hash, recyclers: VerifyRecyclers)
+        -> EntryVerificationState;
     fn verify(&self, start_hash: &Hash) -> bool;
     /// Checks that each entry tick has the correct number of hashes. Entry slices do not
     /// necessarily end in a tick, so `tick_hash_count` is used to carry over the hash count
@@ -346,13 +365,17 @@ pub trait EntrySlice {
     fn verify_tick_hash_count(&self, tick_hash_count: &mut u64, hashes_per_tick: u64) -> bool;
     /// Counts tick entries
     fn tick_count(&self) -> u64;
-    fn verify_transaction_signatures(&self, secp256k1_program_enabled: bool) -> bool;
+    fn verify_and_hash_transactions(
+        &self,
+        skip_verification: bool,
+        secp256k1_program_enabled: bool,
+    ) -> Option<Vec<EntryType<'_>>>;
 }
 
 impl EntrySlice for [Entry] {
     fn verify(&self, start_hash: &Hash) -> bool {
-        self.start_verify(start_hash, VerifyRecyclers::default(), true)
-            .finish_verify(self)
+        self.start_verify(start_hash, VerifyRecyclers::default())
+            .finish_verify()
     }
 
     fn verify_cpu_generic(&self, start_hash: &Hash) -> EntryVerificationState {
@@ -388,7 +411,6 @@ impl EntrySlice for [Entry] {
                 EntryVerificationStatus::Failure
             },
             poh_duration_us,
-            transaction_duration_us: 0,
             device_verification_data: DeviceVerificationData::Cpu(),
         }
     }
@@ -472,7 +494,6 @@ impl EntrySlice for [Entry] {
                 EntryVerificationStatus::Failure
             },
             poh_duration_us,
-            transaction_duration_us: 0,
             device_verification_data: DeviceVerificationData::Cpu(),
         }
     }
@@ -499,25 +520,46 @@ impl EntrySlice for [Entry] {
         }
     }
 
-    fn verify_transaction_signatures(&self, secp256k1_program_enabled: bool) -> bool {
-        let verify = |tx: &Transaction| {
-            tx.verify().is_ok()
-                && {
-                    match bincode::serialized_size(tx) {
-                        Ok(size) => size <= PACKET_DATA_SIZE as u64,
-                        Err(_) => false,
-                    }
+    fn verify_and_hash_transactions<'a>(
+        &'a self,
+        skip_verification: bool,
+        secp256k1_program_enabled: bool,
+    ) -> Option<Vec<EntryType<'a>>> {
+        let verify_and_hash = |tx: &'a Transaction| -> Option<HashedTransaction<'a>> {
+            let message_hash = if !skip_verification {
+                let size = bincode::serialized_size(tx).ok()?;
+                if size > PACKET_DATA_SIZE as u64 {
+                    return None;
                 }
-                && (
+                if secp256k1_program_enabled {
                     // Verify tx precompiles if secp256k1 program is enabled.
-                    !secp256k1_program_enabled || tx.verify_precompiles().is_ok()
-                )
+                    tx.verify_precompiles().ok()?;
+                }
+                tx.verify_and_hash_message().ok()?
+            } else {
+                tx.message().hash()
+            };
+
+            Some(HashedTransaction::new(Cow::Borrowed(tx), message_hash))
         };
+
         PAR_THREAD_POOL.with(|thread_pool| {
             thread_pool.borrow().install(|| {
                 self.par_iter()
-                    .flat_map(|entry| &entry.transactions)
-                    .all(verify)
+                    .map(|entry| {
+                        if entry.transactions.is_empty() {
+                            Some(EntryType::Tick(entry.hash))
+                        } else {
+                            Some(EntryType::Transactions(
+                                entry
+                                    .transactions
+                                    .par_iter()
+                                    .map(verify_and_hash)
+                                    .collect::<Option<Vec<HashedTransaction>>>()?,
+                            ))
+                        }
+                    })
+                    .collect()
             })
         })
     }
@@ -526,26 +568,11 @@ impl EntrySlice for [Entry] {
         &self,
         start_hash: &Hash,
         recyclers: VerifyRecyclers,
-        secp256k1_program_enabled: bool,
     ) -> EntryVerificationState {
-        let start = Instant::now();
-        let res = self.verify_transaction_signatures(secp256k1_program_enabled);
-        let transaction_duration_us = timing::duration_as_us(&start.elapsed());
-        if !res {
-            return EntryVerificationState {
-                verification_status: EntryVerificationStatus::Failure,
-                transaction_duration_us,
-                poh_duration_us: 0,
-                device_verification_data: DeviceVerificationData::Cpu(),
-            };
-        }
-
         let start = Instant::now();
         let api = perf_libs::api();
         if api.is_none() {
-            let mut res: EntryVerificationState = self.verify_cpu(start_hash);
-            res.set_transaction_duration_us(transaction_duration_us);
-            return res;
+            return self.verify_cpu(start_hash);
         }
         let api = api.unwrap();
         inc_new_counter_info!("entry_verify-num_entries", self.len() as usize);
@@ -600,15 +627,21 @@ impl EntrySlice for [Entry] {
             timing::duration_as_us(&gpu_wait.elapsed())
         });
 
-        let tx_hashes = PAR_THREAD_POOL.with(|thread_pool| {
+        let verifications = PAR_THREAD_POOL.with(|thread_pool| {
             thread_pool.borrow().install(|| {
                 self.into_par_iter()
                     .map(|entry| {
-                        if entry.transactions.is_empty() {
-                            None
+                        let answer = entry.hash;
+                        let action = if entry.transactions.is_empty() {
+                            if entry.num_hashes == 0 {
+                                VerifyAction::None
+                            } else {
+                                VerifyAction::Tick
+                            }
                         } else {
-                            Some(hash_transactions(&entry.transactions))
-                        }
+                            VerifyAction::Mixin(hash_transactions(&entry.transactions))
+                        };
+                        (action, answer)
                     })
                     .collect()
             })
@@ -616,13 +649,12 @@ impl EntrySlice for [Entry] {
 
         let device_verification_data = DeviceVerificationData::Gpu(GpuVerificationData {
             thread_h: Some(gpu_verify_thread),
-            tx_hashes,
+            verifications: Some(verifications),
             hashes: Some(hashes),
         });
         EntryVerificationState {
             verification_status: EntryVerificationStatus::Pending,
             poh_duration_us: timing::duration_as_us(&start.elapsed()),
-            transaction_duration_us,
             device_verification_data,
         }
     }
@@ -704,6 +736,7 @@ mod tests {
     use solana_sdk::{
         hash::{hash, new_rand as hash_new_rand, Hash},
         message::Message,
+        packet::PACKET_DATA_SIZE,
         signature::{Keypair, Signer},
         system_transaction,
         transaction::Transaction,
@@ -909,7 +942,7 @@ mod tests {
     }
 
     #[test]
-    fn test_verify_transaction_signatures_packet_data_size() {
+    fn test_verify_and_hash_transactions_packet_data_size() {
         let mut rng = rand::thread_rng();
         let recent_blockhash = hash_new_rand(&mut rng);
         let keypair = Keypair::new();
@@ -931,14 +964,18 @@ mod tests {
             let tx = make_transaction(5);
             let entries = vec![next_entry(&recent_blockhash, 1, vec![tx.clone()])];
             assert!(bincode::serialized_size(&tx).unwrap() <= PACKET_DATA_SIZE as u64);
-            assert!(entries[..].verify_transaction_signatures(false));
+            assert!(entries[..]
+                .verify_and_hash_transactions(false, false)
+                .is_some());
         }
         // Big transaction.
         {
             let tx = make_transaction(15);
             let entries = vec![next_entry(&recent_blockhash, 1, vec![tx.clone()])];
             assert!(bincode::serialized_size(&tx).unwrap() > PACKET_DATA_SIZE as u64);
-            assert!(!entries[..].verify_transaction_signatures(false));
+            assert!(entries[..]
+                .verify_and_hash_transactions(false, false)
+                .is_none());
         }
         // Assert that verify fails as soon as serialized
         // size exceeds packet data size.
@@ -947,7 +984,9 @@ mod tests {
             let entries = vec![next_entry(&recent_blockhash, 1, vec![tx.clone()])];
             assert_eq!(
                 bincode::serialized_size(&tx).unwrap() <= PACKET_DATA_SIZE as u64,
-                entries[..].verify_transaction_signatures(false),
+                entries[..]
+                    .verify_and_hash_transactions(false, false)
+                    .is_some(),
             );
         }
     }

@@ -3634,7 +3634,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") AS \"duplicate_signature\" FROM \"$testnet\".\"autogen\".\"bank-process_transactions-error-duplicate_signature\" WHERE $timeFilter GROUP BY time(1s) FILL(0)\n\n\n\n",
+          "query": "SELECT sum(\"count\") AS \"already_processed\" FROM \"$testnet\".\"autogen\".\"bank-process_transactions-error-already_processed\" WHERE $timeFilter GROUP BY time(1s) FILL(0)\n\n\n\n",
           "rawQuery": true,
           "refId": "G",
           "resultFormat": "time_series",

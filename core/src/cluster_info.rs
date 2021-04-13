@@ -2150,7 +2150,7 @@ impl ClusterInfo {
             let (check, ping) = ping_cache.check(now, node, &mut pingf);
             if let Some(ping) = ping {
                 let ping = Protocol::PingMessage(ping);
-                match Packet::from_data(&node.1, ping) {
+                match Packet::from_data(Some(&node.1), ping) {
                     Ok(packet) => packets.packets.push(packet),
                     Err(err) => error!("failed to write ping packet: {:?}", err),
                 };
@@ -2264,7 +2264,7 @@ impl ClusterInfo {
             let from_addr = pull_responses[stat.to].1;
             let response = pull_responses[stat.to].0[stat.responses_index].clone();
             let protocol = Protocol::PullResponse(self_id, vec![response]);
-            match Packet::from_data(&from_addr, protocol) {
+            match Packet::from_data(Some(&from_addr), protocol) {
                 Err(err) => error!("failed to write pull-response packet: {:?}", err),
                 Ok(packet) => {
                     if self.outbound_budget.take(packet.meta.size) {
@@ -2466,7 +2466,7 @@ impl ClusterInfo {
             .filter_map(|(addr, ping)| {
                 let pong = Pong::new(&ping, &self.keypair).ok()?;
                 let pong = Protocol::PongMessage(pong);
-                match Packet::from_data(&addr, pong) {
+                match Packet::from_data(Some(&addr), pong) {
                     Ok(packet) => Some(packet),
                     Err(err) => {
                         error!("failed to write pong packet: {:?}", err);
@@ -2618,7 +2618,7 @@ impl ClusterInfo {
         inc_new_counter_debug!("cluster_info-push_message-pushes", new_push_requests.len());
         for (address, request) in new_push_requests {
             if ContactInfo::is_valid_address(&address) {
-                match Packet::from_data(&address, &request) {
+                match Packet::from_data(Some(&address), &request) {
                     Ok(packet) => packets.packets.push(packet),
                     Err(err) => error!("failed to write push-request packet: {:?}", err),
                 }
@@ -3710,7 +3710,7 @@ mod tests {
                 CrdsValue::new_signed(CrdsData::SnapshotHashes(snapshot_hash), &Keypair::new());
             let message = Protocol::PushMessage(Pubkey::new_unique(), vec![crds_value]);
             let socket = new_rand_socket_addr(&mut rng);
-            assert!(Packet::from_data(&socket, message).is_ok());
+            assert!(Packet::from_data(Some(&socket), message).is_ok());
         }
     }
 
@@ -3723,7 +3723,7 @@ mod tests {
                 CrdsValue::new_signed(CrdsData::AccountsHashes(snapshot_hash), &Keypair::new());
             let response = Protocol::PullResponse(Pubkey::new_unique(), vec![crds_value]);
             let socket = new_rand_socket_addr(&mut rng);
-            assert!(Packet::from_data(&socket, response).is_ok());
+            assert!(Packet::from_data(Some(&socket), response).is_ok());
         }
     }
 
@@ -3736,7 +3736,7 @@ mod tests {
                 PruneData::new_rand(&mut rng, &self_keypair, Some(MAX_PRUNE_DATA_NODES));
             let prune_message = Protocol::PruneMessage(self_keypair.pubkey(), prune_data);
             let socket = new_rand_socket_addr(&mut rng);
-            assert!(Packet::from_data(&socket, prune_message).is_ok());
+            assert!(Packet::from_data(Some(&socket), prune_message).is_ok());
         }
         // Assert that MAX_PRUNE_DATA_NODES is highest possible.
         let self_keypair = Keypair::new();
@@ -3744,7 +3744,7 @@ mod tests {
             PruneData::new_rand(&mut rng, &self_keypair, Some(MAX_PRUNE_DATA_NODES + 1));
         let prune_message = Protocol::PruneMessage(self_keypair.pubkey(), prune_data);
         let socket = new_rand_socket_addr(&mut rng);
-        assert!(Packet::from_data(&socket, prune_message).is_err());
+        assert!(Packet::from_data(Some(&socket), prune_message).is_err());
     }
 
     #[test]
@@ -4216,7 +4216,7 @@ mod tests {
             let message = Protocol::PushMessage(self_pubkey, values);
             assert_eq!(serialized_size(&message).unwrap(), size);
             // Assert that the message fits into a packet.
-            assert!(Packet::from_data(&socket, message).is_ok());
+            assert!(Packet::from_data(Some(&socket), message).is_ok());
         }
     }
 

@@ -7,7 +7,7 @@ use crossbeam_channel::unbounded;
 use log::*;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
-use solana_core::banking_stage::{create_test_recorder, BankingStage};
+use solana_core::banking_stage::{create_test_recorder, BankingStage, BankingStageStats};
 use solana_core::cluster_info::ClusterInfo;
 use solana_core::cluster_info::Node;
 use solana_core::poh_recorder::WorkingBankEntry;
@@ -89,7 +89,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
                 None,
                 &s,
                 None::<Box<dyn Fn()>>,
-                None,
+                &BankingStageStats::default(),
                 &recorder,
             );
         });

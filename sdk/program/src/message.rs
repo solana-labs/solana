@@ -7,11 +7,12 @@ use crate::serialize_utils::{
 };
 use crate::{
     bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
-    hash::Hash,
+    hash::{Hash, HASH_BYTES},
     instruction::{AccountMeta, CompiledInstruction, Instruction},
     pubkey::Pubkey,
     short_vec, system_instruction, system_program, sysvar,
 };
+use blake3::traits::digest::Digest;
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use std::{convert::TryFrom, str::FromStr};
@@ -294,6 +295,20 @@ impl Message {
         );
         instructions.insert(0, nonce_ix);
         Self::new(&instructions, payer)
+    }
+
+    /// Compute the blake3 hash of this transaction's message
+    pub fn hash(&self) -> Hash {
+        let message_bytes = self.serialize();
+        Self::hash_raw_message(&message_bytes)
+    }
+
+    /// Compute the blake3 hash of a raw transaction message
+    pub fn hash_raw_message(message_bytes: &[u8]) -> Hash {
+        let mut hasher = blake3::Hasher::new();
+        hasher.update(b"solana-tx-message-v1");
+        hasher.update(message_bytes);
+        Hash(<[u8; HASH_BYTES]>::try_from(hasher.finalize().as_slice()).unwrap())
     }
 
     pub fn compile_instruction(&self, ix: &Instruction) -> CompiledInstruction {
@@ -1008,5 +1023,37 @@ mod tests {
             bincode::serialized_size(&MessageHeader::default()).unwrap() as usize,
             MESSAGE_HEADER_LENGTH
         );
+    }
+
+    #[test]
+    fn test_message_hash() {
+        // when this test fails, it's most likely due to a new serialized format of a message.
+        // in this case, the domain prefix `solana-tx-message-v1` should be updated.
+        let program_id0 = Pubkey::from_str("4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM").unwrap();
+        let program_id1 = Pubkey::from_str("8opHzTAnfzRpPEx21XtnrVTX28YQuCpAjcn1PczScKh").unwrap();
+        let id0 = Pubkey::from_str("CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3").unwrap();
+        let id1 = Pubkey::from_str("GcdayuLaLyrdmUu324nahyv33G5poQdLUEZ1nEytDeP").unwrap();
+        let id2 = Pubkey::from_str("LX3EUdRUBUa3TbsYXLEUdj9J3prXkWXvLYSWyYyc2Jj").unwrap();
+        let id3 = Pubkey::from_str("QRSsyMWN1yHT9ir42bgNZUNZ4PdEhcSWCrL2AryKpy5").unwrap();
+        let instructions = vec![
+            Instruction::new_with_bincode(program_id0, &0, vec![AccountMeta::new(id0, false)]),
+            Instruction::new_with_bincode(program_id0, &0, vec![AccountMeta::new(id1, true)]),
+            Instruction::new_with_bincode(
+                program_id1,
+                &0,
+                vec![AccountMeta::new_readonly(id2, false)],
+            ),
+            Instruction::new_with_bincode(
+                program_id1,
+                &0,
+                vec![AccountMeta::new_readonly(id3, true)],
+            ),
+        ];
+
+        let message = Message::new(&instructions, Some(&id1));
+        assert_eq!(
+            message.hash(),
+            Hash::from_str("CXRH7GHLieaQZRUjH1mpnNnUZQtU4V4RpJpAFgy77i3z").unwrap()
+        )
     }
 }
