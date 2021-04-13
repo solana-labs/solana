@@ -50,11 +50,11 @@ pub enum TransactionError {
     #[error("This account may not be used to pay transaction fees")]
     InvalidAccountForFee,
 
-    /// The bank has seen this `Signature` before. This can occur under normal operation
+    /// The bank has seen this transaction before. This can occur under normal operation
     /// when a UDP packet is duplicated, as a user error from a client not updating
     /// its `recent_blockhash`, or as a double-spend attack.
-    #[error("The bank has seen this signature before")]
-    DuplicateSignature,
+    #[error("This transaction has already been processed")]
+    AlreadyProcessed,
 
     /// The bank has not seen the given `recent_blockhash` or the transaction is too old and
     /// the `recent_blockhash` has been discarded.
@@ -317,18 +317,11 @@ impl Transaction {
         Ok(())
     }
 
-    pub fn verify_with_results(&self) -> Vec<bool> {
-        self.signatures
-            .iter()
-            .zip(&self.message.account_keys)
-            .map(|(signature, pubkey)| signature.verify(pubkey.as_ref(), &self.message_data()))
-            .collect()
-    }
-
     /// Verify the transaction
     pub fn verify(&self) -> Result<()> {
+        let message_bytes = self.message_data();
         if !self
-            .verify_with_results()
+            ._verify_with_results(&message_bytes)
             .iter()
             .all(|verify_result| *verify_result)
         {
@@ -336,6 +329,32 @@ impl Transaction {
         } else {
             Ok(())
         }
+    }
+
+    /// Verify the transaction and hash its message
+    pub fn verify_and_hash_message(&self) -> Result<Hash> {
+        let message_bytes = self.message_data();
+        if !self
+            ._verify_with_results(&message_bytes)
+            .iter()
+            .all(|verify_result| *verify_result)
+        {
+            Err(TransactionError::SignatureFailure)
+        } else {
+            Ok(Message::hash_raw_message(&message_bytes))
+        }
+    }
+
+    pub fn verify_with_results(&self) -> Vec<bool> {
+        self._verify_with_results(&self.message_data())
+    }
+
+    pub(crate) fn _verify_with_results(&self, message_bytes: &[u8]) -> Vec<bool> {
+        self.signatures
+            .iter()
+            .zip(&self.message.account_keys)
+            .map(|(signature, pubkey)| signature.verify(pubkey.as_ref(), message_bytes))
+            .collect()
     }
 
     pub fn verify_precompiles(&self) -> Result<()> {
