@@ -1435,10 +1435,7 @@ mod tests {
     use std::{
         net::SocketAddr,
         path::Path,
-        sync::{
-            atomic::{AtomicBool, Ordering},
-            mpsc::Receiver,
-        },
+        sync::atomic::{AtomicBool, Ordering},
         thread::sleep,
     };
 
@@ -2129,7 +2126,7 @@ mod tests {
     }
 
     fn simulate_poh(
-        record_receiver: Receiver<Record>,
+        record_receiver: CrossbeamReceiver<Record>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
     ) -> (JoinHandle<()>, Arc<AtomicBool>) {
         let exit = Arc::new(AtomicBool::new(false));

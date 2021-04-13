@@ -11,6 +11,7 @@
 //! * recorded entry must be >= WorkingBank::min_tick_height && entry must be < WorkingBank::max_tick_height
 //!
 use crate::poh_service::PohService;
+use crossbeam_channel::{unbounded, Receiver as CrossbeamReceiver, Sender as CrossbeamSender};
 use solana_ledger::blockstore::Blockstore;
 use solana_ledger::entry::Entry;
 use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
@@ -56,14 +57,14 @@ pub struct Record {
     pub mixin: Hash,
     pub transactions: Vec<Transaction>,
     pub slot: Slot,
-    pub sender: Sender<Result<()>>,
+    pub sender: CrossbeamSender<Result<()>>,
 }
 impl Record {
     pub fn new(
         mixin: Hash,
         transactions: Vec<Transaction>,
         slot: Slot,
-        sender: Sender<Result<()>>,
+        sender: CrossbeamSender<Result<()>>,
     ) -> Self {
         Self {
             mixin,
@@ -76,7 +77,7 @@ impl Record {
 
 pub struct TransactionRecorder {
     // shared by all users of PohRecorder
-    pub record_sender: Sender<Record>,
+    pub record_sender: CrossbeamSender<Record>,
 }
 
 impl Clone for TransactionRecorder {
@@ -86,7 +87,7 @@ impl Clone for TransactionRecorder {
 }
 
 impl TransactionRecorder {
-    pub fn new(record_sender: Sender<Record>) -> Self {
+    pub fn new(record_sender: CrossbeamSender<Record>) -> Self {
         Self {
             // shared
             record_sender,
@@ -99,7 +100,7 @@ impl TransactionRecorder {
         transactions: Vec<Transaction>,
     ) -> Result<()> {
         // create a new channel so that there is only 1 sender and when it goes out of scope, the receiver fails
-        let (result_sender, result_receiver) = channel();
+        let (result_sender, result_receiver) = unbounded();
         let res =
             self.record_sender
                 .send(Record::new(mixin, transactions, bank_slot, result_sender));
@@ -154,7 +155,7 @@ pub struct PohRecorder {
     record_us: u64,
     ticks_from_record: u64,
     last_metric: Instant,
-    record_sender: Sender<Record>,
+    record_sender: CrossbeamSender<Record>,
 }
 
 impl PohRecorder {
@@ -601,7 +602,7 @@ impl PohRecorder {
         clear_bank_signal: Option<SyncSender<bool>>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         poh_config: &Arc<PohConfig>,
-    ) -> (Self, Receiver<WorkingBankEntry>, Receiver<Record>) {
+    ) -> (Self, Receiver<WorkingBankEntry>, CrossbeamReceiver<Record>) {
         let tick_number = 0;
         let poh = Arc::new(Mutex::new(Poh::new_with_slot_info(
             last_entry_hash,
@@ -615,7 +616,7 @@ impl PohRecorder {
             poh_config.target_tick_duration.as_nanos() as u64,
         );
         let (sender, receiver) = channel();
-        let (record_sender, record_receiver) = channel();
+        let (record_sender, record_receiver) = unbounded();
         let (leader_first_tick_height, leader_last_tick_height, grace_ticks) =
             Self::compute_leader_slot_tick_heights(next_leader_slot, ticks_per_slot);
         (
@@ -668,7 +669,7 @@ impl PohRecorder {
         blockstore: &Arc<Blockstore>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         poh_config: &Arc<PohConfig>,
-    ) -> (Self, Receiver<WorkingBankEntry>, Receiver<Record>) {
+    ) -> (Self, Receiver<WorkingBankEntry>, CrossbeamReceiver<Record>) {
         Self::new_with_clear_signal(
             tick_height,
             last_entry_hash,

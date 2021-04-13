@@ -1,11 +1,12 @@
 //! The `poh_service` module implements a service that records the passing of
 //! "ticks", a measure of time in the PoH stream
 use crate::poh_recorder::{PohRecorder, Record};
+use crossbeam_channel::Receiver;
 use solana_ledger::poh::Poh;
 use solana_measure::measure::Measure;
 use solana_sdk::poh_config::PohConfig;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{mpsc::Receiver, Arc, Mutex};
+use std::sync::{Arc, Mutex};
 use std::thread::{self, sleep, Builder, JoinHandle};
 use std::time::{Duration, Instant};
 
