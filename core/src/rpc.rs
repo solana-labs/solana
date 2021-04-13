@@ -124,6 +124,7 @@ pub struct JsonRpcConfig {
     pub rpc_threads: usize,
     pub rpc_bigtable_timeout: Option<Duration>,
     pub minimal_api: bool,
+    pub obsolete_v1_7_api: bool,
 }
 
 #[derive(Clone)]
@@ -2220,33 +2221,6 @@ pub mod rpc_full {
     pub trait Full {
         type Metadata;
 
-        // DEPRECATED
-        #[rpc(meta, name = "confirmTransaction")]
-        fn confirm_transaction(
-            &self,
-            meta: Self::Metadata,
-            signature_str: String,
-            commitment: Option<CommitmentConfig>,
-        ) -> Result<RpcResponse<bool>>;
-
-        // DEPRECATED
-        #[rpc(meta, name = "getSignatureStatus")]
-        fn get_signature_status(
-            &self,
-            meta: Self::Metadata,
-            signature_str: String,
-            commitment: Option<CommitmentConfig>,
-        ) -> Result<Option<transaction::Result<()>>>;
-
-        // DEPRECATED (used by Trust Wallet)
-        #[rpc(meta, name = "getSignatureConfirmation")]
-        fn get_signature_confirmation(
-            &self,
-            meta: Self::Metadata,
-            signature_str: String,
-            commitment: Option<CommitmentConfig>,
-        ) -> Result<Option<RpcSignatureConfirmation>>;
-
         #[rpc(meta, name = "getAccountInfo")]
         fn get_account_info(
             &self,
@@ -2362,14 +2336,6 @@ pub mod rpc_full {
         #[rpc(meta, name = "getMaxShredInsertSlot")]
         fn get_max_shred_insert_slot(&self, meta: Self::Metadata) -> Result<Slot>;
 
-        // DEPRECATED
-        #[rpc(meta, name = "getTotalSupply")]
-        fn get_total_supply(
-            &self,
-            meta: Self::Metadata,
-            commitment: Option<CommitmentConfig>,
-        ) -> Result<u64>;
-
         #[rpc(meta, name = "getLargestAccounts")]
         fn get_largest_accounts(
             &self,
@@ -2465,16 +2431,6 @@ pub mod rpc_full {
             config: Option<RpcEncodingConfigWrapper<RpcConfirmedTransactionConfig>>,
         ) -> Result<Option<EncodedConfirmedTransaction>>;
 
-        // DEPRECATED
-        #[rpc(meta, name = "getConfirmedSignaturesForAddress")]
-        fn get_confirmed_signatures_for_address(
-            &self,
-            meta: Self::Metadata,
-            pubkey_str: String,
-            start_slot: Slot,
-            end_slot: Slot,
-        ) -> Result<Vec<String>>;
-
         #[rpc(meta, name = "getConfirmedSignaturesForAddress2")]
         fn get_confirmed_signatures_for_address2(
             &self,
@@ -2544,17 +2500,6 @@ pub mod rpc_full {
     pub struct FullImpl;
     impl Full for FullImpl {
         type Metadata = JsonRpcRequestProcessor;
-
-        fn confirm_transaction(
-            &self,
-            meta: Self::Metadata,
-            id: String,
-            commitment: Option<CommitmentConfig>,
-        ) -> Result<RpcResponse<bool>> {
-            debug!("confirm_transaction rpc request received: {:?}", id);
-            let signature = verify_signature(&id)?;
-            Ok(meta.confirm_transaction(&signature, commitment))
-        }
 
         fn get_account_info(
             &self,
@@ -2786,34 +2731,6 @@ pub mod rpc_full {
             Ok(meta.get_fee_rate_governor())
         }
 
-        fn get_signature_confirmation(
-            &self,
-            meta: Self::Metadata,
-            signature_str: String,
-            commitment: Option<CommitmentConfig>,
-        ) -> Result<Option<RpcSignatureConfirmation>> {
-            debug!(
-                "get_signature_confirmation rpc request received: {:?}",
-                signature_str
-            );
-            let signature = verify_signature(&signature_str)?;
-            Ok(meta.get_signature_confirmation_status(signature, commitment))
-        }
-
-        fn get_signature_status(
-            &self,
-            meta: Self::Metadata,
-            signature_str: String,
-            commitment: Option<CommitmentConfig>,
-        ) -> Result<Option<transaction::Result<()>>> {
-            debug!(
-                "get_signature_status rpc request received: {:?}",
-                signature_str
-            );
-            let signature = verify_signature(&signature_str)?;
-            Ok(meta.get_signature_status(signature, commitment))
-        }
-
         fn get_signature_statuses(
             &self,
             meta: Self::Metadata,
@@ -2845,15 +2762,6 @@ pub mod rpc_full {
         fn get_max_shred_insert_slot(&self, meta: Self::Metadata) -> Result<Slot> {
             debug!("get_max_shred_insert_slot rpc request received");
             Ok(meta.get_max_shred_insert_slot())
-        }
-
-        fn get_total_supply(
-            &self,
-            meta: Self::Metadata,
-            commitment: Option<CommitmentConfig>,
-        ) -> Result<u64> {
-            debug!("get_total_supply rpc request received");
-            Ok(meta.get_total_supply(commitment))
         }
 
         fn get_largest_accounts(
@@ -3151,37 +3059,6 @@ pub mod rpc_full {
             meta.get_confirmed_transaction(signature, config)
         }
 
-        fn get_confirmed_signatures_for_address(
-            &self,
-            meta: Self::Metadata,
-            pubkey_str: String,
-            start_slot: Slot,
-            end_slot: Slot,
-        ) -> Result<Vec<String>> {
-            debug!(
-                "get_confirmed_signatures_for_address rpc request received: {:?} {:?}-{:?}",
-                pubkey_str, start_slot, end_slot
-            );
-            let pubkey = verify_pubkey(pubkey_str)?;
-            if end_slot < start_slot {
-                return Err(Error::invalid_params(format!(
-                    "start_slot {} must be less than or equal to end_slot {}",
-                    start_slot, end_slot
-                )));
-            }
-            if end_slot - start_slot > MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE {
-                return Err(Error::invalid_params(format!(
-                    "Slot range too large; max {}",
-                    MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE
-                )));
-            }
-            Ok(meta
-                .get_confirmed_signatures_for_address(pubkey, start_slot, end_slot)
-                .iter()
-                .map(|signature| signature.to_string())
-                .collect())
-        }
-
         fn get_confirmed_signatures_for_address2(
             &self,
             meta: Self::Metadata,
@@ -3326,6 +3203,144 @@ pub mod rpc_full {
             let delegate = verify_pubkey(delegate_str)?;
             let token_account_filter = verify_token_account_filter(token_account_filter)?;
             meta.get_token_accounts_by_delegate(&delegate, token_account_filter, config)
+        }
+    }
+}
+
+// Obsolete RPC methods, collected for easy deactivation and removal
+pub mod rpc_obsolete_v1_7 {
+    use super::*;
+    #[rpc]
+    pub trait ObsoleteV1_7 {
+        type Metadata;
+
+        // DEPRECATED
+        #[rpc(meta, name = "confirmTransaction")]
+        fn confirm_transaction(
+            &self,
+            meta: Self::Metadata,
+            signature_str: String,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<RpcResponse<bool>>;
+
+        // DEPRECATED
+        #[rpc(meta, name = "getSignatureStatus")]
+        fn get_signature_status(
+            &self,
+            meta: Self::Metadata,
+            signature_str: String,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<Option<transaction::Result<()>>>;
+
+        // DEPRECATED (used by Trust Wallet)
+        #[rpc(meta, name = "getSignatureConfirmation")]
+        fn get_signature_confirmation(
+            &self,
+            meta: Self::Metadata,
+            signature_str: String,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<Option<RpcSignatureConfirmation>>;
+
+        // DEPRECATED
+        #[rpc(meta, name = "getTotalSupply")]
+        fn get_total_supply(
+            &self,
+            meta: Self::Metadata,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<u64>;
+
+        // DEPRECATED
+        #[rpc(meta, name = "getConfirmedSignaturesForAddress")]
+        fn get_confirmed_signatures_for_address(
+            &self,
+            meta: Self::Metadata,
+            pubkey_str: String,
+            start_slot: Slot,
+            end_slot: Slot,
+        ) -> Result<Vec<String>>;
+    }
+
+    pub struct ObsoleteV1_7Impl;
+    impl ObsoleteV1_7 for ObsoleteV1_7Impl {
+        type Metadata = JsonRpcRequestProcessor;
+
+        fn confirm_transaction(
+            &self,
+            meta: Self::Metadata,
+            id: String,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<RpcResponse<bool>> {
+            debug!("confirm_transaction rpc request received: {:?}", id);
+            let signature = verify_signature(&id)?;
+            Ok(meta.confirm_transaction(&signature, commitment))
+        }
+
+        fn get_signature_status(
+            &self,
+            meta: Self::Metadata,
+            signature_str: String,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<Option<transaction::Result<()>>> {
+            debug!(
+                "get_signature_status rpc request received: {:?}",
+                signature_str
+            );
+            let signature = verify_signature(&signature_str)?;
+            Ok(meta.get_signature_status(signature, commitment))
+        }
+
+        fn get_signature_confirmation(
+            &self,
+            meta: Self::Metadata,
+            signature_str: String,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<Option<RpcSignatureConfirmation>> {
+            debug!(
+                "get_signature_confirmation rpc request received: {:?}",
+                signature_str
+            );
+            let signature = verify_signature(&signature_str)?;
+            Ok(meta.get_signature_confirmation_status(signature, commitment))
+        }
+
+        fn get_total_supply(
+            &self,
+            meta: Self::Metadata,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<u64> {
+            debug!("get_total_supply rpc request received");
+            Ok(meta.get_total_supply(commitment))
+        }
+
+        fn get_confirmed_signatures_for_address(
+            &self,
+            meta: Self::Metadata,
+            pubkey_str: String,
+            start_slot: Slot,
+            end_slot: Slot,
+        ) -> Result<Vec<String>> {
+            debug!(
+                "get_confirmed_signatures_for_address rpc request received: {:?} {:?}-{:?}",
+                pubkey_str, start_slot, end_slot
+            );
+            let pubkey = verify_pubkey(pubkey_str)?;
+            if end_slot < start_slot {
+                return Err(Error::invalid_params(format!(
+                    "start_slot {} must be less than or equal to end_slot {}",
+                    start_slot, end_slot
+                )));
+            }
+            if end_slot - start_slot > MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE {
+                return Err(Error::invalid_params(format!(
+                    "Slot range too large; max {}",
+                    MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE
+                )));
+            }
+            Ok(meta
+                .get_confirmed_signatures_for_address(pubkey, start_slot, end_slot)
+                .iter()
+                .map(|signature| signature.to_string())
+                .collect())
         }
     }
 }
@@ -3866,31 +3881,6 @@ pub mod tests {
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         assert_eq!(expected, result);
-    }
-
-    #[test]
-    fn test_rpc_get_total_supply() {
-        let bob_pubkey = solana_sdk::pubkey::new_rand();
-        let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
-
-        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getTotalSupply"}"#;
-        let rep = io.handle_request_sync(&req, meta);
-        let res: Response = serde_json::from_str(&rep.expect("actual response"))
-            .expect("actual response deserialization");
-        let supply: u64 = if let Response::Single(res) = res {
-            if let Output::Success(res) = res {
-                if let Value::Number(num) = res.result {
-                    num.as_u64().unwrap()
-                } else {
-                    panic!("Expected number");
-                }
-            } else {
-                panic!("Expected success");
-            }
-        } else {
-            panic!("Expected single response");
-        };
-        assert!(supply >= TEST_MINT_LAMPORTS);
     }
 
     #[test]
@@ -4723,108 +4713,6 @@ pub mod tests {
 
         // should panic because `bank` is not frozen
         let _ = io.handle_request_sync(&req, meta);
-    }
-
-    #[test]
-    fn test_rpc_confirm_tx() {
-        let bob_pubkey = solana_sdk::pubkey::new_rand();
-        let RpcHandler {
-            io,
-            meta,
-            blockhash,
-            alice,
-            ..
-        } = start_rpc_handler_with_tx(&bob_pubkey);
-        let tx = system_transaction::transfer(&alice, &bob_pubkey, 20, blockhash);
-
-        let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"confirmTransaction","params":["{}"]}}"#,
-            tx.signatures[0]
-        );
-        let res = io.handle_request_sync(&req, meta);
-        let expected = json!({
-            "jsonrpc": "2.0",
-            "result": {
-                "context":{"slot":0},
-                "value":true,
-                },
-            "id": 1,
-        });
-        let expected: Response =
-            serde_json::from_value(expected).expect("expected response deserialization");
-        let result: Response = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        assert_eq!(expected, result);
-    }
-
-    #[test]
-    fn test_rpc_get_signature_status() {
-        let bob_pubkey = solana_sdk::pubkey::new_rand();
-        let RpcHandler {
-            io,
-            meta,
-            blockhash,
-            alice,
-            ..
-        } = start_rpc_handler_with_tx(&bob_pubkey);
-
-        let tx = system_transaction::transfer(&alice, &bob_pubkey, 20, blockhash);
-        let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getSignatureStatus","params":["{}"]}}"#,
-            tx.signatures[0]
-        );
-        let res = io.handle_request_sync(&req, meta.clone());
-        let expected_res: Option<transaction::Result<()>> = Some(Ok(()));
-        let expected = json!({
-            "jsonrpc": "2.0",
-            "result": expected_res,
-            "id": 1
-        });
-        let expected: Response =
-            serde_json::from_value(expected).expect("expected response deserialization");
-        let result: Response = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        assert_eq!(expected, result);
-
-        // Test getSignatureStatus request on unprocessed tx
-        let tx = system_transaction::transfer(&alice, &bob_pubkey, 10, blockhash);
-        let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getSignatureStatus","params":["{}"]}}"#,
-            tx.signatures[0]
-        );
-        let res = io.handle_request_sync(&req, meta.clone());
-        let expected_res: Option<String> = None;
-        let expected = json!({
-            "jsonrpc": "2.0",
-            "result": expected_res,
-            "id": 1
-        });
-        let expected: Response =
-            serde_json::from_value(expected).expect("expected response deserialization");
-        let result: Response = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        assert_eq!(expected, result);
-
-        // Test getSignatureStatus request on a TransactionError
-        let tx = system_transaction::transfer(&alice, &bob_pubkey, std::u64::MAX, blockhash);
-        let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getSignatureStatus","params":["{}"]}}"#,
-            tx.signatures[0]
-        );
-        let res = io.handle_request_sync(&req, meta);
-        let expected_res: Option<transaction::Result<()>> = Some(Err(
-            TransactionError::InstructionError(0, InstructionError::Custom(1)),
-        ));
-        let expected = json!({
-            "jsonrpc": "2.0",
-            "result": expected_res,
-            "id": 1
-        });
-        let expected: Response =
-            serde_json::from_value(expected).expect("expected response deserialization");
-        let result: Response = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        assert_eq!(expected, result);
     }
 
     #[test]

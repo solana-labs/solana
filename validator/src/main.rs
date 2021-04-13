@@ -1164,6 +1164,12 @@ pub fn main() {
                 .help("Only expose the RPC methods required to serve snapshots to other nodes"),
         )
         .arg(
+            Arg::with_name("obsolete_v1_7_rpc_api")
+                .long("--enable-rpc-obsolete_v1_7")
+                .takes_value(false)
+                .help("Enable the obsolete RPC methods removed in v1.7"),
+        )
+        .arg(
             Arg::with_name("private_rpc")
                 .long("--private-rpc")
                 .takes_value(false)
@@ -2064,6 +2070,7 @@ pub fn main() {
                 solana_net_utils::parse_host_port(address).expect("failed to parse faucet address")
             }),
             minimal_api: matches.is_present("minimal_rpc_api"),
+            obsolete_v1_7_api: matches.is_present("obsolete_v1_7_rpc_api"),
             max_multiple_accounts: Some(value_t_or_exit!(
                 matches,
                 "rpc_max_multiple_accounts",
