@@ -7,7 +7,7 @@ use crate::{
         AccountAddressFilter, Accounts, TransactionAccountDeps, TransactionAccounts,
         TransactionLoadResult, TransactionLoaders,
     },
-    accounts_db::{ErrorCounters, LoadHint, SnapshotStorages},
+    accounts_db::{ErrorCounters, SnapshotStorages},
     accounts_index::{AccountIndex, Ancestors, IndexKey},
     blockhash_queue::BlockhashQueue,
     builtins::{self, ActivationType},
@@ -4115,9 +4115,7 @@ impl Bank {
         // get_account (= primary this fn caller) may be called from on-chain Bank code even if we
         // try hard to use get_account_with_fixed_root for that purpose...
         // so pass safer LoadHint:Unspecified here as a fallback
-        self.rc
-            .accounts
-            .load_slow(ancestors, pubkey, LoadHint::Unspecified)
+        self.rc.accounts.load_without_fixed_root(ancestors, pubkey)
     }
 
     fn load_slow_with_fixed_root(
@@ -4125,9 +4123,7 @@ impl Bank {
         ancestors: &Ancestors,
         pubkey: &Pubkey,
     ) -> Option<(AccountSharedData, Slot)> {
-        self.rc
-            .accounts
-            .load_slow(ancestors, pubkey, LoadHint::FixedMaxRoot)
+        self.rc.accounts.load_with_fixed_root(ancestors, pubkey)
     }
 
     // Exclude self to really fetch the parent Bank's account hash and data.

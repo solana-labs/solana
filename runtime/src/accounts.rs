@@ -464,7 +464,7 @@ impl Accounts {
     }
 
     /// Slow because lock is held for 1 operation instead of many
-    pub fn load_slow(
+    fn load_slow(
         &self,
         ancestors: &Ancestors,
         pubkey: &Pubkey,
