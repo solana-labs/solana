@@ -15,7 +15,13 @@ pub enum RpcRequest {
     GetConfirmedBlock,
     GetConfirmedBlocks,
     GetConfirmedBlocksWithLimit,
+
+    #[deprecated(
+        since = "1.5.19",
+        note = "Please use RpcRequest::GetConfirmedSignaturesForAddress2 instead"
+    )]
     GetConfirmedSignaturesForAddress,
+
     GetConfirmedSignaturesForAddress2,
     GetConfirmedTransaction,
     GetEpochInfo,
@@ -52,7 +58,10 @@ pub enum RpcRequest {
     GetTokenAccountsByDelegate,
     GetTokenAccountsByOwner,
     GetTokenSupply,
+
+    #[deprecated(since = "1.5.19", note = "Please use RpcRequest::GetSupply instead")]
     GetTotalSupply,
+
     GetTransactionCount,
     GetVersion,
     GetVoteAccounts,
@@ -64,6 +73,7 @@ pub enum RpcRequest {
     SignVote,
 }
 
+#[allow(deprecated)]
 impl fmt::Display for RpcRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let method = match self {

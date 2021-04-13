@@ -452,10 +452,17 @@ impl RpcClient {
         )
     }
 
+    #[deprecated(since = "1.5.19", note = "Please use RpcClient::supply() instead")]
+    #[allow(deprecated)]
     pub fn total_supply(&self) -> ClientResult<u64> {
         self.total_supply_with_commitment(self.commitment_config)
     }
 
+    #[deprecated(
+        since = "1.5.19",
+        note = "Please use RpcClient::supply_with_commitment() instead"
+    )]
+    #[allow(deprecated)]
     pub fn total_supply_with_commitment(
         &self,
         commitment_config: CommitmentConfig,
@@ -605,6 +612,11 @@ impl RpcClient {
         )
     }
 
+    #[deprecated(
+        since = "1.5.19",
+        note = "Please use RpcClient::get_confirmed_signatures_for_address2() instead"
+    )]
+    #[allow(deprecated)]
     pub fn get_confirmed_signatures_for_address(
         &self,
         address: &Pubkey,
