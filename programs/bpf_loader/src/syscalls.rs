@@ -1917,7 +1917,7 @@ fn call<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_rbpf::{memory_region::MemoryRegion, vm::Config};
+    use solana_rbpf::{memory_region::MemoryRegion, user_error::UserError, vm::Config};
     use solana_sdk::{
         bpf_loader,
         fee_calculator::FeeCalculator,
@@ -1948,10 +1948,11 @@ mod tests {
         const LENGTH: u64 = 1000;
         let data = vec![0u8; LENGTH as usize];
         let addr = data.as_ptr() as u64;
-        let memory_mapping = MemoryMapping::new(
+        let memory_mapping = MemoryMapping::new::<UserError>(
             vec![MemoryRegion::new_from_slice(&data, START, 0, false)],
             &DEFAULT_CONFIG,
-        );
+        )
+        .unwrap();
 
         let cases = vec![
             (true, START, 0, addr),
@@ -1986,7 +1987,7 @@ mod tests {
         // Pubkey
         let pubkey = solana_sdk::pubkey::new_rand();
         let addr = &pubkey as *const _ as u64;
-        let memory_mapping = MemoryMapping::new(
+        let memory_mapping = MemoryMapping::new::<UserError>(
             vec![MemoryRegion {
                 host_addr: addr,
                 vm_addr: 100,
@@ -1995,7 +1996,8 @@ mod tests {
                 is_writable: false,
             }],
             &DEFAULT_CONFIG,
-        );
+        )
+        .unwrap();
         let translated_pubkey =
             translate_type::<Pubkey>(&memory_mapping, 100, &bpf_loader::id()).unwrap();
         assert_eq!(pubkey, *translated_pubkey);
@@ -2007,7 +2009,7 @@ mod tests {
             vec![AccountMeta::new(solana_sdk::pubkey::new_rand(), false)],
         );
         let addr = &instruction as *const _ as u64;
-        let mut memory_mapping = MemoryMapping::new(
+        let mut memory_mapping = MemoryMapping::new::<UserError>(
             vec![MemoryRegion {
                 host_addr: addr,
                 vm_addr: 96,
@@ -2016,7 +2018,8 @@ mod tests {
                 is_writable: false,
             }],
             &DEFAULT_CONFIG,
-        );
+        )
+        .unwrap();
         let translated_instruction =
             translate_type::<Instruction>(&memory_mapping, 96, &bpf_loader::id()).unwrap();
         assert_eq!(instruction, *translated_instruction);
@@ -2031,7 +2034,7 @@ mod tests {
         let data: Vec<u8> = vec![];
         assert_eq!(0x1 as *const u8, data.as_ptr());
         let addr = good_data.as_ptr() as *const _ as u64;
-        let memory_mapping = MemoryMapping::new(
+        let memory_mapping = MemoryMapping::new::<UserError>(
             vec![MemoryRegion {
                 host_addr: addr,
                 vm_addr: 100,
@@ -2040,7 +2043,8 @@ mod tests {
                 is_writable: false,
             }],
             &DEFAULT_CONFIG,
-        );
+        )
+        .unwrap();
         let translated_data =
             translate_slice::<u8>(&memory_mapping, data.as_ptr() as u64, 0, &bpf_loader::id())
                 .unwrap();
@@ -2050,7 +2054,7 @@ mod tests {
         // u8
         let mut data = vec![1u8, 2, 3, 4, 5];
         let addr = data.as_ptr() as *const _ as u64;
-        let memory_mapping = MemoryMapping::new(
+        let memory_mapping = MemoryMapping::new::<UserError>(
             vec![MemoryRegion {
                 host_addr: addr,
                 vm_addr: 100,
@@ -2059,7 +2063,8 @@ mod tests {
                 is_writable: false,
             }],
             &DEFAULT_CONFIG,
-        );
+        )
+        .unwrap();
         let translated_data =
             translate_slice::<u8>(&memory_mapping, 100, data.len() as u64, &bpf_loader::id())
                 .unwrap();
@@ -2085,7 +2090,7 @@ mod tests {
         // u64
         let mut data = vec![1u64, 2, 3, 4, 5];
         let addr = data.as_ptr() as *const _ as u64;
-        let memory_mapping = MemoryMapping::new(
+        let memory_mapping = MemoryMapping::new::<UserError>(
             vec![MemoryRegion {
                 host_addr: addr,
                 vm_addr: 96,
@@ -2094,7 +2099,8 @@ mod tests {
                 is_writable: false,
             }],
             &DEFAULT_CONFIG,
-        );
+        )
+        .unwrap();
         let translated_data =
             translate_slice::<u64>(&memory_mapping, 96, data.len() as u64, &bpf_loader::id())
                 .unwrap();
@@ -2106,7 +2112,7 @@ mod tests {
         // Pubkeys
         let mut data = vec![solana_sdk::pubkey::new_rand(); 5];
         let addr = data.as_ptr() as *const _ as u64;
-        let memory_mapping = MemoryMapping::new(
+        let memory_mapping = MemoryMapping::new::<UserError>(
             vec![MemoryRegion {
                 host_addr: addr,
                 vm_addr: 100,
@@ -2115,7 +2121,8 @@ mod tests {
                 is_writable: false,
             }],
             &DEFAULT_CONFIG,
-        );
+        )
+        .unwrap();
         let translated_data =
             translate_slice::<Pubkey>(&memory_mapping, 100, data.len() as u64, &bpf_loader::id())
                 .unwrap();
@@ -2128,7 +2135,7 @@ mod tests {
     fn test_translate_string_and_do() {
         let string = "Gaggablaghblagh!";
         let addr = string.as_ptr() as *const _ as u64;
-        let memory_mapping = MemoryMapping::new(
+        let memory_mapping = MemoryMapping::new::<UserError>(
             vec![MemoryRegion {
                 host_addr: addr,
                 vm_addr: 100,
@@ -2137,7 +2144,8 @@ mod tests {
                 is_writable: false,
             }],
             &DEFAULT_CONFIG,
-        );
+        )
+        .unwrap();
         assert_eq!(
             42,
             translate_string_and_do(
@@ -2157,7 +2165,9 @@ mod tests {
     #[test]
     #[should_panic(expected = "UserError(SyscallError(Abort))")]
     fn test_syscall_abort() {
-        let memory_mapping = MemoryMapping::new(vec![MemoryRegion::default()], &DEFAULT_CONFIG);
+        let memory_mapping =
+            MemoryMapping::new::<UserError>(vec![MemoryRegion::default()], &DEFAULT_CONFIG)
+                .unwrap();
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
         SyscallAbort::call(
             &mut SyscallAbort {},
@@ -2177,7 +2187,7 @@ mod tests {
     fn test_syscall_sol_panic() {
         let string = "Gaggablaghblagh!";
         let addr = string.as_ptr() as *const _ as u64;
-        let memory_mapping = MemoryMapping::new(
+        let memory_mapping = MemoryMapping::new::<UserError>(
             vec![MemoryRegion {
                 host_addr: addr,
                 vm_addr: 100,
@@ -2186,7 +2196,8 @@ mod tests {
                 is_writable: false,
             }],
             &DEFAULT_CONFIG,
-        );
+        )
+        .unwrap();
 
         let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
             Rc::new(RefCell::new(MockComputeMeter {
@@ -2249,7 +2260,7 @@ mod tests {
             logger,
             loader_id: &bpf_loader::id(),
         };
-        let memory_mapping = MemoryMapping::new(
+        let memory_mapping = MemoryMapping::new::<UserError>(
             vec![MemoryRegion {
                 host_addr: addr,
                 vm_addr: 100,
@@ -2258,7 +2269,8 @@ mod tests {
                 is_writable: false,
             }],
             &DEFAULT_CONFIG,
-        );
+        )
+        .unwrap();
 
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
         syscall_sol_log.call(
@@ -2360,7 +2372,7 @@ mod tests {
             compute_meter,
             logger,
         };
-        let memory_mapping = MemoryMapping::new(vec![], &DEFAULT_CONFIG);
+        let memory_mapping = MemoryMapping::new::<UserError>(vec![], &DEFAULT_CONFIG).unwrap();
 
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
         syscall_sol_log_u64.call(1, 2, 3, 4, 5, &memory_mapping, &mut result);
@@ -2386,7 +2398,7 @@ mod tests {
             logger,
             loader_id: &bpf_loader::id(),
         };
-        let memory_mapping = MemoryMapping::new(
+        let memory_mapping = MemoryMapping::new::<UserError>(
             vec![MemoryRegion {
                 host_addr: addr,
                 vm_addr: 100,
@@ -2395,7 +2407,8 @@ mod tests {
                 is_writable: false,
             }],
             &DEFAULT_CONFIG,
-        );
+        )
+        .unwrap();
 
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
         syscall_sol_pubkey.call(100, 0, 0, 0, 0, &memory_mapping, &mut result);
@@ -2431,10 +2444,11 @@ mod tests {
         // large alloc
         {
             let heap = vec![0_u8; 100];
-            let memory_mapping = MemoryMapping::new(
+            let memory_mapping = MemoryMapping::new::<UserError>(
                 vec![MemoryRegion::new_from_slice(&heap, MM_HEAP_START, 0, true)],
                 &DEFAULT_CONFIG,
-            );
+            )
+            .unwrap();
             let mut syscall = SyscallAllocFree {
                 aligned: true,
                 allocator: BpfAllocator::new(heap, MM_HEAP_START),
@@ -2452,10 +2466,11 @@ mod tests {
         // many small unaligned allocs
         {
             let heap = vec![0_u8; 100];
-            let memory_mapping = MemoryMapping::new(
+            let memory_mapping = MemoryMapping::new::<UserError>(
                 vec![MemoryRegion::new_from_slice(&heap, MM_HEAP_START, 0, true)],
                 &DEFAULT_CONFIG,
-            );
+            )
+            .unwrap();
             let mut syscall = SyscallAllocFree {
                 aligned: false,
                 allocator: BpfAllocator::new(heap, MM_HEAP_START),
@@ -2472,10 +2487,11 @@ mod tests {
         // many small aligned allocs
         {
             let heap = vec![0_u8; 100];
-            let memory_mapping = MemoryMapping::new(
+            let memory_mapping = MemoryMapping::new::<UserError>(
                 vec![MemoryRegion::new_from_slice(&heap, MM_HEAP_START, 0, true)],
                 &DEFAULT_CONFIG,
-            );
+            )
+            .unwrap();
             let mut syscall = SyscallAllocFree {
                 aligned: true,
                 allocator: BpfAllocator::new(heap, MM_HEAP_START),
@@ -2493,10 +2509,11 @@ mod tests {
 
         fn check_alignment<T>() {
             let heap = vec![0_u8; 100];
-            let memory_mapping = MemoryMapping::new(
+            let memory_mapping = MemoryMapping::new::<UserError>(
                 vec![MemoryRegion::new_from_slice(&heap, MM_HEAP_START, 0, true)],
                 &DEFAULT_CONFIG,
-            );
+            )
+            .unwrap();
             let mut syscall = SyscallAllocFree {
                 aligned: true,
                 allocator: BpfAllocator::new(heap, MM_HEAP_START),
@@ -2544,7 +2561,7 @@ mod tests {
         let ro_len = bytes_to_hash.len() as u64;
         let ro_va = 96;
         let rw_va = 192;
-        let memory_mapping = MemoryMapping::new(
+        let memory_mapping = MemoryMapping::new::<UserError>(
             vec![
                 MemoryRegion {
                     host_addr: bytes1.as_ptr() as *const _ as u64,
@@ -2576,7 +2593,8 @@ mod tests {
                 },
             ],
             &DEFAULT_CONFIG,
-        );
+        )
+        .unwrap();
         let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
             Rc::new(RefCell::new(MockComputeMeter {
                 remaining: (bytes1.len() + bytes2.len()) as u64,
@@ -2644,7 +2662,7 @@ mod tests {
             let got_clock = Clock::default();
             let got_clock_va = 2048;
 
-            let memory_mapping = MemoryMapping::new(
+            let memory_mapping = MemoryMapping::new::<UserError>(
                 vec![MemoryRegion {
                     host_addr: &got_clock as *const _ as u64,
                     vm_addr: got_clock_va,
@@ -2653,7 +2671,8 @@ mod tests {
                     is_writable: true,
                 }],
                 &DEFAULT_CONFIG,
-            );
+            )
+            .unwrap();
 
             let src_clock = Clock {
                 slot: 1,
@@ -2685,7 +2704,7 @@ mod tests {
             let got_epochschedule = EpochSchedule::default();
             let got_epochschedule_va = 2048;
 
-            let memory_mapping = MemoryMapping::new(
+            let memory_mapping = MemoryMapping::new::<UserError>(
                 vec![MemoryRegion {
                     host_addr: &got_epochschedule as *const _ as u64,
                     vm_addr: got_epochschedule_va,
@@ -2694,7 +2713,8 @@ mod tests {
                     is_writable: true,
                 }],
                 &DEFAULT_CONFIG,
-            );
+            )
+            .unwrap();
 
             let src_epochschedule = EpochSchedule {
                 slots_per_epoch: 1,
@@ -2734,7 +2754,7 @@ mod tests {
             let got_fees = Fees::default();
             let got_fees_va = 2048;
 
-            let memory_mapping = MemoryMapping::new(
+            let memory_mapping = MemoryMapping::new::<UserError>(
                 vec![MemoryRegion {
                     host_addr: &got_fees as *const _ as u64,
                     vm_addr: got_fees_va,
@@ -2743,7 +2763,8 @@ mod tests {
                     is_writable: true,
                 }],
                 &DEFAULT_CONFIG,
-            );
+            )
+            .unwrap();
 
             let src_fees = Fees {
                 fee_calculator: FeeCalculator {
@@ -2773,7 +2794,7 @@ mod tests {
             let got_rent = Rent::default();
             let got_rent_va = 2048;
 
-            let memory_mapping = MemoryMapping::new(
+            let memory_mapping = MemoryMapping::new::<UserError>(
                 vec![MemoryRegion {
                     host_addr: &got_rent as *const _ as u64,
                     vm_addr: got_rent_va,
@@ -2782,7 +2803,8 @@ mod tests {
                     is_writable: true,
                 }],
                 &DEFAULT_CONFIG,
-            );
+            )
+            .unwrap();
 
             let src_rent = Rent {
                 lamports_per_byte_year: 1,
