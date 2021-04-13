@@ -25,6 +25,7 @@ use solana_client::{
     rpc_cache::LargestAccountsCache,
     rpc_config::*,
     rpc_custom_error::RpcCustomError,
+    rpc_deprecated_config::*,
     rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
     rpc_request::{
         TokenAccountsFilter, DELINQUENT_VALIDATOR_SLOT_DISTANCE, MAX_GET_CONFIRMED_BLOCKS_RANGE,
@@ -423,7 +424,7 @@ impl JsonRpcRequestProcessor {
 
         let first_confirmed_block = if let Ok(Some(first_confirmed_block)) = self.get_block(
             first_confirmed_block_in_epoch,
-            Some(RpcConfirmedBlockConfig::rewards_with_commitment(config.commitment).into()),
+            Some(RpcBlockConfig::rewards_with_commitment(config.commitment).into()),
         ) {
             first_confirmed_block
         } else {
@@ -817,7 +818,7 @@ impl JsonRpcRequestProcessor {
     pub fn get_block(
         &self,
         slot: Slot,
-        config: Option<RpcEncodingConfigWrapper<RpcConfirmedBlockConfig>>,
+        config: Option<RpcEncodingConfigWrapper<RpcBlockConfig>>,
     ) -> Result<Option<UiConfirmedBlock>> {
         if self.config.enable_rpc_transaction_history {
             let config = config
@@ -1171,7 +1172,7 @@ impl JsonRpcRequestProcessor {
     pub fn get_transaction(
         &self,
         signature: Signature,
-        config: Option<RpcEncodingConfigWrapper<RpcConfirmedTransactionConfig>>,
+        config: Option<RpcEncodingConfigWrapper<RpcTransactionConfig>>,
     ) -> Result<Option<EncodedConfirmedTransaction>> {
         let config = config
             .map(|config| config.convert_to_current())
@@ -2403,7 +2404,7 @@ pub mod rpc_full {
             &self,
             meta: Self::Metadata,
             slot: Slot,
-            config: Option<RpcEncodingConfigWrapper<RpcConfirmedBlockConfig>>,
+            config: Option<RpcEncodingConfigWrapper<RpcBlockConfig>>,
         ) -> Result<Option<UiConfirmedBlock>>;
 
         #[rpc(meta, name = "getBlockTime")]
@@ -2415,7 +2416,7 @@ pub mod rpc_full {
             &self,
             meta: Self::Metadata,
             start_slot: Slot,
-            config: Option<RpcConfirmedBlocksConfigWrapper>,
+            config: Option<RpcBlocksConfigWrapper>,
             commitment: Option<CommitmentConfig>,
         ) -> Result<Vec<Slot>>;
 
@@ -2433,7 +2434,7 @@ pub mod rpc_full {
             &self,
             meta: Self::Metadata,
             signature_str: String,
-            config: Option<RpcEncodingConfigWrapper<RpcConfirmedTransactionConfig>>,
+            config: Option<RpcEncodingConfigWrapper<RpcTransactionConfig>>,
         ) -> Result<Option<EncodedConfirmedTransaction>>;
 
         #[rpc(meta, name = "getSignaturesForAddress")]
@@ -2441,7 +2442,7 @@ pub mod rpc_full {
             &self,
             meta: Self::Metadata,
             address: String,
-            config: Option<RpcGetConfirmedSignaturesForAddress2Config>,
+            config: Option<RpcSignaturesForAddressConfig>,
         ) -> Result<Vec<RpcConfirmedTransactionStatusWithSignature>>;
 
         #[rpc(meta, name = "getFirstAvailableBlock")]
@@ -3006,7 +3007,7 @@ pub mod rpc_full {
             &self,
             meta: Self::Metadata,
             slot: Slot,
-            config: Option<RpcEncodingConfigWrapper<RpcConfirmedBlockConfig>>,
+            config: Option<RpcEncodingConfigWrapper<RpcBlockConfig>>,
         ) -> Result<Option<UiConfirmedBlock>> {
             debug!("get_block rpc request received: {:?}", slot);
             meta.get_block(slot, config)
@@ -3016,7 +3017,7 @@ pub mod rpc_full {
             &self,
             meta: Self::Metadata,
             start_slot: Slot,
-            config: Option<RpcConfirmedBlocksConfigWrapper>,
+            config: Option<RpcBlocksConfigWrapper>,
             commitment: Option<CommitmentConfig>,
         ) -> Result<Vec<Slot>> {
             let (end_slot, maybe_commitment) =
@@ -3054,7 +3055,7 @@ pub mod rpc_full {
             &self,
             meta: Self::Metadata,
             signature_str: String,
-            config: Option<RpcEncodingConfigWrapper<RpcConfirmedTransactionConfig>>,
+            config: Option<RpcEncodingConfigWrapper<RpcTransactionConfig>>,
         ) -> Result<Option<EncodedConfirmedTransaction>> {
             debug!("get_transaction rpc request received: {:?}", signature_str);
             let signature = verify_signature(&signature_str)?;
@@ -3065,7 +3066,7 @@ pub mod rpc_full {
             &self,
             meta: Self::Metadata,
             address: String,
-            config: Option<RpcGetConfirmedSignaturesForAddress2Config>,
+            config: Option<RpcSignaturesForAddressConfig>,
         ) -> Result<Vec<RpcConfirmedTransactionStatusWithSignature>> {
             let address = verify_pubkey(address)?;
 
@@ -3205,6 +3206,7 @@ pub mod rpc_full {
 
 // Deprecated RPC methods, collected for easy deactivation and removal in v1.8
 pub mod rpc_deprecated_v1_7 {
+    #![allow(deprecated)]
     use super::*;
     #[rpc]
     pub trait DeprecatedV1_7 {
@@ -3269,7 +3271,7 @@ pub mod rpc_deprecated_v1_7 {
             config: Option<RpcEncodingConfigWrapper<RpcConfirmedBlockConfig>>,
         ) -> Result<Option<UiConfirmedBlock>> {
             debug!("get_confirmed_block rpc request received: {:?}", slot);
-            meta.get_block(slot, config)
+            meta.get_block(slot, config.map(|config| config.convert()))
         }
 
         fn get_confirmed_blocks(
@@ -3313,7 +3315,7 @@ pub mod rpc_deprecated_v1_7 {
                 signature_str
             );
             let signature = verify_signature(&signature_str)?;
-            meta.get_transaction(signature, config)
+            meta.get_transaction(signature, config.map(|config| config.convert()))
         }
 
         fn get_confirmed_signatures_for_address2(
@@ -5593,7 +5595,7 @@ pub mod tests {
 
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getBlock","params":[0,{}]}}"#,
-            json!(RpcConfirmedBlockConfig {
+            json!(RpcBlockConfig {
                 encoding: None,
                 transaction_details: Some(TransactionDetails::Signatures),
                 rewards: Some(false),
@@ -5614,7 +5616,7 @@ pub mod tests {
 
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getBlock","params":[0,{}]}}"#,
-            json!(RpcConfirmedBlockConfig {
+            json!(RpcBlockConfig {
                 encoding: None,
                 transaction_details: Some(TransactionDetails::None),
                 rewards: Some(true),

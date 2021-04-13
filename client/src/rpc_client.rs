@@ -1,3 +1,8 @@
+#[allow(deprecated)]
+use crate::rpc_deprecated_config::{
+    RpcConfirmedBlockConfig, RpcConfirmedTransactionConfig,
+    RpcGetConfirmedSignaturesForAddress2Config,
+};
 use {
     crate::{
         client_error::{ClientError, ClientErrorKind, Result as ClientResult},
@@ -5,10 +10,9 @@ use {
         mock_sender::{MockSender, Mocks},
         rpc_config::RpcAccountInfoConfig,
         rpc_config::{
-            RpcConfirmedBlockConfig, RpcConfirmedTransactionConfig, RpcEpochConfig,
-            RpcGetConfirmedSignaturesForAddress2Config, RpcLargestAccountsConfig,
-            RpcProgramAccountsConfig, RpcRequestAirdropConfig, RpcSendTransactionConfig,
-            RpcSimulateTransactionConfig, RpcTokenAccountsFilter,
+            RpcBlockConfig, RpcEpochConfig, RpcLargestAccountsConfig, RpcProgramAccountsConfig,
+            RpcRequestAirdropConfig, RpcSendTransactionConfig, RpcSignaturesForAddressConfig,
+            RpcSimulateTransactionConfig, RpcTokenAccountsFilter, RpcTransactionConfig,
         },
         rpc_request::{RpcError, RpcRequest, RpcResponseErrorData, TokenAccountsFilter},
         rpc_response::*,
@@ -536,7 +540,7 @@ impl RpcClient {
     pub fn get_block_with_config(
         &self,
         slot: Slot,
-        config: RpcConfirmedBlockConfig,
+        config: RpcBlockConfig,
     ) -> ClientResult<UiConfirmedBlock> {
         self.send(RpcRequest::GetBlock, json!([slot, config]))
     }
@@ -703,7 +707,7 @@ impl RpcClient {
         address: &Pubkey,
         config: GetConfirmedSignaturesForAddress2Config,
     ) -> ClientResult<Vec<RpcConfirmedTransactionStatusWithSignature>> {
-        let config = RpcGetConfirmedSignaturesForAddress2Config {
+        let config = RpcSignaturesForAddressConfig {
             before: config.before.map(|signature| signature.to_string()),
             until: config.until.map(|signature| signature.to_string()),
             limit: config.limit,
@@ -772,7 +776,7 @@ impl RpcClient {
     pub fn get_transaction_with_config(
         &self,
         signature: &Signature,
-        config: RpcConfirmedTransactionConfig,
+        config: RpcTransactionConfig,
     ) -> ClientResult<EncodedConfirmedTransaction> {
         self.send(
             RpcRequest::GetTransaction,
