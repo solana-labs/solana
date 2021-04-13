@@ -502,6 +502,7 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
                     45 => InstructionError::AccountNotRentExempt,
                     46 => InstructionError::InvalidAccountOwner,
                     47 => InstructionError::ArithmeticOverflow,
+                    48 => InstructionError::UnsupportedSysvar,
                     _ => return Err("Invalid InstructionError"),
                 };
 
@@ -730,6 +731,9 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                             }
                             InstructionError::ArithmeticOverflow => {
                                 tx_by_addr::InstructionErrorType::ArithmeticOverflow
+                            }
+                            InstructionError::UnsupportedSysvar => {
+                                tx_by_addr::InstructionErrorType::UnsupportedSysvar
                             }
                         } as i32,
                         custom: match instruction_error {
