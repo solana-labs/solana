@@ -10,7 +10,7 @@ use solana_sdk::{
 };
 use test::Bencher;
 
-type BankStatusCache = StatusCache<Signature, ()>;
+type BankStatusCache = StatusCache<()>;
 
 #[bench]
 fn test_statuscache_serialize(bencher: &mut Bencher) {
