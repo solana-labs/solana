@@ -34,7 +34,7 @@ pub trait InvokeContext {
         key: &Pubkey,
     ) -> Result<&[KeyedAccount], InstructionError>;
     /// Pop a program ID off of the invocation stack
-    fn pop(&mut self, keyed_accounts_to_restore: &[KeyedAccount]);
+    fn pop(&mut self);
     /// Current depth of the invocation stake
     fn invoke_depth(&self) -> usize;
     /// Verify and update PreAccount state based on program execution
@@ -286,29 +286,28 @@ impl Logger for MockLogger {
 }
 
 pub struct MockInvokeContext<'a> {
-    pub key: Pubkey,
+    pub invoke_stack: Vec<(Pubkey, &'a [KeyedAccount<'a>])>,
     pub logger: MockLogger,
     pub bpf_compute_budget: BpfComputeBudget,
     pub compute_meter: MockComputeMeter,
-    pub keyed_accounts: &'a [KeyedAccount<'a>],
     pub programs: Vec<(Pubkey, ProcessInstructionWithContext)>,
     pub accounts: Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>,
-    pub invoke_depth: usize,
     pub sysvars: Vec<(Pubkey, Option<Rc<Vec<u8>>>)>,
 }
 impl<'a> MockInvokeContext<'a> {
     pub fn new(keyed_accounts: &'a [KeyedAccount<'a>]) -> Self {
+        let bpf_compute_budget = BpfComputeBudget::default();
+        let mut invoke_stack = Vec::with_capacity(bpf_compute_budget.max_invoke_depth);
+        invoke_stack.push((Pubkey::default(), keyed_accounts));
         MockInvokeContext {
-            key: Pubkey::default(),
+            invoke_stack,
             logger: MockLogger::default(),
-            bpf_compute_budget: BpfComputeBudget::default(),
+            bpf_compute_budget,
             compute_meter: MockComputeMeter {
                 remaining: std::i64::MAX as u64,
             },
-            keyed_accounts,
             programs: vec![],
             accounts: vec![],
-            invoke_depth: 0,
             sysvars: vec![],
         }
     }
@@ -317,19 +316,17 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
     fn push(
         &mut self,
         keyed_accounts: &[KeyedAccount],
-        _key: &Pubkey,
+        key: &Pubkey,
     ) -> Result<&[KeyedAccount], InstructionError> {
-        self.invoke_depth = self.invoke_depth.saturating_add(1);
-        let mut keyed_accounts = unsafe { std::mem::transmute(keyed_accounts) };
-        std::mem::swap(&mut self.keyed_accounts, &mut keyed_accounts);
-        Ok(keyed_accounts)
+        let keyed_accounts = unsafe { std::mem::transmute(keyed_accounts) };
+        self.invoke_stack.push((*key, keyed_accounts));
+        Ok(&self.invoke_stack[self.invoke_stack.len() - 2].1)
     }
-    fn pop(&mut self, keyed_accounts: &[KeyedAccount]) {
-        self.invoke_depth = self.invoke_depth.saturating_sub(1);
-        self.keyed_accounts = unsafe { std::mem::transmute(keyed_accounts) };
+    fn pop(&mut self) {
+        self.invoke_stack.pop();
     }
     fn invoke_depth(&self) -> usize {
-        self.invoke_depth
+        self.invoke_stack.len()
     }
     fn verify_and_update(
         &mut self,
@@ -341,13 +338,18 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
         Ok(())
     }
     fn get_caller(&self) -> Result<&Pubkey, InstructionError> {
-        Ok(&self.key)
+        self.invoke_stack
+            .last()
+            .map(|frame| &frame.0)
+            .ok_or(InstructionError::GenericError)
     }
     fn remove_first_keyed_account(&mut self) {
-        self.keyed_accounts = &self.keyed_accounts[1..];
+        let index = self.invoke_stack.len() - 1;
+        let last_frame = &mut self.invoke_stack[index];
+        last_frame.1 = &last_frame.1[1..];
     }
     fn get_keyed_accounts(&self) -> &[KeyedAccount] {
-        self.keyed_accounts
+        &self.invoke_stack[self.invoke_stack.len() - 1].1
     }
     fn get_programs(&self) -> &[(Pubkey, ProcessInstructionWithContext)] {
         &self.programs

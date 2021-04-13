@@ -1093,14 +1093,12 @@ mod tests {
 
         // Case: limited budget
         let mut invoke_context = MockInvokeContext {
-            key: Pubkey::default(),
+            invoke_stack: vec![(Pubkey::default(), &keyed_accounts)],
             logger: MockLogger::default(),
             bpf_compute_budget: BpfComputeBudget::default(),
             compute_meter: MockComputeMeter::default(),
-            keyed_accounts: &keyed_accounts,
             programs: vec![],
             accounts: vec![],
-            invoke_depth: 0,
             sysvars: vec![],
         };
         assert_eq!(

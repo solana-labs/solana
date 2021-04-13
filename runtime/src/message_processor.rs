@@ -250,12 +250,11 @@ impl ComputeMeter for ThisComputeMeter {
     }
 }
 pub struct ThisInvokeContext<'a> {
-    program_ids: Vec<Pubkey>,
+    invoke_stack: Vec<(Pubkey, &'a [KeyedAccount<'a>])>,
     rent: Rent,
     pre_accounts: Vec<PreAccount>,
     executables: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
     account_deps: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
-    keyed_accounts: &'a [KeyedAccount<'a>],
     programs: &'a [(Pubkey, ProcessInstructionWithContext)],
     logger: Rc<RefCell<dyn Logger>>,
     bpf_compute_budget: BpfComputeBudget,
@@ -286,15 +285,14 @@ impl<'a> ThisInvokeContext<'a> {
         account_db: Arc<Accounts>,
         ancestors: &'a Ancestors,
     ) -> Self {
-        let mut program_ids = Vec::with_capacity(bpf_compute_budget.max_invoke_depth);
-        program_ids.push(*program_id);
+        let mut invoke_stack = Vec::with_capacity(bpf_compute_budget.max_invoke_depth);
+        invoke_stack.push((*program_id, keyed_accounts));
         Self {
-            program_ids,
+            invoke_stack,
             rent,
             pre_accounts,
             executables,
             account_deps,
-            keyed_accounts,
             programs,
             logger: Rc::new(RefCell::new(ThisLogger { log_collector })),
             bpf_compute_budget,
@@ -317,24 +315,23 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         keyed_accounts: &[KeyedAccount],
         key: &Pubkey,
     ) -> Result<&[KeyedAccount], InstructionError> {
-        if self.program_ids.len() > self.bpf_compute_budget.max_invoke_depth {
+        if self.invoke_stack.len() > self.bpf_compute_budget.max_invoke_depth {
             return Err(InstructionError::CallDepth);
         }
-        if self.program_ids.contains(key) && self.program_ids.last() != Some(key) {
+        let frame_index = self.invoke_stack.iter().position(|frame| frame.0 == *key);
+        if frame_index != None && frame_index != Some(self.invoke_stack.len() - 1) {
             // Reentrancy not allowed unless caller is calling itself
             return Err(InstructionError::ReentrancyNotAllowed);
         }
-        self.program_ids.push(*key);
-        let mut keyed_accounts = unsafe { std::mem::transmute(keyed_accounts) };
-        std::mem::swap(&mut self.keyed_accounts, &mut keyed_accounts);
-        Ok(keyed_accounts)
+        let keyed_accounts = unsafe { std::mem::transmute(keyed_accounts) };
+        self.invoke_stack.push((*key, keyed_accounts));
+        Ok(&self.invoke_stack[self.invoke_stack.len() - 2].1)
     }
-    fn pop(&mut self, keyed_accounts: &[KeyedAccount]) {
-        self.program_ids.pop();
-        self.keyed_accounts = unsafe { std::mem::transmute(keyed_accounts) };
+    fn pop(&mut self) {
+        self.invoke_stack.pop();
     }
     fn invoke_depth(&self) -> usize {
-        self.program_ids.len()
+        self.invoke_stack.len()
     }
     fn verify_and_update(
         &mut self,
@@ -343,8 +340,8 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         accounts: &[Rc<RefCell<AccountSharedData>>],
         caller_write_privileges: Option<&[bool]>,
     ) -> Result<(), InstructionError> {
-        match self.program_ids.last() {
-            Some(program_id) => MessageProcessor::verify_and_update(
+        match self.invoke_stack.last() {
+            Some((program_id, _keyed_accounts)) => MessageProcessor::verify_and_update(
                 message,
                 instruction,
                 &mut self.pre_accounts,
@@ -359,15 +356,18 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         }
     }
     fn get_caller(&self) -> Result<&Pubkey, InstructionError> {
-        self.program_ids
+        self.invoke_stack
             .last()
+            .map(|frame| &frame.0)
             .ok_or(InstructionError::GenericError)
     }
     fn remove_first_keyed_account(&mut self) {
-        self.keyed_accounts = &self.keyed_accounts[1..];
+        let index = self.invoke_stack.len() - 1;
+        let last_frame = &mut self.invoke_stack[index];
+        last_frame.1 = &last_frame.1[1..];
     }
     fn get_keyed_accounts(&self) -> &[KeyedAccount] {
-        self.keyed_accounts
+        &self.invoke_stack[self.invoke_stack.len() - 1].1
     }
     fn get_programs(&self) -> &[(Pubkey, ProcessInstructionWithContext)] {
         self.programs
@@ -894,13 +894,7 @@ impl MessageProcessor {
             );
 
             // Invoke callee
-            let previous_keyed_accounts = invoke_context.push(&keyed_accounts, program_id)?;
-
-            // Make Rust forget about lifetimes for a moment.
-            // Otherwise we can not keep this slice to restore it later,
-            // as it is also borrowed in invoke_context.
-            let previous_keyed_accounts =
-                unsafe { std::mem::transmute::<_, &[KeyedAccount]>(previous_keyed_accounts) };
+            invoke_context.push(&keyed_accounts, program_id)?;
 
             let mut message_processor = MessageProcessor::default();
             for (program_id, process_instruction) in invoke_context.get_programs().iter() {
@@ -918,7 +912,7 @@ impl MessageProcessor {
             }
 
             // Restore previous state
-            invoke_context.pop(previous_keyed_accounts);
+            invoke_context.pop();
             result
         } else {
             // This function is always called with a valid instruction, if that changes return an error
@@ -1212,28 +1206,28 @@ mod tests {
     #[test]
     fn test_invoke_context() {
         const MAX_DEPTH: usize = 10;
-        let mut program_ids = vec![];
+        let mut invoke_stack = vec![];
         let mut keys = vec![];
         let mut pre_accounts = vec![];
         let mut accounts = vec![];
         for i in 0..MAX_DEPTH {
-            program_ids.push(solana_sdk::pubkey::new_rand());
+            invoke_stack.push(solana_sdk::pubkey::new_rand());
             keys.push(solana_sdk::pubkey::new_rand());
             accounts.push(Rc::new(RefCell::new(AccountSharedData::new(
                 i as u64,
                 1,
-                &program_ids[i],
+                &invoke_stack[i],
             ))));
             pre_accounts.push(PreAccount::new(&keys[i], &accounts[i].borrow()))
         }
         let account = AccountSharedData::new(1, 1, &solana_sdk::pubkey::Pubkey::default());
-        for program_id in program_ids.iter() {
+        for program_id in invoke_stack.iter() {
             pre_accounts.push(PreAccount::new(program_id, &account.clone()));
         }
 
         let ancestors = Ancestors::default();
         let mut invoke_context = ThisInvokeContext::new(
-            &program_ids[0],
+            &invoke_stack[0],
             Rent::default(),
             pre_accounts,
             &[],
@@ -1251,7 +1245,7 @@ mod tests {
 
         // Check call depth increases and has a limit
         let mut depth_reached = 1;
-        for program_id in program_ids.iter().skip(1) {
+        for program_id in invoke_stack.iter().skip(1) {
             if Err(InstructionError::CallDepth) == invoke_context.push(&[], program_id) {
                 break;
             }
@@ -1269,7 +1263,7 @@ mod tests {
             ];
             let message = Message::new(
                 &[Instruction::new_with_bytes(
-                    program_ids[owned_index],
+                    invoke_stack[owned_index],
                     &[0],
                     metas,
                 )],
@@ -1318,7 +1312,7 @@ mod tests {
             );
             accounts[not_owned_index].borrow_mut().data_as_mut_slice()[0] = data;
 
-            invoke_context.pop(&[]);
+            invoke_context.pop();
         }
     }
 
