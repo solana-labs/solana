@@ -16,13 +16,6 @@ pub enum RpcRequest {
     GetConfirmedBlock,
     GetConfirmedBlocks,
     GetConfirmedBlocksWithLimit,
-
-    #[deprecated(
-        since = "1.5.19",
-        note = "Please use RpcRequest::GetConfirmedSignaturesForAddress2 instead"
-    )]
-    GetConfirmedSignaturesForAddress,
-
     GetConfirmedSignaturesForAddress2,
     GetConfirmedTransaction,
     GetEpochInfo,
@@ -61,10 +54,6 @@ pub enum RpcRequest {
     GetTokenAccountsByDelegate,
     GetTokenAccountsByOwner,
     GetTokenSupply,
-
-    #[deprecated(since = "1.5.19", note = "Please use RpcRequest::GetSupply instead")]
-    GetTotalSupply,
-
     GetTransactionCount,
     GetVersion,
     GetVoteAccounts,
@@ -88,7 +77,6 @@ impl fmt::Display for RpcRequest {
             RpcRequest::GetConfirmedBlock => "getConfirmedBlock",
             RpcRequest::GetConfirmedBlocks => "getConfirmedBlocks",
             RpcRequest::GetConfirmedBlocksWithLimit => "getConfirmedBlocksWithLimit",
-            RpcRequest::GetConfirmedSignaturesForAddress => "getConfirmedSignaturesForAddress",
             RpcRequest::GetConfirmedSignaturesForAddress2 => "getConfirmedSignaturesForAddress2",
             RpcRequest::GetConfirmedTransaction => "getConfirmedTransaction",
             RpcRequest::GetEpochInfo => "getEpochInfo",
@@ -127,7 +115,6 @@ impl fmt::Display for RpcRequest {
             RpcRequest::GetTokenAccountsByDelegate => "getTokenAccountsByDelegate",
             RpcRequest::GetTokenAccountsByOwner => "getTokenAccountsByOwner",
             RpcRequest::GetTokenSupply => "getTokenSupply",
-            RpcRequest::GetTotalSupply => "getTotalSupply",
             RpcRequest::GetTransactionCount => "getTransactionCount",
             RpcRequest::GetVersion => "getVersion",
             RpcRequest::GetVoteAccounts => "getVoteAccounts",

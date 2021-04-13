@@ -458,27 +458,6 @@ impl RpcClient {
         )
     }
 
-    #[deprecated(since = "1.5.19", note = "Please use RpcClient::supply() instead")]
-    #[allow(deprecated)]
-    pub fn total_supply(&self) -> ClientResult<u64> {
-        self.total_supply_with_commitment(self.commitment_config)
-    }
-
-    #[deprecated(
-        since = "1.5.19",
-        note = "Please use RpcClient::supply_with_commitment() instead"
-    )]
-    #[allow(deprecated)]
-    pub fn total_supply_with_commitment(
-        &self,
-        commitment_config: CommitmentConfig,
-    ) -> ClientResult<u64> {
-        self.send(
-            RpcRequest::GetTotalSupply,
-            json!([self.maybe_map_commitment(commitment_config)?]),
-        )
-    }
-
     pub fn get_largest_accounts_with_config(
         &self,
         config: RpcLargestAccountsConfig,
@@ -616,33 +595,6 @@ impl RpcClient {
                 self.maybe_map_commitment(commitment_config)?
             ]),
         )
-    }
-
-    #[deprecated(
-        since = "1.5.19",
-        note = "Please use RpcClient::get_confirmed_signatures_for_address2() instead"
-    )]
-    #[allow(deprecated)]
-    pub fn get_confirmed_signatures_for_address(
-        &self,
-        address: &Pubkey,
-        start_slot: Slot,
-        end_slot: Slot,
-    ) -> ClientResult<Vec<Signature>> {
-        let signatures_base58_str: Vec<String> = self.send(
-            RpcRequest::GetConfirmedSignaturesForAddress,
-            json!([address.to_string(), start_slot, end_slot]),
-        )?;
-
-        let mut signatures = vec![];
-        for signature_base58_str in signatures_base58_str {
-            signatures.push(
-                signature_base58_str.parse::<Signature>().map_err(|err| {
-                    Into::<ClientError>::into(RpcError::ParseError(err.to_string()))
-                })?,
-            );
-        }
-        Ok(signatures)
     }
 
     pub fn get_confirmed_signatures_for_address2(
