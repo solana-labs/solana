@@ -297,7 +297,7 @@ impl Validator {
         identity_keypair: &Arc<Keypair>,
         ledger_path: &Path,
         vote_account: &Pubkey,
-        mut authorized_voter_keypairs: Vec<Arc<Keypair>>,
+        authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
         cluster_entrypoints: Vec<ContactInfo>,
         config: &ValidatorConfig,
         should_check_duplicate_instance: bool,
@@ -311,12 +311,13 @@ impl Validator {
 
         if config.voting_disabled {
             warn!("voting disabled");
-            authorized_voter_keypairs.clear();
+            authorized_voter_keypairs.write().unwrap().clear();
         } else {
-            for authorized_voter_keypair in &authorized_voter_keypairs {
+            for authorized_voter_keypair in authorized_voter_keypairs.read().unwrap().iter() {
                 warn!("authorized voter: {}", authorized_voter_keypair.pubkey());
             }
         }
+
         report_target_features();
 
         for cluster_entrypoint in &cluster_entrypoints {
@@ -1395,22 +1396,17 @@ fn report_target_features() {
 
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     {
-        unsafe { check_avx() };
-    }
-}
-
-// Validator binaries built on a machine with AVX support will generate invalid opcodes
-// when run on machines without AVX causing a non-obvious process abort.  Instead detect
-// the mismatch and error cleanly.
-#[target_feature(enable = "avx")]
-unsafe fn check_avx() {
-    if is_x86_feature_detected!("avx") {
-        info!("AVX detected");
-    } else {
-        error!(
-            "Your machine does not have AVX support, please rebuild from source on your machine"
-        );
-        abort();
+        // Validator binaries built on a machine with AVX support will generate invalid opcodes
+        // when run on machines without AVX causing a non-obvious process abort.  Instead detect
+        // the mismatch and error cleanly.
+        if is_x86_feature_detected!("avx") {
+            info!("AVX detected");
+        } else {
+            error!(
+                "Your machine does not have AVX support, please rebuild from source on your machine"
+            );
+            abort();
+        }
     }
 }
 
@@ -1551,7 +1547,7 @@ mod tests {
             &Arc::new(validator_keypair),
             &validator_ledger_path,
             &voting_keypair.pubkey(),
-            vec![voting_keypair.clone()],
+            Arc::new(RwLock::new(vec![voting_keypair.clone()])),
             vec![leader_node.info],
             &config,
             true, // should_check_duplicate_instance
@@ -1627,7 +1623,7 @@ mod tests {
                     &Arc::new(validator_keypair),
                     &validator_ledger_path,
                     &vote_account_keypair.pubkey(),
-                    vec![Arc::new(vote_account_keypair)],
+                    Arc::new(RwLock::new(vec![Arc::new(vote_account_keypair)])),
                     vec![leader_node.info.clone()],
                     &config,
                     true, // should_check_duplicate_instance
