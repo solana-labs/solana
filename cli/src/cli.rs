@@ -1033,7 +1033,7 @@ fn process_confirm(
                 let mut transaction = None;
                 let mut get_transaction_error = None;
                 if config.verbose {
-                    match rpc_client.get_confirmed_transaction_with_config(
+                    match rpc_client.get_transaction_with_config(
                         signature,
                         RpcConfirmedTransactionConfig {
                             encoding: Some(UiTransactionEncoding::Base64),

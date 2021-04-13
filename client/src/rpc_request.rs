@@ -11,13 +11,32 @@ pub enum RpcRequest {
     DeregisterNode,
     GetAccountInfo,
     GetBalance,
+    GetBlock,
+    GetBlocks,
+    GetBlocksWithLimit,
     GetBlockTime,
     GetClusterNodes,
+
+    #[deprecated(since = "1.7.0", note = "Please use RpcRequest::GetBlock instead")]
     GetConfirmedBlock,
+    #[deprecated(since = "1.7.0", note = "Please use RpcRequest::GetBlocks instead")]
     GetConfirmedBlocks,
+    #[deprecated(
+        since = "1.7.0",
+        note = "Please use RpcRequest::GetBlocksWithLimit instead"
+    )]
     GetConfirmedBlocksWithLimit,
+    #[deprecated(
+        since = "1.7.0",
+        note = "Please use RpcRequest::GetSignaturesForAddress instead"
+    )]
     GetConfirmedSignaturesForAddress2,
+    #[deprecated(
+        since = "1.7.0",
+        note = "Please use RpcRequest::GetTransaction instead"
+    )]
     GetConfirmedTransaction,
+
     GetEpochInfo,
     GetEpochSchedule,
     GetFeeCalculatorForBlockhash,
@@ -40,6 +59,7 @@ pub enum RpcRequest {
     GetRecentBlockhash,
     GetRecentPerformanceSamples,
     GetSnapshotSlot,
+    GetSignaturesForAddress,
     GetSignatureStatuses,
     GetSlot,
     GetSlotLeader,
@@ -54,6 +74,7 @@ pub enum RpcRequest {
     GetTokenAccountsByDelegate,
     GetTokenAccountsByOwner,
     GetTokenSupply,
+    GetTransaction,
     GetTransactionCount,
     GetVersion,
     GetVoteAccounts,
@@ -72,6 +93,9 @@ impl fmt::Display for RpcRequest {
             RpcRequest::DeregisterNode => "deregisterNode",
             RpcRequest::GetAccountInfo => "getAccountInfo",
             RpcRequest::GetBalance => "getBalance",
+            RpcRequest::GetBlock => "getBlock",
+            RpcRequest::GetBlocks => "getBlocks",
+            RpcRequest::GetBlocksWithLimit => "getBlocksWithLimit",
             RpcRequest::GetBlockTime => "getBlockTime",
             RpcRequest::GetClusterNodes => "getClusterNodes",
             RpcRequest::GetConfirmedBlock => "getConfirmedBlock",
@@ -101,6 +125,7 @@ impl fmt::Display for RpcRequest {
             RpcRequest::GetRecentBlockhash => "getRecentBlockhash",
             RpcRequest::GetRecentPerformanceSamples => "getRecentPerformanceSamples",
             RpcRequest::GetSnapshotSlot => "getSnapshotSlot",
+            RpcRequest::GetSignaturesForAddress => "getSignaturesForAddress",
             RpcRequest::GetSignatureStatuses => "getSignatureStatuses",
             RpcRequest::GetSlot => "getSlot",
             RpcRequest::GetSlotLeader => "getSlotLeader",
@@ -115,6 +140,7 @@ impl fmt::Display for RpcRequest {
             RpcRequest::GetTokenAccountsByDelegate => "getTokenAccountsByDelegate",
             RpcRequest::GetTokenAccountsByOwner => "getTokenAccountsByOwner",
             RpcRequest::GetTokenSupply => "getTokenSupply",
+            RpcRequest::GetTransaction => "getTransaction",
             RpcRequest::GetTransactionCount => "getTransactionCount",
             RpcRequest::GetVersion => "getVersion",
             RpcRequest::GetVoteAccounts => "getVoteAccounts",

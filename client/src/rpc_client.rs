@@ -521,10 +521,37 @@ impl RpcClient {
         self.send(RpcRequest::GetClusterNodes, Value::Null)
     }
 
+    pub fn get_block(&self, slot: Slot) -> ClientResult<EncodedConfirmedBlock> {
+        self.get_block_with_encoding(slot, UiTransactionEncoding::Json)
+    }
+
+    pub fn get_block_with_encoding(
+        &self,
+        slot: Slot,
+        encoding: UiTransactionEncoding,
+    ) -> ClientResult<EncodedConfirmedBlock> {
+        self.send(RpcRequest::GetBlock, json!([slot, encoding]))
+    }
+
+    pub fn get_block_with_config(
+        &self,
+        slot: Slot,
+        config: RpcConfirmedBlockConfig,
+    ) -> ClientResult<UiConfirmedBlock> {
+        self.send(RpcRequest::GetBlock, json!([slot, config]))
+    }
+
+    #[deprecated(since = "1.7.0", note = "Please use RpcClient::get_block() instead")]
+    #[allow(deprecated)]
     pub fn get_confirmed_block(&self, slot: Slot) -> ClientResult<EncodedConfirmedBlock> {
         self.get_confirmed_block_with_encoding(slot, UiTransactionEncoding::Json)
     }
 
+    #[deprecated(
+        since = "1.7.0",
+        note = "Please use RpcClient::get_block_with_encoding() instead"
+    )]
+    #[allow(deprecated)]
     pub fn get_confirmed_block_with_encoding(
         &self,
         slot: Slot,
@@ -533,6 +560,11 @@ impl RpcClient {
         self.send(RpcRequest::GetConfirmedBlock, json!([slot, encoding]))
     }
 
+    #[deprecated(
+        since = "1.7.0",
+        note = "Please use RpcClient::get_block_with_config() instead"
+    )]
+    #[allow(deprecated)]
     pub fn get_confirmed_block_with_config(
         &self,
         slot: Slot,
@@ -541,6 +573,50 @@ impl RpcClient {
         self.send(RpcRequest::GetConfirmedBlock, json!([slot, config]))
     }
 
+    pub fn get_blocks(&self, start_slot: Slot, end_slot: Option<Slot>) -> ClientResult<Vec<Slot>> {
+        self.send(RpcRequest::GetBlocks, json!([start_slot, end_slot]))
+    }
+
+    pub fn get_blocks_with_commitment(
+        &self,
+        start_slot: Slot,
+        end_slot: Option<Slot>,
+        commitment_config: CommitmentConfig,
+    ) -> ClientResult<Vec<Slot>> {
+        let json = if end_slot.is_some() {
+            json!([
+                start_slot,
+                end_slot,
+                self.maybe_map_commitment(commitment_config)?
+            ])
+        } else {
+            json!([start_slot, self.maybe_map_commitment(commitment_config)?])
+        };
+        self.send(RpcRequest::GetBlocks, json)
+    }
+
+    pub fn get_blocks_with_limit(&self, start_slot: Slot, limit: usize) -> ClientResult<Vec<Slot>> {
+        self.send(RpcRequest::GetBlocksWithLimit, json!([start_slot, limit]))
+    }
+
+    pub fn get_blocks_with_limit_and_commitment(
+        &self,
+        start_slot: Slot,
+        limit: usize,
+        commitment_config: CommitmentConfig,
+    ) -> ClientResult<Vec<Slot>> {
+        self.send(
+            RpcRequest::GetBlocksWithLimit,
+            json!([
+                start_slot,
+                limit,
+                self.maybe_map_commitment(commitment_config)?
+            ]),
+        )
+    }
+
+    #[deprecated(since = "1.7.0", note = "Please use RpcClient::get_blocks() instead")]
+    #[allow(deprecated)]
     pub fn get_confirmed_blocks(
         &self,
         start_slot: Slot,
@@ -552,6 +628,11 @@ impl RpcClient {
         )
     }
 
+    #[deprecated(
+        since = "1.7.0",
+        note = "Please use RpcClient::get_blocks_with_commitment() instead"
+    )]
+    #[allow(deprecated)]
     pub fn get_confirmed_blocks_with_commitment(
         &self,
         start_slot: Slot,
@@ -570,6 +651,11 @@ impl RpcClient {
         self.send(RpcRequest::GetConfirmedBlocks, json)
     }
 
+    #[deprecated(
+        since = "1.7.0",
+        note = "Please use RpcClient::get_blocks_with_limit() instead"
+    )]
+    #[allow(deprecated)]
     pub fn get_confirmed_blocks_with_limit(
         &self,
         start_slot: Slot,
@@ -581,6 +667,11 @@ impl RpcClient {
         )
     }
 
+    #[deprecated(
+        since = "1.7.0",
+        note = "Please use RpcClient::get_blocks_with_limit_and_commitment() instead"
+    )]
+    #[allow(deprecated)]
     pub fn get_confirmed_blocks_with_limit_and_commitment(
         &self,
         start_slot: Slot,
@@ -597,6 +688,41 @@ impl RpcClient {
         )
     }
 
+    pub fn get_signatures_for_address(
+        &self,
+        address: &Pubkey,
+    ) -> ClientResult<Vec<RpcConfirmedTransactionStatusWithSignature>> {
+        self.get_signatures_for_address_with_config(
+            address,
+            GetConfirmedSignaturesForAddress2Config::default(),
+        )
+    }
+
+    pub fn get_signatures_for_address_with_config(
+        &self,
+        address: &Pubkey,
+        config: GetConfirmedSignaturesForAddress2Config,
+    ) -> ClientResult<Vec<RpcConfirmedTransactionStatusWithSignature>> {
+        let config = RpcGetConfirmedSignaturesForAddress2Config {
+            before: config.before.map(|signature| signature.to_string()),
+            until: config.until.map(|signature| signature.to_string()),
+            limit: config.limit,
+            commitment: config.commitment,
+        };
+
+        let result: Vec<RpcConfirmedTransactionStatusWithSignature> = self.send(
+            RpcRequest::GetSignaturesForAddress,
+            json!([address.to_string(), config]),
+        )?;
+
+        Ok(result)
+    }
+
+    #[deprecated(
+        since = "1.7.0",
+        note = "Please use RpcClient::get_signatures_for_address() instead"
+    )]
+    #[allow(deprecated)]
     pub fn get_confirmed_signatures_for_address2(
         &self,
         address: &Pubkey,
@@ -607,6 +733,11 @@ impl RpcClient {
         )
     }
 
+    #[deprecated(
+        since = "1.7.0",
+        note = "Please use RpcClient::get_signatures_for_address_with_config() instead"
+    )]
+    #[allow(deprecated)]
     pub fn get_confirmed_signatures_for_address2_with_config(
         &self,
         address: &Pubkey,
@@ -627,6 +758,33 @@ impl RpcClient {
         Ok(result)
     }
 
+    pub fn get_transaction(
+        &self,
+        signature: &Signature,
+        encoding: UiTransactionEncoding,
+    ) -> ClientResult<EncodedConfirmedTransaction> {
+        self.send(
+            RpcRequest::GetTransaction,
+            json!([signature.to_string(), encoding]),
+        )
+    }
+
+    pub fn get_transaction_with_config(
+        &self,
+        signature: &Signature,
+        config: RpcConfirmedTransactionConfig,
+    ) -> ClientResult<EncodedConfirmedTransaction> {
+        self.send(
+            RpcRequest::GetTransaction,
+            json!([signature.to_string(), config]),
+        )
+    }
+
+    #[deprecated(
+        since = "1.7.0",
+        note = "Please use RpcClient::get_transaction() instead"
+    )]
+    #[allow(deprecated)]
     pub fn get_confirmed_transaction(
         &self,
         signature: &Signature,
@@ -638,6 +796,11 @@ impl RpcClient {
         )
     }
 
+    #[deprecated(
+        since = "1.7.0",
+        note = "Please use RpcClient::get_transaction_with_config() instead"
+    )]
+    #[allow(deprecated)]
     pub fn get_confirmed_transaction_with_config(
         &self,
         signature: &Signature,
