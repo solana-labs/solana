@@ -28,6 +28,33 @@ pub struct InvokeContextStackFrame<'a> {
     pub keyed_accounts_range: std::ops::Range<usize>,
 }
 
+impl<'a> InvokeContextStackFrame<'a> {
+    pub fn new(
+        key: Pubkey,
+        keyed_accounts: &[(&'a Pubkey, bool, bool, &'a RefCell<AccountSharedData>)],
+    ) -> Self {
+        let keyed_accounts: Vec<_> = keyed_accounts
+            .iter()
+            .map(|(key, is_signer, is_writable, account)| {
+                if *is_writable {
+                    KeyedAccount::new(*key, *is_signer, *account)
+                } else {
+                    KeyedAccount::new_readonly(*key, *is_signer, *account)
+                }
+            })
+            .collect();
+        let keyed_accounts_range = std::ops::Range {
+            start: 0,
+            end: keyed_accounts.len(),
+        };
+        Self {
+            key,
+            keyed_accounts,
+            keyed_accounts_range,
+        }
+    }
+}
+
 /// Invocation context passed to loaders
 pub trait InvokeContext {
     /// Push a program ID on to the invocation stack
@@ -36,8 +63,8 @@ pub trait InvokeContext {
     /// to be used in the matching pop call.
     fn push(
         &mut self,
-        keyed_accounts: Vec<KeyedAccount>,
         key: &Pubkey,
+        keyed_accounts: &[(&Pubkey, bool, bool, &RefCell<AccountSharedData>)],
     ) -> Result<(), InstructionError>;
     /// Pop a program ID off of the invocation stack
     fn pop(&mut self);
@@ -303,18 +330,8 @@ pub struct MockInvokeContext<'a> {
 impl<'a> MockInvokeContext<'a> {
     pub fn new(keyed_accounts: Vec<KeyedAccount<'a>>) -> Self {
         let bpf_compute_budget = BpfComputeBudget::default();
-        let mut invoke_stack = Vec::with_capacity(bpf_compute_budget.max_invoke_depth);
-        let keyed_accounts_range = std::ops::Range {
-            start: 0,
-            end: keyed_accounts.len(),
-        };
-        invoke_stack.push(InvokeContextStackFrame {
-            key: Pubkey::default(),
-            keyed_accounts,
-            keyed_accounts_range,
-        });
-        MockInvokeContext {
-            invoke_stack,
+        let mut invoke_context = MockInvokeContext {
+            invoke_stack: Vec::with_capacity(bpf_compute_budget.max_invoke_depth),
             logger: MockLogger::default(),
             bpf_compute_budget,
             compute_meter: MockComputeMeter {
@@ -323,25 +340,29 @@ impl<'a> MockInvokeContext<'a> {
             programs: vec![],
             accounts: vec![],
             sysvars: vec![],
-        }
+        };
+        let keyed_accounts_range = std::ops::Range {
+            start: 0,
+            end: keyed_accounts.len(),
+        };
+        invoke_context.invoke_stack.push(InvokeContextStackFrame {
+            key: Pubkey::default(),
+            keyed_accounts,
+            keyed_accounts_range,
+        });
+        invoke_context
     }
 }
 impl<'a> InvokeContext for MockInvokeContext<'a> {
     fn push(
         &mut self,
-        keyed_accounts: Vec<KeyedAccount>,
         key: &Pubkey,
+        keyed_accounts: &[(&Pubkey, bool, bool, &RefCell<AccountSharedData>)],
     ) -> Result<(), InstructionError> {
-        let keyed_accounts_range = std::ops::Range {
-            start: 0,
-            end: keyed_accounts.len(),
-        };
-        let keyed_accounts = unsafe { std::mem::transmute(keyed_accounts) };
-        self.invoke_stack.push(InvokeContextStackFrame {
-            key: *key,
-            keyed_accounts,
-            keyed_accounts_range,
-        });
+        self.invoke_stack
+            .push(InvokeContextStackFrame::new(*key, unsafe {
+                std::mem::transmute(keyed_accounts)
+            }));
         Ok(())
     }
     fn pop(&mut self) {

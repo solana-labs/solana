@@ -14,7 +14,7 @@ use solana_sdk::{
     },
     ic_msg,
     instruction::{CompiledInstruction, Instruction, InstructionError},
-    keyed_account::{create_keyed_readonly_accounts, keyed_account_at_index, KeyedAccount},
+    keyed_account::{keyed_account_at_index, KeyedAccount},
     message::Message,
     native_loader,
     process_instruction::{
@@ -253,7 +253,7 @@ pub struct ThisInvokeContext<'a> {
     invoke_stack: Vec<InvokeContextStackFrame<'a>>,
     rent: Rent,
     pre_accounts: Vec<PreAccount>,
-    executables: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
+    executable_accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
     account_deps: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
     programs: &'a [(Pubkey, ProcessInstructionWithContext)],
     logger: Rc<RefCell<dyn Logger>>,
@@ -272,10 +272,11 @@ impl<'a> ThisInvokeContext<'a> {
     pub fn new(
         program_id: &Pubkey,
         rent: Rent,
-        pre_accounts: Vec<PreAccount>,
-        executables: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        message: &'a Message,
+        instruction: &'a CompiledInstruction,
+        executable_accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        accounts: &'a [Rc<RefCell<AccountSharedData>>],
         account_deps: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
-        keyed_accounts: Vec<KeyedAccount<'a>>,
         programs: &'a [(Pubkey, ProcessInstructionWithContext)],
         log_collector: Option<Rc<LogCollector>>,
         bpf_compute_budget: BpfComputeBudget,
@@ -285,21 +286,19 @@ impl<'a> ThisInvokeContext<'a> {
         account_db: Arc<Accounts>,
         ancestors: &'a Ancestors,
     ) -> Self {
-        let mut invoke_stack = Vec::with_capacity(bpf_compute_budget.max_invoke_depth);
-        let keyed_accounts_range = std::ops::Range {
-            start: 0,
-            end: keyed_accounts.len(),
-        };
-        invoke_stack.push(InvokeContextStackFrame {
-            key: *program_id,
-            keyed_accounts,
-            keyed_accounts_range,
-        });
-        Self {
-            invoke_stack,
+        let pre_accounts = MessageProcessor::create_pre_accounts(message, instruction, accounts);
+        let keyed_accounts = MessageProcessor::create_keyed_accounts(
+            message,
+            instruction,
+            executable_accounts,
+            accounts,
+            feature_set.is_active(&demote_sysvar_write_locks::id()),
+        );
+        let mut invoke_context = Self {
+            invoke_stack: Vec::with_capacity(bpf_compute_budget.max_invoke_depth),
             rent,
             pre_accounts,
-            executables,
+            executable_accounts,
             account_deps,
             programs,
             logger: Rc::new(RefCell::new(ThisLogger { log_collector })),
@@ -314,14 +313,18 @@ impl<'a> ThisInvokeContext<'a> {
             account_db,
             ancestors,
             sysvars: vec![],
-        }
+        };
+        invoke_context
+            .invoke_stack
+            .push(InvokeContextStackFrame::new(*program_id, &keyed_accounts));
+        invoke_context
     }
 }
 impl<'a> InvokeContext for ThisInvokeContext<'a> {
     fn push(
         &mut self,
-        keyed_accounts: Vec<KeyedAccount>,
         key: &Pubkey,
+        keyed_accounts: &[(&Pubkey, bool, bool, &RefCell<AccountSharedData>)],
     ) -> Result<(), InstructionError> {
         if self.invoke_stack.len() > self.bpf_compute_budget.max_invoke_depth {
             return Err(InstructionError::CallDepth);
@@ -331,16 +334,10 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             // Reentrancy not allowed unless caller is calling itself
             return Err(InstructionError::ReentrancyNotAllowed);
         }
-        let keyed_accounts_range = std::ops::Range {
-            start: 0,
-            end: keyed_accounts.len(),
-        };
-        let keyed_accounts = unsafe { std::mem::transmute(keyed_accounts) };
-        self.invoke_stack.push(InvokeContextStackFrame {
-            key: *key,
-            keyed_accounts,
-            keyed_accounts_range,
-        });
+        self.invoke_stack
+            .push(InvokeContextStackFrame::new(*key, unsafe {
+                std::mem::transmute(keyed_accounts)
+            }));
         Ok(())
     }
     fn pop(&mut self) {
@@ -421,7 +418,11 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     }
     fn get_account(&self, pubkey: &Pubkey) -> Option<Rc<RefCell<AccountSharedData>>> {
         if self.is_feature_active(&cpi_share_ro_and_exec_accounts::id()) {
-            if let Some((_, account)) = self.executables.iter().find(|(key, _)| key == pubkey) {
+            if let Some((_, account)) = self
+                .executable_accounts
+                .iter()
+                .find(|(key, _)| key == pubkey)
+            {
                 Some(account.clone())
             } else if let Some((_, account)) =
                 self.account_deps.iter().find(|(key, _)| key == pubkey)
@@ -593,25 +594,24 @@ impl MessageProcessor {
         executable_accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
         accounts: &'a [Rc<RefCell<AccountSharedData>>],
         demote_sysvar_write_locks: bool,
-    ) -> Vec<KeyedAccount<'a>> {
-        let mut keyed_accounts = create_keyed_readonly_accounts(&executable_accounts);
-        let mut keyed_accounts2: Vec<_> = instruction
-            .accounts
+    ) -> Vec<(&'a Pubkey, bool, bool, &'a RefCell<AccountSharedData>)> {
+        executable_accounts
             .iter()
-            .map(|&index| {
-                let is_signer = message.is_signer(index as usize);
-                let index = index as usize;
-                let key = &message.account_keys[index];
-                let account = &accounts[index];
-                if message.is_writable(index, demote_sysvar_write_locks) {
-                    KeyedAccount::new(key, is_signer, account)
-                } else {
-                    KeyedAccount::new_readonly(key, is_signer, account)
-                }
+            .map(|(key, account)| {
+                let account: &RefCell<AccountSharedData> = account;
+                (key, false, false, account)
             })
-            .collect();
-        keyed_accounts.append(&mut keyed_accounts2);
-        keyed_accounts
+            .chain(instruction.accounts.iter().map(|index| {
+                let index = *index as usize;
+                let account: &RefCell<AccountSharedData> = &accounts[index];
+                (
+                    &message.account_keys[index],
+                    message.is_signer(index),
+                    message.is_writable(index, demote_sysvar_write_locks),
+                    account,
+                )
+            }))
+            .collect::<Vec<_>>()
     }
 
     /// Process an instruction
@@ -739,7 +739,7 @@ impl MessageProcessor {
 
         let (
             message,
-            executables,
+            executable_accounts,
             accounts,
             keyed_account_indices_reordered,
             caller_write_privileges,
@@ -826,13 +826,13 @@ impl MessageProcessor {
             } else {
                 None
             };
-            let mut executables = vec![(callee_program_id, program_account)];
+            let mut executable_accounts = vec![(callee_program_id, program_account)];
             if let Some(programdata) = programdata {
-                executables.push(programdata);
+                executable_accounts.push(programdata);
             }
             (
                 message,
-                executables,
+                executable_accounts,
                 accounts,
                 keyed_account_indices_reordered,
                 caller_write_privileges,
@@ -843,7 +843,7 @@ impl MessageProcessor {
         #[allow(clippy::deref_addrof)]
         MessageProcessor::process_cross_program_instruction(
             &message,
-            &executables,
+            &executable_accounts,
             &accounts,
             &caller_write_privileges,
             *(&mut *(invoke_context.borrow_mut())),
@@ -906,19 +906,18 @@ impl MessageProcessor {
                 accounts,
                 Some(caller_write_privileges),
             )?;
-            let demote_sysvar_write_locks =
-                invoke_context.is_feature_active(&demote_sysvar_write_locks::id());
+
             // Construct keyed accounts
             let keyed_accounts = Self::create_keyed_accounts(
                 message,
                 instruction,
                 executable_accounts,
                 accounts,
-                demote_sysvar_write_locks,
+                invoke_context.is_feature_active(&demote_sysvar_write_locks::id()),
             );
 
             // Invoke callee
-            invoke_context.push(keyed_accounts, program_id)?;
+            invoke_context.push(program_id, &keyed_accounts)?;
 
             let mut message_processor = MessageProcessor::default();
             for (program_id, process_instruction) in invoke_context.get_programs().iter() {
@@ -1125,22 +1124,15 @@ impl MessageProcessor {
             }
         }
 
-        let pre_accounts = Self::create_pre_accounts(message, instruction, accounts);
         let program_id = instruction.program_id(&message.account_keys);
-        let keyed_accounts = Self::create_keyed_accounts(
+        let mut invoke_context = ThisInvokeContext::new(
+            program_id,
+            rent_collector.rent,
             message,
             instruction,
             executable_accounts,
             accounts,
-            demote_sysvar_write_locks,
-        );
-        let mut invoke_context = ThisInvokeContext::new(
-            program_id,
-            rent_collector.rent,
-            pre_accounts,
-            executable_accounts,
             account_deps,
-            keyed_accounts,
             &self.programs,
             log_collector,
             bpf_compute_budget,
@@ -1232,8 +1224,8 @@ mod tests {
         const MAX_DEPTH: usize = 10;
         let mut invoke_stack = vec![];
         let mut keys = vec![];
-        let mut pre_accounts = vec![];
         let mut accounts = vec![];
+        let mut metas = vec![];
         for i in 0..MAX_DEPTH {
             invoke_stack.push(solana_sdk::pubkey::new_rand());
             keys.push(solana_sdk::pubkey::new_rand());
@@ -1242,21 +1234,30 @@ mod tests {
                 1,
                 &invoke_stack[i],
             ))));
-            pre_accounts.push(PreAccount::new(&keys[i], &accounts[i].borrow()))
+            metas.push(AccountMeta::new(keys[i], false));
         }
-        let account = AccountSharedData::new(1, 1, &solana_sdk::pubkey::Pubkey::default());
         for program_id in invoke_stack.iter() {
-            pre_accounts.push(PreAccount::new(program_id, &account.clone()));
+            accounts.push(Rc::new(RefCell::new(AccountSharedData::new(
+                1,
+                1,
+                &solana_sdk::pubkey::Pubkey::default(),
+            ))));
+            metas.push(AccountMeta::new(*program_id, false));
         }
 
+        let message = Message::new(
+            &[Instruction::new_with_bytes(invoke_stack[0], &[0], metas)],
+            None,
+        );
         let ancestors = Ancestors::default();
         let mut invoke_context = ThisInvokeContext::new(
             &invoke_stack[0],
             Rent::default(),
-            pre_accounts,
+            &message,
+            &message.instructions[0],
             &[],
+            &accounts,
             &[],
-            vec![],
             &[],
             None,
             BpfComputeBudget::default(),
@@ -1270,7 +1271,7 @@ mod tests {
         // Check call depth increases and has a limit
         let mut depth_reached = 1;
         for program_id in invoke_stack.iter().skip(1) {
-            if Err(InstructionError::CallDepth) == invoke_context.push(vec![], program_id) {
+            if Err(InstructionError::CallDepth) == invoke_context.push(program_id, &[]) {
                 break;
             }
             depth_reached += 1;
@@ -2173,24 +2174,15 @@ mod tests {
         );
         let message = Message::new(&[instruction], None);
 
-        let pre_accounts =
-            MessageProcessor::create_pre_accounts(&message, &compiled_instruction, &accounts);
-        let demote_sysvar_write_locks = true;
-        let keyed_accounts = MessageProcessor::create_keyed_accounts(
-            &message,
-            &compiled_instruction,
-            &executable_accounts,
-            &accounts,
-            demote_sysvar_write_locks,
-        );
         let ancestors = Ancestors::default();
         let mut invoke_context = ThisInvokeContext::new(
             &caller_program_id,
             Rent::default(),
-            pre_accounts,
+            &message,
+            &compiled_instruction,
             &executable_accounts,
+            &accounts,
             &[],
-            keyed_accounts,
             programs.as_slice(),
             None,
             BpfComputeBudget::default(),
@@ -2202,6 +2194,8 @@ mod tests {
         );
 
         // not owned account modified by the caller (before the invoke)
+        let demote_sysvar_write_locks =
+            invoke_context.is_feature_active(&demote_sysvar_write_locks::id());
         let caller_write_privileges = message
             .account_keys
             .iter()
@@ -2239,23 +2233,15 @@ mod tests {
                 Instruction::new_with_bincode(callee_program_id, &case.0, metas.clone());
             let message = Message::new(&[instruction], None);
 
-            let pre_accounts =
-                MessageProcessor::create_pre_accounts(&message, &compiled_instruction, &accounts);
-            let keyed_accounts = MessageProcessor::create_keyed_accounts(
-                &message,
-                &compiled_instruction,
-                &executable_accounts,
-                &accounts,
-                demote_sysvar_write_locks,
-            );
             let ancestors = Ancestors::default();
             let mut invoke_context = ThisInvokeContext::new(
                 &caller_program_id,
                 Rent::default(),
-                pre_accounts,
+                &message,
+                &compiled_instruction,
                 &executable_accounts,
+                &accounts,
                 &[],
-                keyed_accounts,
                 programs.as_slice(),
                 None,
                 BpfComputeBudget::default(),
