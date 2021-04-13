@@ -1234,8 +1234,8 @@ pub fn process_supply(
 }
 
 pub fn process_total_supply(rpc_client: &RpcClient, _config: &CliConfig) -> ProcessResult {
-    let total_supply = rpc_client.total_supply()?;
-    Ok(format!("{} SOL", lamports_to_sol(total_supply)))
+    let supply = rpc_client.supply()?.value;
+    Ok(format!("{} SOL", lamports_to_sol(supply.total)))
 }
 
 pub fn process_get_transaction_count(rpc_client: &RpcClient, _config: &CliConfig) -> ProcessResult {
