@@ -7,12 +7,11 @@ use crate::serialize_utils::{
 };
 use crate::{
     bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
-    hash::{Hash, HASH_BYTES},
+    hash::Hash,
     instruction::{AccountMeta, CompiledInstruction, Instruction},
     pubkey::Pubkey,
     short_vec, system_instruction, system_program, sysvar,
 };
-use blake3::traits::digest::Digest;
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use std::{convert::TryFrom, str::FromStr};
@@ -298,17 +297,20 @@ impl Message {
     }
 
     /// Compute the blake3 hash of this transaction's message
+    #[cfg(not(target_arch = "bpf"))]
     pub fn hash(&self) -> Hash {
         let message_bytes = self.serialize();
         Self::hash_raw_message(&message_bytes)
     }
 
     /// Compute the blake3 hash of a raw transaction message
+    #[cfg(not(target_arch = "bpf"))]
     pub fn hash_raw_message(message_bytes: &[u8]) -> Hash {
+        use blake3::traits::digest::Digest;
         let mut hasher = blake3::Hasher::new();
         hasher.update(b"solana-tx-message-v1");
         hasher.update(message_bytes);
-        Hash(<[u8; HASH_BYTES]>::try_from(hasher.finalize().as_slice()).unwrap())
+        Hash(<[u8; crate::hash::HASH_BYTES]>::try_from(hasher.finalize().as_slice()).unwrap())
     }
 
     pub fn compile_instruction(&self, ix: &Instruction) -> CompiledInstruction {
