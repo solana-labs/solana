@@ -45,6 +45,7 @@ BPF_C_FLAGS := \
   $(C_FLAGS) \
   -target bpf \
   -fPIC \
+  -march=bpfel+solana
 
 BPF_CXX_FLAGS := \
   $(CXX_FLAGS) \
@@ -54,6 +55,7 @@ BPF_CXX_FLAGS := \
   -fno-exceptions \
   -fno-asynchronous-unwind-tables \
   -fno-unwind-tables \
+  -march=bpfel+solana
 
 BPF_LLD_FLAGS := \
   -z notext \
