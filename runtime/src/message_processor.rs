@@ -1,6 +1,7 @@
 use crate::{
-    accounts::Accounts, accounts_index::Ancestors, instruction_recorder::InstructionRecorder,
-    log_collector::LogCollector, native_loader::NativeLoader, rent_collector::RentCollector,
+    accounts::Accounts, accounts_db::LoadHint, accounts_index::Ancestors,
+    instruction_recorder::InstructionRecorder, log_collector::LogCollector,
+    native_loader::NativeLoader, rent_collector::RentCollector,
 };
 use log::*;
 use serde::{Deserialize, Serialize};
@@ -434,7 +435,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             // Load it
             result = self
                 .account_db
-                .load_slow(self.ancestors, id, true)
+                .load_slow(self.ancestors, id, LoadHint::FixedMaxRoot)
                 .map(|(account, _)| Rc::new(account.data().clone()));
             // Cache it
             self.sysvars.push((*id, result.clone()));
