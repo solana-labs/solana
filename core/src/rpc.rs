@@ -415,17 +415,16 @@ impl JsonRpcRequestProcessor {
         }
 
         let first_confirmed_block_in_epoch = *self
-            .get_confirmed_blocks_with_limit(first_slot_in_epoch, 1, config.commitment)?
+            .get_blocks_with_limit(first_slot_in_epoch, 1, config.commitment)?
             .get(0)
             .ok_or(RpcCustomError::BlockNotAvailable {
                 slot: first_slot_in_epoch,
             })?;
 
-        let first_confirmed_block = if let Ok(Some(first_confirmed_block)) = self
-            .get_confirmed_block(
-                first_confirmed_block_in_epoch,
-                Some(RpcConfirmedBlockConfig::rewards_with_commitment(config.commitment).into()),
-            ) {
+        let first_confirmed_block = if let Ok(Some(first_confirmed_block)) = self.get_block(
+            first_confirmed_block_in_epoch,
+            Some(RpcConfirmedBlockConfig::rewards_with_commitment(config.commitment).into()),
+        ) {
             first_confirmed_block
         } else {
             return Err(RpcCustomError::BlockNotAvailable {
@@ -815,7 +814,7 @@ impl JsonRpcRequestProcessor {
         Ok(())
     }
 
-    pub fn get_confirmed_block(
+    pub fn get_block(
         &self,
         slot: Slot,
         config: Option<RpcEncodingConfigWrapper<RpcConfirmedBlockConfig>>,
@@ -874,7 +873,7 @@ impl JsonRpcRequestProcessor {
         Err(RpcCustomError::BlockNotAvailable { slot }.into())
     }
 
-    pub fn get_confirmed_blocks(
+    pub fn get_blocks(
         &self,
         start_slot: Slot,
         end_slot: Option<Slot>,
@@ -955,7 +954,7 @@ impl JsonRpcRequestProcessor {
         Ok(blocks)
     }
 
-    pub fn get_confirmed_blocks_with_limit(
+    pub fn get_blocks_with_limit(
         &self,
         start_slot: Slot,
         limit: usize,
@@ -1169,7 +1168,7 @@ impl JsonRpcRequestProcessor {
         })
     }
 
-    pub fn get_confirmed_transaction(
+    pub fn get_transaction(
         &self,
         signature: Signature,
         config: Option<RpcEncodingConfigWrapper<RpcConfirmedTransactionConfig>>,
@@ -1253,7 +1252,7 @@ impl JsonRpcRequestProcessor {
         }
     }
 
-    pub fn get_confirmed_signatures_for_address2(
+    pub fn get_signatures_for_address(
         &self,
         address: Pubkey,
         mut before: Option<Signature>,
@@ -2393,8 +2392,8 @@ pub mod rpc_full {
         #[rpc(meta, name = "minimumLedgerSlot")]
         fn minimum_ledger_slot(&self, meta: Self::Metadata) -> Result<Slot>;
 
-        #[rpc(meta, name = "getConfirmedBlock")]
-        fn get_confirmed_block(
+        #[rpc(meta, name = "getBlock")]
+        fn get_block(
             &self,
             meta: Self::Metadata,
             slot: Slot,
@@ -2405,8 +2404,8 @@ pub mod rpc_full {
         fn get_block_time(&self, meta: Self::Metadata, slot: Slot)
             -> Result<Option<UnixTimestamp>>;
 
-        #[rpc(meta, name = "getConfirmedBlocks")]
-        fn get_confirmed_blocks(
+        #[rpc(meta, name = "getBlocks")]
+        fn get_blocks(
             &self,
             meta: Self::Metadata,
             start_slot: Slot,
@@ -2414,8 +2413,8 @@ pub mod rpc_full {
             commitment: Option<CommitmentConfig>,
         ) -> Result<Vec<Slot>>;
 
-        #[rpc(meta, name = "getConfirmedBlocksWithLimit")]
-        fn get_confirmed_blocks_with_limit(
+        #[rpc(meta, name = "getBlocksWithLimit")]
+        fn get_blocks_with_limit(
             &self,
             meta: Self::Metadata,
             start_slot: Slot,
@@ -2423,16 +2422,16 @@ pub mod rpc_full {
             commitment: Option<CommitmentConfig>,
         ) -> Result<Vec<Slot>>;
 
-        #[rpc(meta, name = "getConfirmedTransaction")]
-        fn get_confirmed_transaction(
+        #[rpc(meta, name = "getTransaction")]
+        fn get_transaction(
             &self,
             meta: Self::Metadata,
             signature_str: String,
             config: Option<RpcEncodingConfigWrapper<RpcConfirmedTransactionConfig>>,
         ) -> Result<Option<EncodedConfirmedTransaction>>;
 
-        #[rpc(meta, name = "getConfirmedSignaturesForAddress2")]
-        fn get_confirmed_signatures_for_address2(
+        #[rpc(meta, name = "getSignaturesForAddress")]
+        fn get_signatures_for_address(
             &self,
             meta: Self::Metadata,
             address: String,
@@ -2997,17 +2996,17 @@ pub mod rpc_full {
             meta.minimum_ledger_slot()
         }
 
-        fn get_confirmed_block(
+        fn get_block(
             &self,
             meta: Self::Metadata,
             slot: Slot,
             config: Option<RpcEncodingConfigWrapper<RpcConfirmedBlockConfig>>,
         ) -> Result<Option<UiConfirmedBlock>> {
-            debug!("get_confirmed_block rpc request received: {:?}", slot);
-            meta.get_confirmed_block(slot, config)
+            debug!("get_block rpc request received: {:?}", slot);
+            meta.get_block(slot, config)
         }
 
-        fn get_confirmed_blocks(
+        fn get_blocks(
             &self,
             meta: Self::Metadata,
             start_slot: Slot,
@@ -3017,13 +3016,13 @@ pub mod rpc_full {
             let (end_slot, maybe_commitment) =
                 config.map(|config| config.unzip()).unwrap_or_default();
             debug!(
-                "get_confirmed_blocks rpc request received: {}-{:?}",
+                "get_blocks rpc request received: {}-{:?}",
                 start_slot, end_slot
             );
-            meta.get_confirmed_blocks(start_slot, end_slot, commitment.or(maybe_commitment))
+            meta.get_blocks(start_slot, end_slot, commitment.or(maybe_commitment))
         }
 
-        fn get_confirmed_blocks_with_limit(
+        fn get_blocks_with_limit(
             &self,
             meta: Self::Metadata,
             start_slot: Slot,
@@ -3031,10 +3030,10 @@ pub mod rpc_full {
             commitment: Option<CommitmentConfig>,
         ) -> Result<Vec<Slot>> {
             debug!(
-                "get_confirmed_blocks_with_limit rpc request received: {}-{}",
+                "get_blocks_with_limit rpc request received: {}-{}",
                 start_slot, limit,
             );
-            meta.get_confirmed_blocks_with_limit(start_slot, limit, commitment)
+            meta.get_blocks_with_limit(start_slot, limit, commitment)
         }
 
         fn get_block_time(
@@ -3045,21 +3044,18 @@ pub mod rpc_full {
             meta.get_block_time(slot)
         }
 
-        fn get_confirmed_transaction(
+        fn get_transaction(
             &self,
             meta: Self::Metadata,
             signature_str: String,
             config: Option<RpcEncodingConfigWrapper<RpcConfirmedTransactionConfig>>,
         ) -> Result<Option<EncodedConfirmedTransaction>> {
-            debug!(
-                "get_confirmed_transaction rpc request received: {:?}",
-                signature_str
-            );
+            debug!("get_transaction rpc request received: {:?}", signature_str);
             let signature = verify_signature(&signature_str)?;
-            meta.get_confirmed_transaction(signature, config)
+            meta.get_transaction(signature, config)
         }
 
-        fn get_confirmed_signatures_for_address2(
+        fn get_signatures_for_address(
             &self,
             meta: Self::Metadata,
             address: String,
@@ -3087,13 +3083,7 @@ pub mod rpc_full {
                 )));
             }
 
-            meta.get_confirmed_signatures_for_address2(
-                address,
-                before,
-                until,
-                limit,
-                config.commitment,
-            )
+            meta.get_signatures_for_address(address, before, until, limit, config.commitment)
         }
 
         fn get_first_available_block(&self, meta: Self::Metadata) -> Result<Slot> {
@@ -3203,6 +3193,152 @@ pub mod rpc_full {
             let delegate = verify_pubkey(delegate_str)?;
             let token_account_filter = verify_token_account_filter(token_account_filter)?;
             meta.get_token_accounts_by_delegate(&delegate, token_account_filter, config)
+        }
+    }
+}
+
+// Deprecated RPC methods, collected for easy deactivation and removal in v1.8
+pub mod rpc_deprecated_v1_7 {
+    use super::*;
+    #[rpc]
+    pub trait DeprecatedV1_7 {
+        type Metadata;
+
+        // DEPRECATED
+        #[rpc(meta, name = "getConfirmedBlock")]
+        fn get_confirmed_block(
+            &self,
+            meta: Self::Metadata,
+            slot: Slot,
+            config: Option<RpcEncodingConfigWrapper<RpcConfirmedBlockConfig>>,
+        ) -> Result<Option<UiConfirmedBlock>>;
+
+        // DEPRECATED
+        #[rpc(meta, name = "getConfirmedBlocks")]
+        fn get_confirmed_blocks(
+            &self,
+            meta: Self::Metadata,
+            start_slot: Slot,
+            config: Option<RpcConfirmedBlocksConfigWrapper>,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<Vec<Slot>>;
+
+        // DEPRECATED
+        #[rpc(meta, name = "getConfirmedBlocksWithLimit")]
+        fn get_confirmed_blocks_with_limit(
+            &self,
+            meta: Self::Metadata,
+            start_slot: Slot,
+            limit: usize,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<Vec<Slot>>;
+
+        // DEPRECATED
+        #[rpc(meta, name = "getConfirmedTransaction")]
+        fn get_confirmed_transaction(
+            &self,
+            meta: Self::Metadata,
+            signature_str: String,
+            config: Option<RpcEncodingConfigWrapper<RpcConfirmedTransactionConfig>>,
+        ) -> Result<Option<EncodedConfirmedTransaction>>;
+
+        // DEPRECATED
+        #[rpc(meta, name = "getConfirmedSignaturesForAddress2")]
+        fn get_confirmed_signatures_for_address2(
+            &self,
+            meta: Self::Metadata,
+            address: String,
+            config: Option<RpcGetConfirmedSignaturesForAddress2Config>,
+        ) -> Result<Vec<RpcConfirmedTransactionStatusWithSignature>>;
+    }
+
+    pub struct DeprecatedV1_7Impl;
+    impl DeprecatedV1_7 for DeprecatedV1_7Impl {
+        type Metadata = JsonRpcRequestProcessor;
+
+        fn get_confirmed_block(
+            &self,
+            meta: Self::Metadata,
+            slot: Slot,
+            config: Option<RpcEncodingConfigWrapper<RpcConfirmedBlockConfig>>,
+        ) -> Result<Option<UiConfirmedBlock>> {
+            debug!("get_confirmed_block rpc request received: {:?}", slot);
+            meta.get_block(slot, config)
+        }
+
+        fn get_confirmed_blocks(
+            &self,
+            meta: Self::Metadata,
+            start_slot: Slot,
+            config: Option<RpcConfirmedBlocksConfigWrapper>,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<Vec<Slot>> {
+            let (end_slot, maybe_commitment) =
+                config.map(|config| config.unzip()).unwrap_or_default();
+            debug!(
+                "get_confirmed_blocks rpc request received: {}-{:?}",
+                start_slot, end_slot
+            );
+            meta.get_blocks(start_slot, end_slot, commitment.or(maybe_commitment))
+        }
+
+        fn get_confirmed_blocks_with_limit(
+            &self,
+            meta: Self::Metadata,
+            start_slot: Slot,
+            limit: usize,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<Vec<Slot>> {
+            debug!(
+                "get_confirmed_blocks_with_limit rpc request received: {}-{}",
+                start_slot, limit,
+            );
+            meta.get_blocks_with_limit(start_slot, limit, commitment)
+        }
+
+        fn get_confirmed_transaction(
+            &self,
+            meta: Self::Metadata,
+            signature_str: String,
+            config: Option<RpcEncodingConfigWrapper<RpcConfirmedTransactionConfig>>,
+        ) -> Result<Option<EncodedConfirmedTransaction>> {
+            debug!(
+                "get_confirmed_transaction rpc request received: {:?}",
+                signature_str
+            );
+            let signature = verify_signature(&signature_str)?;
+            meta.get_transaction(signature, config)
+        }
+
+        fn get_confirmed_signatures_for_address2(
+            &self,
+            meta: Self::Metadata,
+            address: String,
+            config: Option<RpcGetConfirmedSignaturesForAddress2Config>,
+        ) -> Result<Vec<RpcConfirmedTransactionStatusWithSignature>> {
+            let address = verify_pubkey(address)?;
+
+            let config = config.unwrap_or_default();
+            let before = config
+                .before
+                .map(|ref before| verify_signature(before))
+                .transpose()?;
+            let until = config
+                .until
+                .map(|ref until| verify_signature(until))
+                .transpose()?;
+            let limit = config
+                .limit
+                .unwrap_or(MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT);
+
+            if limit == 0 || limit > MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT {
+                return Err(Error::invalid_params(format!(
+                    "Invalid limit; max {}",
+                    MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT
+                )));
+            }
+
+            meta.get_signatures_for_address(address, before, until, limit, config.commitment)
         }
     }
 }
@@ -5340,7 +5476,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_get_confirmed_block() {
+    fn test_get_block() {
         let bob_pubkey = solana_sdk::pubkey::new_rand();
         let RpcHandler {
             io,
@@ -5350,7 +5486,7 @@ pub mod tests {
             ..
         } = start_rpc_handler_with_tx(&bob_pubkey);
 
-        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlock","params":[0]}"#;
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getBlock","params":[0]}"#;
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
@@ -5395,7 +5531,7 @@ pub mod tests {
             }
         }
 
-        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlock","params":[0,"binary"]}"#;
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getBlock","params":[0,"binary"]}"#;
         let res = io.handle_request_sync(&req, meta);
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
@@ -5440,7 +5576,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_get_confirmed_block_config() {
+    fn test_get_block_config() {
         let bob_pubkey = solana_sdk::pubkey::new_rand();
         let RpcHandler {
             io,
@@ -5450,7 +5586,7 @@ pub mod tests {
         } = start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlock","params":[0,{}]}}"#,
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getBlock","params":[0,{}]}}"#,
             json!(RpcConfirmedBlockConfig {
                 encoding: None,
                 transaction_details: Some(TransactionDetails::Signatures),
@@ -5471,7 +5607,7 @@ pub mod tests {
         }
 
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlock","params":[0,{}]}}"#,
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getBlock","params":[0,{}]}}"#,
             json!(RpcConfirmedBlockConfig {
                 encoding: None,
                 transaction_details: Some(TransactionDetails::None),
@@ -5491,7 +5627,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_get_confirmed_blocks() {
+    fn test_get_blocks() {
         let bob_pubkey = solana_sdk::pubkey::new_rand();
         let roots = vec![0, 1, 3, 4, 8];
         let RpcHandler {
@@ -5505,35 +5641,35 @@ pub mod tests {
             .unwrap()
             .set_highest_confirmed_root(8);
 
-        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[0]}"#;
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getBlocks","params":[0]}"#;
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
         assert_eq!(confirmed_blocks, roots[1..].to_vec());
 
-        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[2]}"#;
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getBlocks","params":[2]}"#;
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
         assert_eq!(confirmed_blocks, vec![3, 4, 8]);
 
-        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[0,4]}"#;
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getBlocks","params":[0,4]}"#;
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
         assert_eq!(confirmed_blocks, vec![1, 3, 4]);
 
-        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[0,7]}"#;
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getBlocks","params":[0,7]}"#;
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
         assert_eq!(confirmed_blocks, vec![1, 3, 4]);
 
-        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[9,11]}"#;
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getBlocks","params":[9,11]}"#;
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
@@ -5545,7 +5681,7 @@ pub mod tests {
             .unwrap()
             .set_highest_confirmed_root(std::u64::MAX);
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[0,{}]}}"#,
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getBlocks","params":[0,{}]}}"#,
             MAX_GET_CONFIRMED_BLOCKS_RANGE
         );
         let res = io.handle_request_sync(&req, meta.clone());
@@ -5555,7 +5691,7 @@ pub mod tests {
         assert_eq!(confirmed_blocks, vec![1, 3, 4, 8]);
 
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocks","params":[0,{}]}}"#,
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getBlocks","params":[0,{}]}}"#,
             MAX_GET_CONFIRMED_BLOCKS_RANGE + 1
         );
         let res = io.handle_request_sync(&req, meta);
@@ -5568,7 +5704,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_get_confirmed_blocks_with_limit() {
+    fn test_get_blocks_with_limit() {
         let bob_pubkey = solana_sdk::pubkey::new_rand();
         let roots = vec![0, 1, 3, 4, 8];
         let RpcHandler {
@@ -5582,7 +5718,7 @@ pub mod tests {
             .unwrap()
             .set_highest_confirmed_root(8);
 
-        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocksWithLimit","params":[0,500001]}"#;
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getBlocksWithLimit","params":[0,500001]}"#;
         let res = io.handle_request_sync(&req, meta.clone());
         assert_eq!(
             res,
@@ -5591,38 +5727,35 @@ pub mod tests {
             )
         );
 
-        let req =
-            r#"{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocksWithLimit","params":[0,0]}"#;
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getBlocksWithLimit","params":[0,0]}"#;
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
         assert!(confirmed_blocks.is_empty());
 
-        let req =
-            r#"{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocksWithLimit","params":[2,2]}"#;
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getBlocksWithLimit","params":[2,2]}"#;
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
         assert_eq!(confirmed_blocks, vec![3, 4]);
 
-        let req =
-            r#"{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocksWithLimit","params":[2,3]}"#;
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getBlocksWithLimit","params":[2,3]}"#;
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
         assert_eq!(confirmed_blocks, vec![3, 4, 8]);
 
-        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocksWithLimit","params":[2,500000]}"#;
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getBlocksWithLimit","params":[2,500000]}"#;
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
         assert_eq!(confirmed_blocks, vec![3, 4, 8]);
 
-        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocksWithLimit","params":[9,500000]}"#;
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getBlocksWithLimit","params":[9,500000]}"#;
         let res = io.handle_request_sync(&req, meta);
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
