@@ -18,7 +18,7 @@ use solana_sdk::{
     message::Message,
     native_loader,
     process_instruction::{
-        BpfComputeBudget, ComputeMeter, Executor, InvokeContext, Logger,
+        BpfComputeBudget, ComputeMeter, Executor, InvokeContext, InvokeContextStackFrame, Logger,
         ProcessInstructionWithContext,
     },
     pubkey::Pubkey,
@@ -250,7 +250,7 @@ impl ComputeMeter for ThisComputeMeter {
     }
 }
 pub struct ThisInvokeContext<'a> {
-    invoke_stack: Vec<(Pubkey, &'a [KeyedAccount<'a>])>,
+    invoke_stack: Vec<InvokeContextStackFrame<'a>>,
     rent: Rent,
     pre_accounts: Vec<PreAccount>,
     executables: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
@@ -286,7 +286,10 @@ impl<'a> ThisInvokeContext<'a> {
         ancestors: &'a Ancestors,
     ) -> Self {
         let mut invoke_stack = Vec::with_capacity(bpf_compute_budget.max_invoke_depth);
-        invoke_stack.push((*program_id, keyed_accounts));
+        invoke_stack.push(InvokeContextStackFrame {
+            key: *program_id,
+            keyed_accounts,
+        });
         Self {
             invoke_stack,
             rent,
@@ -318,13 +321,16 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         if self.invoke_stack.len() > self.bpf_compute_budget.max_invoke_depth {
             return Err(InstructionError::CallDepth);
         }
-        let frame_index = self.invoke_stack.iter().position(|frame| frame.0 == *key);
+        let frame_index = self.invoke_stack.iter().position(|frame| frame.key == *key);
         if frame_index != None && frame_index != Some(self.invoke_stack.len().saturating_sub(1)) {
             // Reentrancy not allowed unless caller is calling itself
             return Err(InstructionError::ReentrancyNotAllowed);
         }
         let keyed_accounts = unsafe { std::mem::transmute(keyed_accounts) };
-        self.invoke_stack.push((*key, keyed_accounts));
+        self.invoke_stack.push(InvokeContextStackFrame {
+            key: *key,
+            keyed_accounts,
+        });
         Ok(())
     }
     fn pop(&mut self) {
@@ -340,7 +346,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         accounts: &[Rc<RefCell<AccountSharedData>>],
         caller_write_privileges: Option<&[bool]>,
     ) -> Result<(), InstructionError> {
-        let (program_id, _keyed_accounts) = self
+        let stack_frame = self
             .invoke_stack
             .last()
             .ok_or(InstructionError::GenericError)?;
@@ -349,7 +355,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             instruction,
             &mut self.pre_accounts,
             accounts,
-            program_id,
+            &stack_frame.key,
             &self.rent,
             caller_write_privileges,
             &mut self.timings,
@@ -359,7 +365,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     fn get_caller(&self) -> Result<&Pubkey, InstructionError> {
         self.invoke_stack
             .last()
-            .map(|frame| &frame.0)
+            .map(|frame| &frame.key)
             .ok_or(InstructionError::GenericError)
     }
     fn remove_first_keyed_account(&mut self) -> Result<(), InstructionError> {
@@ -367,13 +373,13 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             .invoke_stack
             .last_mut()
             .ok_or(InstructionError::GenericError)?;
-        stack_frame.1 = &stack_frame.1[1..];
+        stack_frame.keyed_accounts = &stack_frame.keyed_accounts[1..];
         Ok(())
     }
     fn get_keyed_accounts(&self) -> Result<&[KeyedAccount], InstructionError> {
         self.invoke_stack
             .last()
-            .map(|frame| frame.1)
+            .map(|frame| frame.keyed_accounts)
             .ok_or(InstructionError::GenericError)
     }
     fn get_programs(&self) -> &[(Pubkey, ProcessInstructionWithContext)] {

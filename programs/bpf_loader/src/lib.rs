@@ -858,7 +858,10 @@ mod tests {
         instruction::{AccountMeta, InstructionError},
         keyed_account::KeyedAccount,
         message::Message,
-        process_instruction::{BpfComputeBudget, MockComputeMeter, MockInvokeContext, MockLogger},
+        process_instruction::{
+            BpfComputeBudget, InvokeContextStackFrame, MockComputeMeter, MockInvokeContext,
+            MockLogger,
+        },
         pubkey::Pubkey,
         rent::Rent,
         signature::{Keypair, Signer},
@@ -1091,21 +1094,6 @@ mod tests {
             )
         );
 
-        // Case: limited budget
-        let mut invoke_context = MockInvokeContext {
-            invoke_stack: vec![(Pubkey::default(), &keyed_accounts)],
-            logger: MockLogger::default(),
-            bpf_compute_budget: BpfComputeBudget::default(),
-            compute_meter: MockComputeMeter::default(),
-            programs: vec![],
-            accounts: vec![],
-            sysvars: vec![],
-        };
-        assert_eq!(
-            Err(InstructionError::ProgramFailedToComplete),
-            process_instruction(&program_key, &[], &mut invoke_context)
-        );
-
         // Case: With duplicate accounts
         let duplicate_key = solana_sdk::pubkey::new_rand();
         let parameter_account = AccountSharedData::new_ref(1, 0, &program_id);
@@ -1119,6 +1107,24 @@ mod tests {
                 &[],
                 &mut MockInvokeContext::new(&keyed_accounts)
             )
+        );
+
+        // Case: limited budget
+        let mut invoke_context = MockInvokeContext {
+            invoke_stack: vec![InvokeContextStackFrame {
+                key: Pubkey::default(),
+                keyed_accounts,
+            }],
+            logger: MockLogger::default(),
+            bpf_compute_budget: BpfComputeBudget::default(),
+            compute_meter: MockComputeMeter::default(),
+            programs: vec![],
+            accounts: vec![],
+            sysvars: vec![],
+        };
+        assert_eq!(
+            Err(InstructionError::ProgramFailedToComplete),
+            process_instruction(&program_key, &[], &mut invoke_context)
         );
     }
 

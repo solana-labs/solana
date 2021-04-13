@@ -22,6 +22,11 @@ pub type LoaderEntrypoint = unsafe extern "C" fn(
 pub type ProcessInstructionWithContext =
     fn(&Pubkey, &[u8], &mut dyn InvokeContext) -> Result<(), InstructionError>;
 
+pub struct InvokeContextStackFrame<'a> {
+    pub key: Pubkey,
+    pub keyed_accounts: &'a [KeyedAccount<'a>],
+}
+
 /// Invocation context passed to loaders
 pub trait InvokeContext {
     /// Push a program ID on to the invocation stack
@@ -286,7 +291,7 @@ impl Logger for MockLogger {
 }
 
 pub struct MockInvokeContext<'a> {
-    pub invoke_stack: Vec<(Pubkey, &'a [KeyedAccount<'a>])>,
+    pub invoke_stack: Vec<InvokeContextStackFrame<'a>>,
     pub logger: MockLogger,
     pub bpf_compute_budget: BpfComputeBudget,
     pub compute_meter: MockComputeMeter,
@@ -298,7 +303,10 @@ impl<'a> MockInvokeContext<'a> {
     pub fn new(keyed_accounts: &'a [KeyedAccount<'a>]) -> Self {
         let bpf_compute_budget = BpfComputeBudget::default();
         let mut invoke_stack = Vec::with_capacity(bpf_compute_budget.max_invoke_depth);
-        invoke_stack.push((Pubkey::default(), keyed_accounts));
+        invoke_stack.push(InvokeContextStackFrame {
+            key: Pubkey::default(),
+            keyed_accounts,
+        });
         MockInvokeContext {
             invoke_stack,
             logger: MockLogger::default(),
@@ -319,7 +327,10 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
         key: &Pubkey,
     ) -> Result<(), InstructionError> {
         let keyed_accounts = unsafe { std::mem::transmute(keyed_accounts) };
-        self.invoke_stack.push((*key, keyed_accounts));
+        self.invoke_stack.push(InvokeContextStackFrame {
+            key: *key,
+            keyed_accounts,
+        });
         Ok(())
     }
     fn pop(&mut self) {
@@ -340,7 +351,7 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
     fn get_caller(&self) -> Result<&Pubkey, InstructionError> {
         self.invoke_stack
             .last()
-            .map(|frame| &frame.0)
+            .map(|frame| &frame.key)
             .ok_or(InstructionError::GenericError)
     }
     fn remove_first_keyed_account(&mut self) -> Result<(), InstructionError> {
@@ -348,13 +359,13 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
             .invoke_stack
             .last_mut()
             .ok_or(InstructionError::GenericError)?;
-        stack_frame.1 = &stack_frame.1[1..];
+        stack_frame.keyed_accounts = &stack_frame.keyed_accounts[1..];
         Ok(())
     }
     fn get_keyed_accounts(&self) -> Result<&[KeyedAccount], InstructionError> {
         self.invoke_stack
             .last()
-            .map(|frame| frame.1)
+            .map(|frame| frame.keyed_accounts)
             .ok_or(InstructionError::GenericError)
     }
     fn get_programs(&self) -> &[(Pubkey, ProcessInstructionWithContext)] {
