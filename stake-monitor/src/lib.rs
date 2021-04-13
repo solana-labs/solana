@@ -290,12 +290,11 @@ fn load_blocks(
         start_slot, end_slot
     );
 
-    let slots = rpc_client.get_confirmed_blocks(start_slot, Some(end_slot))?;
+    let slots = rpc_client.get_blocks(start_slot, Some(end_slot))?;
 
     let mut blocks = vec![];
     for slot in slots.into_iter() {
-        let block =
-            rpc_client.get_confirmed_block_with_encoding(slot, UiTransactionEncoding::Base64)?;
+        let block = rpc_client.get_block_with_encoding(slot, UiTransactionEncoding::Base64)?;
         blocks.push((slot, block));
     }
     Ok(blocks)

@@ -59,7 +59,7 @@ pub fn calculate_leader_records(
     let start_epoch = epoch_schedule.get_epoch(start_slot);
     let end_epoch = epoch_schedule.get_epoch(end_slot);
     let confirmed_blocks: HashSet<_> = rpc_client
-        .get_confirmed_blocks(start_slot, Some(end_slot))?
+        .get_blocks(start_slot, Some(end_slot))?
         .into_iter()
         .collect();
 
