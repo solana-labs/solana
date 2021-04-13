@@ -6,7 +6,7 @@ use crate::{
     max_slots::MaxSlots,
     optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
     poh_recorder::PohRecorder,
-    rpc::{rpc_full::*, rpc_minimal::*, *},
+    rpc::{rpc_full::*, rpc_minimal::*, rpc_obsolete_v1_7::*, *},
     rpc_health::*,
     send_transaction_service::{LeaderInfo, SendTransactionService},
     validator::ValidatorExit,
@@ -341,6 +341,7 @@ impl JsonRpcService {
             };
 
         let minimal_api = config.minimal_api;
+        let obsolete_v1_7_api = config.obsolete_v1_7_api;
         let (request_processor, receiver) = JsonRpcRequestProcessor::new(
             config,
             snapshot_config.clone(),
@@ -402,6 +403,9 @@ impl JsonRpcService {
                 io.extend_with(rpc_minimal::MinimalImpl.to_delegate());
                 if !minimal_api {
                     io.extend_with(rpc_full::FullImpl.to_delegate());
+                }
+                if obsolete_v1_7_api {
+                    io.extend_with(rpc_obsolete_v1_7::ObsoleteV1_7Impl.to_delegate());
                 }
 
                 let request_middleware = RpcRequestMiddleware::new(
