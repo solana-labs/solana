@@ -117,13 +117,8 @@ impl ExecuteTimings {
     }
 }
 
-<<<<<<< HEAD
 type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "5jetWHJBhYdadbkq3BgEFA7hmKoZQe7KwWQsQp7MQAw1")]
-=======
-type BankStatusCache = StatusCache<Signature, Result<()>>;
-#[frozen_abi(digest = "4mSWwHd4RrLjCXH7RFrm6K3wZSsi9DfVJK3Ngz9jKk7D")]
->>>>>>> 92f4018b0... Cleanup unsupported sysvars (#16390)
+#[frozen_abi(digest = "3TYCJ7hSJ5ig2NmnwxSn1ggkzm6JCmMHoyRMBQQsLCa3")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 type TransactionAccountRefCells = Vec<Rc<RefCell<AccountSharedData>>>;
 type TransactionAccountDepRefCells = Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>;
