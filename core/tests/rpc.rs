@@ -18,6 +18,7 @@ use solana_sdk::{
     system_transaction,
     transaction::Transaction,
 };
+use solana_transaction_status::TransactionStatus;
 use std::{
     collections::HashSet,
     net::UdpSocket,
@@ -79,14 +80,18 @@ fn test_rpc_send_tx() {
 
     let mut confirmed_tx = false;
 
-    let request = json_req!("confirmTransaction", [signature]);
+    let request = json_req!("getSignatureStatuses", [[signature]]);
 
     for _ in 0..solana_sdk::clock::DEFAULT_TICKS_PER_SLOT {
         let json = post_rpc(request.clone(), &rpc_url);
 
-        if true == json["result"]["value"] {
-            confirmed_tx = true;
-            break;
+        let result: Option<TransactionStatus> =
+            serde_json::from_value(json["result"]["value"][0].clone()).unwrap();
+        if let Some(result) = result.as_ref() {
+            if result.err.is_none() {
+                confirmed_tx = true;
+                break;
+            }
         }
 
         sleep(Duration::from_millis(500));
