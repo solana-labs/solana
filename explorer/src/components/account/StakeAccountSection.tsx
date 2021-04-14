@@ -25,6 +25,9 @@ export function StakeAccountSection({
   stakeAccountType: StakeAccountType;
   activation?: StakeActivationData;
 }) {
+  const showDelegation =
+    stakeAccountType !== "delegated" ||
+    isFullyInactivated(stakeAccount, activation);
   return (
     <>
       <LockupCard stakeAccount={stakeAccount} />
@@ -33,17 +36,16 @@ export function StakeAccountSection({
         stakeAccount={stakeAccount}
         stakeAccountType={stakeAccountType}
         activation={activation}
+        showDelegation={showDelegation}
       />
-      {stakeAccount.meta && (
-        <>
-          <DelegationCard
-            stakeAccount={stakeAccount}
-            activation={activation}
-            stakeAccountType={stakeAccountType}
-          />
-          <AuthoritiesCard meta={stakeAccount.meta} />
-        </>
+      {showDelegation && (
+        <DelegationCard
+          stakeAccount={stakeAccount}
+          activation={activation}
+          stakeAccountType={stakeAccountType}
+        />
       )}
+      <AuthoritiesCard meta={stakeAccount.meta} />
     </>
   );
 }
@@ -89,20 +91,15 @@ function OverviewCard({
   stakeAccount,
   stakeAccountType,
   activation,
+  showDelegation,
 }: {
   account: Account;
   stakeAccount: StakeAccountInfo;
   stakeAccountType: StakeAccountType;
   activation?: StakeActivationData;
+  showDelegation: boolean;
 }) {
   const refresh = useFetchAccountInfo();
-  const { stake } = stakeAccount;
-
-  const displayAsInitialized =
-    activation &&
-    stake &&
-    stake.delegation.stake.toString() === activation.inactive.toString();
-
   return (
     <div className="card">
       <div className="card-header">
@@ -131,25 +128,22 @@ function OverviewCard({
             {lamportsToSolString(account.lamports || 0)}
           </td>
         </tr>
-        {stakeAccount.meta && (
+        <tr>
+          <td>Rent Reserve (SOL)</td>
+          <td className="text-lg-right">
+            {lamportsToSolString(stakeAccount.meta.rentExemptReserve)}
+          </td>
+        </tr>
+        {showDelegation && (
           <tr>
-            <td>Rent Reserve (SOL)</td>
+            <td>Status</td>
             <td className="text-lg-right">
-              {lamportsToSolString(stakeAccount.meta.rentExemptReserve)}
+              {isFullyInactivated(stakeAccount, activation)
+                ? "Initialized"
+                : displayStatus(stakeAccountType, activation)}
             </td>
           </tr>
         )}
-        {!stakeAccount.meta ||
-          (displayAsInitialized && (
-            <tr>
-              <td>Status</td>
-              <td className="text-lg-right">
-                {displayAsInitialized
-                  ? "Initialized"
-                  : displayStatus(stakeAccountType, activation)}
-              </td>
-            </tr>
-          ))}
       </TableCardBody>
     </div>
   );
@@ -175,18 +169,7 @@ function DelegationCard({
       ? "-"
       : delegation.deactivationEpoch.toString();
   }
-
   const { stake } = stakeAccount;
-
-  if (
-    activation &&
-    stake &&
-    stake.delegation.stake.toString() === activation.inactive.toString()
-  ) {
-    // hide confusing state https://github.com/solana-labs/solana/issues/13740
-    return null;
-  }
-
   return (
     <div className="card">
       <div className="card-header">
@@ -255,7 +238,7 @@ function DelegationCard({
 }
 
 function AuthoritiesCard({ meta }: { meta: StakeMeta }) {
-  const hasLockup = meta && meta.lockup.unixTimestamp > 0;
+  const hasLockup = meta.lockup.unixTimestamp > 0;
   return (
     <div className="card">
       <div className="card-header">
@@ -289,4 +272,17 @@ function AuthoritiesCard({ meta }: { meta: StakeMeta }) {
       </TableCardBody>
     </div>
   );
+}
+
+function isFullyInactivated(
+  stakeAccount: StakeAccountInfo,
+  activation?: StakeActivationData
+): boolean {
+  const { stake } = stakeAccount;
+
+  if (!stake || !activation) {
+    return false;
+  }
+
+  return stake.delegation.stake.toString() === activation.inactive.toString();
 }
