@@ -4260,6 +4260,7 @@ dependencies = [
  "solana-version",
  "solana-vote-program",
  "thiserror",
+ "tokio 1.1.1",
  "tungstenite",
  "url 2.2.0",
 ]
