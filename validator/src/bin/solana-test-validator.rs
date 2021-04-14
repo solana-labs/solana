@@ -44,6 +44,7 @@ enum Output {
 
 fn main() {
     let default_rpc_port = rpc_port::DEFAULT_RPC_PORT.to_string();
+    let default_faucet_port = FAUCET_PORT.to_string();
 
     let matches = App::new("solana-test-validator")
         .about("Test Validator")
@@ -119,6 +120,15 @@ fn main() {
                 .takes_value(false)
                 .conflicts_with("quiet")
                 .help("Log mode: stream the validator log"),
+        )
+        .arg(
+            Arg::with_name("faucet_port")
+                .long("faucet-port")
+                .value_name("PORT")
+                .takes_value(true)
+                .default_value(&default_faucet_port)
+                .validator(solana_validator::port_validator)
+                .help("Enable the faucet on this port"),
         )
         .arg(
             Arg::with_name("rpc_port")
@@ -228,11 +238,12 @@ fn main() {
         Output::Dashboard
     };
     let rpc_port = value_t_or_exit!(matches, "rpc_port", u16);
+    let faucet_port = value_t_or_exit!(matches, "faucet_port", u16);
     let slots_per_epoch = value_t!(matches, "slots_per_epoch", Slot).ok();
 
     let faucet_addr = Some(SocketAddr::new(
         IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-        FAUCET_PORT,
+        faucet_port,
     ));
     let bpf_jit = !matches.is_present("no_bpf_jit");
 
