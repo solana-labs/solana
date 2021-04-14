@@ -4765,7 +4765,8 @@ mod tests {
         })
         .take(NO_ENTRIES)
         .collect();
-        let timeouts = cluster_info.gossip.read().unwrap().make_timeouts_test();
+        let mut timeouts = HashMap::new();
+        timeouts.insert(Pubkey::default(), CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS * 2);
         assert_eq!(
             (0, 0, NO_ENTRIES),
             cluster_info.handle_pull_response(&entrypoint_pubkey, data, &timeouts)
