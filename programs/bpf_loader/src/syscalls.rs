@@ -2664,7 +2664,7 @@ mod tests {
             let got_clock = Clock::default();
             let got_clock_va = 2048;
 
-            let memory_mapping = MemoryMapping::new(
+            let memory_mapping = MemoryMapping::new::<UserError>(
                 vec![MemoryRegion {
                     host_addr: &got_clock as *const _ as u64,
                     vm_addr: got_clock_va,
@@ -2673,7 +2673,8 @@ mod tests {
                     is_writable: true,
                 }],
                 &DEFAULT_CONFIG,
-            );
+            )
+            .unwrap();
 
             let src_clock = Clock {
                 slot: 1,
@@ -2705,7 +2706,7 @@ mod tests {
             let got_epochschedule = EpochSchedule::default();
             let got_epochschedule_va = 2048;
 
-            let memory_mapping = MemoryMapping::new(
+            let memory_mapping = MemoryMapping::new::<UserError>(
                 vec![MemoryRegion {
                     host_addr: &got_epochschedule as *const _ as u64,
                     vm_addr: got_epochschedule_va,
@@ -2714,7 +2715,8 @@ mod tests {
                     is_writable: true,
                 }],
                 &DEFAULT_CONFIG,
-            );
+            )
+            .unwrap();
 
             let src_epochschedule = EpochSchedule {
                 slots_per_epoch: 1,
@@ -2754,7 +2756,7 @@ mod tests {
             let got_fees = Fees::default();
             let got_fees_va = 2048;
 
-            let memory_mapping = MemoryMapping::new(
+            let memory_mapping = MemoryMapping::new::<UserError>(
                 vec![MemoryRegion {
                     host_addr: &got_fees as *const _ as u64,
                     vm_addr: got_fees_va,
@@ -2763,7 +2765,8 @@ mod tests {
                     is_writable: true,
                 }],
                 &DEFAULT_CONFIG,
-            );
+            )
+            .unwrap();
 
             let src_fees = Fees {
                 fee_calculator: FeeCalculator {
@@ -2793,7 +2796,7 @@ mod tests {
             let got_rent = Rent::default();
             let got_rent_va = 2048;
 
-            let memory_mapping = MemoryMapping::new(
+            let memory_mapping = MemoryMapping::new::<UserError>(
                 vec![MemoryRegion {
                     host_addr: &got_rent as *const _ as u64,
                     vm_addr: got_rent_va,
@@ -2802,7 +2805,8 @@ mod tests {
                     is_writable: true,
                 }],
                 &DEFAULT_CONFIG,
-            );
+            )
+            .unwrap();
 
             let src_rent = Rent {
                 lamports_per_byte_year: 1,
