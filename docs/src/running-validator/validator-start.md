@@ -264,7 +264,7 @@ solana-validator \
   --identity ~/validator-keypair.json \
   --vote-account ~/vote-account-keypair.json \
   --rpc-port 8899 \
-  --entrypoint devnet.solana.com:8001 \
+  --entrypoint entrypoint.devnet.solana.com:8001 \
   --limit-ledger-size \
   --log ~/solana-validator.log
 ```
@@ -286,7 +286,7 @@ Confirm your validator connected to the network by opening a new terminal and
 running:
 
 ```bash
-solana-gossip spy --entrypoint devnet.solana.com:8001
+solana-gossip spy --entrypoint entrypoint.devnet.solana.com:8001
 ```
 
 If your validator is connected, its public key and IP address will appear in the list.
