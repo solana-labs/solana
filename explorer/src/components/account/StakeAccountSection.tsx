@@ -139,7 +139,7 @@ function OverviewCard({
             <td>Status</td>
             <td className="text-lg-right">
               {isFullyInactivated(stakeAccount, activation)
-                ? "Initialized"
+                ? "Not delegated"
                 : displayStatus(stakeAccountType, activation)}
             </td>
           </tr>
