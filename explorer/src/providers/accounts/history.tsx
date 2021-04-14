@@ -4,19 +4,26 @@ import {
   ConfirmedSignatureInfo,
   TransactionSignature,
   Connection,
+  ParsedConfirmedTransaction,
 } from "@solana/web3.js";
 import { useCluster, Cluster } from "../cluster";
 import * as Cache from "providers/cache";
 import { ActionType, FetchStatus } from "providers/cache";
 import { reportError } from "utils/sentry";
 
+const MAX_TRANSACTION_BATCH_SIZE = 10;
+
+type TransactionMap = Map<string, ParsedConfirmedTransaction>;
+
 type AccountHistory = {
   fetched: ConfirmedSignatureInfo[];
+  transactionMap?: TransactionMap;
   foundOldest: boolean;
 };
 
 type HistoryUpdate = {
   history?: AccountHistory;
+  transactionMap?: TransactionMap;
   before?: TransactionSignature;
 };
 
@@ -52,12 +59,19 @@ function reconcile(
   update: HistoryUpdate | undefined
 ) {
   if (update?.history === undefined) return history;
+
+  let transactionMap = history?.transactionMap || new Map();
+  if (update.transactionMap) {
+    transactionMap = new Map([...transactionMap, ...update.transactionMap]);
+  }
+
   return {
     fetched: combineFetched(
       update.history.fetched,
       history?.fetched,
       update?.before
     ),
+    transactionMap,
     foundOldest: update?.history?.foundOldest || history?.foundOldest || false,
   };
 }
@@ -83,12 +97,42 @@ export function HistoryProvider({ children }: HistoryProviderProps) {
   );
 }
 
+async function fetchParsedTransactions(
+  url: string,
+  transactionSignatures: string[]
+) {
+  const transactionMap = new Map();
+  const connection = new Connection(url);
+
+  while (transactionSignatures.length > 0) {
+    const signatures = transactionSignatures.splice(
+      0,
+      MAX_TRANSACTION_BATCH_SIZE
+    );
+    const fetched = await connection.getParsedConfirmedTransactions(signatures);
+    fetched.forEach(
+      (parsed: ParsedConfirmedTransaction | null, index: number) => {
+        if (parsed !== null) {
+          transactionMap.set(signatures[index], parsed);
+        }
+      }
+    );
+  }
+
+  return transactionMap;
+}
+
 async function fetchAccountHistory(
   dispatch: Dispatch,
   pubkey: PublicKey,
   cluster: Cluster,
   url: string,
-  options: { before?: TransactionSignature; limit: number }
+  options: {
+    before?: TransactionSignature;
+    limit: number;
+    additionalSignatures?: string[];
+  },
+  fetchTransactions?: boolean
 ) {
   dispatch({
     type: ActionType.Update,
@@ -116,6 +160,22 @@ async function fetchAccountHistory(
     }
     status = FetchStatus.FetchFailed;
   }
+
+  let transactionMap;
+  if (fetchTransactions && history?.fetched) {
+    try {
+      const signatures = history.fetched
+        .map((signature) => signature.signature)
+        .concat(options.additionalSignatures || []);
+      transactionMap = await fetchParsedTransactions(url, signatures);
+    } catch (error) {
+      if (cluster !== Cluster.Custom) {
+        reportError(error, { url });
+      }
+      status = FetchStatus.FetchFailed;
+    }
+  }
+
   dispatch({
     type: ActionType.Update,
     url,
@@ -123,6 +183,7 @@ async function fetchAccountHistory(
     status,
     data: {
       history,
+      transactionMap,
       before: options?.before,
     },
   });
@@ -152,6 +213,18 @@ export function useAccountHistory(
   return context.entries[address];
 }
 
+function getUnfetchedSignatures(before: Cache.CacheEntry<AccountHistory>) {
+  if (!before.data?.transactionMap) {
+    return [];
+  }
+
+  const existingMap = before.data.transactionMap;
+  const allSignatures = before.data.fetched.map(
+    (signatureInfo) => signatureInfo.signature
+  );
+  return allSignatures.filter((signature) => !existingMap.has(signature));
+}
+
 export function useFetchAccountHistory() {
   const { cluster, url } = useCluster();
   const state = React.useContext(StateContext);
@@ -163,18 +236,39 @@ export function useFetchAccountHistory() {
   }
 
   return React.useCallback(
-    (pubkey: PublicKey, refresh?: boolean) => {
+    (pubkey: PublicKey, fetchTransactions?: boolean, refresh?: boolean) => {
       const before = state.entries[pubkey.toBase58()];
       if (!refresh && before?.data?.fetched && before.data.fetched.length > 0) {
         if (before.data.foundOldest) return;
+
+        let additionalSignatures: string[] = [];
+        if (fetchTransactions) {
+          additionalSignatures = getUnfetchedSignatures(before);
+        }
+
         const oldest =
           before.data.fetched[before.data.fetched.length - 1].signature;
-        fetchAccountHistory(dispatch, pubkey, cluster, url, {
-          before: oldest,
-          limit: 25,
-        });
+        fetchAccountHistory(
+          dispatch,
+          pubkey,
+          cluster,
+          url,
+          {
+            before: oldest,
+            limit: 25,
+            additionalSignatures,
+          },
+          fetchTransactions
+        );
       } else {
-        fetchAccountHistory(dispatch, pubkey, cluster, url, { limit: 25 });
+        fetchAccountHistory(
+          dispatch,
+          pubkey,
+          cluster,
+          url,
+          { limit: 25 },
+          fetchTransactions
+        );
       }
     },
     [state, dispatch, cluster, url]

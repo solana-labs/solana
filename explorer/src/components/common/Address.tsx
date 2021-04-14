@@ -14,6 +14,7 @@ type Props = {
   raw?: boolean;
   truncate?: boolean;
   truncateUnknown?: boolean;
+  truncateChars?: number;
 };
 
 export function Address({
@@ -23,6 +24,7 @@ export function Address({
   raw,
   truncate,
   truncateUnknown,
+  truncateChars,
 }: Props) {
   const address = pubkey.toBase58();
   const { tokenRegistry } = useTokenRegistry();
@@ -35,6 +37,14 @@ export function Address({
     truncate = true;
   }
 
+  let addressLabel = raw
+    ? address
+    : displayAddress(address, cluster, tokenRegistry);
+
+  if (truncateChars && addressLabel === address) {
+    addressLabel = addressLabel.slice(0, truncateChars) + "…";
+  }
+
   const content = (
     <Copyable text={address} replaceText={!alignRight}>
       <span className="text-monospace">
@@ -43,11 +53,11 @@ export function Address({
             className={truncate ? "text-truncate address-truncate" : ""}
             to={clusterPath(`/address/${address}`)}
           >
-            {raw ? address : displayAddress(address, cluster, tokenRegistry)}
+            {addressLabel}
           </Link>
         ) : (
           <span className={truncate ? "text-truncate address-truncate" : ""}>
-            {raw ? address : displayAddress(address, cluster, tokenRegistry)}
+            {addressLabel}
           </span>
         )}
       </span>

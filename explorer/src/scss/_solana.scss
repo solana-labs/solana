@@ -3,7 +3,8 @@
 // Use this to write your custom SCSS
 //
 
-code, pre {
+code,
+pre {
   padding: 0.33rem;
   border-radius: $border-radius;
   background-color: $gray-200;
@@ -21,7 +22,8 @@ ul.log-messages {
   max-height: 20rem;
   overflow: auto;
   font-size: 0.8125rem;
-  font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
 }
 
 .popover-container {
@@ -175,7 +177,7 @@ h4.slot-pill {
 }
 
 .search-indicator {
-  color: hsl(0,0%,60%);
+  color: hsl(0, 0%, 60%);
   display: flex;
   padding: 8px 10px;
   padding-left: 14px;
@@ -184,7 +186,7 @@ h4.slot-pill {
   cursor: pointer;
 
   &:hover {
-    color: hsl(0,0%,40%);
+    color: hsl(0, 0%, 40%);
   }
 }
 
@@ -214,7 +216,8 @@ h4.slot-pill {
   }
 }
 
-.address-truncate, .signature-truncate {
+.address-truncate,
+.signature-truncate {
   @include media-breakpoint-down(md) {
     max-width: 180px;
     display: inline-block;
@@ -239,7 +242,7 @@ p.tree span.c-pointer {
 }
 
 ul.tree ul {
-  margin-left: 1.0em;
+  margin-left: 1em;
 }
 
 ul.tree li {
@@ -288,8 +291,8 @@ div.inner-cards {
 #chartjs-tooltip {
   opacity: 1;
   position: absolute;
-  -webkit-transition: all .1s ease;
-  transition: all .1s ease;
+  -webkit-transition: all 0.1s ease;
+  transition: all 0.1s ease;
   pointer-events: none;
   -webkit-transform: translate(-50%, -105%);
   transform: translate(-50%, -105%);
@@ -327,7 +330,7 @@ div.inner-cards {
     border-left: 10px solid transparent;
     -webkit-transform: translate(-50%, 0);
     transform: translate(-50%, 0);
-    content:'';
+    content: "";
   }
 }
 
@@ -341,7 +344,8 @@ div.inner-cards {
   border: 1px solid red;
 }
 
-pre.data-wrap, pre.json-wrap {
+pre.data-wrap,
+pre.json-wrap {
   max-width: 23rem;
   white-space: pre-wrap;
   white-space: -moz-pre-wrap;
@@ -356,7 +360,7 @@ pre.json-wrap {
 
 .staking-card {
   h1 {
-    margin-bottom: .75rem;
+    margin-bottom: 0.75rem;
     small {
       font-size: 1rem;
     }
@@ -366,12 +370,12 @@ pre.json-wrap {
   }
   em {
     font-style: normal;
-    color: $primary
+    color: $primary;
   }
 }
 
 p.updated-time {
-  font-size: .66rem;
+  font-size: 0.66rem;
   text-align: right;
 }
 

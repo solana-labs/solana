@@ -12,7 +12,7 @@ import { SignatureProps } from "pages/TransactionDetailsPage";
 import { useTransactionDetails } from "providers/transactions";
 import { useTokenRegistry } from "providers/mints/token-registry";
 
-type TokenBalanceRow = {
+export type TokenBalanceRow = {
   account: PublicKey;
   mint: string;
   balance: TokenAmount;
@@ -92,7 +92,7 @@ export function TokenBalancesCard({ signature }: SignatureProps) {
   );
 }
 
-function generateTokenBalanceRows(
+export function generateTokenBalanceRows(
   preTokenBalances: TokenBalance[],
   postTokenBalances: TokenBalance[],
   accounts: ParsedMessageAccount[]

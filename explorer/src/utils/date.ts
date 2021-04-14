@@ -5,7 +5,7 @@ export function displayTimestamp(
   const expireDate = new Date(unixTimestamp);
   const dateString = new Intl.DateTimeFormat("en-US", {
     year: "numeric",
-    month: "long",
+    month: "short",
     day: "numeric",
   }).format(expireDate);
   const timeString = new Intl.DateTimeFormat("en-US", {

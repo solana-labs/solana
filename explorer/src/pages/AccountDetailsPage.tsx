@@ -16,7 +16,6 @@ import { NavLink, Redirect, useLocation } from "react-router-dom";
 import { clusterPath } from "utils/url";
 import { UnknownAccountCard } from "components/account/UnknownAccountCard";
 import { OwnedTokensCard } from "components/account/OwnedTokensCard";
-import { TransactionHistoryCard } from "components/account/TransactionHistoryCard";
 import { TokenHistoryCard } from "components/account/TokenHistoryCard";
 import { TokenLargestAccountsCard } from "components/account/TokenLargestAccountsCard";
 import { VoteAccountSection } from "components/account/VoteAccountSection";
@@ -31,34 +30,58 @@ import { useFlaggedAccounts } from "providers/accounts/flagged-accounts";
 import { UpgradeableLoaderAccountSection } from "components/account/UpgradeableLoaderAccountSection";
 import { useTokenRegistry } from "providers/mints/token-registry";
 import { Identicon } from "components/common/Identicon";
+import { TransactionHistoryCard } from "components/account/history/TransactionHistoryCard";
+import { TokenTransfersCard } from "components/account/history/TokenTransfersCard";
+import { TokenInstructionsCard } from "components/account/history/TokenInstructionsCard";
 
 const IDENTICON_WIDTH = 64;
-const TABS_LOOKUP: { [id: string]: Tab } = {
-  "spl-token:mint": {
-    slug: "largest",
-    title: "Distribution",
-    path: "/largest",
-  },
-  vote: {
-    slug: "vote-history",
-    title: "Vote History",
-    path: "/vote-history",
-  },
-  "sysvar:recentBlockhashes": {
-    slug: "blockhashes",
-    title: "Blockhashes",
-    path: "/blockhashes",
-  },
-  "sysvar:slotHashes": {
-    slug: "slot-hashes",
-    title: "Slot Hashes",
-    path: "/slot-hashes",
-  },
-  "sysvar:stakeHistory": {
-    slug: "stake-history",
-    title: "Stake History",
-    path: "/stake-history",
-  },
+
+const TABS_LOOKUP: { [id: string]: Tab[] } = {
+  "spl-token:mint": [
+    {
+      slug: "transfers",
+      title: "Transfers",
+      path: "/transfers",
+    },
+    {
+      slug: "instructions",
+      title: "Instructions",
+      path: "/instructions",
+    },
+    {
+      slug: "largest",
+      title: "Distribution",
+      path: "/largest",
+    },
+  ],
+  vote: [
+    {
+      slug: "vote-history",
+      title: "Vote History",
+      path: "/vote-history",
+    },
+  ],
+  "sysvar:recentBlockhashes": [
+    {
+      slug: "blockhashes",
+      title: "Blockhashes",
+      path: "/blockhashes",
+    },
+  ],
+  "sysvar:slotHashes": [
+    {
+      slug: "slot-hashes",
+      title: "Slot Hashes",
+      path: "/slot-hashes",
+    },
+  ],
+  "sysvar:stakeHistory": [
+    {
+      slug: "stake-history",
+      title: "Stake History",
+      path: "/stake-history",
+    },
+  ],
 };
 
 const TOKEN_TABS_HIDDEN = [
@@ -248,14 +271,16 @@ type Tab = {
   path: string;
 };
 
-type MoreTabs =
+export type MoreTabs =
   | "history"
   | "tokens"
   | "largest"
   | "vote-history"
   | "slot-hashes"
   | "stake-history"
-  | "blockhashes";
+  | "blockhashes"
+  | "transfers"
+  | "instructions";
 
 function MoreSection({
   account,
@@ -297,6 +322,8 @@ function MoreSection({
         </>
       )}
       {tab === "history" && <TransactionHistoryCard pubkey={pubkey} />}
+      {tab === "transfers" && <TokenTransfersCard pubkey={pubkey} />}
+      {tab === "instructions" && <TokenInstructionsCard pubkey={pubkey} />}
       {tab === "largest" && <TokenLargestAccountsCard pubkey={pubkey} />}
       {tab === "vote-history" && data?.program === "vote" && (
         <VotesCard voteAccount={data.parsed} />
@@ -335,11 +362,11 @@ function getTabs(data?: ProgramData): Tab[] {
   }
 
   if (data && data.program in TABS_LOOKUP) {
-    tabs.push(TABS_LOOKUP[data.program]);
+    tabs.push(...TABS_LOOKUP[data.program]);
   }
 
   if (data && programTypeKey in TABS_LOOKUP) {
-    tabs.push(TABS_LOOKUP[programTypeKey]);
+    tabs.push(...TABS_LOOKUP[programTypeKey]);
   }
 
   if (

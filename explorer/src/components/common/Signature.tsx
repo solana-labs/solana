@@ -9,9 +9,22 @@ type Props = {
   alignRight?: boolean;
   link?: boolean;
   truncate?: boolean;
+  truncateChars?: number;
 };
 
-export function Signature({ signature, alignRight, link, truncate }: Props) {
+export function Signature({
+  signature,
+  alignRight,
+  link,
+  truncate,
+  truncateChars,
+}: Props) {
+  let signatureLabel = signature;
+
+  if (truncateChars) {
+    signatureLabel = signature.slice(0, truncateChars) + "…";
+  }
+
   return (
     <div
       className={`d-flex align-items-center ${
@@ -25,10 +38,10 @@ export function Signature({ signature, alignRight, link, truncate }: Props) {
               className={truncate ? "text-truncate signature-truncate" : ""}
               to={clusterPath(`/tx/${signature}`)}
             >
-              {signature}
+              {signatureLabel}
             </Link>
           ) : (
-            signature
+            signatureLabel
           )}
         </span>
       </Copyable>
