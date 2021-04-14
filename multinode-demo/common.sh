@@ -10,12 +10,10 @@
 # shellcheck source=net/common.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. || exit 1; pwd)"/net/common.sh
 
-skip_build=true
-case "$1" in
-  --prebuild)
-    skip_build=
-    ;;
-esac
+prebuild=
+if [[ $1 = "--prebuild" ]]; then
+  prebuild=true
+fi
 
 if [[ $(uname) != Linux ]]; then
   # Protect against unsupported configurations to prevent non-obvious errors
@@ -51,7 +49,7 @@ else
     fi
 
     # Prebuild binaries so that CI sanity check timeout doesn't include build time
-    if [[ -z $skip_build ]]; then
+    if [[ $prebuild ]]; then
       (
         set -x
         # shellcheck disable=SC2086 # Don't want to double quote
@@ -62,6 +60,7 @@ else
     printf "cargo $CARGO_TOOLCHAIN run $maybe_release  --bin %s %s -- " "$program"
   }
 fi
+
 solana_bench_tps=$(solana_program bench-tps)
 solana_faucet=$(solana_program faucet)
 solana_validator=$(solana_program validator)
