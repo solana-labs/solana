@@ -132,7 +132,7 @@ mod tests {
     use serde_derive::{Deserialize, Serialize};
     use solana_sdk::{
         account::{Account, AccountSharedData},
-        keyed_account::create_keyed_is_signer_accounts,
+        keyed_account::create_keyed_accounts_unified,
         process_instruction::MockInvokeContext,
         signature::{Keypair, Signer},
         system_instruction::SystemInstruction,
@@ -185,8 +185,8 @@ mod tests {
             owner: id(),
             ..Account::default()
         }));
-        let accounts = vec![(&config_pubkey, true, &config_account)];
-        let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
+        let accounts = vec![(true, false, &config_pubkey, &config_account)];
+        let keyed_accounts = create_keyed_accounts_unified(&accounts);
         assert_eq!(
             process_instruction(
                 &id(),
@@ -219,8 +219,8 @@ mod tests {
         let my_config = MyConfig::new(42);
 
         let instruction = config_instruction::store(&config_pubkey, true, keys, &my_config);
-        let accounts = vec![(&config_pubkey, true, &config_account)];
-        let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
+        let accounts = vec![(true, false, &config_pubkey, &config_account)];
+        let keyed_accounts = create_keyed_accounts_unified(&accounts);
         assert_eq!(
             process_instruction(
                 &id(),
@@ -245,8 +245,8 @@ mod tests {
 
         let mut instruction = config_instruction::store(&config_pubkey, true, keys, &my_config);
         instruction.data = vec![0; 123]; // <-- Replace data with a vector that's too large
-        let accounts = vec![(&config_pubkey, true, &config_account)];
-        let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
+        let accounts = vec![(true, false, &config_pubkey, &config_account)];
+        let keyed_accounts = create_keyed_accounts_unified(&accounts);
         assert_eq!(
             process_instruction(
                 &id(),
@@ -267,8 +267,8 @@ mod tests {
 
         let mut instruction = config_instruction::store(&config_pubkey, true, vec![], &my_config);
         instruction.accounts[0].is_signer = false; // <----- not a signer
-        let accounts = vec![(&config_pubkey, false, &config_account)];
-        let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
+        let accounts = vec![(false, false, &config_pubkey, &config_account)];
+        let keyed_accounts = create_keyed_accounts_unified(&accounts);
         assert_eq!(
             process_instruction(
                 &id(),
@@ -298,11 +298,11 @@ mod tests {
         let signer0_account = RefCell::new(AccountSharedData::default());
         let signer1_account = RefCell::new(AccountSharedData::default());
         let accounts = vec![
-            (&config_pubkey, true, &config_account),
-            (&signer0_pubkey, true, &signer0_account),
-            (&signer1_pubkey, true, &signer1_account),
+            (true, false, &config_pubkey, &config_account),
+            (true, false, &signer0_pubkey, &signer0_account),
+            (true, false, &signer1_pubkey, &signer1_account),
         ];
-        let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
+        let keyed_accounts = create_keyed_accounts_unified(&accounts);
         assert_eq!(
             process_instruction(
                 &id(),
@@ -334,8 +334,8 @@ mod tests {
             owner: id(),
             ..Account::default()
         }));
-        let accounts = vec![(&signer0_pubkey, true, &signer0_account)];
-        let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
+        let accounts = vec![(true, false, &signer0_pubkey, &signer0_account)];
+        let keyed_accounts = create_keyed_accounts_unified(&accounts);
         assert_eq!(
             process_instruction(
                 &id(),
@@ -362,10 +362,10 @@ mod tests {
 
         // Config-data pubkey doesn't match signer
         let accounts = vec![
-            (&config_pubkey, true, &config_account),
-            (&signer1_pubkey, true, &signer1_account),
+            (true, false, &config_pubkey, &config_account),
+            (true, false, &signer1_pubkey, &signer1_account),
         ];
-        let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
+        let keyed_accounts = create_keyed_accounts_unified(&accounts);
         assert_eq!(
             process_instruction(
                 &id(),
@@ -377,10 +377,10 @@ mod tests {
 
         // Config-data pubkey not a signer
         let accounts = vec![
-            (&config_pubkey, true, &config_account),
-            (&signer0_pubkey, false, &signer0_account),
+            (true, false, &config_pubkey, &config_account),
+            (false, false, &signer0_pubkey, &signer0_account),
         ];
-        let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
+        let keyed_accounts = create_keyed_accounts_unified(&accounts);
         assert_eq!(
             process_instruction(
                 &id(),
@@ -412,11 +412,11 @@ mod tests {
 
         let instruction = config_instruction::store(&config_pubkey, true, keys.clone(), &my_config);
         let accounts = vec![
-            (&config_pubkey, true, &config_account),
-            (&signer0_pubkey, true, &signer0_account),
-            (&signer1_pubkey, true, &signer1_account),
+            (true, false, &config_pubkey, &config_account),
+            (true, false, &signer0_pubkey, &signer0_account),
+            (true, false, &signer1_pubkey, &signer1_account),
         ];
-        let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
+        let keyed_accounts = create_keyed_accounts_unified(&accounts);
         assert_eq!(
             process_instruction(
                 &id(),
@@ -431,11 +431,11 @@ mod tests {
         let instruction =
             config_instruction::store(&config_pubkey, false, keys.clone(), &new_config);
         let accounts = vec![
-            (&config_pubkey, false, &config_account),
-            (&signer0_pubkey, true, &signer0_account),
-            (&signer1_pubkey, true, &signer1_account),
+            (false, false, &config_pubkey, &config_account),
+            (true, false, &signer0_pubkey, &signer0_account),
+            (true, false, &signer1_pubkey, &signer1_account),
         ];
-        let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
+        let keyed_accounts = create_keyed_accounts_unified(&accounts);
         assert_eq!(
             process_instruction(
                 &id(),
@@ -456,11 +456,11 @@ mod tests {
         let keys = vec![(pubkey, false), (signer0_pubkey, true)];
         let instruction = config_instruction::store(&config_pubkey, false, keys, &my_config);
         let accounts = vec![
-            (&config_pubkey, false, &config_account),
-            (&signer0_pubkey, true, &signer0_account),
-            (&signer1_pubkey, false, &signer1_account),
+            (false, false, &config_pubkey, &config_account),
+            (true, false, &signer0_pubkey, &signer0_account),
+            (false, false, &signer1_pubkey, &signer1_account),
         ];
-        let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
+        let keyed_accounts = create_keyed_accounts_unified(&accounts);
         assert_eq!(
             process_instruction(
                 &id(),
@@ -478,11 +478,11 @@ mod tests {
         ];
         let instruction = config_instruction::store(&config_pubkey, false, keys, &my_config);
         let accounts = vec![
-            (&config_pubkey, false, &config_account),
-            (&signer0_pubkey, true, &signer0_account),
-            (&signer2_pubkey, true, &signer2_account),
+            (false, false, &config_pubkey, &config_account),
+            (true, false, &signer0_pubkey, &signer0_account),
+            (true, false, &signer2_pubkey, &signer2_account),
         ];
-        let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
+        let keyed_accounts = create_keyed_accounts_unified(&accounts);
         assert_eq!(
             process_instruction(
                 &id(),
@@ -516,10 +516,10 @@ mod tests {
 
         let instruction = config_instruction::store(&config_pubkey, true, keys.clone(), &my_config);
         let accounts = vec![
-            (&config_pubkey, true, &config_account),
-            (&signer0_pubkey, true, &signer0_account),
+            (true, false, &config_pubkey, &config_account),
+            (true, false, &signer0_pubkey, &signer0_account),
         ];
-        let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
+        let keyed_accounts = create_keyed_accounts_unified(&accounts);
         assert_eq!(
             process_instruction(
                 &id(),
@@ -534,10 +534,10 @@ mod tests {
         let instruction =
             config_instruction::store(&config_pubkey, true, keys.clone(), &new_config);
         let accounts = vec![
-            (&config_pubkey, true, &config_account),
-            (&signer0_pubkey, true, &signer0_account),
+            (true, false, &config_pubkey, &config_account),
+            (true, false, &signer0_pubkey, &signer0_account),
         ];
-        let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
+        let keyed_accounts = create_keyed_accounts_unified(&accounts);
         assert_eq!(
             process_instruction(
                 &id(),
@@ -557,8 +557,8 @@ mod tests {
         // Attempt update with incomplete signatures
         let keys = vec![(pubkey, false), (config_keypair.pubkey(), true)];
         let instruction = config_instruction::store(&config_pubkey, true, keys, &my_config);
-        let accounts = vec![(&config_pubkey, true, &config_account)];
-        let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
+        let accounts = vec![(true, false, &config_pubkey, &config_account)];
+        let keyed_accounts = create_keyed_accounts_unified(&accounts);
         assert_eq!(
             process_instruction(
                 &id(),
@@ -576,7 +576,7 @@ mod tests {
         let instructions =
             config_instruction::create_account::<MyConfig>(&from_pubkey, &config_pubkey, 1, vec![]);
         let accounts = vec![];
-        let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
+        let keyed_accounts = create_keyed_accounts_unified(&accounts);
         assert_eq!(
             process_instruction(
                 &id(),
@@ -603,10 +603,10 @@ mod tests {
 
         let instruction = config_instruction::store(&config_pubkey, true, keys, &new_config);
         let accounts = vec![
-            (&config_pubkey, true, &config_account),
-            (&signer0_pubkey, true, &signer0_account),
+            (true, false, &config_pubkey, &config_account),
+            (true, false, &signer0_pubkey, &signer0_account),
         ];
-        let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
+        let keyed_accounts = create_keyed_accounts_unified(&accounts);
         assert_eq!(
             process_instruction(
                 &id(),

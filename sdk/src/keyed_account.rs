@@ -146,6 +146,10 @@ pub fn create_keyed_accounts<'a>(
     accounts.iter().map(Into::into).collect()
 }
 
+#[deprecated(
+    since = "1.7.0",
+    note = "Please use create_keyed_accounts_unified instead"
+)]
 pub fn create_keyed_is_signer_accounts<'a>(
     accounts: &'a [(&'a Pubkey, bool, &'a RefCell<AccountSharedData>)],
 ) -> Vec<KeyedAccount<'a>> {
@@ -160,6 +164,10 @@ pub fn create_keyed_is_signer_accounts<'a>(
         .collect()
 }
 
+#[deprecated(
+    since = "1.7.0",
+    note = "Please use create_keyed_accounts_unified instead"
+)]
 pub fn create_keyed_readonly_accounts(
     accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
 ) -> Vec<KeyedAccount> {
@@ -168,6 +176,20 @@ pub fn create_keyed_readonly_accounts(
         .map(|(key, account)| KeyedAccount {
             is_signer: false,
             is_writable: false,
+            key,
+            account,
+        })
+        .collect()
+}
+
+pub fn create_keyed_accounts_unified<'a>(
+    accounts: &[(bool, bool, &'a Pubkey, &'a RefCell<AccountSharedData>)],
+) -> Vec<KeyedAccount<'a>> {
+    accounts
+        .iter()
+        .map(|(is_signer, is_writable, key, account)| KeyedAccount {
+            is_signer: *is_signer,
+            is_writable: *is_writable,
             key,
             account,
         })

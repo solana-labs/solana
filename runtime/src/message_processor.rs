@@ -14,7 +14,7 @@ use solana_sdk::{
     },
     ic_msg,
     instruction::{CompiledInstruction, Instruction, InstructionError},
-    keyed_account::{keyed_account_at_index, KeyedAccount},
+    keyed_account::{create_keyed_accounts_unified, keyed_account_at_index, KeyedAccount},
     message::Message,
     native_loader,
     process_instruction::{
@@ -318,7 +318,10 @@ impl<'a> ThisInvokeContext<'a> {
         };
         invoke_context
             .invoke_stack
-            .push(InvokeContextStackFrame::new(*program_id, &keyed_accounts));
+            .push(InvokeContextStackFrame::new(
+                *program_id,
+                create_keyed_accounts_unified(&keyed_accounts),
+            ));
         invoke_context
     }
 }
@@ -326,7 +329,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     fn push(
         &mut self,
         key: &Pubkey,
-        keyed_accounts: &[(&Pubkey, bool, bool, &RefCell<AccountSharedData>)],
+        keyed_accounts: &[(bool, bool, &Pubkey, &RefCell<AccountSharedData>)],
     ) -> Result<(), InstructionError> {
         if self.invoke_stack.len() > self.bpf_compute_budget.max_invoke_depth {
             return Err(InstructionError::CallDepth);
@@ -340,7 +343,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         // with the ones already existing in self, so that the lifetime 'a matches.
         let keyed_accounts = keyed_accounts
             .iter()
-            .map(|(search_key, is_signer, is_writable, account)| {
+            .map(|(is_signer, is_writable, search_key, account)| {
                 self.account_deps
                     .iter()
                     .map(|(key, _account)| key)
@@ -349,17 +352,17 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
                     .map(|mut index| {
                         if index < self.account_deps.len() {
                             (
-                                &self.account_deps[index].0,
                                 *is_signer,
                                 *is_writable,
+                                &self.account_deps[index].0,
                                 &self.account_deps[index].1 as &RefCell<AccountSharedData>,
                             )
                         } else {
                             index = index.saturating_sub(self.account_deps.len());
                             (
-                                &self.message.account_keys[index],
                                 *is_signer,
                                 *is_writable,
+                                &self.message.account_keys[index],
                                 // TODO
                                 // Currently we are constructing new accounts on the stack
                                 // before calling MessageProcessor::process_cross_program_instruction
@@ -374,7 +377,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             .ok_or(InstructionError::InvalidArgument)?;
         self.invoke_stack.push(InvokeContextStackFrame::new(
             *key,
-            keyed_accounts.as_slice(),
+            create_keyed_accounts_unified(keyed_accounts.as_slice()),
         ));
         Ok(())
     }
@@ -394,7 +397,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         let stack_frame = self
             .invoke_stack
             .last()
-            .ok_or(InstructionError::GenericError)?;
+            .ok_or(InstructionError::CallDepth)?;
         MessageProcessor::verify_and_update(
             message,
             instruction,
@@ -411,13 +414,13 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         self.invoke_stack
             .last()
             .map(|frame| &frame.key)
-            .ok_or(InstructionError::GenericError)
+            .ok_or(InstructionError::CallDepth)
     }
     fn remove_first_keyed_account(&mut self) -> Result<(), InstructionError> {
         let stack_frame = &mut self
             .invoke_stack
             .last_mut()
-            .ok_or(InstructionError::GenericError)?;
+            .ok_or(InstructionError::CallDepth)?;
         stack_frame.keyed_accounts_range.start =
             stack_frame.keyed_accounts_range.start.saturating_add(1);
         Ok(())
@@ -426,7 +429,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         self.invoke_stack
             .last()
             .map(|frame| &frame.keyed_accounts[frame.keyed_accounts_range.clone()])
-            .ok_or(InstructionError::GenericError)
+            .ok_or(InstructionError::CallDepth)
     }
     fn get_programs(&self) -> &[(Pubkey, ProcessInstructionWithContext)] {
         self.programs
@@ -632,16 +635,16 @@ impl MessageProcessor {
         executable_accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
         accounts: &'a [Rc<RefCell<AccountSharedData>>],
         demote_sysvar_write_locks: bool,
-    ) -> Vec<(&'a Pubkey, bool, bool, &'a RefCell<AccountSharedData>)> {
+    ) -> Vec<(bool, bool, &'a Pubkey, &'a RefCell<AccountSharedData>)> {
         executable_accounts
             .iter()
-            .map(|(key, account)| (key, false, false, account as &RefCell<AccountSharedData>))
+            .map(|(key, account)| (false, false, key, account as &RefCell<AccountSharedData>))
             .chain(instruction.accounts.iter().map(|index| {
                 let index = *index as usize;
                 (
-                    &message.account_keys[index],
                     message.is_signer(index),
                     message.is_writable(index, demote_sysvar_write_locks),
+                    &message.account_keys[index],
                     &accounts[index] as &RefCell<AccountSharedData>,
                 )
             }))

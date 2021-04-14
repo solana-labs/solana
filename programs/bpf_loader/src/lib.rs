@@ -103,9 +103,7 @@ pub fn create_executor(
             return Err(InstructionError::ProgramFailedToCompile);
         }
     }
-    Ok(Arc::new(BpfExecutor {
-        program: executable,
-    }))
+    Ok(Arc::new(BpfExecutor { executable }))
 }
 
 fn write_program_data(
@@ -725,7 +723,7 @@ impl InstructionMeter for ThisInstructionMeter {
 
 /// BPF Loader's Executor implementation
 pub struct BpfExecutor {
-    program: Box<dyn Executable<BpfError, ThisInstructionMeter>>,
+    executable: Box<dyn Executable<BpfError, ThisInstructionMeter>>,
 }
 
 // Well, implement Debug for solana_rbpf::vm::Executable in solana-rbpf...
@@ -760,7 +758,7 @@ impl Executor for BpfExecutor {
             let compute_meter = invoke_context.get_compute_meter();
             let mut vm = match create_vm(
                 loader_id,
-                self.program.as_ref(),
+                self.executable.as_ref(),
                 &mut parameter_bytes,
                 invoke_context,
             ) {

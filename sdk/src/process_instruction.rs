@@ -1,7 +1,7 @@
 use solana_sdk::{
     account::AccountSharedData,
     instruction::{CompiledInstruction, Instruction, InstructionError},
-    keyed_account::KeyedAccount,
+    keyed_account::{create_keyed_accounts_unified, KeyedAccount},
     message::Message,
     pubkey::Pubkey,
 };
@@ -29,20 +29,7 @@ pub struct InvokeContextStackFrame<'a> {
 }
 
 impl<'a> InvokeContextStackFrame<'a> {
-    pub fn new(
-        key: Pubkey,
-        keyed_accounts: &[(&'a Pubkey, bool, bool, &'a RefCell<AccountSharedData>)],
-    ) -> Self {
-        let keyed_accounts: Vec<_> = keyed_accounts
-            .iter()
-            .map(|(key, is_signer, is_writable, account)| {
-                if *is_writable {
-                    KeyedAccount::new(*key, *is_signer, *account)
-                } else {
-                    KeyedAccount::new_readonly(*key, *is_signer, *account)
-                }
-            })
-            .collect();
+    pub fn new(key: Pubkey, keyed_accounts: Vec<KeyedAccount<'a>>) -> Self {
         let keyed_accounts_range = std::ops::Range {
             start: 0,
             end: keyed_accounts.len(),
@@ -63,7 +50,7 @@ pub trait InvokeContext {
     fn push(
         &mut self,
         key: &Pubkey,
-        keyed_accounts: &[(&Pubkey, bool, bool, &RefCell<AccountSharedData>)],
+        keyed_accounts: &[(bool, bool, &Pubkey, &RefCell<AccountSharedData>)],
     ) -> Result<(), InstructionError>;
     /// Pop a stack frame from the invocation stack
     ///
@@ -342,15 +329,12 @@ impl<'a> MockInvokeContext<'a> {
             accounts: vec![],
             sysvars: vec![],
         };
-        let keyed_accounts_range = std::ops::Range {
-            start: 0,
-            end: keyed_accounts.len(),
-        };
-        invoke_context.invoke_stack.push(InvokeContextStackFrame {
-            key: Pubkey::default(),
-            keyed_accounts,
-            keyed_accounts_range,
-        });
+        invoke_context
+            .invoke_stack
+            .push(InvokeContextStackFrame::new(
+                Pubkey::default(),
+                keyed_accounts,
+            ));
         invoke_context
     }
 }
@@ -358,11 +342,11 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
     fn push(
         &mut self,
         key: &Pubkey,
-        keyed_accounts: &[(&Pubkey, bool, bool, &RefCell<AccountSharedData>)],
+        keyed_accounts: &[(bool, bool, &Pubkey, &RefCell<AccountSharedData>)],
     ) -> Result<(), InstructionError> {
         self.invoke_stack
             .push(InvokeContextStackFrame::new(*key, unsafe {
-                std::mem::transmute(keyed_accounts)
+                std::mem::transmute(create_keyed_accounts_unified(keyed_accounts))
             }));
         Ok(())
     }
@@ -385,13 +369,13 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
         self.invoke_stack
             .last()
             .map(|frame| &frame.key)
-            .ok_or(InstructionError::GenericError)
+            .ok_or(InstructionError::CallDepth)
     }
     fn remove_first_keyed_account(&mut self) -> Result<(), InstructionError> {
         let stack_frame = &mut self
             .invoke_stack
             .last_mut()
-            .ok_or(InstructionError::GenericError)?;
+            .ok_or(InstructionError::CallDepth)?;
         stack_frame.keyed_accounts_range.start =
             stack_frame.keyed_accounts_range.start.saturating_add(1);
         Ok(())
@@ -400,7 +384,7 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
         self.invoke_stack
             .last()
             .map(|frame| &frame.keyed_accounts[frame.keyed_accounts_range.clone()])
-            .ok_or(InstructionError::GenericError)
+            .ok_or(InstructionError::CallDepth)
     }
     fn get_programs(&self) -> &[(Pubkey, ProcessInstructionWithContext)] {
         &self.programs
