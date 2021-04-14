@@ -1,11 +1,12 @@
 //! The `poh_service` module implements a service that records the passing of
 //! "ticks", a measure of time in the PoH stream
 use crate::poh_recorder::{PohRecorder, Record};
+use crossbeam_channel::Receiver;
 use solana_ledger::poh::Poh;
 use solana_measure::measure::Measure;
 use solana_sdk::poh_config::PohConfig;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{mpsc::Receiver, Arc, Mutex};
+use std::sync::{Arc, Mutex};
 use std::thread::{self, sleep, Builder, JoinHandle};
 use std::time::{Duration, Instant};
 
@@ -381,6 +382,8 @@ mod tests {
                 target_tick_duration,
                 target_tick_count: None,
             });
+            let exit = Arc::new(AtomicBool::new(false));
+
             let (poh_recorder, entry_receiver, record_receiver) = PohRecorder::new(
                 bank.tick_height(),
                 prev_hash,
@@ -391,9 +394,9 @@ mod tests {
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
                 &poh_config,
+                exit.clone(),
             );
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
-            let exit = Arc::new(AtomicBool::new(false));
             let start = Arc::new(Instant::now());
             let working_bank = WorkingBank {
                 bank: bank.clone(),
