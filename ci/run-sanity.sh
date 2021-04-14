@@ -24,7 +24,7 @@ done
 snapshot_slot=1
 
 # wait a bit longer than snapshot_slot
-while [[ $($solana_cli --url http://localhost:8899 slot --commitment recent) -le $((snapshot_slot + 1)) ]]; do
+while [[ $($solana_cli --url http://localhost:8899 slot --commitment processed) -le $((snapshot_slot + 1)) ]]; do
   sleep 1
   echo "Checking slot"
 done
