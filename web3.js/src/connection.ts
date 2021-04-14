@@ -932,13 +932,6 @@ const StakeActivationResult = pick({
 });
 
 /**
- * Expected JSON RPC response for the "getConfirmedSignaturesForAddress" message
- */
-const GetConfirmedSignaturesForAddressRpcResult = jsonRpcResult(
-  array(string()),
-);
-
-/**
  * Expected JSON RPC response for the "getConfirmedSignaturesForAddress2" message
  */
 
@@ -2596,6 +2589,7 @@ export class Connection {
   /**
    * Fetch a list of all the confirmed signatures for transactions involving an address
    * within a specified slot range. Max range allowed is 10,000 slots.
+   * @deprecated Deprecated since v1.3. Use `Connection.getConfirmedSignaturesForAddress2()` instead.
    *
    * @param address queried address
    * @param startSlot start slot, inclusive
@@ -2606,17 +2600,59 @@ export class Connection {
     startSlot: number,
     endSlot: number,
   ): Promise<Array<TransactionSignature>> {
-    const unsafeRes = await this._rpcRequest(
-      'getConfirmedSignaturesForAddress',
-      [address.toBase58(), startSlot, endSlot],
-    );
-    const res = create(unsafeRes, GetConfirmedSignaturesForAddressRpcResult);
-    if ('error' in res) {
-      throw new Error(
-        'failed to get confirmed signatures for address: ' + res.error.message,
-      );
+    let options: any = {};
+
+    let firstAvailableBlock = await this.getFirstAvailableBlock();
+    while (!('until' in options)) {
+      startSlot--;
+      if (startSlot <= 0 || startSlot < firstAvailableBlock) {
+        break;
+      }
+
+      try {
+        const block = await this.getConfirmedBlockSignatures(startSlot);
+        if (block.signatures.length > 0) {
+          options.until = block.signatures[
+            block.signatures.length - 1
+          ].toString();
+        }
+      } catch (err) {
+        if (err.message.includes('skipped')) {
+          continue;
+        } else {
+          throw err;
+        }
+      }
     }
-    return res.result;
+
+    let highestConfirmedRoot = await this.getSlot('finalized');
+    while (!('before' in options)) {
+      endSlot++;
+      if (endSlot > highestConfirmedRoot) {
+        break;
+      }
+
+      try {
+        const block = await this.getConfirmedBlockSignatures(endSlot);
+        if (block.signatures.length > 0) {
+          options.before = block.signatures[
+            block.signatures.length - 1
+          ].toString();
+        }
+      } catch (err) {
+        if (err.message.includes('skipped')) {
+          continue;
+        } else {
+          throw err;
+        }
+      }
+    }
+
+    const confirmedSignatureInfo = await this.getConfirmedSignaturesForAddress2(
+      address,
+      options,
+    );
+    return confirmedSignatureInfo.map(info => info.signature);
   }
 
   /**

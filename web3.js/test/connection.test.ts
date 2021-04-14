@@ -597,9 +597,50 @@ describe('Connection', () => {
 
     // getConfirmedSignaturesForAddress tests...
     await mockRpcResponse({
-      method: 'getConfirmedSignaturesForAddress',
-      params: [address.toBase58(), slot, slot + 1],
-      value: [expectedSignature],
+      method: 'getFirstAvailableBlock',
+      params: [],
+      value: 0,
+    });
+    const mockSignature =
+      '5SHZ9NwpnS9zYnauN7pnuborKf39zGMr11XpMC59VvRSeDJNcnYLecmdxXCVuBFPNQLdCBBjyZiNCL4KoHKr3tvz';
+    await mockRpcResponse({
+      method: 'getConfirmedBlock',
+      params: [slot, {transactionDetails: 'signatures', rewards: false}],
+      value: {
+        blockTime: 1614281964,
+        blockhash: 'H5nJ91eGag3B5ZSRHZ7zG5ZwXJ6ywCt2hyR8xCsV7xMo',
+        previousBlockhash: 'H5nJ91eGag3B5ZSRHZ7zG5ZwXJ6ywCt2hyR8xCsV7xMo',
+        parentSlot: 1,
+        signatures: [mockSignature],
+      },
+    });
+    await mockRpcResponse({
+      method: 'getSlot',
+      params: [],
+      value: 123,
+    });
+    await mockRpcResponse({
+      method: 'getConfirmedBlock',
+      params: [slot + 2, {transactionDetails: 'signatures', rewards: false}],
+      value: {
+        blockTime: 1614281964,
+        blockhash: 'H5nJ91eGag3B5ZSRHZ7zG5ZwXJ6ywCt2hyR8xCsV7xMo',
+        previousBlockhash: 'H5nJ91eGag3B5ZSRHZ7zG5ZwXJ6ywCt2hyR8xCsV7xMo',
+        parentSlot: 1,
+        signatures: [mockSignature],
+      },
+    });
+    await mockRpcResponse({
+      method: 'getConfirmedSignaturesForAddress2',
+      params: [address.toBase58(), {before: mockSignature}],
+      value: [
+        {
+          signature: expectedSignature,
+          slot,
+          err: null,
+          memo: null,
+        },
+      ],
     });
 
     const confirmedSignatures = await connection.getConfirmedSignaturesForAddress(
@@ -611,17 +652,17 @@ describe('Connection', () => {
 
     const badSlot = Number.MAX_SAFE_INTEGER - 1;
     await mockRpcResponse({
-      method: 'getConfirmedSignaturesForAddress',
-      params: [address.toBase58(), badSlot, badSlot + 1],
-      value: [],
+      method: 'getConfirmedBlock',
+      params: [badSlot - 1, {transactionDetails: 'signatures', rewards: false}],
+      error: {message: 'Block not available for slot ' + badSlot},
     });
-
-    const emptySignatures = await connection.getConfirmedSignaturesForAddress(
-      address,
-      badSlot,
-      badSlot + 1,
-    );
-    expect(emptySignatures).to.have.length(0);
+    expect(
+      connection.getConfirmedSignaturesForAddress(
+        address,
+        badSlot,
+        badSlot + 1,
+      ),
+    ).to.be.rejected;
 
     // getConfirmedSignaturesForAddress2 tests...
     await mockRpcResponse({
