@@ -10,6 +10,11 @@
 # shellcheck source=net/common.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. || exit 1; pwd)"/net/common.sh
 
+prebuild=
+if [[ $1 = "--prebuild" ]]; then
+  prebuild=true
+fi
+
 if [[ $(uname) != Linux ]]; then
   # Protect against unsupported configurations to prevent non-obvious errors
   # later. Arguably these should be fatal errors but for now prefer tolerance.
@@ -39,14 +44,20 @@ else
       program="solana-$program"
     fi
 
-    if [[ -r "$SOLANA_ROOT/$crate"/Cargo.toml ]]; then
-      maybe_package="--package solana-$crate"
-    fi
     if [[ -n $NDEBUG ]]; then
       maybe_release=--release
     fi
-    declare manifest_path="--manifest-path=$SOLANA_ROOT/$crate/Cargo.toml"
-    printf "cargo $CARGO_TOOLCHAIN run $manifest_path $maybe_release $maybe_package --bin %s %s -- " "$program"
+
+    # Prebuild binaries so that CI sanity check timeout doesn't include build time
+    if [[ $prebuild ]]; then
+      (
+        set -x
+        # shellcheck disable=SC2086 # Don't want to double quote
+        cargo $CARGO_TOOLCHAIN build $maybe_release --bin $program
+      )
+    fi
+
+    printf "cargo $CARGO_TOOLCHAIN run $maybe_release  --bin %s %s -- " "$program"
   }
 fi
 
