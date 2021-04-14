@@ -263,7 +263,7 @@ fn process_transaction_and_record_inner(
 ) -> (Result<(), TransactionError>, Vec<Vec<CompiledInstruction>>) {
     let signature = tx.signatures.get(0).unwrap().clone();
     let txs = vec![tx];
-    let tx_batch = bank.prepare_batch(&txs);
+    let tx_batch = bank.prepare_batch(txs.iter());
     let (mut results, _, mut inner, _transaction_logs) = bank.load_execute_and_commit_transactions(
         &tx_batch,
         MAX_PROCESSING_AGE,
@@ -288,7 +288,7 @@ fn process_transaction_and_record_inner(
 }
 
 fn execute_transactions(bank: &Bank, txs: &[Transaction]) -> Vec<ConfirmedTransaction> {
-    let batch = bank.prepare_batch(txs);
+    let batch = bank.prepare_batch(txs.iter());
     let mut timings = ExecuteTimings::default();
     let mut mint_decimals = HashMap::new();
     let tx_pre_token_balances = collect_token_balances(&bank, &batch, &mut mint_decimals);
@@ -1233,8 +1233,8 @@ fn assert_instruction_count() {
             ("solana_bpf_rust_many_args", 237),
             ("solana_bpf_rust_noop", 488),
             ("solana_bpf_rust_param_passing", 48),
-            ("solana_bpf_rust_ristretto", 19399),
-            ("solana_bpf_rust_sanity", 935),
+            ("solana_bpf_rust_ristretto", 19409),
+            ("solana_bpf_rust_sanity", 938),
         ]);
     }
 

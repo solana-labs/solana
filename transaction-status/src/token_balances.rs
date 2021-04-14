@@ -55,7 +55,7 @@ pub fn collect_token_balances(
 ) -> TransactionTokenBalances {
     let mut balances: TransactionTokenBalances = vec![];
 
-    for transaction in batch.transactions() {
+    for transaction in batch.transactions_iter() {
         let account_keys = &transaction.message.account_keys;
         let has_token_program = account_keys.iter().any(|p| is_token_program(p));
 

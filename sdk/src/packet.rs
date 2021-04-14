@@ -39,9 +39,9 @@ impl Packet {
         Self { data, meta }
     }
 
-    pub fn from_data<T: Serialize>(dest: &SocketAddr, data: T) -> Result<Self> {
+    pub fn from_data<T: Serialize>(dest: Option<&SocketAddr>, data: T) -> Result<Self> {
         let mut packet = Packet::default();
-        Self::populate_packet(&mut packet, Some(dest), &data)?;
+        Self::populate_packet(&mut packet, dest, &data)?;
         Ok(packet)
     }
 
