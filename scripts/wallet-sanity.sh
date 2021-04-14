@@ -21,7 +21,7 @@ node_readiness=false
 timeout=60
 while [[ $timeout -gt 0 ]]; do
   set +e
-  output=$($solana_cli "${args[@]}" transaction-count --commitment max)
+  output=$($solana_cli "${args[@]}" transaction-count --commitment finalized)
   rc=$?
   set -e
   if [[ $rc -eq 0 && -n $output ]]; then
