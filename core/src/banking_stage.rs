@@ -1391,6 +1391,7 @@ pub fn create_test_recorder(
         blockstore,
         &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
         &poh_config,
+        exit.clone(),
     );
     poh_recorder.set_bank(&bank);
 
@@ -1436,10 +1437,7 @@ mod tests {
     use std::{
         net::SocketAddr,
         path::Path,
-        sync::{
-            atomic::{AtomicBool, Ordering},
-            mpsc::Receiver,
-        },
+        sync::atomic::{AtomicBool, Ordering},
         thread::sleep,
     };
 
@@ -1796,11 +1794,12 @@ mod tests {
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
                 &Arc::new(PohConfig::default()),
+                Arc::new(AtomicBool::default()),
             );
             let recorder = poh_recorder.recorder();
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
-            let (poh_simulator, exit) = simulate_poh(record_receiver, &poh_recorder);
+            let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
             poh_recorder.lock().unwrap().set_working_bank(working_bank);
             let pubkey = solana_sdk::pubkey::new_rand();
@@ -1870,7 +1869,11 @@ mod tests {
             // Should receive nothing from PohRecorder b/c record failed
             assert!(entry_receiver.try_recv().is_err());
 
-            exit.store(true, Ordering::Relaxed);
+            poh_recorder
+                .lock()
+                .unwrap()
+                .is_exited
+                .store(true, Ordering::Relaxed);
             let _ = poh_simulator.join();
         }
         Blockstore::destroy(&ledger_path).unwrap();
@@ -2062,11 +2065,12 @@ mod tests {
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
                 &Arc::new(PohConfig::default()),
+                Arc::new(AtomicBool::default()),
             );
             let recorder = poh_recorder.recorder();
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
-            let (poh_simulator, exit) = simulate_poh(record_receiver, &poh_recorder);
+            let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
             poh_recorder.lock().unwrap().set_working_bank(working_bank);
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
@@ -2121,7 +2125,11 @@ mod tests {
                 Err(PohRecorderError::MaxHeightReached)
             );
 
-            exit.store(true, Ordering::Relaxed);
+            poh_recorder
+                .lock()
+                .unwrap()
+                .is_exited
+                .store(true, Ordering::Relaxed);
             let _ = poh_simulator.join();
 
             assert_eq!(bank.get_balance(&pubkey), 1);
@@ -2130,12 +2138,11 @@ mod tests {
     }
 
     fn simulate_poh(
-        record_receiver: Receiver<Record>,
+        record_receiver: CrossbeamReceiver<Record>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
-    ) -> (JoinHandle<()>, Arc<AtomicBool>) {
-        let exit = Arc::new(AtomicBool::new(false));
-        let exit_ = exit.clone();
+    ) -> JoinHandle<()> {
         let poh_recorder = poh_recorder.clone();
+        let is_exited = poh_recorder.lock().unwrap().is_exited.clone();
         let tick_producer = Builder::new()
             .name("solana-simulate_poh".to_string())
             .spawn(move || loop {
@@ -2144,11 +2151,11 @@ mod tests {
                     &record_receiver,
                     Duration::from_millis(10),
                 );
-                if exit_.load(Ordering::Relaxed) {
+                if is_exited.load(Ordering::Relaxed) {
                     break;
                 }
             });
-        (tick_producer.unwrap(), exit)
+        tick_producer.unwrap()
     }
 
     #[test]
@@ -2189,13 +2196,14 @@ mod tests {
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
                 &Arc::new(PohConfig::default()),
+                Arc::new(AtomicBool::default()),
             );
             let recorder = poh_recorder.recorder();
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
             poh_recorder.lock().unwrap().set_working_bank(working_bank);
 
-            let (poh_simulator, exit) = simulate_poh(record_receiver, &poh_recorder);
+            let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
 
@@ -2208,7 +2216,11 @@ mod tests {
                 &gossip_vote_sender,
             );
 
-            exit.store(true, Ordering::Relaxed);
+            poh_recorder
+                .lock()
+                .unwrap()
+                .is_exited
+                .store(true, Ordering::Relaxed);
             let _ = poh_simulator.join();
 
             assert!(result.is_ok());
@@ -2290,14 +2302,14 @@ mod tests {
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
                 &Arc::new(PohConfig::default()),
+                Arc::new(AtomicBool::default()),
             );
 
             // Poh Recorder has no working bank, so should throw MaxHeightReached error on
             // record
             let recorder = poh_recorder.recorder();
 
-            let (poh_simulator, exit) =
-                simulate_poh(record_receiver, &Arc::new(Mutex::new(poh_recorder)));
+            let poh_simulator = simulate_poh(record_receiver, &Arc::new(Mutex::new(poh_recorder)));
 
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
 
@@ -2317,7 +2329,7 @@ mod tests {
             let expected: Vec<usize> = (0..transactions.len()).collect();
             assert_eq!(retryable_txs, expected);
 
-            exit.store(true, Ordering::Relaxed);
+            recorder.is_exited.store(true, Ordering::Relaxed);
             let _ = poh_simulator.join();
         }
 
@@ -2375,11 +2387,12 @@ mod tests {
                 &blockstore,
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
                 &Arc::new(PohConfig::default()),
+                Arc::new(AtomicBool::default()),
             );
             let recorder = poh_recorder.recorder();
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
-            let (poh_simulator, exit) = simulate_poh(record_receiver, &poh_recorder);
+            let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
             poh_recorder.lock().unwrap().set_working_bank(working_bank);
 
@@ -2434,7 +2447,11 @@ mod tests {
                 }
             }
 
-            exit.store(true, Ordering::Relaxed);
+            poh_recorder
+                .lock()
+                .unwrap()
+                .is_exited
+                .store(true, Ordering::Relaxed);
             let _ = poh_simulator.join();
         }
         Blockstore::destroy(&ledger_path).unwrap();
@@ -2449,7 +2466,6 @@ mod tests {
         Arc<Mutex<PohRecorder>>,
         Receiver<WorkingBankEntry>,
         JoinHandle<()>,
-        Arc<AtomicBool>,
     ) {
         Blockstore::destroy(&ledger_path).unwrap();
         let genesis_config_info = create_slow_genesis_config(10_000);
@@ -2461,6 +2477,7 @@ mod tests {
         let blockstore =
             Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger");
         let bank = Arc::new(Bank::new_no_wallclock_throttle(&genesis_config));
+        let exit = Arc::new(AtomicBool::default());
         let (poh_recorder, entry_receiver, record_receiver) = PohRecorder::new(
             bank.tick_height(),
             bank.last_blockhash(),
@@ -2471,6 +2488,7 @@ mod tests {
             &Arc::new(blockstore),
             &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
             &Arc::new(PohConfig::default()),
+            exit,
         );
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
@@ -2483,7 +2501,7 @@ mod tests {
             system_transaction::transfer(&mint_keypair, &pubkey1, 1, genesis_config.hash()),
             system_transaction::transfer(&mint_keypair, &pubkey2, 1, genesis_config.hash()),
         ];
-        let (poh_simulator, exit) = simulate_poh(record_receiver, &poh_recorder);
+        let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
         (
             transactions,
@@ -2491,7 +2509,6 @@ mod tests {
             poh_recorder,
             entry_receiver,
             poh_simulator,
-            exit,
         )
     }
 
@@ -2499,7 +2516,7 @@ mod tests {
     fn test_consume_buffered_packets() {
         let ledger_path = get_tmp_ledger_path!();
         {
-            let (transactions, bank, poh_recorder, _entry_receiver, poh_simulator, exit) =
+            let (transactions, bank, poh_recorder, _entry_receiver, poh_simulator) =
                 setup_conflicting_transactions(&ledger_path);
             let recorder = poh_recorder.lock().unwrap().recorder();
             let num_conflicting_transactions = transactions.len();
@@ -2553,7 +2570,11 @@ mod tests {
                     assert_eq!(buffered_packets[0].1.len(), num_expected_unprocessed);
                 }
             }
-            exit.store(true, Ordering::Relaxed);
+            poh_recorder
+                .lock()
+                .unwrap()
+                .is_exited
+                .store(true, Ordering::Relaxed);
             let _ = poh_simulator.join();
         }
         Blockstore::destroy(&ledger_path).unwrap();
@@ -2563,7 +2584,7 @@ mod tests {
     fn test_consume_buffered_packets_interrupted() {
         let ledger_path = get_tmp_ledger_path!();
         {
-            let (transactions, bank, poh_recorder, _entry_receiver, poh_simulator, exit) =
+            let (transactions, bank, poh_recorder, _entry_receiver, poh_simulator) =
                 setup_conflicting_transactions(&ledger_path);
             let num_conflicting_transactions = transactions.len();
             let packets_vec = to_packets_chunked(&transactions, 1);
@@ -2640,7 +2661,11 @@ mod tests {
             }
 
             t_consume.join().unwrap();
-            exit.store(true, Ordering::Relaxed);
+            poh_recorder
+                .lock()
+                .unwrap()
+                .is_exited
+                .store(true, Ordering::Relaxed);
             let _ = poh_simulator.join();
         }
         Blockstore::destroy(&ledger_path).unwrap();

@@ -331,7 +331,7 @@ mod test {
         system_program, system_transaction,
         timing::timestamp,
     };
-    use std::sync::mpsc::channel;
+    use std::sync::{atomic::AtomicBool, mpsc::channel};
 
     #[test]
     fn service_exit() {
@@ -811,6 +811,7 @@ mod test {
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
                 &Arc::new(PohConfig::default()),
+                Arc::new(AtomicBool::default()),
             );
 
             let node_keypair = Arc::new(Keypair::new());
