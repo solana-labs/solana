@@ -492,9 +492,15 @@ describe('Connection', () => {
 
   it('get total supply', async () => {
     await mockRpcResponse({
-      method: 'getTotalSupply',
+      method: 'getSupply',
       params: [],
-      value: 1000000,
+      value: {
+        total: 1000000,
+        circulating: 100000,
+        nonCirculating: 900000,
+        nonCirculatingAccounts: [new Account().publicKey.toBase58()],
+      },
+      withContext: true,
     });
 
     const count = await connection.getTotalSupply();
