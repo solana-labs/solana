@@ -343,42 +343,27 @@ impl CrdsGossipPull {
                 failed_inserts.push(value.value_hash)
             }
         };
-        for r in responses {
-            let owner = r.label().pubkey();
+        let default_timeout = timeouts
+            .get(&Pubkey::default())
+            .copied()
+            .unwrap_or(self.msg_timeout);
+        for response in responses {
+            let owner = response.label().pubkey();
             // Check if the crds value is older than the msg_timeout
-            if now > r.wallclock().checked_add(self.msg_timeout).unwrap_or(0)
-                || now + self.msg_timeout < r.wallclock()
-            {
-                match &r.label() {
-                    CrdsValueLabel::ContactInfo(_) => {
-                        // Check if this ContactInfo is actually too old, it's possible that it has
-                        // stake and so might have a longer effective timeout
-                        let timeout = *timeouts
-                            .get(&owner)
-                            .unwrap_or_else(|| timeouts.get(&Pubkey::default()).unwrap());
-                        if now > r.wallclock().checked_add(timeout).unwrap_or(0)
-                            || now + timeout < r.wallclock()
-                        {
-                            stats.timeout_count += 1;
-                            stats.failed_timeout += 1;
-                            continue;
-                        }
-                    }
-                    _ => {
-                        // Before discarding this value, check if a ContactInfo for the owner
-                        // exists in the table. If it doesn't, that implies that this value can be discarded
-                        if crds.lookup(&CrdsValueLabel::ContactInfo(owner)).is_none() {
-                            stats.timeout_count += 1;
-                            stats.failed_timeout += 1;
-                        } else {
-                            // Silently insert this old value without bumping record timestamps
-                            maybe_push(r, &mut versioned_expired_timestamp);
-                        }
-                        continue;
-                    }
-                }
+            let timeout = timeouts.get(&owner).copied().unwrap_or(default_timeout);
+            // Before discarding this value, check if a ContactInfo for the
+            // owner exists in the table. If it doesn't, that implies that this
+            // value can be discarded
+            if now <= response.wallclock().saturating_add(timeout) {
+                maybe_push(response, &mut versioned);
+            } else if crds.get_contact_info(owner).is_some() {
+                // Silently insert this old value without bumping record
+                // timestamps
+                maybe_push(response, &mut versioned_expired_timestamp);
+            } else {
+                stats.timeout_count += 1;
+                stats.failed_timeout += 1;
             }
-            maybe_push(r, &mut versioned);
         }
         (versioned, versioned_expired_timestamp, failed_inserts)
     }
@@ -1511,7 +1496,7 @@ mod test {
                 &peer_pubkey,
                 &timeouts,
                 vec![peer_vote],
-                node.msg_timeout + 1,
+                node.msg_timeout + 2,
             )
             .0,
             1
