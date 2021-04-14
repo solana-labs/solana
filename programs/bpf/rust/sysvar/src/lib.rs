@@ -54,12 +54,6 @@ pub fn process_instruction(
         assert_eq!(fees, got_fees);
     }
 
-    // Instructions
-    msg!("Instructions identifier:");
-    sysvar::instructions::id().log();
-    let index = instructions::load_current_index(&accounts[5].try_borrow_data()?);
-    assert_eq!(0, index);
-
     // Recent Blockhashes
     {
         msg!("RecentBlockhashes identifier:");
@@ -87,13 +81,6 @@ pub fn process_instruction(
         "instruction {:?}",
         instructions::load_instruction_at(index as usize, &accounts[4].try_borrow_data()?)
     );
-
-    let due = Rent::from_account_info(&accounts[5]).unwrap().due(
-        rent::DEFAULT_LAMPORTS_PER_BYTE_YEAR * rent::DEFAULT_EXEMPTION_THRESHOLD as u64,
-        1,
-        1.0,
-    );
-    assert_eq!(due, (0, true));
 
     // Slot Hashes
     msg!("SlotHashes identifier:");
