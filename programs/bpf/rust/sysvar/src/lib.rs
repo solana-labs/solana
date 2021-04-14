@@ -49,10 +49,15 @@ pub fn process_instruction(
         sysvar::fees::id().log();
         let fees = Fees::from_account_info(&accounts[4]).unwrap();
         let fee_calculator = fees.fee_calculator.clone();
-        assert_ne!(fee_calculator, FeeCalculator::default());
         let got_fees = Fees::get()?;
         assert_eq!(fees, got_fees);
     }
+
+    // Instructions
+    msg!("Instructions identifier:");
+    sysvar::instructions::id().log();
+    let index = instructions::load_current_index(&accounts[5].try_borrow_data()?);
+    assert_eq!(0, index);
 
     // Recent Blockhashes
     {
@@ -67,20 +72,9 @@ pub fn process_instruction(
         msg!("Rent identifier:");
         sysvar::rent::id().log();
         let rent = Rent::from_account_info(&accounts[7]).unwrap();
-        assert_eq!(rent, Rent::default());
         let got_rent = Rent::get()?;
         assert_eq!(rent, got_rent);
     }
-
-    // Instructions
-    msg!("Instructions identifier:");
-    sysvar::instructions::id().log();
-    let index = instructions::load_current_index(&accounts[4].try_borrow_data()?);
-    assert_eq!(0, index);
-    msg!(
-        "instruction {:?}",
-        instructions::load_instruction_at(index as usize, &accounts[4].try_borrow_data()?)
-    );
 
     // Slot Hashes
     msg!("SlotHashes identifier:");
