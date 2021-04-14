@@ -70,7 +70,7 @@ done
 
 source ci/upload-ci-artifact.sh
 source scripts/configure-metrics.sh
-source multinode-demo/common.sh
+source multinode-demo/common.sh --prebuild
 
 nodes=(
   "multinode-demo/bootstrap-validator.sh \
