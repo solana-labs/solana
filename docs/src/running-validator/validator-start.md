@@ -32,7 +32,7 @@ Try running following command to join the gossip network and view all the other
 nodes in the cluster:
 
 ```bash
-solana-gossip spy --entrypoint devnet.solana.com:8001
+solana-gossip spy --entrypoint entrypoint.devnet.solana.com:8001
 # Press ^C to exit
 ```
 
