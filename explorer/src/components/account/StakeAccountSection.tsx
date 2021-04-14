@@ -25,7 +25,7 @@ export function StakeAccountSection({
   stakeAccountType: StakeAccountType;
   activation?: StakeActivationData;
 }) {
-  const showDelegation =
+  const hideDelegation =
     stakeAccountType !== "delegated" ||
     isFullyInactivated(stakeAccount, activation);
   return (
@@ -36,9 +36,9 @@ export function StakeAccountSection({
         stakeAccount={stakeAccount}
         stakeAccountType={stakeAccountType}
         activation={activation}
-        showDelegation={showDelegation}
+        hideDelegation={hideDelegation}
       />
-      {showDelegation && (
+      {!hideDelegation && (
         <DelegationCard
           stakeAccount={stakeAccount}
           activation={activation}
@@ -91,13 +91,13 @@ function OverviewCard({
   stakeAccount,
   stakeAccountType,
   activation,
-  showDelegation,
+  hideDelegation,
 }: {
   account: Account;
   stakeAccount: StakeAccountInfo;
   stakeAccountType: StakeAccountType;
   activation?: StakeActivationData;
-  showDelegation: boolean;
+  hideDelegation: boolean;
 }) {
   const refresh = useFetchAccountInfo();
   return (
@@ -134,7 +134,7 @@ function OverviewCard({
             {lamportsToSolString(stakeAccount.meta.rentExemptReserve)}
           </td>
         </tr>
-        {showDelegation && (
+        {hideDelegation && (
           <tr>
             <td>Status</td>
             <td className="text-lg-right">
