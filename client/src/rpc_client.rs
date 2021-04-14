@@ -1557,6 +1557,24 @@ impl RpcClient {
         commitment: CommitmentConfig,
         config: RpcSendTransactionConfig,
     ) -> ClientResult<Signature> {
+        let recent_blockhash = if uses_durable_nonce(transaction).is_some() {
+            self.get_recent_blockhash_with_commitment(CommitmentConfig::processed())?
+                .value
+                .0
+        } else {
+            transaction.message.recent_blockhash
+        };
+        let signature = self.send_transaction_with_config(transaction, config)?;
+        self.confirm_transaction_with_spinner(&signature, &recent_blockhash, commitment)?;
+        Ok(signature)
+    }
+
+    pub fn confirm_transaction_with_spinner(
+        &self,
+        signature: &Signature,
+        recent_blockhash: &Hash,
+        commitment: CommitmentConfig,
+    ) -> ClientResult<()> {
         let desired_confirmations = if commitment.is_finalized() {
             MAX_LOCKOUT_HISTORY + 1
         } else {
@@ -1568,16 +1586,8 @@ impl RpcClient {
 
         progress_bar.set_message(&format!(
             "[{}/{}] Finalizing transaction {}",
-            confirmations, desired_confirmations, transaction.signatures[0],
+            confirmations, desired_confirmations, signature,
         ));
-        let recent_blockhash = if uses_durable_nonce(transaction).is_some() {
-            self.get_recent_blockhash_with_commitment(CommitmentConfig::processed())?
-                .value
-                .0
-        } else {
-            transaction.message.recent_blockhash
-        };
-        let signature = self.send_transaction_with_config(transaction, config)?;
         let (signature, status) = loop {
             // Get recent commitment in order to count confirmations for successful transactions
             let status = self
@@ -1624,7 +1634,7 @@ impl RpcClient {
             {
                 progress_bar.set_message("Transaction confirmed");
                 progress_bar.finish_and_clear();
-                return Ok(signature);
+                return Ok(());
             }
 
             progress_bar.set_message(&format!(
