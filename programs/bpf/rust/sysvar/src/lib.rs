@@ -5,7 +5,6 @@ use solana_program::{
     account_info::AccountInfo,
     entrypoint,
     entrypoint::ProgramResult,
-    fee_calculator::FeeCalculator,
     msg,
     program_error::ProgramError,
     pubkey::Pubkey,
@@ -48,7 +47,6 @@ pub fn process_instruction(
         msg!("Fees identifier:");
         sysvar::fees::id().log();
         let fees = Fees::from_account_info(&accounts[4]).unwrap();
-        let fee_calculator = fees.fee_calculator.clone();
         let got_fees = Fees::get()?;
         assert_eq!(fees, got_fees);
     }
