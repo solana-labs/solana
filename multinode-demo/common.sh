@@ -39,17 +39,20 @@ else
       program="solana-$program"
     fi
 
-    if [[ -r "$SOLANA_ROOT/$crate"/Cargo.toml ]]; then
-      maybe_package="--package solana-$crate"
-    fi
     if [[ -n $NDEBUG ]]; then
       maybe_release=--release
     fi
-    declare manifest_path="--manifest-path=$SOLANA_ROOT/$crate/Cargo.toml"
-    printf "cargo $CARGO_TOOLCHAIN run $manifest_path $maybe_release $maybe_package --bin %s %s -- " "$program"
+
+    (
+      set -x
+      # Prebuild local binaries so that CI sanity check doesn't include build time
+      # in the check timeout
+      cargo $CARGO_TOOLCHAIN build $maybe_release --bin $program
+    )
+
+    printf "cargo $CARGO_TOOLCHAIN run $maybe_release  --bin %s %s -- " "$program"
   }
 fi
-
 solana_bench_tps=$(solana_program bench-tps)
 solana_faucet=$(solana_program faucet)
 solana_validator=$(solana_program validator)
