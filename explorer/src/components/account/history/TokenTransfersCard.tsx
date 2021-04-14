@@ -61,9 +61,6 @@ export function TokenTransfersCard({ pubkey }: { pubkey: PublicKey }) {
 
   React.useEffect(() => {
     if (!history || !history.data?.transactionMap?.size) {
-      if (history) {
-        console.log(history.data?.transactionMap?.size);
-      }
       refresh();
     }
   }, [address]); // eslint-disable-line react-hooks/exhaustive-deps
