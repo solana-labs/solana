@@ -74,15 +74,12 @@ pub fn download_file(
         progress_bar.set_length(download_size);
         progress_bar.set_style(
             ProgressStyle::default_bar()
-                .template(&format!(
-                    "{}{}Downloading {} {}",
-                    "{spinner:.green} ",
-                    TRUCK,
-                    url,
-                    "[{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})"
-                ))
+                .template(
+                    "{spinner:.green}{msg_wide}[{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})",
+                )
                 .progress_chars("=> "),
         );
+        progress_bar.set_message(&format!("{}Downloading~ {}", TRUCK, url));
     } else {
         info!("Downloading {} bytes from {}", download_size, url);
     }
