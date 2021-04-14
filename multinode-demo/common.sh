@@ -43,10 +43,10 @@ else
       maybe_release=--release
     fi
 
+    # Prebuild binaries so that CI sanity check timeout doesn't include build time
     (
       set -x
-      # Prebuild local binaries so that CI sanity check doesn't include build time
-      # in the check timeout
+      # shellcheck disable=SC2086 # Don't want to double quote
       cargo $CARGO_TOOLCHAIN build $maybe_release --bin $program
     )
 
