@@ -1,9 +1,6 @@
 use crate::{
-    heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
-    repair_service::{OutstandingRepairs, RepairTiming},
-    repair_weighted_traversal,
-    serve_repair::RepairType,
-    tree_diff::TreeDiff,
+    heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice, repair_service::RepairTiming,
+    repair_weighted_traversal, serve_repair::RepairType, tree_diff::TreeDiff,
 };
 use solana_ledger::{ancestor_iterator::AncestorIterator, blockstore::Blockstore};
 use solana_measure::measure::Measure;
@@ -150,7 +147,6 @@ impl RepairWeight {
         max_new_shreds: usize,
         ignore_slots: &impl Contains<'a, Slot>,
         repair_timing: Option<&mut RepairTiming>,
-        _outstanding_requests: &OutstandingRepairs,
     ) -> Vec<RepairType> {
         let mut repairs = vec![];
         let mut get_best_orphans_elapsed = Measure::start("get_best_orphans");

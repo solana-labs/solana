@@ -2,9 +2,8 @@ use crate::{
     cluster_info::{ClusterInfo, ClusterInfoError},
     cluster_slots::ClusterSlots,
     contact_info::ContactInfo,
-    outstanding_requests::OutstandingRequests,
     repair_response,
-    repair_service::RepairStats,
+    repair_service::{OutstandingRepairs, RepairStats},
     request_response::RequestResponse,
     result::{Error, Result},
     weighted_shuffle::weighted_best,
@@ -402,7 +401,7 @@ impl ServeRepair {
         cache: &mut RepairCache,
         repair_stats: &mut RepairStats,
         repair_validators: &Option<HashSet<Pubkey>>,
-        outstanding_requests: &OutstandingRequests<RepairType, Shred>,
+        outstanding_requests: &mut OutstandingRepairs,
     ) -> Result<(SocketAddr, Vec<u8>)> {
         // find a peer that appears to be accepting replication and has the desired slot, as indicated
         // by a valid tvu port location
@@ -422,7 +421,7 @@ impl ServeRepair {
         };
         let n = weighted_index.sample(&mut rand::thread_rng());
         let addr = repair_peers[n].serve_repair; // send the request to the peer's serve_repair port
-        let nonce = outstanding_requests.add_request(&addr, repair_request);
+        let nonce = outstanding_requests.add_request(repair_request);
         let repair_peer_id = repair_peers[n].id;
         let out = self.map_repair_request(&repair_request, &repair_peer_id, repair_stats, nonce)?;
         Ok((addr, out))
@@ -780,14 +779,14 @@ mod tests {
         let me = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
         let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(me));
         let serve_repair = ServeRepair::new(cluster_info.clone());
-        let outstanding_requests = OutstandingRequests::default();
+        let mut outstanding_requests = OutstandingRepairs::default();
         let rv = serve_repair.repair_request(
             &cluster_slots,
             RepairType::Shred(0, 0),
             &mut HashMap::new(),
             &mut RepairStats::default(),
             &None,
-            &outstanding_requests,
+            &mut outstanding_requests,
         );
         assert_matches!(rv, Err(Error::ClusterInfoError(ClusterInfoError::NoPeers)));
 
@@ -815,7 +814,7 @@ mod tests {
                 &mut HashMap::new(),
                 &mut RepairStats::default(),
                 &None,
-                &outstanding_requests,
+                &mut outstanding_requests,
             )
             .unwrap();
         assert_eq!(nxt.serve_repair, serve_repair_addr);
@@ -849,7 +848,7 @@ mod tests {
                     &mut HashMap::new(),
                     &mut RepairStats::default(),
                     &None,
-                    &outstanding_requests,
+                    &mut outstanding_requests,
                 )
                 .unwrap();
             if rv.0 == serve_repair_addr {
@@ -1029,6 +1028,7 @@ mod tests {
                     &mut HashMap::new(),
                     &mut RepairStats::default(),
                     &trusted_validators,
+                    &mut OutstandingRepairs::default(),
                 )
                 .is_err());
         }
@@ -1045,6 +1045,7 @@ mod tests {
                 &mut HashMap::new(),
                 &mut RepairStats::default(),
                 &trusted_validators,
+                &mut OutstandingRepairs::default(),
             )
             .is_ok());
 
@@ -1065,6 +1066,7 @@ mod tests {
                 &mut HashMap::new(),
                 &mut RepairStats::default(),
                 &None,
+                &mut OutstandingRepairs::default(),
             )
             .is_ok());
     }
