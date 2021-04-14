@@ -10,6 +10,13 @@
 # shellcheck source=net/common.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. || exit 1; pwd)"/net/common.sh
 
+skip_build=true
+case "$1" in
+  --prebuild)
+    skip_build=
+    ;;
+esac
+
 if [[ $(uname) != Linux ]]; then
   # Protect against unsupported configurations to prevent non-obvious errors
   # later. Arguably these should be fatal errors but for now prefer tolerance.
@@ -44,11 +51,13 @@ else
     fi
 
     # Prebuild binaries so that CI sanity check timeout doesn't include build time
-    (
-      set -x
-      # shellcheck disable=SC2086 # Don't want to double quote
-      cargo $CARGO_TOOLCHAIN build $maybe_release --bin $program
-    )
+    if [[ -z $skip_build ]]; then
+      (
+        set -x
+        # shellcheck disable=SC2086 # Don't want to double quote
+        cargo $CARGO_TOOLCHAIN build $maybe_release --bin $program
+      )
+    fi
 
     printf "cargo $CARGO_TOOLCHAIN run $maybe_release  --bin %s %s -- " "$program"
   }
