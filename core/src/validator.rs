@@ -510,6 +510,7 @@ impl Validator {
                 blockstore.new_shreds_signals.first().cloned(),
                 &leader_schedule_cache,
                 &poh_config,
+                exit.clone(),
             );
         if config.snapshot_config.is_some() {
             poh_recorder.set_bank(&bank);
