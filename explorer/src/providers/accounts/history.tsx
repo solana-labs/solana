@@ -11,7 +11,7 @@ import * as Cache from "providers/cache";
 import { ActionType, FetchStatus } from "providers/cache";
 import { reportError } from "utils/sentry";
 
-const MAX_TRANSACTION_BATCH_SIZE = 30;
+const MAX_TRANSACTION_BATCH_SIZE = 10;
 
 type TransactionMap = Map<string, ParsedConfirmedTransaction>;
 

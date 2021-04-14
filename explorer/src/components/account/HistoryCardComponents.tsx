@@ -107,7 +107,7 @@ export function getTransactionRows(
         blockTime: slotTransaction.blockTime,
         statusClass,
         statusText,
-        signatureInfo: transactions[i],
+        signatureInfo: slotTransaction,
       });
     }
   }
