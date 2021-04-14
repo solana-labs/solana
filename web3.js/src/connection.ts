@@ -2308,15 +2308,16 @@ export class Connection {
 
   /**
    * Fetch the current total currency supply of the cluster in lamports
+   * @deprecated Deprecated since v1.2.8. Use `Connection.getSupply()` instead.
    */
   async getTotalSupply(commitment?: Commitment): Promise<number> {
     const args = this._buildArgs([], commitment);
-    const unsafeRes = await this._rpcRequest('getTotalSupply', args);
-    const res = create(unsafeRes, jsonRpcResult(number()));
+    const unsafeRes = await this._rpcRequest('getSupply', args);
+    const res = create(unsafeRes, GetSupplyRpcResult);
     if ('error' in res) {
       throw new Error('failed to get total supply: ' + res.error.message);
     }
-    return res.result;
+    return res.result.value.total;
   }
 
   /**
