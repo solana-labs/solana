@@ -584,6 +584,22 @@ export type ConfirmedBlock = {
 };
 
 /**
+ * A ConfirmedBlock on the ledger with signatures only
+ */
+export type ConfirmedBlockSignatures = {
+  /** Blockhash of this block */
+  blockhash: Blockhash;
+  /** Blockhash of this block's parent */
+  previousBlockhash: Blockhash;
+  /** Slot index of this block's parent */
+  parentSlot: number;
+  /** Vector of signatures */
+  signatures: Array<string>;
+  /** The unix timestamp of when the block was processed */
+  blockTime: number | null;
+};
+
+/**
  * A performance sample
  */
 export type PerfSample = {
@@ -1226,6 +1242,21 @@ const GetConfirmedBlockRpcResult = jsonRpcResult(
           }),
         ),
       ),
+      blockTime: nullable(number()),
+    }),
+  ),
+);
+
+/**
+ * Expected JSON RPC response for the "getConfirmedBlockSignatures" message
+ */
+const GetConfirmedBlockSignaturesRpcResult = jsonRpcResult(
+  nullable(
+    pick({
+      blockhash: string(),
+      previousBlockhash: string(),
+      parentSlot: number(),
+      signatures: array(string()),
       blockTime: nullable(number()),
     }),
   ),
@@ -2467,6 +2498,27 @@ export class Connection {
   async getConfirmedBlock(slot: number): Promise<ConfirmedBlock> {
     const unsafeRes = await this._rpcRequest('getConfirmedBlock', [slot]);
     const res = create(unsafeRes, GetConfirmedBlockRpcResult);
+    if ('error' in res) {
+      throw new Error('failed to get confirmed block: ' + res.error.message);
+    }
+    const result = res.result;
+    if (!result) {
+      throw new Error('Confirmed block ' + slot + ' not found');
+    }
+    return result;
+  }
+
+  /**
+   * Fetch a list of Signatures from the cluster for a confirmed block, excluding rewards
+   */
+  async getConfirmedBlockSignatures(
+    slot: number,
+  ): Promise<ConfirmedBlockSignatures> {
+    const unsafeRes = await this._rpcRequest('getConfirmedBlock', [
+      slot,
+      {transactionDetails: 'signatures', rewards: false},
+    ]);
+    const res = create(unsafeRes, GetConfirmedBlockSignaturesRpcResult);
     if ('error' in res) {
       throw new Error('failed to get confirmed block: ' + res.error.message);
     }
