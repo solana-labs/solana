@@ -1,10 +1,10 @@
 import React from "react";
-import { ConfirmedSignatureInfo } from "@solana/web3.js";
+import { ConfirmedSignatureInfo, TransactionError } from "@solana/web3.js";
 
 export type TransactionRow = {
   slot: number;
   signature: string;
-  err: object | null;
+  err: TransactionError | null;
   blockTime: number | null | undefined;
   statusClass: string;
   statusText: string;

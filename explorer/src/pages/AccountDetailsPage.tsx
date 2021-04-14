@@ -34,7 +34,6 @@ import { TransactionHistoryCard } from "components/account/history/TransactionHi
 import { TokenTransfersCard } from "components/account/history/TokenTransfersCard";
 import { TokenInstructionsCard } from "components/account/history/TokenInstructionsCard";
 
-
 const IDENTICON_WIDTH = 64;
 
 const TABS_LOOKUP: { [id: string]: Tab[] } = {

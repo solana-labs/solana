@@ -394,10 +394,3 @@ p.updated-time {
 .identicon-wrapper-small {
   margin-left: .4rem;
 }
-
-tr.transaction-failed > td:first-child > :first-child::before {
-  font-family: 'feather';
-  content: '\e902';
-  color: $warning;
-  margin-left: -1rem;
-}

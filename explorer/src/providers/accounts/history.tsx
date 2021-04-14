@@ -11,6 +11,8 @@ import * as Cache from "providers/cache";
 import { ActionType, FetchStatus } from "providers/cache";
 import { reportError } from "utils/sentry";
 
+const MAX_TRANSACTION_BATCH_SIZE = 30;
+
 type TransactionMap = Map<string, ParsedConfirmedTransaction>;
 
 type AccountHistory = {
@@ -99,18 +101,24 @@ async function fetchParsedTransactions(
   url: string,
   transactionSignatures: string[]
 ) {
-  const connection = new Connection(url);
-  const fetched = await connection.getParsedConfirmedTransactions(
-    transactionSignatures
-  );
   const transactionMap = new Map();
-  fetched.forEach(
-    (parsed: ParsedConfirmedTransaction | null, index: number) => {
-      if (parsed !== null) {
-        transactionMap.set(transactionSignatures[index], parsed);
+  const connection = new Connection(url);
+
+  while (transactionSignatures.length > 0) {
+    const signatures = transactionSignatures.splice(
+      0,
+      MAX_TRANSACTION_BATCH_SIZE
+    );
+    const fetched = await connection.getParsedConfirmedTransactions(signatures);
+    fetched.forEach(
+      (parsed: ParsedConfirmedTransaction | null, index: number) => {
+        if (parsed !== null) {
+          transactionMap.set(signatures[index], parsed);
+        }
       }
-    }
-  );
+    );
+  }
+
   return transactionMap;
 }
 
