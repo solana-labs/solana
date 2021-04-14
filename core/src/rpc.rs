@@ -1754,6 +1754,12 @@ fn verify_pubkey(input: String) -> Result<Pubkey> {
         .map_err(|e| Error::invalid_params(format!("Invalid param: {:?}", e)))
 }
 
+fn verify_hash(input: String) -> Result<Hash> {
+    input
+        .parse()
+        .map_err(|e| Error::invalid_params(format!("Invalid param: {:?}", e)))
+}
+
 fn verify_signature(input: &str) -> Result<Signature> {
     input
         .parse()
@@ -2355,7 +2361,7 @@ pub mod rpc_full {
             meta: Self::Metadata,
             pubkey_str: String,
             lamports: u64,
-            commitment: Option<CommitmentConfig>,
+            config: Option<RpcRequestAirdropConfig>,
         ) -> Result<String>;
 
         #[rpc(meta, name = "sendTransaction")]
@@ -2786,28 +2792,28 @@ pub mod rpc_full {
             meta: Self::Metadata,
             pubkey_str: String,
             lamports: u64,
-            commitment: Option<CommitmentConfig>,
+            config: Option<RpcRequestAirdropConfig>,
         ) -> Result<String> {
             debug!("request_airdrop rpc request received");
             trace!(
-                "request_airdrop id={} lamports={} commitment: {:?}",
+                "request_airdrop id={} lamports={} config: {:?}",
                 pubkey_str,
                 lamports,
-                &commitment
+                &config
             );
 
             let faucet_addr = meta.config.faucet_addr.ok_or_else(Error::invalid_request)?;
             let pubkey = verify_pubkey(pubkey_str)?;
 
-            let (blockhash, last_valid_slot) = {
-                let bank = meta.bank(commitment);
+            let config = config.unwrap_or_default();
+            let bank = meta.bank(config.commitment);
 
-                let blockhash = bank.confirmed_last_blockhash().0;
-                (
-                    blockhash,
-                    bank.get_blockhash_last_valid_slot(&blockhash).unwrap_or(0),
-                )
+            let blockhash = if let Some(blockhash) = config.recent_blockhash {
+                verify_hash(blockhash)?
+            } else {
+                bank.confirmed_last_blockhash().0
             };
+            let last_valid_slot = bank.get_blockhash_last_valid_slot(&blockhash).unwrap_or(0);
 
             let transaction =
                 request_airdrop_transaction(&faucet_addr, &pubkey, lamports, blockhash).map_err(
