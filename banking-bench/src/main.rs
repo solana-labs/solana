@@ -148,7 +148,7 @@ fn main() {
             Arg::with_name("num_threads")
                 .long("num-threads")
                 .takes_value(true)
-                .help("Number of iterations"),
+                .help("Number of threads"),
         )
         .get_matches();
 
@@ -169,7 +169,7 @@ fn main() {
 
     let (verified_sender, verified_receiver) = unbounded();
     let (vote_sender, vote_receiver) = unbounded();
-    let (replay_vote_sender, _replay_vote_receiver) = unbounded();
+    let (replay_vote_sender, replay_vote_receiver) = unbounded();
     let bank0 = Bank::new(&genesis_config);
     let mut bank_forks = BankForks::new(bank0);
     let mut bank = bank_forks.working_bank();
@@ -302,7 +302,7 @@ fn main() {
                     bank.transaction_count(),
                     txs_processed
                 );
-                assert!(txs_processed < bank.transaction_count());
+                assert!(txs_processed <= bank.transaction_count());
                 txs_processed = bank.transaction_count();
                 tx_total_us += duration_as_us(&now.elapsed());
 
