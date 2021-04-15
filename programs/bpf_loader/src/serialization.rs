@@ -1,4 +1,5 @@
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
+use solana_rbpf::{aligned_memory::AlignedMemory, ebpf::HOST_ALIGN};
 use solana_sdk::{
     account::ReadableAccount, bpf_loader_deprecated, entrypoint::MAX_PERMITTED_DATA_INCREASE,
     instruction::InstructionError, keyed_account::KeyedAccount, pubkey::Pubkey,
@@ -23,7 +24,7 @@ pub fn serialize_parameters(
     program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
     data: &[u8],
-) -> Result<Vec<u8>, InstructionError> {
+) -> Result<AlignedMemory, InstructionError> {
     if *loader_id == bpf_loader_deprecated::id() {
         serialize_parameters_unaligned(program_id, keyed_accounts, data)
     } else {
@@ -65,7 +66,7 @@ pub fn serialize_parameters_unaligned(
     program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
     instruction_data: &[u8],
-) -> Result<Vec<u8>, InstructionError> {
+) -> Result<AlignedMemory, InstructionError> {
     // Calculate size in order to alloc once
     let mut size = size_of::<u64>();
     for (i, keyed_account) in keyed_accounts.iter().enumerate() {
@@ -78,7 +79,7 @@ pub fn serialize_parameters_unaligned(
     size += size_of::<u64>() // instruction data len
          + instruction_data.len() // instruction data
          + size_of::<Pubkey>(); // program id
-    let mut v: Vec<u8> = Vec::with_capacity(size);
+    let mut v = AlignedMemory::new(size, HOST_ALIGN);
 
     v.write_u64::<LittleEndian>(keyed_accounts.len() as u64)
         .map_err(|_| InstructionError::InvalidArgument)?;
@@ -177,7 +178,7 @@ pub fn serialize_parameters_aligned(
     program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
     instruction_data: &[u8],
-) -> Result<Vec<u8>, InstructionError> {
+) -> Result<AlignedMemory, InstructionError> {
     // Calculate size in order to alloc once
     let mut size = size_of::<u64>();
     for (i, keyed_account) in keyed_accounts.iter().enumerate() {
@@ -192,14 +193,11 @@ pub fn serialize_parameters_aligned(
     size += size_of::<u64>() // data len
     + instruction_data.len()
     + size_of::<Pubkey>(); // program id;
-    let mut v: Vec<u8> = Vec::with_capacity(size);
+    let mut v = AlignedMemory::new(size, HOST_ALIGN);
 
     // Serialize into the buffer
     v.write_u64::<LittleEndian>(keyed_accounts.len() as u64)
         .map_err(|_| InstructionError::InvalidArgument)?;
-    if v.as_ptr().align_offset(align_of::<u128>()) != 0 {
-        panic!();
-    }
     for (i, keyed_account) in keyed_accounts.iter().enumerate() {
         let (is_dup, position) = is_dup(&keyed_accounts[..i], keyed_account);
         if is_dup {
@@ -228,12 +226,12 @@ pub fn serialize_parameters_aligned(
                 .map_err(|_| InstructionError::InvalidArgument)?;
             v.write_all(&keyed_account.try_account_ref()?.data())
                 .map_err(|_| InstructionError::InvalidArgument)?;
-            v.resize(
-                v.len()
-                    + MAX_PERMITTED_DATA_INCREASE
-                    + (v.len() as *const u8).align_offset(align_of::<u128>()),
+            v.fill(
+                MAX_PERMITTED_DATA_INCREASE
+                    + (v.write_index() as *const u8).align_offset(align_of::<u128>()),
                 0,
-            );
+            )
+            .map_err(|_| InstructionError::InvalidArgument)?;
             v.write_u64::<LittleEndian>(keyed_account.rent_epoch()? as u64)
                 .map_err(|_| InstructionError::InvalidArgument)?;
         }
@@ -410,7 +408,8 @@ mod tests {
         .unwrap();
 
         let (de_program_id, de_accounts, de_instruction_data) =
-            unsafe { deserialize(&mut serialized[0] as *mut u8) };
+            unsafe { deserialize(&mut serialized.as_slice_mut()[0] as *mut u8) };
+
         assert_eq!(&program_id, de_program_id);
         assert_eq!(instruction_data, de_instruction_data);
         assert_eq!(
@@ -453,7 +452,13 @@ mod tests {
                 }
             })
             .collect();
-        deserialize_parameters(&bpf_loader::id(), &de_keyed_accounts, &serialized, true).unwrap();
+        deserialize_parameters(
+            &bpf_loader::id(),
+            &de_keyed_accounts,
+            serialized.as_slice(),
+            true,
+        )
+        .unwrap();
         for ((account, de_keyed_account), key) in
             accounts.iter().zip(de_keyed_accounts).zip(keys.clone())
         {
@@ -480,7 +485,7 @@ mod tests {
         .unwrap();
 
         let (de_program_id, de_accounts, de_instruction_data) =
-            unsafe { deserialize_unaligned(&mut serialized[0] as *mut u8) };
+            unsafe { deserialize_unaligned(&mut serialized.as_slice_mut()[0] as *mut u8) };
         assert_eq!(&program_id, de_program_id);
         assert_eq!(instruction_data, de_instruction_data);
         for ((account, account_info), key) in accounts.iter().zip(de_accounts).zip(keys.clone()) {
@@ -509,7 +514,7 @@ mod tests {
         deserialize_parameters(
             &bpf_loader_deprecated::id(),
             &de_keyed_accounts,
-            &serialized,
+            serialized.as_slice(),
             true,
         )
         .unwrap();
