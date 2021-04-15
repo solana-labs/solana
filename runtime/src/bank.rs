@@ -3432,7 +3432,9 @@ impl Bank {
     }
 
     fn run_incinerator(&self) {
-        if let Some((account, _)) = self.get_account_for_incinerator(&incinerator::id()) {
+        if let Some((account, _)) =
+            self.get_account_modified_since_parent_with_fixed_root(&incinerator::id())
+        {
             self.capitalization.fetch_sub(account.lamports, Relaxed);
             self.store_account(&incinerator::id(), &AccountSharedData::default());
         }
@@ -4206,7 +4208,11 @@ impl Bank {
         self.rc.accounts.load_by_program_slot(self.slot(), None)
     }
 
-    fn get_account_for_incinerator(&self, pubkey: &Pubkey) -> Option<(AccountSharedData, Slot)> {
+    // if you want get_account_modified_since_parent without fixed_root, please define so...
+    fn get_account_modified_since_parent_with_fixed_root(
+        &self,
+        pubkey: &Pubkey,
+    ) -> Option<(AccountSharedData, Slot)> {
         let just_self: Ancestors = vec![(self.slot(), 0)].into_iter().collect();
         if let Some((account, slot)) = self.load_slow_with_fixed_root(&just_self, pubkey) {
             if slot == self.slot() {
@@ -8306,27 +8312,29 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn test_bank_get_account_for_incinerator() {
+    fn test_bank_get_account_modified_since_parent_with_fixed_root() {
         let pubkey = solana_sdk::pubkey::new_rand();
 
         let (genesis_config, mint_keypair) = create_genesis_config(500);
         let bank1 = Arc::new(Bank::new(&genesis_config));
         bank1.transfer(1, &mint_keypair, &pubkey).unwrap();
-        let result = bank1.get_account_for_incinerator(&pubkey);
+        let result = bank1.get_account_modified_since_parent_with_fixed_root(&pubkey);
         assert!(result.is_some());
         let (account, slot) = result.unwrap();
         assert_eq!(account.lamports, 1);
         assert_eq!(slot, 0);
 
         let bank2 = Arc::new(Bank::new_from_parent(&bank1, &Pubkey::default(), 1));
-        assert!(bank2.get_account_for_incinerator(&pubkey).is_none());
+        assert!(bank2
+            .get_account_modified_since_parent_with_fixed_root(&pubkey)
+            .is_none());
         bank2.transfer(100, &mint_keypair, &pubkey).unwrap();
-        let result = bank1.get_account_for_incinerator(&pubkey);
+        let result = bank1.get_account_modified_since_parent_with_fixed_root(&pubkey);
         assert!(result.is_some());
         let (account, slot) = result.unwrap();
         assert_eq!(account.lamports, 1);
         assert_eq!(slot, 0);
-        let result = bank2.get_account_for_incinerator(&pubkey);
+        let result = bank2.get_account_modified_since_parent_with_fixed_root(&pubkey);
         assert!(result.is_some());
         let (account, slot) = result.unwrap();
         assert_eq!(account.lamports, 101);
@@ -8335,7 +8343,10 @@ pub(crate) mod tests {
         bank1.squash();
 
         let bank3 = Bank::new_from_parent(&bank2, &Pubkey::default(), 3);
-        assert_eq!(None, bank3.get_account_for_incinerator(&pubkey));
+        assert_eq!(
+            None,
+            bank3.get_account_modified_since_parent_with_fixed_root(&pubkey)
+        );
     }
 
     #[test]
