@@ -9866,10 +9866,8 @@ pub mod tests {
                     // slow branch should only affect the performance.
                     // Ordering::Relaxed is ok because of no data dependencies; the modified field is
                     // completely free-standing cfg(test) control-flow knob.
-                    db.load_limit.store(
-                        thread_rng().gen_range(0, 10) as u64,
-                        Ordering::Relaxed,
-                    );
+                    db.load_limit
+                        .store(thread_rng().gen_range(0, 10) as u64, Ordering::Relaxed);
 
                     // Load should never be unable to find this key
                     let loaded_account = db.do_load(&ancestors, &pubkey, None, load_hint).unwrap();
