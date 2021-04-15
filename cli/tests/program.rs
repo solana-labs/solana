@@ -28,8 +28,9 @@ fn test_cli_program_deploy_non_upgradeable() {
     pathbuf.set_extension("so");
 
     let mint_keypair = Keypair::new();
-    let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
+    let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
+    let test_validator = TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr));
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
@@ -46,8 +47,6 @@ fn test_cli_program_deploy_non_upgradeable() {
     config.json_rpc_url = test_validator.rpc_url();
     config.signers = vec![&keypair];
     config.command = CliCommand::Airdrop {
-        faucet_host: None,
-        faucet_port: faucet_addr.port(),
         pubkey: None,
         lamports: 4 * minimum_balance_for_rent_exemption, // min balance for rent exemption for three programs + leftover for tx processing
     };
@@ -103,8 +102,6 @@ fn test_cli_program_deploy_non_upgradeable() {
     let custom_address_keypair = Keypair::new();
     config.signers = vec![&custom_address_keypair];
     config.command = CliCommand::Airdrop {
-        faucet_host: None,
-        faucet_port: faucet_addr.port(),
         pubkey: None,
         lamports: 2 * minimum_balance_for_rent_exemption, // Anything over minimum_balance_for_rent_exemption should trigger err
     };
@@ -146,8 +143,9 @@ fn test_cli_program_deploy_no_authority() {
     pathbuf.set_extension("so");
 
     let mint_keypair = Keypair::new();
-    let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
+    let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
+    let test_validator = TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr));
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
@@ -170,8 +168,6 @@ fn test_cli_program_deploy_no_authority() {
     let keypair = Keypair::new();
     config.json_rpc_url = test_validator.rpc_url();
     config.command = CliCommand::Airdrop {
-        faucet_host: None,
-        faucet_port: faucet_addr.port(),
         pubkey: None,
         lamports: 100 * minimum_balance_for_programdata + minimum_balance_for_program,
     };
@@ -229,8 +225,9 @@ fn test_cli_program_deploy_with_authority() {
     pathbuf.set_extension("so");
 
     let mint_keypair = Keypair::new();
-    let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
+    let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
+    let test_validator = TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr));
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
@@ -254,8 +251,6 @@ fn test_cli_program_deploy_with_authority() {
     config.json_rpc_url = test_validator.rpc_url();
     config.signers = vec![&keypair];
     config.command = CliCommand::Airdrop {
-        faucet_host: None,
-        faucet_port: faucet_addr.port(),
         pubkey: None,
         lamports: 100 * minimum_balance_for_programdata + minimum_balance_for_program,
     };
@@ -558,8 +553,9 @@ fn test_cli_program_write_buffer() {
     pathbuf.set_extension("so");
 
     let mint_keypair = Keypair::new();
-    let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
+    let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
+    let test_validator = TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr));
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
@@ -584,8 +580,6 @@ fn test_cli_program_write_buffer() {
     config.json_rpc_url = test_validator.rpc_url();
     config.signers = vec![&keypair];
     config.command = CliCommand::Airdrop {
-        faucet_host: None,
-        faucet_port: faucet_addr.port(),
         pubkey: None,
         lamports: 100 * minimum_balance_for_buffer,
     };
@@ -841,8 +835,9 @@ fn test_cli_program_set_buffer_authority() {
     pathbuf.set_extension("so");
 
     let mint_keypair = Keypair::new();
-    let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
+    let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
+    let test_validator = TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr));
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
@@ -862,8 +857,6 @@ fn test_cli_program_set_buffer_authority() {
     config.json_rpc_url = test_validator.rpc_url();
     config.signers = vec![&keypair];
     config.command = CliCommand::Airdrop {
-        faucet_host: None,
-        faucet_port: faucet_addr.port(),
         pubkey: None,
         lamports: 100 * minimum_balance_for_buffer,
     };
@@ -954,8 +947,9 @@ fn test_cli_program_mismatch_buffer_authority() {
     pathbuf.set_extension("so");
 
     let mint_keypair = Keypair::new();
-    let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
+    let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
+    let test_validator = TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr));
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
@@ -975,8 +969,6 @@ fn test_cli_program_mismatch_buffer_authority() {
     config.json_rpc_url = test_validator.rpc_url();
     config.signers = vec![&keypair];
     config.command = CliCommand::Airdrop {
-        faucet_host: None,
-        faucet_port: faucet_addr.port(),
         pubkey: None,
         lamports: 100 * minimum_balance_for_buffer,
     };
@@ -1044,8 +1036,9 @@ fn test_cli_program_show() {
     pathbuf.set_extension("so");
 
     let mint_keypair = Keypair::new();
-    let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
+    let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
+    let test_validator = TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr));
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
@@ -1068,8 +1061,6 @@ fn test_cli_program_show() {
     // Airdrop
     config.signers = vec![&keypair];
     config.command = CliCommand::Airdrop {
-        faucet_host: None,
-        faucet_port: faucet_addr.port(),
         pubkey: None,
         lamports: 100 * minimum_balance_for_buffer,
     };
@@ -1225,8 +1216,9 @@ fn test_cli_program_dump() {
     pathbuf.set_extension("so");
 
     let mint_keypair = Keypair::new();
-    let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
+    let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
+    let test_validator = TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr));
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
@@ -1249,8 +1241,6 @@ fn test_cli_program_dump() {
     // Airdrop
     config.signers = vec![&keypair];
     config.command = CliCommand::Airdrop {
-        faucet_host: None,
-        faucet_port: faucet_addr.port(),
         pubkey: None,
         lamports: 100 * minimum_balance_for_buffer,
     };
