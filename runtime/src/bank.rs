@@ -4086,16 +4086,17 @@ impl Bank {
     }
 
     // Hi! leaky abstraction here....
-    // try to use get_account_with_fixed_root() if it's called ONLY from _on-chain runtime account
-    // processing_. That alternative fn provides more safety.
+    // try to use get_account_with_fixed_root() if it's called ONLY from on-chain runtime account
+    // processing. That alternative fn provides more safety.
     pub fn get_account(&self, pubkey: &Pubkey) -> Option<AccountSharedData> {
         self.get_account_modified_slot(pubkey)
             .map(|(acc, _slot)| acc)
     }
 
     // Hi! leaky abstraction here....
-    // use this over get_account() if it's called ONLY from _on-chain runtime account
-    // processing_.
+    // use this over get_account() if it's called ONLY from on-chain runtime account
+    // processing (i.e. from in-band replay/banking stage; that ensures root is *fixed* while
+    // running).
     // pro: safer assertion can be enabled inside AccountsDb
     // con: panics!() if called from off-chain processing
     pub fn get_account_with_fixed_root(&self, pubkey: &Pubkey) -> Option<AccountSharedData> {
