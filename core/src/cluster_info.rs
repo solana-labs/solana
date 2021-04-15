@@ -1890,14 +1890,12 @@ impl ClusterInfo {
                 error!("crds table trim failed: {:?}", err);
             }
             Ok(purged_values) => {
+                let now = timestamp();
                 self.stats
                     .trim_crds_table_purged_values_count
                     .add_relaxed(purged_values.len() as u64);
-                gossip.pull.purged_values.extend(
-                    purged_values
-                        .into_iter()
-                        .map(|v| (v.value_hash, v.local_timestamp)),
-                );
+                let purged_values = purged_values.into_iter().map(|v| (v.value_hash, now));
+                gossip.pull.purged_values.extend(purged_values);
             }
         }
     }
