@@ -99,6 +99,7 @@ const CACHE_VIRTUAL_WRITE_VERSION: u64 = 0;
 const CACHE_VIRTUAL_OFFSET: usize = 0;
 const CACHE_VIRTUAL_STORED_SIZE: usize = 0;
 
+#[cfg(not(test))]
 const ABSURD_CONSECUTIVE_FAILED_ITERATIONS: usize = 100;
 
 type DashMapVersionHash = DashMap<Pubkey, (u64, Hash)>;
@@ -9866,7 +9867,7 @@ pub mod tests {
                     // Ordering::Relaxed is ok because of no data dependencies; the modified field is
                     // completely free-standing cfg(test) control-flow knob.
                     db.load_limit.store(
-                        thread_rng().gen_range(0, ABSURD_CONSECUTIVE_FAILED_ITERATIONS) as u64,
+                        thread_rng().gen_range(0, 10) as u64,
                         Ordering::Relaxed,
                     );
 
