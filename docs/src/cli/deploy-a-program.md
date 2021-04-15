@@ -142,7 +142,7 @@ Or to recover the account's lamports, pass it as the
 To recover the keypair:
 
 ```bash
-solana-keypair recover -o <KEYPAIR_PATH>
+solana-keygen recover -o <KEYPAIR_PATH>
 ```
 
 When asked, enter the 12-word seed phrase.
