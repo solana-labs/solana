@@ -109,14 +109,12 @@ fn download_to_temp(
     progress_bar.set_length(download_size);
     progress_bar.set_style(
         ProgressStyle::default_bar()
-            .template(&format!(
-                "{}{}{}",
-                "{spinner:.green} ",
-                TRUCK,
-                "Downloading [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})"
-            ))
+            .template(
+                "{spinner:.green}{wide_msg} [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})",
+            )
             .progress_chars("=> "),
     );
+    progress_bar.set_message(&format!("{}Downloading", TRUCK));
 
     struct DownloadProgress<R> {
         progress_bar: ProgressBar,
@@ -824,14 +822,10 @@ pub fn gc(config_file: &str) -> Result<(), String> {
             progress_bar.set_length(old_releases.len() as u64);
             progress_bar.set_style(
                 ProgressStyle::default_bar()
-                    .template(&format!(
-                        "{}{}{}",
-                        "{spinner:.green} ",
-                        RECYCLING,
-                        "Removing old releases [{bar:40.cyan/blue}] {pos}/{len} ({eta})"
-                    ))
+                    .template("{spinner:.green}{wide_msg} [{bar:40.cyan/blue}] {pos}/{len} ({eta})")
                     .progress_chars("=> "),
             );
+            progress_bar.set_message(&format!("{}Removing old releases", RECYCLING));
             for (release, _modified_type) in old_releases {
                 progress_bar.inc(1);
                 let _ = fs::remove_dir_all(&release);
