@@ -679,6 +679,30 @@ fn test_kill_partition_switch_threshold_progress() {
 
 #[test]
 #[serial]
+// Steps in this test:
+// We want to create a situation like:
+/*
+      1 (2%, killed and restarted) --- 200 (37%, lighter fork)
+    /
+    0
+    \-------- 4 (38%, heavier fork)
+*/
+// where the 2% that voted on slot 1 don't see their votes land in a block
+// and thus without integrating votes from gossip into fork choice, will
+// deem slot 4 the heavier fork and try to switch to slot 4, which doesn't pass the
+// switch threshold. This stalls the network.
+
+// We do this by:
+// 1) Creating a partition so all three nodes don't see each other
+// 2) Kill the validator with 2%
+// 3) Wait for longer than blockhash expiration
+// 4) Copy in the lighter fork's blocks up, *only* up to the first slot in the lighter fork
+// (not all the blocks on the lighter fork!), call this slot `L`
+// 5) Restart the validator with 2% so that he votes on `L`, but the vote doesn't land
+// due to blockhash expiration
+// 6) Resolve the partition so that the 2% repairs the other fork, and tries to switch,
+// stalling the network.
+
 fn test_fork_choice_ingest_votes_from_gossip() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     let max_switch_threshold_failure_pct = 1.0 - 2.0 * SWITCH_FORK_THRESHOLD;
@@ -817,7 +841,14 @@ fn test_fork_choice_ingest_votes_from_gossip() {
             loop {
                 // Wait for node to vote on the first slot on the less heavy fork, so it'll need
                 // a switch proof to flip to the other fork.
-                // However, this vote won't land because it's using an expired blockhash
+                // However, this vote won't land because it's using an expired blockhash. The
+                // fork structure will look something like this after the vote:
+                /*
+                     1 (2%, killed and restarted) --- 200 (37%, lighter fork)
+                    /
+                    0
+                    \-------- 4 (38%, heavier fork)
+                */
                 if let Some(last_vote) =
                     last_vote_in_tower(&smallest_ledger_path, &context.smallest_validator_key)
                 {
