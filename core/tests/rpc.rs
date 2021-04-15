@@ -55,7 +55,7 @@ fn test_rpc_send_tx() {
     solana_logger::setup();
 
     let alice = Keypair::new();
-    let test_validator = TestValidator::with_no_fees(alice.pubkey());
+    let test_validator = TestValidator::with_no_fees(alice.pubkey(), None);
     let rpc_url = test_validator.rpc_url();
 
     let bob_pubkey = solana_sdk::pubkey::new_rand();
@@ -119,7 +119,7 @@ fn test_rpc_invalid_requests() {
     solana_logger::setup();
 
     let alice = Keypair::new();
-    let test_validator = TestValidator::with_no_fees(alice.pubkey());
+    let test_validator = TestValidator::with_no_fees(alice.pubkey(), None);
     let rpc_url = test_validator.rpc_url();
 
     let bob_pubkey = solana_sdk::pubkey::new_rand();
@@ -150,7 +150,7 @@ fn test_rpc_invalid_requests() {
 fn test_rpc_slot_updates() {
     solana_logger::setup();
 
-    let test_validator = TestValidator::with_no_fees(Pubkey::new_unique());
+    let test_validator = TestValidator::with_no_fees(Pubkey::new_unique(), None);
 
     // Create the pub sub runtime
     let rt = Runtime::new().unwrap();
@@ -215,7 +215,7 @@ fn test_rpc_subscriptions() {
     solana_logger::setup();
 
     let alice = Keypair::new();
-    let test_validator = TestValidator::with_no_fees(alice.pubkey());
+    let test_validator = TestValidator::with_no_fees(alice.pubkey(), None);
 
     let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
     transactions_socket.connect(test_validator.tpu()).unwrap();

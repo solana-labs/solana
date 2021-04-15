@@ -95,6 +95,11 @@ impl TestValidatorGenesis {
         self
     }
 
+    pub fn faucet_addr(&mut self, faucet_addr: Option<SocketAddr>) -> &mut Self {
+        self.rpc_config.faucet_addr = faucet_addr;
+        self
+    }
+
     pub fn warp_slot(&mut self, warp_slot: Slot) -> &mut Self {
         self.warp_slot = Some(warp_slot);
         self
@@ -244,9 +249,10 @@ pub struct TestValidator {
 
 impl TestValidator {
     /// Create and start a `TestValidator` with no transaction fees and minimal rent.
+    /// Faucet optional.
     ///
     /// This function panics on initialization failure.
-    pub fn with_no_fees(mint_address: Pubkey) -> Self {
+    pub fn with_no_fees(mint_address: Pubkey, faucet_addr: Option<SocketAddr>) -> Self {
         TestValidatorGenesis::default()
             .fee_rate_governor(FeeRateGovernor::new(0, 0))
             .rent(Rent {
@@ -254,14 +260,20 @@ impl TestValidator {
                 exemption_threshold: 1.0,
                 ..Rent::default()
             })
+            .faucet_addr(faucet_addr)
             .start_with_mint_address(mint_address)
             .expect("validator start failed")
     }
 
     /// Create and start a `TestValidator` with custom transaction fees and minimal rent.
+    /// Faucet optional.
     ///
     /// This function panics on initialization failure.
-    pub fn with_custom_fees(mint_address: Pubkey, target_lamports_per_signature: u64) -> Self {
+    pub fn with_custom_fees(
+        mint_address: Pubkey,
+        target_lamports_per_signature: u64,
+        faucet_addr: Option<SocketAddr>,
+    ) -> Self {
         TestValidatorGenesis::default()
             .fee_rate_governor(FeeRateGovernor::new(target_lamports_per_signature, 0))
             .rent(Rent {
@@ -269,6 +281,7 @@ impl TestValidator {
                 exemption_threshold: 1.0,
                 ..Rent::default()
             })
+            .faucet_addr(faucet_addr)
             .start_with_mint_address(mint_address)
             .expect("validator start failed")
     }
