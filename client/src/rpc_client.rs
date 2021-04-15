@@ -186,6 +186,23 @@ impl RpcClient {
         Ok(requested_commitment)
     }
 
+    #[allow(deprecated)]
+    fn maybe_map_request(&self, mut request: RpcRequest) -> Result<RpcRequest, RpcError> {
+        if self.get_node_version()? < semver::Version::new(1, 7, 0) {
+            request = match request {
+                RpcRequest::GetBlock => RpcRequest::GetConfirmedBlock,
+                RpcRequest::GetBlocks => RpcRequest::GetConfirmedBlocks,
+                RpcRequest::GetBlocksWithLimit => RpcRequest::GetConfirmedBlocksWithLimit,
+                RpcRequest::GetSignaturesForAddress => {
+                    RpcRequest::GetConfirmedSignaturesForAddress2
+                }
+                RpcRequest::GetTransaction => RpcRequest::GetConfirmedTransaction,
+                _ => request,
+            };
+        }
+        Ok(request)
+    }
+
     pub fn confirm_transaction(&self, signature: &Signature) -> ClientResult<bool> {
         Ok(self
             .confirm_transaction_with_commitment(signature, self.commitment_config)?
@@ -534,7 +551,10 @@ impl RpcClient {
         slot: Slot,
         encoding: UiTransactionEncoding,
     ) -> ClientResult<EncodedConfirmedBlock> {
-        self.send(RpcRequest::GetBlock, json!([slot, encoding]))
+        self.send(
+            self.maybe_map_request(RpcRequest::GetBlock)?,
+            json!([slot, encoding]),
+        )
     }
 
     pub fn get_block_with_config(
@@ -542,7 +562,10 @@ impl RpcClient {
         slot: Slot,
         config: RpcBlockConfig,
     ) -> ClientResult<UiConfirmedBlock> {
-        self.send(RpcRequest::GetBlock, json!([slot, config]))
+        self.send(
+            self.maybe_map_request(RpcRequest::GetBlock)?,
+            json!([slot, config]),
+        )
     }
 
     #[deprecated(since = "1.7.0", note = "Please use RpcClient::get_block() instead")]
@@ -578,7 +601,10 @@ impl RpcClient {
     }
 
     pub fn get_blocks(&self, start_slot: Slot, end_slot: Option<Slot>) -> ClientResult<Vec<Slot>> {
-        self.send(RpcRequest::GetBlocks, json!([start_slot, end_slot]))
+        self.send(
+            self.maybe_map_request(RpcRequest::GetBlocks)?,
+            json!([start_slot, end_slot]),
+        )
     }
 
     pub fn get_blocks_with_commitment(
@@ -596,11 +622,14 @@ impl RpcClient {
         } else {
             json!([start_slot, self.maybe_map_commitment(commitment_config)?])
         };
-        self.send(RpcRequest::GetBlocks, json)
+        self.send(self.maybe_map_request(RpcRequest::GetBlocks)?, json)
     }
 
     pub fn get_blocks_with_limit(&self, start_slot: Slot, limit: usize) -> ClientResult<Vec<Slot>> {
-        self.send(RpcRequest::GetBlocksWithLimit, json!([start_slot, limit]))
+        self.send(
+            self.maybe_map_request(RpcRequest::GetBlocksWithLimit)?,
+            json!([start_slot, limit]),
+        )
     }
 
     pub fn get_blocks_with_limit_and_commitment(
@@ -610,7 +639,7 @@ impl RpcClient {
         commitment_config: CommitmentConfig,
     ) -> ClientResult<Vec<Slot>> {
         self.send(
-            RpcRequest::GetBlocksWithLimit,
+            self.maybe_map_request(RpcRequest::GetBlocksWithLimit)?,
             json!([
                 start_slot,
                 limit,
@@ -715,7 +744,7 @@ impl RpcClient {
         };
 
         let result: Vec<RpcConfirmedTransactionStatusWithSignature> = self.send(
-            RpcRequest::GetSignaturesForAddress,
+            self.maybe_map_request(RpcRequest::GetSignaturesForAddress)?,
             json!([address.to_string(), config]),
         )?;
 
@@ -768,7 +797,7 @@ impl RpcClient {
         encoding: UiTransactionEncoding,
     ) -> ClientResult<EncodedConfirmedTransaction> {
         self.send(
-            RpcRequest::GetTransaction,
+            self.maybe_map_request(RpcRequest::GetTransaction)?,
             json!([signature.to_string(), encoding]),
         )
     }
@@ -779,7 +808,7 @@ impl RpcClient {
         config: RpcTransactionConfig,
     ) -> ClientResult<EncodedConfirmedTransaction> {
         self.send(
-            RpcRequest::GetTransaction,
+            self.maybe_map_request(RpcRequest::GetTransaction)?,
             json!([signature.to_string(), config]),
         )
     }
