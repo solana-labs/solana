@@ -100,6 +100,10 @@ impl LatestValidatorVotesForFrozenBanks {
             .collect()
     }
 
+    pub(crate) fn max_gossip_frozen_votes(&self) -> &HashMap<Pubkey, (Slot, Vec<Hash>)> {
+        &self.max_gossip_frozen_votes
+    }
+
     #[cfg(test)]
     fn latest_vote(&self, pubkey: &Pubkey, is_replay_vote: bool) -> Option<&(Slot, Vec<Hash>)> {
         let vote_map = if is_replay_vote {
