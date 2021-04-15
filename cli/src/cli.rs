@@ -2553,7 +2553,7 @@ mod tests {
             }
         );
 
-        // Test ResolveSigner Subcommand, KeypairUrl::Filepath
+        // Test ResolveSigner Subcommand, SignerSource::Filepath
         let test_resolve_signer =
             test_commands
                 .clone()
@@ -2565,7 +2565,7 @@ mod tests {
                 signers: vec![],
             }
         );
-        // Test ResolveSigner Subcommand, KeypairUrl::Pubkey (Presigner)
+        // Test ResolveSigner Subcommand, SignerSource::Pubkey (Presigner)
         let test_resolve_signer =
             test_commands
                 .clone()
