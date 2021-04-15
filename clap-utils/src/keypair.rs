@@ -133,7 +133,7 @@ impl DefaultSigner {
     }
 }
 
-pub enum SignerSource {
+pub(crate) enum SignerSource {
     Ask,
     Filepath(String),
     Usb(String),
@@ -141,7 +141,7 @@ pub enum SignerSource {
     Pubkey(Pubkey),
 }
 
-pub fn parse_signer_source<S: AsRef<str>>(source: S) -> SignerSource {
+pub(crate) fn parse_signer_source<S: AsRef<str>>(source: S) -> SignerSource {
     if path == "-" {
         SignerSource::Stdin
     } else if path == ASK_KEYWORD {
