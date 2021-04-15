@@ -206,3 +206,16 @@ balance of 105,290,880 lamports (=~ 0.105 SOL) to be rent-exempt:
 ```text
 105,290,880 = 19.055441478439427 (fee rate) * (128 + 15_000)(account size including metadata) * ((365.25/2) * 2)(epochs in 2 years)
 ```
+
+Rent can also be estimated via the [`solana rent` CLI subcommand](cli/usage.md#solana-rent)
+
+```text
+$ solana rent 15000
+Rent per byte-year: 0.00000348 SOL
+Rent per epoch: 0.000288276 SOL
+Rent-exempt minimum: 0.10529088 SOL
+```
+
+Note: Rest assured that, should the storage rent rate need to be increased at some
+point in the future, steps will be taken to ensure that accounts that are rent-exempt
+before the increase will remain rent-exempt afterwards
