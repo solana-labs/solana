@@ -26,8 +26,9 @@ use solana_stake_program::{
 #[test]
 fn test_stake_delegation_force() {
     let mint_keypair = Keypair::new();
-    let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
+    let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
+    let test_validator = TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr));
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
@@ -37,13 +38,8 @@ fn test_stake_delegation_force() {
     config.json_rpc_url = test_validator.rpc_url();
     config.signers = vec![&default_signer];
 
-    request_and_confirm_airdrop(
-        &rpc_client,
-        &faucet_addr,
-        &config.signers[0].pubkey(),
-        100_000,
-    )
-    .unwrap();
+    request_and_confirm_airdrop(&rpc_client, &config, &config.signers[0].pubkey(), 100_000)
+        .unwrap();
 
     // Create vote account
     let vote_keypair = Keypair::new();
@@ -119,8 +115,9 @@ fn test_seed_stake_delegation_and_deactivation() {
     solana_logger::setup();
 
     let mint_keypair = Keypair::new();
-    let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
+    let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
+    let test_validator = TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr));
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
@@ -132,7 +129,7 @@ fn test_seed_stake_delegation_and_deactivation() {
 
     request_and_confirm_airdrop(
         &rpc_client,
-        &faucet_addr,
+        &config_validator,
         &config_validator.signers[0].pubkey(),
         100_000,
     )
@@ -202,8 +199,9 @@ fn test_stake_delegation_and_deactivation() {
     solana_logger::setup();
 
     let mint_keypair = Keypair::new();
-    let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
+    let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
+    let test_validator = TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr));
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
@@ -217,7 +215,7 @@ fn test_stake_delegation_and_deactivation() {
 
     request_and_confirm_airdrop(
         &rpc_client,
-        &faucet_addr,
+        &config_validator,
         &config_validator.signers[0].pubkey(),
         100_000,
     )
@@ -281,8 +279,9 @@ fn test_offline_stake_delegation_and_deactivation() {
     solana_logger::setup();
 
     let mint_keypair = Keypair::new();
-    let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
+    let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
+    let test_validator = TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr));
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
@@ -307,7 +306,7 @@ fn test_offline_stake_delegation_and_deactivation() {
 
     request_and_confirm_airdrop(
         &rpc_client,
-        &faucet_addr,
+        &config_validator,
         &config_validator.signers[0].pubkey(),
         100_000,
     )
@@ -316,7 +315,7 @@ fn test_offline_stake_delegation_and_deactivation() {
 
     request_and_confirm_airdrop(
         &rpc_client,
-        &faucet_addr,
+        &config_offline,
         &config_offline.signers[0].pubkey(),
         100_000,
     )
@@ -420,8 +419,9 @@ fn test_nonced_stake_delegation_and_deactivation() {
     solana_logger::setup();
 
     let mint_keypair = Keypair::new();
-    let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
+    let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
+    let test_validator = TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr));
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
@@ -435,13 +435,8 @@ fn test_nonced_stake_delegation_and_deactivation() {
         .get_minimum_balance_for_rent_exemption(NonceState::size())
         .unwrap();
 
-    request_and_confirm_airdrop(
-        &rpc_client,
-        &faucet_addr,
-        &config.signers[0].pubkey(),
-        100_000,
-    )
-    .unwrap();
+    request_and_confirm_airdrop(&rpc_client, &config, &config.signers[0].pubkey(), 100_000)
+        .unwrap();
 
     // Create stake account
     let stake_keypair = Keypair::new();
@@ -539,8 +534,9 @@ fn test_stake_authorize() {
     solana_logger::setup();
 
     let mint_keypair = Keypair::new();
-    let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
+    let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
+    let test_validator = TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr));
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
@@ -550,13 +546,8 @@ fn test_stake_authorize() {
     config.json_rpc_url = test_validator.rpc_url();
     config.signers = vec![&default_signer];
 
-    request_and_confirm_airdrop(
-        &rpc_client,
-        &faucet_addr,
-        &config.signers[0].pubkey(),
-        100_000,
-    )
-    .unwrap();
+    request_and_confirm_airdrop(&rpc_client, &config, &config.signers[0].pubkey(), 100_000)
+        .unwrap();
 
     let offline_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
     let mut config_offline = CliConfig::recent_for_tests();
@@ -569,7 +560,7 @@ fn test_stake_authorize() {
 
     request_and_confirm_airdrop(
         &rpc_client,
-        &faucet_addr,
+        &config_offline,
         &config_offline.signers[0].pubkey(),
         100_000,
     )
@@ -809,8 +800,9 @@ fn test_stake_authorize_with_fee_payer() {
     const SIG_FEE: u64 = 42;
 
     let mint_keypair = Keypair::new();
-    let test_validator = TestValidator::with_custom_fees(mint_keypair.pubkey(), SIG_FEE);
+    let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
+    let test_validator = TestValidator::with_custom_fees(mint_pubkey, SIG_FEE, Some(faucet_addr));
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
@@ -836,13 +828,13 @@ fn test_stake_authorize_with_fee_payer() {
     config_offline.command = CliCommand::ClusterVersion;
     process_command(&config_offline).unwrap_err();
 
-    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &default_pubkey, 100_000).unwrap();
+    request_and_confirm_airdrop(&rpc_client, &config, &default_pubkey, 100_000).unwrap();
     check_recent_balance(100_000, &rpc_client, &config.signers[0].pubkey());
 
-    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &payer_pubkey, 100_000).unwrap();
+    request_and_confirm_airdrop(&rpc_client, &config_payer, &payer_pubkey, 100_000).unwrap();
     check_recent_balance(100_000, &rpc_client, &payer_pubkey);
 
-    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &offline_pubkey, 100_000).unwrap();
+    request_and_confirm_airdrop(&rpc_client, &config_offline, &offline_pubkey, 100_000).unwrap();
     check_recent_balance(100_000, &rpc_client, &offline_pubkey);
 
     check_ready(&rpc_client);
@@ -937,8 +929,9 @@ fn test_stake_split() {
     solana_logger::setup();
 
     let mint_keypair = Keypair::new();
-    let test_validator = TestValidator::with_custom_fees(mint_keypair.pubkey(), 1);
+    let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
+    let test_validator = TestValidator::with_custom_fees(mint_pubkey, 1, Some(faucet_addr));
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
@@ -957,16 +950,11 @@ fn test_stake_split() {
     config_offline.command = CliCommand::ClusterVersion;
     process_command(&config_offline).unwrap_err();
 
-    request_and_confirm_airdrop(
-        &rpc_client,
-        &faucet_addr,
-        &config.signers[0].pubkey(),
-        500_000,
-    )
-    .unwrap();
+    request_and_confirm_airdrop(&rpc_client, &config, &config.signers[0].pubkey(), 500_000)
+        .unwrap();
     check_recent_balance(500_000, &rpc_client, &config.signers[0].pubkey());
 
-    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &offline_pubkey, 100_000).unwrap();
+    request_and_confirm_airdrop(&rpc_client, &config_offline, &offline_pubkey, 100_000).unwrap();
     check_recent_balance(100_000, &rpc_client, &offline_pubkey);
 
     // Create stake account, identity is authority
@@ -1084,8 +1072,9 @@ fn test_stake_set_lockup() {
     solana_logger::setup();
 
     let mint_keypair = Keypair::new();
-    let test_validator = TestValidator::with_custom_fees(mint_keypair.pubkey(), 1);
+    let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
+    let test_validator = TestValidator::with_custom_fees(mint_pubkey, 1, Some(faucet_addr));
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
@@ -1104,16 +1093,11 @@ fn test_stake_set_lockup() {
     config_offline.command = CliCommand::ClusterVersion;
     process_command(&config_offline).unwrap_err();
 
-    request_and_confirm_airdrop(
-        &rpc_client,
-        &faucet_addr,
-        &config.signers[0].pubkey(),
-        500_000,
-    )
-    .unwrap();
+    request_and_confirm_airdrop(&rpc_client, &config, &config.signers[0].pubkey(), 500_000)
+        .unwrap();
     check_recent_balance(500_000, &rpc_client, &config.signers[0].pubkey());
 
-    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &offline_pubkey, 100_000).unwrap();
+    request_and_confirm_airdrop(&rpc_client, &config_offline, &offline_pubkey, 100_000).unwrap();
     check_recent_balance(100_000, &rpc_client, &offline_pubkey);
 
     // Create stake account, identity is authority
@@ -1347,8 +1331,9 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     solana_logger::setup();
 
     let mint_keypair = Keypair::new();
-    let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
+    let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
+    let test_validator = TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr));
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
@@ -1366,16 +1351,11 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     // Verify that we cannot reach the cluster
     process_command(&config_offline).unwrap_err();
 
-    request_and_confirm_airdrop(
-        &rpc_client,
-        &faucet_addr,
-        &config.signers[0].pubkey(),
-        200_000,
-    )
-    .unwrap();
+    request_and_confirm_airdrop(&rpc_client, &config, &config.signers[0].pubkey(), 200_000)
+        .unwrap();
     check_recent_balance(200_000, &rpc_client, &config.signers[0].pubkey());
 
-    request_and_confirm_airdrop(&rpc_client, &faucet_addr, &offline_pubkey, 100_000).unwrap();
+    request_and_confirm_airdrop(&rpc_client, &config_offline, &offline_pubkey, 100_000).unwrap();
     check_recent_balance(100_000, &rpc_client, &offline_pubkey);
 
     // Create nonce account

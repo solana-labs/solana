@@ -33,11 +33,6 @@ use solana_client::{
     },
     rpc_response::RpcKeyedAccount,
 };
-#[cfg(not(test))]
-use solana_faucet::faucet::request_airdrop_transaction;
-use solana_faucet::faucet::FaucetError;
-#[cfg(test)]
-use solana_faucet::faucet_mock::request_airdrop_transaction;
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
     clock::{Epoch, Slot},
@@ -59,19 +54,10 @@ use solana_stake_program::{
 use solana_transaction_status::{EncodedTransaction, UiTransactionEncoding};
 use solana_vote_program::vote_state::VoteAuthorize;
 use std::{
-    collections::HashMap,
-    error,
-    fmt::Write as FmtWrite,
-    fs::File,
-    io::Write,
-    net::{IpAddr, SocketAddr},
-    str::FromStr,
-    sync::Arc,
-    thread::sleep,
-    time::Duration,
+    collections::HashMap, error, fmt::Write as FmtWrite, fs::File, io::Write, str::FromStr,
+    sync::Arc, time::Duration,
 };
 use thiserror::Error;
-use url::Url;
 
 pub const DEFAULT_RPC_TIMEOUT_SECONDS: &str = "30";
 
@@ -361,8 +347,6 @@ pub enum CliCommand {
     // Wallet Commands
     Address,
     Airdrop {
-        faucet_host: Option<IpAddr>,
-        faucet_port: u16,
         pubkey: Option<Pubkey>,
         lamports: u64,
     },
@@ -784,20 +768,6 @@ pub fn parse_command(
             signers: vec![default_signer.signer_from_path(matches, wallet_manager)?],
         }),
         ("airdrop", Some(matches)) => {
-            let faucet_port = matches
-                .value_of("faucet_port")
-                .ok_or_else(|| CliError::BadParameter("Missing faucet port".to_string()))?
-                .parse()
-                .map_err(|err| CliError::BadParameter(format!("Invalid faucet port: {}", err)))?;
-
-            let faucet_host = matches
-                .value_of("faucet_host")
-                .map(|faucet_host| {
-                    solana_net_utils::parse_host(faucet_host).map_err(|err| {
-                        CliError::BadParameter(format!("Invalid faucet host: {}", err))
-                    })
-                })
-                .transpose()?;
             let pubkey = pubkey_of_signer(matches, "to", wallet_manager)?;
             let signers = if pubkey.is_some() {
                 vec![]
@@ -806,12 +776,7 @@ pub fn parse_command(
             };
             let lamports = lamports_of_sol(matches, "amount").unwrap();
             Ok(CliCommandInfo {
-                command: CliCommand::Airdrop {
-                    faucet_host,
-                    faucet_port,
-                    pubkey,
-                    lamports,
-                },
+                command: CliCommand::Airdrop { pubkey, lamports },
                 signers,
             })
         }
@@ -1008,7 +973,6 @@ fn process_create_address_with_seed(
 fn process_airdrop(
     rpc_client: &RpcClient,
     config: &CliConfig,
-    faucet_addr: &SocketAddr,
     pubkey: &Option<Pubkey>,
     lamports: u64,
 ) -> ProcessResult {
@@ -1018,14 +982,13 @@ fn process_airdrop(
         config.pubkey()?
     };
     println!(
-        "Requesting airdrop of {} from {}",
+        "Requesting airdrop of {}",
         build_balance_message(lamports, false, true),
-        faucet_addr
     );
 
     let pre_balance = rpc_client.get_balance(&pubkey)?;
 
-    let result = request_and_confirm_airdrop(&rpc_client, faucet_addr, &pubkey, lamports);
+    let result = request_and_confirm_airdrop(rpc_client, config, &pubkey, lamports);
     if let Ok(signature) = result {
         let signature_cli_message = log_instruction_custom_error::<SystemError>(result, &config)?;
         println!("{}", signature_cli_message);
@@ -1877,27 +1840,8 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         // Wallet Commands
 
         // Request an airdrop from Solana Faucet;
-        CliCommand::Airdrop {
-            faucet_host,
-            faucet_port,
-            pubkey,
-            lamports,
-        } => {
-            let faucet_addr = SocketAddr::new(
-                faucet_host.unwrap_or_else(|| {
-                    let faucet_host = Url::parse(&config.json_rpc_url)
-                        .unwrap()
-                        .host()
-                        .unwrap()
-                        .to_string();
-                    solana_net_utils::parse_host(&faucet_host).unwrap_or_else(|err| {
-                        panic!("Unable to resolve {}: {}", faucet_host, err);
-                    })
-                }),
-                *faucet_port,
-            );
-
-            process_airdrop(&rpc_client, config, &faucet_addr, pubkey, *lamports)
+        CliCommand::Airdrop { pubkey, lamports } => {
+            process_airdrop(&rpc_client, config, pubkey, *lamports)
         }
         // Check client balance
         CliCommand::Balance {
@@ -1963,67 +1907,21 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
     }
 }
 
-// Quick and dirty Keypair that assumes the client will do retries but not update the
-// blockhash. If the client updates the blockhash, the signature will be invalid.
-struct FaucetKeypair {
-    transaction: Transaction,
-}
-
-impl FaucetKeypair {
-    fn new_keypair(
-        faucet_addr: &SocketAddr,
-        to_pubkey: &Pubkey,
-        lamports: u64,
-        blockhash: Hash,
-    ) -> Result<Self, FaucetError> {
-        let transaction = request_airdrop_transaction(faucet_addr, to_pubkey, lamports, blockhash)?;
-        Ok(Self { transaction })
-    }
-
-    fn airdrop_transaction(&self) -> Transaction {
-        self.transaction.clone()
-    }
-}
-
-impl Signer for FaucetKeypair {
-    /// Return the public key of the keypair used to sign votes
-    fn pubkey(&self) -> Pubkey {
-        self.transaction.message().account_keys[0]
-    }
-
-    fn try_pubkey(&self) -> Result<Pubkey, SignerError> {
-        Ok(self.pubkey())
-    }
-
-    fn sign_message(&self, _msg: &[u8]) -> Signature {
-        self.transaction.signatures[0]
-    }
-
-    fn try_sign_message(&self, message: &[u8]) -> Result<Signature, SignerError> {
-        Ok(self.sign_message(message))
-    }
-}
-
 pub fn request_and_confirm_airdrop(
     rpc_client: &RpcClient,
-    faucet_addr: &SocketAddr,
+    config: &CliConfig,
     to_pubkey: &Pubkey,
     lamports: u64,
 ) -> ClientResult<Signature> {
-    let (blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
-    let keypair = {
-        let mut retries = 5;
-        loop {
-            let result = FaucetKeypair::new_keypair(faucet_addr, to_pubkey, lamports, blockhash);
-            if result.is_ok() || retries == 0 {
-                break result;
-            }
-            retries -= 1;
-            sleep(Duration::from_secs(1));
-        }
-    }?;
-    let tx = keypair.airdrop_transaction();
-    rpc_client.send_and_confirm_transaction_with_spinner(&tx)
+    let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let signature =
+        rpc_client.request_airdrop_with_blockhash(to_pubkey, lamports, &recent_blockhash)?;
+    rpc_client.confirm_transaction_with_spinner(
+        &signature,
+        &recent_blockhash,
+        config.commitment,
+    )?;
+    Ok(signature)
 }
 
 pub fn log_instruction_custom_error<E>(
@@ -2493,8 +2391,6 @@ mod tests {
             parse_command(&test_airdrop, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Airdrop {
-                    faucet_host: None,
-                    faucet_port: solana_faucet::faucet::FAUCET_PORT,
                     pubkey: Some(pubkey),
                     lamports: 50_000_000_000,
                 },
@@ -2880,8 +2776,6 @@ mod tests {
         let to = solana_sdk::pubkey::new_rand();
         config.signers = vec![&keypair];
         config.command = CliCommand::Airdrop {
-            faucet_host: None,
-            faucet_port: 1234,
             pubkey: Some(to),
             lamports: 50,
         };
@@ -2906,8 +2800,6 @@ mod tests {
         config.rpc_client = Some(RpcClient::new_mock("fails".to_string()));
 
         config.command = CliCommand::Airdrop {
-            faucet_host: None,
-            faucet_port: 1234,
             pubkey: None,
             lamports: 50,
         };
