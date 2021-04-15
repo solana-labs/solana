@@ -20,6 +20,7 @@ use solana_sdk::{
     },
 };
 use std::{
+    convert::TryFrom,
     error,
     io::{stdin, stdout, Write},
     process::exit,
@@ -142,16 +143,27 @@ pub(crate) enum SignerSource {
 }
 
 pub(crate) fn parse_signer_source<S: AsRef<str>>(source: S) -> SignerSource {
-    if path == "-" {
-        SignerSource::Stdin
-    } else if path == ASK_KEYWORD {
-        SignerSource::Ask
-    } else if path.starts_with("usb://") {
-        SignerSource::Usb(path.to_string())
-    } else if let Ok(pubkey) = Pubkey::from_str(path) {
-        SignerSource::Pubkey(pubkey)
-    } else {
-        SignerSource::Filepath(path.to_string())
+    let source = source.as_ref();
+    match uriparse::URIReference::try_from(source) {
+        Err(_) => SignerSource::Filepath(source.to_string()),
+        Ok(uri) => {
+            if let Some(scheme) = uri.scheme() {
+                let scheme = scheme.as_str().to_ascii_lowercase();
+                match scheme.as_str() {
+                    "usb" => SignerSource::Usb(source.to_string()),
+                    _ => SignerSource::Filepath(source.to_string()),
+                }
+            } else {
+                match source {
+                    "-" => SignerSource::Stdin,
+                    ASK_KEYWORD => SignerSource::Ask,
+                    _ => match Pubkey::from_str(source) {
+                        Ok(pubkey) => SignerSource::Pubkey(pubkey),
+                        Err(_) => SignerSource::Filepath(source.to_string()),
+                    },
+                }
+            }
+        }
     }
 }
 
@@ -442,5 +454,29 @@ mod tests {
             signer_info.signers[1].pubkey(),
         ];
         assert_eq!(signer_pubkeys, expect);
+    }
+
+    #[test]
+    fn test_parse_signer_source() {
+        assert!(matches!(parse_signer_source("-"), SignerSource::Stdin));
+        assert!(matches!(
+            parse_signer_source(ASK_KEYWORD),
+            SignerSource::Ask
+        ));
+        let pubkey = Pubkey::new_unique();
+        assert!(
+            matches!(parse_signer_source(&pubkey.to_string()), SignerSource::Pubkey(p) if p == pubkey)
+        );
+        let path = "/absolute/path".to_string();
+        assert!(matches!(parse_signer_source(&path), SignerSource::Filepath(p) if p == path));
+        let path = "relative/path".to_string();
+        assert!(matches!(parse_signer_source(&path), SignerSource::Filepath(p) if p == path));
+        let usb = "usb://ledger".to_string();
+        assert!(matches!(parse_signer_source(&usb), SignerSource::Usb(u) if u == usb));
+        // Catchall into SignerSource::Filepath
+        let junk = "sometextthatisnotapubkey".to_string();
+        assert!(Pubkey::from_str(&junk).is_err());
+        assert!(matches!(parse_signer_source(&junk), SignerSource::Filepath(j) if j == junk));
+
     }
 }
