@@ -33,6 +33,14 @@ pub struct RpcSimulateTransactionConfig {
     pub encoding: Option<UiTransactionEncoding>,
 }
 
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcRequestAirdropConfig {
+    pub recent_blockhash: Option<String>, // base-58 encoded blockhash
+    #[serde(flatten)]
+    pub commitment: Option<CommitmentConfig>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum RpcLargestAccountsFilter {

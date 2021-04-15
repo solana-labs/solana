@@ -10,15 +10,13 @@ use solana_sdk::{
 #[test]
 fn test_cli_request_airdrop() {
     let mint_keypair = Keypair::new();
-    let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
-
+    let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
+    let test_validator = TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr));
 
     let mut bob_config = CliConfig::recent_for_tests();
     bob_config.json_rpc_url = test_validator.rpc_url();
     bob_config.command = CliCommand::Airdrop {
-        faucet_host: None,
-        faucet_port: faucet_addr.port(),
         pubkey: None,
         lamports: 50,
     };

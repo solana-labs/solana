@@ -34,7 +34,7 @@ fn test_rpc_client() {
     solana_logger::setup();
 
     let alice = Keypair::new();
-    let test_validator = TestValidator::with_no_fees(alice.pubkey());
+    let test_validator = TestValidator::with_no_fees(alice.pubkey(), None);
 
     let bob_pubkey = solana_sdk::pubkey::new_rand();
 

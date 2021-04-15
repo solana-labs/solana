@@ -22,44 +22,38 @@ use solana_sdk::{
 #[test]
 fn test_nonce() {
     let mint_keypair = Keypair::new();
-    full_battery_tests(
-        TestValidator::with_no_fees(mint_keypair.pubkey()),
-        mint_keypair,
-        None,
-        false,
-    );
+    let mint_pubkey = mint_keypair.pubkey();
+    let faucet_addr = run_local_faucet(mint_keypair, None);
+    let test_validator = TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr));
+
+    full_battery_tests(test_validator, None, false);
 }
 
 #[test]
 fn test_nonce_with_seed() {
     let mint_keypair = Keypair::new();
-    full_battery_tests(
-        TestValidator::with_no_fees(mint_keypair.pubkey()),
-        mint_keypair,
-        Some(String::from("seed")),
-        false,
-    );
+    let mint_pubkey = mint_keypair.pubkey();
+    let faucet_addr = run_local_faucet(mint_keypair, None);
+    let test_validator = TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr));
+
+    full_battery_tests(test_validator, Some(String::from("seed")), false);
 }
 
 #[test]
 fn test_nonce_with_authority() {
     let mint_keypair = Keypair::new();
-    full_battery_tests(
-        TestValidator::with_no_fees(mint_keypair.pubkey()),
-        mint_keypair,
-        None,
-        true,
-    );
+    let mint_pubkey = mint_keypair.pubkey();
+    let faucet_addr = run_local_faucet(mint_keypair, None);
+    let test_validator = TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr));
+
+    full_battery_tests(test_validator, None, true);
 }
 
 fn full_battery_tests(
     test_validator: TestValidator,
-    mint_keypair: Keypair,
     seed: Option<String>,
     use_nonce_authority: bool,
 ) {
-    let faucet_addr = run_local_faucet(mint_keypair, None);
-
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
     let json_rpc_url = test_validator.rpc_url();
@@ -71,7 +65,7 @@ fn full_battery_tests(
 
     request_and_confirm_airdrop(
         &rpc_client,
-        &faucet_addr,
+        &config_payer,
         &config_payer.signers[0].pubkey(),
         2000,
     )
@@ -220,9 +214,9 @@ fn full_battery_tests(
 fn test_create_account_with_seed() {
     solana_logger::setup();
     let mint_keypair = Keypair::new();
-    let test_validator = TestValidator::with_custom_fees(mint_keypair.pubkey(), 1);
-
+    let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
+    let test_validator = TestValidator::with_custom_fees(mint_pubkey, 1, Some(faucet_addr));
 
     let offline_nonce_authority_signer = keypair_from_seed(&[1u8; 32]).unwrap();
     let online_nonce_creator_signer = keypair_from_seed(&[2u8; 32]).unwrap();
@@ -233,14 +227,14 @@ fn test_create_account_with_seed() {
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
     request_and_confirm_airdrop(
         &rpc_client,
-        &faucet_addr,
+        &CliConfig::recent_for_tests(),
         &offline_nonce_authority_signer.pubkey(),
         42,
     )
     .unwrap();
     request_and_confirm_airdrop(
         &rpc_client,
-        &faucet_addr,
+        &CliConfig::recent_for_tests(),
         &online_nonce_creator_signer.pubkey(),
         4242,
     )
