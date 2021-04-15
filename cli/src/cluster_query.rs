@@ -24,9 +24,9 @@ use solana_client::{
     pubsub_client::PubsubClient,
     rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClient},
     rpc_config::{
-        RpcAccountInfoConfig, RpcConfirmedBlockConfig, RpcConfirmedTransactionConfig,
-        RpcLargestAccountsConfig, RpcLargestAccountsFilter, RpcProgramAccountsConfig,
-        RpcTransactionLogsConfig, RpcTransactionLogsFilter,
+        RpcAccountInfoConfig, RpcBlockConfig, RpcLargestAccountsConfig, RpcLargestAccountsFilter,
+        RpcProgramAccountsConfig, RpcTransactionConfig, RpcTransactionLogsConfig,
+        RpcTransactionLogsFilter,
     },
     rpc_filter,
     rpc_response::SlotInfo,
@@ -975,12 +975,12 @@ pub fn process_get_block(
     };
 
     let encoded_confirmed_block = rpc_client
-        .get_confirmed_block_with_config(
+        .get_block_with_config(
             slot,
-            RpcConfirmedBlockConfig {
+            RpcBlockConfig {
                 encoding: Some(UiTransactionEncoding::Base64),
                 commitment: Some(CommitmentConfig::confirmed()),
-                ..RpcConfirmedBlockConfig::default()
+                ..RpcBlockConfig::default()
             },
         )?
         .into();
@@ -1108,7 +1108,7 @@ pub fn process_show_block_production(
         "Fetching confirmed blocks between slots {} and {}...",
         start_slot, end_slot
     ));
-    let confirmed_blocks = rpc_client.get_confirmed_blocks(start_slot, Some(end_slot))?;
+    let confirmed_blocks = rpc_client.get_blocks(start_slot, Some(end_slot))?;
 
     let start_slot_index = (start_slot - first_slot_in_epoch) as usize;
     let end_slot_index = (end_slot - first_slot_in_epoch) as usize;
@@ -1829,7 +1829,7 @@ pub fn process_transaction_history(
     limit: usize,
     show_transactions: bool,
 ) -> ProcessResult {
-    let results = rpc_client.get_confirmed_signatures_for_address2_with_config(
+    let results = rpc_client.get_signatures_for_address_with_config(
         address,
         GetConfirmedSignaturesForAddress2Config {
             before,
@@ -1868,9 +1868,9 @@ pub fn process_transaction_history(
 
         if show_transactions {
             if let Ok(signature) = result.signature.parse::<Signature>() {
-                match rpc_client.get_confirmed_transaction_with_config(
+                match rpc_client.get_transaction_with_config(
                     &signature,
-                    RpcConfirmedTransactionConfig {
+                    RpcTransactionConfig {
                         encoding: Some(UiTransactionEncoding::Base64),
                         commitment: Some(CommitmentConfig::confirmed()),
                     },

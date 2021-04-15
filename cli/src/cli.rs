@@ -28,7 +28,7 @@ use solana_client::{
     nonce_utils,
     rpc_client::RpcClient,
     rpc_config::{
-        RpcConfirmedTransactionConfig, RpcLargestAccountsFilter, RpcSendTransactionConfig,
+        RpcLargestAccountsFilter, RpcSendTransactionConfig, RpcTransactionConfig,
         RpcTransactionLogsFilter,
     },
     rpc_response::RpcKeyedAccount,
@@ -1033,9 +1033,9 @@ fn process_confirm(
                 let mut transaction = None;
                 let mut get_transaction_error = None;
                 if config.verbose {
-                    match rpc_client.get_confirmed_transaction_with_config(
+                    match rpc_client.get_transaction_with_config(
                         signature,
-                        RpcConfirmedTransactionConfig {
+                        RpcTransactionConfig {
                             encoding: Some(UiTransactionEncoding::Base64),
                             commitment: Some(CommitmentConfig::confirmed()),
                         },
