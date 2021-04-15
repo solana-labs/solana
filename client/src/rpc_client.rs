@@ -1407,7 +1407,7 @@ impl RpcClient {
         .map_err(|_| {
             RpcError::ForUser(
                 "airdrop request failed. \
-                This can happen when the address rate limit is reached."
+                This can happen when the rate limit is reached."
                     .to_string(),
             )
             .into()
