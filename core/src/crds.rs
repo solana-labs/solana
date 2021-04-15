@@ -73,7 +73,7 @@ pub struct VersionedCrdsValue {
     /// local time when inserted
     pub insert_timestamp: u64,
     /// local time when updated
-    pub local_timestamp: u64,
+    pub(crate) local_timestamp: u64,
     /// value hash
     pub value_hash: Hash,
 }
