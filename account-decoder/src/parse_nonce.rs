@@ -9,7 +9,13 @@ pub fn parse_nonce(data: &[u8]) -> Result<UiNonceState, ParseAccountError> {
         .map_err(|_| ParseAccountError::from(InstructionError::InvalidAccountData))?;
     let nonce_state = nonce_state.convert_to_current();
     match nonce_state {
-        State::Uninitialized => Ok(UiNonceState::Uninitialized),
+        // This prevents parsing an allocated System-owned account with empty data of any non-zero
+        // length as `uninitialized` nonce. An empty account of the wrong length can never be
+        // initialized as a nonce account, and an empty account of the correct length may not be an
+        // uninitialized nonce account, since it can be assigned to another program.
+        State::Uninitialized => Err(ParseAccountError::from(
+            InstructionError::InvalidAccountData,
+        )),
         State::Initialized(data) => Ok(UiNonceState::Initialized(UiNonceData {
             authority: data.authority.to_string(),
             blockhash: data.blockhash.to_string(),
