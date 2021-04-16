@@ -101,7 +101,8 @@ mod tests {
                 vote_slot,
                 frozen_hash,
             ),
-            // Nothing has been inserted yet, so should return None for the highest voted frozen slot
+            // Non-frozen bank isn't inserted, so should return None for
+            // the highest voted frozen slot
             (false, None)
         );
         assert!(latest_validator_votes_for_frozen_banks
@@ -296,7 +297,8 @@ mod tests {
                                 vote_slot,
                                 Some(frozen_hash1),
                             ),
-                            // Nothing has been inserted yet, so should return None for the highest voted frozen slot
+                            // This vote slot was frozen, and is the highest slot inserted thus far,
+                            // so the highest vote should be Some(vote_slot)
                             (true, Some(vote_slot))
                         );
                         // Add a duplicate
@@ -307,7 +309,8 @@ mod tests {
                                 vote_slot,
                                 Some(frozen_hash2),
                             ),
-                            // Nothing has been inserted yet, so should return None for the highest voted frozen slot
+                            // This vote slot was frozen, and is for a duplicate version of the highest slot
+                            // inserted thus far, so the highest vote should be Some(vote_slot).
                             (true, Some(vote_slot))
                         );
                         vec![

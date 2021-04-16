@@ -532,6 +532,15 @@ impl HeaviestSubtreeForkChoice {
             let (pubkey, new_vote_slot_hash) = pubkey_vote.borrow();
             let (new_vote_slot, new_vote_hash) = *new_vote_slot_hash;
             if new_vote_slot < self.root.0 {
+                // If the new vote is less than the root we can ignore it. This is because there
+                // are two cases. Either:
+                // 1) The validator's latest vote was bigger than the new vote, so we can ignore it
+                // 2) The validator's latest vote was less than the new vote, then the validator's latest
+                // vote was also less than root. This means either every node in the current tree has the
+                // validators stake counted toward it (if the latest vote was an ancestor of the current root),
+                // OR every node doesn't have this validator's vote counting toward it (if the latest vote
+                // was not an ancestor of the current root). Thus this validator is essentially a no-op
+                // and won't affect fork choice.
                 continue;
             }
 
