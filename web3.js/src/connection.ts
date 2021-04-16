@@ -1369,6 +1369,63 @@ export type StakeActivationData = {
 };
 
 /**
+ * Data slice argument for getProgramAccounts
+ */
+export type DataSlice = {
+  /** offset of data slice */
+  offset: number;
+  /** length of data slice */
+  length: number;
+};
+
+/**
+ * Memory comparison filter for getProgramAccounts
+ */
+export type MemcmpFilter = {
+  memcmp: {
+    /** offset into program account data to start comparison */
+    offset: number;
+    /** data to match, as base-58 encoded string and limited to less than 129 bytes */
+    bytes: string;
+  };
+};
+
+/**
+ * Data size comparison filter for getProgramAccounts
+ */
+export type DataSizeFilter = {
+  /** Size of data for program account data length comparison */
+  dataSize: number;
+};
+
+/**
+ * A filter object for getProgramAccounts
+ */
+export type GetProgramAccountsFilter = MemcmpFilter | DataSizeFilter;
+
+/**
+ * Configuration object for getProgramAccounts requests
+ */
+export type GetProgramAccountsConfig = {
+  /** Optional commitment level */
+  commitment?: Commitment;
+  /** Optional encoding for account data (default base64) */
+  encoding?: 'base64' | 'jsonParsed';
+  /** Optional data slice to limit the returned account data */
+  dataSlice?: DataSlice;
+  /** Optional array of filters to apply to accounts */
+  filters?: GetProgramAccountsFilter[];
+};
+
+/**
+ * Configuration object for getParsedProgramAccounts
+ */
+export type GetParsedProgramAccountsConfig = Exclude<
+  GetProgramAccountsConfig,
+  'encoding' | 'dataSlice'
+>;
+
+/**
  * Information describing an account
  */
 export type AccountInfo<T> = {
@@ -2080,9 +2137,34 @@ export class Connection {
    */
   async getProgramAccounts(
     programId: PublicKey,
-    commitment?: Commitment,
+    configOrCommitment?: GetProgramAccountsConfig | Commitment,
   ): Promise<Array<{pubkey: PublicKey; account: AccountInfo<Buffer>}>> {
-    const args = this._buildArgs([programId.toBase58()], commitment, 'base64');
+    const extra: Pick<GetProgramAccountsConfig, 'dataSlice' | 'filters'> = {};
+
+    let commitment;
+    let encoding;
+    if (configOrCommitment) {
+      if (typeof configOrCommitment === 'string') {
+        commitment = configOrCommitment;
+      } else {
+        commitment = configOrCommitment.commitment;
+        encoding = configOrCommitment.encoding;
+
+        if (configOrCommitment.dataSlice) {
+          extra.dataSlice = configOrCommitment.dataSlice;
+        }
+        if (configOrCommitment.filters) {
+          extra.filters = configOrCommitment.filters;
+        }
+      }
+    }
+
+    const args = this._buildArgs(
+      [programId.toBase58()],
+      commitment,
+      encoding || 'base64',
+      extra,
+    );
     const unsafeRes = await this._rpcRequest('getProgramAccounts', args);
     const res = create(unsafeRes, jsonRpcResult(array(KeyedAccountInfoResult)));
     if ('error' in res) {
@@ -2103,17 +2185,33 @@ export class Connection {
    */
   async getParsedProgramAccounts(
     programId: PublicKey,
-    commitment?: Commitment,
+    configOrCommitment?: GetParsedProgramAccountsConfig | Commitment,
   ): Promise<
     Array<{
       pubkey: PublicKey;
       account: AccountInfo<Buffer | ParsedAccountData>;
     }>
   > {
+    const extra: Pick<GetParsedProgramAccountsConfig, 'filters'> = {};
+
+    let commitment;
+    if (configOrCommitment) {
+      if (typeof configOrCommitment === 'string') {
+        commitment = configOrCommitment;
+      } else {
+        commitment = configOrCommitment.commitment;
+
+        if (configOrCommitment.filters) {
+          extra.filters = configOrCommitment.filters;
+        }
+      }
+    }
+
     const args = this._buildArgs(
       [programId.toBase58()],
       commitment,
       'jsonParsed',
+      extra,
     );
     const unsafeRes = await this._rpcRequest('getProgramAccounts', args);
     const res = create(

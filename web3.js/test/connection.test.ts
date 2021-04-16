@@ -197,6 +197,59 @@ describe('Connection', () => {
 
       const programAccounts = await connection.getProgramAccounts(
         programId.publicKey,
+        {
+          commitment: 'confirmed',
+        },
+      );
+      expect(programAccounts).to.have.length(2);
+      programAccounts.forEach(function (keyedAccount) {
+        if (keyedAccount.pubkey.equals(account0.publicKey)) {
+          expect(keyedAccount.account.lamports).to.eq(
+            LAMPORTS_PER_SOL - feeCalculator.lamportsPerSignature,
+          );
+        } else {
+          expect(keyedAccount.pubkey).to.eql(account1.publicKey);
+          expect(keyedAccount.account.lamports).to.eq(
+            0.5 * LAMPORTS_PER_SOL - feeCalculator.lamportsPerSignature,
+          );
+        }
+      });
+    }
+
+    {
+      await mockRpcResponse({
+        method: 'getProgramAccounts',
+        params: [
+          programId.publicKey.toBase58(),
+          {commitment: 'confirmed', encoding: 'base64'},
+        ],
+        value: [
+          {
+            account: {
+              data: ['', 'base64'],
+              executable: false,
+              lamports: LAMPORTS_PER_SOL - feeCalculator.lamportsPerSignature,
+              owner: programId.publicKey.toBase58(),
+              rentEpoch: 20,
+            },
+            pubkey: account0.publicKey.toBase58(),
+          },
+          {
+            account: {
+              data: ['', 'base64'],
+              executable: false,
+              lamports:
+                0.5 * LAMPORTS_PER_SOL - feeCalculator.lamportsPerSignature,
+              owner: programId.publicKey.toBase58(),
+              rentEpoch: 20,
+            },
+            pubkey: account1.publicKey.toBase58(),
+          },
+        ],
+      });
+
+      const programAccounts = await connection.getProgramAccounts(
+        programId.publicKey,
         'confirmed',
       );
       expect(programAccounts).to.have.length(2);
@@ -212,6 +265,95 @@ describe('Connection', () => {
           );
         }
       });
+    }
+
+    {
+      await mockRpcResponse({
+        method: 'getProgramAccounts',
+        params: [
+          programId.publicKey.toBase58(),
+          {
+            commitment: 'confirmed',
+            encoding: 'base64',
+            filters: [
+              {
+                dataSize: 0,
+              },
+            ],
+          },
+        ],
+        value: [
+          {
+            account: {
+              data: ['', 'base64'],
+              executable: false,
+              lamports: LAMPORTS_PER_SOL - feeCalculator.lamportsPerSignature,
+              owner: programId.publicKey.toBase58(),
+              rentEpoch: 20,
+            },
+            pubkey: account0.publicKey.toBase58(),
+          },
+          {
+            account: {
+              data: ['', 'base64'],
+              executable: false,
+              lamports:
+                0.5 * LAMPORTS_PER_SOL - feeCalculator.lamportsPerSignature,
+              owner: programId.publicKey.toBase58(),
+              rentEpoch: 20,
+            },
+            pubkey: account1.publicKey.toBase58(),
+          },
+        ],
+      });
+
+      const programAccountsDoMatchFilter = await connection.getProgramAccounts(
+        programId.publicKey,
+        {
+          commitment: 'confirmed',
+          encoding: 'base64',
+          filters: [{dataSize: 0}],
+        },
+      );
+      expect(programAccountsDoMatchFilter).to.have.length(2);
+    }
+
+    {
+      await mockRpcResponse({
+        method: 'getProgramAccounts',
+        params: [
+          programId.publicKey.toBase58(),
+          {
+            commitment: 'confirmed',
+            encoding: 'base64',
+            filters: [
+              {
+                memcmp: {
+                  offset: 0,
+                  bytes: 'XzdZ3w',
+                },
+              },
+            ],
+          },
+        ],
+        value: [],
+      });
+
+      const programAccountsDontMatchFilter = await connection.getProgramAccounts(
+        programId.publicKey,
+        {
+          commitment: 'confirmed',
+          filters: [
+            {
+              memcmp: {
+                offset: 0,
+                bytes: 'XzdZ3w',
+              },
+            },
+          ],
+        },
+      );
+      expect(programAccountsDontMatchFilter).to.have.length(0);
     }
 
     {
@@ -248,7 +390,9 @@ describe('Connection', () => {
 
       const programAccounts = await connection.getParsedProgramAccounts(
         programId.publicKey,
-        'confirmed',
+        {
+          commitment: 'confirmed',
+        },
       );
       expect(programAccounts).to.have.length(2);
 
@@ -264,6 +408,94 @@ describe('Connection', () => {
           );
         }
       });
+    }
+
+    {
+      await mockRpcResponse({
+        method: 'getProgramAccounts',
+        params: [
+          programId.publicKey.toBase58(),
+          {
+            commitment: 'confirmed',
+            encoding: 'jsonParsed',
+            filters: [
+              {
+                dataSize: 2,
+              },
+            ],
+          },
+        ],
+        value: [],
+      });
+
+      const programAccountsDontMatchFilter = await connection.getParsedProgramAccounts(
+        programId.publicKey,
+        {
+          commitment: 'confirmed',
+          filters: [{dataSize: 2}],
+        },
+      );
+      expect(programAccountsDontMatchFilter).to.have.length(0);
+    }
+
+    {
+      await mockRpcResponse({
+        method: 'getProgramAccounts',
+        params: [
+          programId.publicKey.toBase58(),
+          {
+            commitment: 'confirmed',
+            encoding: 'jsonParsed',
+            filters: [
+              {
+                memcmp: {
+                  offset: 0,
+                  bytes: '',
+                },
+              },
+            ],
+          },
+        ],
+        value: [
+          {
+            account: {
+              data: ['', 'base64'],
+              executable: false,
+              lamports: LAMPORTS_PER_SOL - feeCalculator.lamportsPerSignature,
+              owner: programId.publicKey.toBase58(),
+              rentEpoch: 20,
+            },
+            pubkey: account0.publicKey.toBase58(),
+          },
+          {
+            account: {
+              data: ['', 'base64'],
+              executable: false,
+              lamports:
+                0.5 * LAMPORTS_PER_SOL - feeCalculator.lamportsPerSignature,
+              owner: programId.publicKey.toBase58(),
+              rentEpoch: 20,
+            },
+            pubkey: account1.publicKey.toBase58(),
+          },
+        ],
+      });
+
+      const programAccountsDoMatchFilter = await connection.getParsedProgramAccounts(
+        programId.publicKey,
+        {
+          commitment: 'confirmed',
+          filters: [
+            {
+              memcmp: {
+                offset: 0,
+                bytes: '',
+              },
+            },
+          ],
+        },
+      );
+      expect(programAccountsDoMatchFilter).to.have.length(2);
     }
   });
 
