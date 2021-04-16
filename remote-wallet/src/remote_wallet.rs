@@ -6,7 +6,7 @@ use {
     log::*,
     parking_lot::{Mutex, RwLock},
     solana_sdk::{
-        derivation_path::{DerivationPath, DerivationPathComponent, DerivationPathError},
+        derivation_path::{DerivationPath, DerivationPathError},
         pubkey::Pubkey,
         signature::{Signature, SignerError},
     },
@@ -288,26 +288,10 @@ impl RemoteWalletInfo {
                 if let Some(mut pair) = query_pairs.next() {
                     if pair.0 == "key" {
                         let key_path = pair.1.to_mut();
-                        let _key_path = key_path.clone();
                         if key_path.ends_with('/') {
                             key_path.pop();
                         }
-                        let mut parts = key_path.split('/');
-                        if let Some(account) = parts.next() {
-                            derivation_path.account =
-                                Some(DerivationPathComponent::from_str(account)?);
-                        }
-                        if let Some(change) = parts.next() {
-                            derivation_path.change =
-                                Some(DerivationPathComponent::from_str(change)?);
-                        }
-                        if parts.next().is_some() {
-                            return Err(DerivationPathError::InvalidDerivationPath(format!(
-                                "key path `{}` too deep, only <account>/<change> supported",
-                                _key_path
-                            ))
-                            .into());
-                        }
+                        derivation_path = DerivationPath::from_key_str(key_path)?;
                     } else {
                         return Err(DerivationPathError::InvalidDerivationPath(format!(
                             "invalid query string `{}={}`, only `key` supported",
@@ -380,10 +364,7 @@ mod tests {
         }));
         assert_eq!(
             derivation_path,
-            DerivationPath {
-                account: Some(1.into()),
-                change: Some(2.into()),
-            }
+            DerivationPath::new_bip44_solana(Some(1), Some(2))
         );
         let (wallet_info, derivation_path) =
             RemoteWalletInfo::parse_path(format!("usb://ledger/{:?}?key=1'/2'", pubkey)).unwrap();
@@ -397,10 +378,7 @@ mod tests {
         }));
         assert_eq!(
             derivation_path,
-            DerivationPath {
-                account: Some(1.into()),
-                change: Some(2.into()),
-            }
+            DerivationPath::new_bip44_solana(Some(1), Some(2))
         );
         let (wallet_info, derivation_path) =
             RemoteWalletInfo::parse_path(format!("usb://ledger/{:?}?key=1\'/2\'", pubkey)).unwrap();
@@ -414,10 +392,7 @@ mod tests {
         }));
         assert_eq!(
             derivation_path,
-            DerivationPath {
-                account: Some(1.into()),
-                change: Some(2.into()),
-            }
+            DerivationPath::new_bip44_solana(Some(1), Some(2))
         );
         let (wallet_info, derivation_path) =
             RemoteWalletInfo::parse_path(format!("usb://ledger/{:?}?key=1/2/", pubkey)).unwrap();
@@ -431,10 +406,7 @@ mod tests {
         }));
         assert_eq!(
             derivation_path,
-            DerivationPath {
-                account: Some(1.into()),
-                change: Some(2.into()),
-            }
+            DerivationPath::new_bip44_solana(Some(1), Some(2))
         );
         let (wallet_info, derivation_path) =
             RemoteWalletInfo::parse_path(format!("usb://ledger/{:?}?key=1/", pubkey)).unwrap();
@@ -448,10 +420,7 @@ mod tests {
         }));
         assert_eq!(
             derivation_path,
-            DerivationPath {
-                account: Some(1.into()),
-                change: None,
-            }
+            DerivationPath::new_bip44_solana(Some(1), None)
         );
 
         // Test that wallet id need not be complete for key derivation to work
@@ -467,10 +436,7 @@ mod tests {
         }));
         assert_eq!(
             derivation_path,
-            DerivationPath {
-                account: Some(1.into()),
-                change: None,
-            }
+            DerivationPath::new_bip44_solana(Some(1), None)
         );
         let (wallet_info, derivation_path) =
             RemoteWalletInfo::parse_path("usb://ledger/?key=1/2".to_string()).unwrap();
@@ -484,10 +450,7 @@ mod tests {
         }));
         assert_eq!(
             derivation_path,
-            DerivationPath {
-                account: Some(1.into()),
-                change: Some(2.into()),
-            }
+            DerivationPath::new_bip44_solana(Some(1), Some(2))
         );
 
         // Failure cases

@@ -34,8 +34,6 @@ const MAX_CHUNK_SIZE: usize = 255;
 
 const APDU_SUCCESS_CODE: usize = 0x9000;
 
-const SOL_DERIVATION_PATH_BE: [u8; 8] = [0x80, 0, 0, 44, 0x80, 0, 0x01, 0xF5]; // 44'/501', Solana
-
 /// Ledger vendor ID
 const LEDGER_VID: u16 = 0x2c97;
 /// Ledger product IDs: Nano S and Nano X
@@ -513,20 +511,16 @@ pub fn is_valid_ledger(vendor_id: u16, product_id: u16) -> bool {
 
 /// Build the derivation path byte array from a DerivationPath selection
 fn extend_and_serialize(derivation_path: &DerivationPath) -> Vec<u8> {
-    let byte = if derivation_path.change.is_some() {
+    let byte = if derivation_path.change().is_some() {
         4
-    } else if derivation_path.account.is_some() {
+    } else if derivation_path.account().is_some() {
         3
     } else {
         2
     };
     let mut concat_derivation = vec![byte];
-    concat_derivation.extend_from_slice(&SOL_DERIVATION_PATH_BE);
-    if let Some(account) = &derivation_path.account {
-        concat_derivation.extend_from_slice(&account.as_u32().to_be_bytes());
-        if let Some(change) = &derivation_path.change {
-            concat_derivation.extend_from_slice(&change.as_u32().to_be_bytes());
-        }
+    for index in derivation_path.path() {
+        concat_derivation.extend_from_slice(&index.to_bits().to_be_bytes());
     }
     concat_derivation
 }
