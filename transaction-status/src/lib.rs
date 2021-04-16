@@ -756,7 +756,7 @@ mod test {
         assert!(!status.satisfies_commitment(CommitmentConfig::confirmed()));
         assert!(status.satisfies_commitment(CommitmentConfig::processed()));
 
-        // Test single_gossip fallback cases
+        // Test confirmed fallback cases
         let status = TransactionStatus {
             slot: 0,
             confirmations: Some(1),
