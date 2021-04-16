@@ -10,8 +10,8 @@
 //! |+---+---+---  |+---+---+---|+----------------------------------------------------------+----+|
 //! || s | s | .   || p | f | s || data (ie ledger entries)                                 | r  ||
 //! || i | h | .   || a | l | i ||                                                          | e  ||
-//! || g | r | .   || r | a | z || See notes below for explanation of restricted            | s  ||
-//! || n | e |     || e | g | e ||                                                          | t  ||
+//! || g | r | .   || r | a | z || See notes immediately after shred diagrams for an        | s  ||
+//! || n | e |     || e | g | e || explanation of the "restricted" section in this payload  | t  ||
 //! || a | d |     || n | s |   ||                                                          | r  ||
 //! || t |   |     || t |   |   ||                                                          | i  ||
 //! || u | t |     ||   |   |   ||                                                          | c  ||
@@ -117,12 +117,12 @@ pub const SIZE_OF_SHRED_TYPE: usize = 1;
 pub const SIZE_OF_SHRED_SLOT: usize = 8;
 pub const SIZE_OF_SHRED_INDEX: usize = 4;
 pub const SIZE_OF_NONCE: usize = 4;
-pub const SIZE_OF_DATA_SHRED_RESTRICTED: usize =
+pub const SIZE_OF_CODING_SHRED_HEADERS: usize =
     SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_CODING_SHRED_HEADER;
 pub const SIZE_OF_DATA_SHRED_PAYLOAD: usize = PACKET_DATA_SIZE
     - SIZE_OF_COMMON_SHRED_HEADER
     - SIZE_OF_DATA_SHRED_HEADER
-    - SIZE_OF_DATA_SHRED_RESTRICTED
+    - SIZE_OF_CODING_SHRED_HEADERS
     - SIZE_OF_NONCE;
 
 pub const OFFSET_OF_SHRED_TYPE: usize = SIZE_OF_SIGNATURE;
@@ -801,8 +801,8 @@ impl Shredder {
                 .all(|shred| shred.common_header.slot == slot
                     && shred.common_header.version == version
                     && shred.common_header.fec_set_index == fec_set_index));
-            // All information excluding the restricted section is encoded in a data shred
-            let valid_data_len = SHRED_PAYLOAD_SIZE - SIZE_OF_DATA_SHRED_RESTRICTED;
+            // All information (excluding the restricted section) from a data shred is encoded
+            let valid_data_len = SHRED_PAYLOAD_SIZE - SIZE_OF_CODING_SHRED_HEADERS;
             let data_ptrs: Vec<_> = data_shred_batch
                 .iter()
                 .map(|data| &data.payload[..valid_data_len])
@@ -825,7 +825,7 @@ impl Shredder {
                 .collect();
 
             // Grab pointers for the coding blocks; these come after the two headers
-            let coding_block_offset = SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_CODING_SHRED_HEADER;
+            let coding_block_offset = SIZE_OF_CODING_SHRED_HEADERS;
             let mut coding_ptrs: Vec<_> = coding_shreds
                 .iter_mut()
                 .map(|buffer| &mut buffer[coding_block_offset..])
@@ -955,8 +955,9 @@ impl Shredder {
 
             let session = Session::new(num_data, num_coding)?;
 
-            let valid_data_len = SHRED_PAYLOAD_SIZE - SIZE_OF_DATA_SHRED_RESTRICTED;
-            let coding_block_offset = SIZE_OF_CODING_SHRED_HEADER + SIZE_OF_COMMON_SHRED_HEADER;
+            // All information (excluding the restricted section) from a data shred is encoded
+            let valid_data_len = SHRED_PAYLOAD_SIZE - SIZE_OF_CODING_SHRED_HEADERS;
+            let coding_block_offset = SIZE_OF_CODING_SHRED_HEADERS;
             let mut blocks: Vec<(&mut [u8], bool)> = shred_bufs
                 .iter_mut()
                 .enumerate()
@@ -1034,7 +1035,7 @@ impl Shredder {
     }
 
     fn reassemble_payload(num_data: usize, data_shred_bufs: Vec<&Vec<u8>>) -> Vec<u8> {
-        let valid_data_len = SHRED_PAYLOAD_SIZE - SIZE_OF_DATA_SHRED_RESTRICTED;
+        let valid_data_len = SHRED_PAYLOAD_SIZE - SIZE_OF_CODING_SHRED_HEADERS;
         data_shred_bufs[..num_data]
             .iter()
             .flat_map(|data| {
