@@ -1,6 +1,6 @@
 use {
     derivation_path::{ChildIndex, DerivationPath as DerivationPathInner},
-    std::fmt,
+    std::{fmt, str::FromStr},
     thiserror::Error,
 };
 
@@ -46,6 +46,30 @@ impl DerivationPath {
             )));
         }
         Ok(Self::new(indexes))
+    }
+
+    fn _from_full_path_str(path: &str) -> Result<Self, DerivationPathError> {
+        let parts = path.split('/');
+        let string: String = parts
+            .enumerate()
+            .map(|(i, s)| {
+                let mut s = s.to_string();
+                if i > 0 && !s.contains('\'') {
+                    s.push('\'');
+                }
+                s
+            })
+            .collect::<Vec<_>>()
+            .join("/");
+        Ok(Self(DerivationPathInner::from_str(&string).map_err(
+            |err| DerivationPathError::InvalidDerivationPath(err.to_string()),
+        )?))
+    }
+
+    fn _from_full_path_insecure_str(path: &str) -> Result<Self, DerivationPathError> {
+        Ok(Self(DerivationPathInner::from_str(&path).map_err(
+            |err| DerivationPathError::InvalidDerivationPath(err.to_string()),
+        )?))
     }
 
     pub fn new_bip44_solana(account: Option<u32>, change: Option<u32>) -> Self {
@@ -155,6 +179,52 @@ mod tests {
 
         assert!(DerivationPath::from_key_str("other").is_err());
         assert!(DerivationPath::from_key_str("1o").is_err());
+    }
+
+    #[test]
+    fn test_from_full_path_str() {
+        let s = "m/44/501";
+        assert_eq!(
+            DerivationPath::_from_full_path_str(s).unwrap(),
+            DerivationPath::default()
+        );
+        let s = "m/44'/501'";
+        assert_eq!(
+            DerivationPath::_from_full_path_str(s).unwrap(),
+            DerivationPath::default()
+        );
+        let s = "m/44'/501'/1/2";
+        assert_eq!(
+            DerivationPath::_from_full_path_str(s).unwrap(),
+            DerivationPath::new_bip44_solana(Some(1), Some(2))
+        );
+        let s = "m/44'/501'/1'/2'";
+        assert_eq!(
+            DerivationPath::_from_full_path_str(s).unwrap(),
+            DerivationPath::new_bip44_solana(Some(1), Some(2))
+        );
+
+        // Test non-bip44-Solana paths
+        let s = "m/501'/0'/0/0";
+        assert_eq!(
+            DerivationPath::_from_full_path_str(s).unwrap(),
+            DerivationPath::new(vec![
+                ChildIndex::Hardened(501),
+                ChildIndex::Hardened(0),
+                ChildIndex::Hardened(0),
+                ChildIndex::Hardened(0),
+            ])
+        );
+        let s = "m/501'/0'/0'/0'";
+        assert_eq!(
+            DerivationPath::_from_full_path_str(s).unwrap(),
+            DerivationPath::new(vec![
+                ChildIndex::Hardened(501),
+                ChildIndex::Hardened(0),
+                ChildIndex::Hardened(0),
+                ChildIndex::Hardened(0),
+            ])
+        );
     }
 
     #[test]
