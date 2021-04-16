@@ -1,16 +1,16 @@
-use crate::{
-    ledger_error::LedgerError,
-    remote_wallet::{
-        DerivationPath, RemoteWallet, RemoteWalletError, RemoteWalletInfo, RemoteWalletManager,
+use {
+    crate::{
+        ledger_error::LedgerError,
+        remote_wallet::{RemoteWallet, RemoteWalletError, RemoteWalletInfo, RemoteWalletManager},
     },
+    console::Emoji,
+    dialoguer::{theme::ColorfulTheme, Select},
+    log::*,
+    num_traits::FromPrimitive,
+    semver::Version as FirmwareVersion,
+    solana_sdk::{derivation_path::DerivationPath, pubkey::Pubkey, signature::Signature},
+    std::{cmp::min, fmt, sync::Arc},
 };
-use console::Emoji;
-use dialoguer::{theme::ColorfulTheme, Select};
-use log::*;
-use num_traits::FromPrimitive;
-use semver::Version as FirmwareVersion;
-use solana_sdk::{pubkey::Pubkey, signature::Signature};
-use std::{cmp::min, fmt, sync::Arc};
 
 static CHECK_MARK: Emoji = Emoji("✅ ", "");
 

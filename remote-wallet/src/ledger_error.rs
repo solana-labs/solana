@@ -1,5 +1,4 @@
-use num_derive::FromPrimitive;
-use thiserror::Error;
+use {num_derive::FromPrimitive, thiserror::Error};
 
 #[derive(Error, Debug, Clone, FromPrimitive, PartialEq)]
 pub enum LedgerError {
