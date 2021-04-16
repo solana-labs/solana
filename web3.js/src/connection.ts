@@ -584,6 +584,22 @@ export type ConfirmedBlock = {
 };
 
 /**
+ * A ConfirmedBlock on the ledger with signatures only
+ */
+export type ConfirmedBlockSignatures = {
+  /** Blockhash of this block */
+  blockhash: Blockhash;
+  /** Blockhash of this block's parent */
+  previousBlockhash: Blockhash;
+  /** Slot index of this block's parent */
+  parentSlot: number;
+  /** Vector of signatures */
+  signatures: Array<string>;
+  /** The unix timestamp of when the block was processed */
+  blockTime: number | null;
+};
+
+/**
  * A performance sample
  */
 export type PerfSample = {
@@ -916,13 +932,6 @@ const StakeActivationResult = pick({
 });
 
 /**
- * Expected JSON RPC response for the "getConfirmedSignaturesForAddress" message
- */
-const GetConfirmedSignaturesForAddressRpcResult = jsonRpcResult(
-  array(string()),
-);
-
-/**
  * Expected JSON RPC response for the "getConfirmedSignaturesForAddress2" message
  */
 
@@ -1226,6 +1235,21 @@ const GetConfirmedBlockRpcResult = jsonRpcResult(
           }),
         ),
       ),
+      blockTime: nullable(number()),
+    }),
+  ),
+);
+
+/**
+ * Expected JSON RPC response for the "getConfirmedBlockSignatures" message
+ */
+const GetConfirmedBlockSignaturesRpcResult = jsonRpcResult(
+  nullable(
+    pick({
+      blockhash: string(),
+      previousBlockhash: string(),
+      parentSlot: number(),
+      signatures: array(string()),
       blockTime: nullable(number()),
     }),
   ),
@@ -2284,15 +2308,16 @@ export class Connection {
 
   /**
    * Fetch the current total currency supply of the cluster in lamports
+   * @deprecated Deprecated since v1.2.8. Use `Connection.getSupply()` instead.
    */
   async getTotalSupply(commitment?: Commitment): Promise<number> {
     const args = this._buildArgs([], commitment);
-    const unsafeRes = await this._rpcRequest('getTotalSupply', args);
-    const res = create(unsafeRes, jsonRpcResult(number()));
+    const unsafeRes = await this._rpcRequest('getSupply', args);
+    const res = create(unsafeRes, GetSupplyRpcResult);
     if ('error' in res) {
       throw new Error('failed to get total supply: ' + res.error.message);
     }
-    return res.result;
+    return res.result.value.total;
   }
 
   /**
@@ -2478,6 +2503,27 @@ export class Connection {
   }
 
   /**
+   * Fetch a list of Signatures from the cluster for a confirmed block, excluding rewards
+   */
+  async getConfirmedBlockSignatures(
+    slot: number,
+  ): Promise<ConfirmedBlockSignatures> {
+    const unsafeRes = await this._rpcRequest('getConfirmedBlock', [
+      slot,
+      {transactionDetails: 'signatures', rewards: false},
+    ]);
+    const res = create(unsafeRes, GetConfirmedBlockSignaturesRpcResult);
+    if ('error' in res) {
+      throw new Error('failed to get confirmed block: ' + res.error.message);
+    }
+    const result = res.result;
+    if (!result) {
+      throw new Error('Confirmed block ' + slot + ' not found');
+    }
+    return result;
+  }
+
+  /**
    * Fetch a transaction details for a confirmed transaction
    */
   async getConfirmedTransaction(
@@ -2544,6 +2590,7 @@ export class Connection {
   /**
    * Fetch a list of all the confirmed signatures for transactions involving an address
    * within a specified slot range. Max range allowed is 10,000 slots.
+   * @deprecated Deprecated since v1.3. Use `Connection.getConfirmedSignaturesForAddress2()` instead.
    *
    * @param address queried address
    * @param startSlot start slot, inclusive
@@ -2554,17 +2601,59 @@ export class Connection {
     startSlot: number,
     endSlot: number,
   ): Promise<Array<TransactionSignature>> {
-    const unsafeRes = await this._rpcRequest(
-      'getConfirmedSignaturesForAddress',
-      [address.toBase58(), startSlot, endSlot],
-    );
-    const res = create(unsafeRes, GetConfirmedSignaturesForAddressRpcResult);
-    if ('error' in res) {
-      throw new Error(
-        'failed to get confirmed signatures for address: ' + res.error.message,
-      );
+    let options: any = {};
+
+    let firstAvailableBlock = await this.getFirstAvailableBlock();
+    while (!('until' in options)) {
+      startSlot--;
+      if (startSlot <= 0 || startSlot < firstAvailableBlock) {
+        break;
+      }
+
+      try {
+        const block = await this.getConfirmedBlockSignatures(startSlot);
+        if (block.signatures.length > 0) {
+          options.until = block.signatures[
+            block.signatures.length - 1
+          ].toString();
+        }
+      } catch (err) {
+        if (err.message.includes('skipped')) {
+          continue;
+        } else {
+          throw err;
+        }
+      }
     }
-    return res.result;
+
+    let highestConfirmedRoot = await this.getSlot('finalized');
+    while (!('before' in options)) {
+      endSlot++;
+      if (endSlot > highestConfirmedRoot) {
+        break;
+      }
+
+      try {
+        const block = await this.getConfirmedBlockSignatures(endSlot);
+        if (block.signatures.length > 0) {
+          options.before = block.signatures[
+            block.signatures.length - 1
+          ].toString();
+        }
+      } catch (err) {
+        if (err.message.includes('skipped')) {
+          continue;
+        } else {
+          throw err;
+        }
+      }
+    }
+
+    const confirmedSignatureInfo = await this.getConfirmedSignaturesForAddress2(
+      address,
+      options,
+    );
+    return confirmedSignatureInfo.map(info => info.signature);
   }
 
   /**
