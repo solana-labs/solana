@@ -150,6 +150,8 @@ pub(crate) fn parse_signer_source<S: AsRef<str>>(source: S) -> SignerSource {
             if let Some(scheme) = uri.scheme() {
                 let scheme = scheme.as_str().to_ascii_lowercase();
                 match scheme.as_str() {
+                    "ask" => SignerSource::Ask,
+                    "file" => SignerSource::Filepath(uri.path().to_string()),
                     "usb" => SignerSource::Usb(source.to_string()),
                     _ => SignerSource::Filepath(source.to_string()),
                 }
@@ -478,5 +480,15 @@ mod tests {
         assert!(Pubkey::from_str(&junk).is_err());
         assert!(matches!(parse_signer_source(&junk), SignerSource::Filepath(j) if j == junk));
 
+        let ask = "ask:".to_string();
+        assert!(matches!(parse_signer_source(&ask), SignerSource::Ask));
+        let path = "/absolute/path".to_string();
+        assert!(
+            matches!(parse_signer_source(&format!("file:{}", path)), SignerSource::Filepath(p) if p == path)
+        );
+        let path = "relative/path".to_string();
+        assert!(
+            matches!(parse_signer_source(&format!("file:{}", path)), SignerSource::Filepath(p) if p == path)
+        );
     }
 }
