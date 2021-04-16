@@ -1,5 +1,7 @@
 use crate::{
-    accounts_db::{AccountsDb, BankHashInfo, ErrorCounters, LoadedAccount, ScanStorageResult},
+    accounts_db::{
+        AccountsDb, BankHashInfo, ErrorCounters, LoadHint, LoadedAccount, ScanStorageResult,
+    },
     accounts_index::{AccountIndex, Ancestors, IndexKey},
     bank::{
         NonceRollbackFull, NonceRollbackInfo, TransactionCheckResult, TransactionExecutionResult,
@@ -214,7 +216,7 @@ impl Accounts {
                     } else {
                         let (account, rent) = self
                             .accounts_db
-                            .load(ancestors, key)
+                            .load_with_fixed_root(ancestors, key)
                             .map(|(mut account, _)| {
                                 if message.is_writable(i, demote_sysvar_write_locks) {
                                     let rent_due = rent_collector
@@ -234,7 +236,7 @@ impl Accounts {
                             {
                                 if let Some(account) = self
                                     .accounts_db
-                                    .load(ancestors, &programdata_address)
+                                    .load_with_fixed_root(ancestors, &programdata_address)
                                     .map(|(account, _)| account)
                                 {
                                     account_deps.push((programdata_address, account));
@@ -341,7 +343,7 @@ impl Accounts {
 
             let program = match self
                 .accounts_db
-                .load(ancestors, &program_id)
+                .load_with_fixed_root(ancestors, &program_id)
                 .map(|(account, _)| account)
             {
                 Some(program) => program,
@@ -366,7 +368,7 @@ impl Accounts {
                 {
                     if let Some(program) = self
                         .accounts_db
-                        .load(ancestors, &programdata_address)
+                        .load_with_fixed_root(ancestors, &programdata_address)
                         .map(|(account, _)| account)
                     {
                         accounts.insert(0, (programdata_address, program));
@@ -450,19 +452,42 @@ impl Accounts {
             .collect()
     }
 
-    /// Slow because lock is held for 1 operation instead of many
-    pub fn load_slow(
-        &self,
-        ancestors: &Ancestors,
-        pubkey: &Pubkey,
+    fn filter_zero_lamport_account(
+        account: AccountSharedData,
+        slot: Slot,
     ) -> Option<(AccountSharedData, Slot)> {
-        let (account, slot) = self.accounts_db.load_slow(ancestors, pubkey)?;
-
         if account.lamports > 0 {
             Some((account, slot))
         } else {
             None
         }
+    }
+
+    /// Slow because lock is held for 1 operation instead of many
+    fn load_slow(
+        &self,
+        ancestors: &Ancestors,
+        pubkey: &Pubkey,
+        load_hint: LoadHint,
+    ) -> Option<(AccountSharedData, Slot)> {
+        let (account, slot) = self.accounts_db.load(ancestors, pubkey, load_hint)?;
+        Self::filter_zero_lamport_account(account, slot)
+    }
+
+    pub fn load_with_fixed_root(
+        &self,
+        ancestors: &Ancestors,
+        pubkey: &Pubkey,
+    ) -> Option<(AccountSharedData, Slot)> {
+        self.load_slow(ancestors, pubkey, LoadHint::FixedMaxRoot)
+    }
+
+    pub fn load_without_fixed_root(
+        &self,
+        ancestors: &Ancestors,
+        pubkey: &Pubkey,
+    ) -> Option<(AccountSharedData, Slot)> {
+        self.load_slow(ancestors, pubkey, LoadHint::Unspecified)
     }
 
     /// scans underlying accounts_db for this delta (slot) with a map function
@@ -527,7 +552,7 @@ impl Accounts {
             };
 
             if hit {
-                Some((*stored_account.pubkey(), stored_account.account()))
+                Some((*stored_account.pubkey(), stored_account.take_account()))
             } else {
                 None
             }

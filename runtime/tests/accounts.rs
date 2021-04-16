@@ -1,7 +1,10 @@
 use log::*;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
-use solana_runtime::{accounts_db::AccountsDb, accounts_index::Ancestors};
+use solana_runtime::{
+    accounts_db::{AccountsDb, LoadHint},
+    accounts_index::Ancestors,
+};
 use solana_sdk::genesis_config::ClusterType;
 use solana_sdk::{account::AccountSharedData, clock::Slot, pubkey::Pubkey};
 use std::collections::HashSet;
@@ -112,7 +115,8 @@ fn test_bad_bank_hash() {
 
         for (key, account) in &account_refs {
             assert_eq!(
-                db.load_account_hash(&ancestors, &key),
+                db.load_account_hash(&ancestors, &key, None, LoadHint::Unspecified)
+                    .unwrap(),
                 AccountsDb::hash_account(some_slot, &account, &key)
             );
         }

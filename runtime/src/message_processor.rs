@@ -434,7 +434,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             // Load it
             result = self
                 .account_db
-                .load_slow(self.ancestors, id)
+                .load_with_fixed_root(self.ancestors, id)
                 .map(|(account, _)| Rc::new(account.data().clone()));
             // Cache it
             self.sysvars.push((*id, result.clone()));
