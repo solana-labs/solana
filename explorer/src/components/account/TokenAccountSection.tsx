@@ -10,7 +10,7 @@ import { create } from "superstruct";
 import { TableCardBody } from "components/common/TableCardBody";
 import { Address } from "components/common/Address";
 import { UnknownAccountCard } from "./UnknownAccountCard";
-import { useCluster } from "providers/cluster";
+import { Cluster, useCluster } from "providers/cluster";
 import { normalizeTokenAmount } from "utils";
 import { addressLabel } from "utils/tx";
 import { reportError } from "utils/sentry";
@@ -38,6 +38,8 @@ export function TokenAccountSection({
   account: Account;
   tokenAccount: TokenAccount;
 }) {
+  const { cluster } = useCluster();
+
   try {
     switch (tokenAccount.type) {
       case "mint": {
@@ -54,9 +56,11 @@ export function TokenAccountSection({
       }
     }
   } catch (err) {
-    reportError(err, {
-      address: account.pubkey.toBase58(),
-    });
+    if (cluster !== Cluster.Custom) {
+      reportError(err, {
+        address: account.pubkey.toBase58(),
+      });
+    }
   }
   return <UnknownAccountCard account={account} />;
 }
