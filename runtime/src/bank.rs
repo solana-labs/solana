@@ -2551,28 +2551,19 @@ impl Bank {
         &self,
         hashed_tx: &HashedTransaction,
         status_cache: &StatusCache<Result<()>>,
+        check_duplicates_by_hash_enabled: bool,
     ) -> bool {
         let tx = hashed_tx.transaction();
-        if status_cache
-            .get_status(
-                &hashed_tx.message_hash,
-                &tx.message().recent_blockhash,
-                &self.ancestors,
-            )
-            .is_some()
-        {
-            return true;
-        }
-
-        // Fallback to signature check in case this validator has only recently started
-        // adding the message hash to the status cache.
-        return tx
-            .signatures
-            .get(0)
-            .and_then(|sig0| {
-                status_cache.get_status(sig0, &tx.message().recent_blockhash, &self.ancestors)
+        let status_cache_key: Option<&[u8]> = if check_duplicates_by_hash_enabled {
+            Some(hashed_tx.message_hash.as_ref())
+        } else {
+            tx.signatures.get(0).map(|sig0| sig0.as_ref())
+        };
+        status_cache_key
+            .and_then(|key| {
+                status_cache.get_status(key, &tx.message().recent_blockhash, &self.ancestors)
             })
-            .is_some();
+            .is_some()
     }
 
     fn check_status_cache(
@@ -2582,11 +2573,18 @@ impl Bank {
         error_counters: &mut ErrorCounters,
     ) -> Vec<TransactionCheckResult> {
         let rcache = self.src.status_cache.read().unwrap();
+        let check_duplicates_by_hash_enabled = self.check_duplicates_by_hash_enabled();
         hashed_txs
             .iter()
             .zip(lock_results)
             .map(|(hashed_tx, (lock_res, nonce_rollback))| {
-                if lock_res.is_ok() && self.is_tx_already_processed(hashed_tx, &rcache) {
+                if lock_res.is_ok()
+                    && self.is_tx_already_processed(
+                        hashed_tx,
+                        &rcache,
+                        check_duplicates_by_hash_enabled,
+                    )
+                {
                     error_counters.already_processed += 1;
                     return (Err(TransactionError::AlreadyProcessed), None);
                 }
@@ -4756,6 +4754,11 @@ impl Bank {
     pub fn check_init_vote_data_enabled(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::check_init_vote_data::id())
+    }
+
+    pub fn check_duplicates_by_hash_enabled(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::check_duplicates_by_hash::id())
     }
 
     // Check if the wallclock time from bank creation to now has exceeded the allotted
@@ -7958,7 +7961,8 @@ pub(crate) mod tests {
     #[test]
     fn test_tx_already_processed() {
         let (genesis_config, mint_keypair) = create_genesis_config(2);
-        let bank = Bank::new(&genesis_config);
+        let mut bank = Bank::new(&genesis_config);
+        assert!(!bank.check_duplicates_by_hash_enabled());
 
         let key1 = Keypair::new();
         let mut tx =
@@ -7975,6 +7979,9 @@ pub(crate) mod tests {
 
         // Clear transaction signature
         tx.signatures[0] = Signature::default();
+
+        // Enable duplicate check by message hash
+        bank.feature_set = Arc::new(FeatureSet::all_enabled());
 
         // Ensure that message hash check works
         assert_eq!(
