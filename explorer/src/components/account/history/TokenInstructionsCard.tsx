@@ -185,11 +185,15 @@ function isRelevantInstruction(
         account.equals(pubkey) ||
         mintMap.get(account.toBase58())?.mint === address
     );
-  } else {
+  } else if (
+    typeof instruction.parsed === "object" &&
+    "info" in instruction.parsed
+  ) {
     return Object.entries(instruction.parsed.info).some(
       ([key, value]) =>
         value === address ||
         (typeof value === "string" && mintMap.get(value)?.mint === address)
     );
   }
+  return false;
 }

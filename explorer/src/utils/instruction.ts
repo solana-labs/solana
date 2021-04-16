@@ -47,7 +47,11 @@ export class InstructionContainer {
     this.instructions = parsedTransaction.transaction.message.instructions.map(
       (instruction) => {
         if ("parsed" in instruction) {
-          instruction.parsed = create(instruction.parsed, ParsedInfo);
+          if (typeof instruction.parsed === "object") {
+            instruction.parsed = create(instruction.parsed, ParsedInfo);
+          } else if (typeof instruction.parsed !== "string") {
+            throw new Error("Unexpected parsed response");
+          }
         }
 
         return {
