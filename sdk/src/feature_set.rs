@@ -131,6 +131,10 @@ pub mod sysvar_via_syscall {
     solana_sdk::declare_id!("7411E6gFQLDhQkdRjmpXwM1hzHMMoYQUjHicmvGPC1Nf");
 }
 
+pub mod check_duplicates_by_hash {
+    solana_sdk::declare_id!("8ZqTSYHgzyaYCcXJPMViRy6afCFSgNvYooPDeVdyj5GC");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -164,6 +168,7 @@ lazy_static! {
         (upgradeable_close_instruction::id(), "close upgradeable buffer accounts"),
         (demote_sysvar_write_locks::id(), "demote builtins and sysvar write locks to readonly #15497"),
         (sysvar_via_syscall::id(), "Provide sysvars via syscalls"),
+        (check_duplicates_by_hash::id(), "use transaction message hash for duplicate check"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
