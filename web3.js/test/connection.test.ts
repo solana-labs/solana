@@ -107,6 +107,28 @@ describe('Connection', () => {
 
       expect(await connection.getVersion()).to.be.not.null;
     });
+
+    it('should allow middleware to augment request', async () => {
+      let connection = new Connection(url, {
+        fetchMiddleware: (url, options, fetch) => {
+          options.headers = Object.assign(options.headers, {
+            Authorization: 'Bearer 123',
+          });
+          fetch(url, options);
+        },
+      });
+
+      await mockRpcResponse({
+        method: 'getVersion',
+        params: [],
+        value: {'solana-core': '0.20.4'},
+        withHeaders: {
+          Authorization: 'Bearer 123',
+        },
+      });
+
+      expect(await connection.getVersion()).to.be.not.null;
+    });
   }
 
   it('get account info - not found', async () => {

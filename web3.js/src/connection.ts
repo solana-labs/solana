@@ -617,10 +617,27 @@ function createRpcClient(
   url: string,
   useHttps: boolean,
   httpHeaders?: HttpHeaders,
+  fetchMiddleware?: FetchMiddleware,
 ): RpcClient {
   let agentManager: AgentManager | undefined;
   if (!process.env.BROWSER) {
     agentManager = new AgentManager(useHttps);
+  }
+
+  let fetchWithMiddleware: (url: string, options: any) => Promise<Response>;
+
+  if (fetchMiddleware) {
+    fetchWithMiddleware = (url: string, options: any) => {
+      return new Promise<Response>((resolve, reject) => {
+        fetchMiddleware(url, options, async (url: string, options: any) => {
+          try {
+            resolve(await fetch(url, options));
+          } catch (error) {
+            reject(error);
+          }
+        });
+      });
+    };
   }
 
   const clientBrowser = new RpcClient(async (request, callback) => {
@@ -642,7 +659,12 @@ function createRpcClient(
       let res: Response;
       let waitTime = 500;
       for (;;) {
-        res = await fetch(url, options);
+        if (fetchWithMiddleware) {
+          res = await fetchWithMiddleware(url, options);
+        } else {
+          res = await fetch(url, options);
+        }
+
         if (res.status !== 429 /* Too many requests */) {
           break;
         }
@@ -1677,20 +1699,24 @@ export type ConfirmedSignatureInfo = {
 export type HttpHeaders = {[header: string]: string};
 
 /**
+ * A callback used to augment the outgoing HTTP request
+ */
+export type FetchMiddleware = (
+  url: string,
+  options: any,
+  fetch: Function,
+) => void;
+
+/**
  * Configuration for instantiating a Connection
  */
 export type ConnectionConfig = {
+  /** Optional commitment level */
   commitment?: Commitment;
+  /** Optional HTTP headers object */
   httpHeaders?: HttpHeaders;
-};
-
-/**
- * @internal
- */
-type WebsocketClientOptions = {
-  autoconnect: boolean;
-  max_reconnects: number;
-  headers?: HttpHeaders;
+  /** Optional fetch middleware callback */
+  fetchMiddleware?: FetchMiddleware;
 };
 
 /**
@@ -1766,14 +1792,21 @@ export class Connection {
     const useHttps = url.protocol === 'https:';
 
     let httpHeaders;
+    let fetchMiddleware;
     if (commitmentOrConfig && typeof commitmentOrConfig === 'string') {
       this._commitment = commitmentOrConfig;
     } else if (commitmentOrConfig) {
       this._commitment = commitmentOrConfig.commitment;
       httpHeaders = commitmentOrConfig.httpHeaders;
+      fetchMiddleware = commitmentOrConfig.fetchMiddleware;
     }
 
-    this._rpcClient = createRpcClient(url.href, useHttps, httpHeaders);
+    this._rpcClient = createRpcClient(
+      url.href,
+      useHttps,
+      httpHeaders,
+      fetchMiddleware,
+    );
     this._rpcRequest = createRpcRequest(this._rpcClient);
     this._rpcBatchRequest = createRpcBatchRequest(this._rpcClient);
 
@@ -1796,19 +1829,10 @@ export class Connection {
       url.port = String(Number(url.port) + 1);
     }
 
-    const websocketClientOptions: WebsocketClientOptions = {
+    this._rpcWebSocket = new RpcWebSocketClient(urlFormat(url), {
       autoconnect: false,
       max_reconnects: Infinity,
-    };
-
-    if (httpHeaders) {
-      websocketClientOptions.headers = httpHeaders;
-    }
-
-    this._rpcWebSocket = new RpcWebSocketClient(
-      urlFormat(url),
-      websocketClientOptions,
-    );
+    });
     this._rpcWebSocket.on('open', this._wsOnOpen.bind(this));
     this._rpcWebSocket.on('error', this._wsOnError.bind(this));
     this._rpcWebSocket.on('close', this._wsOnClose.bind(this));
