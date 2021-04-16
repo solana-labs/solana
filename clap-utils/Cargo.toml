@@ -16,6 +16,7 @@ solana-remote-wallet = { path = "../remote-wallet", version = "=1.5.19" }
 solana-sdk = { path = "../sdk", version = "=1.5.19" }
 thiserror = "1.0.21"
 tiny-bip39 = "0.7.0"
+uriparse = "0.6.3"
 url = "2.1.0"
 chrono = "0.4"
 
