@@ -13,6 +13,7 @@ pub mod account_utils;
 pub mod builtins;
 pub mod client;
 pub mod commitment_config;
+pub mod derivation_path;
 pub mod deserialize_utils;
 pub mod entrypoint;
 pub mod entrypoint_deprecated;
