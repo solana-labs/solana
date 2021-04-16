@@ -32,7 +32,6 @@ impl FromStr for DerivationPathComponent {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let index_str = if let Some(stripped) = s.strip_suffix('\'') {
-            eprintln!("all path components are promoted to hardened representation");
             stripped
         } else {
             s
