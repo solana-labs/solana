@@ -88,6 +88,27 @@ describe('Connection', () => {
     });
   }
 
+  if (mockServer) {
+    it('should pass HTTP headers to RPC', async () => {
+      const headers = {
+        Authorization: 'Bearer 123',
+      };
+
+      let connection = new Connection(url, {
+        httpHeaders: headers,
+      });
+
+      await mockRpcResponse({
+        method: 'getVersion',
+        params: [],
+        value: {'solana-core': '0.20.4'},
+        withHeaders: headers,
+      });
+
+      expect(await connection.getVersion()).to.be.not.null;
+    });
+  }
+
   it('get account info - not found', async () => {
     const account = new Account();
 
