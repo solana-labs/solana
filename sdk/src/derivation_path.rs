@@ -1,3 +1,4 @@
+#![cfg(feature = "full")]
 use {
     std::{fmt, str::FromStr},
     thiserror::Error,
