@@ -1,4 +1,5 @@
 use {
+    core::{iter::IntoIterator, slice::Iter},
     derivation_path::{ChildIndex, DerivationPath as DerivationPathInner},
     std::{fmt, str::FromStr},
     thiserror::Error,
@@ -29,18 +30,13 @@ impl DerivationPath {
     }
 
     pub fn from_key_str<T: Bip44>(path: &str, coin: T) -> Result<Self, DerivationPathError> {
-        let mut parts = path.split('/');
-        let account = if let Some(account) = parts.next() {
-            Some(raw_index_from_str(account)?)
-        } else {
-            None
-        };
-        let change = if let Some(change) = parts.next() {
-            Some(raw_index_from_str(change)?)
-        } else {
-            None
-        };
-        if parts.next().is_some() {
+        let path = format!("m/{}", path);
+        let extend = DerivationPathInner::from_str(&path)
+            .map_err(|err| DerivationPathError::InvalidDerivationPath(err.to_string()))?;
+        let mut extend = extend.into_iter();
+        let account = extend.next().map(|index| index.to_u32());
+        let change = extend.next().map(|index| index.to_u32());
+        if extend.next().is_some() {
             return Err(DerivationPathError::InvalidDerivationPath(format!(
                 "key path `{}` too deep, only <account>/<change> supported",
                 path
@@ -49,25 +45,15 @@ impl DerivationPath {
         Ok(Self::new_bip44(coin, account, change))
     }
 
-    fn _from_full_path_str(path: &str) -> Result<Self, DerivationPathError> {
-        let parts = path.split('/');
-        let string: String = parts
-            .enumerate()
-            .map(|(i, s)| {
-                let mut s = s.to_string();
-                if i > 0 && !s.contains('\'') {
-                    s.push('\'');
-                }
-                s
-            })
-            .collect::<Vec<_>>()
-            .join("/");
-        Ok(Self(DerivationPathInner::from_str(&string).map_err(
-            |err| DerivationPathError::InvalidDerivationPath(err.to_string()),
-        )?))
+    fn _from_absolute_path_str(path: &str) -> Result<Self, DerivationPathError> {
+        let inner = DerivationPath::_from_absolute_path_insecure_str(path)?
+            .into_iter()
+            .map(|c| ChildIndex::Hardened(c.to_u32()))
+            .collect::<Vec<_>>();
+        Ok(Self(DerivationPathInner::new(inner)))
     }
 
-    fn _from_full_path_insecure_str(path: &str) -> Result<Self, DerivationPathError> {
+    fn _from_absolute_path_insecure_str(path: &str) -> Result<Self, DerivationPathError> {
         Ok(Self(DerivationPathInner::from_str(&path).map_err(
             |err| DerivationPathError::InvalidDerivationPath(err.to_string()),
         )?))
@@ -119,6 +105,14 @@ impl fmt::Debug for DerivationPath {
     }
 }
 
+impl<'a> IntoIterator for &'a DerivationPath {
+    type IntoIter = Iter<'a, ChildIndex>;
+    type Item = &'a ChildIndex;
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
 pub trait Bip44 {
     const PURPOSE: u32 = 44;
     const COIN: u32;
@@ -135,20 +129,6 @@ pub struct Solana;
 
 impl Bip44 for Solana {
     const COIN: u32 = 501;
-}
-
-fn raw_index_from_str(s: &str) -> Result<u32, DerivationPathError> {
-    let index_str = if let Some(stripped) = s.strip_suffix('\'') {
-        stripped
-    } else {
-        s
-    };
-    index_str.parse::<u32>().map_err(|_| {
-        DerivationPathError::InvalidDerivationPath(format!(
-            "failed to parse path component: {:?}",
-            s
-        ))
-    })
 }
 
 #[cfg(test)]
@@ -193,49 +173,50 @@ mod tests {
             DerivationPath::new_bip44(TestCoin, Some(1), None)
         );
 
+        assert!(DerivationPath::from_key_str("1/2/3", TestCoin).is_err());
         assert!(DerivationPath::from_key_str("other", TestCoin).is_err());
         assert!(DerivationPath::from_key_str("1o", TestCoin).is_err());
     }
 
     #[test]
-    fn test_from_full_path_str() {
+    fn test_from_absolute_path_str() {
         let s = "m/44/501";
         assert_eq!(
-            DerivationPath::_from_full_path_str(s).unwrap(),
+            DerivationPath::_from_absolute_path_str(s).unwrap(),
             DerivationPath::default()
         );
         let s = "m/44'/501'";
         assert_eq!(
-            DerivationPath::_from_full_path_str(s).unwrap(),
+            DerivationPath::_from_absolute_path_str(s).unwrap(),
             DerivationPath::default()
         );
         let s = "m/44'/501'/1/2";
         assert_eq!(
-            DerivationPath::_from_full_path_str(s).unwrap(),
+            DerivationPath::_from_absolute_path_str(s).unwrap(),
             DerivationPath::new_bip44(Solana, Some(1), Some(2))
         );
         let s = "m/44'/501'/1'/2'";
         assert_eq!(
-            DerivationPath::_from_full_path_str(s).unwrap(),
+            DerivationPath::_from_absolute_path_str(s).unwrap(),
             DerivationPath::new_bip44(Solana, Some(1), Some(2))
         );
 
         // Test non-Solana Bip44
         let s = "m/44'/999'/1/2";
         assert_eq!(
-            DerivationPath::_from_full_path_str(s).unwrap(),
+            DerivationPath::_from_absolute_path_str(s).unwrap(),
             DerivationPath::new_bip44(TestCoin, Some(1), Some(2))
         );
         let s = "m/44'/999'/1'/2'";
         assert_eq!(
-            DerivationPath::_from_full_path_str(s).unwrap(),
+            DerivationPath::_from_absolute_path_str(s).unwrap(),
             DerivationPath::new_bip44(TestCoin, Some(1), Some(2))
         );
 
         // Test non-bip44 paths
         let s = "m/501'/0'/0/0";
         assert_eq!(
-            DerivationPath::_from_full_path_str(s).unwrap(),
+            DerivationPath::_from_absolute_path_str(s).unwrap(),
             DerivationPath::new(vec![
                 ChildIndex::Hardened(501),
                 ChildIndex::Hardened(0),
@@ -245,7 +226,7 @@ mod tests {
         );
         let s = "m/501'/0'/0'/0'";
         assert_eq!(
-            DerivationPath::_from_full_path_str(s).unwrap(),
+            DerivationPath::_from_absolute_path_str(s).unwrap(),
             DerivationPath::new(vec![
                 ChildIndex::Hardened(501),
                 ChildIndex::Hardened(0),
@@ -275,19 +256,5 @@ mod tests {
 
         let path = DerivationPath::new_bip44(Solana, Some(1), Some(2));
         assert_eq!(format!("{:?}", path), "m/44'/501'/1'/2'".to_string());
-    }
-
-    #[test]
-    fn test_raw_index_from_str() {
-        let s = "1";
-        assert_eq!(raw_index_from_str(s).unwrap(), 1);
-        let s = "1\'";
-        assert_eq!(raw_index_from_str(s).unwrap(), 1);
-        let s = "1/";
-        assert!(raw_index_from_str(s).is_err());
-        let s = "e";
-        assert!(raw_index_from_str(s).is_err());
-        let s = "m";
-        assert!(raw_index_from_str(s).is_err());
     }
 }
