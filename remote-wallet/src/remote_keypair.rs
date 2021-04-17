@@ -1,13 +1,16 @@
-use crate::{
-    ledger::get_ledger_from_info,
-    remote_wallet::{
-        DerivationPath, RemoteWallet, RemoteWalletError, RemoteWalletInfo, RemoteWalletManager,
-        RemoteWalletType,
+use {
+    crate::{
+        ledger::get_ledger_from_info,
+        remote_wallet::{
+            RemoteWallet, RemoteWalletError, RemoteWalletInfo, RemoteWalletManager,
+            RemoteWalletType,
+        },
     },
-};
-use solana_sdk::{
-    pubkey::Pubkey,
-    signature::{Signature, Signer, SignerError},
+    solana_sdk::{
+        derivation_path::DerivationPath,
+        pubkey::Pubkey,
+        signature::{Signature, Signer, SignerError},
+    },
 };
 
 pub struct RemoteKeypair {

@@ -1,21 +1,23 @@
-use crate::{
-    ledger::{is_valid_ledger, LedgerWallet},
-    ledger_error::LedgerError,
+use {
+    crate::{
+        ledger::{is_valid_ledger, LedgerWallet},
+        ledger_error::LedgerError,
+    },
+    log::*,
+    parking_lot::{Mutex, RwLock},
+    solana_sdk::{
+        derivation_path::{DerivationPath, DerivationPathComponent, DerivationPathError},
+        pubkey::Pubkey,
+        signature::{Signature, SignerError},
+    },
+    std::{
+        str::FromStr,
+        sync::Arc,
+        time::{Duration, Instant},
+    },
+    thiserror::Error,
+    url::Url,
 };
-use log::*;
-use parking_lot::{Mutex, RwLock};
-use solana_sdk::{
-    pubkey::Pubkey,
-    signature::{Signature, SignerError},
-};
-use std::{
-    fmt,
-    str::FromStr,
-    sync::Arc,
-    time::{Duration, Instant},
-};
-use thiserror::Error;
-use url::Url;
 
 const HID_GLOBAL_USAGE_PAGE: u16 = 0xFF00;
 const HID_USB_DEVICE_CLASS: u8 = 0;
@@ -32,8 +34,8 @@ pub enum RemoteWalletError {
     #[error("device with non-supported product ID or vendor ID was detected")]
     InvalidDevice,
 
-    #[error("invalid derivation path: {0}")]
-    InvalidDerivationPath(String),
+    #[error(transparent)]
+    DerivationPathError(#[from] DerivationPathError),
 
     #[error("invalid input: {0}")]
     InvalidInput(String),
@@ -251,13 +253,17 @@ pub struct RemoteWalletInfo {
 impl RemoteWalletInfo {
     pub fn parse_path(path: String) -> Result<(Self, DerivationPath), RemoteWalletError> {
         let wallet_path = Url::parse(&path).map_err(|e| {
-            RemoteWalletError::InvalidDerivationPath(format!("parse error: {:?}", e))
+            Into::<RemoteWalletError>::into(DerivationPathError::InvalidDerivationPath(format!(
+                "parse error: {:?}",
+                e
+            )))
         })?;
 
         if wallet_path.host_str().is_none() {
-            return Err(RemoteWalletError::InvalidDerivationPath(
+            return Err(DerivationPathError::InvalidDerivationPath(
                 "missing remote wallet type".to_string(),
-            ));
+            )
+            .into());
         }
 
         let mut wallet_info = RemoteWalletInfo {
@@ -268,9 +274,8 @@ impl RemoteWalletInfo {
         if let Some(wallet_id) = wallet_path.path_segments().map(|c| c.collect::<Vec<_>>()) {
             if !wallet_id[0].is_empty() {
                 wallet_info.pubkey = Pubkey::from_str(wallet_id[0]).map_err(|e| {
-                    RemoteWalletError::InvalidDerivationPath(format!(
-                        "pubkey from_str error: {:?}",
-                        e
+                    Into::<RemoteWalletError>::into(DerivationPathError::InvalidDerivationPath(
+                        format!("pubkey from_str error: {:?}", e),
                     ))
                 })?;
             }
@@ -297,22 +302,25 @@ impl RemoteWalletInfo {
                                 Some(DerivationPathComponent::from_str(change)?);
                         }
                         if parts.next().is_some() {
-                            return Err(RemoteWalletError::InvalidDerivationPath(format!(
+                            return Err(DerivationPathError::InvalidDerivationPath(format!(
                                 "key path `{}` too deep, only <account>/<change> supported",
                                 _key_path
-                            )));
+                            ))
+                            .into());
                         }
                     } else {
-                        return Err(RemoteWalletError::InvalidDerivationPath(format!(
+                        return Err(DerivationPathError::InvalidDerivationPath(format!(
                             "invalid query string `{}={}`, only `key` supported",
                             pair.0, pair.1
-                        )));
+                        ))
+                        .into());
                     }
                 }
                 if query_pairs.next().is_some() {
-                    return Err(RemoteWalletError::InvalidDerivationPath(
+                    return Err(DerivationPathError::InvalidDerivationPath(
                         "invalid query string, extra fields not supported".to_string(),
-                    ));
+                    )
+                    .into());
                 }
             }
         }
@@ -328,96 +336,6 @@ impl RemoteWalletInfo {
             && (self.pubkey == other.pubkey
                 || self.pubkey == Pubkey::default()
                 || other.pubkey == Pubkey::default())
-    }
-}
-
-#[derive(Clone, Default, PartialEq)]
-pub struct DerivationPathComponent(u32);
-
-impl DerivationPathComponent {
-    pub const HARDENED_BIT: u32 = 1 << 31;
-
-    pub fn as_u32(&self) -> u32 {
-        self.0
-    }
-}
-
-impl From<u32> for DerivationPathComponent {
-    fn from(n: u32) -> Self {
-        Self(n | Self::HARDENED_BIT)
-    }
-}
-
-impl FromStr for DerivationPathComponent {
-    type Err = RemoteWalletError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let index_str = if let Some(stripped) = s.strip_suffix('\'') {
-            eprintln!("all path components are promoted to hardened representation");
-            stripped
-        } else {
-            s
-        };
-        index_str.parse::<u32>().map(|ki| ki.into()).map_err(|_| {
-            RemoteWalletError::InvalidDerivationPath(format!(
-                "failed to parse path component: {:?}",
-                s
-            ))
-        })
-    }
-}
-
-impl std::fmt::Display for DerivationPathComponent {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let hardened = if (self.0 & Self::HARDENED_BIT) == 0 {
-            ""
-        } else {
-            "'"
-        };
-        let index = self.0 & !Self::HARDENED_BIT;
-        write!(fmt, "{}{}", index, hardened)
-    }
-}
-
-impl std::fmt::Debug for DerivationPathComponent {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-        std::fmt::Display::fmt(self, fmt)
-    }
-}
-
-#[derive(Default, PartialEq, Clone)]
-pub struct DerivationPath {
-    pub account: Option<DerivationPathComponent>,
-    pub change: Option<DerivationPathComponent>,
-}
-
-impl fmt::Debug for DerivationPath {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let account = if let Some(account) = &self.account {
-            format!("/{:?}", account)
-        } else {
-            "".to_string()
-        };
-        let change = if let Some(change) = &self.change {
-            format!("/{:?}", change)
-        } else {
-            "".to_string()
-        };
-        write!(f, "m/44'/501'{}{}", account, change)
-    }
-}
-
-impl DerivationPath {
-    pub fn get_query(&self) -> String {
-        if let Some(account) = &self.account {
-            if let Some(change) = &self.change {
-                format!("?key={}/{}", account, change)
-            } else {
-                format!("?key={}", account)
-            }
-        } else {
-            "".to_string()
-        }
     }
 }
 
@@ -635,63 +553,5 @@ mod tests {
             remote_wallet_info.get_pretty_path(),
             format!("usb://ledger/{}", pubkey_str)
         );
-    }
-
-    #[test]
-    fn test_get_query() {
-        let derivation_path = DerivationPath {
-            account: None,
-            change: None,
-        };
-        assert_eq!(derivation_path.get_query(), "".to_string());
-        let derivation_path = DerivationPath {
-            account: Some(1.into()),
-            change: None,
-        };
-        assert_eq!(
-            derivation_path.get_query(),
-            format!("?key={}", DerivationPathComponent::from(1))
-        );
-        let derivation_path = DerivationPath {
-            account: Some(1.into()),
-            change: Some(2.into()),
-        };
-        assert_eq!(
-            derivation_path.get_query(),
-            format!(
-                "?key={}/{}",
-                DerivationPathComponent::from(1),
-                DerivationPathComponent::from(2)
-            )
-        );
-    }
-
-    #[test]
-    fn test_derivation_path_debug() {
-        let mut path = DerivationPath::default();
-        assert_eq!(format!("{:?}", path), "m/44'/501'".to_string());
-
-        path.account = Some(1.into());
-        assert_eq!(format!("{:?}", path), "m/44'/501'/1'".to_string());
-
-        path.change = Some(2.into());
-        assert_eq!(format!("{:?}", path), "m/44'/501'/1'/2'".to_string());
-    }
-
-    #[test]
-    fn test_derivation_path_component() {
-        let f = DerivationPathComponent::from(1);
-        assert_eq!(f.as_u32(), 1 | DerivationPathComponent::HARDENED_BIT);
-
-        let fs = DerivationPathComponent::from_str("1").unwrap();
-        assert_eq!(fs, f);
-
-        let fs = DerivationPathComponent::from_str("1'").unwrap();
-        assert_eq!(fs, f);
-
-        assert!(DerivationPathComponent::from_str("-1").is_err());
-
-        assert_eq!(format!("{}", f), "1'".to_string());
-        assert_eq!(format!("{:?}", f), "1'".to_string());
     }
 }
