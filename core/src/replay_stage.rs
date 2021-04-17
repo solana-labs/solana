@@ -526,6 +526,7 @@ impl ReplayStage {
 
                         Self::handle_votable_bank(
                             &vote_bank,
+                            &poh_recorder,
                             switch_fork_decision,
                             &bank_forks,
                             &mut tower,
@@ -1250,6 +1251,7 @@ impl ReplayStage {
     #[allow(clippy::too_many_arguments)]
     fn handle_votable_bank(
         bank: &Arc<Bank>,
+        poh_recorder: &Arc<Mutex<PohRecorder>>,
         switch_fork_decision: &SwitchForkDecision,
         bank_forks: &Arc<RwLock<BankForks>>,
         tower: &mut Tower,
@@ -1350,6 +1352,7 @@ impl ReplayStage {
         Self::push_vote(
             cluster_info,
             bank,
+            poh_recorder,
             vote_account_pubkey,
             authorized_voter_keypairs,
             last_vote,
@@ -1360,9 +1363,11 @@ impl ReplayStage {
         );
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn push_vote(
         cluster_info: &ClusterInfo,
         bank: &Arc<Bank>,
+        poh_recorder: &Arc<Mutex<PohRecorder>>,
         vote_account_pubkey: &Pubkey,
         authorized_voter_keypairs: &[Arc<Keypair>],
         vote: Vote,
@@ -1452,7 +1457,10 @@ impl ReplayStage {
             vote_signatures.clear();
         }
 
-        let _ = cluster_info.send_vote(&vote_tx);
+        let _ = cluster_info.send_vote(
+            &vote_tx,
+            crate::banking_stage::next_leader_tpu(cluster_info, poh_recorder),
+        );
         cluster_info.push_vote(tower, vote_tx);
     }
 

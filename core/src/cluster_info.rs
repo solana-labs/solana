@@ -1182,8 +1182,8 @@ impl ClusterInfo {
             .process_push_message(&self_pubkey, vec![vote], now);
     }
 
-    pub fn send_vote(&self, vote: &Transaction) -> Result<()> {
-        let tpu = self.my_contact_info().tpu;
+    pub fn send_vote(&self, vote: &Transaction, tpu: Option<SocketAddr>) -> Result<()> {
+        let tpu = tpu.unwrap_or_else(|| self.my_contact_info().tpu);
         let buf = serialize(vote)?;
         self.socket.send_to(&buf, &tpu)?;
         Ok(())
