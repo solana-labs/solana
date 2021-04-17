@@ -566,15 +566,8 @@ impl BankingStage {
             }
             return;
         }
-        let next_leader = match poh_recorder
-            .lock()
-            .unwrap()
-            .leader_after_n_slots(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET)
-        {
-            Some(pubkey) => pubkey,
-            None => return,
-        };
-        let addr = match cluster_info.lookup_contact_info(&next_leader, |ci| ci.tpu_forwards) {
+
+        let addr = match next_leader_tpu_forwards(cluster_info, poh_recorder) {
             Some(addr) => addr,
             None => return,
         };
@@ -1365,6 +1358,36 @@ impl BankingStage {
             bank_thread_hdl.join()?;
         }
         Ok(())
+    }
+}
+
+pub(crate) fn next_leader_tpu(
+    cluster_info: &ClusterInfo,
+    poh_recorder: &Arc<Mutex<PohRecorder>>,
+) -> Option<std::net::SocketAddr> {
+    if let Some(leader_pubkey) = poh_recorder
+        .lock()
+        .unwrap()
+        .leader_after_n_slots(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET)
+    {
+        cluster_info.lookup_contact_info(&leader_pubkey, |leader| leader.tpu)
+    } else {
+        None
+    }
+}
+
+fn next_leader_tpu_forwards(
+    cluster_info: &ClusterInfo,
+    poh_recorder: &Arc<Mutex<PohRecorder>>,
+) -> Option<std::net::SocketAddr> {
+    if let Some(leader_pubkey) = poh_recorder
+        .lock()
+        .unwrap()
+        .leader_after_n_slots(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET)
+    {
+        cluster_info.lookup_contact_info(&leader_pubkey, |leader| leader.tpu_forwards)
+    } else {
+        None
     }
 }
 
