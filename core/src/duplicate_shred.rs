@@ -343,17 +343,9 @@ pub(crate) mod tests {
     fn test_duplicate_shred_round_trip() {
         let mut rng = rand::thread_rng();
         let leader = Arc::new(Keypair::new());
-        let (slot, parent_slot, fec_rate, reference_tick, version) =
-            (53084024, 53084023, 0.0, 0, 0);
-        let shredder = Shredder::new(
-            slot,
-            parent_slot,
-            fec_rate,
-            leader.clone(),
-            reference_tick,
-            version,
-        )
-        .unwrap();
+        let (slot, parent_slot, reference_tick, version) = (53084024, 53084023, 0, 0);
+        let shredder =
+            Shredder::new(slot, parent_slot, leader.clone(), reference_tick, version).unwrap();
         let next_shred_index = rng.gen();
         let shred1 = new_rand_shred(&mut rng, next_shred_index, &shredder);
         let shred2 = new_rand_shred(&mut rng, next_shred_index, &shredder);

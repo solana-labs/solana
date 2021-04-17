@@ -3756,17 +3756,9 @@ mod tests {
         let mut rng = rand::thread_rng();
         let leader = Arc::new(Keypair::new());
         let keypair = Keypair::new();
-        let (slot, parent_slot, fec_rate, reference_tick, version) =
-            (53084024, 53084023, 0.0, 0, 0);
-        let shredder = Shredder::new(
-            slot,
-            parent_slot,
-            fec_rate,
-            leader.clone(),
-            reference_tick,
-            version,
-        )
-        .unwrap();
+        let (slot, parent_slot, reference_tick, version) = (53084024, 53084023, 0, 0);
+        let shredder =
+            Shredder::new(slot, parent_slot, leader.clone(), reference_tick, version).unwrap();
         let next_shred_index = rng.gen();
         let shred = new_rand_shred(&mut rng, next_shred_index, &shredder);
         let other_payload = new_rand_shred(&mut rng, next_shred_index, &shredder).payload;
@@ -4766,7 +4758,7 @@ mod tests {
         .take(NO_ENTRIES)
         .collect();
         let mut timeouts = HashMap::new();
-        timeouts.insert(Pubkey::default(), CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS * 2);
+        timeouts.insert(Pubkey::default(), CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS * 4);
         assert_eq!(
             (0, 0, NO_ENTRIES),
             cluster_info.handle_pull_response(&entrypoint_pubkey, data, &timeouts)

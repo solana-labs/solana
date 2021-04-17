@@ -1,6 +1,6 @@
 use super::*;
 use solana_ledger::entry::Entry;
-use solana_ledger::shred::{Shredder, RECOMMENDED_FEC_RATE};
+use solana_ledger::shred::Shredder;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::Keypair;
 
@@ -47,7 +47,6 @@ impl BroadcastRun for BroadcastFakeShredsRun {
         let shredder = Shredder::new(
             bank.slot(),
             bank.parent().unwrap().slot(),
-            RECOMMENDED_FEC_RATE,
             self.keypair.clone(),
             (bank.tick_height() % bank.ticks_per_slot()) as u8,
             self.shred_version,
