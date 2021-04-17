@@ -1418,7 +1418,7 @@ impl ReplayStage {
             }
             Some(authorized_voter_keypair) => authorized_voter_keypair,
         };
-        let node_keypair = cluster_info.keypair.clone();
+        let node_keypair = &cluster_info.keypair;
 
         // Send our last few votes along with the new one
         let vote_ix = if bank.slot() > Self::get_unlock_switch_vote_slot(bank.cluster_type()) {
