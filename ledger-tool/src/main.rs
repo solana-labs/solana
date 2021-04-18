@@ -57,6 +57,7 @@ use std::{
     io::{self, stdout, BufRead, BufReader, Write},
     path::{Path, PathBuf},
     process::{exit, Command, Stdio},
+    rc::Rc,
     str::FromStr,
     sync::Arc,
 };
@@ -1191,6 +1192,12 @@ fn main() {
                     .help("Remove all existing stake accounts from the new snapshot")
             )
         ).subcommand(
+            SubCommand::with_name("accounts-summary")
+            .about("Print accounts summary after processing the ledger")
+            .arg(&account_paths_arg)
+            .arg(&halt_at_slot_arg)
+            .arg(&max_genesis_archive_unpacked_size_arg)
+        ).subcommand(
             SubCommand::with_name("accounts")
             .about("Print account contents after processing in the ledger")
             .arg(&no_snapshot_arg)
@@ -2055,6 +2062,90 @@ fn main() {
                             Some(&bank.hard_forks().read().unwrap())
                         )
                     );
+                }
+                Err(err) => {
+                    eprintln!("Failed to load ledger: {:?}", err);
+                    exit(1);
+                }
+            }
+        }
+        ("accounts-summary", Some(arg_matches)) => {
+            let dev_halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
+            let process_options = ProcessOptions {
+                dev_halt_at_slot,
+                poh_verify: false,
+                ..ProcessOptions::default()
+            };
+            let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
+            let blockstore = open_blockstore(
+                &ledger_path,
+                AccessType::TryPrimaryThenSecondary,
+                wal_recovery_mode,
+            );
+            match load_bank_forks(
+                arg_matches,
+                &genesis_config,
+                &blockstore,
+                process_options,
+                snapshot_archive_path,
+            ) {
+                Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
+                    let slot = bank_forks.working_bank().slot();
+                    let bank = bank_forks.get(slot).unwrap_or_else(|| {
+                        eprintln!("Error: Slot {} is not available", slot);
+                        exit(1);
+                    });
+
+                    #[derive(Default)]
+                    struct AccountSummary {
+                        total_accounts: u64,
+                        total_storage_bytes: usize,
+                        rent_paying_accounts: u64,
+                        program_accounts: HashMap<Pubkey, u64>,
+                    }
+
+                    impl AccountSummary {
+                        fn print(&self) {
+                            println!("---");
+                            println!("Accounts Summary:");
+                            println!("  - Total accounts: {}", self.total_accounts);
+                            println!("  - Total storage bytes: {}", self.total_storage_bytes);
+                            println!("  - Rent paying accounts: {}", self.rent_paying_accounts);
+                            println!("---");
+                            println!("Top Program Accounts:");
+                            let mut program_accounts: Vec<_> =
+                                self.program_accounts.iter().collect();
+                            program_accounts.sort_by_cached_key(|(_pubkey, count)| *count);
+                            for (index, (owner, count)) in
+                                program_accounts.into_iter().rev().take(25).enumerate()
+                            {
+                                println!("  {}. {} Total: {}", index + 1, owner, count);
+                            }
+                        }
+                    }
+
+                    let rent = Rc::new(solana_sdk::rent::Rent::default());
+                    bank.rc
+                        .accounts
+                        .accounts_db
+                        .scan_accounts(&bank.ancestors, |summary: &mut AccountSummary, option| {
+                            if let Some((_pubkey, account, _slot)) = option {
+                                if account.lamports > 0 {
+                                    summary.total_accounts += 1;
+                                    summary.total_storage_bytes += account.data().len();
+                                    *summary.program_accounts.entry(account.owner).or_default() +=
+                                        1;
+                                    if account.lamports < rent.minimum_balance(account.data().len())
+                                    {
+                                        // Exclude sysvars and native programs
+                                        if account.lamports > 1 {
+                                            summary.rent_paying_accounts += 1;
+                                        }
+                                    }
+                                }
+                            }
+                        })
+                        .print();
                 }
                 Err(err) => {
                     eprintln!("Failed to load ledger: {:?}", err);
