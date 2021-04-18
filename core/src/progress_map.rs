@@ -191,11 +191,11 @@ impl ForkProgress {
             num_blocks_on_fork,
             num_dropped_blocks_on_fork,
             propagated_stats: PropagatedStats {
-                prev_leader_slot,
-                is_leader_slot,
-                propagated_validators_stake,
                 propagated_validators,
+                propagated_validators_stake,
                 is_propagated,
+                is_leader_slot,
+                prev_leader_slot,
                 total_epoch_stake,
                 ..PropagatedStats::default()
             },

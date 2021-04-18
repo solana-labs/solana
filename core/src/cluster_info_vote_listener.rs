@@ -1430,26 +1430,19 @@ mod tests {
             let slot_vote_tracker = vote_tracker.get_slot_vote_tracker(vote_slot).unwrap();
             let r_slot_vote_tracker = &slot_vote_tracker.read().unwrap();
 
+            assert_eq!(
+                r_slot_vote_tracker
+                    .optimistic_votes_tracker(&vote_bank_hash)
+                    .unwrap()
+                    .stake(),
+                100
+            );
             if events == vec![1] {
                 // Check `gossip_only_stake` is not incremented
-                assert_eq!(
-                    r_slot_vote_tracker
-                        .optimistic_votes_tracker(&vote_bank_hash)
-                        .unwrap()
-                        .stake(),
-                    100
-                );
                 assert_eq!(r_slot_vote_tracker.gossip_only_stake, 0);
             } else {
                 // Check that both the `gossip_only_stake` and `total_voted_stake` both
                 // increased
-                assert_eq!(
-                    r_slot_vote_tracker
-                        .optimistic_votes_tracker(&vote_bank_hash)
-                        .unwrap()
-                        .stake(),
-                    100
-                );
                 assert_eq!(r_slot_vote_tracker.gossip_only_stake, 100);
             }
         }

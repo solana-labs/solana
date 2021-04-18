@@ -980,7 +980,7 @@ impl JsonRpcRequestProcessor {
                 return Ok(self
                     .runtime
                     .block_on(bigtable_ledger_storage.get_confirmed_blocks(start_slot, limit))
-                    .unwrap_or_else(|_| vec![]));
+                    .unwrap_or_default());
             }
         }
 
@@ -1246,7 +1246,7 @@ impl JsonRpcRequestProcessor {
             );
             self.blockstore
                 .get_confirmed_signatures_for_address(pubkey, start_slot, end_slot)
-                .unwrap_or_else(|_| vec![])
+                .unwrap_or_default()
         } else {
             vec![]
         }

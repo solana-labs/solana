@@ -1210,7 +1210,7 @@ impl SavedTower {
     pub fn new<T: Signer>(tower: &Tower, keypair: &Arc<T>) -> Result<Self> {
         let data = bincode::serialize(tower)?;
         let signature = keypair.sign_message(&data);
-        Ok(Self { data, signature })
+        Ok(Self { signature, data })
     }
 
     pub fn verify(&self, pubkey: &Pubkey) -> bool {

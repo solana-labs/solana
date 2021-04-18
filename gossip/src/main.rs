@@ -190,7 +190,7 @@ fn process_spy_results(
             }
         }
         if let Some(node) = pubkey {
-            if validators.iter().find(|x| x.id == node).is_none() {
+            if !validators.iter().any(|x| x.id == node) {
                 eprintln!("Error: Could not find node {:?}", node);
                 exit(1);
             }

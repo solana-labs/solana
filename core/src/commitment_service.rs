@@ -315,15 +315,13 @@ mod tests {
         );
 
         for a in ancestors {
+            let mut expected = BlockCommitment::default();
             if a <= root {
-                let mut expected = BlockCommitment::default();
                 expected.increase_rooted_stake(lamports);
-                assert_eq!(*commitment.get(&a).unwrap(), expected);
             } else {
-                let mut expected = BlockCommitment::default();
                 expected.increase_confirmation_stake(1, lamports);
-                assert_eq!(*commitment.get(&a).unwrap(), expected);
             }
+            assert_eq!(*commitment.get(&a).unwrap(), expected);
         }
         assert_eq!(rooted_stake[0], (root, lamports));
     }

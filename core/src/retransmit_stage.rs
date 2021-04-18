@@ -175,7 +175,7 @@ fn update_retransmit_stats(
             ),
         );
         let mut packets_by_slot = stats.packets_by_slot.lock().unwrap();
-        let old_packets_by_slot = std::mem::replace(&mut *packets_by_slot, BTreeMap::new());
+        let old_packets_by_slot = std::mem::take(&mut *packets_by_slot);
         drop(packets_by_slot);
 
         for (slot, num_shreds) in old_packets_by_slot {

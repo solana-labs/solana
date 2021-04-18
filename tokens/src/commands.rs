@@ -715,6 +715,7 @@ fn check_payer_balances(
         (args.sender_keypair.pubkey(), None)
     };
 
+    let fee_payer_balance = client.get_balance(&args.fee_payer.pubkey())?;
     if let Some((unlocked_sol_source, total_unlocked_sol)) = unlocked_sol_source {
         let staker_balance = client.get_balance(&distribution_source)?;
         if staker_balance < undistributed_tokens {
@@ -724,15 +725,13 @@ fn check_payer_balances(
             ));
         }
         if args.fee_payer.pubkey() == unlocked_sol_source {
-            let balance = client.get_balance(&args.fee_payer.pubkey())?;
-            if balance < fees + total_unlocked_sol {
+            if fee_payer_balance < fees + total_unlocked_sol {
                 return Err(Error::InsufficientFunds(
                     vec![FundingSource::SystemAccount, FundingSource::FeePayer].into(),
                     lamports_to_sol(fees + total_unlocked_sol).to_string(),
                 ));
             }
         } else {
-            let fee_payer_balance = client.get_balance(&args.fee_payer.pubkey())?;
             if fee_payer_balance < fees {
                 return Err(Error::InsufficientFunds(
                     vec![FundingSource::FeePayer].into(),
@@ -748,15 +747,13 @@ fn check_payer_balances(
             }
         }
     } else if args.fee_payer.pubkey() == distribution_source {
-        let balance = client.get_balance(&args.fee_payer.pubkey())?;
-        if balance < fees + undistributed_tokens {
+        if fee_payer_balance < fees + undistributed_tokens {
             return Err(Error::InsufficientFunds(
                 vec![FundingSource::SystemAccount, FundingSource::FeePayer].into(),
                 lamports_to_sol(fees + undistributed_tokens).to_string(),
             ));
         }
     } else {
-        let fee_payer_balance = client.get_balance(&args.fee_payer.pubkey())?;
         if fee_payer_balance < fees {
             return Err(Error::InsufficientFunds(
                 vec![FundingSource::FeePayer].into(),

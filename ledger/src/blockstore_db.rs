@@ -449,6 +449,7 @@ impl<T: SlotColumn> Column for T {
         index
     }
 
+    #[allow(clippy::wrong_self_convention)]
     fn as_index(slot: Slot) -> u64 {
         slot
     }
@@ -480,6 +481,7 @@ impl Column for columns::TransactionStatus {
         index.0
     }
 
+    #[allow(clippy::wrong_self_convention)]
     fn as_index(index: u64) -> Self::Index {
         (index, Signature::default(), 0)
     }
@@ -516,6 +518,7 @@ impl Column for columns::AddressSignatures {
         index.0
     }
 
+    #[allow(clippy::wrong_self_convention)]
     fn as_index(index: u64) -> Self::Index {
         (index, Pubkey::default(), 0, Signature::default())
     }
@@ -542,6 +545,7 @@ impl Column for columns::TransactionStatusIndex {
         index
     }
 
+    #[allow(clippy::wrong_self_convention)]
     fn as_index(slot: u64) -> u64 {
         slot
     }
@@ -590,6 +594,7 @@ impl Column for columns::ShredCode {
         index.0
     }
 
+    #[allow(clippy::wrong_self_convention)]
     fn as_index(slot: Slot) -> Self::Index {
         (slot, 0)
     }
@@ -619,6 +624,7 @@ impl Column for columns::ShredData {
         index.0
     }
 
+    #[allow(clippy::wrong_self_convention)]
     fn as_index(slot: Slot) -> Self::Index {
         (slot, 0)
     }
@@ -697,6 +703,7 @@ impl Column for columns::ErasureMeta {
         index.0
     }
 
+    #[allow(clippy::wrong_self_convention)]
     fn as_index(slot: Slot) -> Self::Index {
         (slot, 0)
     }

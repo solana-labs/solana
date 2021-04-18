@@ -70,8 +70,8 @@ impl BlockCommitmentCache {
     ) -> Self {
         Self {
             block_commitment,
-            total_stake,
             commitment_slots,
+            total_stake,
         }
     }
 

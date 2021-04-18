@@ -480,9 +480,9 @@ pub fn parse_stake_create_account(
             staker,
             withdrawer,
             lockup: Lockup {
-                custodian,
-                epoch,
                 unix_timestamp,
+                epoch,
+                custodian,
             },
             amount,
             sign_only,
