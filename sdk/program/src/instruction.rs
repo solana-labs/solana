@@ -244,8 +244,8 @@ impl Instruction {
         let data = serialize(data).unwrap();
         Self {
             program_id,
-            data,
             accounts,
+            data,
         }
     }
 
@@ -257,16 +257,16 @@ impl Instruction {
         let data = data.try_to_vec().unwrap();
         Self {
             program_id,
-            data,
             accounts,
+            data,
         }
     }
 
     pub fn new_with_bytes(program_id: Pubkey, data: &[u8], accounts: Vec<AccountMeta>) -> Self {
         Self {
             program_id,
-            data: data.to_vec(),
             accounts,
+            data: data.to_vec(),
         }
     }
 }

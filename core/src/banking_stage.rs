@@ -2633,7 +2633,7 @@ mod tests {
                     // should still be unprocessed
                     assert_eq!(
                         buffered_packets.len(),
-                        packets_vec[interrupted_iteration + 1..].iter().count()
+                        packets_vec[interrupted_iteration + 1..].len()
                     );
                     for ((remaining_unprocessed_packet, _, _forwarded), original_packet) in
                         buffered_packets

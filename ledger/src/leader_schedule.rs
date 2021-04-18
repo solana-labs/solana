@@ -33,10 +33,8 @@ impl LeaderSchedule {
             .map(|i| {
                 if i % repeat == 0 {
                     current_node = ids[weighted_index.sample(rng)];
-                    current_node
-                } else {
-                    current_node
                 }
+                current_node
             })
             .collect();
         Self::new_from_schedule(slot_leaders)

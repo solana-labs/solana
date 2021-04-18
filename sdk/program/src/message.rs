@@ -487,8 +487,8 @@ impl Message {
         let data = read_slice(&mut current, &data, data_len as usize)?;
         Ok(Instruction {
             program_id,
-            data,
             accounts,
+            data,
         })
     }
 

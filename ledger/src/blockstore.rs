@@ -4708,14 +4708,10 @@ pub mod tests {
                 if slot % 3 == 0 {
                     let shred0 = shreds_for_slot.remove(0);
                     missing_shreds.push(shred0);
-                    blockstore
-                        .insert_shreds(shreds_for_slot, None, false)
-                        .unwrap();
-                } else {
-                    blockstore
-                        .insert_shreds(shreds_for_slot, None, false)
-                        .unwrap();
                 }
+                blockstore
+                    .insert_shreds(shreds_for_slot, None, false)
+                    .unwrap();
             }
 
             // Check metadata

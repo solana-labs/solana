@@ -2358,7 +2358,7 @@ pub mod tests {
         let account_key = Pubkey::new_unique();
 
         let mut account_data = vec![0; inline_spl_token_v2_0::state::Account::get_packed_len()];
-        account_data[key_start..key_end].clone_from_slice(&(index_key.clone().to_bytes()));
+        account_data[key_start..key_end].clone_from_slice(&(index_key.to_bytes()));
 
         // Insert slots into secondary index
         for slot in &slots {
@@ -2583,7 +2583,7 @@ pub mod tests {
         let index_key = Pubkey::new_unique();
         let slot = 1;
         let mut account_data = vec![0; inline_spl_token_v2_0::state::Account::get_packed_len()];
-        account_data[key_start..key_end].clone_from_slice(&(index_key.clone().to_bytes()));
+        account_data[key_start..key_end].clone_from_slice(&(index_key.to_bytes()));
 
         // Wrong program id
         index.upsert(
@@ -2675,10 +2675,10 @@ pub mod tests {
         let slot = 1;
         let mut account_data1 = vec![0; inline_spl_token_v2_0::state::Account::get_packed_len()];
         account_data1[index_key_start..index_key_end]
-            .clone_from_slice(&(secondary_key1.clone().to_bytes()));
+            .clone_from_slice(&(secondary_key1.to_bytes()));
         let mut account_data2 = vec![0; inline_spl_token_v2_0::state::Account::get_packed_len()];
         account_data2[index_key_start..index_key_end]
-            .clone_from_slice(&(secondary_key2.clone().to_bytes()));
+            .clone_from_slice(&(secondary_key2.to_bytes()));
 
         // First write one mint index
         index.upsert(

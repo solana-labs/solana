@@ -2109,10 +2109,7 @@ impl AccountsDb {
     }
 
     pub fn shrink_candidate_slots(&self) -> usize {
-        let shrink_slots = std::mem::replace(
-            &mut *self.shrink_candidate_slots.lock().unwrap(),
-            HashMap::new(),
-        );
+        let shrink_slots = std::mem::take(&mut *self.shrink_candidate_slots.lock().unwrap());
         let num_candidates = shrink_slots.len();
         for (slot, slot_shrink_candidates) in shrink_slots {
             let mut measure = Measure::start("shrink_candidate_slots-ms");
@@ -6681,7 +6678,7 @@ pub mod tests {
         let mint_key = Pubkey::new_unique();
         let mut account_data_with_mint =
             vec![0; inline_spl_token_v2_0::state::Account::get_packed_len()];
-        account_data_with_mint[..PUBKEY_BYTES].clone_from_slice(&(mint_key.clone().to_bytes()));
+        account_data_with_mint[..PUBKEY_BYTES].clone_from_slice(&(mint_key.to_bytes()));
 
         let mut normal_account = AccountSharedData::new(1, 0, &AccountSharedData::default().owner);
         normal_account.owner = inline_spl_token_v2_0::id();

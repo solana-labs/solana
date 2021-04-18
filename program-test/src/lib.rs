@@ -737,9 +737,9 @@ impl ProgramTest {
             block_commitment_cache,
             last_blockhash,
             GenesisConfigInfo {
+                genesis_config,
                 mint_keypair,
                 voting_keypair,
-                genesis_config,
             },
         )
     }

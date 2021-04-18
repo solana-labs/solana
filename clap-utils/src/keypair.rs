@@ -104,11 +104,9 @@ impl DefaultSigner {
             unique_signers.push(default_signer);
         }
 
-        for signer in bulk_signers.into_iter() {
-            if let Some(signer) = signer {
-                if !unique_signers.iter().any(|s| s == &signer) {
-                    unique_signers.push(signer);
-                }
+        for signer in bulk_signers.into_iter().flatten() {
+            if !unique_signers.iter().any(|s| s == &signer) {
+                unique_signers.push(signer);
             }
         }
         Ok(CliSignerInfo {
