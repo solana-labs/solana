@@ -77,3 +77,6 @@ members = [
 exclude = [
     "programs/bpf",
 ]
+
+[profile.dev]
+split-debuginfo = "unpacked"
