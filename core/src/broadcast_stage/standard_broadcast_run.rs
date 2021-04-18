@@ -261,7 +261,6 @@ impl StandardBroadcastRun {
             num_expected_batches,
             slot_start_ts: self
                 .slot_broadcast_start
-                .clone()
                 .expect("Start timestamp must exist for a slot if we're broadcasting the slot"),
         });
         get_leader_schedule_time.stop();

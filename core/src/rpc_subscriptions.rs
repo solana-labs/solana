@@ -482,8 +482,8 @@ impl RpcSubscriptions {
         let exit_clone = exit.clone();
         let subscriptions = Subscriptions {
             account_subscriptions,
-            logs_subscriptions,
             program_subscriptions,
+            logs_subscriptions,
             signature_subscriptions,
             gossip_account_subscriptions,
             gossip_logs_subscriptions,

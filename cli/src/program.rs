@@ -1782,7 +1782,7 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
         .map_err(|err| format!("Unable to read program file: {}", err))?;
 
     // Verify the program
-    Executable::<BpfError, ThisInstructionMeter>::from_elf(
+    <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(
         &program_data,
         Some(|x| bpf_verifier::check(x)),
         Config::default(),

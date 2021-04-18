@@ -506,10 +506,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let mut genesis_config = GenesisConfig {
         native_instruction_processors,
         ticks_per_slot,
-        epoch_schedule,
+        poh_config,
         fee_rate_governor,
         rent,
-        poh_config,
+        epoch_schedule,
         cluster_type,
         ..GenesisConfig::default()
     };

@@ -99,8 +99,8 @@ pub fn create_genesis_config_with_vote_accounts_and_cluster_type(
 
     let mut genesis_config_info = GenesisConfigInfo {
         genesis_config,
-        voting_keypair,
         mint_keypair,
+        voting_keypair,
     };
 
     for (validator_voting_keypairs, stake) in voting_keypairs[1..].iter().zip(&stakes[1..]) {
@@ -156,8 +156,8 @@ pub fn create_genesis_config_with_leader(
 
     GenesisConfigInfo {
         genesis_config,
-        voting_keypair,
         mint_keypair,
+        voting_keypair,
     }
 }
 

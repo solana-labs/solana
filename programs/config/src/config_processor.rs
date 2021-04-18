@@ -86,10 +86,7 @@ pub fn process_instruction(
             }
             // If Config account is already initialized, update signatures must match Config data
             if !current_data.keys.is_empty()
-                && current_signer_keys
-                    .iter()
-                    .find(|&pubkey| pubkey == signer)
-                    .is_none()
+                && !current_signer_keys.iter().any(|pubkey| pubkey == signer)
             {
                 ic_msg!(
                     invoke_context,

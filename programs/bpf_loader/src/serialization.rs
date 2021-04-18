@@ -571,9 +571,9 @@ mod tests {
                 offset += size_of::<u64>();
 
                 accounts.push(AccountInfo {
+                    key,
                     is_signer,
                     is_writable,
-                    key,
                     lamports,
                     data,
                     owner,

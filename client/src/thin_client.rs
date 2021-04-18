@@ -169,8 +169,8 @@ impl ThinClient {
         let rpc_clients: Vec<_> = rpc_addrs.into_iter().map(RpcClient::new_socket).collect();
         let optimizer = ClientOptimizer::new(rpc_clients.len());
         Self {
-            tpu_addrs,
             transactions_socket,
+            tpu_addrs,
             rpc_clients,
             optimizer,
         }

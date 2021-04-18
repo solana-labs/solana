@@ -189,9 +189,9 @@ fn apply_lockup_changes(lockup: &LockupArgs, existing_lockup: &Lockup) -> Lockup
         x => x,
     };
     LockupArgs {
-        custodian,
-        epoch,
         unix_timestamp,
+        epoch,
+        custodian,
     }
 }
 

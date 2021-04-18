@@ -365,21 +365,15 @@ impl RemoteWallet for LedgerWallet {
     ) -> Result<RemoteWalletInfo, RemoteWalletError> {
         let manufacturer = dev_info
             .manufacturer_string()
-            .clone()
             .unwrap_or("Unknown")
             .to_lowercase()
             .replace(" ", "-");
         let model = dev_info
             .product_string()
-            .clone()
             .unwrap_or("Unknown")
             .to_lowercase()
             .replace(" ", "-");
-        let serial = dev_info
-            .serial_number()
-            .clone()
-            .unwrap_or("Unknown")
-            .to_string();
+        let serial = dev_info.serial_number().unwrap_or("Unknown").to_string();
         let host_device_path = dev_info.path().to_string_lossy().to_string();
         let version = self.get_firmware_version()?;
         self.version = version;
