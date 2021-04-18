@@ -6,13 +6,15 @@ source "$here"/common.sh
 
 set -e
 
+RPC_URL=http://104.198.102.145 # validator-us-west1-b (7Np41oeYqPefeNQEHSv1UDhYrehxin3NStELsSKCT4K2)
+
 rm -rf "$SOLANA_CONFIG_DIR"/latest-mainnet-beta-snapshot
 mkdir -p "$SOLANA_CONFIG_DIR"/latest-mainnet-beta-snapshot
 (
   cd "$SOLANA_CONFIG_DIR"/latest-mainnet-beta-snapshot || exit 1
   set -x
-  wget http://api.mainnet-beta.solana.com/genesis.tar.bz2
-  wget --trust-server-names http://api.mainnet-beta.solana.com/snapshot.tar.bz2
+  wget "$RPC_URL"/genesis.tar.bz2
+  wget --trust-server-names "$RPC_URL"/snapshot.tar.bz2
 )
 
 snapshot=$(ls "$SOLANA_CONFIG_DIR"/latest-mainnet-beta-snapshot/snapshot-[0-9]*-*.tar.zst)
