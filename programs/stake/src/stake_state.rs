@@ -2536,13 +2536,12 @@ mod tests {
                 },
             );
 
+            let effective_rate_limited = (effective as f64 * stake.warmup_cooldown_rate) as u64;
             if epoch < stake.deactivation_epoch {
-                let increase = (effective as f64 * stake.warmup_cooldown_rate) as u64;
-                effective += increase.min(activating);
+                effective += effective_rate_limited.min(activating);
                 other_activations.push(0);
             } else {
-                let decrease = (effective as f64 * stake.warmup_cooldown_rate) as u64;
-                effective -= decrease.min(deactivating);
+                effective -= effective_rate_limited.min(deactivating);
                 effective += other_activation;
                 other_activations.push(other_activation);
             }

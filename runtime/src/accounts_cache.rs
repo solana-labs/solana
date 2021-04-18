@@ -216,7 +216,7 @@ impl AccountsCache {
             // we return all slots <= `max_root`
             std::mem::replace(&mut w_maybe_unflushed_roots, greater_than_max_root)
         } else {
-            std::mem::replace(&mut *w_maybe_unflushed_roots, BTreeSet::new())
+            std::mem::take(&mut *w_maybe_unflushed_roots)
         }
     }
 

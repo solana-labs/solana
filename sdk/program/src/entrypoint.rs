@@ -198,9 +198,9 @@ pub unsafe fn deserialize<'a>(input: *mut u8) -> (&'a Pubkey, Vec<AccountInfo<'a
             offset += size_of::<u64>();
 
             accounts.push(AccountInfo {
+                key,
                 is_signer,
                 is_writable,
-                key,
                 lamports,
                 data,
                 owner,
