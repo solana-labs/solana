@@ -338,7 +338,7 @@ impl fmt::Display for CliValidators {
 
             writeln!(
                 f,
-                "{} {:<44}  {:<44}  {:>3}%   {:>8}  {:>10}  {:>10}  {:>8}  {}",
+                "{} {:<44}  {:<44}  {:>3}%   {:>8}  {:>10} {:>13} {:>7}  {}",
                 if delinquent {
                     WARNING.to_string()
                 } else {
@@ -366,13 +366,13 @@ impl fmt::Display for CliValidators {
             f,
             "{}",
             style(format!(
-                "  {:<44}  {:<38}  {}  {}  {}  {:>10}  {:^8}  {}",
+                "  {:<44}  {:<38}  {}  {}  {} {:>11} {:^7}  {}",
                 "Identity",
                 "Vote Account",
                 "Commission",
                 "Last Vote",
                 "Root Block",
-                "Credits",
+                "Epoch Credits",
                 "Version",
                 "Active Stake",
             ))
@@ -482,9 +482,9 @@ impl CliValidator {
             credits: vote_account
                 .epoch_credits
                 .iter()
-                .find_map(|(epoch, credits, _)| {
+                .find_map(|(epoch, credits, pre_credits)| {
                     if *epoch == current_epoch {
-                        Some(*credits)
+                        Some(credits.saturating_sub(*pre_credits))
                     } else {
                         None
                     }
