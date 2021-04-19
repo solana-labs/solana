@@ -81,33 +81,41 @@ pub fn serialize_parameters_unaligned(
     let mut v: Vec<u8> = Vec::with_capacity(size);
 
     v.write_u64::<LittleEndian>(keyed_accounts.len() as u64)
-        .unwrap();
+        .map_err(|_| InstructionError::InvalidArgument)?;
     for (i, keyed_account) in keyed_accounts.iter().enumerate() {
         let (is_dup, position) = is_dup(&keyed_accounts[..i], keyed_account);
         if is_dup {
-            v.write_u8(position as u8).unwrap();
+            v.write_u8(position as u8)
+                .map_err(|_| InstructionError::InvalidArgument)?;
         } else {
-            v.write_u8(std::u8::MAX).unwrap();
+            v.write_u8(std::u8::MAX)
+                .map_err(|_| InstructionError::InvalidArgument)?;
             v.write_u8(keyed_account.signer_key().is_some() as u8)
-                .unwrap();
-            v.write_u8(keyed_account.is_writable() as u8).unwrap();
-            v.write_all(keyed_account.unsigned_key().as_ref()).unwrap();
+                .map_err(|_| InstructionError::InvalidArgument)?;
+            v.write_u8(keyed_account.is_writable() as u8)
+                .map_err(|_| InstructionError::InvalidArgument)?;
+            v.write_all(keyed_account.unsigned_key().as_ref())
+                .map_err(|_| InstructionError::InvalidArgument)?;
             v.write_u64::<LittleEndian>(keyed_account.lamports()?)
-                .unwrap();
+                .map_err(|_| InstructionError::InvalidArgument)?;
             v.write_u64::<LittleEndian>(keyed_account.data_len()? as u64)
-                .unwrap();
+                .map_err(|_| InstructionError::InvalidArgument)?;
             v.write_all(&keyed_account.try_account_ref()?.data())
-                .unwrap();
-            v.write_all(keyed_account.owner()?.as_ref()).unwrap();
-            v.write_u8(keyed_account.executable()? as u8).unwrap();
+                .map_err(|_| InstructionError::InvalidArgument)?;
+            v.write_all(keyed_account.owner()?.as_ref())
+                .map_err(|_| InstructionError::InvalidArgument)?;
+            v.write_u8(keyed_account.executable()? as u8)
+                .map_err(|_| InstructionError::InvalidArgument)?;
             v.write_u64::<LittleEndian>(keyed_account.rent_epoch()? as u64)
-                .unwrap();
+                .map_err(|_| InstructionError::InvalidArgument)?;
         }
     }
     v.write_u64::<LittleEndian>(instruction_data.len() as u64)
-        .unwrap();
-    v.write_all(instruction_data).unwrap();
-    v.write_all(program_id.as_ref()).unwrap();
+        .map_err(|_| InstructionError::InvalidArgument)?;
+    v.write_all(instruction_data)
+        .map_err(|_| InstructionError::InvalidArgument)?;
+    v.write_all(program_id.as_ref())
+        .map_err(|_| InstructionError::InvalidArgument)?;
     Ok(v)
 }
 
@@ -188,30 +196,38 @@ pub fn serialize_parameters_aligned(
 
     // Serialize into the buffer
     v.write_u64::<LittleEndian>(keyed_accounts.len() as u64)
-        .unwrap();
+        .map_err(|_| InstructionError::InvalidArgument)?;
     if v.as_ptr().align_offset(align_of::<u128>()) != 0 {
         panic!();
     }
     for (i, keyed_account) in keyed_accounts.iter().enumerate() {
         let (is_dup, position) = is_dup(&keyed_accounts[..i], keyed_account);
         if is_dup {
-            v.write_u8(position as u8).unwrap();
-            v.write_all(&[0u8, 0, 0, 0, 0, 0, 0]).unwrap(); // 7 bytes of padding to make 64-bit aligned
+            v.write_u8(position as u8)
+                .map_err(|_| InstructionError::InvalidArgument)?;
+            v.write_all(&[0u8, 0, 0, 0, 0, 0, 0])
+                .map_err(|_| InstructionError::InvalidArgument)?; // 7 bytes of padding to make 64-bit aligned
         } else {
-            v.write_u8(std::u8::MAX).unwrap();
+            v.write_u8(std::u8::MAX)
+                .map_err(|_| InstructionError::InvalidArgument)?;
             v.write_u8(keyed_account.signer_key().is_some() as u8)
-                .unwrap();
-            v.write_u8(keyed_account.is_writable() as u8).unwrap();
-            v.write_u8(keyed_account.executable()? as u8).unwrap();
-            v.write_all(&[0u8, 0, 0, 0]).unwrap(); // 4 bytes of padding to make 128-bit aligned
-            v.write_all(keyed_account.unsigned_key().as_ref()).unwrap();
-            v.write_all(keyed_account.owner()?.as_ref()).unwrap();
+                .map_err(|_| InstructionError::InvalidArgument)?;
+            v.write_u8(keyed_account.is_writable() as u8)
+                .map_err(|_| InstructionError::InvalidArgument)?;
+            v.write_u8(keyed_account.executable()? as u8)
+                .map_err(|_| InstructionError::InvalidArgument)?;
+            v.write_all(&[0u8, 0, 0, 0])
+                .map_err(|_| InstructionError::InvalidArgument)?; // 4 bytes of padding to make 128-bit aligned
+            v.write_all(keyed_account.unsigned_key().as_ref())
+                .map_err(|_| InstructionError::InvalidArgument)?;
+            v.write_all(keyed_account.owner()?.as_ref())
+                .map_err(|_| InstructionError::InvalidArgument)?;
             v.write_u64::<LittleEndian>(keyed_account.lamports()?)
-                .unwrap();
+                .map_err(|_| InstructionError::InvalidArgument)?;
             v.write_u64::<LittleEndian>(keyed_account.data_len()? as u64)
-                .unwrap();
+                .map_err(|_| InstructionError::InvalidArgument)?;
             v.write_all(&keyed_account.try_account_ref()?.data())
-                .unwrap();
+                .map_err(|_| InstructionError::InvalidArgument)?;
             v.resize(
                 v.len()
                     + MAX_PERMITTED_DATA_INCREASE
@@ -219,13 +235,15 @@ pub fn serialize_parameters_aligned(
                 0,
             );
             v.write_u64::<LittleEndian>(keyed_account.rent_epoch()? as u64)
-                .unwrap();
+                .map_err(|_| InstructionError::InvalidArgument)?;
         }
     }
     v.write_u64::<LittleEndian>(instruction_data.len() as u64)
-        .unwrap();
-    v.write_all(instruction_data).unwrap();
-    v.write_all(program_id.as_ref()).unwrap();
+        .map_err(|_| InstructionError::InvalidArgument)?;
+    v.write_all(instruction_data)
+        .map_err(|_| InstructionError::InvalidArgument)?;
+    v.write_all(program_id.as_ref())
+        .map_err(|_| InstructionError::InvalidArgument)?;
     Ok(v)
 }
 
