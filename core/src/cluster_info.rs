@@ -2051,7 +2051,6 @@ impl ClusterInfo {
         recycler: &PacketsRecycler,
         stakes: &HashMap<Pubkey, u64>,
         response_sender: &PacketSender,
-        feature_set: Option<&FeatureSet>,
         require_stake_for_gossip: bool,
     ) {
         let _st = ScopedTimer::from(&self.stats.handle_batch_pull_requests_time);
@@ -2094,13 +2093,8 @@ impl ClusterInfo {
             self.stats
                 .pull_requests_count
                 .add_relaxed(requests.len() as u64);
-            let response = self.handle_pull_requests(
-                recycler,
-                requests,
-                stakes,
-                feature_set,
-                require_stake_for_gossip,
-            );
+            let response =
+                self.handle_pull_requests(recycler, requests, stakes, require_stake_for_gossip);
             if !response.is_empty() {
                 self.stats
                     .packets_sent_pull_responses_count
@@ -2132,13 +2126,10 @@ impl ClusterInfo {
         now: Instant,
         mut rng: &'a mut R,
         packets: &'a mut Packets,
-        feature_set: Option<&FeatureSet>,
     ) -> impl FnMut(&PullData) -> bool + 'a
     where
         R: Rng + CryptoRng,
     {
-        let check_enabled = matches!(feature_set, Some(feature_set) if
-            feature_set.is_active(&feature_set::pull_request_ping_pong_check::id()));
         let mut cache = HashMap::<(Pubkey, SocketAddr), bool>::new();
         let mut pingf = move || Ping::new_rand(&mut rng, &self.keypair).ok();
         let mut ping_cache = self.ping_cache.write().unwrap();
@@ -2156,7 +2147,7 @@ impl ClusterInfo {
                     .pull_request_ping_pong_check_failed_count
                     .add_relaxed(1)
             }
-            check || !check_enabled
+            check
         };
         // Because pull-responses are sent back to packet.meta.addr() of
         // incoming pull-requests, pings are also sent to request.from_addr (as
@@ -2176,7 +2167,6 @@ impl ClusterInfo {
         recycler: &PacketsRecycler,
         requests: Vec<PullData>,
         stakes: &HashMap<Pubkey, u64>,
-        feature_set: Option<&FeatureSet>,
         require_stake_for_gossip: bool,
     ) -> Packets {
         let mut time = Measure::start("handle_pull_requests");
@@ -2189,7 +2179,7 @@ impl ClusterInfo {
         let (caller_and_filters, addrs): (Vec<_>, Vec<_>) = {
             let mut rng = rand::thread_rng();
             let check_pull_request =
-                self.check_pull_request(Instant::now(), &mut rng, &mut packets, feature_set);
+                self.check_pull_request(Instant::now(), &mut rng, &mut packets);
             requests
                 .into_iter()
                 .filter(check_pull_request)
@@ -2786,7 +2776,6 @@ impl ClusterInfo {
             recycler,
             &stakes,
             response_sender,
-            feature_set,
             require_stake_for_gossip,
         );
         Ok(())
