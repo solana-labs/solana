@@ -376,6 +376,9 @@ impl fmt::Display for CliValidators {
                 },
             )
         }
+
+        let padding = ((self.validators.len() + 1) as f64).log10().floor() as usize + 1;
+        write!(f, "{:padding$}", " ", padding = padding)?;
         writeln!(
             f,
             "{}",
@@ -425,7 +428,8 @@ impl fmt::Display for CliValidators {
             sorted_validators.reverse();
         }
 
-        for validator in &sorted_validators {
+        for (i, validator) in sorted_validators.iter().enumerate() {
+            write!(f, "{:padding$}", i + 1, padding = padding)?;
             write_vote_account(
                 f,
                 validator,
