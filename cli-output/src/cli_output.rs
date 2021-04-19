@@ -349,7 +349,7 @@ impl fmt::Display for CliValidators {
                 validator.commission,
                 non_zero_or_dash(validator.last_vote),
                 non_zero_or_dash(validator.root_slot),
-                validator.credits,
+                validator.epoch_credits,
                 validator.version,
                 if validator.activated_stake > 0 {
                     format!(
@@ -461,7 +461,8 @@ pub struct CliValidator {
     pub commission: u8,
     pub last_vote: u64,
     pub root_slot: u64,
-    pub credits: u64,
+    pub credits: u64,       // lifetime credits
+    pub epoch_credits: u64, // credits earned in the current epoch
     pub activated_stake: u64,
     pub version: String,
 }
@@ -473,23 +474,26 @@ impl CliValidator {
         version: String,
         address_labels: &HashMap<String, String>,
     ) -> Self {
+        let (credits, epoch_credits) = vote_account
+            .epoch_credits
+            .iter()
+            .find_map(|(epoch, credits, pre_credits)| {
+                if *epoch == current_epoch {
+                    Some((*credits, credits.saturating_sub(*pre_credits)))
+                } else {
+                    None
+                }
+            })
+            .unwrap_or((0, 0));
+
         Self {
             identity_pubkey: format_labeled_address(&vote_account.node_pubkey, address_labels),
             vote_account_pubkey: format_labeled_address(&vote_account.vote_pubkey, address_labels),
             commission: vote_account.commission,
             last_vote: vote_account.last_vote,
             root_slot: vote_account.root_slot,
-            credits: vote_account
-                .epoch_credits
-                .iter()
-                .find_map(|(epoch, credits, pre_credits)| {
-                    if *epoch == current_epoch {
-                        Some(credits.saturating_sub(*pre_credits))
-                    } else {
-                        None
-                    }
-                })
-                .unwrap_or(0),
+            credits,
+            epoch_credits,
             activated_stake: vote_account.activated_stake,
             version,
         }
