@@ -378,12 +378,9 @@ impl fmt::Display for CliValidators {
         }
 
         let padding = ((self.validators.len() + 1) as f64).log10().floor() as usize + 1;
-        write!(f, "{:padding$}", " ", padding = padding)?;
-        writeln!(
-            f,
-            "{}",
-            style(format!(
-                "  {:<44}  {:<38}  {}  {}  {} {:>11} {:^7}  {}",
+        let header = style(format!(
+                "{:padding$}  {:<44}  {:<38}  {}  {}  {} {:>11} {:^7}  {}",
+                " ",
                 "Identity",
                 "Vote Account",
                 "Commission",
@@ -392,9 +389,10 @@ impl fmt::Display for CliValidators {
                 "Epoch Credits",
                 "Version",
                 "Active Stake",
+                padding = padding
             ))
-            .bold()
-        )?;
+            .bold();
+        writeln!(f, "{}", header)?;
 
         let mut sorted_validators = self.validators.clone();
         match self.validators_sort_order {
@@ -436,6 +434,11 @@ impl fmt::Display for CliValidators {
                 self.total_active_stake,
                 self.use_lamports_unit,
             )?;
+        }
+
+        // The actual header has long scrolled away.  Print the header once more as a footer
+        if self.validators.len() > 100 {
+            writeln!(f, "{}", header)?;
         }
 
         writeln!(f)?;
