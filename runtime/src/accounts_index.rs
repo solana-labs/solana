@@ -209,7 +209,12 @@ impl RollingBitField {
             self.count == 0
                 || (self.max.saturating_sub(key) <= self.max_width as u64
                     && key.saturating_sub(self.min) < self.max_width as u64),
-            "out of range"
+            "out of range: count: {}, min: {}, max: {}, width: {}, key: {}",
+            self.count,
+            self.min,
+            self.max,
+            self.max_width,
+            key
         );
     }
 
