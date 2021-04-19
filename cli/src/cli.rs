@@ -133,6 +133,7 @@ pub enum CliCommand {
         use_lamports_unit: bool,
         sort_order: CliValidatorsSortOrder,
         reverse_sort: bool,
+        number_validators: bool,
     },
     Supply {
         print_accounts: bool,
@@ -1385,12 +1386,14 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             use_lamports_unit,
             sort_order,
             reverse_sort,
+            number_validators,
         } => process_show_validators(
             &rpc_client,
             config,
             *use_lamports_unit,
             *sort_order,
             *reverse_sort,
+            *number_validators,
         ),
         CliCommand::Supply { print_accounts } => {
             process_supply(&rpc_client, config, *print_accounts)

@@ -326,6 +326,8 @@ pub struct CliValidators {
     pub validators_sort_order: CliValidatorsSortOrder,
     #[serde(skip_serializing)]
     pub validators_reverse_sort: bool,
+    #[serde(skip_serializing)]
+    pub number_validators: bool,
     pub stake_by_version: BTreeMap<String, CliValidatorsStakeByVersion>,
     #[serde(skip_serializing)]
     pub use_lamports_unit: bool,
@@ -377,21 +379,25 @@ impl fmt::Display for CliValidators {
             )
         }
 
-        let padding = ((self.validators.len() + 1) as f64).log10().floor() as usize + 1;
+        let padding = if self.number_validators {
+            ((self.validators.len() + 1) as f64).log10().floor() as usize + 1
+        } else {
+            0
+        };
         let header = style(format!(
-                "{:padding$}  {:<44}  {:<38}  {}  {}  {} {:>11} {:^7}  {}",
-                " ",
-                "Identity",
-                "Vote Account",
-                "Commission",
-                "Last Vote",
-                "Root Block",
-                "Epoch Credits",
-                "Version",
-                "Active Stake",
-                padding = padding
-            ))
-            .bold();
+            "{:padding$} {:<44}  {:<38}  {}  {}  {} {:>11} {:^7}  {}",
+            " ",
+            "Identity",
+            "Vote Account",
+            "Commission",
+            "Last Vote",
+            "Root Block",
+            "Epoch Credits",
+            "Version",
+            "Active Stake",
+            padding = padding + 1
+        ))
+        .bold();
         writeln!(f, "{}", header)?;
 
         let mut sorted_validators = self.validators.clone();
@@ -427,7 +433,9 @@ impl fmt::Display for CliValidators {
         }
 
         for (i, validator) in sorted_validators.iter().enumerate() {
-            write!(f, "{:padding$}", i + 1, padding = padding)?;
+            if padding > 0 {
+                write!(f, "{:padding$}", i + 1, padding = padding)?;
+            }
             write_vote_account(
                 f,
                 validator,

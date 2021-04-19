@@ -351,6 +351,13 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .help("Display balance in lamports instead of SOL"),
                 )
                 .arg(
+                    Arg::with_name("number")
+                        .long("number")
+                        .short("n")
+                        .takes_value(false)
+                        .help("Number the validators"),
+                )
+                .arg(
                     Arg::with_name("reverse")
                         .long("reverse")
                         .short("r")
@@ -606,6 +613,7 @@ pub fn parse_show_stakes(
 
 pub fn parse_show_validators(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let use_lamports_unit = matches.is_present("lamports");
+    let number_validators = matches.is_present("number");
     let reverse_sort = matches.is_present("reverse");
 
     let sort_order = match value_t_or_exit!(matches, "sort", String).as_str() {
@@ -625,6 +633,7 @@ pub fn parse_show_validators(matches: &ArgMatches<'_>) -> Result<CliCommandInfo,
             use_lamports_unit,
             sort_order,
             reverse_sort,
+            number_validators,
         },
         signers: vec![],
     })
@@ -1773,6 +1782,7 @@ pub fn process_show_validators(
     use_lamports_unit: bool,
     validators_sort_order: CliValidatorsSortOrder,
     validators_reverse_sort: bool,
+    number_validators: bool,
 ) -> ProcessResult {
     let epoch_info = rpc_client.get_epoch_info()?;
     let vote_accounts = rpc_client.get_vote_accounts()?;
@@ -1859,6 +1869,7 @@ pub fn process_show_validators(
             .collect(),
         validators_sort_order,
         validators_reverse_sort,
+        number_validators,
         stake_by_version,
         use_lamports_unit,
     };
