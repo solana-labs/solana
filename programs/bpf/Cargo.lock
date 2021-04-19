@@ -827,7 +827,7 @@ checksum = "aa4da3c766cd7a0db8242e326e9e4e081edd567072893ed320008189715366a4"
 dependencies = [
  "proc-macro2 1.0.24",
  "quote 1.0.6",
- "syn 1.0.67",
+ "syn 1.0.60",
  "synstructure",
 ]
 
