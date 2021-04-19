@@ -1116,7 +1116,7 @@ pub fn make_min_priority_thread_pool() -> ThreadPool {
     // Use lower thread count to reduce priority.
     let num_threads = std::cmp::max(2, num_cpus::get() / 4);
     rayon::ThreadPoolBuilder::new()
-        .thread_name(|i| format!("solana-accounts-cleanup-{}", i))
+        .thread_name(|i| format!("solana-cleanup-accounts-{}", i))
         .num_threads(num_threads)
         .build()
         .unwrap()
@@ -1162,7 +1162,7 @@ impl Default for AccountsDb {
             file_size: DEFAULT_FILE_SIZE,
             thread_pool: rayon::ThreadPoolBuilder::new()
                 .num_threads(num_threads)
-                .thread_name(|i| format!("solana-accounts-db-{}", i))
+                .thread_name(|i| format!("solana-db-accounts-{}", i))
                 .build()
                 .unwrap(),
             thread_pool_clean: make_min_priority_thread_pool(),
@@ -1407,7 +1407,7 @@ impl AccountsDb {
     fn start_background_hasher(&mut self) {
         let (sender, receiver) = unbounded();
         Builder::new()
-            .name("solana-accounts-db-store-hasher".to_string())
+            .name("solana-db-store-hasher-accounts".to_string())
             .spawn(move || {
                 Self::background_hasher(receiver);
             })

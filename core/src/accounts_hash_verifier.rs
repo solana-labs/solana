@@ -43,7 +43,7 @@ impl AccountsHashVerifier {
         let exit = exit.clone();
         let cluster_info = cluster_info.clone();
         let t_accounts_hash_verifier = Builder::new()
-            .name("solana-accounts-hash".to_string())
+            .name("solana-hash-accounts".to_string())
             .spawn(move || {
                 let mut hashes = vec![];
                 let mut thread_pool_storage = None;
