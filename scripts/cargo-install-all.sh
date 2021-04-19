@@ -3,7 +3,13 @@
 # |cargo install| of the top-level crate will not install binaries for
 # other workspace crates or native program crates.
 here="$(dirname "$0")"
-cargo="$(readlink -f "${here}/../cargo")"
+readlink_cmd="readlink"
+if [[ $OSTYPE == darwin* ]]; then
+  # Mac OS X's version of `readlink` does not support the -f option,
+  # But `greadlink` does, which you can get with `brew install coreutils`
+  readlink_cmd="greadlink"
+fi
+cargo="$("${readlink_cmd}" -f "${here}/../cargo")"
 
 set -e
 
