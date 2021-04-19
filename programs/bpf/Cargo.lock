@@ -652,6 +652,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "derivation-path"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "193388a8c8c75a490b604ff61775e236541b8975e98e5ca1f6ea97d122b7e2db"
+dependencies = [
+ "failure",
+]
+
+[[package]]
 name = "derivative"
 version = "2.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -800,7 +809,10 @@ version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d32e9bd16cc02eae7db7ef620b392808b89f6a5e16bb3497d159c6b92a0f4f86"
 dependencies = [
+<<<<<<< HEAD
  "backtrace",
+=======
+>>>>>>> 185bbf2db... Wrap derivation_path::DerivationPath (#16609)
  "failure_derive",
 ]
 
@@ -3318,6 +3330,7 @@ dependencies = [
  "bv",
  "byteorder 1.3.4",
  "chrono",
+ "derivation-path",
  "digest 0.9.0",
  "ed25519-dalek",
  "generic-array 0.14.3",
