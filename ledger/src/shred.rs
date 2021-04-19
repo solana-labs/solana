@@ -319,11 +319,10 @@ impl Shred {
             Self::deserialize_obj(&mut start, SIZE_OF_COMMON_SHRED_HEADER, &payload)?;
 
         let slot = common_header.slot;
-        let expected_data_size = SHRED_PAYLOAD_SIZE;
         // Shreds should be padded out to SHRED_PAYLOAD_SIZE
         // so that erasure generation/recovery works correctly
         // But only the data_header.size is stored in blockstore.
-        payload.resize(expected_data_size, 0);
+        payload.resize(SHRED_PAYLOAD_SIZE, 0);
         let shred = if common_header.shred_type == ShredType(CODING_SHRED) {
             let coding_header: CodingShredHeader =
                 Self::deserialize_obj(&mut start, SIZE_OF_CODING_SHRED_HEADER, &payload)?;

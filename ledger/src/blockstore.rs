@@ -1416,6 +1416,8 @@ impl Blockstore {
         // We don't want only a subset of these changes going through.
         write_batch.put_bytes::<cf::ShredData>(
             (slot, index),
+            // Payload will be padded out to SHRED_PAYLOAD_SIZE
+            // But only need to store the bytes within data_header.size
             &shred.payload[..shred.data_header.size as usize],
         )?;
         data_index.set_present(index, true);
@@ -1448,6 +1450,9 @@ impl Blockstore {
         use crate::shred::SHRED_PAYLOAD_SIZE;
         self.data_shred_cf.get_bytes((slot, index)).map(|data| {
             data.map(|mut d| {
+                // Only data_header.size bytes stored in the blockstore so
+                // pad the payload out to SHRED_PAYLOAD_SIZE so that the
+                // erasure recovery works properly.
                 d.resize(cmp::max(d.len(), SHRED_PAYLOAD_SIZE), 0);
                 d
             })
