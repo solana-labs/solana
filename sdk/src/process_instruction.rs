@@ -344,10 +344,13 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
         key: &Pubkey,
         keyed_accounts: &[(bool, bool, &Pubkey, &RefCell<AccountSharedData>)],
     ) -> Result<(), InstructionError> {
-        self.invoke_stack
-            .push(InvokeContextStackFrame::new(*key, unsafe {
-                std::mem::transmute(create_keyed_accounts_unified(keyed_accounts))
-            }));
+        fn transmute_lifetime<'a, 'b>(value: Vec<KeyedAccount<'a>>) -> Vec<KeyedAccount<'b>> {
+            unsafe { std::mem::transmute(value) }
+        }
+        self.invoke_stack.push(InvokeContextStackFrame::new(
+            *key,
+            transmute_lifetime(create_keyed_accounts_unified(keyed_accounts)),
+        ));
         Ok(())
     }
     fn pop(&mut self) {

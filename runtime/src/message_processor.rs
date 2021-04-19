@@ -341,6 +341,9 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         }
         // Alias the keys and account references in the provided keyed_accounts
         // with the ones already existing in self, so that the lifetime 'a matches.
+        fn transmute_lifetime<'a, 'b, T: Sized>(value: &'a T) -> &'b T {
+            unsafe { std::mem::transmute(value) }
+        }
         let keyed_accounts = keyed_accounts
             .iter()
             .map(|(is_signer, is_writable, search_key, account)| {
@@ -368,7 +371,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
                                 // before calling MessageProcessor::process_cross_program_instruction
                                 // Ideally we would recycle the existing accounts here like this:
                                 // &self.accounts[index] as &RefCell<AccountSharedData>,
-                                unsafe { std::mem::transmute(*account) },
+                                transmute_lifetime(*account),
                             )
                         }
                     })
