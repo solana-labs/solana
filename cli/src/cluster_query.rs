@@ -349,6 +349,30 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .long("lamports")
                         .takes_value(false)
                         .help("Display balance in lamports instead of SOL"),
+                )
+                .arg(
+                    Arg::with_name("reverse")
+                        .long("reverse")
+                        .short("r")
+                        .takes_value(false)
+                        .help("Reverse order while sorting"),
+                )
+                .arg(
+                    Arg::with_name("sort")
+                        .long("sort")
+                        .takes_value(true)
+                        .possible_values(&[
+                            "delinquent",
+                            "commission",
+                            "credits",
+                            "identity",
+                            "last-vote",
+                            "root",
+                            "stake",
+                            "vote-account",
+                        ])
+                        .default_value("stake")
+                        .help("Sort order (does not affect JSON output)"),
                 ),
         )
         .subcommand(
@@ -582,9 +606,26 @@ pub fn parse_show_stakes(
 
 pub fn parse_show_validators(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let use_lamports_unit = matches.is_present("lamports");
+    let reverse_sort = matches.is_present("reverse");
+
+    let sort_order = match value_t_or_exit!(matches, "sort", String).as_str() {
+        "delinquent" => CliValidatorsSortOrder::Delinquent,
+        "commission" => CliValidatorsSortOrder::Commission,
+        "credits" => CliValidatorsSortOrder::EpochCredits,
+        "identity" => CliValidatorsSortOrder::Identity,
+        "last-vote" => CliValidatorsSortOrder::LastVote,
+        "root" => CliValidatorsSortOrder::Root,
+        "stake" => CliValidatorsSortOrder::Stake,
+        "vote-account" => CliValidatorsSortOrder::VoteAccount,
+        _ => unreachable!(),
+    };
 
     Ok(CliCommandInfo {
-        command: CliCommand::ShowValidators { use_lamports_unit },
+        command: CliCommand::ShowValidators {
+            use_lamports_unit,
+            sort_order,
+            reverse_sort,
+        },
         signers: vec![],
     })
 }
@@ -1730,6 +1771,8 @@ pub fn process_show_validators(
     rpc_client: &RpcClient,
     config: &CliConfig,
     use_lamports_unit: bool,
+    validators_sort_order: CliValidatorsSortOrder,
+    validators_reverse_sort: bool,
 ) -> ProcessResult {
     let epoch_info = rpc_client.get_epoch_info()?;
     let vote_accounts = rpc_client.get_vote_accounts()?;
@@ -1759,9 +1802,8 @@ pub fn process_show_validators(
         .sum();
     let total_current_stake = total_active_stake - total_delinquent_stake;
 
-    let mut current = vote_accounts.current;
-    current.sort_by(|a, b| b.activated_stake.cmp(&a.activated_stake));
-    let current_validators: Vec<CliValidator> = current
+    let current_validators: Vec<CliValidator> = vote_accounts
+        .current
         .iter()
         .map(|vote_account| {
             CliValidator::new(
@@ -1775,12 +1817,11 @@ pub fn process_show_validators(
             )
         })
         .collect();
-    let mut delinquent = vote_accounts.delinquent;
-    delinquent.sort_by(|a, b| b.activated_stake.cmp(&a.activated_stake));
-    let delinquent_validators: Vec<CliValidator> = delinquent
+    let delinquent_validators: Vec<CliValidator> = vote_accounts
+        .delinquent
         .iter()
         .map(|vote_account| {
-            CliValidator::new(
+            CliValidator::new_delinquent(
                 vote_account,
                 epoch_info.epoch,
                 node_version
@@ -1812,8 +1853,12 @@ pub fn process_show_validators(
         total_active_stake,
         total_current_stake,
         total_delinquent_stake,
-        current_validators,
-        delinquent_validators,
+        validators: current_validators
+            .into_iter()
+            .chain(delinquent_validators.into_iter())
+            .collect(),
+        validators_sort_order,
+        validators_reverse_sort,
         stake_by_version,
         use_lamports_unit,
     };
