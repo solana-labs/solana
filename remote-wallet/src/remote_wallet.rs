@@ -6,7 +6,7 @@ use {
     log::*,
     parking_lot::{Mutex, RwLock},
     solana_sdk::{
-        derivation_path::{DerivationPath, DerivationPathError, Solana},
+        derivation_path::{DerivationPath, DerivationPathError},
         pubkey::Pubkey,
         signature::{Signature, SignerError},
     },
@@ -291,7 +291,7 @@ impl RemoteWalletInfo {
                         if key_path.ends_with('/') {
                             key_path.pop();
                         }
-                        derivation_path = DerivationPath::from_key_str(key_path, Solana)?;
+                        derivation_path = DerivationPath::from_key_str(key_path)?;
                     } else {
                         return Err(DerivationPathError::InvalidDerivationPath(format!(
                             "invalid query string `{}={}`, only `key` supported",
@@ -362,10 +362,7 @@ mod tests {
             pubkey,
             error: None,
         }));
-        assert_eq!(
-            derivation_path,
-            DerivationPath::new_bip44(Solana, Some(1), Some(2))
-        );
+        assert_eq!(derivation_path, DerivationPath::new_bip44(Some(1), Some(2)));
         let (wallet_info, derivation_path) =
             RemoteWalletInfo::parse_path(format!("usb://ledger/{:?}?key=1'/2'", pubkey)).unwrap();
         assert!(wallet_info.matches(&RemoteWalletInfo {
@@ -376,10 +373,7 @@ mod tests {
             pubkey,
             error: None,
         }));
-        assert_eq!(
-            derivation_path,
-            DerivationPath::new_bip44(Solana, Some(1), Some(2))
-        );
+        assert_eq!(derivation_path, DerivationPath::new_bip44(Some(1), Some(2)));
         let (wallet_info, derivation_path) =
             RemoteWalletInfo::parse_path(format!("usb://ledger/{:?}?key=1\'/2\'", pubkey)).unwrap();
         assert!(wallet_info.matches(&RemoteWalletInfo {
@@ -390,10 +384,7 @@ mod tests {
             pubkey,
             error: None,
         }));
-        assert_eq!(
-            derivation_path,
-            DerivationPath::new_bip44(Solana, Some(1), Some(2))
-        );
+        assert_eq!(derivation_path, DerivationPath::new_bip44(Some(1), Some(2)));
         let (wallet_info, derivation_path) =
             RemoteWalletInfo::parse_path(format!("usb://ledger/{:?}?key=1/2/", pubkey)).unwrap();
         assert!(wallet_info.matches(&RemoteWalletInfo {
@@ -404,10 +395,7 @@ mod tests {
             pubkey,
             error: None,
         }));
-        assert_eq!(
-            derivation_path,
-            DerivationPath::new_bip44(Solana, Some(1), Some(2))
-        );
+        assert_eq!(derivation_path, DerivationPath::new_bip44(Some(1), Some(2)));
         let (wallet_info, derivation_path) =
             RemoteWalletInfo::parse_path(format!("usb://ledger/{:?}?key=1/", pubkey)).unwrap();
         assert!(wallet_info.matches(&RemoteWalletInfo {
@@ -418,10 +406,7 @@ mod tests {
             pubkey,
             error: None,
         }));
-        assert_eq!(
-            derivation_path,
-            DerivationPath::new_bip44(Solana, Some(1), None)
-        );
+        assert_eq!(derivation_path, DerivationPath::new_bip44(Some(1), None));
 
         // Test that wallet id need not be complete for key derivation to work
         let (wallet_info, derivation_path) =
@@ -434,10 +419,7 @@ mod tests {
             pubkey: Pubkey::default(),
             error: None,
         }));
-        assert_eq!(
-            derivation_path,
-            DerivationPath::new_bip44(Solana, Some(1), None)
-        );
+        assert_eq!(derivation_path, DerivationPath::new_bip44(Some(1), None));
         let (wallet_info, derivation_path) =
             RemoteWalletInfo::parse_path("usb://ledger/?key=1/2".to_string()).unwrap();
         assert!(wallet_info.matches(&RemoteWalletInfo {
@@ -448,10 +430,7 @@ mod tests {
             pubkey: Pubkey::default(),
             error: None,
         }));
-        assert_eq!(
-            derivation_path,
-            DerivationPath::new_bip44(Solana, Some(1), Some(2))
-        );
+        assert_eq!(derivation_path, DerivationPath::new_bip44(Some(1), Some(2)));
 
         // Failure cases
         assert!(
