@@ -786,7 +786,7 @@ impl Shredder {
             .iter()
             .map(|shred| &shred.payload[..PAYLOAD_ENCODE_SIZE])
             .collect();
-        let mut parity = vec![vec![0; PAYLOAD_ENCODE_SIZE]; num_coding];
+        let mut parity = vec![vec![0u8; PAYLOAD_ENCODE_SIZE]; num_coding];
         Session::new(num_data, num_coding)
             .unwrap()
             .encode(&data, &mut parity[..])
@@ -938,37 +938,36 @@ impl Shredder {
 
     /// Combines all shreds to recreate the original buffer
     pub fn deshred(shreds: &[Shred]) -> std::result::Result<Vec<u8>, reed_solomon_erasure::Error> {
-        let num_data = shreds.len();
+        use reed_solomon_erasure::Error::TooFewDataShards;
+        const SHRED_DATA_OFFSET: usize = SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_DATA_SHRED_HEADER;
         Self::verify_consistent_shred_payload_sizes(&"deshred()", shreds)?;
-        let data_shred_bufs = {
-            let first_index = shreds.first().unwrap().index() as usize;
-            let last_shred = shreds.last().unwrap();
-            let last_index = if last_shred.data_complete() || last_shred.last_in_slot() {
-                last_shred.index() as usize
-            } else {
-                0
-            };
-
-            if num_data.saturating_add(first_index) != last_index.saturating_add(1) {
-                return Err(reed_solomon_erasure::Error::TooFewDataShards);
-            }
-
-            shreds.iter().map(|shred| &shred.payload).collect()
+        let index = shreds.first().ok_or(TooFewDataShards)?.index();
+        let aligned = shreds.iter().zip(index..).all(|(s, i)| s.index() == i);
+        let data_complete = {
+            let shred = shreds.last().unwrap();
+            shred.data_complete() || shred.last_in_slot()
         };
-
-        Ok(Self::reassemble_payload(num_data, data_shred_bufs))
-    }
-
-    fn reassemble_payload(num_data: usize, data_shred_bufs: Vec<&Vec<u8>>) -> Vec<u8> {
-        let valid_data_len = SHRED_PAYLOAD_SIZE - SIZE_OF_CODING_SHRED_HEADERS;
-        data_shred_bufs[..num_data]
+        if !data_complete || !aligned {
+            return Err(TooFewDataShards);
+        }
+        let data: Vec<_> = shreds
             .iter()
-            .flat_map(|data| {
-                let offset = SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_DATA_SHRED_HEADER;
-                data[offset..valid_data_len].iter()
+            .flat_map(|shred| {
+                let size = shred.data_header.size as usize;
+                let size = shred.payload.len().min(size);
+                let offset = SHRED_DATA_OFFSET.min(size);
+                shred.payload[offset..size].iter()
             })
-            .cloned()
-            .collect()
+            .copied()
+            .collect();
+        if data.is_empty() {
+            // For backward compatibility. This is needed when the data shred
+            // payload is None, so that deserializing to Vec<Entry> results in
+            // an empty vector.
+            Ok(vec![0u8; SIZE_OF_DATA_SHRED_PAYLOAD])
+        } else {
+            Ok(data)
+        }
     }
 
     fn verify_consistent_shred_payload_sizes(
