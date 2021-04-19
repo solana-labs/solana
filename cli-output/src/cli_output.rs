@@ -358,7 +358,7 @@ impl fmt::Display for CliValidators {
                 if validator.delinquent {
                     WARNING.to_string()
                 } else {
-                    " ".to_string()
+                    "\u{a0}".to_string()
                 },
                 validator.identity_pubkey,
                 validator.vote_account_pubkey,
