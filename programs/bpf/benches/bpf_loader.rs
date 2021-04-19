@@ -76,7 +76,7 @@ fn bench_program_create_executable(bencher: &mut Bencher) {
 
     bencher.iter(|| {
         let _ =
-            Executable::<BpfError, ThisInstructionMeter>::from_elf(&elf, None, Config::default())
+            <dyn Executable::<BpfError, ThisInstructionMeter>>::from_elf(&elf, None, Config::default())
                 .unwrap();
     });
 }
@@ -95,7 +95,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
 
     let elf = load_elf("bench_alu").unwrap();
     let mut executable =
-        Executable::<BpfError, ThisInstructionMeter>::from_elf(&elf, None, Config::default())
+        <dyn Executable::<BpfError, ThisInstructionMeter>>::from_elf(&elf, None, Config::default())
             .unwrap();
     executable.set_syscall_registry(register_syscalls(&mut invoke_context).unwrap());
     executable.jit_compile().unwrap();
@@ -223,7 +223,7 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
 
     let elf = load_elf("tuner").unwrap();
     let mut executable =
-        Executable::<BpfError, ThisInstructionMeter>::from_elf(&elf, None, Config::default())
+        <dyn Executable::<BpfError, ThisInstructionMeter>>::from_elf(&elf, None, Config::default())
             .unwrap();
     executable.set_syscall_registry(register_syscalls(&mut invoke_context).unwrap());
     let compute_meter = invoke_context.get_compute_meter();
