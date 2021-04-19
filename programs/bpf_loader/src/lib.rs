@@ -70,40 +70,53 @@ fn map_ebpf_error(
 }
 
 pub fn create_and_cache_executor(
-    key: &Pubkey,
-    data: &[u8],
+    program_id: Option<&Pubkey>,
+    program_account_index: usize,
+    program_data_offset: usize,
     invoke_context: &mut dyn InvokeContext,
     use_jit: bool,
 ) -> Result<Arc<BpfExecutor>, InstructionError> {
-    let bpf_compute_budget = invoke_context.get_bpf_compute_budget();
-    let mut program = <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(
-        data,
-        None,
-        Config {
-            max_call_depth: bpf_compute_budget.max_call_depth,
-            stack_frame_size: bpf_compute_budget.stack_frame_size,
-            enable_instruction_meter: true,
-            enable_instruction_tracing: log_enabled!(Trace),
-        },
-    )
-    .map_err(|e| map_ebpf_error(invoke_context, e))?;
-    let (_, elf_bytes) = program
-        .get_text_bytes()
-        .map_err(|e| map_ebpf_error(invoke_context, e))?;
-    bpf_verifier::check(elf_bytes)
-        .map_err(|e| map_ebpf_error(invoke_context, EbpfError::UserError(e)))?;
     let syscall_registry = syscalls::register_syscalls(invoke_context).map_err(|e| {
         ic_msg!(invoke_context, "Failed to register syscalls: {}", e);
         InstructionError::ProgramEnvironmentSetupFailure
     })?;
-    program.set_syscall_registry(syscall_registry);
+    let bpf_compute_budget = invoke_context.get_bpf_compute_budget();
+    let config = Config {
+        max_call_depth: bpf_compute_budget.max_call_depth,
+        stack_frame_size: bpf_compute_budget.stack_frame_size,
+        enable_instruction_meter: true,
+        enable_instruction_tracing: log_enabled!(Trace),
+    };
+    let mut executable = {
+        let keyed_accounts = invoke_context.get_keyed_accounts();
+        let program = keyed_account_at_index(keyed_accounts, program_account_index)?;
+        let account = program.try_account_ref()?;
+        let data = &account.data()[program_data_offset..];
+        <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(data, None, config)
+    }
+    .map_err(|e| map_ebpf_error(invoke_context, e))?;
+    let (_, elf_bytes) = executable
+        .get_text_bytes()
+        .map_err(|e| map_ebpf_error(invoke_context, e))?;
+    bpf_verifier::check(elf_bytes)
+        .map_err(|e| map_ebpf_error(invoke_context, EbpfError::UserError(e)))?;
+    executable.set_syscall_registry(syscall_registry);
     if use_jit {
-        if let Err(err) = program.jit_compile() {
+        if let Err(err) = executable.jit_compile() {
             ic_msg!(invoke_context, "Failed to compile program {:?}", err);
             return Err(InstructionError::ProgramFailedToCompile);
         }
     }
-    let executor = Arc::new(BpfExecutor { program });
+    let executor = Arc::new(BpfExecutor {
+        program: executable,
+    });
+    let key = if let Some(program_id) = program_id {
+        program_id
+    } else {
+        let keyed_accounts = invoke_context.get_keyed_accounts();
+        let program = keyed_account_at_index(keyed_accounts, program_account_index)?;
+        program.unsigned_key()
+    };
     invoke_context.add_executor(key, executor.clone());
     Ok(executor)
 }
@@ -206,7 +219,7 @@ fn process_instruction_common(
             return Err(InstructionError::IncorrectProgramId);
         }
 
-        let (program, keyed_accounts, offset) =
+        let (keyed_accounts, program_data_offset) =
             if bpf_loader_upgradeable::check_id(&first_account.owner()?) {
                 if let UpgradeableLoaderState::Program {
                     programdata_address,
@@ -224,7 +237,6 @@ fn process_instruction_common(
                     // invoke_context.set_keyed_accounts(&keyed_accounts[1..]);
                     invoke_context.pop_first_keyed_account();
                     (
-                        programdata,
                         &keyed_accounts[1..],
                         UpgradeableLoaderState::programdata_data_offset()?,
                     )
@@ -233,10 +245,14 @@ fn process_instruction_common(
                     return Err(InstructionError::InvalidAccountData);
                 }
             } else {
-                (first_account, keyed_accounts, 0)
+                (keyed_accounts, 0)
             };
 
-        let loader_id = &program.owner()?;
+        let loader_id = {
+            let keyed_accounts = invoke_context.get_keyed_accounts();
+            let program = keyed_account_at_index(keyed_accounts, 0)?;
+            &program.owner()?
+        };
 
         if !check_loader_id(loader_id) {
             ic_logger_msg!(logger, "Executable account not owned by the BPF loader");
@@ -246,8 +262,9 @@ fn process_instruction_common(
         let executor = match invoke_context.get_executor(program_id) {
             Some(executor) => executor,
             None => create_and_cache_executor(
-                program_id,
-                &program.try_account_ref()?.data()[offset..],
+                Some(program_id),
+                0,
+                program_data_offset,
                 invoke_context,
                 use_jit,
             )?,
@@ -295,6 +312,7 @@ fn process_loader_upgradeable_instruction(
     use_jit: bool,
 ) -> Result<(), InstructionError> {
     let logger = invoke_context.get_logger();
+    debug_assert_eq!(keyed_accounts, invoke_context.get_keyed_accounts());
 
     match limited_deserialize(instruction_data)? {
         UpgradeableLoaderInstruction::InitializeBuffer => {
@@ -426,8 +444,9 @@ fn process_loader_upgradeable_instruction(
 
             // Load and verify the program bits
             let _ = create_and_cache_executor(
-                program_id,
-                &buffer.try_account_ref()?.data()[buffer_data_offset..],
+                Some(program_id),
+                3,
+                buffer_data_offset,
                 invoke_context,
                 use_jit,
             )?;
@@ -551,12 +570,8 @@ fn process_loader_upgradeable_instruction(
 
             // Load and verify the program bits
 
-            let _ = create_and_cache_executor(
-                program.unsigned_key(),
-                &buffer.try_account_ref()?.data()[buffer_data_offset..],
-                invoke_context,
-                use_jit,
-            )?;
+            let _ =
+                create_and_cache_executor(None, 2, buffer_data_offset, invoke_context, use_jit)?;
 
             // Update the ProgramData account, record the upgraded data, and zero
             // the rest
@@ -691,6 +706,7 @@ fn process_loader_instruction(
     invoke_context: &mut dyn InvokeContext,
     use_jit: bool,
 ) -> Result<(), InstructionError> {
+    debug_assert_eq!(keyed_accounts, invoke_context.get_keyed_accounts());
     let program = keyed_account_at_index(keyed_accounts, 0)?;
     if program.owner()? != *program_id {
         ic_msg!(
@@ -718,12 +734,7 @@ fn process_loader_instruction(
                 return Err(InstructionError::MissingRequiredSignature);
             }
 
-            let _ = create_and_cache_executor(
-                program.unsigned_key(),
-                &program.try_account_ref()?.data(),
-                invoke_context,
-                use_jit,
-            )?;
+            let _ = create_and_cache_executor(None, 0, 0, invoke_context, use_jit)?;
             program.try_account_ref_mut()?.executable = true;
             ic_msg!(
                 invoke_context,
