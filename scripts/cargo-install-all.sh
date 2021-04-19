@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-#
+
+readlink_cmd="readlink"
+if [[ $OSTYPE == darwin* ]]; then
+  # Mac OS X's version of `readlink` does not support the -f option,
+  # But `greadlink` does, which you can get with `brew install coreutils`
+  readlink_cmd="greadlink"
+fi
+
 # |cargo install| of the top-level crate will not install binaries for
 # other workspace crates or native program crates.
 here="$(dirname "$0")"
-
-# Mac OS X's version of `readlink` does not support the -f option.
-# But `greadlink` does, which you can get with `brew install coreutils`
-unameOut="$(uname -s)"
-case "${unameOut}" in
-    Darwin*)    cargo="$(greadlink -f "${here}/../cargo")";;
-    *)          cargo="$(readlink -f "${here}/../cargo")"
-esac
+cargo="$("${readlink_cmd}" -f "${here}/../cargo")"
 
 set -e
 
