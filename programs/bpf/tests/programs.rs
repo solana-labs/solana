@@ -179,7 +179,7 @@ fn upgrade_bpf_program(
 fn run_program(
     name: &str,
     program_id: &Pubkey,
-    parameter_accounts: &[KeyedAccount],
+    parameter_accounts: Vec<KeyedAccount>,
     instruction_data: &[u8],
 ) -> Result<u64, InstructionError> {
     let path = create_bpf_path(name);
@@ -188,14 +188,14 @@ fn run_program(
     let mut data = vec![];
     file.read_to_end(&mut data).unwrap();
     let loader_id = bpf_loader::id();
-    let mut invoke_context = MockInvokeContext::default();
     let parameter_bytes = serialize_parameters(
         &bpf_loader::id(),
         program_id,
-        parameter_accounts,
+        &parameter_accounts,
         &instruction_data,
     )
     .unwrap();
+    let mut invoke_context = MockInvokeContext::new(parameter_accounts);
     let compute_meter = invoke_context.get_compute_meter();
     let mut instruction_meter = ThisInstructionMeter { compute_meter };
 
@@ -213,20 +213,46 @@ fn run_program(
     let mut tracer = None;
     for i in 0..2 {
         let mut parameter_bytes = parameter_bytes.clone();
-        let mut vm = create_vm(
-            &loader_id,
-            executable.as_ref(),
-            &mut parameter_bytes,
-            parameter_accounts,
-            &mut invoke_context,
-        )
-        .unwrap();
-        let result = if i == 0 {
-            vm.execute_program_interpreted(&mut instruction_meter)
-        } else {
-            vm.execute_program_jit(&mut instruction_meter)
-        };
-        assert_eq!(SUCCESS, result.unwrap());
+        {
+            let mut vm = create_vm(
+                &loader_id,
+                executable.as_ref(),
+                &mut parameter_bytes,
+                &mut invoke_context,
+            )
+            .unwrap();
+            let result = if i == 0 {
+                vm.execute_program_interpreted(&mut instruction_meter)
+            } else {
+                vm.execute_program_jit(&mut instruction_meter)
+            };
+            assert_eq!(SUCCESS, result.unwrap());
+            if i == 1 {
+                assert_eq!(instruction_count, vm.get_total_instruction_count());
+            }
+            instruction_count = vm.get_total_instruction_count();
+            if config.enable_instruction_tracing {
+                if i == 1 {
+                    if !Tracer::compare(tracer.as_ref().unwrap(), vm.get_tracer()) {
+                        let mut tracer_display = String::new();
+                        tracer
+                            .as_ref()
+                            .unwrap()
+                            .write(&mut tracer_display, vm.get_program())
+                            .unwrap();
+                        println!("TRACE (interpreted): {}", tracer_display);
+                        let mut tracer_display = String::new();
+                        vm.get_tracer()
+                            .write(&mut tracer_display, vm.get_program())
+                            .unwrap();
+                        println!("TRACE (jit): {}", tracer_display);
+                        assert!(false);
+                    }
+                }
+                tracer = Some(vm.get_tracer().clone());
+            }
+        }
+        let parameter_accounts = invoke_context.get_keyed_accounts().unwrap();
         deserialize_parameters(
             &bpf_loader::id(),
             parameter_accounts,
@@ -234,30 +260,6 @@ fn run_program(
             true,
         )
         .unwrap();
-        if i == 1 {
-            assert_eq!(instruction_count, vm.get_total_instruction_count());
-        }
-        instruction_count = vm.get_total_instruction_count();
-        if config.enable_instruction_tracing {
-            if i == 1 {
-                if !Tracer::compare(tracer.as_ref().unwrap(), vm.get_tracer()) {
-                    let mut tracer_display = String::new();
-                    tracer
-                        .as_ref()
-                        .unwrap()
-                        .write(&mut tracer_display, vm.get_program())
-                        .unwrap();
-                    println!("TRACE (interpreted): {}", tracer_display);
-                    let mut tracer_display = String::new();
-                    vm.get_tracer()
-                        .write(&mut tracer_display, vm.get_program())
-                        .unwrap();
-                    println!("TRACE (jit): {}", tracer_display);
-                    assert!(false);
-                }
-            }
-            tracer = Some(vm.get_tracer().clone());
-        }
     }
 
     Ok(instruction_count)
@@ -1263,7 +1265,7 @@ fn assert_instruction_count() {
         let key = solana_sdk::pubkey::new_rand();
         let mut account = RefCell::new(AccountSharedData::default());
         let parameter_accounts = vec![KeyedAccount::new(&key, false, &mut account)];
-        let count = run_program(program.0, &program_id, &parameter_accounts[..], &[]).unwrap();
+        let count = run_program(program.0, &program_id, parameter_accounts, &[]).unwrap();
         let diff: i64 = count as i64 - program.1 as i64;
         println!("  {:30} {:8} {:6} {:+4}", program.0, program.1, count, diff);
         if count > program.1 {

@@ -10,7 +10,7 @@ use solana_sdk::{
     account::{ReadableAccount, WritableAccount},
     hash::hash,
     instruction::InstructionError,
-    keyed_account::{next_keyed_account, KeyedAccount},
+    keyed_account::{keyed_account_at_index, KeyedAccount},
     process_instruction::InvokeContext,
     program_utils::limited_deserialize,
     pubkey::Pubkey,
@@ -116,22 +116,22 @@ fn apply_account_data(
 
 pub fn process_instruction(
     _program_id: &Pubkey,
-    keyed_accounts: &[KeyedAccount],
     data: &[u8],
-    _invoke_context: &mut dyn InvokeContext,
+    invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
-    let keyed_accounts_iter = &mut keyed_accounts.iter();
+    let keyed_accounts = invoke_context.get_keyed_accounts()?;
+
     let instruction = limited_deserialize(data)?;
 
     trace!("process_instruction: {:?}", instruction);
 
     match instruction {
         BudgetInstruction::InitializeAccount(expr) => {
-            let contract_keyed_account = next_keyed_account(keyed_accounts_iter)?;
+            let contract_keyed_account = keyed_account_at_index(keyed_accounts, 0)?;
 
             if let Some(payment) = expr.final_payment() {
                 let to_keyed_account = contract_keyed_account;
-                let contract_keyed_account = next_keyed_account(keyed_accounts_iter)?;
+                let contract_keyed_account = keyed_account_at_index(keyed_accounts, 1)?;
                 contract_keyed_account.try_account_ref_mut()?.lamports = 0;
                 to_keyed_account.try_account_ref_mut()?.lamports += payment.lamports;
                 return Ok(());
@@ -154,8 +154,8 @@ pub fn process_instruction(
             )
         }
         BudgetInstruction::ApplyTimestamp(dt) => {
-            let witness_keyed_account = next_keyed_account(keyed_accounts_iter)?;
-            let contract_keyed_account = next_keyed_account(keyed_accounts_iter)?;
+            let witness_keyed_account = keyed_account_at_index(keyed_accounts, 0)?;
+            let contract_keyed_account = keyed_account_at_index(keyed_accounts, 1)?;
             let mut budget_state =
                 BudgetState::deserialize(&contract_keyed_account.try_account_ref()?.data())?;
             if !budget_state.is_pending() {
@@ -173,7 +173,7 @@ pub fn process_instruction(
                 &mut budget_state,
                 witness_keyed_account,
                 contract_keyed_account,
-                next_keyed_account(keyed_accounts_iter),
+                keyed_account_at_index(keyed_accounts, 2),
                 dt,
             )?;
             trace!("apply timestamp committed");
@@ -184,8 +184,8 @@ pub fn process_instruction(
             )
         }
         BudgetInstruction::ApplySignature => {
-            let witness_keyed_account = next_keyed_account(keyed_accounts_iter)?;
-            let contract_keyed_account = next_keyed_account(keyed_accounts_iter)?;
+            let witness_keyed_account = keyed_account_at_index(keyed_accounts, 0)?;
+            let contract_keyed_account = keyed_account_at_index(keyed_accounts, 1)?;
             let mut budget_state =
                 BudgetState::deserialize(&contract_keyed_account.try_account_ref()?.data())?;
             if !budget_state.is_pending() {
@@ -203,7 +203,7 @@ pub fn process_instruction(
                 &mut budget_state,
                 witness_keyed_account,
                 contract_keyed_account,
-                next_keyed_account(keyed_accounts_iter),
+                keyed_account_at_index(keyed_accounts, 2),
             )?;
             trace!("apply signature committed");
             budget_state.serialize(
@@ -213,8 +213,8 @@ pub fn process_instruction(
             )
         }
         BudgetInstruction::ApplyAccountData => {
-            let witness_keyed_account = next_keyed_account(keyed_accounts_iter)?;
-            let contract_keyed_account = next_keyed_account(keyed_accounts_iter)?;
+            let witness_keyed_account = keyed_account_at_index(keyed_accounts, 0)?;
+            let contract_keyed_account = keyed_account_at_index(keyed_accounts, 1)?;
             let mut budget_state =
                 BudgetState::deserialize(&contract_keyed_account.try_account_ref()?.data())?;
             if !budget_state.is_pending() {
@@ -228,7 +228,7 @@ pub fn process_instruction(
                 &mut budget_state,
                 witness_keyed_account,
                 contract_keyed_account,
-                next_keyed_account(keyed_accounts_iter),
+                keyed_account_at_index(keyed_accounts, 2),
             )?;
             trace!("apply account data committed");
             budget_state.serialize(

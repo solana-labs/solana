@@ -169,7 +169,6 @@ macro_rules! bind_feature_gated_syscall_context_object {
 pub fn bind_syscall_context_objects<'a>(
     loader_id: &'a Pubkey,
     vm: &mut EbpfVm<'a, BpfError, crate::ThisInstructionMeter>,
-    callers_keyed_accounts: &'a [KeyedAccount<'a>],
     invoke_context: &'a mut dyn InvokeContext,
     heap: Vec<u8>,
 ) -> Result<(), EbpfError<BpfError>> {
@@ -299,7 +298,6 @@ pub fn bind_syscall_context_objects<'a>(
     // Cross-program invocation syscalls
     vm.bind_syscall_context_object(
         Box::new(SyscallInvokeSignedC {
-            callers_keyed_accounts,
             invoke_context: invoke_context.clone(),
             loader_id,
         }),
@@ -307,7 +305,6 @@ pub fn bind_syscall_context_objects<'a>(
     )?;
     vm.bind_syscall_context_object(
         Box::new(SyscallInvokeSignedRust {
-            callers_keyed_accounts,
             invoke_context: invoke_context.clone(),
             loader_id,
         }),
@@ -1029,7 +1026,6 @@ type TranslatedAccounts<'a> = (
 trait SyscallInvokeSigned<'a> {
     fn get_context_mut(&self) -> Result<RefMut<&'a mut dyn InvokeContext>, EbpfError<BpfError>>;
     fn get_context(&self) -> Result<Ref<&'a mut dyn InvokeContext>, EbpfError<BpfError>>;
-    fn get_callers_keyed_accounts(&self) -> &'a [KeyedAccount<'a>];
     fn translate_instruction(
         &self,
         addr: u64,
@@ -1055,7 +1051,6 @@ trait SyscallInvokeSigned<'a> {
 
 /// Cross-program invocation called from Rust
 pub struct SyscallInvokeSignedRust<'a> {
-    callers_keyed_accounts: &'a [KeyedAccount<'a>],
     invoke_context: Rc<RefCell<&'a mut dyn InvokeContext>>,
     loader_id: &'a Pubkey,
 }
@@ -1069,9 +1064,6 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
         self.invoke_context
             .try_borrow()
             .map_err(|_| SyscallError::InvokeContextBorrowFailed.into())
-    }
-    fn get_callers_keyed_accounts(&self) -> &'a [KeyedAccount<'a>] {
-        self.callers_keyed_accounts
     }
     fn translate_instruction(
         &self,
@@ -1350,7 +1342,6 @@ struct SolSignerSeedsC {
 
 /// Cross-program invocation called from C
 pub struct SyscallInvokeSignedC<'a> {
-    callers_keyed_accounts: &'a [KeyedAccount<'a>],
     invoke_context: Rc<RefCell<&'a mut dyn InvokeContext>>,
     loader_id: &'a Pubkey,
 }
@@ -1364,10 +1355,6 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
         self.invoke_context
             .try_borrow()
             .map_err(|_| SyscallError::InvokeContextBorrowFailed.into())
-    }
-
-    fn get_callers_keyed_accounts(&self) -> &'a [KeyedAccount<'a>] {
-        self.callers_keyed_accounts
     }
 
     fn translate_instruction(
@@ -1777,8 +1764,9 @@ fn call<'a>(
             signers_seeds_len,
             memory_mapping,
         )?;
-        let keyed_account_refs = syscall
-            .get_callers_keyed_accounts()
+        let keyed_account_refs = invoke_context
+            .get_keyed_accounts()
+            .map_err(SyscallError::InstructionError)?
             .iter()
             .collect::<Vec<&KeyedAccount>>();
         let (message, callee_program_id, callee_program_id_index) =
@@ -2683,7 +2671,7 @@ mod tests {
                 leader_schedule_epoch: 4,
                 unix_timestamp: 5,
             };
-            let mut invoke_context = MockInvokeContext::default();
+            let mut invoke_context = MockInvokeContext::new(vec![]);
             let mut data = vec![];
             bincode::serialize_into(&mut data, &src_clock).unwrap();
             invoke_context
@@ -2725,7 +2713,7 @@ mod tests {
                 first_normal_epoch: 3,
                 first_normal_slot: 4,
             };
-            let mut invoke_context = MockInvokeContext::default();
+            let mut invoke_context = MockInvokeContext::new(vec![]);
             let mut data = vec![];
             bincode::serialize_into(&mut data, &src_epochschedule).unwrap();
             invoke_context
@@ -2773,7 +2761,7 @@ mod tests {
                     lamports_per_signature: 1,
                 },
             };
-            let mut invoke_context = MockInvokeContext::default();
+            let mut invoke_context = MockInvokeContext::new(vec![]);
             let mut data = vec![];
             bincode::serialize_into(&mut data, &src_fees).unwrap();
             invoke_context
@@ -2813,7 +2801,7 @@ mod tests {
                 exemption_threshold: 2.0,
                 burn_percent: 3,
             };
-            let mut invoke_context = MockInvokeContext::default();
+            let mut invoke_context = MockInvokeContext::new(vec![]);
             let mut data = vec![];
             bincode::serialize_into(&mut data, &src_rent).unwrap();
             invoke_context

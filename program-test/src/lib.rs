@@ -25,7 +25,6 @@ use {
         hash::Hash,
         instruction::Instruction,
         instruction::InstructionError,
-        keyed_account::KeyedAccount,
         message::Message,
         native_token::sol_to_lamports,
         process_instruction::{
@@ -99,11 +98,12 @@ fn get_invoke_context<'a>() -> &'a mut dyn InvokeContext {
 pub fn builtin_process_instruction(
     process_instruction: solana_sdk::entrypoint::ProcessInstruction,
     program_id: &Pubkey,
-    keyed_accounts: &[KeyedAccount],
     input: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     set_invoke_context(invoke_context);
+
+    let keyed_accounts = invoke_context.get_keyed_accounts()?;
 
     // Copy all the accounts into a HashMap to ensure there are no duplicates
     let mut accounts: HashMap<Pubkey, Account> = keyed_accounts
@@ -172,13 +172,11 @@ macro_rules! processor {
     ($process_instruction:expr) => {
         Some(
             |program_id: &Pubkey,
-             keyed_accounts: &[solana_sdk::keyed_account::KeyedAccount],
              input: &[u8],
              invoke_context: &mut dyn solana_sdk::process_instruction::InvokeContext| {
                 $crate::builtin_process_instruction(
                     $process_instruction,
                     program_id,
-                    keyed_accounts,
                     input,
                     invoke_context,
                 )

@@ -10,7 +10,7 @@ use solana_sdk::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
     feature_set,
     instruction::InstructionError,
-    keyed_account::{next_keyed_account, KeyedAccount},
+    keyed_account::{keyed_account_at_index, KeyedAccount},
     process_instruction::InvokeContext,
     program_utils::limited_deserialize,
     pubkey::Pubkey,
@@ -59,12 +59,12 @@ fn verify_signed_account<'a>(
 
 pub fn process_instruction(
     _program_id: &Pubkey,
-    keyed_accounts: &[KeyedAccount],
     data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
-    let keyed_accounts_iter = &mut keyed_accounts.iter();
-    let contract_account = &mut next_keyed_account(keyed_accounts_iter)?.try_account_ref_mut()?;
+    let keyed_accounts = invoke_context.get_keyed_accounts()?;
+
+    let contract_account = &mut keyed_account_at_index(keyed_accounts, 0)?.try_account_ref_mut()?;
     if invoke_context.is_feature_active(&feature_set::check_program_owner::id())
         && contract_account.owner != crate::id()
     {
@@ -97,25 +97,25 @@ pub fn process_instruction(
         VestInstruction::InitializeAccount { .. } => {}
         VestInstruction::SetTerminator(new_pubkey) => {
             verify_signed_account(
-                next_keyed_account(keyed_accounts_iter)?,
+                keyed_account_at_index(keyed_accounts, 1)?,
                 &vest_state.terminator_pubkey,
             )?;
             vest_state.terminator_pubkey = new_pubkey;
         }
         VestInstruction::SetPayee(new_pubkey) => {
             verify_signed_account(
-                next_keyed_account(keyed_accounts_iter)?,
+                keyed_account_at_index(keyed_accounts, 1)?,
                 &vest_state.payee_pubkey,
             )?;
             vest_state.payee_pubkey = new_pubkey;
         }
         VestInstruction::RedeemTokens => {
             let current_date = verify_date_account(
-                next_keyed_account(keyed_accounts_iter)?,
+                keyed_account_at_index(keyed_accounts, 1)?,
                 &vest_state.date_pubkey,
             )?;
             let mut payee_account = verify_account(
-                next_keyed_account(keyed_accounts_iter)?,
+                keyed_account_at_index(keyed_accounts, 2)?,
                 &vest_state.payee_pubkey,
             )?;
             vest_state.redeem_tokens(contract_account, current_date, &mut payee_account);
@@ -127,11 +127,11 @@ pub fn process_instruction(
                 contract_account.lamports
             };
             let terminator_account = verify_signed_account(
-                next_keyed_account(keyed_accounts_iter)?,
+                keyed_account_at_index(keyed_accounts, 1)?,
                 &vest_state.terminator_pubkey,
             )?;
-            let payee_keyed_account = keyed_accounts_iter.next();
-            let mut payee_account = if let Some(payee_keyed_account) = payee_keyed_account {
+            let payee_keyed_account = keyed_account_at_index(keyed_accounts, 2);
+            let mut payee_account = if let Ok(payee_keyed_account) = payee_keyed_account {
                 payee_keyed_account.try_account_ref_mut()?
             } else {
                 terminator_account
@@ -140,7 +140,7 @@ pub fn process_instruction(
         }
         VestInstruction::VestAll => {
             verify_signed_account(
-                next_keyed_account(keyed_accounts_iter)?,
+                keyed_account_at_index(keyed_accounts, 1)?,
                 &vest_state.terminator_pubkey,
             )?;
             vest_state.vest_all();

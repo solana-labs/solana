@@ -788,7 +788,7 @@ mod tests {
         account::AccountSharedData,
         account_utils::StateMut,
         hash::hash,
-        keyed_account::{get_signers, next_keyed_account},
+        keyed_account::{get_signers, keyed_account_at_index},
     };
     use std::cell::RefCell;
 
@@ -1715,9 +1715,8 @@ mod tests {
             KeyedAccount::new(&authorized_withdrawer_pubkey, true, &withdrawer_account),
         ];
         let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-        let keyed_accounts = &mut keyed_accounts.iter();
-        let vote_keyed_account = next_keyed_account(keyed_accounts).unwrap();
-        let withdrawer_keyed_account = next_keyed_account(keyed_accounts).unwrap();
+        let vote_keyed_account = keyed_account_at_index(keyed_accounts, 0).unwrap();
+        let withdrawer_keyed_account = keyed_account_at_index(keyed_accounts, 1).unwrap();
         let res = withdraw(
             vote_keyed_account,
             lamports,

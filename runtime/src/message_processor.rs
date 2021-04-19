@@ -14,11 +14,11 @@ use solana_sdk::{
     },
     ic_msg,
     instruction::{CompiledInstruction, Instruction, InstructionError},
-    keyed_account::{create_keyed_readonly_accounts, KeyedAccount},
+    keyed_account::{create_keyed_accounts_unified, keyed_account_at_index, KeyedAccount},
     message::Message,
     native_loader,
     process_instruction::{
-        BpfComputeBudget, ComputeMeter, Executor, InvokeContext, Logger,
+        BpfComputeBudget, ComputeMeter, Executor, InvokeContext, InvokeContextStackFrame, Logger,
         ProcessInstructionWithContext,
     },
     pubkey::Pubkey,
@@ -215,8 +215,8 @@ impl PreAccount {
         self.changed = true;
     }
 
-    pub fn key(&self) -> Pubkey {
-        self.key
+    pub fn key(&self) -> &Pubkey {
+        &self.key
     }
 
     pub fn lamports(&self) -> u64 {
@@ -250,10 +250,11 @@ impl ComputeMeter for ThisComputeMeter {
     }
 }
 pub struct ThisInvokeContext<'a> {
-    program_ids: Vec<Pubkey>,
+    invoke_stack: Vec<InvokeContextStackFrame<'a>>,
     rent: Rent,
+    message: &'a Message,
     pre_accounts: Vec<PreAccount>,
-    executables: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
+    executable_accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
     account_deps: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
     programs: &'a [(Pubkey, ProcessInstructionWithContext)],
     logger: Rc<RefCell<dyn Logger>>,
@@ -272,8 +273,10 @@ impl<'a> ThisInvokeContext<'a> {
     pub fn new(
         program_id: &Pubkey,
         rent: Rent,
-        pre_accounts: Vec<PreAccount>,
-        executables: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        message: &'a Message,
+        instruction: &'a CompiledInstruction,
+        executable_accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        accounts: &'a [Rc<RefCell<AccountSharedData>>],
         account_deps: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
         programs: &'a [(Pubkey, ProcessInstructionWithContext)],
         log_collector: Option<Rc<LogCollector>>,
@@ -284,13 +287,20 @@ impl<'a> ThisInvokeContext<'a> {
         account_db: Arc<Accounts>,
         ancestors: &'a Ancestors,
     ) -> Self {
-        let mut program_ids = Vec::with_capacity(bpf_compute_budget.max_invoke_depth);
-        program_ids.push(*program_id);
-        Self {
-            program_ids,
+        let pre_accounts = MessageProcessor::create_pre_accounts(message, instruction, accounts);
+        let keyed_accounts = MessageProcessor::create_keyed_accounts(
+            message,
+            instruction,
+            executable_accounts,
+            accounts,
+            feature_set.is_active(&demote_sysvar_write_locks::id()),
+        );
+        let mut invoke_context = Self {
+            invoke_stack: Vec::with_capacity(bpf_compute_budget.max_invoke_depth),
             rent,
+            message,
             pre_accounts,
-            executables,
+            executable_accounts,
             account_deps,
             programs,
             logger: Rc::new(RefCell::new(ThisLogger { log_collector })),
@@ -305,26 +315,80 @@ impl<'a> ThisInvokeContext<'a> {
             account_db,
             ancestors,
             sysvars: vec![],
-        }
+        };
+        invoke_context
+            .invoke_stack
+            .push(InvokeContextStackFrame::new(
+                *program_id,
+                create_keyed_accounts_unified(&keyed_accounts),
+            ));
+        invoke_context
     }
 }
 impl<'a> InvokeContext for ThisInvokeContext<'a> {
-    fn push(&mut self, key: &Pubkey) -> Result<(), InstructionError> {
-        if self.program_ids.len() > self.bpf_compute_budget.max_invoke_depth {
+    fn push(
+        &mut self,
+        key: &Pubkey,
+        keyed_accounts: &[(bool, bool, &Pubkey, &RefCell<AccountSharedData>)],
+    ) -> Result<(), InstructionError> {
+        if self.invoke_stack.len() > self.bpf_compute_budget.max_invoke_depth {
             return Err(InstructionError::CallDepth);
         }
-        if self.program_ids.contains(key) && self.program_ids.last() != Some(key) {
+        let frame_index = self.invoke_stack.iter().position(|frame| frame.key == *key);
+        if frame_index != None && frame_index != Some(self.invoke_stack.len().saturating_sub(1)) {
             // Reentrancy not allowed unless caller is calling itself
             return Err(InstructionError::ReentrancyNotAllowed);
         }
-        self.program_ids.push(*key);
+        // Alias the keys and account references in the provided keyed_accounts
+        // with the ones already existing in self, so that the lifetime 'a matches.
+        fn transmute_lifetime<'a, 'b, T: Sized>(value: &'a T) -> &'b T {
+            unsafe { std::mem::transmute(value) }
+        }
+        let keyed_accounts = keyed_accounts
+            .iter()
+            .map(|(is_signer, is_writable, search_key, account)| {
+                self.account_deps
+                    .iter()
+                    .map(|(key, _account)| key)
+                    .chain(self.message.account_keys.iter())
+                    .position(|key| key == *search_key)
+                    .map(|mut index| {
+                        if index < self.account_deps.len() {
+                            (
+                                *is_signer,
+                                *is_writable,
+                                &self.account_deps[index].0,
+                                &self.account_deps[index].1 as &RefCell<AccountSharedData>,
+                            )
+                        } else {
+                            index = index.saturating_sub(self.account_deps.len());
+                            (
+                                *is_signer,
+                                *is_writable,
+                                &self.message.account_keys[index],
+                                // TODO
+                                // Currently we are constructing new accounts on the stack
+                                // before calling MessageProcessor::process_cross_program_instruction
+                                // Ideally we would recycle the existing accounts here like this:
+                                // &self.accounts[index] as &RefCell<AccountSharedData>,
+                                transmute_lifetime(*account),
+                            )
+                        }
+                    })
+            })
+            .collect::<Option<Vec<_>>>()
+            .ok_or(InstructionError::InvalidArgument)?;
+        self.invoke_stack.push(InvokeContextStackFrame::new(
+            *key,
+            create_keyed_accounts_unified(keyed_accounts.as_slice()),
+        ));
         Ok(())
     }
     fn pop(&mut self) {
-        self.program_ids.pop();
+        self.invoke_stack.pop();
     }
     fn invoke_depth(&self) -> usize {
-        self.program_ids.len()
+        self.invoke_stack.len()
     }
     fn verify_and_update(
         &mut self,
@@ -333,25 +397,42 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         accounts: &[Rc<RefCell<AccountSharedData>>],
         caller_write_privileges: Option<&[bool]>,
     ) -> Result<(), InstructionError> {
-        match self.program_ids.last() {
-            Some(program_id) => MessageProcessor::verify_and_update(
-                message,
-                instruction,
-                &mut self.pre_accounts,
-                accounts,
-                program_id,
-                &self.rent,
-                caller_write_privileges,
-                &mut self.timings,
-                self.feature_set.is_active(&demote_sysvar_write_locks::id()),
-            ),
-            None => Err(InstructionError::GenericError), // Should never happen
-        }
+        let stack_frame = self
+            .invoke_stack
+            .last()
+            .ok_or(InstructionError::CallDepth)?;
+        MessageProcessor::verify_and_update(
+            message,
+            instruction,
+            &mut self.pre_accounts,
+            accounts,
+            &stack_frame.key,
+            &self.rent,
+            caller_write_privileges,
+            &mut self.timings,
+            self.feature_set.is_active(&demote_sysvar_write_locks::id()),
+        )
     }
     fn get_caller(&self) -> Result<&Pubkey, InstructionError> {
-        self.program_ids
+        self.invoke_stack
             .last()
-            .ok_or(InstructionError::GenericError)
+            .map(|frame| &frame.key)
+            .ok_or(InstructionError::CallDepth)
+    }
+    fn remove_first_keyed_account(&mut self) -> Result<(), InstructionError> {
+        let stack_frame = &mut self
+            .invoke_stack
+            .last_mut()
+            .ok_or(InstructionError::CallDepth)?;
+        stack_frame.keyed_accounts_range.start =
+            stack_frame.keyed_accounts_range.start.saturating_add(1);
+        Ok(())
+    }
+    fn get_keyed_accounts(&self) -> Result<&[KeyedAccount], InstructionError> {
+        self.invoke_stack
+            .last()
+            .map(|frame| &frame.keyed_accounts[frame.keyed_accounts_range.clone()])
+            .ok_or(InstructionError::CallDepth)
     }
     fn get_programs(&self) -> &[(Pubkey, ProcessInstructionWithContext)] {
         self.programs
@@ -381,7 +462,11 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     }
     fn get_account(&self, pubkey: &Pubkey) -> Option<Rc<RefCell<AccountSharedData>>> {
         if self.is_feature_active(&cpi_share_ro_and_exec_accounts::id()) {
-            if let Some((_, account)) = self.executables.iter().find(|(key, _)| key == pubkey) {
+            if let Some((_, account)) = self
+                .executable_accounts
+                .iter()
+                .find(|(key, _)| key == pubkey)
+            {
                 Some(account.clone())
             } else if let Some((_, account)) =
                 self.account_deps.iter().find(|(key, _)| key == pubkey)
@@ -476,7 +561,6 @@ impl std::fmt::Debug for MessageProcessor {
         // These are just type aliases for work around of Debug-ing above pointers
         type ErasedProcessInstructionWithContext = fn(
             &'static Pubkey,
-            &'static [KeyedAccount<'static>],
             &'static [u8],
             &'static mut dyn InvokeContext,
         ) -> Result<(), InstructionError>;
@@ -554,25 +638,20 @@ impl MessageProcessor {
         executable_accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
         accounts: &'a [Rc<RefCell<AccountSharedData>>],
         demote_sysvar_write_locks: bool,
-    ) -> Vec<KeyedAccount<'a>> {
-        let mut keyed_accounts = create_keyed_readonly_accounts(&executable_accounts);
-        let mut keyed_accounts2: Vec<_> = instruction
-            .accounts
+    ) -> Vec<(bool, bool, &'a Pubkey, &'a RefCell<AccountSharedData>)> {
+        executable_accounts
             .iter()
-            .map(|&index| {
-                let is_signer = message.is_signer(index as usize);
-                let index = index as usize;
-                let key = &message.account_keys[index];
-                let account = &accounts[index];
-                if message.is_writable(index, demote_sysvar_write_locks) {
-                    KeyedAccount::new(key, is_signer, account)
-                } else {
-                    KeyedAccount::new_readonly(key, is_signer, account)
-                }
-            })
-            .collect();
-        keyed_accounts.append(&mut keyed_accounts2);
-        keyed_accounts
+            .map(|(key, account)| (false, false, key, account as &RefCell<AccountSharedData>))
+            .chain(instruction.accounts.iter().map(|index| {
+                let index = *index as usize;
+                (
+                    message.is_signer(index),
+                    message.is_writable(index, demote_sysvar_write_locks),
+                    &message.account_keys[index],
+                    &accounts[index] as &RefCell<AccountSharedData>,
+                )
+            }))
+            .collect::<Vec<_>>()
     }
 
     /// Process an instruction
@@ -580,28 +659,22 @@ impl MessageProcessor {
     fn process_instruction(
         &self,
         program_id: &Pubkey,
-        keyed_accounts: &[KeyedAccount],
         instruction_data: &[u8],
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
-        if let Some(root_account) = keyed_accounts.iter().next() {
+        if let Some(root_account) = invoke_context.get_keyed_accounts()?.iter().next() {
             let root_id = root_account.unsigned_key();
             if native_loader::check_id(&root_account.owner()?) {
                 for (id, process_instruction) in &self.programs {
                     if id == root_id {
+                        invoke_context.remove_first_keyed_account()?;
                         // Call the builtin program
-                        return process_instruction(
-                            &program_id,
-                            &keyed_accounts[1..],
-                            instruction_data,
-                            invoke_context,
-                        );
+                        return process_instruction(&program_id, instruction_data, invoke_context);
                     }
                 }
                 // Call the program via the native loader
                 return self.native_loader.process_instruction(
                     &native_loader::id(),
-                    keyed_accounts,
                     instruction_data,
                     invoke_context,
                 );
@@ -610,12 +683,7 @@ impl MessageProcessor {
                 for (id, process_instruction) in &self.programs {
                     if id == owner_id {
                         // Call the program via a builtin loader
-                        return process_instruction(
-                            &program_id,
-                            keyed_accounts,
-                            instruction_data,
-                            invoke_context,
-                        );
+                        return process_instruction(&program_id, instruction_data, invoke_context);
                     }
                 }
             }
@@ -704,43 +772,44 @@ impl MessageProcessor {
     pub fn native_invoke(
         invoke_context: &mut dyn InvokeContext,
         instruction: Instruction,
-        keyed_accounts: &[&KeyedAccount],
-        signers_seeds: &[&[&[u8]]],
+        keyed_account_indices: &[usize],
+        signers: &[Pubkey],
     ) -> Result<(), InstructionError> {
         let invoke_context = RefCell::new(invoke_context);
 
         let (
             message,
-            executables,
+            executable_accounts,
             accounts,
-            account_refs,
+            keyed_account_indices_reordered,
             caller_write_privileges,
             demote_sysvar_write_locks,
         ) = {
             let invoke_context = invoke_context.borrow();
 
-            let caller_program_id = invoke_context.get_caller()?;
-
             // Translate and verify caller's data
-
-            let signers = signers_seeds
+            let keyed_accounts = invoke_context.get_keyed_accounts()?;
+            let keyed_accounts = keyed_account_indices
                 .iter()
-                .map(|seeds| Pubkey::create_program_address(&seeds, caller_program_id))
-                .collect::<Result<Vec<_>, solana_sdk::pubkey::PubkeyError>>()?;
-            let mut caller_write_privileges = keyed_accounts
-                .iter()
-                .map(|keyed_account| keyed_account.is_writable())
-                .collect::<Vec<bool>>();
-            caller_write_privileges.insert(0, false);
+                .map(|index| keyed_account_at_index(keyed_accounts, *index))
+                .collect::<Result<Vec<&KeyedAccount>, InstructionError>>()?;
             let (message, callee_program_id, _) =
                 Self::create_message(&instruction, &keyed_accounts, &signers, &invoke_context)?;
+            let keyed_accounts = invoke_context.get_keyed_accounts()?;
+            let mut caller_write_privileges = keyed_account_indices
+                .iter()
+                .map(|index| keyed_accounts[*index].is_writable())
+                .collect::<Vec<bool>>();
+            caller_write_privileges.insert(0, false);
             let mut accounts = vec![];
-            let mut account_refs = vec![];
+            let mut keyed_account_indices_reordered = vec![];
+            let keyed_accounts = invoke_context.get_keyed_accounts()?;
             'root: for account_key in message.account_keys.iter() {
-                for keyed_account in keyed_accounts {
+                for keyed_account_index in keyed_account_indices {
+                    let keyed_account = &keyed_accounts[*keyed_account_index];
                     if account_key == keyed_account.unsigned_key() {
                         accounts.push(Rc::new(keyed_account.account.clone()));
-                        account_refs.push(keyed_account);
+                        keyed_account_indices_reordered.push(*keyed_account_index);
                         continue 'root;
                     }
                 }
@@ -771,42 +840,41 @@ impl MessageProcessor {
                 );
                 return Err(InstructionError::AccountNotExecutable);
             }
-            let programdata_executable =
-                if program_account.borrow().owner == bpf_loader_upgradeable::id() {
-                    if let UpgradeableLoaderState::Program {
-                        programdata_address,
-                    } = program_account.borrow().state()?
-                    {
-                        if let Some(account) = invoke_context.get_account(&programdata_address) {
-                            Some((programdata_address, account))
-                        } else {
-                            ic_msg!(
-                                invoke_context,
-                                "Unknown upgradeable programdata account {}",
-                                programdata_address,
-                            );
-                            return Err(InstructionError::MissingAccount);
-                        }
+            let programdata = if program_account.borrow().owner == bpf_loader_upgradeable::id() {
+                if let UpgradeableLoaderState::Program {
+                    programdata_address,
+                } = program_account.borrow().state()?
+                {
+                    if let Some(account) = invoke_context.get_account(&programdata_address) {
+                        Some((programdata_address, account))
                     } else {
                         ic_msg!(
                             invoke_context,
-                            "Upgradeable program account state not valid {}",
-                            callee_program_id,
+                            "Unknown upgradeable programdata account {}",
+                            programdata_address,
                         );
                         return Err(InstructionError::MissingAccount);
                     }
                 } else {
-                    None
-                };
-            let mut executables = vec![(callee_program_id, program_account)];
-            if let Some(programdata) = programdata_executable {
-                executables.push(programdata);
+                    ic_msg!(
+                        invoke_context,
+                        "Upgradeable program account state not valid {}",
+                        callee_program_id,
+                    );
+                    return Err(InstructionError::MissingAccount);
+                }
+            } else {
+                None
+            };
+            let mut executable_accounts = vec![(callee_program_id, program_account)];
+            if let Some(programdata) = programdata {
+                executable_accounts.push(programdata);
             }
             (
                 message,
-                executables,
+                executable_accounts,
                 accounts,
-                account_refs,
+                keyed_account_indices_reordered,
                 caller_write_privileges,
                 invoke_context.is_feature_active(&demote_sysvar_write_locks::id()),
             )
@@ -815,7 +883,7 @@ impl MessageProcessor {
         #[allow(clippy::deref_addrof)]
         MessageProcessor::process_cross_program_instruction(
             &message,
-            &executables,
+            &executable_accounts,
             &accounts,
             &caller_write_privileges,
             *(&mut *(invoke_context.borrow_mut())),
@@ -825,13 +893,19 @@ impl MessageProcessor {
 
         {
             let invoke_context = invoke_context.borrow();
-            for (i, (account, account_ref)) in accounts.iter().zip(account_refs).enumerate() {
-                let account = account.borrow();
-                if message.is_writable(i, demote_sysvar_write_locks) && !account.executable {
-                    account_ref.try_account_ref_mut()?.lamports = account.lamports;
-                    account_ref.try_account_ref_mut()?.owner = account.owner;
-                    if account_ref.data_len()? != account.data().len()
-                        && account_ref.data_len()? != 0
+            let keyed_accounts = invoke_context.get_keyed_accounts()?;
+            for (src_keyed_account_index, (account, dst_keyed_account_index)) in accounts
+                .iter()
+                .zip(keyed_account_indices_reordered)
+                .enumerate()
+            {
+                let dst_keyed_account = &keyed_accounts[dst_keyed_account_index];
+                let src_keyed_account = account.borrow();
+                if message.is_writable(src_keyed_account_index, demote_sysvar_write_locks)
+                    && !src_keyed_account.executable
+                {
+                    if dst_keyed_account.data_len()? != src_keyed_account.data().len()
+                        && dst_keyed_account.data_len()? != 0
                     {
                         // Only support for `CreateAccount` at this time.
                         // Need a way to limit total realloc size across multiple CPI calls
@@ -841,9 +915,11 @@ impl MessageProcessor {
                         );
                         return Err(InstructionError::InvalidRealloc);
                     }
-                    account_ref
+                    dst_keyed_account.try_account_ref_mut()?.lamports = src_keyed_account.lamports;
+                    dst_keyed_account.try_account_ref_mut()?.owner = src_keyed_account.owner;
+                    dst_keyed_account
                         .try_account_ref_mut()?
-                        .set_data(account.data().clone());
+                        .set_data(src_keyed_account.data().clone());
                 }
             }
         }
@@ -870,19 +946,18 @@ impl MessageProcessor {
                 accounts,
                 Some(caller_write_privileges),
             )?;
-            let demote_sysvar_write_locks =
-                invoke_context.is_feature_active(&demote_sysvar_write_locks::id());
+
             // Construct keyed accounts
             let keyed_accounts = Self::create_keyed_accounts(
                 message,
                 instruction,
                 executable_accounts,
                 accounts,
-                demote_sysvar_write_locks,
+                invoke_context.is_feature_active(&demote_sysvar_write_locks::id()),
             );
 
             // Invoke callee
-            invoke_context.push(program_id)?;
+            invoke_context.push(program_id, &keyed_accounts)?;
 
             let mut message_processor = MessageProcessor::default();
             for (program_id, process_instruction) in invoke_context.get_programs().iter() {
@@ -891,7 +966,6 @@ impl MessageProcessor {
 
             let mut result = message_processor.process_instruction(
                 program_id,
-                &keyed_accounts,
                 &instruction.data,
                 invoke_context,
             );
@@ -899,8 +973,9 @@ impl MessageProcessor {
                 // Verify the called program has not misbehaved
                 result = invoke_context.verify_and_update(message, instruction, accounts, None);
             }
-            invoke_context.pop();
 
+            // Restore previous state
+            invoke_context.pop();
             result
         } else {
             // This function is always called with a valid instruction, if that changes return an error
@@ -1013,7 +1088,7 @@ impl MessageProcessor {
                 };
                 // Find the matching PreAccount
                 for pre_account in pre_accounts.iter_mut() {
-                    if *key == pre_account.key() {
+                    if key == pre_account.key() {
                         {
                             // Verify account has no outstanding references
                             let _ = account
@@ -1089,13 +1164,14 @@ impl MessageProcessor {
             }
         }
 
-        let pre_accounts = Self::create_pre_accounts(message, instruction, accounts);
         let program_id = instruction.program_id(&message.account_keys);
         let mut invoke_context = ThisInvokeContext::new(
             program_id,
             rent_collector.rent,
-            pre_accounts,
+            message,
+            instruction,
             executable_accounts,
+            accounts,
             account_deps,
             &self.programs,
             log_collector,
@@ -1106,19 +1182,7 @@ impl MessageProcessor {
             account_db,
             ancestors,
         );
-        let keyed_accounts = Self::create_keyed_accounts(
-            message,
-            instruction,
-            executable_accounts,
-            accounts,
-            demote_sysvar_write_locks,
-        );
-        self.process_instruction(
-            program_id,
-            &keyed_accounts,
-            &instruction.data,
-            &mut invoke_context,
-        )?;
+        self.process_instruction(program_id, &instruction.data, &mut invoke_context)?;
         Self::verify(
             message,
             instruction,
@@ -1198,31 +1262,41 @@ mod tests {
     #[test]
     fn test_invoke_context() {
         const MAX_DEPTH: usize = 10;
-        let mut program_ids = vec![];
+        let mut invoke_stack = vec![];
         let mut keys = vec![];
-        let mut pre_accounts = vec![];
         let mut accounts = vec![];
+        let mut metas = vec![];
         for i in 0..MAX_DEPTH {
-            program_ids.push(solana_sdk::pubkey::new_rand());
+            invoke_stack.push(solana_sdk::pubkey::new_rand());
             keys.push(solana_sdk::pubkey::new_rand());
             accounts.push(Rc::new(RefCell::new(AccountSharedData::new(
                 i as u64,
                 1,
-                &program_ids[i],
+                &invoke_stack[i],
             ))));
-            pre_accounts.push(PreAccount::new(&keys[i], &accounts[i].borrow()))
+            metas.push(AccountMeta::new(keys[i], false));
         }
-        let account = AccountSharedData::new(1, 1, &solana_sdk::pubkey::Pubkey::default());
-        for program_id in program_ids.iter() {
-            pre_accounts.push(PreAccount::new(program_id, &account.clone()));
+        for program_id in invoke_stack.iter() {
+            accounts.push(Rc::new(RefCell::new(AccountSharedData::new(
+                1,
+                1,
+                &solana_sdk::pubkey::Pubkey::default(),
+            ))));
+            metas.push(AccountMeta::new(*program_id, false));
         }
 
+        let message = Message::new(
+            &[Instruction::new_with_bytes(invoke_stack[0], &[0], metas)],
+            None,
+        );
         let ancestors = Ancestors::default();
         let mut invoke_context = ThisInvokeContext::new(
-            &program_ids[0],
+            &invoke_stack[0],
             Rent::default(),
-            pre_accounts,
+            &message,
+            &message.instructions[0],
             &[],
+            &accounts,
             &[],
             &[],
             None,
@@ -1236,8 +1310,8 @@ mod tests {
 
         // Check call depth increases and has a limit
         let mut depth_reached = 1;
-        for program_id in program_ids.iter().skip(1) {
-            if Err(InstructionError::CallDepth) == invoke_context.push(program_id) {
+        for program_id in invoke_stack.iter().skip(1) {
+            if Err(InstructionError::CallDepth) == invoke_context.push(program_id, &[]) {
                 break;
             }
             depth_reached += 1;
@@ -1254,7 +1328,7 @@ mod tests {
             ];
             let message = Message::new(
                 &[Instruction::new_with_bytes(
-                    program_ids[owned_index],
+                    invoke_stack[owned_index],
                     &[0],
                     metas,
                 )],
@@ -1743,10 +1817,10 @@ mod tests {
 
         fn mock_system_process_instruction(
             _program_id: &Pubkey,
-            keyed_accounts: &[KeyedAccount],
             data: &[u8],
-            _invoke_context: &mut dyn InvokeContext,
+            invoke_context: &mut dyn InvokeContext,
         ) -> Result<(), InstructionError> {
+            let keyed_accounts = invoke_context.get_keyed_accounts()?;
             if let Ok(instruction) = bincode::deserialize(data) {
                 match instruction {
                     MockSystemInstruction::Correct => Ok(()),
@@ -1896,10 +1970,10 @@ mod tests {
 
         fn mock_system_process_instruction(
             _program_id: &Pubkey,
-            keyed_accounts: &[KeyedAccount],
             data: &[u8],
-            _invoke_context: &mut dyn InvokeContext,
+            invoke_context: &mut dyn InvokeContext,
         ) -> Result<(), InstructionError> {
+            let keyed_accounts = invoke_context.get_keyed_accounts()?;
             if let Ok(instruction) = bincode::deserialize(data) {
                 match instruction {
                     MockSystemInstruction::BorrowFail => {
@@ -2075,10 +2149,10 @@ mod tests {
 
         fn mock_process_instruction(
             program_id: &Pubkey,
-            keyed_accounts: &[KeyedAccount],
             data: &[u8],
-            _invoke_context: &mut dyn InvokeContext,
+            invoke_context: &mut dyn InvokeContext,
         ) -> Result<(), InstructionError> {
+            let keyed_accounts = invoke_context.get_keyed_accounts()?;
             assert_eq!(*program_id, keyed_accounts[0].owner()?);
             assert_ne!(
                 keyed_accounts[1].owner()?,
@@ -2107,7 +2181,6 @@ mod tests {
 
         let mut program_account = AccountSharedData::new(1, 0, &native_loader::id());
         program_account.executable = true;
-        let executable_preaccount = PreAccount::new(&callee_program_id, &program_account);
         let executable_accounts = vec![(
             callee_program_id,
             Rc::new(RefCell::new(program_account.clone())),
@@ -2115,11 +2188,9 @@ mod tests {
 
         let owned_key = solana_sdk::pubkey::new_rand();
         let owned_account = AccountSharedData::new(42, 1, &callee_program_id);
-        let owned_preaccount = PreAccount::new(&owned_key, &owned_account);
 
         let not_owned_key = solana_sdk::pubkey::new_rand();
         let not_owned_account = AccountSharedData::new(84, 1, &solana_sdk::pubkey::new_rand());
-        let not_owned_preaccount = PreAccount::new(&not_owned_key, &not_owned_account);
 
         #[allow(unused_mut)]
         let mut accounts = vec![
@@ -2127,18 +2198,30 @@ mod tests {
             Rc::new(RefCell::new(not_owned_account)),
             Rc::new(RefCell::new(program_account)),
         ];
+
+        let compiled_instruction = CompiledInstruction::new(2, &(), vec![0, 1, 2]);
         let programs: Vec<(_, ProcessInstructionWithContext)> =
             vec![(callee_program_id, mock_process_instruction)];
+        let metas = vec![
+            AccountMeta::new(owned_key, false),
+            AccountMeta::new(not_owned_key, false),
+        ];
+
+        let instruction = Instruction::new_with_bincode(
+            callee_program_id,
+            &MockInstruction::NoopSuccess,
+            metas.clone(),
+        );
+        let message = Message::new(&[instruction], None);
+
         let ancestors = Ancestors::default();
         let mut invoke_context = ThisInvokeContext::new(
             &caller_program_id,
             Rent::default(),
-            vec![
-                owned_preaccount,
-                not_owned_preaccount,
-                executable_preaccount,
-            ],
-            &[],
+            &message,
+            &compiled_instruction,
+            &executable_accounts,
+            &accounts,
             &[],
             programs.as_slice(),
             None,
@@ -2149,26 +2232,17 @@ mod tests {
             Arc::new(Accounts::default()),
             &ancestors,
         );
-        let metas = vec![
-            AccountMeta::new(owned_key, false),
-            AccountMeta::new(not_owned_key, false),
-        ];
 
         // not owned account modified by the caller (before the invoke)
-        accounts[0].borrow_mut().data_as_mut_slice()[0] = 1;
-        let instruction = Instruction::new_with_bincode(
-            callee_program_id,
-            &MockInstruction::NoopSuccess,
-            metas.clone(),
-        );
-        let demote_sysvar_write_locks = true;
-        let message = Message::new(&[instruction], None);
+        let demote_sysvar_write_locks =
+            invoke_context.is_feature_active(&demote_sysvar_write_locks::id());
         let caller_write_privileges = message
             .account_keys
             .iter()
             .enumerate()
             .map(|(i, _)| message.is_writable(i, demote_sysvar_write_locks))
             .collect::<Vec<bool>>();
+        accounts[0].borrow_mut().data_as_mut_slice()[0] = 1;
         assert_eq!(
             MessageProcessor::process_cross_program_instruction(
                 &message,
@@ -2198,6 +2272,26 @@ mod tests {
             let instruction =
                 Instruction::new_with_bincode(callee_program_id, &case.0, metas.clone());
             let message = Message::new(&[instruction], None);
+
+            let ancestors = Ancestors::default();
+            let mut invoke_context = ThisInvokeContext::new(
+                &caller_program_id,
+                Rent::default(),
+                &message,
+                &compiled_instruction,
+                &executable_accounts,
+                &accounts,
+                &[],
+                programs.as_slice(),
+                None,
+                BpfComputeBudget::default(),
+                Rc::new(RefCell::new(Executors::default())),
+                None,
+                Arc::new(FeatureSet::all_enabled()),
+                Arc::new(Accounts::default()),
+                &ancestors,
+            );
+
             let caller_write_privileges = message
                 .account_keys
                 .iter()
@@ -2223,7 +2317,6 @@ mod tests {
         #[allow(clippy::unnecessary_wraps)]
         fn mock_process_instruction(
             _program_id: &Pubkey,
-            _keyed_accounts: &[KeyedAccount],
             _data: &[u8],
             _invoke_context: &mut dyn InvokeContext,
         ) -> Result<(), InstructionError> {
@@ -2232,7 +2325,6 @@ mod tests {
         #[allow(clippy::unnecessary_wraps)]
         fn mock_ix_processor(
             _pubkey: &Pubkey,
-            _ka: &[KeyedAccount],
             _data: &[u8],
             _context: &mut dyn InvokeContext,
         ) -> Result<(), InstructionError> {

@@ -5,7 +5,6 @@ use crate::{
 use solana_sdk::{
     feature_set,
     instruction::InstructionError,
-    keyed_account::KeyedAccount,
     process_instruction::{stable_log, InvokeContext, ProcessInstructionWithContext},
     pubkey::Pubkey,
     system_program,
@@ -14,14 +13,13 @@ use solana_sdk::{
 fn process_instruction_with_program_logging(
     process_instruction: ProcessInstructionWithContext,
     program_id: &Pubkey,
-    keyed_accounts: &[KeyedAccount],
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     let logger = invoke_context.get_logger();
     stable_log::program_invoke(&logger, program_id, invoke_context.invoke_depth());
 
-    let result = process_instruction(program_id, keyed_accounts, instruction_data, invoke_context);
+    let result = process_instruction(program_id, instruction_data, invoke_context);
 
     match &result {
         Ok(()) => stable_log::program_success(&logger, program_id),
@@ -32,14 +30,10 @@ fn process_instruction_with_program_logging(
 
 macro_rules! with_program_logging {
     ($process_instruction:expr) => {
-        |program_id: &Pubkey,
-         keyed_accounts: &[KeyedAccount],
-         instruction_data: &[u8],
-         invoke_context: &mut dyn InvokeContext| {
+        |program_id: &Pubkey, instruction_data: &[u8], invoke_context: &mut dyn InvokeContext| {
             process_instruction_with_program_logging(
                 $process_instruction,
                 program_id,
-                keyed_accounts,
                 instruction_data,
                 invoke_context,
             )

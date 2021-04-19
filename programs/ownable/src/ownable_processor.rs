@@ -5,7 +5,7 @@ use bincode::serialize_into;
 use solana_sdk::{
     account::{ReadableAccount, WritableAccount},
     instruction::InstructionError,
-    keyed_account::{next_keyed_account, KeyedAccount},
+    keyed_account::{keyed_account_at_index, KeyedAccount},
     process_instruction::InvokeContext,
     program_utils::limited_deserialize,
     pubkey::Pubkey,
@@ -30,20 +30,20 @@ fn set_owner(
 
 pub fn process_instruction(
     _program_id: &Pubkey,
-    keyed_accounts: &[KeyedAccount],
     data: &[u8],
-    _invoke_context: &mut dyn InvokeContext,
+    invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
+    let keyed_accounts = invoke_context.get_keyed_accounts()?;
+
     let new_owner_pubkey: Pubkey = limited_deserialize(data)?;
-    let keyed_accounts_iter = &mut keyed_accounts.iter();
-    let account_keyed_account = &mut next_keyed_account(keyed_accounts_iter)?;
+    let account_keyed_account = &mut keyed_account_at_index(keyed_accounts, 0)?;
     let mut account_owner_pubkey: Pubkey =
         limited_deserialize(&account_keyed_account.try_account_ref()?.data())?;
 
     if account_owner_pubkey == Pubkey::default() {
         account_owner_pubkey = new_owner_pubkey;
     } else {
-        let owner_keyed_account = &mut next_keyed_account(keyed_accounts_iter)?;
+        let owner_keyed_account = &mut keyed_account_at_index(keyed_accounts, 1)?;
         set_owner(
             &mut account_owner_pubkey,
             new_owner_pubkey,

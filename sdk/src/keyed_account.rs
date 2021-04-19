@@ -10,7 +10,7 @@ use std::{
 };
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct KeyedAccount<'a> {
     is_signer: bool, // Transaction was signed by this account's key
     is_writable: bool,
@@ -146,6 +146,10 @@ pub fn create_keyed_accounts<'a>(
     accounts.iter().map(Into::into).collect()
 }
 
+#[deprecated(
+    since = "1.7.0",
+    note = "Please use create_keyed_accounts_unified instead"
+)]
 pub fn create_keyed_is_signer_accounts<'a>(
     accounts: &'a [(&'a Pubkey, bool, &'a RefCell<AccountSharedData>)],
 ) -> Vec<KeyedAccount<'a>> {
@@ -160,6 +164,10 @@ pub fn create_keyed_is_signer_accounts<'a>(
         .collect()
 }
 
+#[deprecated(
+    since = "1.7.0",
+    note = "Please use create_keyed_accounts_unified instead"
+)]
 pub fn create_keyed_readonly_accounts(
     accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
 ) -> Vec<KeyedAccount> {
@@ -168,6 +176,20 @@ pub fn create_keyed_readonly_accounts(
         .map(|(key, account)| KeyedAccount {
             is_signer: false,
             is_writable: false,
+            key,
+            account,
+        })
+        .collect()
+}
+
+pub fn create_keyed_accounts_unified<'a>(
+    accounts: &[(bool, bool, &'a Pubkey, &'a RefCell<AccountSharedData>)],
+) -> Vec<KeyedAccount<'a>> {
+    accounts
+        .iter()
+        .map(|(is_signer, is_writable, key, account)| KeyedAccount {
+            is_signer: *is_signer,
+            is_writable: *is_writable,
             key,
             account,
         })
@@ -186,11 +208,22 @@ where
         .collect::<A>()
 }
 
+#[deprecated(since = "1.7.0", note = "Please use keyed_account_at_index instead")]
 /// Return the next KeyedAccount or a NotEnoughAccountKeys error
 pub fn next_keyed_account<'a, 'b, I: Iterator<Item = &'a KeyedAccount<'b>>>(
     iter: &mut I,
 ) -> Result<I::Item, InstructionError> {
     iter.next().ok_or(InstructionError::NotEnoughAccountKeys)
+}
+
+/// Return the KeyedAccount at the specified index or a NotEnoughAccountKeys error
+pub fn keyed_account_at_index<'a>(
+    keyed_accounts: &'a [KeyedAccount],
+    index: usize,
+) -> Result<&'a KeyedAccount<'a>, InstructionError> {
+    keyed_accounts
+        .get(index)
+        .ok_or(InstructionError::NotEnoughAccountKeys)
 }
 
 /// Return true if the first keyed_account is executable, used to determine if

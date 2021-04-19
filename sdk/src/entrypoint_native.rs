@@ -89,14 +89,12 @@ macro_rules! declare_name {
 /// use solana_sdk::{
 ///     declare_program,
 ///     instruction::InstructionError,
-///     keyed_account::KeyedAccount,
 ///     process_instruction::InvokeContext,
 ///     pubkey::Pubkey,
 /// };
 ///
 /// fn my_process_instruction(
 ///     program_id: &Pubkey,
-///     keyed_accounts: &[KeyedAccount],
 ///     instruction_data: &[u8],
 ///     invoke_context: &mut dyn InvokeContext,
 /// ) -> Result<(), InstructionError> {
@@ -124,14 +122,12 @@ macro_rules! declare_name {
 /// use solana_sdk::{
 ///     declare_program,
 ///     instruction::InstructionError,
-///     keyed_account::KeyedAccount,
 ///     process_instruction::InvokeContext,
 ///     pubkey::Pubkey,
 /// };
 ///
 /// fn my_process_instruction(
 ///     program_id: &Pubkey,
-///     keyed_accounts: &[KeyedAccount],
 ///     instruction_data: &[u8],
 ///     invoke_context: &mut dyn InvokeContext,
 /// ) -> Result<(), InstructionError> {
@@ -158,11 +154,10 @@ macro_rules! declare_program(
         #[no_mangle]
         pub extern "C" fn $name(
             program_id: &$crate::pubkey::Pubkey,
-            keyed_accounts: &[$crate::keyed_account::KeyedAccount],
             instruction_data: &[u8],
             invoke_context: &mut dyn $crate::process_instruction::InvokeContext,
         ) -> Result<(), $crate::instruction::InstructionError> {
-            $entrypoint(program_id, keyed_accounts, instruction_data, invoke_context)
+            $entrypoint(program_id, instruction_data, invoke_context)
         }
     )
 );

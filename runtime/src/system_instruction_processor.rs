@@ -4,7 +4,7 @@ use solana_sdk::{
     account_utils::StateMut,
     ic_msg,
     instruction::InstructionError,
-    keyed_account::{from_keyed_account, get_signers, next_keyed_account, KeyedAccount},
+    keyed_account::{from_keyed_account, get_signers, keyed_account_at_index, KeyedAccount},
     nonce,
     nonce_keyed_account::NonceKeyedAccount,
     process_instruction::InvokeContext,
@@ -35,7 +35,7 @@ impl Address {
     fn create(
         address: &Pubkey,
         with_seed: Option<(&Pubkey, &str, &Pubkey)>,
-        invoke_context: &mut dyn InvokeContext,
+        invoke_context: &dyn InvokeContext,
     ) -> Result<Self, InstructionError> {
         let base = if let Some((base, seed, owner)) = with_seed {
             let address_with_seed = Pubkey::create_with_seed(base, seed, owner)?;
@@ -66,7 +66,7 @@ fn allocate(
     address: &Address,
     space: u64,
     signers: &HashSet<Pubkey>,
-    invoke_context: &mut dyn InvokeContext,
+    invoke_context: &dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     if !address.is_signer(signers) {
         ic_msg!(
@@ -108,7 +108,7 @@ fn assign(
     address: &Address,
     owner: &Pubkey,
     signers: &HashSet<Pubkey>,
-    invoke_context: &mut dyn InvokeContext,
+    invoke_context: &dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     // no work to do, just return
     if account.owner == *owner {
@@ -136,7 +136,7 @@ fn allocate_and_assign(
     space: u64,
     owner: &Pubkey,
     signers: &HashSet<Pubkey>,
-    invoke_context: &mut dyn InvokeContext,
+    invoke_context: &dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     allocate(to, to_address, space, signers, invoke_context)?;
     assign(to, to_address, owner, signers, invoke_context)
@@ -150,7 +150,7 @@ fn create_account(
     space: u64,
     owner: &Pubkey,
     signers: &HashSet<Pubkey>,
-    invoke_context: &mut dyn InvokeContext,
+    invoke_context: &dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     // if it looks like the `to` account is already in use, bail
     {
@@ -173,7 +173,7 @@ fn transfer_verified(
     from: &KeyedAccount,
     to: &KeyedAccount,
     lamports: u64,
-    invoke_context: &mut dyn InvokeContext,
+    invoke_context: &dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     if !from.data_is_empty()? {
         ic_msg!(invoke_context, "Transfer: `from` must not carry data");
@@ -198,7 +198,7 @@ fn transfer(
     from: &KeyedAccount,
     to: &KeyedAccount,
     lamports: u64,
-    invoke_context: &mut dyn InvokeContext,
+    invoke_context: &dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     if lamports == 0 {
         return Ok(());
@@ -223,7 +223,7 @@ fn transfer_with_seed(
     from_owner: &Pubkey,
     to: &KeyedAccount,
     lamports: u64,
-    invoke_context: &mut dyn InvokeContext,
+    invoke_context: &dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     if lamports == 0 {
         return Ok(());
@@ -255,17 +255,16 @@ fn transfer_with_seed(
 
 pub fn process_instruction(
     _owner: &Pubkey,
-    keyed_accounts: &[KeyedAccount],
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
+    let keyed_accounts = invoke_context.get_keyed_accounts()?;
     let instruction = limited_deserialize(instruction_data)?;
 
     trace!("process_instruction: {:?}", instruction);
     trace!("keyed_accounts: {:?}", keyed_accounts);
 
     let signers = get_signers(keyed_accounts);
-    let keyed_accounts_iter = &mut keyed_accounts.iter();
 
     match instruction {
         SystemInstruction::CreateAccount {
@@ -273,8 +272,8 @@ pub fn process_instruction(
             space,
             owner,
         } => {
-            let from = next_keyed_account(keyed_accounts_iter)?;
-            let to = next_keyed_account(keyed_accounts_iter)?;
+            let from = keyed_account_at_index(keyed_accounts, 0)?;
+            let to = keyed_account_at_index(keyed_accounts, 1)?;
             let to_address = Address::create(to.unsigned_key(), None, invoke_context)?;
             create_account(
                 from,
@@ -294,8 +293,8 @@ pub fn process_instruction(
             space,
             owner,
         } => {
-            let from = next_keyed_account(keyed_accounts_iter)?;
-            let to = next_keyed_account(keyed_accounts_iter)?;
+            let from = keyed_account_at_index(keyed_accounts, 0)?;
+            let to = keyed_account_at_index(keyed_accounts, 1)?;
             let to_address = Address::create(
                 &to.unsigned_key(),
                 Some((&base, &seed, &owner)),
@@ -313,14 +312,14 @@ pub fn process_instruction(
             )
         }
         SystemInstruction::Assign { owner } => {
-            let keyed_account = next_keyed_account(keyed_accounts_iter)?;
+            let keyed_account = keyed_account_at_index(keyed_accounts, 0)?;
             let mut account = keyed_account.try_account_ref_mut()?;
             let address = Address::create(keyed_account.unsigned_key(), None, invoke_context)?;
             assign(&mut account, &address, &owner, &signers, invoke_context)
         }
         SystemInstruction::Transfer { lamports } => {
-            let from = next_keyed_account(keyed_accounts_iter)?;
-            let to = next_keyed_account(keyed_accounts_iter)?;
+            let from = keyed_account_at_index(keyed_accounts, 0)?;
+            let to = keyed_account_at_index(keyed_accounts, 1)?;
             transfer(from, to, lamports, invoke_context)
         }
         SystemInstruction::TransferWithSeed {
@@ -328,9 +327,9 @@ pub fn process_instruction(
             from_seed,
             from_owner,
         } => {
-            let from = next_keyed_account(keyed_accounts_iter)?;
-            let base = next_keyed_account(keyed_accounts_iter)?;
-            let to = next_keyed_account(keyed_accounts_iter)?;
+            let from = keyed_account_at_index(keyed_accounts, 0)?;
+            let base = keyed_account_at_index(keyed_accounts, 1)?;
+            let to = keyed_account_at_index(keyed_accounts, 2)?;
             transfer_with_seed(
                 from,
                 base,
@@ -342,40 +341,49 @@ pub fn process_instruction(
             )
         }
         SystemInstruction::AdvanceNonceAccount => {
-            let me = &mut next_keyed_account(keyed_accounts_iter)?;
+            let me = &mut keyed_account_at_index(keyed_accounts, 0)?;
             me.advance_nonce_account(
-                &from_keyed_account::<RecentBlockhashes>(next_keyed_account(keyed_accounts_iter)?)?,
+                &from_keyed_account::<RecentBlockhashes>(keyed_account_at_index(
+                    keyed_accounts,
+                    1,
+                )?)?,
                 &signers,
                 invoke_context,
             )
         }
         SystemInstruction::WithdrawNonceAccount(lamports) => {
-            let me = &mut next_keyed_account(keyed_accounts_iter)?;
-            let to = &mut next_keyed_account(keyed_accounts_iter)?;
+            let me = &mut keyed_account_at_index(keyed_accounts, 0)?;
+            let to = &mut keyed_account_at_index(keyed_accounts, 1)?;
             me.withdraw_nonce_account(
                 lamports,
                 to,
-                &from_keyed_account::<RecentBlockhashes>(next_keyed_account(keyed_accounts_iter)?)?,
-                &from_keyed_account::<Rent>(next_keyed_account(keyed_accounts_iter)?)?,
+                &from_keyed_account::<RecentBlockhashes>(keyed_account_at_index(
+                    keyed_accounts,
+                    2,
+                )?)?,
+                &from_keyed_account::<Rent>(keyed_account_at_index(keyed_accounts, 3)?)?,
                 &signers,
                 invoke_context,
             )
         }
         SystemInstruction::InitializeNonceAccount(authorized) => {
-            let me = &mut next_keyed_account(keyed_accounts_iter)?;
+            let me = &mut keyed_account_at_index(keyed_accounts, 0)?;
             me.initialize_nonce_account(
                 &authorized,
-                &from_keyed_account::<RecentBlockhashes>(next_keyed_account(keyed_accounts_iter)?)?,
-                &from_keyed_account::<Rent>(next_keyed_account(keyed_accounts_iter)?)?,
+                &from_keyed_account::<RecentBlockhashes>(keyed_account_at_index(
+                    keyed_accounts,
+                    1,
+                )?)?,
+                &from_keyed_account::<Rent>(keyed_account_at_index(keyed_accounts, 2)?)?,
                 invoke_context,
             )
         }
         SystemInstruction::AuthorizeNonceAccount(nonce_authority) => {
-            let me = &mut next_keyed_account(keyed_accounts_iter)?;
+            let me = &mut keyed_account_at_index(keyed_accounts, 0)?;
             me.authorize_nonce_account(&nonce_authority, &signers, invoke_context)
         }
         SystemInstruction::Allocate { space } => {
-            let keyed_account = next_keyed_account(keyed_accounts_iter)?;
+            let keyed_account = keyed_account_at_index(keyed_accounts, 0)?;
             let mut account = keyed_account.try_account_ref_mut()?;
             let address = Address::create(keyed_account.unsigned_key(), None, invoke_context)?;
             allocate(&mut account, &address, space, &signers, invoke_context)
@@ -386,7 +394,7 @@ pub fn process_instruction(
             space,
             owner,
         } => {
-            let keyed_account = next_keyed_account(keyed_accounts_iter)?;
+            let keyed_account = keyed_account_at_index(keyed_accounts, 0)?;
             let mut account = keyed_account.try_account_ref_mut()?;
             let address = Address::create(
                 keyed_account.unsigned_key(),
@@ -403,7 +411,7 @@ pub fn process_instruction(
             )
         }
         SystemInstruction::AssignWithSeed { base, seed, owner } => {
-            let keyed_account = next_keyed_account(keyed_accounts_iter)?;
+            let keyed_account = keyed_account_at_index(keyed_accounts, 0)?;
             let mut account = keyed_account.try_account_ref_mut()?;
             let address = Address::create(
                 keyed_account.unsigned_key(),
@@ -475,14 +483,13 @@ mod tests {
 
     fn process_instruction(
         owner: &Pubkey,
-        keyed_accounts: &[KeyedAccount],
+        keyed_accounts: Vec<KeyedAccount>,
         instruction_data: &[u8],
     ) -> Result<(), InstructionError> {
         super::process_instruction(
             owner,
-            keyed_accounts,
             instruction_data,
-            &mut MockInvokeContext::default(),
+            &mut MockInvokeContext::new(keyed_accounts),
         )
     }
 
@@ -515,7 +522,7 @@ mod tests {
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                &[
+                vec![
                     KeyedAccount::new(&from, true, &from_account),
                     KeyedAccount::new(&to, true, &to_account)
                 ],
@@ -547,7 +554,7 @@ mod tests {
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                &[
+                vec![
                     KeyedAccount::new(&from, true, &from_account),
                     KeyedAccount::new(&to, false, &to_account)
                 ],
@@ -583,7 +590,7 @@ mod tests {
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                &[
+                vec![
                     KeyedAccount::new(&from, true, &from_account),
                     KeyedAccount::new(&to, false, &to_account),
                     KeyedAccount::new(&base, true, &base_account)
@@ -616,7 +623,7 @@ mod tests {
             Address::create(
                 &to,
                 Some((&from, seed, &owner)),
-                &mut MockInvokeContext::default(),
+                &MockInvokeContext::new(vec![]),
             ),
             Err(SystemError::AddressWithSeedMismatch.into())
         );
@@ -634,7 +641,7 @@ mod tests {
         let to_address = Address::create(
             &to,
             Some((&from, seed, &new_owner)),
-            &mut MockInvokeContext::default(),
+            &MockInvokeContext::new(vec![]),
         )
         .unwrap();
 
@@ -647,7 +654,7 @@ mod tests {
                 2,
                 &new_owner,
                 &HashSet::new(),
-                &mut MockInvokeContext::default(),
+                &MockInvokeContext::new(vec![]),
             ),
             Err(InstructionError::MissingRequiredSignature)
         );
@@ -674,7 +681,7 @@ mod tests {
                 2,
                 &new_owner,
                 &[to].iter().cloned().collect::<HashSet<_>>(),
-                &mut MockInvokeContext::default(),
+                &MockInvokeContext::new(vec![]),
             ),
             Ok(())
         );
@@ -706,7 +713,7 @@ mod tests {
             2,
             &new_owner,
             &[from, to].iter().cloned().collect::<HashSet<_>>(),
-            &mut MockInvokeContext::default(),
+            &MockInvokeContext::new(vec![]),
         );
         assert_eq!(result, Err(SystemError::ResultWithNegativeLamports.into()));
     }
@@ -730,7 +737,7 @@ mod tests {
             MAX_PERMITTED_DATA_LENGTH + 1,
             &system_program::id(),
             &signers,
-            &mut MockInvokeContext::default(),
+            &MockInvokeContext::new(vec![]),
         );
         assert!(result.is_err());
         assert_eq!(
@@ -747,7 +754,7 @@ mod tests {
             MAX_PERMITTED_DATA_LENGTH,
             &system_program::id(),
             &signers,
-            &mut MockInvokeContext::default(),
+            &MockInvokeContext::new(vec![]),
         );
         assert!(result.is_ok());
         assert_eq!(to_account.borrow().lamports, 50);
@@ -780,7 +787,7 @@ mod tests {
             2,
             &new_owner,
             &signers,
-            &mut MockInvokeContext::default(),
+            &MockInvokeContext::new(vec![]),
         );
         assert_eq!(result, Err(SystemError::AccountAlreadyInUse.into()));
 
@@ -799,7 +806,7 @@ mod tests {
             2,
             &new_owner,
             &signers,
-            &mut MockInvokeContext::default(),
+            &MockInvokeContext::new(vec![]),
         );
         assert_eq!(result, Err(SystemError::AccountAlreadyInUse.into()));
         let from_lamports = from_account.borrow().lamports;
@@ -817,7 +824,7 @@ mod tests {
             2,
             &new_owner,
             &signers,
-            &mut MockInvokeContext::default(),
+            &MockInvokeContext::new(vec![]),
         );
         assert_eq!(result, Err(SystemError::AccountAlreadyInUse.into()));
         assert_eq!(from_lamports, 100);
@@ -845,7 +852,7 @@ mod tests {
             2,
             &new_owner,
             &[owned_key].iter().cloned().collect::<HashSet<_>>(),
-            &mut MockInvokeContext::default(),
+            &MockInvokeContext::new(vec![]),
         );
         assert_eq!(result, Err(InstructionError::MissingRequiredSignature));
 
@@ -859,7 +866,7 @@ mod tests {
             2,
             &new_owner,
             &[from].iter().cloned().collect::<HashSet<_>>(),
-            &mut MockInvokeContext::default(),
+            &MockInvokeContext::new(vec![]),
         );
         assert_eq!(result, Err(InstructionError::MissingRequiredSignature));
 
@@ -873,7 +880,7 @@ mod tests {
             2,
             &new_owner,
             &[owned_key].iter().cloned().collect::<HashSet<_>>(),
-            &mut MockInvokeContext::default(),
+            &MockInvokeContext::new(vec![]),
         );
         assert_eq!(result, Ok(()));
     }
@@ -899,7 +906,7 @@ mod tests {
             2,
             &sysvar::id(),
             &signers,
-            &mut MockInvokeContext::default(),
+            &MockInvokeContext::new(vec![]),
         );
 
         assert_eq!(result, Err(SystemError::InvalidProgramId.into()));
@@ -933,7 +940,7 @@ mod tests {
             2,
             &new_owner,
             &signers,
-            &mut MockInvokeContext::default(),
+            &MockInvokeContext::new(vec![]),
         );
         assert_eq!(result, Err(SystemError::AccountAlreadyInUse.into()));
     }
@@ -967,7 +974,7 @@ mod tests {
                 0,
                 &solana_sdk::pubkey::new_rand(),
                 &signers,
-                &mut MockInvokeContext::default(),
+                &MockInvokeContext::new(vec![]),
             ),
             Err(InstructionError::InvalidArgument),
         );
@@ -986,7 +993,7 @@ mod tests {
                 &pubkey.into(),
                 &new_owner,
                 &HashSet::new(),
-                &mut MockInvokeContext::default(),
+                &MockInvokeContext::new(vec![]),
             ),
             Err(InstructionError::MissingRequiredSignature)
         );
@@ -997,7 +1004,7 @@ mod tests {
                 &pubkey.into(),
                 &system_program::id(),
                 &HashSet::new(),
-                &mut MockInvokeContext::default(),
+                &MockInvokeContext::new(vec![]),
             ),
             Ok(())
         );
@@ -1006,7 +1013,7 @@ mod tests {
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                &[KeyedAccount::new(&pubkey, true, &account)],
+                vec![KeyedAccount::new(&pubkey, true, &account)],
                 &bincode::serialize(&SystemInstruction::Assign { owner: new_owner }).unwrap()
             ),
             Ok(())
@@ -1026,7 +1033,7 @@ mod tests {
                 &from.into(),
                 &new_owner,
                 &[from].iter().cloned().collect::<HashSet<_>>(),
-                &mut MockInvokeContext::default(),
+                &MockInvokeContext::new(vec![]),
             ),
             Err(SystemError::InvalidProgramId.into())
         );
@@ -1039,7 +1046,7 @@ mod tests {
             owner: solana_sdk::pubkey::new_rand(),
         };
         let data = serialize(&instruction).unwrap();
-        let result = process_instruction(&system_program::id(), &[], &data);
+        let result = process_instruction(&system_program::id(), vec![], &data);
         assert_eq!(result, Err(InstructionError::NotEnoughAccountKeys));
 
         let from = solana_sdk::pubkey::new_rand();
@@ -1049,7 +1056,7 @@ mod tests {
         let data = serialize(&instruction).unwrap();
         let result = process_instruction(
             &system_program::id(),
-            &[KeyedAccount::new(&from, true, &from_account)],
+            vec![KeyedAccount::new(&from, true, &from_account)],
             &data,
         );
         assert_eq!(result, Err(InstructionError::NotEnoughAccountKeys));
@@ -1067,7 +1074,7 @@ mod tests {
             &from_keyed_account,
             &to_keyed_account,
             50,
-            &mut MockInvokeContext::default(),
+            &MockInvokeContext::new(vec![]),
         )
         .unwrap();
         let from_lamports = from_keyed_account.account.borrow().lamports;
@@ -1081,7 +1088,7 @@ mod tests {
             &from_keyed_account,
             &to_keyed_account,
             100,
-            &mut MockInvokeContext::default(),
+            &MockInvokeContext::new(vec![]),
         );
         assert_eq!(result, Err(SystemError::ResultWithNegativeLamports.into()));
         assert_eq!(from_keyed_account.account.borrow().lamports, 50);
@@ -1094,7 +1101,7 @@ mod tests {
             &from_keyed_account,
             &to_keyed_account,
             0,
-            &mut MockInvokeContext::default(),
+            &MockInvokeContext::new(vec![]),
         )
         .is_ok(),);
         assert_eq!(from_keyed_account.account.borrow().lamports, 50);
@@ -1121,7 +1128,7 @@ mod tests {
             &from_owner,
             &to_keyed_account,
             50,
-            &mut MockInvokeContext::default(),
+            &MockInvokeContext::new(vec![]),
         )
         .unwrap();
         let from_lamports = from_keyed_account.account.borrow().lamports;
@@ -1138,7 +1145,7 @@ mod tests {
             &from_owner,
             &to_keyed_account,
             100,
-            &mut MockInvokeContext::default(),
+            &MockInvokeContext::new(vec![]),
         );
         assert_eq!(result, Err(SystemError::ResultWithNegativeLamports.into()));
         assert_eq!(from_keyed_account.account.borrow().lamports, 50);
@@ -1153,7 +1160,7 @@ mod tests {
             &from_owner,
             &to_keyed_account,
             0,
-            &mut MockInvokeContext::default(),
+            &MockInvokeContext::new(vec![]),
         )
         .is_ok(),);
         assert_eq!(from_keyed_account.account.borrow().lamports, 50);
@@ -1184,7 +1191,7 @@ mod tests {
                 &KeyedAccount::new(&from, true, &from_account),
                 &KeyedAccount::new(&to, false, &to_account),
                 50,
-                &mut MockInvokeContext::default(),
+                &MockInvokeContext::new(vec![]),
             ),
             Err(InstructionError::InvalidArgument),
         )
@@ -1391,7 +1398,7 @@ mod tests {
                 .zip(accounts.iter())
                 .map(|(meta, account)| KeyedAccount::new(&meta.pubkey, meta.is_signer, account))
                 .collect();
-            process_instruction(&Pubkey::default(), &keyed_accounts, &instruction.data)
+            process_instruction(&Pubkey::default(), keyed_accounts, &instruction.data)
         }
     }
 
@@ -1411,7 +1418,7 @@ mod tests {
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                &[],
+                vec![],
                 &serialize(&SystemInstruction::AdvanceNonceAccount).unwrap()
             ),
             Err(InstructionError::NotEnoughAccountKeys),
@@ -1423,11 +1430,11 @@ mod tests {
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                &[KeyedAccount::new(
+                vec![KeyedAccount::new(
                     &Pubkey::default(),
                     true,
                     &create_default_account(),
-                ),],
+                )],
                 &serialize(&SystemInstruction::AdvanceNonceAccount).unwrap(),
             ),
             Err(InstructionError::NotEnoughAccountKeys),
@@ -1439,7 +1446,7 @@ mod tests {
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                &[
+                vec![
                     KeyedAccount::new(&Pubkey::default(), true, &create_default_account()),
                     KeyedAccount::new(
                         &sysvar::recent_blockhashes::id(),
@@ -1458,7 +1465,7 @@ mod tests {
         let nonce_acc = nonce_account::create_account(1_000_000);
         process_instruction(
             &Pubkey::default(),
-            &[
+            vec![
                 KeyedAccount::new(&Pubkey::default(), true, &nonce_acc),
                 KeyedAccount::new(
                     &sysvar::recent_blockhashes::id(),
@@ -1486,7 +1493,7 @@ mod tests {
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                &[
+                vec![
                     KeyedAccount::new(&Pubkey::default(), true, &nonce_acc,),
                     KeyedAccount::new(
                         &sysvar::recent_blockhashes::id(),
@@ -1518,7 +1525,7 @@ mod tests {
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                &[],
+                vec![],
                 &serialize(&SystemInstruction::WithdrawNonceAccount(42)).unwrap(),
             ),
             Err(InstructionError::NotEnoughAccountKeys),
@@ -1530,11 +1537,11 @@ mod tests {
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                &[KeyedAccount::new(
+                vec![KeyedAccount::new(
                     &Pubkey::default(),
                     true,
                     &create_default_account()
-                ),],
+                )],
                 &serialize(&SystemInstruction::WithdrawNonceAccount(42)).unwrap(),
             ),
             Err(InstructionError::NotEnoughAccountKeys),
@@ -1546,7 +1553,7 @@ mod tests {
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                &[
+                vec![
                     KeyedAccount::new(&Pubkey::default(), true, &create_default_account()),
                     KeyedAccount::new(&Pubkey::default(), false, &create_default_account()),
                     KeyedAccount::new(
@@ -1566,7 +1573,7 @@ mod tests {
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                &[
+                vec![
                     KeyedAccount::new(
                         &Pubkey::default(),
                         true,
@@ -1591,7 +1598,7 @@ mod tests {
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                &[
+                vec![
                     KeyedAccount::new(
                         &Pubkey::default(),
                         true,
@@ -1616,7 +1623,7 @@ mod tests {
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                &[],
+                vec![],
                 &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
             ),
             Err(InstructionError::NotEnoughAccountKeys),
@@ -1628,11 +1635,11 @@ mod tests {
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                &[KeyedAccount::new(
+                vec![KeyedAccount::new(
                     &Pubkey::default(),
                     true,
                     &nonce_account::create_account(1_000_000),
-                ),],
+                )],
                 &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
             ),
             Err(InstructionError::NotEnoughAccountKeys),
@@ -1644,7 +1651,7 @@ mod tests {
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                &[
+                vec![
                     KeyedAccount::new(
                         &Pubkey::default(),
                         true,
@@ -1667,7 +1674,7 @@ mod tests {
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                &[
+                vec![
                     KeyedAccount::new(
                         &Pubkey::default(),
                         true,
@@ -1691,7 +1698,7 @@ mod tests {
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                &[
+                vec![
                     KeyedAccount::new(
                         &Pubkey::default(),
                         true,
@@ -1715,7 +1722,7 @@ mod tests {
         let nonce_acc = nonce_account::create_account(1_000_000);
         process_instruction(
             &Pubkey::default(),
-            &[
+            vec![
                 KeyedAccount::new(&Pubkey::default(), true, &nonce_acc),
                 KeyedAccount::new(
                     &sysvar::recent_blockhashes::id(),
@@ -1730,7 +1737,7 @@ mod tests {
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                &[KeyedAccount::new(&Pubkey::default(), true, &nonce_acc,),],
+                vec![KeyedAccount::new(&Pubkey::default(), true, &nonce_acc,),],
                 &serialize(&SystemInstruction::AuthorizeNonceAccount(Pubkey::default(),)).unwrap(),
             ),
             Ok(()),
