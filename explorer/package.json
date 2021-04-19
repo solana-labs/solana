@@ -8,7 +8,7 @@
     "@react-hook/debounce": "^3.0.0",
     "@sentry/react": "^6.2.5",
     "@solana/spl-token-registry": "^0.2.57",
-    "@solana/web3.js": "^1.2.7",
+    "@solana/web3.js": "^1.4.0",
     "@testing-library/jest-dom": "^5.11.10",
     "@testing-library/react": "^11.2.6",
     "@testing-library/user-event": "^13.1.4",
