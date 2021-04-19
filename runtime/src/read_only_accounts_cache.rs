@@ -50,6 +50,7 @@ impl ReadOnlyAccountsCache {
     }
 
     fn per_account_size() -> usize {
+        // size_of(arc(x)) does not return the size of x, so we have to add the size of RwLock...
         std::mem::size_of::<ReadOnlyAccountCacheEntry>() + std::mem::size_of::<RwLock<Instant>>()
     }
 
@@ -184,6 +185,13 @@ impl ReadOnlyAccountsCache {
 pub mod tests {
     use super::*;
     use solana_sdk::account::{accounts_equal, Account};
+    #[test]
+    fn test_accountsdb_sizeof() {
+        // size_of(arc(x)) does not return the size of x
+        assert!(std::mem::size_of::<Arc<u64>>() == std::mem::size_of::<Arc<u8>>());
+        assert!(std::mem::size_of::<Arc<u64>>() == std::mem::size_of::<Arc<[u8; 32]>>());
+    }
+
     #[test]
     fn test_read_only_accounts_cache() {
         solana_logger::setup();
