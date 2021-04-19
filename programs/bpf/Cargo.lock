@@ -677,6 +677,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "derivation-path"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "193388a8c8c75a490b604ff61775e236541b8975e98e5ca1f6ea97d122b7e2db"
+dependencies = [
+ "failure",
+]
+
+[[package]]
 name = "derivative"
 version = "2.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -843,6 +852,27 @@ dependencies = [
  "log",
  "regex",
  "termcolor",
+]
+
+[[package]]
+name = "failure"
+version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d32e9bd16cc02eae7db7ef620b392808b89f6a5e16bb3497d159c6b92a0f4f86"
+dependencies = [
+ "failure_derive",
+]
+
+[[package]]
+name = "failure_derive"
+version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aa4da3c766cd7a0db8242e326e9e4e081edd567072893ed320008189715366a4"
+dependencies = [
+ "proc-macro2 1.0.24",
+ "quote 1.0.6",
+ "syn 1.0.67",
+ "synstructure",
 ]
 
 [[package]]
@@ -3416,6 +3446,7 @@ dependencies = [
  "bv",
  "byteorder 1.3.4",
  "chrono",
+ "derivation-path",
  "digest 0.9.0",
  "ed25519-dalek",
  "generic-array 0.14.3",
