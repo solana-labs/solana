@@ -152,9 +152,8 @@ fn bench_shredder_decoding(bencher: &mut Bencher) {
             coding_shreds[..].to_vec(),
             symbol_count,
             symbol_count,
-            0,
-            0,
-            1,
+            0, // first index
+            1, // slot
         )
         .unwrap();
     })

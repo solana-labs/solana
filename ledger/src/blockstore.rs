@@ -573,8 +573,7 @@ impl Blockstore {
         prev_inserted_codes: &mut HashMap<(u64, u64), Shred>,
         code_cf: &LedgerColumn<cf::ShredCode>,
     ) {
-        (erasure_meta.first_coding_index
-            ..erasure_meta.first_coding_index + erasure_meta.config.num_coding() as u64)
+        (erasure_meta.set_index..erasure_meta.set_index + erasure_meta.config.num_coding() as u64)
             .for_each(|i| {
                 if let Some(shred) = prev_inserted_codes
                     .remove(&(slot, i))
@@ -645,7 +644,6 @@ impl Blockstore {
             erasure_meta.config.num_data(),
             erasure_meta.config.num_coding(),
             set_index as usize,
-            erasure_meta.first_coding_index as usize,
             slot,
         ) {
             Self::submit_metrics(
@@ -1069,12 +1067,10 @@ impl Blockstore {
         );
 
         let erasure_meta = erasure_metas.entry((slot, set_index)).or_insert_with(|| {
-            let first_coding_index =
-                u64::from(shred.index()) - u64::from(shred.coding_header.position);
             self.erasure_meta_cf
                 .get((slot, set_index))
                 .expect("Expect database get to succeed")
-                .unwrap_or_else(|| ErasureMeta::new(set_index, first_coding_index, &erasure_config))
+                .unwrap_or_else(|| ErasureMeta::new(set_index, erasure_config))
         });
 
         if erasure_config != erasure_meta.config {
@@ -1128,10 +1124,10 @@ impl Blockstore {
     ) -> Option<Vec<u8>> {
         // Search for the shred which set the initial erasure config, either inserted,
         // or in the current batch in just_received_coding_shreds.
-        let coding_start = erasure_meta.first_coding_index;
-        let coding_end = coding_start + erasure_meta.config.num_coding() as u64;
+        let coding_indices = erasure_meta.set_index
+            ..erasure_meta.set_index + erasure_meta.config.num_coding() as u64;
         let mut conflicting_shred = None;
-        for coding_index in coding_start..coding_end {
+        for coding_index in coding_indices {
             let maybe_shred = self.get_coding_shred(slot, coding_index);
             if let Ok(Some(shred_data)) = maybe_shred {
                 let potential_shred = Shred::new_from_serialized_shred(shred_data).unwrap();
