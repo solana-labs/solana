@@ -529,6 +529,7 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
             13 => TransactionError::InvalidProgramForExecution,
             14 => TransactionError::SanitizeFailure,
             15 => TransactionError::ClusterMaintenance,
+            16 => TransactionError::AccountBorrowOutstanding,
             _ => return Err("Invalid TransactionError"),
         })
     }
@@ -583,6 +584,9 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                 }
                 TransactionError::InstructionError(_, _) => {
                     tx_by_addr::TransactionErrorType::InstructionError
+                }
+                TransactionError::AccountBorrowOutstanding => {
+                    tx_by_addr::TransactionErrorType::AccountBorrowOutstanding
                 }
             } as i32,
             instruction_error: match transaction_error {
