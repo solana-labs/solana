@@ -20,7 +20,8 @@ use solana_clap_utils::{
 use solana_cli_output::{
     display::{build_balance_message, println_name_value},
     return_signers_with_config, CliAccount, CliSignature, CliSignatureVerificationStatus,
-    CliTransaction, CliTransactionConfirmation, OutputFormat, ReturnSignersConfig,
+    CliTransaction, CliTransactionConfirmation, CliValidatorsSortOrder, OutputFormat,
+    ReturnSignersConfig,
 };
 use solana_client::{
     blockhash_query::BlockhashQuery,
@@ -130,6 +131,8 @@ pub enum CliCommand {
     },
     ShowValidators {
         use_lamports_unit: bool,
+        sort_order: CliValidatorsSortOrder,
+        reverse_sort: bool,
     },
     Supply {
         print_accounts: bool,
@@ -1378,9 +1381,17 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::WaitForMaxStake { max_stake_percent } => {
             process_wait_for_max_stake(&rpc_client, config, *max_stake_percent)
         }
-        CliCommand::ShowValidators { use_lamports_unit } => {
-            process_show_validators(&rpc_client, config, *use_lamports_unit)
-        }
+        CliCommand::ShowValidators {
+            use_lamports_unit,
+            sort_order,
+            reverse_sort,
+        } => process_show_validators(
+            &rpc_client,
+            config,
+            *use_lamports_unit,
+            *sort_order,
+            *reverse_sort,
+        ),
         CliCommand::Supply { print_accounts } => {
             process_supply(&rpc_client, config, *print_accounts)
         }
