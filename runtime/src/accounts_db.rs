@@ -1840,13 +1840,10 @@ impl AccountsDb {
     where
         I: Iterator<Item = &'a Arc<AccountStorageEntry>>,
     {
-        struct FoundStoredAccount {
-            account: AccountSharedData,
-            account_hash: Hash,
-            account_size: usize,
-            store_id: AppendVecId,
-            offset: usize,
-            write_version: u64,
+        struct FoundStoredAccount<'a> {
+            pub account: StoredAccountMeta<'a>,
+            pub store_id: AppendVecId,
+            pub account_size: usize,
         }
         debug!("do_shrink_slot_stores: slot: {}", slot);
         let mut stored_accounts: HashMap<Pubkey, FoundStoredAccount> = HashMap::new();
@@ -1855,28 +1852,21 @@ impl AccountsDb {
             let mut start = 0;
             original_bytes += store.total_bytes();
             while let Some((account, next)) = store.accounts.get_account(start) {
-                match stored_accounts.entry(account.meta.pubkey) {
+                let new_entry = FoundStoredAccount {
+                    account,
+                    store_id: store.append_vec_id(),
+                    account_size: next - start,
+                };
+                match stored_accounts.entry(new_entry.account.meta.pubkey) {
                     Entry::Occupied(mut occupied_entry) => {
-                        if account.meta.write_version > occupied_entry.get().write_version {
-                            occupied_entry.insert(FoundStoredAccount {
-                                account: account.clone_account(),
-                                account_hash: *account.hash,
-                                account_size: next - start,
-                                store_id: store.append_vec_id(),
-                                offset: account.offset,
-                                write_version: account.meta.write_version,
-                            });
+                        if new_entry.account.meta.write_version
+                            > occupied_entry.get().account.meta.write_version
+                        {
+                            occupied_entry.insert(new_entry);
                         }
                     }
                     Entry::Vacant(vacant_entry) => {
-                        vacant_entry.insert(FoundStoredAccount {
-                            account: account.clone_account(),
-                            account_hash: *account.hash,
-                            account_size: next - start,
-                            store_id: store.append_vec_id(),
-                            offset: account.offset,
-                            write_version: account.meta.write_version,
-                        });
+                        vacant_entry.insert(new_entry);
                     }
                 }
                 start = next;
@@ -1889,17 +1879,11 @@ impl AccountsDb {
             stored_accounts
                 .iter()
                 .filter(|(pubkey, stored_account)| {
-                    let FoundStoredAccount {
-                        account_size,
-                        store_id,
-                        offset,
-                        ..
-                    } = stored_account;
                     if let Some((locked_entry, _)) = self.accounts_index.get(pubkey, None, None) {
-                        let is_alive = locked_entry
-                            .slot_list()
-                            .iter()
-                            .any(|(_slot, i)| i.store_id == *store_id && i.offset == *offset);
+                        let is_alive = locked_entry.slot_list().iter().any(|(_slot, i)| {
+                            i.store_id == stored_account.store_id
+                                && i.offset == stored_account.account.offset
+                        });
                         if !is_alive {
                             // This pubkey was found in the storage, but no longer exists in the index.
                             // It would have had a ref to the storage from the initial store, but it will
@@ -1907,7 +1891,7 @@ impl AccountsDb {
                             // rewriting the storage entries.
                             locked_entry.unref()
                         } else {
-                            alive_total += *account_size as u64;
+                            alive_total += stored_account.account_size as u64;
                         }
                         is_alive
                     } else {
@@ -1938,15 +1922,20 @@ impl AccountsDb {
         let mut store_accounts_timing = StoreAccountsTiming::default();
         if aligned_total > 0 {
             let mut start = Measure::start("find_alive_elapsed");
-            let mut accounts = Vec::with_capacity(alive_accounts.len());
+            let mut stored_accounts = Vec::with_capacity(alive_accounts.len());
             let mut hashes = Vec::with_capacity(alive_accounts.len());
             let mut write_versions = Vec::with_capacity(alive_accounts.len());
 
-            for (pubkey, alive_account) in alive_accounts {
-                accounts.push((pubkey, &alive_account.account));
-                hashes.push(alive_account.account_hash);
-                write_versions.push(alive_account.write_version);
+            for (_pubkey, alive_account) in alive_accounts.iter() {
+                stored_accounts.push(alive_account.account.clone_account());
+                hashes.push(*alive_account.account.hash);
+                write_versions.push(alive_account.account.meta.write_version);
             }
+            let accounts = alive_accounts
+                .iter()
+                .map(|(pubkey, _)| *pubkey)
+                .zip(stored_accounts.iter())
+                .collect::<Vec<_>>();
             start.stop();
             find_alive_elapsed = start.as_us();
 
