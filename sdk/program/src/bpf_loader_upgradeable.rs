@@ -196,10 +196,6 @@ pub fn is_set_authority_instruction(instruction_data: &[u8]) -> bool {
     4 == instruction_data[0]
 }
 
-pub fn is_cpi_authorized_instruction(instruction_data: &[u8]) -> bool {
-    is_upgrade_instruction(instruction_data) || is_set_authority_instruction(instruction_data)
-}
-
 /// Returns the instructions required to set a buffers's authority.
 pub fn set_buffer_authority(
     buffer_address: &Pubkey,
@@ -272,18 +268,17 @@ mod tests {
 
     fn assert_is_instruction<F>(
         is_instruction_fn: F,
-        expected_instructions: &[UpgradeableLoaderInstruction],
+        expected_instruction: UpgradeableLoaderInstruction,
     ) where
         F: Fn(&[u8]) -> bool,
     {
         let result = is_instruction_fn(
             &bincode::serialize(&UpgradeableLoaderInstruction::InitializeBuffer).unwrap(),
         );
-
-        let expected_result = expected_instructions
-            .iter()
-            .any(|i| matches!(i, UpgradeableLoaderInstruction::InitializeBuffer));
-
+        let expected_result = matches!(
+            expected_instruction,
+            UpgradeableLoaderInstruction::InitializeBuffer
+        );
         assert_eq!(expected_result, result);
 
         let result = is_instruction_fn(
@@ -293,17 +288,13 @@ mod tests {
             })
             .unwrap(),
         );
-
-        let expected_result = expected_instructions.iter().any(|i| {
-            matches!(
-                i,
-                UpgradeableLoaderInstruction::Write {
-                    offset: _,
-                    bytes: _,
-                }
-            )
-        });
-
+        let expected_result = matches!(
+            expected_instruction,
+            UpgradeableLoaderInstruction::Write {
+                offset: _,
+                bytes: _,
+            }
+        );
         assert_eq!(expected_result, result);
 
         let result = is_instruction_fn(
@@ -312,37 +303,29 @@ mod tests {
             })
             .unwrap(),
         );
-
-        let expected_result = expected_instructions.iter().any(|i| {
-            matches!(
-                i,
-                UpgradeableLoaderInstruction::DeployWithMaxDataLen { max_data_len: _ }
-            )
-        });
-
+        let expected_result = matches!(
+            expected_instruction,
+            UpgradeableLoaderInstruction::DeployWithMaxDataLen { max_data_len: _ }
+        );
         assert_eq!(expected_result, result);
 
         let result =
             is_instruction_fn(&bincode::serialize(&UpgradeableLoaderInstruction::Upgrade).unwrap());
-
-        let expected_result = expected_instructions
-            .iter()
-            .any(|i| matches!(i, UpgradeableLoaderInstruction::Upgrade));
+        let expected_result = matches!(expected_instruction, UpgradeableLoaderInstruction::Upgrade);
         assert_eq!(expected_result, result);
 
         let result = is_instruction_fn(
             &bincode::serialize(&UpgradeableLoaderInstruction::SetAuthority).unwrap(),
         );
-        let expected_result = expected_instructions
-            .iter()
-            .any(|i| matches!(i, UpgradeableLoaderInstruction::SetAuthority));
+        let expected_result = matches!(
+            expected_instruction,
+            UpgradeableLoaderInstruction::SetAuthority
+        );
         assert_eq!(expected_result, result);
 
         let result =
             is_instruction_fn(&bincode::serialize(&UpgradeableLoaderInstruction::Close).unwrap());
-        let expected_result = expected_instructions
-            .iter()
-            .any(|i| matches!(i, UpgradeableLoaderInstruction::Close));
+        let expected_result = matches!(expected_instruction, UpgradeableLoaderInstruction::Close);
         assert_eq!(expected_result, result);
     }
 
@@ -350,7 +333,7 @@ mod tests {
     fn test_is_set_authority_instruction() {
         assert_is_instruction(
             is_set_authority_instruction,
-            &[UpgradeableLoaderInstruction::SetAuthority {}],
+            UpgradeableLoaderInstruction::SetAuthority {},
         );
     }
 
@@ -358,18 +341,7 @@ mod tests {
     fn test_is_upgrade_instruction() {
         assert_is_instruction(
             is_upgrade_instruction,
-            &[UpgradeableLoaderInstruction::Upgrade {}],
-        );
-    }
-
-    #[test]
-    fn test_is_cpi_authorized_instruction() {
-        assert_is_instruction(
-            is_cpi_authorized_instruction,
-            &[
-                UpgradeableLoaderInstruction::Upgrade {},
-                UpgradeableLoaderInstruction::SetAuthority {},
-            ],
+            UpgradeableLoaderInstruction::Upgrade {},
         );
     }
 }
