@@ -220,6 +220,15 @@ export type Commitment =
   | 'max'; // Deprecated as of v1.5.5
 
 /**
+ * A subset of Commitment levels, which are at least optimistically confirmed
+ * <pre>
+ *   'confirmed': Query the most recent block which has reached 1 confirmation by the cluster
+ *   'finalized': Query the most recent block which has been finalized by the cluster
+ * </pre>
+ */
+export type Finality = 'confirmed' | 'finalized';
+
+/**
  * Filter for largest accounts query
  * <pre>
  *   'circulating':    Return the largest accounts that are part of the circulating supply
