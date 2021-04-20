@@ -2,7 +2,6 @@ use crate::request_response::RequestResponse;
 use lru::LruCache;
 use rand::{thread_rng, Rng};
 use solana_ledger::shred::Nonce;
-use solana_sdk::timing::timestamp;
 
 pub const DEFAULT_REQUEST_EXPIRATION_MS: u64 = 60_000;
 
@@ -76,6 +75,7 @@ pub(crate) mod tests {
     use super::*;
     use crate::serve_repair::RepairType;
     use solana_ledger::shred::Shred;
+    use solana_sdk::timing::timestamp;
 
     #[test]
     fn test_add_request() {
@@ -88,6 +88,23 @@ pub(crate) mod tests {
             request_status.num_expected_responses,
             repair_type.num_expected_responses()
         );
+    }
+
+    #[test]
+    fn test_timeout_expired_remove() {
+        let repair_type = RepairType::Orphan(9);
+        let mut outstanding_requests = OutstandingRequests::default();
+        let nonce = outstanding_requests.add_request(repair_type, timestamp());
+        let shred = Shred::new_empty_data_shred();
+
+        let expire_timestamp = outstanding_requests
+            .requests
+            .get(&nonce)
+            .unwrap()
+            .expire_timestamp;
+
+        assert!(!outstanding_requests.register_response(nonce, &shred, expire_timestamp + 1));
+        assert!(outstanding_requests.requests.get(&nonce).is_none());
     }
 
     #[test]
