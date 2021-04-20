@@ -85,6 +85,12 @@ impl<T> AccountMapEntryInner<T> {
     }
 }
 
+pub enum AccountIndexGetResult<T: 'static> {
+    Success(ReadAccountMapEntry<T>, usize),
+    NoRootFound(ReadAccountMapEntry<T>),
+    Missing(),
+}
+
 #[self_referencing]
 pub struct ReadAccountMapEntry<T: 'static> {
     owned_entry: AccountMapEntry<T>,
@@ -694,7 +700,9 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         for pubkey in index.get(index_key) {
             // Maybe these reads from the AccountsIndex can be batched every time it
             // grabs the read lock as well...
-            if let Some((list_r, index)) = self.get(&pubkey, Some(ancestors), max_root) {
+            if let AccountIndexGetResult::Success(list_r, index) =
+                self.get(&pubkey, Some(ancestors), max_root)
+            {
                 func(
                     &pubkey,
                     (&list_r.slot_list()[index].1, list_r.slot_list()[index].0),
@@ -936,13 +944,18 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         pubkey: &Pubkey,
         ancestors: Option<&Ancestors>,
         max_root: Option<Slot>,
-    ) -> Option<(ReadAccountMapEntry<T>, usize)> {
-        self.get_account_read_entry(pubkey)
-            .and_then(|locked_entry| {
-                let found_index =
-                    self.latest_slot(ancestors, &locked_entry.slot_list(), max_root)?;
-                Some((locked_entry, found_index))
-            })
+    ) -> AccountIndexGetResult<T> {
+        match self.get_account_read_entry(pubkey) {
+            Some(locked_entry) => {
+                let slot_list = locked_entry.slot_list();
+                let found_index = self.latest_slot(ancestors, slot_list, max_root);
+                match found_index {
+                    Some(found_index) => AccountIndexGetResult::Success(locked_entry, found_index),
+                    None => AccountIndexGetResult::NoRootFound(locked_entry),
+                }
+            }
+            None => AccountIndexGetResult::Missing(),
+        }
     }
 
     // Get the maximum root <= `max_allowed_root` from the given `slice`
@@ -1318,6 +1331,32 @@ pub mod tests {
         let mut account_indexes = HashSet::new();
         account_indexes.insert(AccountIndex::SplTokenOwner);
         account_indexes
+    }
+
+    impl<T: 'static> AccountIndexGetResult<T> {
+        pub fn unwrap(self) -> (ReadAccountMapEntry<T>, usize) {
+            match self {
+                AccountIndexGetResult::Success(lock, size) => (lock, size),
+                _ => {
+                    panic!("trying to unwrap AccountIndexGetResult with non-Success result");
+                }
+            }
+        }
+
+        pub fn is_none(&self) -> bool {
+            !self.is_some()
+        }
+
+        pub fn is_some(&self) -> bool {
+            matches!(self, AccountIndexGetResult::Success(_lock, _size))
+        }
+
+        pub fn map<U, F: FnOnce((ReadAccountMapEntry<T>, usize)) -> U>(self, f: F) -> Option<U> {
+            match self {
+                AccountIndexGetResult::Success(lock, size) => Some(f((lock, size))),
+                _ => None,
+            }
+        }
     }
 
     fn create_dashmap_secondary_index_state() -> (usize, usize, HashSet<AccountIndex>) {
