@@ -66,6 +66,7 @@ pub enum TransactionErrorType {
     InvalidProgramForExecution = 13,
     SanitizeFailure = 14,
     ClusterMaintenance = 15,
+    AccountBorrowOutstanding = 16,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]

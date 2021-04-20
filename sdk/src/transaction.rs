@@ -94,6 +94,10 @@ pub enum TransactionError {
 
     #[error("Transactions are currently disabled due to cluster maintenance")]
     ClusterMaintenance,
+
+    /// Transaction processing left an account with an outstanding borrowed reference
+    #[error("Transaction processing left an account with an outstanding borrowed reference")]
+    AccountBorrowOutstanding,
 }
 
 pub type Result<T> = result::Result<T, TransactionError>;
