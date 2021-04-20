@@ -16,13 +16,13 @@ where
 {
     // Returns boolean indicating whether sufficient time has passed for a request with
     // the given timestamp to be made
-    pub fn add_request(&mut self, request: T) -> Nonce {
+    pub fn add_request(&mut self, request: T, now: u64) -> Nonce {
         let num_expected_responses = request.num_expected_responses();
         let nonce = thread_rng().gen_range(0, Nonce::MAX);
         self.requests.put(
             nonce,
             RequestStatus {
-                expire_timestamp: timestamp() + DEFAULT_REQUEST_EXPIRATION_MS,
+                expire_timestamp: now + DEFAULT_REQUEST_EXPIRATION_MS,
                 num_expected_responses,
                 request,
             },
@@ -81,7 +81,7 @@ pub(crate) mod tests {
     fn test_add_request() {
         let repair_type = RepairType::Orphan(9);
         let mut outstanding_requests = OutstandingRequests::default();
-        let nonce = outstanding_requests.add_request(repair_type);
+        let nonce = outstanding_requests.add_request(repair_type, timestamp());
         let request_status = outstanding_requests.requests.get(&nonce).unwrap();
         assert_eq!(request_status.request, repair_type);
         assert_eq!(
@@ -94,7 +94,7 @@ pub(crate) mod tests {
     fn test_register_response() {
         let repair_type = RepairType::Orphan(9);
         let mut outstanding_requests = OutstandingRequests::default();
-        let nonce = outstanding_requests.add_request(repair_type);
+        let nonce = outstanding_requests.add_request(repair_type, timestamp());
 
         let shred = Shred::new_empty_data_shred();
         let mut expire_timestamp = outstanding_requests
@@ -139,7 +139,7 @@ pub(crate) mod tests {
         assert!(outstanding_requests.requests.get(&nonce).is_none());
 
         // If number of outstanding requests hits zero, should also remove the entry
-        let nonce = outstanding_requests.add_request(repair_type);
+        let nonce = outstanding_requests.add_request(repair_type, timestamp());
         expire_timestamp = outstanding_requests
             .requests
             .get(&nonce)

@@ -492,7 +492,7 @@ impl RepairService {
                 if let Some(repairs) = repairs {
                     let mut outstanding_requests = outstanding_requests.write().unwrap();
                     for repair_type in repairs {
-                        let nonce = outstanding_requests.add_request(repair_type);
+                        let nonce = outstanding_requests.add_request(repair_type, timestamp());
                         if let Err(e) = Self::serialize_and_send_request(
                             &repair_type,
                             repair_socket,

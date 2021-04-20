@@ -781,7 +781,7 @@ mod test {
         let nonce = outstanding_requests
             .write()
             .unwrap()
-            .add_request(repair_type);
+            .add_request(repair_type, timestamp());
         let repair_meta1 = RepairMeta { _from_addr, nonce };
         let mut repair_infos = vec![None, Some(repair_meta), Some(repair_meta1)];
         prune_shreds_invalid_repair(&mut shreds, &mut repair_infos, &outstanding_requests);

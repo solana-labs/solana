@@ -421,7 +421,8 @@ impl ServeRepair {
         };
         let n = weighted_index.sample(&mut rand::thread_rng());
         let addr = repair_peers[n].serve_repair; // send the request to the peer's serve_repair port
-        let nonce = outstanding_requests.add_request(repair_request);
+        let nonce =
+            outstanding_requests.add_request(repair_request, solana_sdk::timing::timestamp());
         let repair_peer_id = repair_peers[n].id;
         let out = self.map_repair_request(&repair_request, &repair_peer_id, repair_stats, nonce)?;
         Ok((addr, out))
