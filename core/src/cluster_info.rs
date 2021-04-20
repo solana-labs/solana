@@ -108,8 +108,8 @@ pub const MAX_SNAPSHOT_HASHES: usize = 16;
 const MAX_PRUNE_DATA_NODES: usize = 32;
 /// Number of bytes in the randomly generated token sent with ping messages.
 const GOSSIP_PING_TOKEN_SIZE: usize = 32;
-const GOSSIP_PING_CACHE_CAPACITY: usize = 16384;
-const GOSSIP_PING_CACHE_TTL: Duration = Duration::from_secs(640);
+const GOSSIP_PING_CACHE_CAPACITY: usize = 65536;
+const GOSSIP_PING_CACHE_TTL: Duration = Duration::from_secs(1280);
 pub const DEFAULT_CONTACT_DEBUG_INTERVAL_MILLIS: u64 = 10_000;
 pub const DEFAULT_CONTACT_SAVE_INTERVAL_MILLIS: u64 = 60_000;
 /// Minimum serialized size of a Protocol::PullResponse packet.
@@ -317,7 +317,7 @@ pub fn make_accounts_hashes_message(
     Some(CrdsValue::new_signed(message, keypair))
 }
 
-type Ping = ping_pong::Ping<[u8; GOSSIP_PING_TOKEN_SIZE]>;
+pub(crate) type Ping = ping_pong::Ping<[u8; GOSSIP_PING_TOKEN_SIZE]>;
 
 // TODO These messages should go through the gpu pipeline for spam filtering
 #[frozen_abi(digest = "CH5BWuhAyvUiUQYgu2Lcwu7eoiW6bQitvtLS1yFsdmrE")]
@@ -1566,21 +1566,29 @@ impl ClusterInfo {
         })
     }
 
+    #[allow(clippy::type_complexity)]
     fn new_pull_requests(
         &self,
         thread_pool: &ThreadPool,
         gossip_validators: Option<&HashSet<Pubkey>>,
         stakes: &HashMap<Pubkey, u64>,
-    ) -> Vec<(SocketAddr, Protocol)> {
+    ) -> (
+        Vec<(SocketAddr, Ping)>,     // Ping packets.
+        Vec<(SocketAddr, Protocol)>, // Pull requests
+    ) {
         let now = timestamp();
+        let mut pings = Vec::new();
         let mut pulls: Vec<_> = {
             let gossip = self.time_gossip_read_lock("new_pull_reqs", &self.stats.new_pull_requests);
             match gossip.new_pull_request(
                 thread_pool,
+                self.keypair.deref(),
                 now,
                 gossip_validators,
                 stakes,
                 MAX_BLOOM_SIZE,
+                &self.ping_cache,
+                &mut pings,
             ) {
                 Err(_) => Vec::default(),
                 Ok((peer, filters)) => vec![(peer, filters)],
@@ -1598,14 +1606,17 @@ impl ClusterInfo {
         }
         let self_info = CrdsData::ContactInfo(self.my_contact_info());
         let self_info = CrdsValue::new_signed(self_info, &self.keypair);
-        pulls
+        let pulls = pulls
             .into_iter()
             .flat_map(|(peer, filters)| std::iter::repeat(peer.gossip).zip(filters))
             .map(|(gossip_addr, filter)| {
                 let request = Protocol::PullRequest(filter, self_info.clone());
                 (gossip_addr, request)
-            })
-            .collect()
+            });
+        self.stats
+            .new_pull_requests_pings_count
+            .add_relaxed(pings.len() as u64);
+        (pings, pulls.collect())
     }
 
     fn drain_push_queue(&self) -> Vec<CrdsValue> {
@@ -1676,11 +1687,16 @@ impl ClusterInfo {
             .packets_sent_push_messages_count
             .add_relaxed(out.len() as u64);
         if generate_pull_requests {
-            let pull_requests = self.new_pull_requests(&thread_pool, gossip_validators, stakes);
+            let (pings, pull_requests) =
+                self.new_pull_requests(&thread_pool, gossip_validators, stakes);
             self.stats
                 .packets_sent_pull_requests_count
                 .add_relaxed(pull_requests.len() as u64);
+            let pings = pings
+                .into_iter()
+                .map(|(addr, ping)| (addr, Protocol::PingMessage(ping)));
             out.extend(pull_requests);
+            out.extend(pings);
         }
         out
     }
@@ -3576,6 +3592,11 @@ mod tests {
         let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
         let peer = ContactInfo::new_localhost(&peer_keypair.pubkey(), 0);
         let cluster_info = ClusterInfo::new(contact_info, Arc::new(keypair));
+        cluster_info
+            .ping_cache
+            .lock()
+            .unwrap()
+            .mock_pong(peer.id, peer.gossip, Instant::now());
         cluster_info.insert_info(peer);
         cluster_info
             .gossip
@@ -3594,16 +3615,20 @@ mod tests {
             .values()
             .for_each(|v| v.par_iter().for_each(|v| assert!(v.verify())));
 
+        let mut pings = Vec::new();
         cluster_info
             .gossip
             .write()
             .unwrap()
             .new_pull_request(
                 &thread_pool,
+                cluster_info.keypair.deref(),
                 timestamp(),
                 None,
                 &HashMap::new(),
                 MAX_BLOOM_SIZE,
+                &cluster_info.ping_cache,
+                &mut pings,
             )
             .ok()
             .unwrap();
@@ -3859,7 +3884,8 @@ mod tests {
         let entrypoint_pubkey = solana_sdk::pubkey::new_rand();
         let entrypoint = ContactInfo::new_localhost(&entrypoint_pubkey, timestamp());
         cluster_info.set_entrypoint(entrypoint.clone());
-        let pulls = cluster_info.new_pull_requests(&thread_pool, None, &HashMap::new());
+        let (pings, pulls) = cluster_info.new_pull_requests(&thread_pool, None, &HashMap::new());
+        assert!(pings.is_empty());
         assert_eq!(1, pulls.len() as u64);
         match pulls.get(0) {
             Some((addr, msg)) => {
@@ -3886,7 +3912,8 @@ mod tests {
             vec![entrypoint_crdsvalue],
             &timeouts,
         );
-        let pulls = cluster_info.new_pull_requests(&thread_pool, None, &HashMap::new());
+        let (pings, pulls) = cluster_info.new_pull_requests(&thread_pool, None, &HashMap::new());
+        assert_eq!(pings.len(), 1);
         assert_eq!(1, pulls.len() as u64);
         assert_eq!(*cluster_info.entrypoints.read().unwrap(), vec![entrypoint]);
     }
@@ -4062,26 +4089,34 @@ mod tests {
         let other_node_pubkey = solana_sdk::pubkey::new_rand();
         let other_node = ContactInfo::new_localhost(&other_node_pubkey, timestamp());
         assert_ne!(other_node.gossip, entrypoint.gossip);
+        cluster_info.ping_cache.lock().unwrap().mock_pong(
+            other_node.id,
+            other_node.gossip,
+            Instant::now(),
+        );
         cluster_info.insert_info(other_node.clone());
         stakes.insert(other_node_pubkey, 10);
 
         // Pull request 1:  `other_node` is present but `entrypoint` was just added (so it has a
         // fresh timestamp).  There should only be one pull request to `other_node`
-        let pulls = cluster_info.new_pull_requests(&thread_pool, None, &stakes);
+        let (pings, pulls) = cluster_info.new_pull_requests(&thread_pool, None, &stakes);
+        assert!(pings.is_empty());
         assert_eq!(1, pulls.len() as u64);
         assert_eq!(pulls.get(0).unwrap().0, other_node.gossip);
 
         // Pull request 2: pretend it's been a while since we've pulled from `entrypoint`.  There should
         // now be two pull requests
         cluster_info.entrypoints.write().unwrap()[0].wallclock = 0;
-        let pulls = cluster_info.new_pull_requests(&thread_pool, None, &stakes);
+        let (pings, pulls) = cluster_info.new_pull_requests(&thread_pool, None, &stakes);
+        assert!(pings.is_empty());
         assert_eq!(2, pulls.len() as u64);
         assert_eq!(pulls.get(0).unwrap().0, other_node.gossip);
         assert_eq!(pulls.get(1).unwrap().0, entrypoint.gossip);
 
         // Pull request 3:  `other_node` is present and `entrypoint` was just pulled from.  There should
         // only be one pull request to `other_node`
-        let pulls = cluster_info.new_pull_requests(&thread_pool, None, &stakes);
+        let (pings, pulls) = cluster_info.new_pull_requests(&thread_pool, None, &stakes);
+        assert!(pings.is_empty());
         assert_eq!(1, pulls.len() as u64);
         assert_eq!(pulls.get(0).unwrap().0, other_node.gossip);
     }

@@ -68,6 +68,7 @@ pub(crate) struct GossipStats {
     pub(crate) mark_pull_request: Counter,
     pub(crate) new_pull_requests: Counter,
     pub(crate) new_pull_requests_count: Counter,
+    pub(crate) new_pull_requests_pings_count: Counter,
     pub(crate) new_push_requests2: Counter,
     pub(crate) new_push_requests: Counter,
     pub(crate) new_push_requests_num: Counter,
@@ -240,6 +241,11 @@ pub(crate) fn submit_gossip_stats(stats: &GossipStats, gossip: &RwLock<CrdsGossi
         (
             "pull_request_ping_pong_check_failed_count",
             stats.pull_request_ping_pong_check_failed_count.clear(),
+            i64
+        ),
+        (
+            "new_pull_requests_pings_count",
+            stats.new_pull_requests_pings_count.clear(),
             i64
         ),
         (
