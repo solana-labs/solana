@@ -466,6 +466,7 @@ pub struct ProgramTest {
     builtins: Vec<Builtin>,
     bpf_compute_max_units: Option<u64>,
     prefer_bpf: bool,
+    use_bpf_jit: bool,
 }
 
 impl Default for ProgramTest {
@@ -495,6 +496,7 @@ impl Default for ProgramTest {
             builtins: vec![],
             bpf_compute_max_units: None,
             prefer_bpf,
+            use_bpf_jit: false,
         }
     }
 }
@@ -518,6 +520,11 @@ impl ProgramTest {
     /// Override the BPF compute budget
     pub fn set_bpf_compute_max_units(&mut self, bpf_compute_max_units: u64) {
         self.bpf_compute_max_units = Some(bpf_compute_max_units);
+    }
+
+    /// Execute the BPF program with JIT if true, interpreted if false
+    pub fn use_bpf_jit(&mut self, use_bpf_jit: bool) {
+        self.use_bpf_jit = use_bpf_jit;
     }
 
     /// Add an account to the test environment
@@ -688,11 +695,17 @@ impl ProgramTest {
 
         let mut bank = Bank::new(&genesis_config);
 
-        for loader in &[
-            solana_bpf_loader_deprecated_program!(),
-            solana_bpf_loader_program!(),
-        ] {
-            bank.add_builtin(&loader.0, loader.1, loader.2);
+        // Add loaders
+        macro_rules! add_builtin {
+            ($b:expr) => {
+                bank.add_builtin(&$b.0, $b.1, $b.2)
+            };
+        }
+        add_builtin!(solana_bpf_loader_deprecated_program!());
+        if self.use_bpf_jit {
+            add_builtin!(solana_bpf_loader_program_with_jit!());
+        } else {
+            add_builtin!(solana_bpf_loader_program!());
         }
 
         // Add commonly-used SPL programs as a convenience to the user
