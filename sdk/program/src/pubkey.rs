@@ -2,7 +2,11 @@
 use crate::{decode_error::DecodeError, hash::hashv};
 use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
 use num_derive::{FromPrimitive, ToPrimitive};
-use std::{convert::TryFrom, fmt, mem, str::FromStr};
+use std::{
+    convert::{Infallible, TryFrom},
+    fmt, mem,
+    str::FromStr,
+};
 use thiserror::Error;
 
 /// Number of bytes in a pubkey
@@ -64,7 +68,16 @@ pub enum ParsePubkeyError {
     WrongSize,
     #[error("Invalid Base58 string")]
     Invalid,
+    #[error("Infallible")]
+    Infallible,
 }
+
+impl From<Infallible> for ParsePubkeyError {
+    fn from(_: Infallible) -> Self {
+        Self::Infallible
+    }
+}
+
 impl<T> DecodeError<T> for ParsePubkeyError {
     fn type_of() -> &'static str {
         "ParsePubkeyError"
@@ -86,6 +99,13 @@ impl FromStr for Pubkey {
         } else {
             Ok(Pubkey::new(&pubkey_vec))
         }
+    }
+}
+
+impl TryFrom<&str> for Pubkey {
+    type Error = ParsePubkeyError;
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        Pubkey::from_str(s)
     }
 }
 
