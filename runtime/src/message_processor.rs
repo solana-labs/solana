@@ -520,7 +520,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             result = self
                 .account_db
                 .load_with_fixed_root(self.ancestors, id)
-                .map(|(account, _)| Rc::new(account.data().clone()));
+                .map(|(account, _)| Rc::new(account.data().to_vec()));
             // Cache it
             self.sysvars.push((*id, result.clone()));
         }
@@ -919,7 +919,7 @@ impl MessageProcessor {
                     dst_keyed_account.try_account_ref_mut()?.owner = src_keyed_account.owner;
                     dst_keyed_account
                         .try_account_ref_mut()?
-                        .set_data(src_keyed_account.data().clone());
+                        .set_data(src_keyed_account.data().to_vec());
                 }
             }
         }
