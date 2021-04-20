@@ -94,7 +94,7 @@ pub trait WritableAccount: ReadableAccount {
 
 pub trait ReadableAccount: Sized {
     fn lamports(&self) -> u64;
-    fn data(&self) -> &Vec<u8>;
+    fn data(&self) -> &[u8];
     fn owner(&self) -> &Pubkey;
     fn executable(&self) -> bool;
     fn rent_epoch(&self) -> Epoch;
@@ -104,7 +104,7 @@ impl ReadableAccount for Account {
     fn lamports(&self) -> u64 {
         self.lamports
     }
-    fn data(&self) -> &Vec<u8> {
+    fn data(&self) -> &[u8] {
         &self.data
     }
     fn owner(&self) -> &Pubkey {
@@ -189,7 +189,7 @@ impl ReadableAccount for AccountSharedData {
     fn lamports(&self) -> u64 {
         self.lamports
     }
-    fn data(&self) -> &Vec<u8> {
+    fn data(&self) -> &[u8] {
         &self.data
     }
     fn owner(&self) -> &Pubkey {
@@ -207,7 +207,7 @@ impl ReadableAccount for Ref<'_, AccountSharedData> {
     fn lamports(&self) -> u64 {
         self.lamports
     }
-    fn data(&self) -> &Vec<u8> {
+    fn data(&self) -> &[u8] {
         &self.data
     }
     fn owner(&self) -> &Pubkey {
@@ -225,7 +225,7 @@ impl ReadableAccount for Ref<'_, Account> {
     fn lamports(&self) -> u64 {
         self.lamports
     }
-    fn data(&self) -> &Vec<u8> {
+    fn data(&self) -> &[u8] {
         &self.data
     }
     fn owner(&self) -> &Pubkey {

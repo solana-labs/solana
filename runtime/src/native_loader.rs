@@ -154,7 +154,7 @@ impl NativeLoader {
             // still exists even after invoke_context.remove_first_keyed_account() is called
             (
                 *program.unsigned_key(),
-                &program.try_account_ref()?.data().clone(),
+                &program.try_account_ref()?.data().to_vec(),
             )
         };
 
