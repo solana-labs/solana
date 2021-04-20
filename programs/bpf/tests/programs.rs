@@ -217,7 +217,7 @@ fn run_program(
             let mut vm = create_vm(
                 &loader_id,
                 executable.as_ref(),
-                &mut parameter_bytes,
+                parameter_bytes.as_slice_mut(),
                 &mut invoke_context,
             )
             .unwrap();
@@ -256,7 +256,7 @@ fn run_program(
         deserialize_parameters(
             &bpf_loader::id(),
             parameter_accounts,
-            &parameter_bytes,
+            parameter_bytes.as_slice(),
             true,
         )
         .unwrap();
