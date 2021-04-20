@@ -117,7 +117,7 @@ fn test_bad_bank_hash() {
             assert_eq!(
                 db.load_account_hash(&ancestors, &key, None, LoadHint::Unspecified)
                     .unwrap(),
-                AccountsDb::hash_account(some_slot, &account, &key)
+                AccountsDb::hash_account(some_slot, *account, &key)
             );
         }
         existing.clear();
