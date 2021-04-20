@@ -1879,7 +1879,7 @@ fn check_authorized_program(
         || bpf_loader::check_id(program_id)
         || bpf_loader_deprecated::check_id(program_id)
         || (bpf_loader_upgradeable::check_id(program_id)
-            && !bpf_loader_upgradeable::is_upgrade_instruction(instruction_data))
+            && !bpf_loader_upgradeable::is_cli_authorized_instruction(instruction_data))
     {
         return Err(SyscallError::ProgramNotSupported(*program_id).into());
     }
