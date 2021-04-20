@@ -96,6 +96,10 @@ use tokio::runtime::Runtime;
 pub const MAX_REQUEST_PAYLOAD_SIZE: usize = 50 * (1 << 10); // 50kB
 pub const PERFORMANCE_SAMPLES_LIMIT: usize = 720;
 
+// Limit the length of the `epoch_credits` array for each validator in a `get_vote_accounts`
+// response
+const MAX_RPC_EPOCH_CREDITS_HISTORY: usize = 5;
+
 fn new_response<T>(bank: &Bank, value: T) -> RpcResponse<T> {
     let context = RpcResponseContext { slot: bank.slot() };
     Response { context, value }
@@ -719,13 +723,25 @@ impl JsonRpcRequestProcessor {
                 } else {
                     0
                 };
+
+                let epoch_credits = vote_state.epoch_credits();
+                let epoch_credits = if epoch_credits.len() > MAX_RPC_EPOCH_CREDITS_HISTORY {
+                    epoch_credits
+                        .iter()
+                        .skip(epoch_credits.len() - MAX_RPC_EPOCH_CREDITS_HISTORY)
+                        .cloned()
+                        .collect()
+                } else {
+                    epoch_credits.clone()
+                };
+
                 RpcVoteAccountInfo {
                     vote_pubkey: (pubkey).to_string(),
                     node_pubkey: vote_state.node_pubkey.to_string(),
                     activated_stake: *activated_stake,
                     commission: vote_state.commission,
                     root_slot: vote_state.root_slot.unwrap_or(0),
-                    epoch_credits: vote_state.epoch_credits().clone(),
+                    epoch_credits,
                     epoch_vote_account: epoch_vote_accounts.contains_key(pubkey),
                     last_vote,
                 }
@@ -5908,8 +5924,7 @@ pub mod tests {
             }
         }
 
-        // Advance bank to the next epoch
-        for _ in 0..TEST_SLOTS_PER_EPOCH {
+        let mut advance_bank = || {
             bank.freeze();
 
             // Votes
@@ -5950,6 +5965,11 @@ pub mod tests {
 
             bank.process_transaction(&transaction)
                 .expect("process transaction");
+        };
+
+        // Advance bank to the next epoch
+        for _ in 0..TEST_SLOTS_PER_EPOCH {
+            advance_bank();
         }
 
         let req = format!(
@@ -5969,7 +5989,6 @@ pub mod tests {
 
         // Both accounts should be active and have voting history.
         assert_eq!(vote_account_status.current.len(), 2);
-        //let leader_info = &vote_account_status.current[0];
         let leader_info = vote_account_status
             .current
             .iter()
@@ -5985,6 +6004,30 @@ pub mod tests {
                 (1, expected_credits + 1, expected_credits) // one vote in current epoch
             ]
         );
+
+        // Overflow the epoch credits history and ensure only `MAX_RPC_EPOCH_CREDITS_HISTORY`
+        // results are returned
+        for _ in 0..(TEST_SLOTS_PER_EPOCH * (MAX_RPC_EPOCH_CREDITS_HISTORY) as u64) {
+            advance_bank();
+        }
+
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getVoteAccounts","params":{}}}"#,
+            json!([CommitmentConfig::processed()])
+        );
+
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+
+        let vote_account_status: RpcVoteAccountStatus =
+            serde_json::from_value(result["result"].clone()).unwrap();
+
+        assert!(vote_account_status.delinquent.is_empty());
+        assert!(!vote_account_status
+            .current
+            .iter()
+            .any(|x| x.epoch_credits.len() != MAX_RPC_EPOCH_CREDITS_HISTORY));
 
         // Advance bank with no voting
         bank.freeze();
