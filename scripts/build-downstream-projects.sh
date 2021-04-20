@@ -63,6 +63,7 @@ spl() {
     rm -rf spl
     git clone https://github.com/solana-labs/solana-program-library.git spl
     cd spl
+    git checkout 589da55e2994d04d87db461ed0a0457a5096970d
 
     ./patch.crates-io.sh "$solana_dir"
 
