@@ -421,7 +421,7 @@ mod tests {
             assert_eq!(key, *account_info.key);
             let account = account.borrow();
             assert_eq!(account.lamports, account_info.lamports());
-            assert_eq!(&account.data()[..], &account_info.data.borrow()[..]);
+            assert_eq!(&account.data(), &account_info.data.borrow()[..]);
             assert_eq!(&account.owner, account_info.owner);
             assert_eq!(account.executable, account_info.executable);
             assert_eq!(account.rent_epoch, account_info.rent_epoch);
@@ -461,7 +461,7 @@ mod tests {
             let account = account.borrow();
             assert_eq!(account.lamports, de_keyed_account.lamports().unwrap());
             assert_eq!(
-                &account.data()[..],
+                &account.data(),
                 &de_keyed_account.try_account_ref().unwrap().data()[..]
             );
             assert_eq!(account.owner, de_keyed_account.owner().unwrap());
@@ -487,7 +487,7 @@ mod tests {
             assert_eq!(key, *account_info.key);
             let account = account.borrow();
             assert_eq!(account.lamports, account_info.lamports());
-            assert_eq!(&account.data()[..], &account_info.data.borrow()[..]);
+            assert_eq!(&account.data(), &account_info.data.borrow()[..]);
             assert_eq!(&account.owner, account_info.owner);
             assert_eq!(account.executable, account_info.executable);
             assert_eq!(account.rent_epoch, account_info.rent_epoch);
@@ -520,7 +520,7 @@ mod tests {
             let account = account.borrow();
             assert_eq!(account.lamports, de_keyed_account.lamports().unwrap());
             assert_eq!(
-                &account.data()[..],
+                &account.data(),
                 &de_keyed_account.try_account_ref().unwrap().data()[..]
             );
             assert_eq!(account.owner, de_keyed_account.owner().unwrap());
