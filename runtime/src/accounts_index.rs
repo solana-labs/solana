@@ -85,6 +85,12 @@ impl<T> AccountMapEntryInner<T> {
     }
 }
 
+pub enum AccountIndexGetResult<T: 'static> {
+    LatestFound(ReadAccountMapEntry<T>, usize, Slot),
+    NoRootFound(ReadAccountMapEntry<T>),
+    Missing(),
+}
+
 #[self_referencing]
 pub struct ReadAccountMapEntry<T: 'static> {
     owned_entry: AccountMapEntry<T>,
@@ -931,18 +937,38 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
 
     /// Get an account
     /// The latest account that appears in `ancestors` or `roots` is returned.
+    pub(crate) fn get2<'a, 'b>(
+        &'a self,
+        pubkey: &'b Pubkey,
+        ancestors: Option<&'b Ancestors>,
+        max_root: Option<Slot>,
+    ) -> AccountIndexGetResult<T> {
+        match self.get_account_read_entry(pubkey) {
+            Some(locked_entry) => {
+                let slot_list = &locked_entry.slot_list();
+                let found_index = self.latest_slot(ancestors, slot_list, max_root);
+                match found_index {
+                    Some(found_index) => {
+                        let slot = slot_list[found_index].0;
+                        AccountIndexGetResult::LatestFound(locked_entry, found_index, slot)
+                    }
+                    None => AccountIndexGetResult::NoRootFound(locked_entry),
+                }
+            }
+            None => AccountIndexGetResult::Missing(),
+        }
+    }
+
     pub(crate) fn get(
         &self,
         pubkey: &Pubkey,
         ancestors: Option<&Ancestors>,
         max_root: Option<Slot>,
     ) -> Option<(ReadAccountMapEntry<T>, usize)> {
-        self.get_account_read_entry(pubkey)
-            .and_then(|locked_entry| {
-                let found_index =
-                    self.latest_slot(ancestors, &locked_entry.slot_list(), max_root)?;
-                Some((locked_entry, found_index))
-            })
+        match self.get2(pubkey, ancestors, max_root) {
+            AccountIndexGetResult::LatestFound(lock, index, _slot) => Some((lock, index)),
+            _ => None,
+        }
     }
 
     // Get the maximum root <= `max_allowed_root` from the given `slice`
