@@ -4,9 +4,10 @@ use crate::{
     cluster_info::ClusterInfo,
     cluster_info_vote_listener::VerifiedVoteReceiver,
     cluster_slots::ClusterSlots,
+    outstanding_requests::OutstandingRequests,
     repair_weight::RepairWeight,
     result::Result,
-    serve_repair::{RepairType, ServeRepair, DEFAULT_NONCE},
+    serve_repair::{RepairType, ServeRepair},
 };
 use crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender};
 use solana_ledger::{
@@ -32,6 +33,8 @@ use std::{
 
 pub type DuplicateSlotsResetSender = CrossbeamSender<Slot>;
 pub type DuplicateSlotsResetReceiver = CrossbeamReceiver<Slot>;
+
+pub type OutstandingRepairs = OutstandingRequests<RepairType>;
 
 #[derive(Default, Debug)]
 pub struct SlotRepairs {
@@ -145,6 +148,7 @@ impl RepairService {
         repair_info: RepairInfo,
         cluster_slots: Arc<ClusterSlots>,
         verified_vote_receiver: VerifiedVoteReceiver,
+        outstanding_requests: Arc<RwLock<OutstandingRepairs>>,
     ) -> Self {
         let t_repair = Builder::new()
             .name("solana-repair-service".to_string())
@@ -157,6 +161,7 @@ impl RepairService {
                     repair_info,
                     &cluster_slots,
                     verified_vote_receiver,
+                    &outstanding_requests,
                 )
             })
             .unwrap();
@@ -172,6 +177,7 @@ impl RepairService {
         repair_info: RepairInfo,
         cluster_slots: &ClusterSlots,
         verified_vote_receiver: VerifiedVoteReceiver,
+        outstanding_requests: &RwLock<OutstandingRepairs>,
     ) {
         let mut repair_weight = RepairWeight::new(repair_info.bank_forks.read().unwrap().root());
         let serve_repair = ServeRepair::new(cluster_info.clone());
@@ -190,6 +196,7 @@ impl RepairService {
             let mut set_root_elapsed;
             let mut get_votes_elapsed;
             let mut add_votes_elapsed;
+
             let repairs = {
                 let root_bank = repair_info.bank_forks.read().unwrap().root_bank().clone();
                 let new_root = root_bank.slot();
@@ -261,6 +268,7 @@ impl RepairService {
 
             let mut cache = HashMap::new();
             let mut send_repairs_elapsed = Measure::start("send_repairs_elapsed");
+            let mut outstanding_requests = outstanding_requests.write().unwrap();
             repairs.into_iter().for_each(|repair_request| {
                 if let Ok((to, req)) = serve_repair.repair_request(
                     &cluster_slots,
@@ -268,6 +276,7 @@ impl RepairService {
                     &mut cache,
                     &mut repair_stats,
                     &repair_info.repair_validators,
+                    &mut outstanding_requests,
                 ) {
                     repair_socket.send_to(&req, to).unwrap_or_else(|e| {
                         info!("{} repair req send_to({}) error {:?}", id, to, e);
@@ -467,6 +476,7 @@ impl RepairService {
         repair_stats: &mut RepairStats,
         repair_socket: &UdpSocket,
         repair_validators: &Option<HashSet<Pubkey>>,
+        outstanding_requests: &RwLock<OutstandingRepairs>,
     ) {
         duplicate_slot_repair_statuses.retain(|slot, status| {
             Self::update_duplicate_slot_repair_addr(
@@ -480,7 +490,9 @@ impl RepairService {
                 let repairs = Self::generate_duplicate_repairs_for_slot(&blockstore, *slot);
 
                 if let Some(repairs) = repairs {
+                    let mut outstanding_requests = outstanding_requests.write().unwrap();
                     for repair_type in repairs {
+                        let nonce = outstanding_requests.add_request(repair_type, timestamp());
                         if let Err(e) = Self::serialize_and_send_request(
                             &repair_type,
                             repair_socket,
@@ -488,7 +500,7 @@ impl RepairService {
                             &repair_addr,
                             serve_repair,
                             repair_stats,
-                            DEFAULT_NONCE,
+                            nonce,
                         ) {
                             info!(
                                 "repair req send_to {} ({}) error {:?}",
@@ -688,7 +700,7 @@ mod test {
                     MAX_ORPHANS,
                     MAX_REPAIR_LENGTH,
                     &HashSet::default(),
-                    None
+                    None,
                 ),
                 vec![RepairType::Orphan(2), RepairType::HighestShred(0, 0)]
             );
@@ -987,6 +999,7 @@ mod test {
             &mut RepairStats::default(),
             &UdpSocket::bind("0.0.0.0:0").unwrap(),
             &None,
+            &RwLock::new(OutstandingRequests::default()),
         );
         assert!(duplicate_slot_repair_statuses
             .get(&dead_slot)
@@ -1011,6 +1024,7 @@ mod test {
             &mut RepairStats::default(),
             &UdpSocket::bind("0.0.0.0:0").unwrap(),
             &None,
+            &RwLock::new(OutstandingRequests::default()),
         );
         assert_eq!(duplicate_slot_repair_statuses.len(), 1);
         assert!(duplicate_slot_repair_statuses.get(&dead_slot).is_some());
@@ -1028,6 +1042,7 @@ mod test {
             &mut RepairStats::default(),
             &UdpSocket::bind("0.0.0.0:0").unwrap(),
             &None,
+            &RwLock::new(OutstandingRequests::default()),
         );
         assert!(duplicate_slot_repair_statuses.is_empty());
     }

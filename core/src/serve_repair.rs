@@ -3,13 +3,17 @@ use crate::{
     cluster_slots::ClusterSlots,
     contact_info::ContactInfo,
     repair_response,
-    repair_service::RepairStats,
+    repair_service::{OutstandingRepairs, RepairStats},
+    request_response::RequestResponse,
     result::{Error, Result},
     weighted_shuffle::weighted_best,
 };
 use bincode::serialize;
 use rand::distributions::{Distribution, WeightedIndex};
-use solana_ledger::{blockstore::Blockstore, shred::Nonce};
+use solana_ledger::{
+    blockstore::Blockstore,
+    shred::{Nonce, Shred},
+};
 use solana_measure::measure::Measure;
 use solana_metrics::inc_new_counter_debug;
 use solana_perf::packet::{limited_deserialize, Packets, PacketsRecycler};
@@ -31,7 +35,6 @@ use std::{
 
 /// the number of slots to respond with when responding to `Orphan` requests
 pub const MAX_ORPHAN_REPAIR_RESPONSES: usize = 10;
-pub const DEFAULT_NONCE: u32 = 42;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum RepairType {
@@ -46,6 +49,28 @@ impl RepairType {
             RepairType::Orphan(slot) => *slot,
             RepairType::HighestShred(slot, _) => *slot,
             RepairType::Shred(slot, _) => *slot,
+        }
+    }
+}
+
+impl RequestResponse for RepairType {
+    type Response = Shred;
+    fn num_expected_responses(&self) -> u32 {
+        match self {
+            RepairType::Orphan(_) => (MAX_ORPHAN_REPAIR_RESPONSES + 1) as u32, // run_orphan uses <= MAX_ORPHAN_REPAIR_RESPONSES
+            RepairType::HighestShred(_, _) => 1,
+            RepairType::Shred(_, _) => 1,
+        }
+    }
+    fn verify_response(&self, response_shred: &Shred) -> bool {
+        match self {
+            RepairType::Orphan(slot) => response_shred.slot() <= *slot,
+            RepairType::HighestShred(slot, index) => {
+                response_shred.slot() as u64 == *slot && response_shred.index() as u64 >= *index
+            }
+            RepairType::Shred(slot, index) => {
+                response_shred.slot() as u64 == *slot && response_shred.index() as u64 == *index
+            }
         }
     }
 }
@@ -376,6 +401,7 @@ impl ServeRepair {
         cache: &mut RepairCache,
         repair_stats: &mut RepairStats,
         repair_validators: &Option<HashSet<Pubkey>>,
+        outstanding_requests: &mut OutstandingRepairs,
     ) -> Result<(SocketAddr, Vec<u8>)> {
         // find a peer that appears to be accepting replication and has the desired slot, as indicated
         // by a valid tvu port location
@@ -395,13 +421,10 @@ impl ServeRepair {
         };
         let n = weighted_index.sample(&mut rand::thread_rng());
         let addr = repair_peers[n].serve_repair; // send the request to the peer's serve_repair port
+        let nonce =
+            outstanding_requests.add_request(repair_request, solana_sdk::timing::timestamp());
         let repair_peer_id = repair_peers[n].id;
-        let out = self.map_repair_request(
-            &repair_request,
-            &repair_peer_id,
-            repair_stats,
-            DEFAULT_NONCE,
-        )?;
+        let out = self.map_repair_request(&repair_request, &repair_peer_id, repair_stats, nonce)?;
         Ok((addr, out))
     }
 
@@ -592,6 +615,7 @@ mod tests {
             max_ticks_per_n_shreds, CodingShredHeader, DataShredHeader, Shred, ShredCommonHeader,
         },
     };
+    use solana_perf::packet::Packet;
     use solana_sdk::{hash::Hash, pubkey::Pubkey, timing::timestamp};
 
     #[test]
@@ -634,6 +658,8 @@ mod tests {
                 nonce,
             )
             .expect("packets");
+            let request = RepairType::HighestShred(slot, index);
+            verify_responses(&request, rv.packets.iter());
 
             let rv: Vec<Shred> = rv
                 .packets
@@ -731,6 +757,8 @@ mod tests {
                 nonce,
             )
             .expect("packets");
+            let request = RepairType::Shred(slot, index);
+            verify_responses(&request, rv.packets.iter());
             let rv: Vec<Shred> = rv
                 .packets
                 .into_iter()
@@ -752,12 +780,14 @@ mod tests {
         let me = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
         let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(me));
         let serve_repair = ServeRepair::new(cluster_info.clone());
+        let mut outstanding_requests = OutstandingRepairs::default();
         let rv = serve_repair.repair_request(
             &cluster_slots,
             RepairType::Shred(0, 0),
             &mut HashMap::new(),
             &mut RepairStats::default(),
             &None,
+            &mut outstanding_requests,
         );
         assert_matches!(rv, Err(Error::ClusterInfoError(ClusterInfoError::NoPeers)));
 
@@ -785,6 +815,7 @@ mod tests {
                 &mut HashMap::new(),
                 &mut RepairStats::default(),
                 &None,
+                &mut outstanding_requests,
             )
             .unwrap();
         assert_eq!(nxt.serve_repair, serve_repair_addr);
@@ -818,6 +849,7 @@ mod tests {
                     &mut HashMap::new(),
                     &mut RepairStats::default(),
                     &None,
+                    &mut outstanding_requests,
                 )
                 .unwrap();
             if rv.0 == serve_repair_addr {
@@ -886,6 +918,9 @@ mod tests {
             .collect();
 
             // Verify responses
+            let request = RepairType::Orphan(slot);
+            verify_responses(&request, rv.iter());
+
             let expected: Vec<_> = (slot..slot + num_slots)
                 .rev()
                 .filter_map(|slot| {
@@ -994,6 +1029,7 @@ mod tests {
                     &mut HashMap::new(),
                     &mut RepairStats::default(),
                     &trusted_validators,
+                    &mut OutstandingRepairs::default(),
                 )
                 .is_err());
         }
@@ -1010,6 +1046,7 @@ mod tests {
                 &mut HashMap::new(),
                 &mut RepairStats::default(),
                 &trusted_validators,
+                &mut OutstandingRepairs::default(),
             )
             .is_ok());
 
@@ -1030,7 +1067,68 @@ mod tests {
                 &mut HashMap::new(),
                 &mut RepairStats::default(),
                 &None,
+                &mut OutstandingRepairs::default(),
             )
             .is_ok());
+    }
+
+    #[test]
+    fn test_verify_response() {
+        let repair = RepairType::Orphan(9);
+        // Ensure new options are addded to this test
+        match repair {
+            RepairType::Orphan(_) => (),
+            RepairType::HighestShred(_, _) => (),
+            RepairType::Shred(_, _) => (),
+        };
+
+        let slot = 9;
+        let index = 5;
+
+        // Orphan
+        let mut shred = Shred::new_empty_data_shred();
+        shred.set_slot(slot);
+        let request = RepairType::Orphan(slot);
+        assert!(request.verify_response(&shred));
+        shred.set_slot(slot - 1);
+        assert!(request.verify_response(&shred));
+        shred.set_slot(slot + 1);
+        assert!(!request.verify_response(&shred));
+
+        // HighestShred
+        shred = Shred::new_empty_data_shred();
+        shred.set_slot(slot);
+        shred.set_index(index);
+        let request = RepairType::HighestShred(slot, index as u64);
+        assert!(request.verify_response(&shred));
+        shred.set_index(index + 1);
+        assert!(request.verify_response(&shred));
+        shred.set_index(index - 1);
+        assert!(!request.verify_response(&shred));
+        shred.set_slot(slot - 1);
+        shred.set_index(index);
+        assert!(!request.verify_response(&shred));
+        shred.set_slot(slot + 1);
+        assert!(!request.verify_response(&shred));
+
+        // Shred
+        shred = Shred::new_empty_data_shred();
+        shred.set_slot(slot);
+        shred.set_index(index);
+        let request = RepairType::Shred(slot, index as u64);
+        assert!(request.verify_response(&shred));
+        shred.set_index(index + 1);
+        assert!(!request.verify_response(&shred));
+        shred.set_slot(slot + 1);
+        shred.set_index(index);
+        assert!(!request.verify_response(&shred));
+    }
+
+    fn verify_responses<'a>(request: &RepairType, packets: impl Iterator<Item = &'a Packet>) {
+        for packet in packets {
+            let shred_payload = packet.data.to_vec();
+            let shred = Shred::new_from_serialized_shred(shred_payload).unwrap();
+            request.verify_response(&shred);
+        }
     }
 }

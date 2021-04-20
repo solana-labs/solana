@@ -6,10 +6,10 @@ use crate::{
     cluster_info_vote_listener::VerifiedVoteReceiver,
     cluster_slots::ClusterSlots,
     completed_data_sets_service::CompletedDataSetsSender,
+    outstanding_requests::OutstandingRequests,
     repair_response,
-    repair_service::{RepairInfo, RepairService},
+    repair_service::{OutstandingRepairs, RepairInfo, RepairService},
     result::{Error, Result},
-    serve_repair::DEFAULT_NONCE,
 };
 use crossbeam_channel::{
     unbounded, Receiver as CrossbeamReceiver, RecvTimeoutError, Sender as CrossbeamSender,
@@ -28,6 +28,7 @@ use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use solana_sdk::{clock::Slot, packet::PACKET_DATA_SIZE, pubkey::Pubkey, timing::duration_as_ms};
 use solana_streamer::streamer::PacketSender;
+use std::collections::HashSet;
 use std::{
     net::{SocketAddr, UdpSocket},
     sync::atomic::{AtomicBool, Ordering},
@@ -123,11 +124,48 @@ fn run_check_duplicate(
     Ok(())
 }
 
-fn verify_repair(repair_info: &Option<RepairMeta>) -> bool {
-    repair_info
+fn verify_repair(
+    outstanding_requests: &mut OutstandingRepairs,
+    shred: &Shred,
+    repair_meta: &Option<RepairMeta>,
+) -> bool {
+    repair_meta
         .as_ref()
-        .map(|repair_info| repair_info.nonce == DEFAULT_NONCE)
+        .map(|repair_meta| {
+            outstanding_requests.register_response(
+                repair_meta.nonce,
+                &shred,
+                solana_sdk::timing::timestamp(),
+            )
+        })
         .unwrap_or(true)
+}
+
+fn prune_shreds_invalid_repair(
+    shreds: &mut Vec<Shred>,
+    repair_infos: &mut Vec<Option<RepairMeta>>,
+    outstanding_requests: &Arc<RwLock<OutstandingRepairs>>,
+) {
+    assert_eq!(shreds.len(), repair_infos.len());
+    let mut i = 0;
+    let mut removed = HashSet::new();
+    {
+        let mut outstanding_requests = outstanding_requests.write().unwrap();
+        shreds.retain(|shred| {
+            let should_keep = (
+                verify_repair(&mut outstanding_requests, &shred, &repair_infos[i]),
+                i += 1,
+            )
+                .0;
+            if !should_keep {
+                removed.insert(i - 1);
+            }
+            should_keep
+        });
+    }
+    i = 0;
+    repair_infos.retain(|_repair_info| (!removed.contains(&i), i += 1).0);
+    assert_eq!(shreds.len(), repair_infos.len());
 }
 
 fn run_insert<F>(
@@ -137,6 +175,7 @@ fn run_insert<F>(
     handle_duplicate: F,
     metrics: &mut BlockstoreInsertionMetrics,
     completed_data_sets_sender: &CompletedDataSetsSender,
+    outstanding_requests: &Arc<RwLock<OutstandingRepairs>>,
 ) -> Result<()>
 where
     F: Fn(Shred),
@@ -148,11 +187,7 @@ where
         repair_infos.extend(more_repair_infos);
     }
 
-    assert_eq!(shreds.len(), repair_infos.len());
-    let mut i = 0;
-    shreds.retain(|_shred| (verify_repair(&repair_infos[i]), i += 1).0);
-    repair_infos.retain(|repair_info| verify_repair(&repair_info));
-    assert_eq!(shreds.len(), repair_infos.len());
+    prune_shreds_invalid_repair(&mut shreds, &mut repair_infos, outstanding_requests);
 
     let (completed_data_sets, inserted_indices) = blockstore.insert_shreds_handle_duplicate(
         shreds,
@@ -334,6 +369,9 @@ impl WindowService {
             + std::marker::Send
             + std::marker::Sync,
     {
+        let outstanding_requests: Arc<RwLock<OutstandingRepairs>> =
+            Arc::new(RwLock::new(OutstandingRequests::default()));
+
         let bank_forks = Some(repair_info.bank_forks.clone());
 
         let repair_service = RepairService::new(
@@ -344,6 +382,7 @@ impl WindowService {
             repair_info,
             cluster_slots,
             verified_vote_receiver,
+            outstanding_requests.clone(),
         );
 
         let (insert_sender, insert_receiver) = unbounded();
@@ -364,6 +403,7 @@ impl WindowService {
             insert_receiver,
             duplicate_sender,
             completed_data_sets_sender,
+            outstanding_requests,
         );
 
         let t_window = Self::start_recv_window_thread(
@@ -424,6 +464,7 @@ impl WindowService {
         insert_receiver: CrossbeamReceiver<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
         check_duplicate_sender: CrossbeamSender<Shred>,
         completed_data_sets_sender: CompletedDataSetsSender,
+        outstanding_requests: Arc<RwLock<OutstandingRepairs>>,
     ) -> JoinHandle<()> {
         let exit = exit.clone();
         let blockstore = blockstore.clone();
@@ -453,6 +494,7 @@ impl WindowService {
                         &handle_duplicate,
                         &mut metrics,
                         &completed_data_sets_sender,
+                        &outstanding_requests,
                     ) {
                         if Self::should_exit_on_error(e, &mut handle_timeout, &handle_error) {
                             break;
@@ -719,5 +761,32 @@ mod test {
             duplicate_slot_receiver.try_recv().unwrap(),
             duplicate_shred_slot
         );
+    }
+
+    #[test]
+    fn test_prune_shreds() {
+        use crate::serve_repair::RepairType;
+        use std::net::{IpAddr, Ipv4Addr};
+        solana_logger::setup();
+        let (common, coding) = Shredder::new_coding_shred_header(5, 5, 5, 6, 6, 0, 0);
+        let shred = Shred::new_empty_from_header(common, DataShredHeader::default(), coding);
+        let mut shreds = vec![shred.clone(), shred.clone(), shred];
+        let _from_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
+        let repair_meta = RepairMeta {
+            _from_addr,
+            nonce: 0,
+        };
+        let outstanding_requests = Arc::new(RwLock::new(OutstandingRepairs::default()));
+        let repair_type = RepairType::Orphan(9);
+        let nonce = outstanding_requests
+            .write()
+            .unwrap()
+            .add_request(repair_type, timestamp());
+        let repair_meta1 = RepairMeta { _from_addr, nonce };
+        let mut repair_infos = vec![None, Some(repair_meta), Some(repair_meta1)];
+        prune_shreds_invalid_repair(&mut shreds, &mut repair_infos, &outstanding_requests);
+        assert_eq!(repair_infos.len(), 2);
+        assert!(repair_infos[0].is_none());
+        assert_eq!(repair_infos[1].as_ref().unwrap().nonce, nonce);
     }
 }
