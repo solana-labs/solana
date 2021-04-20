@@ -2202,7 +2202,7 @@ mod tests {
             vec![AccountMeta::new(solana_sdk::pubkey::new_rand(), false)],
         );
         let addr = &instruction as *const _ as u64;
-        let memory_mapping = MemoryMapping::new::<UserError>(
+        let mut memory_mapping = MemoryMapping::new::<UserError>(
             vec![MemoryRegion {
                 host_addr: addr,
                 vm_addr: 96,
@@ -2216,10 +2216,10 @@ mod tests {
         let translated_instruction =
             translate_type::<Instruction>(&memory_mapping, 96, &bpf_loader::id(), true).unwrap();
         assert_eq!(instruction, *translated_instruction);
-        // TODO: Reenable when solana_rbpf is bumped to "0.2.8" or higher
-        // Text search anchor so that it is easier to find: solana_rbpf = "=0.2.7"
-        // memory_mapping.resize_region::<BpfError>(0, 1).unwrap();
-        // assert!(translate_type::<Instruction>(&memory_mapping, 100, &bpf_loader::id()).is_err());
+        memory_mapping.resize_region::<BpfError>(0, 1).unwrap();
+        assert!(
+            translate_type::<Instruction>(&memory_mapping, 100, &bpf_loader::id(), true).is_err()
+        );
     }
 
     #[test]
