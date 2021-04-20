@@ -303,14 +303,31 @@ pub struct CliValidatorsStakeByVersion {
     pub delinquent_active_stake: u64,
 }
 
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone, Copy)]
+pub enum CliValidatorsSortOrder {
+    Delinquent,
+    Commission,
+    EpochCredits,
+    Identity,
+    LastVote,
+    Root,
+    Stake,
+    VoteAccount,
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CliValidators {
     pub total_active_stake: u64,
     pub total_current_stake: u64,
     pub total_delinquent_stake: u64,
-    pub current_validators: Vec<CliValidator>,
-    pub delinquent_validators: Vec<CliValidator>,
+    pub validators: Vec<CliValidator>,
+    #[serde(skip_serializing)]
+    pub validators_sort_order: CliValidatorsSortOrder,
+    #[serde(skip_serializing)]
+    pub validators_reverse_sort: bool,
+    #[serde(skip_serializing)]
+    pub number_validators: bool,
     pub stake_by_version: BTreeMap<String, CliValidatorsStakeByVersion>,
     #[serde(skip_serializing)]
     pub use_lamports_unit: bool,
@@ -326,7 +343,6 @@ impl fmt::Display for CliValidators {
             validator: &CliValidator,
             total_active_stake: u64,
             use_lamports_unit: bool,
-            delinquent: bool,
         ) -> fmt::Result {
             fn non_zero_or_dash(v: u64) -> String {
                 if v == 0 {
@@ -339,10 +355,10 @@ impl fmt::Display for CliValidators {
             writeln!(
                 f,
                 "{} {:<44}  {:<44}  {:>3}%   {:>8}  {:>10} {:>13} {:>7}  {}",
-                if delinquent {
+                if validator.delinquent {
                     WARNING.to_string()
                 } else {
-                    " ".to_string()
+                    "\u{a0}".to_string()
                 },
                 validator.identity_pubkey,
                 validator.vote_account_pubkey,
@@ -362,39 +378,75 @@ impl fmt::Display for CliValidators {
                 },
             )
         }
-        writeln!(
-            f,
-            "{}",
-            style(format!(
-                "  {:<44}  {:<38}  {}  {}  {} {:>11} {:^7}  {}",
-                "Identity",
-                "Vote Account",
-                "Commission",
-                "Last Vote",
-                "Root Block",
-                "Epoch Credits",
-                "Version",
-                "Active Stake",
-            ))
-            .bold()
-        )?;
-        for validator in &self.current_validators {
+
+        let padding = if self.number_validators {
+            ((self.validators.len() + 1) as f64).log10().floor() as usize + 1
+        } else {
+            0
+        };
+        let header = style(format!(
+            "{:padding$} {:<44}  {:<38}  {}  {}  {} {:>11} {:^7}  {}",
+            " ",
+            "Identity",
+            "Vote Account",
+            "Commission",
+            "Last Vote",
+            "Root Block",
+            "Epoch Credits",
+            "Version",
+            "Active Stake",
+            padding = padding + 1
+        ))
+        .bold();
+        writeln!(f, "{}", header)?;
+
+        let mut sorted_validators = self.validators.clone();
+        match self.validators_sort_order {
+            CliValidatorsSortOrder::Delinquent => {
+                sorted_validators.sort_by_key(|a| a.delinquent);
+            }
+            CliValidatorsSortOrder::Commission => {
+                sorted_validators.sort_by_key(|a| a.commission);
+            }
+            CliValidatorsSortOrder::EpochCredits => {
+                sorted_validators.sort_by_key(|a| a.epoch_credits);
+            }
+            CliValidatorsSortOrder::Identity => {
+                sorted_validators.sort_by(|a, b| a.identity_pubkey.cmp(&b.identity_pubkey));
+            }
+            CliValidatorsSortOrder::LastVote => {
+                sorted_validators.sort_by_key(|a| a.last_vote);
+            }
+            CliValidatorsSortOrder::Root => {
+                sorted_validators.sort_by_key(|a| a.root_slot);
+            }
+            CliValidatorsSortOrder::VoteAccount => {
+                sorted_validators.sort_by(|a, b| a.vote_account_pubkey.cmp(&b.vote_account_pubkey));
+            }
+            CliValidatorsSortOrder::Stake => {
+                sorted_validators.sort_by_key(|a| a.activated_stake);
+            }
+        }
+
+        if self.validators_reverse_sort {
+            sorted_validators.reverse();
+        }
+
+        for (i, validator) in sorted_validators.iter().enumerate() {
+            if padding > 0 {
+                write!(f, "{:padding$}", i + 1, padding = padding)?;
+            }
             write_vote_account(
                 f,
                 validator,
                 self.total_active_stake,
                 self.use_lamports_unit,
-                false,
             )?;
         }
-        for validator in &self.delinquent_validators {
-            write_vote_account(
-                f,
-                validator,
-                self.total_active_stake,
-                self.use_lamports_unit,
-                true,
-            )?;
+
+        // The actual header has long scrolled away.  Print the header once more as a footer
+        if self.validators.len() > 100 {
+            writeln!(f, "{}", header)?;
         }
 
         writeln!(f)?;
@@ -453,7 +505,7 @@ impl fmt::Display for CliValidators {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct CliValidator {
     pub identity_pubkey: String,
@@ -465,6 +517,7 @@ pub struct CliValidator {
     pub epoch_credits: u64, // credits earned in the current epoch
     pub activated_stake: u64,
     pub version: String,
+    pub delinquent: bool,
 }
 
 impl CliValidator {
@@ -473,6 +526,25 @@ impl CliValidator {
         current_epoch: Epoch,
         version: String,
         address_labels: &HashMap<String, String>,
+    ) -> Self {
+        Self::_new(vote_account, current_epoch, version, address_labels, false)
+    }
+
+    pub fn new_delinquent(
+        vote_account: &RpcVoteAccountInfo,
+        current_epoch: Epoch,
+        version: String,
+        address_labels: &HashMap<String, String>,
+    ) -> Self {
+        Self::_new(vote_account, current_epoch, version, address_labels, true)
+    }
+
+    fn _new(
+        vote_account: &RpcVoteAccountInfo,
+        current_epoch: Epoch,
+        version: String,
+        address_labels: &HashMap<String, String>,
+        delinquent: bool,
     ) -> Self {
         let (credits, epoch_credits) = vote_account
             .epoch_credits
@@ -485,7 +557,6 @@ impl CliValidator {
                 }
             })
             .unwrap_or((0, 0));
-
         Self {
             identity_pubkey: format_labeled_address(&vote_account.node_pubkey, address_labels),
             vote_account_pubkey: format_labeled_address(&vote_account.vote_pubkey, address_labels),
@@ -496,6 +567,7 @@ impl CliValidator {
             epoch_credits,
             activated_stake: vote_account.activated_stake,
             version,
+            delinquent,
         }
     }
 }
