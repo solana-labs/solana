@@ -10,12 +10,13 @@
 //! of false positives.
 
 use crate::{
-    cluster_info::CRDS_UNIQUE_PUBKEY_CAPACITY,
+    cluster_info::{Ping, CRDS_UNIQUE_PUBKEY_CAPACITY},
     contact_info::ContactInfo,
     crds::{Crds, CrdsError},
     crds_gossip::{get_stake, get_weight, CRDS_GOSSIP_DEFAULT_BLOOM_ITEMS},
     crds_gossip_error::CrdsGossipError,
     crds_value::{CrdsValue, CrdsValueLabel},
+    ping_pong::PingCache,
 };
 use itertools::Itertools;
 use lru::LruCache;
@@ -26,11 +27,16 @@ use solana_runtime::bloom::{AtomicBloom, Bloom};
 use solana_sdk::{
     hash::{hash, Hash},
     pubkey::Pubkey,
+    signature::{Keypair, Signer},
 };
-use std::cmp;
-use std::collections::VecDeque;
-use std::collections::{HashMap, HashSet};
-use std::convert::TryInto;
+use std::{
+    cmp,
+    collections::{HashMap, HashSet, VecDeque},
+    convert::TryInto,
+    net::SocketAddr,
+    sync::Mutex,
+    time::Instant,
+};
 
 pub const CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS: u64 = 15000;
 // The maximum age of a value received over pull responses
@@ -203,33 +209,62 @@ impl Default for CrdsGossipPull {
 }
 impl CrdsGossipPull {
     /// generate a random request
+    #[allow(clippy::too_many_arguments)]
     pub fn new_pull_request(
         &self,
         thread_pool: &ThreadPool,
         crds: &Crds,
-        self_id: &Pubkey,
+        self_keypair: &Keypair,
         self_shred_version: u16,
         now: u64,
         gossip_validators: Option<&HashSet<Pubkey>>,
         stakes: &HashMap<Pubkey, u64>,
         bloom_size: usize,
+        ping_cache: &Mutex<PingCache>,
+        pings: &mut Vec<(SocketAddr, Ping)>,
     ) -> Result<(ContactInfo, Vec<CrdsFilter>), CrdsGossipError> {
-        let options = self.pull_options(
-            crds,
-            &self_id,
-            self_shred_version,
-            now,
-            gossip_validators,
-            stakes,
-        );
-        if options.is_empty() {
+        let (weights, peers): (Vec<_>, Vec<_>) = self
+            .pull_options(
+                crds,
+                &self_keypair.pubkey(),
+                self_shred_version,
+                now,
+                gossip_validators,
+                stakes,
+            )
+            .into_iter()
+            .unzip();
+        if peers.is_empty() {
             return Err(CrdsGossipError::NoPeers);
         }
-        let filters = self.build_crds_filters(thread_pool, crds, bloom_size);
-        let index = WeightedIndex::new(options.iter().map(|weighted| weighted.0)).unwrap();
-        let random = index.sample(&mut rand::thread_rng());
-        let (_weight, peer) = options[random];
-        Ok((peer.clone(), filters))
+        let mut peers = {
+            let mut rng = rand::thread_rng();
+            let num_samples = peers.len() * 2;
+            let index = WeightedIndex::new(weights).unwrap();
+            let sample_peer = move || peers[index.sample(&mut rng)];
+            std::iter::repeat_with(sample_peer).take(num_samples)
+        };
+        let peer = {
+            let mut rng = rand::thread_rng();
+            let mut ping_cache = ping_cache.lock().unwrap();
+            let mut pingf = move || Ping::new_rand(&mut rng, self_keypair).ok();
+            let now = Instant::now();
+            peers.find(|peer| {
+                let node = (peer.id, peer.gossip);
+                let (check, ping) = ping_cache.check(now, node, &mut pingf);
+                if let Some(ping) = ping {
+                    pings.push((peer.gossip, ping));
+                }
+                check
+            })
+        };
+        match peer {
+            None => Err(CrdsGossipError::NoPeers),
+            Some(peer) => {
+                let filters = self.build_crds_filters(thread_pool, crds, bloom_size);
+                Ok((peer.clone(), filters))
+            }
+        }
     }
 
     fn pull_options<'a>(
@@ -629,7 +664,7 @@ mod test {
         packet::PACKET_DATA_SIZE,
         timing::timestamp,
     };
-    use std::iter::repeat_with;
+    use std::{iter::repeat_with, time::Duration};
 
     #[test]
     fn test_hash_as_u64() {
@@ -919,22 +954,29 @@ mod test {
     fn test_new_pull_request() {
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         let mut crds = Crds::default();
+        let node_keypair = Keypair::new();
         let entry = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &solana_sdk::pubkey::new_rand(),
+            &node_keypair.pubkey(),
             0,
         )));
-        let id = entry.label().pubkey();
         let node = CrdsGossipPull::default();
+        let mut pings = Vec::new();
+        let ping_cache = Mutex::new(PingCache::new(
+            Duration::from_secs(20 * 60), // ttl
+            128,                          // capacity
+        ));
         assert_eq!(
             node.new_pull_request(
                 &thread_pool,
                 &crds,
-                &id,
+                &node_keypair,
                 0,
                 0,
                 None,
                 &HashMap::new(),
-                PACKET_DATA_SIZE
+                PACKET_DATA_SIZE,
+                &ping_cache,
+                &mut pings,
             ),
             Err(CrdsGossipError::NoPeers)
         );
@@ -944,30 +986,35 @@ mod test {
             node.new_pull_request(
                 &thread_pool,
                 &crds,
-                &id,
+                &node_keypair,
                 0,
                 0,
                 None,
                 &HashMap::new(),
-                PACKET_DATA_SIZE
+                PACKET_DATA_SIZE,
+                &ping_cache,
+                &mut pings,
             ),
             Err(CrdsGossipError::NoPeers)
         );
-
-        let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &solana_sdk::pubkey::new_rand(),
-            0,
-        )));
+        let new = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0);
+        ping_cache
+            .lock()
+            .unwrap()
+            .mock_pong(new.id, new.gossip, Instant::now());
+        let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(new));
         crds.insert(new.clone(), 0).unwrap();
         let req = node.new_pull_request(
             &thread_pool,
             &crds,
-            &id,
+            &node_keypair,
             0,
             0,
             None,
             &HashMap::new(),
             PACKET_DATA_SIZE,
+            &ping_cache,
+            &mut pings,
         );
         let (peer, _) = req.unwrap();
         assert_eq!(peer, *new.contact_info().unwrap());
@@ -977,23 +1024,25 @@ mod test {
     fn test_new_mark_creation_time() {
         let now: u64 = 1_605_127_770_789;
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
+        let mut ping_cache = PingCache::new(
+            Duration::from_secs(20 * 60), // ttl
+            128,                          // capacity
+        );
         let mut crds = Crds::default();
+        let node_keypair = Keypair::new();
         let entry = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &solana_sdk::pubkey::new_rand(),
+            &node_keypair.pubkey(),
             0,
         )));
-        let node_pubkey = entry.label().pubkey();
         let mut node = CrdsGossipPull::default();
         crds.insert(entry, now).unwrap();
-        let old = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &solana_sdk::pubkey::new_rand(),
-            0,
-        )));
+        let old = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0);
+        ping_cache.mock_pong(old.id, old.gossip, Instant::now());
+        let old = CrdsValue::new_unsigned(CrdsData::ContactInfo(old));
         crds.insert(old.clone(), now).unwrap();
-        let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &solana_sdk::pubkey::new_rand(),
-            0,
-        )));
+        let new = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0);
+        ping_cache.mock_pong(new.id, new.gossip, Instant::now());
+        let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(new));
         crds.insert(new.clone(), now).unwrap();
 
         // set request creation time to now.
@@ -1002,16 +1051,20 @@ mod test {
 
         // odds of getting the other request should be close to 1.
         let now = now + 1_000;
+        let mut pings = Vec::new();
+        let ping_cache = Mutex::new(ping_cache);
         for _ in 0..10 {
             let req = node.new_pull_request(
                 &thread_pool,
                 &crds,
-                &node_pubkey,
+                &node_keypair,
                 0,
                 now,
                 None,
                 &HashMap::new(),
                 PACKET_DATA_SIZE,
+                &ping_cache,
+                &mut pings,
             );
             let (peer, _) = req.unwrap();
             assert_eq!(peer, *old.contact_info().unwrap());
@@ -1056,29 +1109,35 @@ mod test {
     #[test]
     fn test_generate_pull_responses() {
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
+        let node_keypair = Keypair::new();
         let mut node_crds = Crds::default();
+        let mut ping_cache = PingCache::new(
+            Duration::from_secs(20 * 60), // ttl
+            128,                          // capacity
+        );
         let entry = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &solana_sdk::pubkey::new_rand(),
+            &node_keypair.pubkey(),
             0,
         )));
         let caller = entry.clone();
-        let node_pubkey = entry.label().pubkey();
         let node = CrdsGossipPull::default();
         node_crds.insert(entry, 0).unwrap();
-        let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &solana_sdk::pubkey::new_rand(),
-            0,
-        )));
+        let new = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0);
+        ping_cache.mock_pong(new.id, new.gossip, Instant::now());
+        let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(new));
         node_crds.insert(new, 0).unwrap();
+        let mut pings = Vec::new();
         let req = node.new_pull_request(
             &thread_pool,
             &node_crds,
-            &node_pubkey,
+            &node_keypair,
             0,
             0,
             None,
             &HashMap::new(),
             PACKET_DATA_SIZE,
+            &Mutex::new(ping_cache),
+            &mut pings,
         );
 
         let mut dest_crds = Crds::default();
@@ -1133,29 +1192,35 @@ mod test {
     #[test]
     fn test_process_pull_request() {
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
+        let node_keypair = Keypair::new();
         let mut node_crds = Crds::default();
         let entry = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &solana_sdk::pubkey::new_rand(),
+            &node_keypair.pubkey(),
             0,
         )));
         let caller = entry.clone();
-        let node_pubkey = entry.label().pubkey();
         let node = CrdsGossipPull::default();
         node_crds.insert(entry, 0).unwrap();
-        let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &solana_sdk::pubkey::new_rand(),
-            0,
-        )));
+        let mut ping_cache = PingCache::new(
+            Duration::from_secs(20 * 60), // ttl
+            128,                          // capacity
+        );
+        let new = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0);
+        ping_cache.mock_pong(new.id, new.gossip, Instant::now());
+        let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(new));
         node_crds.insert(new, 0).unwrap();
+        let mut pings = Vec::new();
         let req = node.new_pull_request(
             &thread_pool,
             &node_crds,
-            &node_pubkey,
+            &node_keypair,
             0,
             0,
             None,
             &HashMap::new(),
             PACKET_DATA_SIZE,
+            &Mutex::new(ping_cache),
+            &mut pings,
         );
 
         let mut dest_crds = Crds::default();
@@ -1193,34 +1258,37 @@ mod test {
     #[test]
     fn test_process_pull_request_response() {
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
+        let node_keypair = Keypair::new();
         let mut node_crds = Crds::default();
         let entry = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &solana_sdk::pubkey::new_rand(),
+            &node_keypair.pubkey(),
             1,
         )));
         let caller = entry.clone();
         let node_pubkey = entry.label().pubkey();
         let mut node = CrdsGossipPull::default();
         node_crds.insert(entry, 0).unwrap();
-
-        let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &solana_sdk::pubkey::new_rand(),
-            1,
-        )));
+        let mut ping_cache = PingCache::new(
+            Duration::from_secs(20 * 60), // ttl
+            128,                          // capacity
+        );
+        let new = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 1);
+        ping_cache.mock_pong(new.id, new.gossip, Instant::now());
+        let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(new));
         node_crds.insert(new, 0).unwrap();
 
         let mut dest = CrdsGossipPull::default();
         let mut dest_crds = Crds::default();
         let new_id = solana_sdk::pubkey::new_rand();
-        let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &new_id, 1,
-        )));
+        let new = ContactInfo::new_localhost(&new_id, 1);
+        ping_cache.mock_pong(new.id, new.gossip, Instant::now());
+        let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(new));
         dest_crds.insert(new.clone(), 0).unwrap();
 
         // node contains a key from the dest node, but at an older local timestamp
-        let same_key = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &new_id, 0,
-        )));
+        let same_key = ContactInfo::new_localhost(&new_id, 0);
+        ping_cache.mock_pong(same_key.id, same_key.gossip, Instant::now());
+        let same_key = CrdsValue::new_unsigned(CrdsData::ContactInfo(same_key));
         assert_eq!(same_key.label(), new.label());
         assert!(same_key.wallclock() < new.wallclock());
         node_crds.insert(same_key.clone(), 0).unwrap();
@@ -1232,17 +1300,21 @@ mod test {
             0
         );
         let mut done = false;
+        let mut pings = Vec::new();
+        let ping_cache = Mutex::new(ping_cache);
         for _ in 0..30 {
             // there is a chance of a false positive with bloom filters
             let req = node.new_pull_request(
                 &thread_pool,
                 &node_crds,
-                &node_pubkey,
+                &node_keypair,
                 0,
                 0,
                 None,
                 &HashMap::new(),
                 PACKET_DATA_SIZE,
+                &ping_cache,
+                &mut pings,
             );
             let (_, filters) = req.unwrap();
             let filters: Vec<_> = filters.into_iter().map(|f| (caller.clone(), f)).collect();
