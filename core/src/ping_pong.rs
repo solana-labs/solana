@@ -243,6 +243,11 @@ impl PingCache {
         }
         clone
     }
+
+    /// Only for tests and simulations.
+    pub fn mock_pong(&mut self, node: Pubkey, socket: SocketAddr, now: Instant) {
+        self.pongs.put((node, socket), now);
+    }
 }
 
 #[cfg(test)]
