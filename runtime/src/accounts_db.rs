@@ -4136,7 +4136,7 @@ impl AccountsDb {
             // higher passes = slower total time, lower dynamic memory usage
             // lower passes = faster total time, higher dynamic memory usage
             // passes=2 cuts dynamic memory usage in approximately half.
-            let num_scan_passes: usize = 2;
+            let num_scan_passes: usize = 16;
 
             let bins_per_pass = PUBKEY_BINS_FOR_CALCULATING_HASHES / num_scan_passes;
             assert_eq!(
