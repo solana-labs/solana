@@ -480,6 +480,27 @@ As withdrawals are irreversible, it may be a good practice to validate a
 user-supplied account address before authorizing a withdrawal in order to
 prevent accidental loss of user funds.
 
+#### Basic verfication
+
+Solana addresses a 32-byte array, encoded with the bitcoin base58 alphabet. This
+results in an ASCII text string matching the following regular expression:
+```
+[1-9A-HJ-NP-Za-km-z]{32,44}
+```
+This check is insufficient on its own as Solana addresses are not checksummed, so
+typos cannot be detected. To further validate the user's input, the string can be
+decoded and the resulting byte array's length confirmed to be 32. However, there
+are some addresses that can decode to 32 bytes despite a typo such as a single
+missing character, reversed characters and ignored case
+
+#### Advanced verification
+
+Due to the vulnerability to typos described above, it is recommended that the
+balance be queried for candidate withdraw addresses and the user prompted to
+confirm their intentions if a non-zero balance is discovered.
+
+#### Valid ed25519 pubkey check
+
 The address of a normal account in Solana is a Base58-encoded string of a
 256-bit ed25519 public key. Not all bit patterns are valid public keys for the
 ed25519 curve, so it is possible to ensure user-supplied account addresses are
