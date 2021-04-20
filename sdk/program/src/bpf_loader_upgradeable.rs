@@ -280,10 +280,9 @@ mod tests {
             &bincode::serialize(&UpgradeableLoaderInstruction::InitializeBuffer).unwrap(),
         );
 
-        let expected_result = expected_instructions.iter().any(|i| match i {
-            UpgradeableLoaderInstruction::InitializeBuffer => true,
-            _ => false,
-        });
+        let expected_result = expected_instructions
+            .iter()
+            .any(|i| matches!(i, UpgradeableLoaderInstruction::InitializeBuffer));
 
         assert_eq!(expected_result, result);
 
