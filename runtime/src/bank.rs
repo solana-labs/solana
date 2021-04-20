@@ -118,7 +118,7 @@ impl ExecuteTimings {
 }
 
 type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "3TYCJ7hSJ5ig2NmnwxSn1ggkzm6JCmMHoyRMBQQsLCa3")]
+#[frozen_abi(digest = "F3Ubz2Sx973pKSYNHTEmj6LY3te1DKUo3fs3cgzQ1uqJ")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 type TransactionAccountRefCells = Vec<Rc<RefCell<AccountSharedData>>>;
 type TransactionAccountDepRefCells = Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>;
@@ -2798,18 +2798,26 @@ impl Bank {
         loaders: &mut TransactionLoaders,
         mut account_refcells: TransactionAccountRefCells,
         loader_refcells: TransactionLoaderRefCells,
-    ) {
-        account_refcells.drain(..).for_each(|account_refcell| {
-            accounts.push(Rc::try_unwrap(account_refcell).unwrap().into_inner())
-        });
-        loaders
-            .iter_mut()
-            .zip(loader_refcells)
-            .for_each(|(ls, mut lrcs)| {
-                lrcs.drain(..).for_each(|(pubkey, lrc)| {
-                    ls.push((pubkey, Rc::try_unwrap(lrc).unwrap().into_inner()))
-                })
-            });
+    ) -> std::result::Result<(), TransactionError> {
+        for account_refcell in account_refcells.drain(..) {
+            accounts.push(
+                Rc::try_unwrap(account_refcell)
+                    .map_err(|_| TransactionError::AccountBorrowOutstanding)?
+                    .into_inner(),
+            )
+        }
+        for (ls, mut lrcs) in loaders.iter_mut().zip(loader_refcells) {
+            for (pubkey, lrc) in lrcs.drain(..) {
+                ls.push((
+                    pubkey,
+                    Rc::try_unwrap(lrc)
+                        .map_err(|_| TransactionError::AccountBorrowOutstanding)?
+                        .into_inner(),
+                ))
+            }
+        }
+
+        Ok(())
     }
 
     fn compile_recorded_instructions(
@@ -2974,7 +2982,7 @@ impl Bank {
                         None
                     };
 
-                    let process_result = self.message_processor.process_message(
+                    let mut process_result = self.message_processor.process_message(
                         tx.message(),
                         &loader_refcells,
                         &account_refcells,
@@ -3005,12 +3013,15 @@ impl Bank {
                         &tx.message,
                     );
 
-                    Self::refcells_to_accounts(
+                    if let Err(e) = Self::refcells_to_accounts(
                         &mut loaded_transaction.accounts,
                         &mut loaded_transaction.loaders,
                         account_refcells,
                         loader_refcells,
-                    );
+                    ) {
+                        warn!("Account lifetime mismanagement");
+                        process_result = Err(e);
+                    }
 
                     if process_result.is_ok() {
                         self.update_executors(executors);

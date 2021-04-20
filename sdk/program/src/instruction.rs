@@ -108,7 +108,7 @@ pub enum InstructionError {
     AccountBorrowFailed,
 
     /// Account data has an outstanding reference after a program's execution
-    #[error("instruction left account with an outstanding reference borrowed")]
+    #[error("instruction left account with an outstanding borrowed reference")]
     AccountBorrowOutstanding,
 
     /// The same account was multiply passed to an on-chain program's entrypoint, but the program
