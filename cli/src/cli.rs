@@ -257,6 +257,7 @@ pub enum CliCommand {
     },
     ShowStakeHistory {
         use_lamports_unit: bool,
+        limit_results: usize,
     },
     ShowStakeAccount {
         pubkey: Pubkey,
@@ -1661,9 +1662,10 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *use_lamports_unit,
             *with_rewards,
         ),
-        CliCommand::ShowStakeHistory { use_lamports_unit } => {
-            process_show_stake_history(&rpc_client, config, *use_lamports_unit)
-        }
+        CliCommand::ShowStakeHistory {
+            use_lamports_unit,
+            limit_results,
+        } => process_show_stake_history(&rpc_client, config, *use_lamports_unit, *limit_results),
         CliCommand::StakeAuthorize {
             stake_account_pubkey,
             ref new_authorizations,
