@@ -326,15 +326,6 @@ impl Crds {
         now: u64,
         timeouts: &HashMap<Pubkey, u64>,
     ) -> Vec<CrdsValueLabel> {
-        // TODO: remove this!
-        #[rustversion::before(1.49.0)]
-        fn select_nth<T: Ord>(xs: &mut Vec<T>, _nth: usize) {
-            xs.sort_unstable();
-        }
-        #[rustversion::since(1.49.0)]
-        fn select_nth<T: Ord>(xs: &mut Vec<T>, nth: usize) {
-            xs.select_nth_unstable(nth);
-        }
         let default_timeout = *timeouts
             .get(&Pubkey::default())
             .expect("must have default timeout");
@@ -376,7 +367,7 @@ impl Crds {
                 .saturating_sub(MAX_CRDS_VALUES_PER_PUBKEY);
             // Partition on wallclock to discard the older ones.
             if nth > 0 && nth < recent_unlimited_labels.len() {
-                select_nth(&mut recent_unlimited_labels, nth);
+                recent_unlimited_labels.select_nth_unstable(nth);
             }
             old_labels.extend(
                 recent_unlimited_labels
