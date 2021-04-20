@@ -295,12 +295,14 @@ mod tests {
             .unwrap(),
         );
 
-        let expected_result = expected_instructions.iter().any(|i| match i {
-            UpgradeableLoaderInstruction::Write {
-                offset: _,
-                bytes: _,
-            } => true,
-            _ => false,
+        let expected_result = expected_instructions.iter().any(|i| {
+            matches!(
+                i,
+                UpgradeableLoaderInstruction::Write {
+                    offset: _,
+                    bytes: _,
+                }
+            )
         });
 
         assert_eq!(expected_result, result);
@@ -312,9 +314,11 @@ mod tests {
             .unwrap(),
         );
 
-        let expected_result = expected_instructions.iter().any(|i| match i {
-            UpgradeableLoaderInstruction::DeployWithMaxDataLen { max_data_len: _ } => true,
-            _ => false,
+        let expected_result = expected_instructions.iter().any(|i| {
+            matches!(
+                i,
+                UpgradeableLoaderInstruction::DeployWithMaxDataLen { max_data_len: _ }
+            )
         });
 
         assert_eq!(expected_result, result);
@@ -322,27 +326,24 @@ mod tests {
         let result =
             is_instruction_fn(&bincode::serialize(&UpgradeableLoaderInstruction::Upgrade).unwrap());
 
-        let expected_result = expected_instructions.iter().any(|i| match i {
-            UpgradeableLoaderInstruction::Upgrade => true,
-            _ => false,
-        });
+        let expected_result = expected_instructions
+            .iter()
+            .any(|i| matches!(i, UpgradeableLoaderInstruction::Upgrade));
         assert_eq!(expected_result, result);
 
         let result = is_instruction_fn(
             &bincode::serialize(&UpgradeableLoaderInstruction::SetAuthority).unwrap(),
         );
-        let expected_result = expected_instructions.iter().any(|i| match i {
-            UpgradeableLoaderInstruction::SetAuthority => true,
-            _ => false,
-        });
+        let expected_result = expected_instructions
+            .iter()
+            .any(|i| matches!(i, UpgradeableLoaderInstruction::SetAuthority));
         assert_eq!(expected_result, result);
 
         let result =
             is_instruction_fn(&bincode::serialize(&UpgradeableLoaderInstruction::Close).unwrap());
-        let expected_result = expected_instructions.iter().any(|i| match i {
-            UpgradeableLoaderInstruction::Close => true,
-            _ => false,
-        });
+        let expected_result = expected_instructions
+            .iter()
+            .any(|i| matches!(i, UpgradeableLoaderInstruction::Close));
         assert_eq!(expected_result, result);
     }
 
