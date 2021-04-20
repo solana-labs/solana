@@ -41,7 +41,7 @@ use solana_runtime::{
     commitment::BlockCommitmentCache, vote_sender_types::ReplayVoteSender,
 };
 use solana_sdk::{
-    clock::{Slot, NUM_CONSECUTIVE_LEADER_SLOTS},
+    clock::{Slot, MAX_PROCESSING_AGE, NUM_CONSECUTIVE_LEADER_SLOTS},
     genesis_config::ClusterType,
     hash::Hash,
     pubkey::Pubkey,
@@ -50,7 +50,7 @@ use solana_sdk::{
     timing::timestamp,
     transaction::Transaction,
 };
-use solana_vote_program::{vote_instruction, vote_state::Vote};
+use solana_vote_program::vote_state::Vote;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     result,
@@ -479,7 +479,6 @@ impl ReplayStage {
                     let (heaviest_bank, heaviest_bank_on_same_voted_fork) = heaviest_subtree_fork_choice
                         .select_forks(&frozen_banks, &tower, &progress, &ancestors, &bank_forks);
                     select_forks_time.stop();
-
 
                     let mut select_vote_and_reset_forks_time =
                         Measure::start("select_vote_and_reset_forks");
@@ -1290,8 +1289,7 @@ impl ReplayStage {
             inc_new_counter_info!("replay_stage-voted_empty_bank", 1);
         }
         trace!("handle votable bank {}", bank.slot());
-        let (new_root, tower_slots) = tower.record_bank_vote(bank, vote_account_pubkey);
-        let last_vote = tower.last_vote_and_timestamp();
+        let (new_root, last_vote) = tower.record_bank_vote(bank, vote_account_pubkey);
 
         if let Err(err) = tower.save(&cluster_info.keypair) {
             error!("Unable to save tower: {:?}", err);
@@ -1368,28 +1366,25 @@ impl ReplayStage {
             vote_account_pubkey,
             authorized_voter_keypairs,
             last_vote,
-            &tower_slots,
+            tower,
             switch_fork_decision,
             vote_signatures,
             *has_new_vote_been_rooted,
         );
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn push_vote(
-        cluster_info: &ClusterInfo,
-        bank: &Arc<Bank>,
-        poh_recorder: &Arc<Mutex<PohRecorder>>,
+    fn generate_vote_tx(
+        node_keypair: &Arc<Keypair>,
+        bank: &Bank,
         vote_account_pubkey: &Pubkey,
         authorized_voter_keypairs: &[Arc<Keypair>],
         vote: Vote,
-        tower: &[Slot],
         switch_fork_decision: &SwitchForkDecision,
         vote_signatures: &mut Vec<Signature>,
         has_new_vote_been_rooted: bool,
-    ) {
+    ) -> Option<Transaction> {
         if authorized_voter_keypairs.is_empty() {
-            return;
+            return None;
         }
         let vote_account = match bank.get_vote_account(vote_account_pubkey) {
             None => {
@@ -1397,7 +1392,7 @@ impl ReplayStage {
                     "Vote account {} does not exist.  Unable to vote",
                     vote_account_pubkey,
                 );
-                return;
+                return None;
             }
             Some((_stake, vote_account)) => vote_account,
         };
@@ -1408,7 +1403,7 @@ impl ReplayStage {
                     "Vote account {} is unreadable.  Unable to vote",
                     vote_account_pubkey,
                 );
-                return;
+                return None;
             }
             Ok(vote_state) => vote_state,
         };
@@ -1421,7 +1416,7 @@ impl ReplayStage {
                     vote_account_pubkey,
                     bank.epoch()
                 );
-                return;
+                return None;
             };
 
         let authorized_voter_keypair = match authorized_voter_keypairs
@@ -1431,28 +1426,19 @@ impl ReplayStage {
             None => {
                 warn!("The authorized keypair {} for vote account {} is not available.  Unable to vote",
                       authorized_voter_pubkey, vote_account_pubkey);
-                return;
+                return None;
             }
             Some(authorized_voter_keypair) => authorized_voter_keypair,
         };
-        let node_keypair = &cluster_info.keypair;
 
         // Send our last few votes along with the new one
-        let vote_ix = if bank.slot() > Self::get_unlock_switch_vote_slot(bank.cluster_type()) {
-            switch_fork_decision
-                .to_vote_instruction(
-                    vote,
-                    &vote_account_pubkey,
-                    &authorized_voter_keypair.pubkey(),
-                )
-                .expect("Switch threshold failure should not lead to voting")
-        } else {
-            vote_instruction::vote(
+        let vote_ix = switch_fork_decision
+            .to_vote_instruction(
+                vote,
                 &vote_account_pubkey,
                 &authorized_voter_keypair.pubkey(),
-                vote,
             )
-        };
+            .expect("Switch threshold failure should not lead to voting");
 
         let mut vote_tx = Transaction::new_with_payer(&[vote_ix], Some(&node_keypair.pubkey()));
 
@@ -1469,11 +1455,92 @@ impl ReplayStage {
             vote_signatures.clear();
         }
 
-        let _ = cluster_info.send_vote(
-            &vote_tx,
-            crate::banking_stage::next_leader_tpu(cluster_info, poh_recorder),
+        Some(vote_tx)
+    }
+
+    fn refresh_last_vote(
+        tower: &mut Tower,
+        cluster_info: &ClusterInfo,
+        heaviest_bank_on_same_fork: &Bank,
+        poh_recorder: &Mutex<PohRecorder>,
+        last_landed_vote_slot: Slot,
+        vote_account_pubkey: &Pubkey,
+        authorized_voter_keypairs: &[Arc<Keypair>],
+        vote: Vote,
+        vote_signatures: &mut Vec<Signature>,
+        has_new_vote_been_rooted: bool,
+    ) {
+        let last_voted_slot = tower.last_voted_slot();
+        if last_voted_slot.is_none() {
+            return;
+        }
+
+        // Refresh the vote if our latest vote hasn't landed, and the recent blockhash of the
+        // last attempt at a vote transaction has expired
+        let last_voted_slot = last_voted_slot.unwrap();
+        if last_landed_vote_slot >= last_voted_slot
+            || heaviest_bank_on_same_fork
+                .check_hash_age(&tower.last_vote_tx_blockhash(), MAX_PROCESSING_AGE)
+                .unwrap_or(false)
+        {
+            return;
+        }
+
+        // TODO: check the timestamp in this vote is correct, i.e. it shouldn't
+        // have changed from the original timestamp of the vote.
+        let vote_tx = Self::generate_vote_tx(
+            &cluster_info.keypair,
+            heaviest_bank_on_same_fork,
+            vote_account_pubkey,
+            authorized_voter_keypairs,
+            vote,
+            &SwitchForkDecision::SameFork,
+            vote_signatures,
+            has_new_vote_been_rooted,
         );
-        cluster_info.push_vote(tower, vote_tx);
+
+        if let Some(vote_tx) = vote_tx {
+            tower.refresh_last_vote_tx_blockhash(vote_tx.message.recent_blockhash);
+
+            // Send the votes to the TPU and gossip for network propagation
+            let _ = cluster_info.send_vote(
+                &vote_tx,
+                crate::banking_stage::next_leader_tpu(cluster_info, poh_recorder),
+            );
+            //cluster_info.push_vote(tower, vote_tx);
+        }
+    }
+
+    fn push_vote(
+        cluster_info: &ClusterInfo,
+        bank: &Bank,
+        poh_recorder: &Mutex<PohRecorder>,
+        vote_account_pubkey: &Pubkey,
+        authorized_voter_keypairs: &[Arc<Keypair>],
+        vote: Vote,
+        tower: &mut Tower,
+        switch_fork_decision: &SwitchForkDecision,
+        vote_signatures: &mut Vec<Signature>,
+        has_new_vote_been_rooted: bool,
+    ) {
+        let vote_tx = Self::generate_vote_tx(
+            &cluster_info.keypair,
+            bank,
+            vote_account_pubkey,
+            authorized_voter_keypairs,
+            vote,
+            switch_fork_decision,
+            vote_signatures,
+            has_new_vote_been_rooted,
+        );
+        if let Some(vote_tx) = vote_tx {
+            tower.refresh_last_vote_tx_blockhash(vote_tx.message.recent_blockhash);
+            let _ = cluster_info.send_vote(
+                &vote_tx,
+                crate::banking_stage::next_leader_tpu(cluster_info, poh_recorder),
+            );
+            cluster_info.push_vote(&tower.tower_slots(), vote_tx);
+        }
     }
 
     fn update_commitment_cache(

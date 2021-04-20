@@ -98,6 +98,7 @@ pub(crate) struct ComputedBankState {
     // Tree of intervals of lockouts of the form [slot, slot + slot.lockout],
     // keyed by end of the range
     pub lockout_intervals: LockoutIntervals,
+    pub my_latest_landed_vote: Slot,
 }
 
 #[frozen_abi(digest = "Eay84NBbJqiMBfE7HHH2o6e51wcvoU79g8zCi5sw6uj3")]
@@ -108,6 +109,11 @@ pub struct Tower {
     threshold_size: f64,
     lockouts: VoteState,
     last_vote: Vote,
+    // The blockhash used in the last vote transaction, may or may not equal the
+    // blockhash of the voted block itself, depending if the vote slot was refreshed.
+    // For instance, a vote for slot 5, may be refreshed/resubmitted for inclusion in
+    //  block 10, in  which case `last_vote_tx_blockhash` equals the blockhash of 10, not 5.
+    last_vote_tx_blockhash: Hash,
     last_timestamp: BlockTimestamp,
     #[serde(skip)]
     path: PathBuf,
@@ -134,6 +140,7 @@ impl Default for Tower {
             lockouts: VoteState::default(),
             last_vote: Vote::default(),
             last_timestamp: BlockTimestamp::default(),
+            last_vote_tx_blockhash: Hash::default(),
             path: PathBuf::default(),
             tmp_path: PathBuf::default(),
             stray_restored_slot: Option::default(),
@@ -234,6 +241,7 @@ impl Tower {
         // Tree of intervals of lockouts of the form [slot, slot + slot.lockout],
         // keyed by end of the range
         let mut lockout_intervals = LockoutIntervals::new();
+        let mut my_latest_landed_vote = 0;
         for (key, (voted_stake, account)) in vote_accounts {
             if voted_stake == 0 {
                 continue;
@@ -261,6 +269,7 @@ impl Tower {
             }
 
             if key == *node_pubkey || vote_state.node_pubkey == *node_pubkey {
+                my_latest_landed_vote = vote_state.nth_recent_vote(0).map(|v| v.slot).unwrap_or(0);
                 debug!("vote state {:?}", vote_state);
                 debug!(
                     "observed slot {}",
@@ -348,6 +357,7 @@ impl Tower {
             total_stake,
             bank_weight,
             lockout_intervals,
+            my_latest_landed_vote,
         }
     }
 
@@ -368,7 +378,7 @@ impl Tower {
         slot: Slot,
         hash: Hash,
         last_voted_slot_in_bank: Option<Slot>,
-    ) -> (Vote, Vec<Slot> /*VoteState.tower*/) {
+    ) -> Vote {
         let mut local_vote_state = local_vote_state.clone();
         let vote = Vote::new(vec![slot], hash);
         local_vote_state.process_vote_unchecked(&vote);
@@ -388,7 +398,15 @@ impl Tower {
             slots,
             local_vote_state.votes
         );
-        (Vote::new(slots, hash), local_vote_state.tower())
+        Vote::new(slots, hash)
+    }
+
+    pub fn tower_slots(&self) -> Vec<Slot> {
+        self.lockouts.tower()
+    }
+
+    pub fn last_vote_tx_blockhash(&self) -> Hash {
+        self.last_vote_tx_blockhash
     }
 
     fn last_voted_slot_in_bank(bank: &Bank, vote_account_pubkey: &Pubkey) -> Option<Slot> {
@@ -397,22 +415,23 @@ impl Tower {
         slot
     }
 
+    pub fn refresh_last_vote_tx_blockhash(&mut self, new_vote_tx_blockhash: Hash) {
+        self.last_vote_tx_blockhash = new_vote_tx_blockhash;
+    }
+
     pub fn record_bank_vote(
         &mut self,
         bank: &Bank,
         vote_account_pubkey: &Pubkey,
-    ) -> (Option<Slot>, Vec<Slot> /*VoteState.tower*/) {
-        let (vote, tower_slots) = self.new_vote_from_bank(bank, vote_account_pubkey);
-
+    ) -> (Option<Slot>, Vote) {
+        let vote = self.new_vote_from_bank(bank, vote_account_pubkey);
         let new_root = self.record_bank_vote_update_lockouts(vote);
-        (new_root, tower_slots)
+        self.last_vote.timestamp =
+            self.maybe_timestamp(self.last_vote.last_voted_slot().unwrap_or(0));
+        (new_root, self.last_vote.clone())
     }
 
-    pub fn new_vote_from_bank(
-        &self,
-        bank: &Bank,
-        vote_account_pubkey: &Pubkey,
-    ) -> (Vote, Vec<Slot> /*VoteState.tower*/) {
+    pub fn new_vote_from_bank(&self, bank: &Bank, vote_account_pubkey: &Pubkey) -> Vote {
         let voted_slot = Self::last_voted_slot_in_bank(bank, vote_account_pubkey);
         Self::new_vote(&self.lockouts, bank.slot(), bank.hash(), voted_slot)
     }
@@ -451,10 +470,8 @@ impl Tower {
         self.stray_restored_slot
     }
 
-    pub fn last_vote_and_timestamp(&mut self) -> Vote {
-        let mut last_vote = self.last_vote.clone();
-        last_vote.timestamp = self.maybe_timestamp(last_vote.last_voted_slot().unwrap_or(0));
-        last_vote
+    pub fn last_vote(&mut self) -> Vote {
+        self.last_vote.clone()
     }
 
     fn maybe_timestamp(&mut self, current_slot: Slot) -> Option<UnixTimestamp> {
@@ -1216,7 +1233,7 @@ impl SavedTower {
     pub fn new<T: Signer>(tower: &Tower, keypair: &Arc<T>) -> Result<Self> {
         let data = bincode::serialize(tower)?;
         let signature = keypair.sign_message(&data);
-        Ok(Self { signature, data })
+        Ok(Self { data, signature })
     }
 
     pub fn verify(&self, pubkey: &Pubkey) -> bool {
@@ -1457,7 +1474,7 @@ pub mod test {
                 return heaviest_fork_failures;
             }
 
-            let (new_root, _) = tower.record_bank_vote(&vote_bank, &my_vote_pubkey);
+            let (new_root, _, _) = tower.record_bank_vote(&vote_bank, &my_vote_pubkey);
             if let Some(new_root) = new_root {
                 self.set_root(new_root);
             }
