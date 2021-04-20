@@ -180,7 +180,7 @@ to be used by RPC and programs.
 
 The entries in the token-list are signed using a managed key. As wallets or
 Ledgers are asked to send transactions using a particular token program, they can
-cross-check the mint or program information using a signature check on the 
+cross-check the mint or program information using a signature check on the
 token-list data.
 
 The token-list client libraries can fetch, cache, and query all registry info,
