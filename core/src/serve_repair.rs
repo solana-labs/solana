@@ -57,7 +57,7 @@ impl RequestResponse for RepairType {
     type Response = Shred;
     fn num_expected_responses(&self) -> u32 {
         match self {
-            RepairType::Orphan(_) => MAX_ORPHAN_REPAIR_RESPONSES as u32,
+            RepairType::Orphan(_) => (MAX_ORPHAN_REPAIR_RESPONSES + 1) as u32, // run_orphan uses <= MAX_ORPHAN_REPAIR_RESPONSES
             RepairType::HighestShred(_, _) => 1,
             RepairType::Shred(_, _) => 1,
         }
