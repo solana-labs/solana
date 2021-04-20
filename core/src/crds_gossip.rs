@@ -66,8 +66,7 @@ impl CrdsGossip {
                     .push
                     .process_push_message(&mut self.crds, from, val, now);
                 if let Ok(Some(val)) = res {
-                    self.pull
-                        .record_old_hash(val.value_hash, val.local_timestamp);
+                    self.pull.record_old_hash(val.value_hash, now);
                     Some(val)
                 } else {
                     None

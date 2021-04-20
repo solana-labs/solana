@@ -300,8 +300,7 @@ impl CrdsGossipPull {
         for caller in callers {
             let key = caller.label().pubkey();
             if let Ok(Some(val)) = crds.insert(caller, now) {
-                self.purged_values
-                    .push_back((val.value_hash, val.local_timestamp));
+                self.purged_values.push_back((val.value_hash, now));
             }
             crds.update_record_timestamp(&key, now);
         }
@@ -399,8 +398,7 @@ impl CrdsGossipPull {
                     owners.insert(label.pubkey());
                     success.push((label, hash, wc));
                     if let Some(val) = old {
-                        self.purged_values
-                            .push_back((val.value_hash, val.local_timestamp))
+                        self.purged_values.push_back((val.value_hash, now))
                     }
                 }
             }
@@ -555,7 +553,7 @@ impl CrdsGossipPull {
                 .into_iter()
                 .filter_map(|label| {
                     let val = crds.remove(&label)?;
-                    Some((val.value_hash, val.local_timestamp))
+                    Some((val.value_hash, now))
                 }),
         );
         self.purged_values.len() - num_purged_values
@@ -1335,7 +1333,7 @@ mod test {
         }
 
         // purge the value
-        node.purge_purged(1);
+        node.purge_purged(3);
         assert_eq!(node.purged_values.len(), 0);
     }
     #[test]
