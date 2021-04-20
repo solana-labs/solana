@@ -17,7 +17,8 @@ programs, as well include instructions from on-chain programs.
 
 ## System Program
 
-Create accounts and transfer lamports between them
+Create new accounts, allocate account data, assign accounts to owning programs,
+transfer lamports from System Program owned accounts and pay transacation fees.
 
 - Program id: `11111111111111111111111111111111`
 - Instructions: [SystemInstruction](https://docs.rs/solana-sdk/VERSION_FOR_DOCS_RS/solana_sdk/system_instruction/enum.SystemInstruction.html)
@@ -36,21 +37,22 @@ data to store in it.
 
 ## Stake Program
 
-Create stake accounts and delegate it to validators
+Create and manage accounts representing stake and rewards for delegations to
+validators.
 
 - Program id: `Stake11111111111111111111111111111111111111`
 - Instructions: [StakeInstruction](https://docs.rs/solana-stake-program/VERSION_FOR_DOCS_RS/solana_stake_program/stake_instruction/enum.StakeInstruction.html)
 
 ## Vote Program
 
-Create vote accounts and vote on blocks
+Create and manage accounts that track validator voting state and rewards.
 
 - Program id: `Vote111111111111111111111111111111111111111`
 - Instructions: [VoteInstruction](https://docs.rs/solana-vote-program/VERSION_FOR_DOCS_RS/solana_vote_program/vote_instruction/enum.VoteInstruction.html)
 
 ## BPF Loader
 
-Add programs to the chain and execute them.
+Deploy programs to the chain, load and execute them.
 
 - Program id: `BPFLoader1111111111111111111111111111111111`
 - Instructions: [LoaderInstruction](https://docs.rs/solana-sdk/VERSION_FOR_DOCS_RS/solana_sdk/loader_instruction/enum.LoaderInstruction.html)
