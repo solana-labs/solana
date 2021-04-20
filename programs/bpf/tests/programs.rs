@@ -2087,6 +2087,65 @@ fn test_program_bpf_upgrade_self_via_cpi() {
 
 #[cfg(feature = "bpf_rust")]
 #[test]
+fn test_program_bpf_set_upgrade_authority_via_cpi() {
+    solana_logger::setup();
+
+    let GenesisConfigInfo {
+        genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config(50);
+    let mut bank = Bank::new(&genesis_config);
+    let (name, id, entrypoint) = solana_bpf_loader_program!();
+    bank.add_builtin(&name, id, entrypoint);
+    let (name, id, entrypoint) = solana_bpf_loader_upgradeable_program!();
+    bank.add_builtin(&name, id, entrypoint);
+    let bank_client = BankClient::new(bank);
+    let invoke_and_return = load_bpf_program(
+        &bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        "solana_bpf_rust_invoke_and_return",
+    );
+
+    // Deploy upgradeable program
+    let buffer_keypair = Keypair::new();
+    let program_keypair = Keypair::new();
+    let program_id = program_keypair.pubkey();
+    let authority_keypair = Keypair::new();
+    load_upgradeable_bpf_program(
+        &bank_client,
+        &mint_keypair,
+        &buffer_keypair,
+        &program_keypair,
+        &authority_keypair,
+        "solana_bpf_rust_upgradeable",
+    );
+
+    // Set program upgrade authority via CPI
+    let new_authority_keypair = Keypair::new();
+    let mut set_upgrade_authority_instruction = bpf_loader_upgradeable::set_upgrade_authority(
+        &program_id,
+        &authority_keypair.pubkey(),
+        Some(&new_authority_keypair.pubkey()),
+    );
+
+    set_upgrade_authority_instruction.program_id = invoke_and_return;
+    set_upgrade_authority_instruction
+        .accounts
+        .insert(0, AccountMeta::new(bpf_loader_upgradeable::id(), false));
+
+    let message = Message::new(
+        &[set_upgrade_authority_instruction],
+        Some(&mint_keypair.pubkey()),
+    );
+    bank_client
+        .send_and_confirm_message(&[&mint_keypair, &authority_keypair], message)
+        .unwrap();
+}
+
+#[cfg(feature = "bpf_rust")]
+#[test]
 fn test_program_upgradeable_locks() {
     fn setup_program_upgradeable_locks(
         payer_keypair: &Keypair,
