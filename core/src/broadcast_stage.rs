@@ -373,7 +373,7 @@ pub fn get_broadcast_peers(
 /// # Remarks
 pub fn broadcast_shreds(
     s: &UdpSocket,
-    shreds: &Arc<Vec<Shred>>,
+    shreds: &[Shred],
     peers_and_stakes: &[(u64, usize)],
     peers: &[ContactInfo],
     last_datapoint_submit: &Arc<AtomicU64>,
