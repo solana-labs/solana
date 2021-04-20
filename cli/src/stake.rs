@@ -21,7 +21,7 @@ use solana_clap_utils::{
 };
 use solana_cli_output::{
     return_signers_with_config, CliEpochReward, CliStakeHistory, CliStakeHistoryEntry,
-    CliStakeState, CliStakeType, ReturnSignersConfig,
+    CliStakeState, CliStakeType, OutputFormat, ReturnSignersConfig,
 };
 use solana_client::{
     blockhash_query::BlockhashQuery, nonce_utils, rpc_client::RpcClient,
@@ -437,6 +437,19 @@ impl StakeSubCommands for App<'_, '_> {
                         .long("lamports")
                         .takes_value(false)
                         .help("Display balance in lamports instead of SOL")
+                )
+                .arg(
+                    Arg::with_name("limit")
+                        .long("limit")
+                        .takes_value(true)
+                        .value_name("NUM")
+                        .default_value("10")
+                        .validator(|s| {
+                            s.parse::<usize>()
+                                .map(|_| ())
+                                .map_err(|e| e.to_string())
+                        })
+                        .help("Display NUM recent epochs worth of stake history in text mode. 0 for all")
                 )
         )
     }
@@ -896,8 +909,12 @@ pub fn parse_show_stake_account(
 
 pub fn parse_show_stake_history(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
     let use_lamports_unit = matches.is_present("lamports");
+    let limit_results = value_of(matches, "limit").unwrap();
     Ok(CliCommandInfo {
-        command: CliCommand::ShowStakeHistory { use_lamports_unit },
+        command: CliCommand::ShowStakeHistory {
+            use_lamports_unit,
+            limit_results,
+        },
         signers: vec![],
     })
 }
@@ -1846,6 +1863,7 @@ pub fn process_show_stake_history(
     rpc_client: &RpcClient,
     config: &CliConfig,
     use_lamports_unit: bool,
+    limit_results: usize,
 ) -> ProcessResult {
     let stake_history_account = rpc_client.get_account(&stake_history::id())?;
     let stake_history =
@@ -1853,8 +1871,18 @@ pub fn process_show_stake_history(
             CliError::RpcRequestError("Failed to deserialize stake history".to_string())
         })?;
 
+    let limit_results = match config.output_format {
+        OutputFormat::Json | OutputFormat::JsonCompact => std::usize::MAX,
+        _ => {
+            if limit_results == 0 {
+                std::usize::MAX
+            } else {
+                limit_results
+            }
+        }
+    };
     let mut entries: Vec<CliStakeHistoryEntry> = vec![];
-    for entry in stake_history.deref() {
+    for entry in stake_history.deref().iter().take(limit_results) {
         entries.push(entry.into());
     }
     let stake_history_output = CliStakeHistory {
