@@ -10,6 +10,7 @@ use serde_json::{json, Value};
 use solana_account_decoder::UiAccount;
 use solana_client::{
     rpc_client::RpcClient,
+    rpc_config::{RpcAccountInfoConfig, RpcSignatureSubscribeConfig},
     rpc_response::{Response, RpcSignatureResult, SlotUpdate},
 };
 use solana_core::{rpc_pubsub::gen_client::Client as PubsubClient, test_validator::TestValidator};
@@ -260,6 +261,7 @@ fn test_rpc_subscriptions() {
     let (status_sender, status_receiver) = channel::<(String, Response<RpcSignatureResult>)>();
 
     // Create the pub sub runtime
+<<<<<<< HEAD
     let mut rt = Runtime::new().unwrap();
 
     // Subscribe to all signatures
@@ -316,6 +318,62 @@ fn test_rpc_subscriptions() {
                 future::ok(())
             })
             .map_err(|_| ())
+=======
+    let rt = Runtime::new().unwrap();
+    let rpc_pubsub_url = test_validator.rpc_pubsub_url();
+    let signature_set_clone = signature_set.clone();
+    rt.spawn(async move {
+        let connect = ws::try_connect::<PubsubClient>(&rpc_pubsub_url).unwrap();
+        let client = connect.await.unwrap();
+
+        // Subscribe to signature notifications
+        for sig in signature_set_clone {
+            let status_sender = status_sender.clone();
+            let mut sig_sub = client
+                .signature_subscribe(
+                    sig.clone(),
+                    Some(RpcSignatureSubscribeConfig {
+                        commitment: Some(CommitmentConfig::confirmed()),
+                        ..RpcSignatureSubscribeConfig::default()
+                    }),
+                )
+                .unwrap_or_else(|err| panic!("sig sub err: {:#?}", err));
+
+            tokio_02::spawn(async move {
+                let response = sig_sub.next().await.unwrap();
+                status_sender
+                    .send((sig.clone(), response.unwrap()))
+                    .unwrap();
+            });
+        }
+
+        // Subscribe to account notifications
+        for pubkey in account_set {
+            let account_sender = account_sender.clone();
+            let mut client_sub = client
+                .account_subscribe(
+                    pubkey,
+                    Some(RpcAccountInfoConfig {
+                        commitment: Some(CommitmentConfig::confirmed()),
+                        ..RpcAccountInfoConfig::default()
+                    }),
+                )
+                .unwrap_or_else(|err| panic!("acct sub err: {:#?}", err));
+            tokio_02::spawn(async move {
+                let response = client_sub.next().await.unwrap();
+                account_sender.send(response.unwrap()).unwrap();
+            });
+        }
+
+        // Signal ready after the next slot notification
+        let mut slot_sub = client
+            .slot_subscribe()
+            .unwrap_or_else(|err| panic!("sig sub err: {:#?}", err));
+        tokio_02::spawn(async move {
+            let _response = slot_sub.next().await.unwrap();
+            ready_sender.send(()).unwrap();
+        });
+>>>>>>> a7e65c003... RPC: use finalized as default pubsub commitment level (#16659)
     });
 
     // Wait for signature subscriptions
