@@ -410,12 +410,13 @@ impl ReplayStage {
                     // included in a block, so we may not have yet observed these votes just
                     // by replaying blocks.
                     let mut process_unfrozen_gossip_verified_vote_hashes_time = Measure::start("process_gossip_duplicate_confirmed_slots");
-                    Self::process_gossip_verified_vote_hashes(
+                    /*Self::process_gossip_verified_vote_hashes(
                         &gossip_verified_vote_hash_receiver,
                         &mut unfrozen_gossip_verified_vote_hashes,
                         &heaviest_subtree_fork_choice,
                         &mut latest_validator_votes_for_frozen_banks,
-                    );
+                    );*/
+                    for _ in gossip_verified_vote_hash_receiver.try_iter() {}
                     process_unfrozen_gossip_verified_vote_hashes_time.stop();
 
                     // Check to remove any duplicated slots from fork choice
@@ -918,6 +919,7 @@ impl ReplayStage {
         }
     }
 
+    #[cfg(test)]
     fn process_gossip_verified_vote_hashes(
         gossip_verified_vote_hash_receiver: &GossipVerifiedVoteHashReceiver,
         unfrozen_gossip_verified_vote_hashes: &mut UnfrozenGossipVerifiedVoteHashes,

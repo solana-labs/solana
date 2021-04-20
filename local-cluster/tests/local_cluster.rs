@@ -679,6 +679,7 @@ fn test_kill_partition_switch_threshold_progress() {
 
 #[test]
 #[serial]
+#[ignore]
 // Steps in this test:
 // We want to create a situation like:
 /*

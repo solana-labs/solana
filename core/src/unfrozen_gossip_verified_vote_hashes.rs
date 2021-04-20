@@ -10,6 +10,7 @@ pub(crate) struct UnfrozenGossipVerifiedVoteHashes {
 impl UnfrozenGossipVerifiedVoteHashes {
     // Update `latest_validator_votes_for_frozen_banks` if gossip has seen a newer vote
     // for a frozen bank.
+    #[allow(dead_code)]
     pub(crate) fn add_vote(
         &mut self,
         pubkey: Pubkey,
