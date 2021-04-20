@@ -7,6 +7,7 @@ use serde_json::{json, Value};
 use solana_account_decoder::UiAccount;
 use solana_client::{
     rpc_client::RpcClient,
+    rpc_config::{RpcAccountInfoConfig, RpcSignatureSubscribeConfig},
     rpc_response::{Response, RpcSignatureResult, SlotUpdate},
 };
 use solana_core::{rpc_pubsub::gen_client::Client as PubsubClient, test_validator::TestValidator};
@@ -262,7 +263,13 @@ fn test_rpc_subscriptions() {
         for sig in signature_set_clone {
             let status_sender = status_sender.clone();
             let mut sig_sub = client
-                .signature_subscribe(sig.clone(), None)
+                .signature_subscribe(
+                    sig.clone(),
+                    Some(RpcSignatureSubscribeConfig {
+                        commitment: Some(CommitmentConfig::confirmed()),
+                        ..RpcSignatureSubscribeConfig::default()
+                    }),
+                )
                 .unwrap_or_else(|err| panic!("sig sub err: {:#?}", err));
 
             tokio_02::spawn(async move {
@@ -277,7 +284,13 @@ fn test_rpc_subscriptions() {
         for pubkey in account_set {
             let account_sender = account_sender.clone();
             let mut client_sub = client
-                .account_subscribe(pubkey, None)
+                .account_subscribe(
+                    pubkey,
+                    Some(RpcAccountInfoConfig {
+                        commitment: Some(CommitmentConfig::confirmed()),
+                        ..RpcAccountInfoConfig::default()
+                    }),
+                )
                 .unwrap_or_else(|err| panic!("acct sub err: {:#?}", err));
             tokio_02::spawn(async move {
                 let response = client_sub.next().await.unwrap();
