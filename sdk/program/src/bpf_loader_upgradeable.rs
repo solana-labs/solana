@@ -196,7 +196,7 @@ pub fn is_set_authority_instruction(instruction_data: &[u8]) -> bool {
     4 == instruction_data[0]
 }
 
-pub fn is_cli_authorized_instruction(instruction_data: &[u8]) -> bool {
+pub fn is_cpi_authorized_instruction(instruction_data: &[u8]) -> bool {
     is_upgrade_instruction(instruction_data) || is_set_authority_instruction(instruction_data)
 }
 
@@ -363,9 +363,9 @@ mod tests {
     }
 
     #[test]
-    fn test_is_cli_authorized_instruction() {
+    fn test_is_cpi_authorized_instruction() {
         assert_is_instruction(
-            is_cli_authorized_instruction,
+            is_cpi_authorized_instruction,
             &[
                 UpgradeableLoaderInstruction::Upgrade {},
                 UpgradeableLoaderInstruction::SetAuthority {},
