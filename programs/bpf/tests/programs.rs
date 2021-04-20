@@ -216,6 +216,7 @@ fn run_program(
     let mut tracer = None;
     for i in 0..2 {
         let mut parameter_bytes = parameter_bytes.clone();
+<<<<<<< HEAD
         let mut vm = create_vm(
             &loader_id,
             executable.as_ref(),
@@ -230,10 +231,52 @@ fn run_program(
             vm.execute_program_jit(&mut instruction_meter)
         };
         assert_eq!(SUCCESS, result.unwrap());
+=======
+        {
+            let mut vm = create_vm(
+                &loader_id,
+                executable.as_ref(),
+                parameter_bytes.as_slice_mut(),
+                &mut invoke_context,
+            )
+            .unwrap();
+            let result = if i == 0 {
+                vm.execute_program_interpreted(&mut instruction_meter)
+            } else {
+                vm.execute_program_jit(&mut instruction_meter)
+            };
+            assert_eq!(SUCCESS, result.unwrap());
+            if i == 1 {
+                assert_eq!(instruction_count, vm.get_total_instruction_count());
+            }
+            instruction_count = vm.get_total_instruction_count();
+            if config.enable_instruction_tracing {
+                if i == 1 {
+                    if !Tracer::compare(tracer.as_ref().unwrap(), vm.get_tracer()) {
+                        let mut tracer_display = String::new();
+                        tracer
+                            .as_ref()
+                            .unwrap()
+                            .write(&mut tracer_display, vm.get_program())
+                            .unwrap();
+                        println!("TRACE (interpreted): {}", tracer_display);
+                        let mut tracer_display = String::new();
+                        vm.get_tracer()
+                            .write(&mut tracer_display, vm.get_program())
+                            .unwrap();
+                        println!("TRACE (jit): {}", tracer_display);
+                        assert!(false);
+                    }
+                }
+                tracer = Some(vm.get_tracer().clone());
+            }
+        }
+        let parameter_accounts = invoke_context.get_keyed_accounts().unwrap();
+>>>>>>> 08d525365... Enforce host aligned memory for program regions (#16590)
         deserialize_parameters(
             &bpf_loader::id(),
             parameter_accounts,
-            &parameter_bytes,
+            parameter_bytes.as_slice(),
             true,
         )
         .unwrap();
