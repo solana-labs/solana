@@ -4788,6 +4788,7 @@ mod tests {
 
     #[test]
     #[serial]
+    #[ignore]
     fn test_pull_request_time_pruning() {
         let node = Node::new_localhost();
         let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(node.info));
