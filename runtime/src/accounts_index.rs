@@ -307,9 +307,9 @@ pub struct RootsTracker {
 impl Default for RootsTracker {
     fn default() -> Self {
         // we expect to keep a rolling set of 400k slots around at a time
-        // 2M gives us plenty of extra room to handle a width 5x what we should need.
-        // cost is 2M bits of memory
-        RootsTracker::new(2097152)
+        // 4M gives us plenty of extra(?!) room to handle a width 10x what we should need.
+        // cost is 4M bits of memory, which is .5MB
+        RootsTracker::new(4194304)
     }
 }
 
