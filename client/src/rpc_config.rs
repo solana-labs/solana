@@ -41,6 +41,14 @@ pub struct RpcRequestAirdropConfig {
     pub commitment: Option<CommitmentConfig>,
 }
 
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcLeaderScheduleConfig {
+    pub identity: Option<String>, // validator identity, as a base-58 encoded string
+    #[serde(flatten)]
+    pub commitment: Option<CommitmentConfig>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum RpcLargestAccountsFilter {
