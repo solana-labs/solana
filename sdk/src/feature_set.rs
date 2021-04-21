@@ -75,10 +75,6 @@ pub mod bpf_loader_upgradeable_program {
     solana_sdk::declare_id!("FbhK8HN9qvNHvJcoFVHAEUCNkagHvu7DTWzdnLuVQ5u4");
 }
 
-pub mod set_upgrade_authority_via_cpi_enabled {
-    solana_sdk::declare_id!("GQdjCCptpGECG7QfE35hKTAopB1umGoSrdKfax2VmZWy");
-}
-
 pub mod stake_program_v3 {
     solana_sdk::declare_id!("Ego6nTu7WsBcZBvVqJQKp6Yku2N3mrfG8oYCfaLZkAeK");
 }
@@ -142,6 +138,10 @@ pub mod check_duplicates_by_hash {
 pub mod enforce_aligned_host_addrs {
     solana_sdk::declare_id!("6Qob9Z4RwGdf599FDVCqsjuKjR8ZFR3oVs2ByRLWBsua");
 }
+    
+pub mod set_upgrade_authority_via_cpi_enabled {
+    solana_sdk::declare_id!("GQdjCCptpGECG7QfE35hKTAopB1umGoSrdKfax2VmZWy");
+}
 
 lazy_static! {
     /// Map of feature identifiers to user-visible description
@@ -160,7 +160,6 @@ lazy_static! {
         (rewrite_stake::id(), "rewrite stake"),
         (filter_stake_delegation_accounts::id(), "filter stake_delegation_accounts #14062"),
         (bpf_loader_upgradeable_program::id(), "upgradeable bpf loader"),
-        (set_upgrade_authority_via_cpi_enabled::id(), "set upgrade authority instruction via cpi calls for upgradable programs"),
         (stake_program_v3::id(), "solana_stake_program v3"),
         (turbine_retransmit_peers_patch::id(), "turbine retransmit peers patch #14631"),
         (require_custodian_for_locked_stake_authorize::id(), "require custodian to authorize withdrawer change for locked stake"),
@@ -179,6 +178,7 @@ lazy_static! {
         (sysvar_via_syscall::id(), "provide sysvars via syscalls"),
         (check_duplicates_by_hash::id(), "use transaction message hash for duplicate check"),
         (enforce_aligned_host_addrs::id(), "enforce aligned host addresses"),
+        (set_upgrade_authority_via_cpi_enabled::id(), "set upgrade authority instruction via cpi calls for upgradable programs"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
