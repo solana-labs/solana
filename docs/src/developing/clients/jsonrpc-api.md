@@ -1135,7 +1135,8 @@ The result field will be a JSON object with the following fields:
 
 - `initial: <f64>`, the initial inflation percentage from time 0
 - `terminal: <f64>`, terminal inflation percentage
-- `taper: <f64>`, rate per year at which inflation is lowered
+- `taper: <f64>`, rate per year at which inflation is lowered.
+   Rate reduction is derived using the target slot time in genesis config
 - `foundation: <f64>`, percentage of total inflation allocated to the foundation
 - `foundationTerm: <f64>`, duration of foundation pool inflation in years
 
