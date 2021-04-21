@@ -92,10 +92,32 @@ specific needs.
 
 ## Float Support
 
-Programs support a limited subset of Rust's float operations, though they are
-highly discouraged due to the overhead involved. If a program attempts to use a
-float operation that is not supported, the runtime will report an unresolved
-symbol error.
+Programs support a limited subset of Rust's float operations, if a program
+attempts to use a float operation that is not supported, the runtime will report
+an unresolved symbol error.
+
+Float operations are performed via software libraries, specifically LLVM's float
+builtins.  Due to be software emulated they consume more compute units than
+integer operations.  In general, fixed point operations are recommended where
+possible.
+
+The Solana Program Library math tests will report the performance of some math
+operations:
+https://github.com/solana-labs/solana-program-library/tree/master/libraries/math
+
+To run the test, sync the repo, and run:
+
+`$ cargo test-bpf -- --nocapture --test-threads=1`
+
+Recent results show the float operations take more instructions compared to
+integers equivalents.  Fixed point implementations may vary but will also be
+less then the float equivalents:
+
+```
+         u64   f32
+Multipy    8   176
+Divide     9   219
+```
 
 ## Static Writable Data
 
