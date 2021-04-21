@@ -711,101 +711,8 @@ impl Shredder {
     }
 
     /// Generates coding shreds for the data shreds in the current FEC set
-<<<<<<< HEAD
-    pub fn generate_coding_shreds(
-        fec_rate: f32,
-        data_shred_batch: &[Shred],
-        max_coding_shreds: usize,
-    ) -> Vec<Shred> {
-        assert!(!data_shred_batch.is_empty());
-        if fec_rate != 0.0 {
-            let num_data = data_shred_batch.len();
-            // always generate at least 1 coding shred even if the fec_rate doesn't allow it
-            let num_coding =
-                Self::calculate_num_coding_shreds(num_data, fec_rate, max_coding_shreds);
-            let session =
-                Session::new(num_data, num_coding).expect("Failed to create erasure session");
-            let ShredCommonHeader {
-                slot,
-                index: start_index,
-                version,
-                fec_set_index,
-                ..
-            } = data_shred_batch[0].common_header;
-            assert_eq!(fec_set_index, start_index);
-            assert!(data_shred_batch
-                .iter()
-                .all(|shred| shred.common_header.slot == slot
-                    && shred.common_header.version == version
-                    && shred.common_header.fec_set_index == fec_set_index));
-            // All information after coding shred field in a data shred is encoded
-            let valid_data_len = SHRED_PAYLOAD_SIZE - SIZE_OF_DATA_SHRED_IGNORED_TAIL;
-            let data_ptrs: Vec<_> = data_shred_batch
-                .iter()
-                .map(|data| &data.payload[..valid_data_len])
-                .collect();
-
-            // Create empty coding shreds, with correctly populated headers
-            let mut coding_shreds: Vec<_> = (0..num_coding)
-                .map(|i| {
-                    Shred::new_empty_coding(
-                        slot,
-                        start_index + i as u32,
-                        fec_set_index,
-                        num_data,
-                        num_coding,
-                        i, // position
-                        version,
-                    )
-                    .payload
-                })
-                .collect();
-
-            // Grab pointers for the coding blocks
-            let coding_block_offset = SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_CODING_SHRED_HEADER;
-            let mut coding_ptrs: Vec<_> = coding_shreds
-                .iter_mut()
-                .map(|buffer| &mut buffer[coding_block_offset..])
-                .collect();
-
-            // Create coding blocks
-            session
-                .encode(&data_ptrs, coding_ptrs.as_mut_slice())
-                .expect("Failed in erasure encode");
-
-            // append to the shred list
-            coding_shreds
-                .into_iter()
-                .enumerate()
-                .map(|(i, payload)| {
-                    let mut shred = Shred::new_empty_coding(
-                        slot,
-                        start_index + i as u32,
-                        start_index,
-                        num_data,
-                        num_coding,
-                        i,
-                        version,
-                    );
-                    shred.payload = payload;
-                    shred
-                })
-                .collect()
-        } else {
-            vec![]
-        }
-    }
-
-    fn calculate_num_coding_shreds(
-        num_data_shreds: usize,
-        fec_rate: f32,
-        max_coding_shreds: usize,
-    ) -> usize {
-        if num_data_shreds == 0 {
-            0
-=======
     pub fn generate_coding_shreds(data: &[Shred], is_last_in_slot: bool) -> Vec<Shred> {
-        const PAYLOAD_ENCODE_SIZE: usize = SHRED_PAYLOAD_SIZE - SIZE_OF_CODING_SHRED_HEADERS;
+        const PAYLOAD_ENCODE_SIZE: usize = SHRED_PAYLOAD_SIZE - SIZE_OF_DATA_SHRED_IGNORED_TAIL;
         let ShredCommonHeader {
             slot,
             index,
@@ -822,7 +729,6 @@ impl Shredder {
             (2 * MAX_DATA_SHREDS_PER_FEC_BLOCK as usize)
                 .saturating_sub(num_data)
                 .max(num_data)
->>>>>>> 37b8587d4... expands number of erasure coding shreds in the last batch in slots (#16484)
         } else {
             num_data
         };
@@ -848,7 +754,7 @@ impl Shredder {
                     i, // position
                     version,
                 );
-                shred.payload[SIZE_OF_CODING_SHRED_HEADERS..].copy_from_slice(parity);
+                shred.payload[SIZE_OF_DATA_SHRED_IGNORED_TAIL..].copy_from_slice(parity);
                 shred
             })
             .collect()
@@ -1256,23 +1162,12 @@ pub mod tests {
             .collect();
 
         let size = serialized_size(&entries).unwrap();
-<<<<<<< HEAD
-        let no_header_size = SIZE_OF_DATA_SHRED_PAYLOAD as u64;
-        let num_expected_data_shreds = (size + no_header_size - 1) / no_header_size;
-        let num_expected_coding_shreds = Shredder::calculate_num_coding_shreds(
-            num_expected_data_shreds as usize,
-            fec_rate,
-            num_expected_data_shreds as usize,
-        );
-
-=======
         // Integer division to ensure we have enough shreds to fit all the data
         let payload_capacity = SIZE_OF_DATA_SHRED_PAYLOAD as u64;
         let num_expected_data_shreds = (size + payload_capacity - 1) / payload_capacity;
         let num_expected_coding_shreds = (2 * MAX_DATA_SHREDS_PER_FEC_BLOCK as usize)
             .saturating_sub(num_expected_data_shreds as usize)
             .max(num_expected_data_shreds as usize);
->>>>>>> 37b8587d4... expands number of erasure coding shreds in the last batch in slots (#16484)
         let start_index = 0;
         let (data_shreds, coding_shreds, next_index) =
             shredder.entries_to_shreds(&entries, true, start_index);
@@ -1484,8 +1379,6 @@ pub mod tests {
 
         // We should have 10 shreds now, an equal number of coding shreds
         assert_eq!(data_shreds.len(), num_data_shreds);
-<<<<<<< HEAD
-=======
         if is_last_in_slot {
             assert_eq!(
                 num_coding_shreds,
@@ -1495,7 +1388,6 @@ pub mod tests {
             // and an equal number of coding shreds
             assert_eq!(num_data_shreds, num_coding_shreds);
         }
->>>>>>> 37b8587d4... expands number of erasure coding shreds in the last batch in slots (#16484)
 
         let all_shreds = data_shreds
             .iter()

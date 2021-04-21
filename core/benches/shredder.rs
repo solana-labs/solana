@@ -8,13 +8,8 @@ use raptorq::{Decoder, Encoder};
 use solana_ledger::entry::{create_ticks, Entry};
 use solana_ledger::shred::{
     max_entries_per_n_shred, max_ticks_per_n_shreds, ProcessShredsStats, Shred, Shredder,
-<<<<<<< HEAD
-    MAX_DATA_SHREDS_PER_FEC_BLOCK, RECOMMENDED_FEC_RATE, SHRED_PAYLOAD_SIZE,
-    SIZE_OF_DATA_SHRED_IGNORED_TAIL, SIZE_OF_DATA_SHRED_PAYLOAD,
-=======
-    MAX_DATA_SHREDS_PER_FEC_BLOCK, SHRED_PAYLOAD_SIZE, SIZE_OF_CODING_SHRED_HEADERS,
+    MAX_DATA_SHREDS_PER_FEC_BLOCK, SHRED_PAYLOAD_SIZE, SIZE_OF_DATA_SHRED_IGNORED_TAIL,
     SIZE_OF_DATA_SHRED_PAYLOAD,
->>>>>>> 37b8587d4... expands number of erasure coding shreds in the last batch in slots (#16484)
 };
 use solana_perf::test_tx;
 use solana_sdk::hash::Hash;
