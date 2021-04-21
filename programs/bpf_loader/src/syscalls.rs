@@ -21,8 +21,8 @@ use solana_sdk::{
     epoch_schedule::EpochSchedule,
     feature_set::{
         cpi_data_cost, cpi_share_ro_and_exec_accounts, demote_sysvar_write_locks,
-        enforce_aligned_host_addrs, 
-        ristretto_mul_syscall_enabled, set_upgrade_authority_via_cpi_enabled, sysvar_via_syscall,
+        enforce_aligned_host_addrs, ristretto_mul_syscall_enabled,
+        set_upgrade_authority_via_cpi_enabled, sysvar_via_syscall,
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
