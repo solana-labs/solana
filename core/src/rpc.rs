@@ -1764,13 +1764,13 @@ fn verify_filter(input: &RpcFilterType) -> Result<()> {
         .map_err(|e| Error::invalid_params(format!("Invalid param: {:?}", e)))
 }
 
-fn verify_pubkey(input: String) -> Result<Pubkey> {
+fn verify_pubkey(input: &str) -> Result<Pubkey> {
     input
         .parse()
         .map_err(|e| Error::invalid_params(format!("Invalid param: {:?}", e)))
 }
 
-fn verify_hash(input: String) -> Result<Hash> {
+fn verify_hash(input: &str) -> Result<Hash> {
     input
         .parse()
         .map_err(|e| Error::invalid_params(format!("Invalid param: {:?}", e)))
@@ -1787,11 +1787,11 @@ fn verify_token_account_filter(
 ) -> Result<TokenAccountsFilter> {
     match token_account_filter {
         RpcTokenAccountsFilter::Mint(mint_str) => {
-            let mint = verify_pubkey(mint_str)?;
+            let mint = verify_pubkey(&mint_str)?;
             Ok(TokenAccountsFilter::Mint(mint))
         }
         RpcTokenAccountsFilter::ProgramId(program_id_str) => {
-            let program_id = verify_pubkey(program_id_str)?;
+            let program_id = verify_pubkey(&program_id_str)?;
             Ok(TokenAccountsFilter::ProgramId(program_id))
         }
     }
@@ -2124,7 +2124,7 @@ pub mod rpc_minimal {
             commitment: Option<CommitmentConfig>,
         ) -> Result<RpcResponse<u64>> {
             debug!("get_balance rpc request received: {:?}", pubkey_str);
-            let pubkey = verify_pubkey(pubkey_str)?;
+            let pubkey = verify_pubkey(&pubkey_str)?;
             Ok(meta.get_balance(&pubkey, commitment))
         }
 
@@ -2585,7 +2585,7 @@ pub mod rpc_full {
             config: Option<RpcAccountInfoConfig>,
         ) -> Result<RpcResponse<Option<UiAccount>>> {
             debug!("get_account_info rpc request received: {:?}", pubkey_str);
-            let pubkey = verify_pubkey(pubkey_str)?;
+            let pubkey = verify_pubkey(&pubkey_str)?;
             meta.get_account_info(&pubkey, config)
         }
 
@@ -2612,7 +2612,7 @@ pub mod rpc_full {
             }
             let mut pubkeys: Vec<Pubkey> = vec![];
             for pubkey_str in pubkey_strs {
-                pubkeys.push(verify_pubkey(pubkey_str)?);
+                pubkeys.push(verify_pubkey(&pubkey_str)?);
             }
             meta.get_multiple_accounts(pubkeys, config)
         }
@@ -2643,7 +2643,7 @@ pub mod rpc_full {
                 "get_program_accounts rpc request received: {:?}",
                 program_id_str
             );
-            let program_id = verify_pubkey(program_id_str)?;
+            let program_id = verify_pubkey(&program_id_str)?;
             let (config, filters) = if let Some(config) = config {
                 (
                     Some(config.account_config),
@@ -2912,13 +2912,13 @@ pub mod rpc_full {
             );
 
             let faucet_addr = meta.config.faucet_addr.ok_or_else(Error::invalid_request)?;
-            let pubkey = verify_pubkey(pubkey_str)?;
+            let pubkey = verify_pubkey(&pubkey_str)?;
 
             let config = config.unwrap_or_default();
             let bank = meta.bank(config.commitment);
 
             let blockhash = if let Some(blockhash) = config.recent_blockhash {
-                verify_hash(blockhash)?
+                verify_hash(&blockhash)?
             } else {
                 bank.confirmed_last_blockhash().0
             };
@@ -3184,7 +3184,7 @@ pub mod rpc_full {
                 "get_confirmed_signatures_for_address rpc request received: {:?} {:?}-{:?}",
                 pubkey_str, start_slot, end_slot
             );
-            let pubkey = verify_pubkey(pubkey_str)?;
+            let pubkey = verify_pubkey(&pubkey_str)?;
             if end_slot < start_slot {
                 return Err(Error::invalid_params(format!(
                     "start_slot {} must be less than or equal to end_slot {}",
@@ -3210,7 +3210,7 @@ pub mod rpc_full {
             address: String,
             config: Option<RpcGetConfirmedSignaturesForAddress2Config>,
         ) -> Result<Vec<RpcConfirmedTransactionStatusWithSignature>> {
-            let address = verify_pubkey(address)?;
+            let address = verify_pubkey(&address)?;
 
             let config = config.unwrap_or_default();
             let before = config
@@ -3256,7 +3256,7 @@ pub mod rpc_full {
                 "get_stake_activation rpc request received: {:?}",
                 pubkey_str
             );
-            let pubkey = verify_pubkey(pubkey_str)?;
+            let pubkey = verify_pubkey(&pubkey_str)?;
             meta.get_stake_activation(&pubkey, config)
         }
 
@@ -3273,7 +3273,7 @@ pub mod rpc_full {
 
             let mut addresses: Vec<Pubkey> = vec![];
             for address_str in address_strs {
-                addresses.push(verify_pubkey(address_str)?);
+                addresses.push(verify_pubkey(&address_str)?);
             }
 
             meta.get_inflation_reward(addresses, config)
@@ -3289,7 +3289,7 @@ pub mod rpc_full {
                 "get_token_account_balance rpc request received: {:?}",
                 pubkey_str
             );
-            let pubkey = verify_pubkey(pubkey_str)?;
+            let pubkey = verify_pubkey(&pubkey_str)?;
             meta.get_token_account_balance(&pubkey, commitment)
         }
 
@@ -3300,7 +3300,7 @@ pub mod rpc_full {
             commitment: Option<CommitmentConfig>,
         ) -> Result<RpcResponse<UiTokenAmount>> {
             debug!("get_token_supply rpc request received: {:?}", mint_str);
-            let mint = verify_pubkey(mint_str)?;
+            let mint = verify_pubkey(&mint_str)?;
             meta.get_token_supply(&mint, commitment)
         }
 
@@ -3314,7 +3314,7 @@ pub mod rpc_full {
                 "get_token_largest_accounts rpc request received: {:?}",
                 mint_str
             );
-            let mint = verify_pubkey(mint_str)?;
+            let mint = verify_pubkey(&mint_str)?;
             meta.get_token_largest_accounts(&mint, commitment)
         }
 
@@ -3329,7 +3329,7 @@ pub mod rpc_full {
                 "get_token_accounts_by_owner rpc request received: {:?}",
                 owner_str
             );
-            let owner = verify_pubkey(owner_str)?;
+            let owner = verify_pubkey(&owner_str)?;
             let token_account_filter = verify_token_account_filter(token_account_filter)?;
             meta.get_token_accounts_by_owner(&owner, token_account_filter, config)
         }
@@ -3345,7 +3345,7 @@ pub mod rpc_full {
                 "get_token_accounts_by_delegate rpc request received: {:?}",
                 delegate_str
             );
-            let delegate = verify_pubkey(delegate_str)?;
+            let delegate = verify_pubkey(&delegate_str)?;
             let token_account_filter = verify_token_account_filter(token_account_filter)?;
             meta.get_token_accounts_by_delegate(&delegate, token_account_filter, config)
         }
@@ -5243,10 +5243,10 @@ pub mod tests {
     #[test]
     fn test_rpc_verify_pubkey() {
         let pubkey = solana_sdk::pubkey::new_rand();
-        assert_eq!(verify_pubkey(pubkey.to_string()).unwrap(), pubkey);
+        assert_eq!(verify_pubkey(&pubkey.to_string()).unwrap(), pubkey);
         let bad_pubkey = "a1b2c3d4";
         assert_eq!(
-            verify_pubkey(bad_pubkey.to_string()),
+            verify_pubkey(&bad_pubkey.to_string()),
             Err(Error::invalid_params("Invalid param: WrongSize"))
         );
     }
