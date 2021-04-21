@@ -1,5 +1,5 @@
 #![allow(clippy::integer_arithmetic)]
-pub use solana_core::test_validator;
+pub use solana_core::{cluster_info::MINIMUM_VALIDATOR_PORT_RANGE_WIDTH, test_validator};
 use {
     console::style,
     indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle},
@@ -73,6 +73,22 @@ pub fn port_validator(port: String) -> Result<(), String> {
     port.parse::<u16>()
         .map(|_| ())
         .map_err(|e| format!("{:?}", e))
+}
+
+pub fn port_range_validator(port_range: String) -> Result<(), String> {
+    if let Some((start, end)) = solana_net_utils::parse_port_range(&port_range) {
+        if end - start < MINIMUM_VALIDATOR_PORT_RANGE_WIDTH {
+            Err(format!(
+                "Port range is too small.  Try --dynamic-port-range {}-{}",
+                start,
+                start + MINIMUM_VALIDATOR_PORT_RANGE_WIDTH
+            ))
+        } else {
+            Ok(())
+        }
+    } else {
+        Err("Invalid port range".to_string())
+    }
 }
 
 /// Creates a new process bar for processing that will take an unknown amount of time

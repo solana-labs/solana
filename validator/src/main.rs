@@ -21,9 +21,7 @@ use {
         DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS,
     },
     solana_core::{
-        cluster_info::{
-            ClusterInfo, Node, MINIMUM_VALIDATOR_PORT_RANGE_WIDTH, VALIDATOR_PORT_RANGE,
-        },
+        cluster_info::{ClusterInfo, Node, VALIDATOR_PORT_RANGE},
         contact_info::ContactInfo,
         gossip_service::GossipService,
         poh_service,
@@ -294,22 +292,6 @@ fn wait_for_restart_window(
     drop(progress_bar);
     println!("{}", style("Ready to restart").green());
     Ok(())
-}
-
-fn port_range_validator(port_range: String) -> Result<(), String> {
-    if let Some((start, end)) = solana_net_utils::parse_port_range(&port_range) {
-        if end - start < MINIMUM_VALIDATOR_PORT_RANGE_WIDTH {
-            Err(format!(
-                "Port range is too small.  Try --dynamic-port-range {}-{}",
-                start,
-                start + MINIMUM_VALIDATOR_PORT_RANGE_WIDTH
-            ))
-        } else {
-            Ok(())
-        }
-    } else {
-        Err("Invalid port range".to_string())
-    }
 }
 
 fn hash_validator(hash: String) -> Result<(), String> {
@@ -1298,7 +1280,7 @@ pub fn main() {
                 .value_name("MIN_PORT-MAX_PORT")
                 .takes_value(true)
                 .default_value(default_dynamic_port_range)
-                .validator(port_range_validator)
+                .validator(solana_validator::port_range_validator)
                 .help("Range to use for dynamically assigned ports"),
         )
         .arg(

@@ -7,6 +7,7 @@ use {
     },
     solana_client::rpc_client::RpcClient,
     solana_ledger::{blockstore::create_new_ledger, create_new_tmp_ledger},
+    solana_net_utils::PortRange,
     solana_runtime::{
         bank_forks::{ArchiveFormat, SnapshotConfig, SnapshotVersion},
         genesis_utils::create_genesis_config_with_leader_ex,
@@ -42,6 +43,29 @@ pub struct ProgramInfo {
     pub program_path: PathBuf,
 }
 
+#[derive(Debug)]
+pub struct TestValidatorNodeConfig {
+    gossip_addr: SocketAddr,
+    port_range: PortRange,
+    bind_ip_addr: IpAddr,
+}
+
+impl Default for TestValidatorNodeConfig {
+    fn default() -> Self {
+        const MIN_PORT_RANGE: u16 = 1024;
+        const MAX_PORT_RANGE: u16 = 65535;
+
+        let bind_ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let port_range = (MIN_PORT_RANGE, MAX_PORT_RANGE);
+
+        Self {
+            gossip_addr: socketaddr!("127.0.0.1:0"),
+            port_range,
+            bind_ip_addr,
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct TestValidatorGenesis {
     fee_rate_governor: FeeRateGovernor,
@@ -54,6 +78,7 @@ pub struct TestValidatorGenesis {
     accounts: HashMap<Pubkey, AccountSharedData>,
     programs: Vec<ProgramInfo>,
     epoch_schedule: Option<EpochSchedule>,
+    node_config: TestValidatorNodeConfig,
     pub validator_exit: Arc<RwLock<ValidatorExit>>,
     pub start_progress: Arc<RwLock<ValidatorStartProgress>>,
     pub authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
@@ -107,6 +132,26 @@ impl TestValidatorGenesis {
 
     pub fn bpf_jit(&mut self, bpf_jit: bool) -> &mut Self {
         self.no_bpf_jit = !bpf_jit;
+        self
+    }
+
+    pub fn gossip_host(&mut self, gossip_host: IpAddr) -> &mut Self {
+        self.node_config.gossip_addr.set_ip(gossip_host);
+        self
+    }
+
+    pub fn gossip_port(&mut self, gossip_port: u16) -> &mut Self {
+        self.node_config.gossip_addr.set_port(gossip_port);
+        self
+    }
+
+    pub fn port_range(&mut self, port_range: PortRange) -> &mut Self {
+        self.node_config.port_range = port_range;
+        self
+    }
+
+    pub fn bind_ip_addr(&mut self, bind_ip_addr: IpAddr) -> &mut Self {
+        self.node_config.bind_ip_addr = bind_ip_addr;
         self
     }
 
@@ -398,7 +443,12 @@ impl TestValidator {
                 .unwrap(),
         )?;
 
-        let mut node = Node::new_localhost_with_pubkey(&validator_identity.pubkey());
+        let mut node = Node::new_single_bind(
+            &validator_identity.pubkey(),
+            &config.node_config.gossip_addr,
+            config.node_config.port_range,
+            config.node_config.bind_ip_addr,
+        );
         if let Some((rpc, rpc_pubsub)) = config.rpc_ports {
             node.info.rpc = SocketAddr::new(node.info.gossip.ip(), rpc);
             node.info.rpc_pubsub = SocketAddr::new(node.info.gossip.ip(), rpc_pubsub);

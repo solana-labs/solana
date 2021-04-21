@@ -3358,6 +3358,7 @@ impl Node {
             },
         }
     }
+
     fn get_gossip_port(
         gossip_addr: &SocketAddr,
         port_range: PortRange,
@@ -3376,6 +3377,60 @@ impl Node {
     }
     fn bind(bind_ip_addr: IpAddr, port_range: PortRange) -> (u16, UdpSocket) {
         bind_in_range(bind_ip_addr, port_range).expect("Failed to bind")
+    }
+
+    pub fn new_single_bind(
+        pubkey: &Pubkey,
+        gossip_addr: &SocketAddr,
+        port_range: PortRange,
+        bind_ip_addr: IpAddr,
+    ) -> Self {
+        let (gossip_port, (gossip, ip_echo)) =
+            Self::get_gossip_port(gossip_addr, port_range, bind_ip_addr);
+        let (tvu_port, tvu) = Self::bind(bind_ip_addr, port_range);
+        let (tvu_forwards_port, tvu_forwards) = Self::bind(bind_ip_addr, port_range);
+        let (tpu_port, tpu) = Self::bind(bind_ip_addr, port_range);
+        let (tpu_forwards_port, tpu_forwards) = Self::bind(bind_ip_addr, port_range);
+        let (_, retransmit_socket) = Self::bind(bind_ip_addr, port_range);
+        let (repair_port, repair) = Self::bind(bind_ip_addr, port_range);
+        let (serve_repair_port, serve_repair) = Self::bind(bind_ip_addr, port_range);
+        let (_, broadcast) = Self::bind(bind_ip_addr, port_range);
+
+        let rpc_port = find_available_port_in_range(bind_ip_addr, port_range).unwrap();
+        let rpc_pubsub_port = find_available_port_in_range(bind_ip_addr, port_range).unwrap();
+
+        let info = ContactInfo {
+            id: *pubkey,
+            gossip: SocketAddr::new(gossip_addr.ip(), gossip_port),
+            tvu: SocketAddr::new(gossip_addr.ip(), tvu_port),
+            tvu_forwards: SocketAddr::new(gossip_addr.ip(), tvu_forwards_port),
+            repair: SocketAddr::new(gossip_addr.ip(), repair_port),
+            tpu: SocketAddr::new(gossip_addr.ip(), tpu_port),
+            tpu_forwards: SocketAddr::new(gossip_addr.ip(), tpu_forwards_port),
+            unused: socketaddr_any!(),
+            rpc: SocketAddr::new(gossip_addr.ip(), rpc_port),
+            rpc_pubsub: SocketAddr::new(gossip_addr.ip(), rpc_pubsub_port),
+            serve_repair: SocketAddr::new(gossip_addr.ip(), serve_repair_port),
+            wallclock: timestamp(),
+            shred_version: 0,
+        };
+        trace!("new ContactInfo: {:?}", info);
+
+        Node {
+            info,
+            sockets: Sockets {
+                gossip,
+                ip_echo: Some(ip_echo),
+                tvu: vec![tvu],
+                tvu_forwards: vec![tvu_forwards],
+                tpu: vec![tpu],
+                tpu_forwards: vec![tpu_forwards],
+                broadcast: vec![broadcast],
+                repair,
+                retransmit_sockets: vec![retransmit_socket],
+                serve_repair,
+            },
+        }
     }
 
     pub fn new_with_external_ip(
