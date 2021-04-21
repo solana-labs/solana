@@ -75,18 +75,12 @@ fn bench_program_create_executable(bencher: &mut Bencher) {
     let elf = load_elf("bench_alu").unwrap();
 
     bencher.iter(|| {
-<<<<<<< HEAD
-        let _ =
-            Executable::<BpfError, ThisInstructionMeter>::from_elf(&elf, None, Config::default())
-                .unwrap();
-=======
         let _ = <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(
             &elf,
             None,
             Config::default(),
         )
         .unwrap();
->>>>>>> 08d525365... Enforce host aligned memory for program regions (#16590)
     });
 }
 
@@ -104,11 +98,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
 
     let elf = load_elf("bench_alu").unwrap();
     let mut executable =
-<<<<<<< HEAD
-        Executable::<BpfError, ThisInstructionMeter>::from_elf(&elf, None, Config::default())
-=======
         <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(&elf, None, Config::default())
->>>>>>> 08d525365... Enforce host aligned memory for program regions (#16590)
             .unwrap();
     executable.set_syscall_registry(register_syscalls(&mut invoke_context).unwrap());
     executable.jit_compile().unwrap();
@@ -235,11 +225,7 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
 
     let elf = load_elf("tuner").unwrap();
     let mut executable =
-<<<<<<< HEAD
-        Executable::<BpfError, ThisInstructionMeter>::from_elf(&elf, None, Config::default())
-=======
         <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(&elf, None, Config::default())
->>>>>>> 08d525365... Enforce host aligned memory for program regions (#16590)
             .unwrap();
     executable.set_syscall_registry(register_syscalls(&mut invoke_context).unwrap());
     let compute_meter = invoke_context.get_compute_meter();
@@ -247,12 +233,8 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
     let mut vm = create_vm(
         &loader_id,
         executable.as_ref(),
-<<<<<<< HEAD
-        &mut serialized,
-        &[],
-=======
         serialized.as_slice_mut(),
->>>>>>> 08d525365... Enforce host aligned memory for program regions (#16590)
+        &[],
         &mut invoke_context,
     )
     .unwrap();

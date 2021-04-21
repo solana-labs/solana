@@ -793,14 +793,9 @@ impl Executor for BpfExecutor {
             let compute_meter = invoke_context.get_compute_meter();
             let mut vm = match create_vm(
                 loader_id,
-<<<<<<< HEAD
                 self.program.as_ref(),
-                &mut parameter_bytes,
-                &parameter_accounts,
-=======
-                self.executable.as_ref(),
                 parameter_bytes.as_slice_mut(),
->>>>>>> 08d525365... Enforce host aligned memory for program regions (#16590)
+                &parameter_accounts,
                 invoke_context,
             ) {
                 Ok(info) => info,
@@ -862,13 +857,8 @@ impl Executor for BpfExecutor {
         let mut deserialize_time = Measure::start("deserialize");
         deserialize_parameters(
             loader_id,
-<<<<<<< HEAD
             parameter_accounts,
-            &parameter_bytes,
-=======
-            keyed_accounts,
             parameter_bytes.as_slice(),
->>>>>>> 08d525365... Enforce host aligned memory for program regions (#16590)
             invoke_context.is_feature_active(&skip_ro_deserialization::id()),
         )?;
         deserialize_time.stop();
