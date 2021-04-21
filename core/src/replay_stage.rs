@@ -60,7 +60,7 @@ use std::{
         Arc, Mutex, RwLock,
     },
     thread::{self, Builder, JoinHandle},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 pub const MAX_ENTRY_RECV_PER_ITER: usize = 512;
@@ -334,6 +334,7 @@ impl ReplayStage {
                 let mut latest_validator_votes_for_frozen_banks: LatestValidatorVotesForFrozenBanks = LatestValidatorVotesForFrozenBanks::default();
                 let mut voted_signatures = Vec::new();
                 let mut has_new_vote_been_rooted = !wait_for_vote_to_start_leader;
+                let mut last_vote_refresh_time = Instant::now();
                 loop {
                     // Stop getting entries if we get exit signal
                     if exit.load(Ordering::Relaxed) {
@@ -479,6 +480,12 @@ impl ReplayStage {
                     let (heaviest_bank, heaviest_bank_on_same_voted_fork) = heaviest_subtree_fork_choice
                         .select_forks(&frozen_banks, &tower, &progress, &ancestors, &bank_forks);
                     select_forks_time.stop();
+
+                    if let Some(heaviest_bank_on_same_voted_fork) = heaviest_bank_on_same_voted_fork.as_ref() {
+                        if let Some(my_latest_landed_vote) = progress.my_latest_landed_vote(heaviest_bank_on_same_voted_fork.slot()) {
+                            Self::refresh_last_vote(&mut tower, &cluster_info, heaviest_bank_on_same_voted_fork, &poh_recorder, my_latest_landed_vote, &vote_account, &authorized_voter_keypairs.read().unwrap(), &mut voted_signatures, has_new_vote_been_rooted, &mut last_vote_refresh_time);
+                        }
+                    }
 
                     let mut select_vote_and_reset_forks_time =
                         Measure::start("select_vote_and_reset_forks");
@@ -1289,7 +1296,7 @@ impl ReplayStage {
             inc_new_counter_info!("replay_stage-voted_empty_bank", 1);
         }
         trace!("handle votable bank {}", bank.slot());
-        let (new_root, last_vote) = tower.record_bank_vote(bank, vote_account_pubkey);
+        let new_root = tower.record_bank_vote(bank, vote_account_pubkey);
 
         if let Err(err) = tower.save(&cluster_info.keypair) {
             error!("Unable to save tower: {:?}", err);
@@ -1365,7 +1372,6 @@ impl ReplayStage {
             poh_recorder,
             vote_account_pubkey,
             authorized_voter_keypairs,
-            last_vote,
             tower,
             switch_fork_decision,
             vote_signatures,
@@ -1463,12 +1469,12 @@ impl ReplayStage {
         cluster_info: &ClusterInfo,
         heaviest_bank_on_same_fork: &Bank,
         poh_recorder: &Mutex<PohRecorder>,
-        last_landed_vote_slot: Slot,
+        my_latest_landed_vote: Slot,
         vote_account_pubkey: &Pubkey,
         authorized_voter_keypairs: &[Arc<Keypair>],
-        vote: Vote,
         vote_signatures: &mut Vec<Signature>,
         has_new_vote_been_rooted: bool,
+        last_vote_refresh_time: &mut Instant,
     ) {
         let last_voted_slot = tower.last_voted_slot();
         if last_voted_slot.is_none() {
@@ -1478,10 +1484,13 @@ impl ReplayStage {
         // Refresh the vote if our latest vote hasn't landed, and the recent blockhash of the
         // last attempt at a vote transaction has expired
         let last_voted_slot = last_voted_slot.unwrap();
-        if last_landed_vote_slot >= last_voted_slot
+        if my_latest_landed_vote >= last_voted_slot
             || heaviest_bank_on_same_fork
                 .check_hash_age(&tower.last_vote_tx_blockhash(), MAX_PROCESSING_AGE)
                 .unwrap_or(false)
+            // In order to avoid voting on multiple forks all past MAX_PROCESSING_AGE that don't 
+            // include the last voted blockhash
+            || last_vote_refresh_time.elapsed().as_millis() < 5000
         {
             return;
         }
@@ -1493,7 +1502,7 @@ impl ReplayStage {
             heaviest_bank_on_same_fork,
             vote_account_pubkey,
             authorized_voter_keypairs,
-            vote,
+            tower.last_vote(),
             &SwitchForkDecision::SameFork,
             vote_signatures,
             has_new_vote_been_rooted,
@@ -1507,7 +1516,8 @@ impl ReplayStage {
                 &vote_tx,
                 crate::banking_stage::next_leader_tpu(cluster_info, poh_recorder),
             );
-            //cluster_info.push_vote(tower, vote_tx);
+            cluster_info.refresh_vote(vote_tx, last_voted_slot);
+            *last_vote_refresh_time = Instant::now();
         }
     }
 
@@ -1517,7 +1527,6 @@ impl ReplayStage {
         poh_recorder: &Mutex<PohRecorder>,
         vote_account_pubkey: &Pubkey,
         authorized_voter_keypairs: &[Arc<Keypair>],
-        vote: Vote,
         tower: &mut Tower,
         switch_fork_decision: &SwitchForkDecision,
         vote_signatures: &mut Vec<Signature>,
@@ -1528,7 +1537,7 @@ impl ReplayStage {
             bank,
             vote_account_pubkey,
             authorized_voter_keypairs,
-            vote,
+            tower.last_vote(),
             switch_fork_decision,
             vote_signatures,
             has_new_vote_been_rooted,
@@ -1794,6 +1803,7 @@ impl ReplayStage {
                         voted_stakes,
                         total_stake,
                         lockout_intervals,
+                        my_latest_landed_vote,
                         ..
                     } = computed_bank_state;
                     let stats = progress
@@ -1804,6 +1814,7 @@ impl ReplayStage {
                     stats.lockout_intervals = lockout_intervals;
                     stats.block_height = bank.block_height();
                     stats.bank_hash = Some(bank.hash());
+                    stats.my_latest_landed_vote = my_latest_landed_vote;
                     stats.computed = true;
                     new_stats.push(bank_slot);
                     datapoint_info!(

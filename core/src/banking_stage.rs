@@ -1363,7 +1363,7 @@ impl BankingStage {
 
 pub(crate) fn next_leader_tpu(
     cluster_info: &ClusterInfo,
-    poh_recorder: &Arc<Mutex<PohRecorder>>,
+    poh_recorder: &Mutex<PohRecorder>,
 ) -> Option<std::net::SocketAddr> {
     if let Some(leader_pubkey) = poh_recorder
         .lock()
