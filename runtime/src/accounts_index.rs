@@ -703,13 +703,17 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         }
     }
 
-    pub fn get_account_read_entry(&self, pubkey: &Pubkey) -> Option<ReadAccountMapEntry<T>> {
+    fn get_account_write_entry(&self, pubkey: &Pubkey) -> Option<WriteAccountMapEntry<T>> {
+        let account_maps =
         self.account_maps
             .read()
-            .unwrap()
+            .unwrap();
+            let result = account_maps
             .get(pubkey)
             .cloned()
-            .map(ReadAccountMapEntry::from_account_map_entry)
+            .map(WriteAccountMapEntry::from_account_map_entry);
+            drop(account_maps);
+            result
     }
 
     fn get_account_write_entry(&self, pubkey: &Pubkey) -> Option<WriteAccountMapEntry<T>> {
