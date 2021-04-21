@@ -4,6 +4,7 @@
 //! packet::PACKET_DATA_SIZE size.
 
 use crate::{
+    contact_info::ContactInfo,
     crds::{Crds, VersionedCrdsValue},
     crds_gossip_error::CrdsGossipError,
     crds_gossip_pull::{CrdsFilter, CrdsGossipPull, ProcessPullStats},
@@ -220,7 +221,7 @@ impl CrdsGossip {
         gossip_validators: Option<&HashSet<Pubkey>>,
         stakes: &HashMap<Pubkey, u64>,
         bloom_size: usize,
-    ) -> Result<(Pubkey, Vec<CrdsFilter>, CrdsValue), CrdsGossipError> {
+    ) -> Result<(ContactInfo, Vec<CrdsFilter>), CrdsGossipError> {
         self.pull.new_pull_request(
             thread_pool,
             &self.crds,
@@ -237,7 +238,7 @@ impl CrdsGossip {
     /// This is used for weighted random selection during `new_pull_request`
     /// It's important to use the local nodes request creation time as the weight
     /// instead of the response received time otherwise failed nodes will increase their weight.
-    pub fn mark_pull_request_creation_time(&mut self, from: &Pubkey, now: u64) {
+    pub fn mark_pull_request_creation_time(&mut self, from: Pubkey, now: u64) {
         self.pull.mark_pull_request_creation_time(from, now)
     }
     /// process a pull request and create a response
