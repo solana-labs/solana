@@ -40,7 +40,7 @@ use solana_runtime::{
 use solana_sdk::{
     account::AccountSharedData,
     client::{AsyncClient, SyncClient},
-    clock::{self, Slot, DEFAULT_MS_PER_SLOT, MAX_RECENT_BLOCKHASHES},
+    clock::{self, Slot, DEFAULT_MS_PER_SLOT, DEFAULT_TICKS_PER_SLOT, MAX_RECENT_BLOCKHASHES},
     commitment_config::CommitmentConfig,
     epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
     genesis_config::ClusterType,
@@ -292,6 +292,7 @@ fn run_cluster_partition<C>(
     on_before_partition_resolved: impl FnOnce(&mut LocalCluster, &mut C),
     on_partition_resolved: impl FnOnce(&mut LocalCluster, &mut C),
     partition_duration: Option<u64>,
+    ticks_per_slot: Option<u64>,
     additional_accounts: Vec<(Pubkey, AccountSharedData)>,
 ) {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
@@ -351,6 +352,7 @@ fn run_cluster_partition<C>(
         stakers_slot_offset: slots_per_epoch,
         skip_warmup_slots: true,
         additional_accounts,
+        ticks_per_slot: ticks_per_slot.unwrap_or(DEFAULT_TICKS_PER_SLOT),
         ..ClusterConfig::default()
     };
 
@@ -425,6 +427,7 @@ fn test_cluster_partition_1_2() {
         empty,
         on_partition_resolved,
         None,
+        None,
         vec![],
     )
 }
@@ -444,6 +447,7 @@ fn test_cluster_partition_1_1() {
         empty,
         on_partition_resolved,
         None,
+        None,
         vec![],
     )
 }
@@ -462,6 +466,7 @@ fn test_cluster_partition_1_1_1() {
         empty,
         empty,
         on_partition_resolved,
+        None,
         None,
         vec![],
     )
@@ -522,6 +527,7 @@ fn test_kill_heaviest_partition() {
         empty,
         on_partition_resolved,
         None,
+        None,
         vec![],
     )
 }
@@ -531,6 +537,7 @@ fn run_kill_partition_switch_threshold<C>(
     stakes_to_kill: &[&[(usize, usize)]],
     alive_stakes: &[&[(usize, usize)]],
     partition_duration: Option<u64>,
+    ticks_per_slot: Option<u64>,
     partition_context: C,
     on_partition_start: impl Fn(&mut LocalCluster, &[Pubkey], &mut C),
     on_before_partition_resolved: impl Fn(&mut LocalCluster, &mut C),
@@ -588,6 +595,7 @@ fn run_kill_partition_switch_threshold<C>(
         on_before_partition_resolved,
         on_partition_resolved,
         partition_duration,
+        ticks_per_slot,
         vec![],
     )
 }
@@ -620,6 +628,7 @@ fn test_kill_partition_switch_threshold_no_progress() {
             &[(alive_stake_1 as usize, 8)],
             &[(alive_stake_2 as usize, 8)],
         ],
+        None,
         None,
         (),
         on_partition_start,
@@ -669,6 +678,7 @@ fn test_kill_partition_switch_threshold_progress() {
             &[(alive_stake_1 as usize, 8)],
             &[(alive_stake_2 as usize, 8)],
         ],
+        None,
         None,
         (),
         on_partition_start,
@@ -749,9 +759,15 @@ fn test_fork_choice_ingest_votes_from_gossip() {
             context.heaviest_validator_key = validator_keys[2];
         };
 
+    let ticks_per_slot = 8;
     let on_before_partition_resolved =
         |cluster: &mut LocalCluster, context: &mut PartitionContext| {
-            let sleep_time_ms = MAX_RECENT_BLOCKHASHES as u64 * DEFAULT_MS_PER_SLOT;
+            // Equal to ms_per_slot * MAX_RECENT_BLOCKHASHES, rounded up
+            let sleep_time_ms =
+                ((ticks_per_slot * DEFAULT_MS_PER_SLOT * MAX_RECENT_BLOCKHASHES as u64)
+                    + DEFAULT_TICKS_PER_SLOT
+                    - 1)
+                    / DEFAULT_TICKS_PER_SLOT;
             info!("Wait for blockhashes to expire, {} ms", sleep_time_ms);
 
             // Wait for blockhashes to expire
@@ -809,12 +825,11 @@ fn test_fork_choice_ingest_votes_from_gossip() {
 
             // Copy all the blocks from the smaller partition up to `first_slot_in_lighter_partition`
             // into the smallest validator's blockstore
-            for (lighter_slot, lighter_slot_meta) in
-                lighter_fork_blockstore.slot_meta_iterator(0).unwrap()
-            {
-                if lighter_slot > first_slot_in_lighter_partition {
-                    break;
-                }
+            for lighter_slot in std::iter::once(first_slot_in_lighter_partition).chain(
+                AncestorIterator::new(first_slot_in_lighter_partition, &lighter_fork_blockstore),
+            ) {
+                let lighter_slot_meta =
+                    lighter_fork_blockstore.meta(lighter_slot).unwrap().unwrap();
                 assert!(lighter_slot_meta.is_full());
                 // Get the shreds from the leader of the smaller fork
                 let lighter_fork_data_shreds = lighter_fork_blockstore
@@ -889,6 +904,7 @@ fn test_fork_choice_ingest_votes_from_gossip() {
         // Partition long enough such that the first vote made by validator with
         // `alive_stake_3` won't be ingested due to BlockhashTooOld,
         None,
+        Some(ticks_per_slot),
         PartitionContext::default(),
         on_partition_start,
         on_before_partition_resolved,
@@ -2518,6 +2534,7 @@ fn run_test_load_program_accounts_partition(scan_commitment: CommitmentConfig) {
         on_partition_start,
         on_partition_before_resolved,
         on_partition_resolved,
+        None,
         None,
         additional_accounts,
     );

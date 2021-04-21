@@ -15,7 +15,6 @@ fi
 
 set -x
 
-$sudo apt install net-tools
 iface="$(ifconfig | grep mtu | grep -iv loopback | grep -i running | awk 'BEGIN { FS = ":" } ; {print $1}')"
 
 if [[ "$1" = cleanup ]]; then
