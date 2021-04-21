@@ -1559,53 +1559,49 @@ impl AccountsDb {
                         let mut purges_in_root = Vec::new();
                         let mut purges = HashMap::new();
                         for pubkey in pubkeys {
-                            let remove_from_zero_lamports_list =
-                                match self.accounts_index.get(pubkey, None, max_clean_root) {
-                                    AccountIndexGetResult::Found(locked_entry, index) => {
-                                        let slot_list = locked_entry.slot_list();
-                                        let (slot, account_info) = &slot_list[index];
-                                        if account_info.lamports == 0 {
-                                            purges.insert(
-                                                *pubkey,
-                                                self.accounts_index.roots_and_ref_count(
-                                                    &locked_entry,
-                                                    max_clean_root,
-                                                ),
-                                            );
-                                        }
-                                        // prune zero_lamport_pubkey set which should contain all 0-lamport
-                                        // keys whether rooted or not. A 0-lamport update may become rooted
-                                        // in the future.
-                                        let remove_from_zero_lamports_list =
-                                            !slot_list.iter().any(|(_slot, account_info)| {
-                                                account_info.lamports == 0
-                                            });
-                                        // Release the lock
-                                        let slot = *slot;
-                                        drop(locked_entry);
+                            match self.accounts_index.get(pubkey, None, max_clean_root) {
+                                AccountIndexGetResult::Found(locked_entry, index) => {
+                                    let slot_list = locked_entry.slot_list();
+                                    let (slot, account_info) = &slot_list[index];
+                                    if account_info.lamports == 0 {
+                                        purges.insert(
+                                            *pubkey,
+                                            self.accounts_index
+                                                .roots_and_ref_count(&locked_entry, max_clean_root),
+                                        );
+                                    }
+                                    // prune zero_lamport_pubkey set which should contain all 0-lamport
+                                    // keys whether rooted or not. A 0-lamport update may become rooted
+                                    // in the future.
+                                    if !slot_list
+                                        .iter()
+                                        .any(|(_slot, account_info)| account_info.lamports == 0)
+                                    {
+                                        self.accounts_index.remove_zero_lamport_key(pubkey);
+                                    }
+                                    // Release the lock
+                                    let slot = *slot;
+                                    drop(locked_entry);
 
-                                        if self.accounts_index.is_uncleaned_root(slot) {
-                                            // Assertion enforced by `accounts_index.get()`, the latest slot
-                                            // will not be greater than the given `max_clean_root`
-                                            if let Some(max_clean_root) = max_clean_root {
-                                                assert!(slot <= max_clean_root);
-                                            }
-                                            purges_in_root.push(*pubkey);
+                                    if self.accounts_index.is_uncleaned_root(slot) {
+                                        // Assertion enforced by `accounts_index.get()`, the latest slot
+                                        // will not be greater than the given `max_clean_root`
+                                        if let Some(max_clean_root) = max_clean_root {
+                                            assert!(slot <= max_clean_root);
                                         }
-                                        remove_from_zero_lamports_list
+                                        purges_in_root.push(*pubkey);
                                     }
-                                    AccountIndexGetResult::NotFoundOnFork => {
-                                        // do nothing - pubkey is in index, but not found in a root slot
-                                        false
-                                    }
-                                    AccountIndexGetResult::Missing => {
-                                        // pubkey is missing from index, so remove from zero_lamports_list
-                                        true
-                                    }
-                                };
-                            if remove_from_zero_lamports_list {
-                                self.accounts_index.remove_zero_lamport_key(pubkey);
-                            }
+                                }
+                                AccountIndexGetResult::NotFoundOnFork => {
+                                    // do nothing - pubkey is in index, but not found in a root slot
+                                    ()
+                                }
+                                AccountIndexGetResult::Missing(lock) => {
+                                    // pubkey is missing from index, so remove from zero_lamports_list
+                                    self.accounts_index.remove_zero_lamport_key(pubkey);
+                                    drop(lock);
+                                }
+                            };
                         }
                         (purges, purges_in_root)
                     })
@@ -2345,7 +2341,7 @@ impl AccountsDb {
             AccountIndexGetResult::NotFoundOnFork => {
                 return None;
             }
-            AccountIndexGetResult::Missing => {
+            AccountIndexGetResult::Missing(_) => {
                 return None;
             }
         };
