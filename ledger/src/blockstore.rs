@@ -1518,7 +1518,7 @@ impl Blockstore {
 
     // Only used by tests
     #[allow(clippy::too_many_arguments)]
-    pub fn write_entries(
+    pub(crate) fn write_entries(
         &self,
         start_slot: Slot,
         num_ticks_in_start_slot: u64,
@@ -1529,7 +1529,7 @@ impl Blockstore {
         keypair: &Arc<Keypair>,
         entries: Vec<Entry>,
         version: u16,
-    ) -> Result<usize> {
+    ) -> Result<usize /*num of data shreds*/> {
         let mut parent_slot = parent.map_or(start_slot.saturating_sub(1), |v| v);
         let num_slots = (start_slot - parent_slot).max(1); // Note: slot 0 has parent slot 0
         assert!(num_ticks_in_start_slot < num_slots * ticks_per_slot);
@@ -1537,8 +1537,7 @@ impl Blockstore {
 
         let mut current_slot = start_slot;
         let mut shredder =
-            Shredder::new(current_slot, parent_slot, 0.0, keypair.clone(), 0, version)
-                .expect("Failed to create entry shredder");
+            Shredder::new(current_slot, parent_slot, keypair.clone(), 0, version).unwrap();
         let mut all_shreds = vec![];
         let mut slot_entries = vec![];
         // Find all the entries for start_slot
@@ -1563,12 +1562,11 @@ impl Blockstore {
                 shredder = Shredder::new(
                     current_slot,
                     parent_slot,
-                    0.0,
                     keypair.clone(),
                     (ticks_per_slot - remaining_ticks_in_slot) as u8,
                     version,
                 )
-                .expect("Failed to create entry shredder");
+                .unwrap();
             }
 
             if entry.is_tick() {
@@ -1583,10 +1581,9 @@ impl Blockstore {
             all_shreds.append(&mut data_shreds);
             all_shreds.append(&mut coding_shreds);
         }
-
-        let num_shreds = all_shreds.len();
+        let num_data = all_shreds.iter().filter(|shred| shred.is_data()).count();
         self.insert_shreds(all_shreds, None, false)?;
-        Ok(num_shreds)
+        Ok(num_data)
     }
 
     pub fn get_index(&self, slot: Slot) -> Result<Option<Index>> {
@@ -3381,8 +3378,7 @@ pub fn create_new_ledger(
     let last_hash = entries.last().unwrap().hash;
     let version = solana_sdk::shred_version::version_from_hash(&last_hash);
 
-    let shredder = Shredder::new(0, 0, 0.0, Arc::new(Keypair::new()), 0, version)
-        .expect("Failed to create entry shredder");
+    let shredder = Shredder::new(0, 0, Arc::new(Keypair::new()), 0, version).unwrap();
     let shreds = shredder.entries_to_shreds(&entries, true, 0).0;
     assert!(shreds.last().unwrap().last_in_slot());
 
@@ -3558,10 +3554,10 @@ pub fn entries_to_test_shreds(
     is_full_slot: bool,
     version: u16,
 ) -> Vec<Shred> {
-    let shredder = Shredder::new(slot, parent_slot, 0.0, Arc::new(Keypair::new()), 0, version)
-        .expect("Failed to create entry shredder");
-
-    shredder.entries_to_shreds(&entries, is_full_slot, 0).0
+    Shredder::new(slot, parent_slot, Arc::new(Keypair::new()), 0, version)
+        .unwrap()
+        .entries_to_shreds(&entries, is_full_slot, 0)
+        .0
 }
 
 // used for tests only
@@ -7480,7 +7476,7 @@ pub mod tests {
     fn test_recovery() {
         let slot = 1;
         let (data_shreds, coding_shreds, leader_schedule_cache) =
-            setup_erasure_shreds(slot, 0, 100, 1.0);
+            setup_erasure_shreds(slot, 0, 100);
         let blockstore_path = get_tmp_ledger_path!();
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
@@ -7513,7 +7509,7 @@ pub mod tests {
         let slot = 1;
         let num_entries = 100;
         let (data_shreds, coding_shreds, leader_schedule_cache) =
-            setup_erasure_shreds(slot, 0, num_entries, 1.0);
+            setup_erasure_shreds(slot, 0, num_entries);
         assert!(data_shreds.len() > 3);
         assert!(coding_shreds.len() > 3);
         let blockstore_path = get_tmp_ledger_path!();
@@ -7650,19 +7646,10 @@ pub mod tests {
         slot: u64,
         parent_slot: u64,
         num_entries: u64,
-        erasure_rate: f32,
     ) -> (Vec<Shred>, Vec<Shred>, Arc<LeaderScheduleCache>) {
         let entries = make_slot_entries_with_transactions(num_entries);
         let leader_keypair = Arc::new(Keypair::new());
-        let shredder = Shredder::new(
-            slot,
-            parent_slot,
-            erasure_rate,
-            leader_keypair.clone(),
-            0,
-            0,
-        )
-        .expect("Failed in creating shredder");
+        let shredder = Shredder::new(slot, parent_slot, leader_keypair.clone(), 0, 0).unwrap();
         let (data_shreds, coding_shreds, _) = shredder.entries_to_shreds(&entries, true, 0);
 
         let genesis_config = create_genesis_config(2).genesis_config;
@@ -7714,8 +7701,7 @@ pub mod tests {
         let entries1 = make_slot_entries_with_transactions(1);
         let entries2 = make_slot_entries_with_transactions(1);
         let leader_keypair = Arc::new(Keypair::new());
-        let shredder =
-            Shredder::new(slot, 0, 1.0, leader_keypair, 0, 0).expect("Failed in creating shredder");
+        let shredder = Shredder::new(slot, 0, leader_keypair, 0, 0).unwrap();
         let (shreds, _, _) = shredder.entries_to_shreds(&entries1, true, 0);
         let (duplicate_shreds, _, _) = shredder.entries_to_shreds(&entries2, true, 0);
         let shred = shreds[0].clone();
@@ -8026,8 +8012,8 @@ pub mod tests {
         let ledger_path = get_tmp_ledger_path!();
         let ledger = Blockstore::open(&ledger_path).unwrap();
 
-        let coding1 = Shredder::generate_coding_shreds(0.5f32, &shreds, usize::MAX);
-        let coding2 = Shredder::generate_coding_shreds(1.0f32, &shreds, usize::MAX);
+        let coding1 = Shredder::generate_coding_shreds(&shreds, false);
+        let coding2 = Shredder::generate_coding_shreds(&shreds, true);
         for shred in &shreds {
             info!("shred {:?}", shred);
         }
@@ -8051,7 +8037,7 @@ pub mod tests {
         solana_logger::setup();
         let slot = 1;
         let (_data_shreds, mut coding_shreds, leader_schedule_cache) =
-            setup_erasure_shreds(slot, 0, 100, 1.0);
+            setup_erasure_shreds(slot, 0, 100);
         let blockstore_path = get_tmp_ledger_path!();
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();

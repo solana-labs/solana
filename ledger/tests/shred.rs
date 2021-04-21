@@ -22,9 +22,7 @@ type IndexShredsMap = BTreeMap<u32, Vec<Shred>>;
 fn test_multi_fec_block_coding() {
     let keypair = Arc::new(Keypair::new());
     let slot = 0x1234_5678_9abc_def0;
-    let shredder = Shredder::new(slot, slot - 5, 1.0, keypair.clone(), 0, 0)
-        .expect("Failed in creating shredder");
-
+    let shredder = Shredder::new(slot, slot - 5, keypair.clone(), 0, 0).unwrap();
     let num_fec_sets = 100;
     let num_data_shreds = (MAX_DATA_SHREDS_PER_FEC_BLOCK * num_fec_sets) as usize;
     let keypair0 = Keypair::new();
@@ -200,8 +198,7 @@ fn setup_different_sized_fec_blocks(
     parent_slot: Slot,
     keypair: Arc<Keypair>,
 ) -> (IndexShredsMap, IndexShredsMap, usize) {
-    let shredder =
-        Shredder::new(slot, parent_slot, 1.0, keypair, 0, 0).expect("Failed in creating shredder");
+    let shredder = Shredder::new(slot, parent_slot, keypair, 0, 0).unwrap();
     let keypair0 = Keypair::new();
     let keypair1 = Keypair::new();
     let tx0 = system_transaction::transfer(&keypair0, &keypair1.pubkey(), 1, Hash::default());

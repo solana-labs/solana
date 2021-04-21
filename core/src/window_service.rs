@@ -636,8 +636,7 @@ mod test {
         parent: Slot,
         keypair: &Arc<Keypair>,
     ) -> Vec<Shred> {
-        let shredder = Shredder::new(slot, parent, 0.0, keypair.clone(), 0, 0)
-            .expect("Failed to create entry shredder");
+        let shredder = Shredder::new(slot, parent, keypair.clone(), 0, 0).unwrap();
         shredder.entries_to_shreds(&entries, true, 0).0
     }
 
