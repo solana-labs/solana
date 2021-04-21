@@ -1,8 +1,7 @@
 use crate::{
-    consensus::{ComputedBankState, Tower},
-    fork_choice::ForkChoice,
-    progress_map::ProgressMap,
-    tree_diff::TreeDiff,
+    consensus::Tower, fork_choice::ForkChoice,
+    latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
+    progress_map::ProgressMap, tree_diff::TreeDiff,
 };
 use solana_measure::measure::Measure;
 use solana_runtime::{bank::Bank, bank_forks::BankForks, epoch_stakes::EpochStakes};
@@ -22,7 +21,7 @@ use std::{
 use trees::{Tree, TreeWalk};
 
 pub type ForkWeight = u64;
-type SlotHashKey = (Slot, Hash);
+pub type SlotHashKey = (Slot, Hash);
 type UpdateOperations = BTreeMap<(SlotHashKey, UpdateLabel), UpdateOperation>;
 
 const MAX_ROOT_PRINT_SECONDS: u64 = 30;
@@ -161,6 +160,10 @@ impl HeaviestSubtreeForkChoice {
         }
 
         heaviest_subtree_fork_choice
+    }
+
+    pub fn contains_block(&self, key: &SlotHashKey) -> bool {
+        self.fork_infos.contains_key(key)
     }
 
     pub fn best_slot(&self, key: &SlotHashKey) -> Option<SlotHashKey> {
@@ -529,6 +532,15 @@ impl HeaviestSubtreeForkChoice {
             let (pubkey, new_vote_slot_hash) = pubkey_vote.borrow();
             let (new_vote_slot, new_vote_hash) = *new_vote_slot_hash;
             if new_vote_slot < self.root.0 {
+                // If the new vote is less than the root we can ignore it. This is because there
+                // are two cases. Either:
+                // 1) The validator's latest vote was bigger than the new vote, so we can ignore it
+                // 2) The validator's latest vote was less than the new vote, then the validator's latest
+                // vote was also less than root. This means either every node in the current tree has the
+                // validators stake counted toward it (if the latest vote was an ancestor of the current root),
+                // OR every node doesn't have this validator's vote counting toward it (if the latest vote
+                // was not an ancestor of the current root). Thus this validator is essentially a no-op
+                // and won't affect fork choice.
                 continue;
             }
 
@@ -744,29 +756,14 @@ impl ForkChoice for HeaviestSubtreeForkChoice {
         &mut self,
         bank: &Bank,
         _tower: &Tower,
-        progress: &mut ProgressMap,
-        computed_bank_state: &ComputedBankState,
+        latest_validator_votes_for_frozen_banks: &mut LatestValidatorVotesForFrozenBanks,
     ) {
-        let ComputedBankState { pubkey_votes, .. } = computed_bank_state;
         let mut start = Measure::start("compute_bank_stats_time");
         // Update `heaviest_subtree_fork_choice` to find the best fork to build on
         let root = self.root.0;
+        let new_votes = latest_validator_votes_for_frozen_banks.take_votes_dirty_set(root);
         let (best_overall_slot, best_overall_hash) = self.add_votes(
-            pubkey_votes.iter().filter_map(|(pubkey, slot)| {
-                if *slot >= root {
-                    Some((
-                        *pubkey,
-                        (
-                            *slot,
-                            progress
-                                .get_hash(*slot)
-                                .expect("Votes for ancestors must exist in progress map"),
-                        ),
-                    ))
-                } else {
-                    None
-                }
-            }),
+            new_votes.into_iter(),
             bank.epoch_stakes_map(),
             bank.epoch_schedule(),
         );
