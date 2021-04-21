@@ -323,16 +323,20 @@ impl Rocks {
                 }
             }
         };
-        for cf_name in cf_names {
-            db.0.set_options_cf(
-                db.cf_handle(cf_name),
-                &[(
-                    "ttl",
-                    &std::env::var("SOLANA_ROCKSDB_COMPACTION_TTL")
-                        .unwrap_or(format!("{}", 60 * 60 * 24 * 3)),
-                )],
-            )
-            .unwrap();
+        if db.1 == ActualAccessType::Primary {
+            // Setting ttl only makes sense for primary access mode; and forcing so causes
+            // hard-errors from RocksDB
+            for cf_name in cf_names {
+                db.0.set_options_cf(
+                    db.cf_handle(cf_name),
+                    &[(
+                        "ttl",
+                        &std::env::var("SOLANA_ROCKSDB_COMPACTION_TTL")
+                            .unwrap_or(format!("{}", 60 * 60 * 24 * 3)),
+                    )],
+                )
+                .unwrap();
+            }
         }
 
         Ok(db)
