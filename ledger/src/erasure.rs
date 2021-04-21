@@ -104,10 +104,12 @@ impl Session {
     }
 
     /// Create coding blocks by overwriting `parity`
-    pub fn encode(&self, data: &[&[u8]], parity: &mut [&mut [u8]]) -> Result<()> {
-        self.0.encode_sep(data, parity)?;
-
-        Ok(())
+    pub fn encode<T, U>(&self, data: &[T], parity: &mut [U]) -> Result<()>
+    where
+        T: AsRef<[u8]>,
+        U: AsRef<[u8]> + AsMut<[u8]>,
+    {
+        self.0.encode_sep(data, parity)
     }
 
     /// Recover data + coding blocks into data blocks
