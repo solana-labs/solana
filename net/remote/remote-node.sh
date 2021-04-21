@@ -360,6 +360,8 @@ EOF
 
     if [[ $airdropsEnabled != true ]]; then
       args+=(--no-airdrop)
+    else
+      args+=(--rpc-faucet-address "$entrypointIp:9900")
     fi
 
     if [[ -r "$SOLANA_CONFIG_DIR"/bank-hash ]]; then
