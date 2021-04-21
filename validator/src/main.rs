@@ -36,7 +36,7 @@ use {
         },
     },
     solana_download_utils::{download_genesis_if_missing, download_snapshot},
-    solana_ledger::blockstore_db::BlockstoreRecoveryMode,
+    solana_ledger::blockstore_db::{BlockstoreCompressionMode, BlockstoreRecoveryMode},
     solana_perf::recycler::enable_recycler_warming,
     solana_runtime::{
         accounts_index::AccountIndex,
@@ -1482,6 +1482,13 @@ pub fn main() {
                 .help("Disable manual compaction of the ledger database. May increase storage requirements.")
         )
         .arg(
+            Arg::with_name("rocksdb_compression_mode")
+                .long("rocksdb-compression-mode")
+                .takes_value(true)
+                .possible_values(&["snappy", "lz4"])
+                .help("Type of compression to use with rocksdb. default to none")
+        )
+        .arg(
             Arg::with_name("rocksdb_compaction_interval")
                 .long("rocksdb-compaction-interval-slots")
                 .value_name("ROCKSDB_COMPACTION_INTERVAL_SLOTS")
@@ -1971,6 +1978,9 @@ pub fn main() {
     let no_port_check = matches.is_present("no_port_check");
     let no_rocksdb_compaction = matches.is_present("no_rocksdb_compaction");
     let rocksdb_compaction_interval = value_t!(matches, "rocksdb_compaction_interval", u64).ok();
+    let rocksdb_compression_mode = matches
+        .value_of("rocksdb_compression_mode")
+        .map(BlockstoreCompressionMode::from);
     let rocksdb_max_compaction_jitter =
         value_t!(matches, "rocksdb_max_compaction_jitter", u64).ok();
     let tpu_coalesce_ms =
@@ -2111,6 +2121,7 @@ pub fn main() {
         no_rocksdb_compaction,
         rocksdb_compaction_interval,
         rocksdb_max_compaction_jitter,
+        rocksdb_compression_mode,
         wal_recovery_mode,
         poh_verify: !matches.is_present("skip_poh_verify"),
         debug_keys,

@@ -5,8 +5,8 @@ use log::*;
 use prost::Message;
 pub use rocksdb::Direction as IteratorDirection;
 use rocksdb::{
-    self, ColumnFamily, ColumnFamilyDescriptor, DBIterator, DBRawIterator, DBRecoveryMode,
-    IteratorMode as RocksIteratorMode, Options, WriteBatch as RWriteBatch, DB,
+    self, ColumnFamily, ColumnFamilyDescriptor, DBCompressionType, DBIterator, DBRawIterator,
+    DBRecoveryMode, IteratorMode as RocksIteratorMode, Options, WriteBatch as RWriteBatch, DB,
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -202,6 +202,31 @@ impl From<BlockstoreRecoveryMode> for DBRecoveryMode {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum BlockstoreCompressionMode {
+    Snappy,
+    Lz4,
+}
+
+impl From<&str> for BlockstoreCompressionMode {
+    fn from(string: &str) -> Self {
+        match string {
+            "snappy" => BlockstoreCompressionMode::Snappy,
+            "lz4" => BlockstoreCompressionMode::Lz4,
+            bad_mode => panic!("Invalid recovery mode: {}", bad_mode),
+        }
+    }
+}
+
+impl From<BlockstoreCompressionMode> for DBCompressionType {
+    fn from(bcm: BlockstoreCompressionMode) -> Self {
+        match bcm {
+            BlockstoreCompressionMode::Snappy => DBCompressionType::Snappy,
+            BlockstoreCompressionMode::Lz4 => DBCompressionType::Lz4,
+        }
+    }
+}
+
 #[derive(Debug)]
 struct Rocks(rocksdb::DB, ActualAccessType);
 
@@ -210,6 +235,7 @@ impl Rocks {
         path: &Path,
         access_type: AccessType,
         recovery_mode: Option<BlockstoreRecoveryMode>,
+        compression_mode: Option<BlockstoreCompressionMode>,
     ) -> Result<Rocks> {
         use columns::{
             AddressSignatures, Blocktime, DeadSlots, DuplicateSlots, ErasureMeta, Index, Orphans,
@@ -228,37 +254,32 @@ impl Rocks {
             db_options.set_wal_recovery_mode(recovery_mode.into());
         }
 
+        let cf_options = get_cf_options(&access_type, compression_mode);
         // Column family names
-        let meta_cf_descriptor =
-            ColumnFamilyDescriptor::new(SlotMeta::NAME, get_cf_options(&access_type));
+        let meta_cf_descriptor = ColumnFamilyDescriptor::new(SlotMeta::NAME, cf_options.clone());
         let dead_slots_cf_descriptor =
-            ColumnFamilyDescriptor::new(DeadSlots::NAME, get_cf_options(&access_type));
+            ColumnFamilyDescriptor::new(DeadSlots::NAME, cf_options.clone());
         let duplicate_slots_cf_descriptor =
-            ColumnFamilyDescriptor::new(DuplicateSlots::NAME, get_cf_options(&access_type));
+            ColumnFamilyDescriptor::new(DuplicateSlots::NAME, cf_options.clone());
         let erasure_meta_cf_descriptor =
-            ColumnFamilyDescriptor::new(ErasureMeta::NAME, get_cf_options(&access_type));
-        let orphans_cf_descriptor =
-            ColumnFamilyDescriptor::new(Orphans::NAME, get_cf_options(&access_type));
-        let root_cf_descriptor =
-            ColumnFamilyDescriptor::new(Root::NAME, get_cf_options(&access_type));
-        let index_cf_descriptor =
-            ColumnFamilyDescriptor::new(Index::NAME, get_cf_options(&access_type));
+            ColumnFamilyDescriptor::new(ErasureMeta::NAME, cf_options.clone());
+        let orphans_cf_descriptor = ColumnFamilyDescriptor::new(Orphans::NAME, cf_options.clone());
+        let root_cf_descriptor = ColumnFamilyDescriptor::new(Root::NAME, cf_options.clone());
+        let index_cf_descriptor = ColumnFamilyDescriptor::new(Index::NAME, cf_options.clone());
         let shred_data_cf_descriptor =
-            ColumnFamilyDescriptor::new(ShredData::NAME, get_cf_options(&access_type));
+            ColumnFamilyDescriptor::new(ShredData::NAME, cf_options.clone());
         let shred_code_cf_descriptor =
-            ColumnFamilyDescriptor::new(ShredCode::NAME, get_cf_options(&access_type));
+            ColumnFamilyDescriptor::new(ShredCode::NAME, cf_options.clone());
         let transaction_status_cf_descriptor =
-            ColumnFamilyDescriptor::new(TransactionStatus::NAME, get_cf_options(&access_type));
+            ColumnFamilyDescriptor::new(TransactionStatus::NAME, cf_options.clone());
         let address_signatures_cf_descriptor =
-            ColumnFamilyDescriptor::new(AddressSignatures::NAME, get_cf_options(&access_type));
+            ColumnFamilyDescriptor::new(AddressSignatures::NAME, cf_options.clone());
         let transaction_status_index_cf_descriptor =
-            ColumnFamilyDescriptor::new(TransactionStatusIndex::NAME, get_cf_options(&access_type));
-        let rewards_cf_descriptor =
-            ColumnFamilyDescriptor::new(Rewards::NAME, get_cf_options(&access_type));
+            ColumnFamilyDescriptor::new(TransactionStatusIndex::NAME, cf_options.clone());
+        let rewards_cf_descriptor = ColumnFamilyDescriptor::new(Rewards::NAME, cf_options.clone());
         let blocktime_cf_descriptor =
-            ColumnFamilyDescriptor::new(Blocktime::NAME, get_cf_options(&access_type));
-        let perf_samples_cf_descriptor =
-            ColumnFamilyDescriptor::new(PerfSamples::NAME, get_cf_options(&access_type));
+            ColumnFamilyDescriptor::new(Blocktime::NAME, cf_options.clone());
+        let perf_samples_cf_descriptor = ColumnFamilyDescriptor::new(PerfSamples::NAME, cf_options);
 
         let cfs = vec![
             (SlotMeta::NAME, meta_cf_descriptor),
@@ -740,8 +761,14 @@ impl Database {
         path: &Path,
         access_type: AccessType,
         recovery_mode: Option<BlockstoreRecoveryMode>,
+        compression_mode: Option<BlockstoreCompressionMode>,
     ) -> Result<Self> {
-        let backend = Arc::new(Rocks::open(path, access_type, recovery_mode)?);
+        let backend = Arc::new(Rocks::open(
+            path,
+            access_type,
+            recovery_mode,
+            compression_mode,
+        )?);
 
         Ok(Database {
             backend,
@@ -1014,7 +1041,10 @@ impl<'a> WriteBatch<'a> {
     }
 }
 
-fn get_cf_options(access_type: &AccessType) -> Options {
+fn get_cf_options(
+    access_type: &AccessType,
+    compression_mode: Option<BlockstoreCompressionMode>,
+) -> Options {
     let mut options = Options::default();
     // 256 * 8 = 2GB. 6 of these columns should take at most 12GB of RAM
     options.set_max_write_buffer_number(8);
@@ -1030,6 +1060,21 @@ fn get_cf_options(access_type: &AccessType) -> Options {
     options.set_target_file_size_base(file_size_base);
     if matches!(access_type, AccessType::PrimaryOnlyForMaintenance) {
         options.set_disable_auto_compactions(true);
+    }
+
+    if let Some(compression_mode) = compression_mode {
+        let mode = compression_mode.into();
+        let compression = [
+            DBCompressionType::None,
+            DBCompressionType::None,
+            mode,
+            mode,
+            mode,
+            mode,
+        ];
+        options.set_compression_per_level(&compression);
+    } else {
+        options.set_compression_type(DBCompressionType::None);
     }
 
     options

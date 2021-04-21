@@ -621,7 +621,8 @@ fn open_blockstore(
     access_type: AccessType,
     wal_recovery_mode: Option<BlockstoreRecoveryMode>,
 ) -> Blockstore {
-    match Blockstore::open_with_access_type(ledger_path, access_type, wal_recovery_mode, true) {
+    match Blockstore::open_with_access_type(ledger_path, access_type, wal_recovery_mode, None, true)
+    {
         Ok(blockstore) => blockstore,
         Err(err) => {
             eprintln!("Failed to open ledger at {:?}: {:?}", ledger_path, err);
@@ -631,7 +632,7 @@ fn open_blockstore(
 }
 
 fn open_database(ledger_path: &Path, access_type: AccessType) -> Database {
-    match Database::open(&ledger_path.join("rocksdb"), access_type, None) {
+    match Database::open(&ledger_path.join("rocksdb"), access_type, None, None) {
         Ok(database) => database,
         Err(err) => {
             eprintln!("Unable to read the Ledger rocksdb: {:?}", err);
