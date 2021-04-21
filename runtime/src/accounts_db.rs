@@ -635,8 +635,8 @@ pub struct BankHashStats {
 }
 
 impl BankHashStats {
-    pub fn update(&mut self, account: &AccountSharedData) {
-        if account.lamports == 0 {
+    pub fn update<T: ReadableAccount>(&mut self, account: &T) {
+        if account.lamports() == 0 {
             self.num_removed_accounts += 1;
         } else {
             self.num_updated_accounts += 1;
@@ -644,10 +644,10 @@ impl BankHashStats {
         self.total_data_len = self
             .total_data_len
             .wrapping_add(account.data().len() as u64);
-        if account.executable {
+        if account.executable() {
             self.num_executable_accounts += 1;
         }
-        self.num_lamports_stored = self.num_lamports_stored.wrapping_add(account.lamports);
+        self.num_lamports_stored = self.num_lamports_stored.wrapping_add(account.lamports());
     }
 
     pub fn merge(&mut self, other: &BankHashStats) {
@@ -3221,13 +3221,13 @@ impl AccountsDb {
         )
     }
 
-    pub fn hash_account(slot: Slot, account: &AccountSharedData, pubkey: &Pubkey) -> Hash {
+    pub fn hash_account<T: ReadableAccount>(slot: Slot, account: &T, pubkey: &Pubkey) -> Hash {
         Self::hash_account_data(
             slot,
-            account.lamports,
-            &account.owner,
-            account.executable,
-            account.rent_epoch,
+            account.lamports(),
+            &account.owner(),
+            account.executable(),
+            account.rent_epoch(),
             &account.data(),
             pubkey,
         )
@@ -3350,7 +3350,7 @@ impl AccountsDb {
                     store_id: storage.append_vec_id(),
                     offset: offsets[0],
                     stored_size,
-                    lamports: account.lamports,
+                    lamports: account.lamports(),
                 });
             }
             // restore the state to available
@@ -3706,7 +3706,7 @@ impl AccountsDb {
                     store_id: CACHE_VIRTUAL_STORAGE_ID,
                     offset: CACHE_VIRTUAL_OFFSET,
                     stored_size: CACHE_VIRTUAL_STORED_SIZE,
-                    lamports: account.lamports,
+                    lamports: account.lamports(),
                 }
             })
             .collect()
@@ -3729,7 +3729,7 @@ impl AccountsDb {
             .iter()
             .map(|(pubkey, account)| {
                 self.read_only_accounts_cache.remove(pubkey, slot);
-                let account = if account.lamports == 0 {
+                let account = if account.lamports() == 0 {
                     &default_account
                 } else {
                     *account
@@ -4280,7 +4280,7 @@ impl AccountsDb {
             self.accounts_index.upsert(
                 slot,
                 pubkey,
-                &pubkey_account.1.owner,
+                &pubkey_account.1.owner(),
                 &pubkey_account.1.data(),
                 &self.account_indexes,
                 info,
@@ -4522,7 +4522,7 @@ impl AccountsDb {
         let mut total_data = 0;
         accounts.iter().for_each(|(_pubkey, account)| {
             total_data += account.data().len();
-            stats.update(account);
+            stats.update(*account);
         });
 
         self.stats

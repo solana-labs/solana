@@ -57,13 +57,13 @@ pub struct AccountMeta {
     pub rent_epoch: Epoch,
 }
 
-impl<'a> From<&'a AccountSharedData> for AccountMeta {
-    fn from(account: &'a AccountSharedData) -> Self {
+impl<'a, T: ReadableAccount> From<&'a T> for AccountMeta {
+    fn from(account: &'a T) -> Self {
         Self {
-            lamports: account.lamports,
-            owner: account.owner,
-            executable: account.executable,
-            rent_epoch: account.rent_epoch,
+            lamports: account.lamports(),
+            owner: *account.owner(),
+            executable: account.executable(),
+            rent_epoch: account.rent_epoch(),
         }
     }
 }
