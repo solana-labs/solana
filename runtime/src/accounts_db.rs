@@ -1594,7 +1594,7 @@ impl AccountsDb {
                                         }
                                         remove_from_zero_lamports_list
                                     }
-                                    AccountIndexGetResult::NoRootFound(_locked_entry) => {
+                                    AccountIndexGetResult::NotFoundOnFork(_locked_entry) => {
                                         // do nothing - pubkey is in index, but not found in a root slot
                                         false
                                     }
@@ -2342,7 +2342,10 @@ impl AccountsDb {
         let (lock, index) = match self.accounts_index.get(pubkey, Some(ancestors), max_root) {
             AccountIndexGetResult::Success(lock, index) => (lock, index),
             // we bail out pretty early for missing.
-            _ => {
+            AccountIndexGetResult::NotFoundOnFork(_) => {
+                return None;
+            }
+            AccountIndexGetResult::Missing() => {
                 return None;
             }
         };

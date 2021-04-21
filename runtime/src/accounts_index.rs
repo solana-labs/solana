@@ -87,7 +87,7 @@ impl<T> AccountMapEntryInner<T> {
 
 pub enum AccountIndexGetResult<T: 'static> {
     Success(ReadAccountMapEntry<T>, usize),
-    NoRootFound(ReadAccountMapEntry<T>),
+    NotFoundOnFork(ReadAccountMapEntry<T>),
     Missing(),
 }
 
@@ -951,7 +951,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
                 let found_index = self.latest_slot(ancestors, slot_list, max_root);
                 match found_index {
                     Some(found_index) => AccountIndexGetResult::Success(locked_entry, found_index),
-                    None => AccountIndexGetResult::NoRootFound(locked_entry),
+                    None => AccountIndexGetResult::NotFoundOnFork(locked_entry),
                 }
             }
             None => AccountIndexGetResult::Missing(),
