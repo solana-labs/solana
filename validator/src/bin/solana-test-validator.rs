@@ -180,6 +180,44 @@ fn main() {
                 ),
         )
         .arg(
+            Arg::with_name("gossip_port")
+                .long("gossip-port")
+                .value_name("PORT")
+                .takes_value(true)
+                .help("Gossip port number for the validator"),
+        )
+        .arg(
+            Arg::with_name("gossip_host")
+                .long("gossip-host")
+                .value_name("HOST")
+                .takes_value(true)
+                .validator(solana_net_utils::is_host)
+                .help(
+                    "Gossip DNS name or IP address for the validator to advertise in gossip \
+                       [default: 127.0.0.1]",
+                ),
+        )
+        .arg(
+            Arg::with_name("dynamic_port_range")
+                .long("dynamic-port-range")
+                .value_name("MIN_PORT-MAX_PORT")
+                .takes_value(true)
+                .validator(solana_validator::port_range_validator)
+                .help(
+                    "Range to use for dynamically assigned ports \
+                    [default: 1024-65535]",
+                ),
+        )
+        .arg(
+            Arg::with_name("bind_address")
+                .long("bind-address")
+                .value_name("HOST")
+                .takes_value(true)
+                .validator(solana_net_utils::is_host)
+                .default_value("0.0.0.0")
+                .help("IP address to bind the validator ports [default: 0.0.0.0]"),
+        )
+        .arg(
             Arg::with_name("clone_account")
                 .long("clone")
                 .short("c")
@@ -240,6 +278,25 @@ fn main() {
     let rpc_port = value_t_or_exit!(matches, "rpc_port", u16);
     let faucet_port = value_t_or_exit!(matches, "faucet_port", u16);
     let slots_per_epoch = value_t!(matches, "slots_per_epoch", Slot).ok();
+    let gossip_host = matches.value_of("gossip_host").map(|gossip_host| {
+        solana_net_utils::parse_host(gossip_host).unwrap_or_else(|err| {
+            eprintln!("Failed to parse --gossip-host: {}", err);
+            exit(1);
+        })
+    });
+    let gossip_port = value_t!(matches, "gossip_port", u16).ok();
+    let dynamic_port_range = matches.value_of("dynamic_port_range").map(|port_range| {
+        solana_net_utils::parse_port_range(port_range).unwrap_or_else(|| {
+            eprintln!("Failed to parse --dynamic-port-range");
+            exit(1);
+        })
+    });
+    let bind_address = matches.value_of("bind_address").map(|bind_address| {
+        solana_net_utils::parse_host(bind_address).unwrap_or_else(|err| {
+            eprintln!("Failed to parse --bind-address: {}", err);
+            exit(1);
+        })
+    });
 
     let faucet_addr = Some(SocketAddr::new(
         IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
@@ -465,6 +522,22 @@ fn main() {
             slots_per_epoch,
             /* enable_warmup_epochs = */ false,
         ));
+    }
+
+    if let Some(gossip_host) = gossip_host {
+        genesis.gossip_host(gossip_host);
+    }
+
+    if let Some(gossip_port) = gossip_port {
+        genesis.gossip_port(gossip_port);
+    }
+
+    if let Some(dynamic_port_range) = dynamic_port_range {
+        genesis.port_range(dynamic_port_range);
+    }
+
+    if let Some(bind_address) = bind_address {
+        genesis.bind_ip_addr(bind_address);
     }
 
     match genesis.start_with_mint_address(mint_address) {
