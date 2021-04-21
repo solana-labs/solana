@@ -8,7 +8,7 @@ use crate::broadcast_stage::broadcast_utils::UnfinishedSlotInfo;
 use solana_ledger::{
     entry::Entry,
     shred::{
-        ProcessShredsStats, Shred, Shredder, MAX_DATA_SHREDS_PER_FEC_BLOCK, RECOMMENDED_FEC_RATE,
+        ProcessShredsStats, Shred, Shredder, MAX_DATA_SHREDS_PER_FEC_BLOCK,
         SHRED_TICK_REFERENCE_MASK,
     },
 };
@@ -121,7 +121,6 @@ impl StandardBroadcastRun {
         let (data_shreds, next_shred_index) = Shredder::new(
             slot,
             parent_slot,
-            RECOMMENDED_FEC_RATE,
             self.keypair.clone(),
             reference_tick,
             self.shred_version,
@@ -451,8 +450,7 @@ fn make_coding_shreds(
                 .collect()
         }
     };
-    Shredder::data_shreds_to_coding_shreds(keypair, &data_shreds, RECOMMENDED_FEC_RATE, stats)
-        .unwrap()
+    Shredder::data_shreds_to_coding_shreds(keypair, &data_shreds, is_slot_end, stats).unwrap()
 }
 
 impl BroadcastRun for StandardBroadcastRun {

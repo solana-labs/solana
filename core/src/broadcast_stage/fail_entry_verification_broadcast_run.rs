@@ -71,7 +71,6 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         let shredder = Shredder::new(
             bank.slot(),
             bank.parent().unwrap().slot(),
-            0.0,
             self.keypair.clone(),
             (bank.tick_height() % bank.ticks_per_slot()) as u8,
             self.shred_version,

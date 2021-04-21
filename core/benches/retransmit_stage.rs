@@ -81,8 +81,7 @@ fn bench_retransmitter(bencher: &mut Bencher) {
     let keypair = Arc::new(Keypair::new());
     let slot = 0;
     let parent = 0;
-    let shredder =
-        Shredder::new(slot, parent, 0.0, keypair, 0, 0).expect("Failed to create entry shredder");
+    let shredder = Shredder::new(slot, parent, keypair, 0, 0).unwrap();
     let mut data_shreds = shredder.entries_to_shreds(&entries, true, 0).0;
 
     let num_packets = data_shreds.len();
