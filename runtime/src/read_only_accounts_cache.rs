@@ -34,6 +34,7 @@ pub struct ReadOnlyAccountsCache {
     misses: AtomicU64,
     lru: LruList,
     per_account_size: usize,
+    disabled: bool,
 }
 
 impl ReadOnlyAccountsCache {
@@ -46,6 +47,7 @@ impl ReadOnlyAccountsCache {
             misses: AtomicU64::new(0),
             lru: Arc::new(RwLock::new(Vec::new())),
             per_account_size: Self::per_account_size(),
+            disabled: true,
         }
     }
 
@@ -72,6 +74,9 @@ impl ReadOnlyAccountsCache {
     }
 
     pub fn store(&self, pubkey: &Pubkey, slot: Slot, account: &AccountSharedData) {
+        if self.disabled {
+            return;
+        }
         let len = account.data().len() + self.per_account_size;
         self.cache.insert(
             (*pubkey, slot),
@@ -199,6 +204,7 @@ pub mod tests {
         let data_size = 100;
         let max = data_size + per_account_size;
         let cache = ReadOnlyAccountsCache::new(max);
+        cache.disabled = false;
         let slot = 0;
         assert!(cache.load(&Pubkey::default(), slot).is_none());
         assert_eq!(0, cache.cache_len());
@@ -234,6 +240,7 @@ pub mod tests {
         // can store 2 items, 3rd item kicks oldest item out
         let max = (data_size + per_account_size) * 2;
         let cache = ReadOnlyAccountsCache::new(max);
+        cache.disabled = false;
         cache.store(&key1, slot, &account1);
         assert_eq!(100 + per_account_size, cache.data_size());
         assert!(accounts_equal(&cache.load(&key1, slot).unwrap(), &account1));
