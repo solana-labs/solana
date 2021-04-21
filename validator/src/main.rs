@@ -16,7 +16,10 @@ use {
         },
         keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
-    solana_client::{rpc_client::RpcClient, rpc_request::MAX_MULTIPLE_ACCOUNTS},
+    solana_client::{
+        rpc_client::RpcClient, rpc_config::RpcLeaderScheduleConfig,
+        rpc_request::MAX_MULTIPLE_ACCOUNTS,
+    },
     solana_core::ledger_cleanup_service::{
         DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS,
     },
@@ -154,7 +157,13 @@ fn wait_for_restart_window(
             ));
             let first_slot_in_epoch = epoch_info.absolute_slot - epoch_info.slot_index;
             leader_schedule = rpc_client
-                .get_leader_schedule(Some(first_slot_in_epoch))?
+                .get_leader_schedule_with_config(
+                    Some(first_slot_in_epoch),
+                    RpcLeaderScheduleConfig {
+                        identity: Some(identity.to_string()),
+                        ..RpcLeaderScheduleConfig::default()
+                    },
+                )?
                 .ok_or_else(|| {
                     format!(
                         "Unable to get leader schedule from slot {}",

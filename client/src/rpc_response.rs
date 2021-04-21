@@ -254,10 +254,10 @@ pub struct RpcVoteAccountStatus {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcVoteAccountInfo {
-    /// Vote account pubkey as base-58 encoded string
+    /// Vote account address, as base-58 encoded string
     pub vote_pubkey: String,
 
-    /// The pubkey of the node that votes using this account
+    /// The validator identity, as base-58 encoded string
     pub node_pubkey: String,
 
     /// The current stake, in lamports, delegated to this vote account

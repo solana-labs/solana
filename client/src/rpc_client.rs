@@ -9,11 +9,7 @@ use {
         http_sender::HttpSender,
         mock_sender::{MockSender, Mocks},
         rpc_config::RpcAccountInfoConfig,
-        rpc_config::{
-            RpcBlockConfig, RpcEpochConfig, RpcLargestAccountsConfig, RpcProgramAccountsConfig,
-            RpcRequestAirdropConfig, RpcSendTransactionConfig, RpcSignaturesForAddressConfig,
-            RpcSimulateTransactionConfig, RpcTokenAccountsFilter, RpcTransactionConfig,
-        },
+        rpc_config::*,
         rpc_request::{RpcError, RpcRequest, RpcResponseErrorData, TokenAccountsFilter},
         rpc_response::*,
         rpc_sender::RpcSender,
@@ -880,7 +876,7 @@ impl RpcClient {
         &self,
         slot: Option<Slot>,
     ) -> ClientResult<Option<RpcLeaderSchedule>> {
-        self.get_leader_schedule_with_commitment(slot, self.commitment_config)
+        self.get_leader_schedule_with_config(slot, RpcLeaderScheduleConfig::default())
     }
 
     pub fn get_leader_schedule_with_commitment(
@@ -890,8 +886,22 @@ impl RpcClient {
     ) -> ClientResult<Option<RpcLeaderSchedule>> {
         self.send(
             RpcRequest::GetLeaderSchedule,
-            json!([slot, self.maybe_map_commitment(commitment_config)?]),
+            json!([
+                slot,
+                RpcLeaderScheduleConfig {
+                    commitment: Some(self.maybe_map_commitment(commitment_config)?),
+                    ..RpcLeaderScheduleConfig::default()
+                }
+            ]),
         )
+    }
+
+    pub fn get_leader_schedule_with_config(
+        &self,
+        slot: Option<Slot>,
+        config: RpcLeaderScheduleConfig,
+    ) -> ClientResult<Option<RpcLeaderSchedule>> {
+        self.send(RpcRequest::GetLeaderSchedule, json!([slot, config]))
     }
 
     pub fn get_epoch_schedule(&self) -> ClientResult<EpochSchedule> {

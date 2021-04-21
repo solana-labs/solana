@@ -2110,7 +2110,7 @@ pub mod rpc_minimal {
             &self,
             meta: Self::Metadata,
             slot: Option<Slot>,
-            commitment: Option<CommitmentConfig>,
+            config: Option<RpcLeaderScheduleConfig>,
         ) -> Result<Option<RpcLeaderSchedule>>;
     }
 
@@ -2215,9 +2215,15 @@ pub mod rpc_minimal {
             &self,
             meta: Self::Metadata,
             slot: Option<Slot>,
-            commitment: Option<CommitmentConfig>,
+            config: Option<RpcLeaderScheduleConfig>,
         ) -> Result<Option<RpcLeaderSchedule>> {
-            let bank = meta.bank(commitment);
+            let config = config.unwrap_or_default();
+
+            if let Some(ref identity) = config.identity {
+                let _ = verify_pubkey(identity)?;
+            }
+
+            let bank = meta.bank(config.commitment);
             let slot = slot.unwrap_or_else(|| bank.slot());
             let epoch = bank.epoch_schedule().get_epoch(slot);
 
@@ -2227,9 +2233,14 @@ pub mod rpc_minimal {
                 .leader_schedule_cache
                 .get_epoch_leader_schedule(epoch)
                 .map(|leader_schedule| {
-                    solana_ledger::leader_schedule_utils::leader_schedule_by_identity(
-                        leader_schedule.get_slot_leaders().iter().enumerate(),
-                    )
+                    let mut schedule_by_identity =
+                        solana_ledger::leader_schedule_utils::leader_schedule_by_identity(
+                            leader_schedule.get_slot_leaders().iter().enumerate(),
+                        );
+                    if let Some(identity) = config.identity {
+                        schedule_by_identity.retain(|k, _| *k == identity);
+                    }
+                    schedule_by_identity
                 }))
         }
     }
@@ -4235,6 +4246,10 @@ pub mod tests {
         for req in [
             r#"{"jsonrpc":"2.0","id":1,"method":"getLeaderSchedule", "params": [0]}"#,
             r#"{"jsonrpc":"2.0","id":1,"method":"getLeaderSchedule"}"#,
+            &format!(
+                r#"{{"jsonrpc":"2.0","id":1,"method":"getLeaderSchedule", "params": [null, {{ "identity": "{}" }}]}}"#,
+                bank.collector_id().to_string()
+            ),
         ]
         .iter()
         {
@@ -4267,7 +4282,7 @@ pub mod tests {
         }
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getLeaderSchedule", "params": [42424242]}"#;
-        let rep = io.handle_request_sync(&req, meta);
+        let rep = io.handle_request_sync(&req, meta.clone());
         let res: Response = serde_json::from_str(&rep.expect("actual response"))
             .expect("actual response deserialization");
 
@@ -4281,6 +4296,27 @@ pub mod tests {
             panic!("Expected single response");
         };
         assert_eq!(schedule, None);
+
+        // `bob` is not in the leader schedule, look for an empty response
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getLeaderSchedule", "params": [null, {{ "identity": "{}"}}]}}"#,
+            bob_pubkey
+        );
+
+        let rep = io.handle_request_sync(&req, meta);
+        let res: Response = serde_json::from_str(&rep.expect("actual response"))
+            .expect("actual response deserialization");
+
+        let schedule: Option<RpcLeaderSchedule> = if let Response::Single(res) = res {
+            if let Output::Success(res) = res {
+                serde_json::from_value(res.result).unwrap()
+            } else {
+                panic!("Expected success");
+            }
+        } else {
+            panic!("Expected single response");
+        };
+        assert_eq!(schedule, Some(HashMap::default()));
     }
 
     #[test]

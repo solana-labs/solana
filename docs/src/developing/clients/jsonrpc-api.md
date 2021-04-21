@@ -1366,14 +1366,17 @@ Returns the leader schedule for an epoch
 
 #### Parameters:
 
-- `<u64>` - (optional) Fetch the leader schedule for the epoch that corresponds to the provided slot. If unspecified, the leader schedule for the current epoch is fetched
-- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+- `<u64>` - (optional) Fetch the leader schedule for the epoch that corresponds to the provided slot.
+            If unspecified, the leader schedule for the current epoch is fetched
+- `<object>` - (optional) Configuration object containing the following field:
+  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - (optional) `identity: <string>` - Only return results for this validator identity (base-58 encoded)
 
 #### Results:
 
 - `<null>` - if requested epoch is not found
-- `<object>` - otherwise, the result field will be a dictionary of leader public keys
-  \(as base-58 encoded strings\) and their corresponding leader slot indices as values
+- `<object>` - otherwise, the result field will be a dictionary of validator identities,
+  as base-58 encoded strings, and their corresponding leader slot indices as values
   (indices are relative to the first slot in the requested epoch)
 
 #### Example:
@@ -1382,6 +1385,36 @@ Request:
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getLeaderSchedule"}
+'
+```
+
+Result:
+```json
+{
+  "jsonrpc":"2.0",
+  "result":{
+    "4Qkev8aNZcqFNSRhQzwyLMFSsi94jHqE8WNVTJzTP99F":[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63]
+  },
+  "id":1
+}
+```
+
+#### Example:
+
+Request:
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getLeaderSchedule",
+    "params": [
+      null,
+      {
+        "identity": "4Qkev8aNZcqFNSRhQzwyLMFSsi94jHqE8WNVTJzTP99F"
+      }
+    ]
+  }
 '
 ```
 
@@ -2820,8 +2853,8 @@ Returns the account info and associated stake for all the voting accounts in the
 
 The result field will be a JSON object of `current` and `delinquent` accounts, each containing an array of JSON objects with the following sub fields:
 
-- `votePubkey: <string>` - Vote account public key, as base-58 encoded string
-- `nodePubkey: <string>` - Node public key, as base-58 encoded string
+- `votePubkey: <string>` - Vote account address, as base-58 encoded string
+- `nodePubkey: <string>` - Validator identity, as base-58 encoded string
 - `activatedStake: <u64>` - the stake, in lamports, delegated to this vote account and active in this epoch
 - `epochVoteAccount: <bool>` - bool, whether the vote account is staked for this epoch
 - `commission: <number>`, percentage (0-100) of rewards payout owed to the vote account
