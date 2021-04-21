@@ -17,7 +17,8 @@ use crate::{
 use log::{log_enabled, trace, Level::Trace};
 use solana_measure::measure::Measure;
 use solana_rbpf::{
-    ebpf::MM_HEAP_START,
+    aligned_memory::AlignedMemory,
+    ebpf::{HOST_ALIGN, MM_HEAP_START},
     error::{EbpfError, UserDefinedError},
     memory_region::MemoryRegion,
     vm::{Config, EbpfVm, Executable, InstructionMeter},
@@ -146,8 +147,8 @@ pub fn create_vm<'a>(
     parameter_accounts: &'a [KeyedAccount<'a>],
     invoke_context: &'a mut dyn InvokeContext,
 ) -> Result<EbpfVm<'a, BpfError, ThisInstructionMeter>, EbpfError<BpfError>> {
-    let heap = vec![0_u8; DEFAULT_HEAP_SIZE];
-    let heap_region = MemoryRegion::new_from_slice(&heap, MM_HEAP_START, 0, true);
+    let heap = AlignedMemory::new(DEFAULT_HEAP_SIZE, HOST_ALIGN);
+    let heap_region = MemoryRegion::new_from_slice(heap.as_slice(), MM_HEAP_START, 0, true);
     let mut vm = EbpfVm::new(program, parameter_bytes, &[heap_region])?;
     syscalls::bind_syscall_context_objects(
         loader_id,
@@ -793,7 +794,7 @@ impl Executor for BpfExecutor {
             let mut vm = match create_vm(
                 loader_id,
                 self.program.as_ref(),
-                &mut parameter_bytes,
+                parameter_bytes.as_slice_mut(),
                 &parameter_accounts,
                 invoke_context,
             ) {
@@ -857,7 +858,7 @@ impl Executor for BpfExecutor {
         deserialize_parameters(
             loader_id,
             parameter_accounts,
-            &parameter_bytes,
+            parameter_bytes.as_slice(),
             invoke_context.is_feature_active(&skip_ro_deserialization::id()),
         )?;
         deserialize_time.stop();
