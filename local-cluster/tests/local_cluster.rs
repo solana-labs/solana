@@ -1592,7 +1592,7 @@ fn test_validator_saves_tower() {
         #[allow(deprecated)]
         // This test depends on knowing the immediate root, without any delay from the commitment
         // service, so the deprecated CommitmentConfig::root() is retained
-        if let Ok(root) = validator_client.get_slot_with_commitment(CommitmentConfig::root()) {
+        if let Some(root) = root_in_tower(&ledger_path, &validator_id) {
             trace!("current root: {}", root);
             if root > last_replayed_root + 1 {
                 last_replayed_root = root;
@@ -1617,14 +1617,13 @@ fn test_validator_saves_tower() {
     tower1.save(&validator_identity_keypair).unwrap();
 
     cluster.restart_node(&validator_id, validator_info);
-    let validator_client = cluster.get_validator_client(&validator_id).unwrap();
 
     // Wait for a new root, demonstrating the validator was able to make progress from the older `tower1`
     loop {
         #[allow(deprecated)]
         // This test depends on knowing the immediate root, without any delay from the commitment
         // service, so the deprecated CommitmentConfig::root() is retained
-        if let Ok(root) = validator_client.get_slot_with_commitment(CommitmentConfig::root()) {
+        if let Some(root) = root_in_tower(&ledger_path, &validator_id) {
             trace!(
                 "current root: {}, last_replayed_root: {}",
                 root,
