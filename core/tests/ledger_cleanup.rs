@@ -39,6 +39,7 @@ mod tests {
         pub cleanup_blockstore: bool,
         pub emit_cpu_info: bool,
         pub assert_compaction: bool,
+        pub no_compaction: bool,
     }
 
     #[derive(Clone, Copy, Debug)]
@@ -154,6 +155,7 @@ mod tests {
         let emit_cpu_info = read_env("EMIT_CPU_INFO", true);
         // set default to `true` once compaction is merged
         let assert_compaction = read_env("ASSERT_COMPACTION", false);
+        let no_compaction = read_env("NO_COMPACTION", false);
 
         BenchmarkConfig {
             benchmark_slots,
@@ -166,6 +168,7 @@ mod tests {
             cleanup_blockstore,
             emit_cpu_info,
             assert_compaction,
+            no_compaction,
         }
     }
 
@@ -211,8 +214,13 @@ mod tests {
     fn test_ledger_cleanup_compaction() {
         solana_logger::setup();
         let blockstore_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&blockstore_path).unwrap());
+        let mut blockstore = Blockstore::open(&blockstore_path).unwrap();
         let config = get_benchmark_config();
+        if config.no_compaction {
+            blockstore.set_no_compaction(true);
+        }
+        let blockstore = Arc::new(blockstore);
+
         eprintln!("BENCHMARK CONFIG: {:?}", config);
         eprintln!("LEDGER_PATH: {:?}", &blockstore_path);
 
