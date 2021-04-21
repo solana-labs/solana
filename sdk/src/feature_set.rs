@@ -138,7 +138,6 @@ pub mod check_duplicates_by_hash {
 pub mod enforce_aligned_host_addrs {
     solana_sdk::declare_id!("6Qob9Z4RwGdf599FDVCqsjuKjR8ZFR3oVs2ByRLWBsua");
 }
-    
 pub mod set_upgrade_authority_via_cpi_enabled {
     solana_sdk::declare_id!("GQdjCCptpGECG7QfE35hKTAopB1umGoSrdKfax2VmZWy");
 }
