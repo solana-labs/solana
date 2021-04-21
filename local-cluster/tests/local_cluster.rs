@@ -713,7 +713,7 @@ fn test_kill_partition_switch_threshold_progress() {
 // 6) Resolve the partition so that the 2% repairs the other fork, and tries to switch,
 // stalling the network.
 
-fn test_fork_choice_ingest_votes_from_gossip() {
+fn test_fork_choice_refresh_old_votes() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     let max_switch_threshold_failure_pct = 1.0 - 2.0 * SWITCH_FORK_THRESHOLD;
     let total_stake = 100;

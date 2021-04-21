@@ -1464,6 +1464,7 @@ impl ReplayStage {
         Some(vote_tx)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn refresh_last_vote(
         tower: &mut Tower,
         cluster_info: &ClusterInfo,
@@ -1513,11 +1514,12 @@ impl ReplayStage {
             tower.refresh_last_vote_tx_blockhash(recent_blockhash);
 
             // Send the votes to the TPU and gossip for network propagation
-            info!(
-                "refreshing vote for slot {}, for target slot {}, hash {}",
-                last_voted_slot,
-                heaviest_bank_on_same_fork.slot(),
-                recent_blockhash
+            let hash_string = format!("{}", recent_blockhash);
+            datapoint_info!(
+                "refresh_vote",
+                ("last_voted_slot", last_voted_slot, i64),
+                ("target_bank_slot", heaviest_bank_on_same_fork.slot(), i64),
+                ("target_bank_hash", hash_string, String),
             );
             let _ = cluster_info.send_vote(
                 &vote_tx,

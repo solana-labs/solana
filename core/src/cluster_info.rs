@@ -1019,9 +1019,21 @@ impl ClusterInfo {
         self.push_message(CrdsValue::new_signed(message, &self.keypair));
     }
 
+    fn push_vote_at_index(&self, vote: Transaction, vote_index: u8) {
+        assert!((vote_index as usize) < MAX_LOCKOUT_HISTORY);
+        let self_pubkey = self.id();
+        let now = timestamp();
+        let vote = Vote::new(self_pubkey, vote, now);
+        let vote = CrdsData::Vote(vote_index, vote);
+        let vote = CrdsValue::new_signed(vote, &self.keypair);
+        self.gossip
+            .write()
+            .unwrap()
+            .process_push_message(&self_pubkey, vec![vote], now);
+    }
+
     pub fn push_vote(&self, tower: &[Slot], vote: Transaction) {
         debug_assert!(tower.iter().tuple_windows().all(|(a, b)| a < b));
-        let now = timestamp();
         // Find a crds vote which is evicted from the tower, and recycle its
         // vote-index. This can be either an old vote which is popped off the
         // deque, or recent vote which has expired before getting enough
@@ -1064,15 +1076,40 @@ impl ClusterInfo {
                 .map(|(_ /*wallclock*/, ix)| ix)
         };
         let vote_index = vote_index.unwrap_or(num_crds_votes);
-        assert!((vote_index as usize) < MAX_LOCKOUT_HISTORY);
-        let vote = Vote::new(self_pubkey, vote, now);
-        debug_assert_eq!(vote.slot().unwrap(), *tower.last().unwrap());
-        let vote = CrdsData::Vote(vote_index, vote);
-        let vote = CrdsValue::new_signed(vote, &self.keypair);
-        self.gossip
-            .write()
-            .unwrap()
-            .process_push_message(&self_pubkey, vec![vote], now);
+        self.push_vote_at_index(vote, vote_index);
+    }
+
+    pub fn refresh_vote(&self, vote: Transaction, vote_slot: Slot) {
+        let vote_index = {
+            let gossip =
+                self.time_gossip_read_lock("gossip_read_push_vote", &self.stats.push_vote_read);
+            (0..MAX_LOCKOUT_HISTORY as u8).find(|ix| {
+                let vote = CrdsValueLabel::Vote(*ix, self.id());
+                if let Some(vote) = gossip.crds.lookup(&vote) {
+                    match &vote.data {
+                        CrdsData::Vote(_, prev_vote) => match prev_vote.slot() {
+                            Some(prev_vote_slot) => prev_vote_slot == vote_slot,
+                            None => {
+                                error!("crds vote with no slots!");
+                                false
+                            }
+                        },
+                        _ => panic!("this should not happen!"),
+                    }
+                } else {
+                    false
+                }
+            })
+        };
+
+        // If you don't see a vote with the same slot yet, this means you probably
+        // restarted, and need to wait for your oldest vote to propagate back to you.
+        //
+        // We don't write to an arbitrary index, because it may replace one of this validator's
+        // existing votes on the network.
+        if let Some(vote_index) = vote_index {
+            self.push_vote_at_index(vote, vote_index);
+        }
     }
 
     pub fn send_vote(&self, vote: &Transaction, tpu: Option<SocketAddr>) -> Result<()> {
