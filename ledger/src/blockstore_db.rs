@@ -324,8 +324,8 @@ impl Rocks {
             }
         };
         if db.1 == ActualAccessType::Primary {
-            // Setting ttl only makes sense for primary access mode; and forcing so causes
-            // hard-errors from RocksDB
+            // Setting ttl only makes sense for primary access mode; and forcing so with secondary
+            // access causes hard-errors from RocksDB...
             for cf_name in cf_names {
                 db.0.set_options_cf(
                     db.cf_handle(cf_name),
