@@ -8,7 +8,7 @@ use crate::{
     nonce::check_nonce_account,
     spend_utils::{resolve_spend_tx_and_check_account_balances, SpendAmount},
 };
-use clap::{App, Arg, ArgGroup, ArgMatches, SubCommand};
+use clap::{value_t, App, Arg, ArgGroup, ArgMatches, SubCommand};
 use solana_clap_utils::{
     fee_payer::{fee_payer_arg, FEE_PAYER_ARG},
     input_parsers::*,
@@ -107,7 +107,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(
                     Arg::with_name("stake_account")
                         .index(1)
-                        .value_name("ACCOUNT_KEYPAIR")
+                        .value_name("STAKE_ACCOUNT_KEYPAIR")
                         .takes_value(true)
                         .required(true)
                         .validator(is_valid_signer)
@@ -133,7 +133,8 @@ impl StakeSubCommands for App<'_, '_> {
                         .long("seed")
                         .value_name("STRING")
                         .takes_value(true)
-                        .help("Seed for address generation; if specified, the resulting account will be at a derived address of the stake_account pubkey")
+                        .help("Seed for address generation; if specified, the resulting account \
+                               will be at a derived address of the STAKE_ACCOUNT_KEYPAIR pubkey")
                 )
                 .arg(
                     Arg::with_name("lockup_epoch")
@@ -246,7 +247,15 @@ impl StakeSubCommands for App<'_, '_> {
                         .index(1)
                         .value_name("STAKE_ACCOUNT_ADDRESS")
                         .required(true),
-                        "Stake account to be deactivated. ")
+                        "Stake account to be deactivated (or base of derived address if --seed is used). ")
+                )
+                .arg(
+                    Arg::with_name("seed")
+                        .long("seed")
+                        .value_name("STRING")
+                        .takes_value(true)
+                        .help("Seed for address generation; if specified, the resulting account \
+                               will be at a derived address of STAKE_ACCOUNT_ADDRESS")
                 )
                 .arg(stake_authority_arg())
                 .offline_args()
@@ -286,7 +295,8 @@ impl StakeSubCommands for App<'_, '_> {
                         .long("seed")
                         .value_name("STRING")
                         .takes_value(true)
-                        .help("Seed for address generation; if specified, the resulting account will be at a derived address of the SPLIT_STAKE_ACCOUNT pubkey")
+                        .help("Seed for address generation; if specified, the resulting account \
+                               will be at a derived address of SPLIT_STAKE_ACCOUNT")
                 )
                 .arg(stake_authority_arg())
                 .offline_args()
@@ -308,7 +318,8 @@ impl StakeSubCommands for App<'_, '_> {
                         .index(2)
                         .value_name("SOURCE_STAKE_ACCOUNT_ADDRESS")
                         .required(true),
-                        "Source stake account for the merge.  If successful, this stake account will no longer exist after the merge")
+                        "Source stake account for the merge.  If successful, this stake account \
+                         will no longer exist after the merge")
                 )
                 .arg(stake_authority_arg())
                 .offline_args()
@@ -323,7 +334,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .index(1)
                         .value_name("STAKE_ACCOUNT_ADDRESS")
                         .required(true),
-                        "Stake account from which to withdraw")
+                        "Stake account from which to withdraw (or base of derived address if --seed is used). ")
                 )
                 .arg(
                     pubkey!(Arg::with_name("destination_account_pubkey")
@@ -340,6 +351,14 @@ impl StakeSubCommands for App<'_, '_> {
                         .validator(is_amount)
                         .required(true)
                         .help("The amount to withdraw from the stake account, in SOL")
+                )
+                .arg(
+                    Arg::with_name("seed")
+                        .long("seed")
+                        .value_name("STRING")
+                        .takes_value(true)
+                        .help("Seed for address generation; if specified, the resulting account \
+                               will be at a derived address of STAKE_ACCOUNT_ADDRESS")
                 )
                 .arg(withdraw_authority_arg())
                 .offline_args()
@@ -755,6 +774,7 @@ pub fn parse_stake_deactivate_stake(
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let nonce_account = pubkey_of(matches, NONCE_ARG.name);
     let memo = matches.value_of(MEMO_ARG.name).map(String::from);
+    let seed = value_t!(matches, "seed", String).ok();
     let (stake_authority, stake_authority_pubkey) =
         signer_of(matches, STAKE_AUTHORITY_ARG.name, wallet_manager)?;
     let (nonce_authority, nonce_authority_pubkey) =
@@ -778,6 +798,7 @@ pub fn parse_stake_deactivate_stake(
             nonce_account,
             nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
             memo,
+            seed,
             fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
         },
         signers: signer_info.signers,
@@ -799,6 +820,7 @@ pub fn parse_stake_withdraw_stake(
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let nonce_account = pubkey_of(matches, NONCE_ARG.name);
     let memo = matches.value_of(MEMO_ARG.name).map(String::from);
+    let seed = value_t!(matches, "seed", String).ok();
     let (withdraw_authority, withdraw_authority_pubkey) =
         signer_of(matches, WITHDRAW_AUTHORITY_ARG.name, wallet_manager)?;
     let (nonce_authority, nonce_authority_pubkey) =
@@ -828,6 +850,7 @@ pub fn parse_stake_withdraw_stake(
             nonce_account,
             nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
             memo,
+            seed,
             fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
             custodian: custodian_pubkey.and_then(|_| signer_info.index_of(custodian_pubkey)),
         },
@@ -1151,13 +1174,21 @@ pub fn process_deactivate_stake_account(
     nonce_account: Option<Pubkey>,
     nonce_authority: SignerIndex,
     memo: Option<&String>,
+    seed: Option<&String>,
     fee_payer: SignerIndex,
 ) -> ProcessResult {
     let (recent_blockhash, fee_calculator) =
         blockhash_query.get_blockhash_and_fee_calculator(rpc_client, config.commitment)?;
     let stake_authority = config.signers[stake_authority];
+
+    let stake_account_address = if let Some(seed) = seed {
+        Pubkey::create_with_seed(&stake_account_pubkey, seed, &solana_stake_program::id())?
+    } else {
+        *stake_account_pubkey
+    };
+
     let ixs = vec![stake_instruction::deactivate_stake(
-        stake_account_pubkey,
+        &stake_account_address,
         &stake_authority.pubkey(),
     )]
     .with_memo(memo);
@@ -1222,6 +1253,7 @@ pub fn process_withdraw_stake(
     nonce_account: Option<&Pubkey>,
     nonce_authority: SignerIndex,
     memo: Option<&String>,
+    seed: Option<&String>,
     fee_payer: SignerIndex,
 ) -> ProcessResult {
     let (recent_blockhash, fee_calculator) =
@@ -1229,8 +1261,14 @@ pub fn process_withdraw_stake(
     let withdraw_authority = config.signers[withdraw_authority];
     let custodian = custodian.map(|index| config.signers[index]);
 
+    let stake_account_address = if let Some(seed) = seed {
+        Pubkey::create_with_seed(&stake_account_pubkey, seed, &solana_stake_program::id())?
+    } else {
+        *stake_account_pubkey
+    };
+
     let ixs = vec![stake_instruction::withdraw(
-        stake_account_pubkey,
+        &stake_account_address,
         &withdraw_authority.pubkey(),
         destination_account_pubkey,
         lamports,
@@ -3067,6 +3105,7 @@ mod tests {
                     nonce_account: None,
                     nonce_authority: 0,
                     memo: None,
+                    seed: None,
                     fee_payer: 0,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
@@ -3099,6 +3138,7 @@ mod tests {
                     nonce_account: None,
                     nonce_authority: 0,
                     memo: None,
+                    seed: None,
                     fee_payer: 0,
                 },
                 signers: vec![
@@ -3136,6 +3176,7 @@ mod tests {
                     nonce_account: None,
                     nonce_authority: 0,
                     memo: None,
+                    seed: None,
                     fee_payer: 0,
                 },
                 signers: vec![
@@ -3184,6 +3225,7 @@ mod tests {
                     nonce_account: Some(nonce_account),
                     nonce_authority: 1,
                     memo: None,
+                    seed: None,
                     fee_payer: 1,
                 },
                 signers: vec![
@@ -3213,6 +3255,7 @@ mod tests {
                     nonce_account: None,
                     nonce_authority: 0,
                     memo: None,
+                    seed: None,
                     fee_payer: 0,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
@@ -3239,6 +3282,7 @@ mod tests {
                     nonce_account: None,
                     nonce_authority: 0,
                     memo: None,
+                    seed: None,
                     fee_payer: 0,
                 },
                 signers: vec![
@@ -3275,6 +3319,7 @@ mod tests {
                     nonce_account: None,
                     nonce_authority: 0,
                     memo: None,
+                    seed: None,
                     fee_payer: 0,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
@@ -3301,6 +3346,7 @@ mod tests {
                     nonce_account: None,
                     nonce_authority: 0,
                     memo: None,
+                    seed: None,
                     fee_payer: 0,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
@@ -3337,6 +3383,7 @@ mod tests {
                     nonce_account: None,
                     nonce_authority: 0,
                     memo: None,
+                    seed: None,
                     fee_payer: 1,
                 },
                 signers: vec![
@@ -3382,6 +3429,7 @@ mod tests {
                     nonce_account: Some(nonce_account),
                     nonce_authority: 2,
                     memo: None,
+                    seed: None,
                     fee_payer: 1,
                 },
                 signers: vec![
@@ -3412,6 +3460,7 @@ mod tests {
                     nonce_account: None,
                     nonce_authority: 0,
                     memo: None,
+                    seed: None,
                     fee_payer: 1,
                 },
                 signers: vec![
