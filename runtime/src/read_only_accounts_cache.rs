@@ -203,7 +203,7 @@ pub mod tests {
         let per_account_size = ReadOnlyAccountsCache::per_account_size();
         let data_size = 100;
         let max = data_size + per_account_size;
-        let cache = ReadOnlyAccountsCache::new(max);
+        let mut cache = ReadOnlyAccountsCache::new(max);
         cache.disabled = false;
         let slot = 0;
         assert!(cache.load(&Pubkey::default(), slot).is_none());
@@ -239,7 +239,7 @@ pub mod tests {
 
         // can store 2 items, 3rd item kicks oldest item out
         let max = (data_size + per_account_size) * 2;
-        let cache = ReadOnlyAccountsCache::new(max);
+        let mut cache = ReadOnlyAccountsCache::new(max);
         cache.disabled = false;
         cache.store(&key1, slot, &account1);
         assert_eq!(100 + per_account_size, cache.data_size());
