@@ -241,8 +241,10 @@ impl fmt::Display for GenesisConfig {
              Shred version: {}\n\
              Ticks per slot: {:?}\n\
              Hashes per tick: {:?}\n\
+             Target tick duration: {:?}\n\
              Slots per epoch: {}\n\
              Warmup epochs: {}abled\n\
+             Slots per year: {}\n\
              {:?}\n\
              {:?}\n\
              {:?}\n\
@@ -256,12 +258,14 @@ impl fmt::Display for GenesisConfig {
             compute_shred_version(&self.hash(), None),
             self.ticks_per_slot,
             self.poh_config.hashes_per_tick,
+            self.poh_config.target_tick_duration,
             self.epoch_schedule.slots_per_epoch,
             if self.epoch_schedule.warmup {
                 "en"
             } else {
                 "dis"
             },
+            self.slots_per_year(),
             self.inflation,
             self.rent,
             self.fee_rate_governor,
