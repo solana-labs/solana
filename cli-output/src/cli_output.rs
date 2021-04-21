@@ -1405,24 +1405,28 @@ impl fmt::Display for CliInflation {
         if (self.governor.initial - self.governor.terminal).abs() < f64::EPSILON {
             writeln!(
                 f,
-                "Fixed APR:               {:>5.2}%",
+                "Fixed rate:              {:>5.2}%",
                 self.governor.terminal * 100.
             )?;
         } else {
             writeln!(
                 f,
-                "Initial APR:             {:>5.2}%",
+                "Initial rate:            {:>5.2}%",
                 self.governor.initial * 100.
             )?;
             writeln!(
                 f,
-                "Terminal APR:            {:>5.2}%",
+                "Terminal rate:           {:>5.2}%",
                 self.governor.terminal * 100.
             )?;
             writeln!(
                 f,
                 "Rate reduction per year: {:>5.2}%",
                 self.governor.taper * 100.
+            )?;
+            writeln!(
+                f,
+                "* Rate reduction is derived using the target slot time in genesis config"
             )?;
         }
         if self.governor.foundation_term > 0. {
@@ -1445,17 +1449,17 @@ impl fmt::Display for CliInflation {
         )?;
         writeln!(
             f,
-            "Total APR:               {:>5.2}%",
+            "Total rate:              {:>5.2}%",
             self.current_rate.total * 100.
         )?;
         writeln!(
             f,
-            "Staking APR:             {:>5.2}%",
+            "Staking rate:            {:>5.2}%",
             self.current_rate.validator * 100.
         )?;
         writeln!(
             f,
-            "Foundation APR:          {:>5.2}%",
+            "Foundation rate:         {:>5.2}%",
             self.current_rate.foundation * 100.
         )
     }
