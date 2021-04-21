@@ -4,6 +4,9 @@
 extern crate solana_bpf_loader_program;
 
 use itertools::izip;
+use solana_account_decoder::parse_bpf_loader::{
+    parse_bpf_upgradeable_loader, BpfUpgradeableLoaderAccountType,
+};
 use solana_bpf_loader_program::{
     create_vm,
     serialization::{deserialize_parameters, serialize_parameters},
@@ -42,7 +45,10 @@ use solana_transaction_status::{
     token_balances::collect_token_balances, ConfirmedTransaction, InnerInstructions,
     TransactionStatusMeta, TransactionWithStatusMeta, UiTransactionEncoding,
 };
-use std::{cell::RefCell, collections::HashMap, env, fs::File, io::Read, path::PathBuf, sync::Arc};
+use std::{
+    cell::RefCell, collections::HashMap, env, fs::File, io::Read, path::PathBuf, str::FromStr,
+    sync::Arc,
+};
 
 /// BPF program file extension
 const PLATFORM_FILE_EXTENSION_BPF: &str = "so";
@@ -2101,6 +2107,8 @@ fn test_program_bpf_set_upgrade_authority_via_cpi() {
     let (name, id, entrypoint) = solana_bpf_loader_upgradeable_program!();
     bank.add_builtin(&name, id, entrypoint);
     let bank_client = BankClient::new(bank);
+
+    // Deploy CPI invoker program
     let invoke_and_return = load_bpf_program(
         &bank_client,
         &bpf_loader::id(),
@@ -2123,13 +2131,14 @@ fn test_program_bpf_set_upgrade_authority_via_cpi() {
     );
 
     // Set program upgrade authority via CPI
-    let new_authority_keypair = Keypair::new();
+    let new_upgrade_authority_key = Keypair::new().pubkey();
     let mut set_upgrade_authority_instruction = bpf_loader_upgradeable::set_upgrade_authority(
         &program_id,
         &authority_keypair.pubkey(),
-        Some(&new_authority_keypair.pubkey()),
+        Some(&new_upgrade_authority_key),
     );
 
+    // Invoke set_upgrade_authority via CPI invoker program
     set_upgrade_authority_instruction.program_id = invoke_and_return;
     set_upgrade_authority_instruction
         .accounts
@@ -2142,6 +2151,32 @@ fn test_program_bpf_set_upgrade_authority_via_cpi() {
     bank_client
         .send_and_confirm_message(&[&mint_keypair, &authority_keypair], message)
         .unwrap();
+
+    // Assert upgrade authority was changed
+    let program_account_data = bank_client.get_account_data(&program_id).unwrap().unwrap();
+    let program_account = parse_bpf_upgradeable_loader(&program_account_data).unwrap();
+
+    let upgrade_authority_key = match program_account {
+        BpfUpgradeableLoaderAccountType::Program(ui_program) => {
+            let program_data_account_key = Pubkey::from_str(&ui_program.program_data).unwrap();
+            let program_data_account_data = bank_client
+                .get_account_data(&program_data_account_key)
+                .unwrap()
+                .unwrap();
+            let program_data_account =
+                parse_bpf_upgradeable_loader(&program_data_account_data).unwrap();
+
+            match program_data_account {
+                BpfUpgradeableLoaderAccountType::ProgramData(ui_program_data) => ui_program_data
+                    .authority
+                    .map(|a| Pubkey::from_str(&a).unwrap()),
+                _ => None,
+            }
+        }
+        _ => None,
+    };
+
+    assert_eq!(Some(new_upgrade_authority_key), upgrade_authority_key);
 }
 
 #[cfg(feature = "bpf_rust")]
