@@ -86,9 +86,9 @@ impl<T> AccountMapEntryInner<T> {
 }
 
 pub enum AccountIndexGetResult<T: 'static> {
-    Success(ReadAccountMapEntry<T>, usize),
-    NotFoundOnFork(ReadAccountMapEntry<T>),
-    Missing(),
+    Found(ReadAccountMapEntry<T>, usize),
+    NotFoundOnFork,
+    Missing,
 }
 
 #[self_referencing]
@@ -700,7 +700,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         for pubkey in index.get(index_key) {
             // Maybe these reads from the AccountsIndex can be batched every time it
             // grabs the read lock as well...
-            if let AccountIndexGetResult::Success(list_r, index) =
+            if let AccountIndexGetResult::Found(list_r, index) =
                 self.get(&pubkey, Some(ancestors), max_root)
             {
                 func(
@@ -950,11 +950,11 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
                 let slot_list = locked_entry.slot_list();
                 let found_index = self.latest_slot(ancestors, slot_list, max_root);
                 match found_index {
-                    Some(found_index) => AccountIndexGetResult::Success(locked_entry, found_index),
-                    None => AccountIndexGetResult::NotFoundOnFork(locked_entry),
+                    Some(found_index) => AccountIndexGetResult::Found(locked_entry, found_index),
+                    None => AccountIndexGetResult::NotFoundOnFork,
                 }
             }
-            None => AccountIndexGetResult::Missing(),
+            None => AccountIndexGetResult::Missing,
         }
     }
 
@@ -1336,7 +1336,7 @@ pub mod tests {
     impl<T: 'static> AccountIndexGetResult<T> {
         pub fn unwrap(self) -> (ReadAccountMapEntry<T>, usize) {
             match self {
-                AccountIndexGetResult::Success(lock, size) => (lock, size),
+                AccountIndexGetResult::Found(lock, size) => (lock, size),
                 _ => {
                     panic!("trying to unwrap AccountIndexGetResult with non-Success result");
                 }
@@ -1348,12 +1348,12 @@ pub mod tests {
         }
 
         pub fn is_some(&self) -> bool {
-            matches!(self, AccountIndexGetResult::Success(_lock, _size))
+            matches!(self, AccountIndexGetResult::Found(_lock, _size))
         }
 
         pub fn map<U, F: FnOnce((ReadAccountMapEntry<T>, usize)) -> U>(self, f: F) -> Option<U> {
             match self {
-                AccountIndexGetResult::Success(lock, size) => Some(f((lock, size))),
+                AccountIndexGetResult::Found(lock, size) => Some(f((lock, size))),
                 _ => None,
             }
         }

@@ -1561,7 +1561,7 @@ impl AccountsDb {
                         for pubkey in pubkeys {
                             let remove_from_zero_lamports_list =
                                 match self.accounts_index.get(pubkey, None, max_clean_root) {
-                                    AccountIndexGetResult::Success(locked_entry, index) => {
+                                    AccountIndexGetResult::Found(locked_entry, index) => {
                                         let slot_list = locked_entry.slot_list();
                                         let (slot, account_info) = &slot_list[index];
                                         if account_info.lamports == 0 {
@@ -1594,11 +1594,11 @@ impl AccountsDb {
                                         }
                                         remove_from_zero_lamports_list
                                     }
-                                    AccountIndexGetResult::NotFoundOnFork(_locked_entry) => {
+                                    AccountIndexGetResult::NotFoundOnFork => {
                                         // do nothing - pubkey is in index, but not found in a root slot
                                         false
                                     }
-                                    AccountIndexGetResult::Missing() => {
+                                    AccountIndexGetResult::Missing => {
                                         // pubkey is missing from index, so remove from zero_lamports_list
                                         true
                                     }
@@ -2340,12 +2340,12 @@ impl AccountsDb {
         clone_in_lock: bool,
     ) -> Option<(Slot, AppendVecId, usize, Option<LoadedAccountAccessor<'a>>)> {
         let (lock, index) = match self.accounts_index.get(pubkey, Some(ancestors), max_root) {
-            AccountIndexGetResult::Success(lock, index) => (lock, index),
+            AccountIndexGetResult::Found(lock, index) => (lock, index),
             // we bail out pretty early for missing.
-            AccountIndexGetResult::NotFoundOnFork(_) => {
+            AccountIndexGetResult::NotFoundOnFork => {
                 return None;
             }
-            AccountIndexGetResult::Missing() => {
+            AccountIndexGetResult::Missing => {
                 return None;
             }
         };
@@ -3896,7 +3896,7 @@ impl AccountsDb {
                         let result: Vec<Hash> = pubkeys
                             .iter()
                             .filter_map(|pubkey| {
-                                if let AccountIndexGetResult::Success(lock, index) =
+                                if let AccountIndexGetResult::Found(lock, index) =
                                     self.accounts_index.get(pubkey, Some(ancestors), Some(slot))
                                 {
                                     let (slot, account_info) = &lock.slot_list()[index];
