@@ -1572,6 +1572,10 @@ impl AccountsDb {
                                     );
                                 }
 
+                                let m = self.accounts_index.account_maps.write().unwrap();
+                                drop(m);
+                                //panic!("dropped");
+
                                 // prune zero_lamport_pubkey set which should contain all 0-lamport
                                 // keys whether rooted or not. A 0-lamport update may become rooted
                                 // in the future.
