@@ -214,6 +214,7 @@ pub enum CliCommand {
         nonce_account: Option<Pubkey>,
         nonce_authority: SignerIndex,
         memo: Option<String>,
+        seed: Option<String>,
         fee_payer: SignerIndex,
     },
     DelegateStake {
@@ -300,6 +301,7 @@ pub enum CliCommand {
         nonce_account: Option<Pubkey>,
         nonce_authority: SignerIndex,
         memo: Option<String>,
+        seed: Option<String>,
         fee_payer: SignerIndex,
     },
     // Validator Info Commands
@@ -1556,6 +1558,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             nonce_account,
             nonce_authority,
             memo,
+            seed,
             fee_payer,
         } => process_deactivate_stake_account(
             &rpc_client,
@@ -1568,6 +1571,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *nonce_account,
             *nonce_authority,
             memo.as_ref(),
+            seed.as_ref(),
             *fee_payer,
         ),
         CliCommand::DelegateStake {
@@ -1728,6 +1732,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             ref nonce_account,
             nonce_authority,
             memo,
+            seed,
             fee_payer,
         } => process_withdraw_stake(
             &rpc_client,
@@ -1743,6 +1748,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             nonce_account.as_ref(),
             *nonce_authority,
             memo.as_ref(),
+            seed.as_ref(),
             *fee_payer,
         ),
 
@@ -2709,6 +2715,7 @@ mod tests {
             nonce_account: None,
             nonce_authority: 0,
             memo: None,
+            seed: None,
             fee_payer: 0,
         };
         config.signers = vec![&keypair];
@@ -2725,6 +2732,7 @@ mod tests {
             nonce_account: None,
             nonce_authority: 0,
             memo: None,
+            seed: None,
             fee_payer: 0,
         };
         let result = process_command(&config);

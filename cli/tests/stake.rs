@@ -189,6 +189,7 @@ fn test_seed_stake_delegation_and_deactivation() {
         nonce_account: None,
         nonce_authority: 0,
         memo: None,
+        seed: None,
         fee_payer: 0,
     };
     process_command(&config_validator).unwrap();
@@ -269,6 +270,7 @@ fn test_stake_delegation_and_deactivation() {
         nonce_account: None,
         nonce_authority: 0,
         memo: None,
+        seed: None,
         fee_payer: 0,
     };
     process_command(&config_validator).unwrap();
@@ -391,6 +393,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         nonce_account: None,
         nonce_authority: 0,
         memo: None,
+        seed: None,
         fee_payer: 0,
     };
     let sig_response = process_command(&config_offline).unwrap();
@@ -409,6 +412,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         nonce_account: None,
         nonce_authority: 0,
         memo: None,
+        seed: None,
         fee_payer: 0,
     };
     process_command(&config_payer).unwrap();
@@ -524,6 +528,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
         nonce_account: Some(nonce_account.pubkey()),
         nonce_authority: 0,
         memo: None,
+        seed: None,
         fee_payer: 0,
     };
     process_command(&config).unwrap();
@@ -1459,6 +1464,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         nonce_account: Some(nonce_pubkey),
         nonce_authority: 0,
         memo: None,
+        seed: None,
         fee_payer: 0,
     };
     let sig_response = process_command(&config_offline).unwrap();
@@ -1480,6 +1486,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         nonce_account: Some(nonce_pubkey),
         nonce_authority: 0,
         memo: None,
+        seed: None,
         fee_payer: 0,
     };
     process_command(&config).unwrap();
