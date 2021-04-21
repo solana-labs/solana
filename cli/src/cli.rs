@@ -850,7 +850,7 @@ pub fn parse_command(
                 signers: vec![],
             })
         }
-        ("pay", Some(matches)) | ("transfer", Some(matches)) => {
+        ("transfer", Some(matches)) => {
             let amount = SpendAmount::new_from_matches(matches, "amount");
             let to = pubkey_of_signer(matches, "to", wallet_manager)?.unwrap();
             let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
@@ -2156,28 +2156,6 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 ),
         )
         .subcommand(
-            SubCommand::with_name("pay")
-                .about("Deprecated alias for the transfer command")
-                .arg(
-                    pubkey!(Arg::with_name("to")
-                        .index(1)
-                        .value_name("RECIPIENT_ADDRESS")
-                        .required(true),
-                        "The account address of recipient. "),
-                )
-                .arg(
-                    Arg::with_name("amount")
-                        .index(2)
-                        .value_name("AMOUNT")
-                        .takes_value(true)
-                        .validator(is_amount_or_all)
-                        .required(true)
-                        .help("The amount to send, in SOL; accepts keyword ALL"),
-                )
-                .offline_args()
-                .nonce_args(false)
-        )
-        .subcommand(
             SubCommand::with_name("resolve-signer")
                 .about("Checks that a signer is valid, and returns its specific path; useful for signers that may be specified generally, eg. usb://ledger")
                 .arg(
@@ -2193,6 +2171,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
         .subcommand(
             SubCommand::with_name("transfer")
                 .about("Transfer funds between system accounts")
+                .alias("pay")
                 .arg(
                     pubkey!(Arg::with_name("to")
                         .index(1)
