@@ -1509,9 +1509,16 @@ impl ReplayStage {
         );
 
         if let Some(vote_tx) = vote_tx {
-            tower.refresh_last_vote_tx_blockhash(vote_tx.message.recent_blockhash);
+            let recent_blockhash = vote_tx.message.recent_blockhash;
+            tower.refresh_last_vote_tx_blockhash(recent_blockhash);
 
             // Send the votes to the TPU and gossip for network propagation
+            info!(
+                "refreshing vote for slot {}, for target slot {}, hash {}",
+                last_voted_slot,
+                heaviest_bank_on_same_fork.slot(),
+                recent_blockhash
+            );
             let _ = cluster_info.send_vote(
                 &vote_tx,
                 crate::banking_stage::next_leader_tpu(cluster_info, poh_recorder),
