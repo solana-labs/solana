@@ -2130,7 +2130,7 @@ fn test_program_bpf_set_upgrade_authority_via_cpi() {
         "solana_bpf_rust_upgradeable",
     );
 
-    // Set program upgrade authority via CPI
+    // Set program upgrade authority instruction to invoke via CPI
     let new_upgrade_authority_key = Keypair::new().pubkey();
     let mut set_upgrade_authority_instruction = bpf_loader_upgradeable::set_upgrade_authority(
         &program_id,
