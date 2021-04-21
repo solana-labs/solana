@@ -289,6 +289,7 @@ impl Rocks {
             (PerfSamples::NAME, perf_samples_cf_descriptor),
             (BlockHeight::NAME, block_height_cf_descriptor),
         ];
+        let cf_names: Vec<_> = cfs.iter().map(|c| c.0).collect();
 
         // Open the database
         let db = match access_type {
@@ -297,8 +298,6 @@ impl Rocks {
                 ActualAccessType::Primary,
             ),
             AccessType::TryPrimaryThenSecondary => {
-                let names: Vec<_> = cfs.iter().map(|c| c.0).collect();
-
                 match DB::open_cf_descriptors(&db_options, path, cfs.into_iter().map(|c| c.1)) {
                     Ok(db) => Rocks(db, ActualAccessType::Primary),
                     Err(err) => {
@@ -312,13 +311,29 @@ impl Rocks {
                         db_options.set_max_open_files(-1);
 
                         Rocks(
-                            DB::open_cf_as_secondary(&db_options, path, &secondary_path, names)?,
+                            DB::open_cf_as_secondary(
+                                &db_options,
+                                path,
+                                &secondary_path,
+                                cf_names.clone(),
+                            )?,
                             ActualAccessType::Secondary,
                         )
                     }
                 }
             }
         };
+        for cf_name in cf_names {
+            db.0.set_options_cf(
+                db.cf_handle(cf_name),
+                &[(
+                    "ttl",
+                    &std::env::var("SOLANA_ROCKSDB_COMPACTION_TTL")
+                        .unwrap_or(format!("{}", 60 * 60 * 24 * 3)),
+                )],
+            )
+            .unwrap();
+        }
 
         Ok(db)
     }
