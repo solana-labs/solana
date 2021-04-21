@@ -21,7 +21,8 @@ use solana_sdk::{
     epoch_schedule::EpochSchedule,
     feature_set::{
         cpi_data_cost, cpi_share_ro_and_exec_accounts, demote_sysvar_write_locks,
-        enforce_aligned_host_addrs, ristretto_mul_syscall_enabled, sysvar_via_syscall,
+        enforce_aligned_host_addrs, ristretto_mul_syscall_enabled,
+        set_upgrade_authority_via_cpi_enabled, sysvar_via_syscall,
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
@@ -1874,12 +1875,16 @@ fn check_account_infos(
 fn check_authorized_program(
     program_id: &Pubkey,
     instruction_data: &[u8],
+    invoke_context: &Ref<&mut dyn InvokeContext>,
 ) -> Result<(), EbpfError<BpfError>> {
     if native_loader::check_id(program_id)
         || bpf_loader::check_id(program_id)
         || bpf_loader_deprecated::check_id(program_id)
         || (bpf_loader_upgradeable::check_id(program_id)
-            && !bpf_loader_upgradeable::is_upgrade_instruction(instruction_data))
+            && !(bpf_loader_upgradeable::is_upgrade_instruction(instruction_data)
+                || (bpf_loader_upgradeable::is_set_authority_instruction(instruction_data)
+                    && invoke_context
+                        .is_feature_active(&set_upgrade_authority_via_cpi_enabled::id()))))
     {
         return Err(SyscallError::ProgramNotSupported(*program_id).into());
     }
@@ -1994,7 +1999,7 @@ fn call<'a>(
                 }
             })
             .collect::<Vec<bool>>();
-        check_authorized_program(&callee_program_id, &instruction.data)?;
+        check_authorized_program(&callee_program_id, &instruction.data, &invoke_context)?;
         let (accounts, account_refs) = syscall.translate_accounts(
             &message.account_keys,
             &caller_write_privileges,
