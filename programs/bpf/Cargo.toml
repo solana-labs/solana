@@ -68,7 +68,6 @@ members = [
     "rust/param_passing",
     "rust/param_passing_dep",
     "rust/rand",
-    "rust/ristretto",
     "rust/ro_modify",
     "rust/sanity",
     "rust/sha256",

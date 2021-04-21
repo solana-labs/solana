@@ -1,6 +1,5 @@
 use crate::{alloc, BpfError};
 use alloc::Alloc;
-use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use solana_rbpf::{
     aligned_memory::AlignedMemory,
     ebpf::MM_HEAP_START,
@@ -21,8 +20,7 @@ use solana_sdk::{
     epoch_schedule::EpochSchedule,
     feature_set::{
         cpi_data_cost, cpi_share_ro_and_exec_accounts, demote_sysvar_write_locks,
-        enforce_aligned_host_addrs, ristretto_mul_syscall_enabled,
-        set_upgrade_authority_via_cpi_enabled, sysvar_via_syscall,
+        enforce_aligned_host_addrs, set_upgrade_authority_via_cpi_enabled, sysvar_via_syscall,
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
@@ -127,11 +125,6 @@ pub fn register_syscalls(
     )?;
 
     syscall_registry.register_syscall_by_name(b"sol_sha256", SyscallSha256::call)?;
-
-    if invoke_context.is_feature_active(&ristretto_mul_syscall_enabled::id()) {
-        syscall_registry
-            .register_syscall_by_name(b"sol_ristretto_mul", SyscallRistrettoMul::call)?;
-    }
 
     if invoke_context.is_feature_active(&sysvar_via_syscall::id()) {
         syscall_registry
@@ -257,17 +250,6 @@ pub fn bind_syscall_context_objects<'a>(
         }),
         None,
     )?;
-
-    bind_feature_gated_syscall_context_object!(
-        vm,
-        invoke_context.is_feature_active(&ristretto_mul_syscall_enabled::id()),
-        Box::new(SyscallRistrettoMul {
-            cost: 0,
-            compute_meter: invoke_context.get_compute_meter(),
-            loader_id,
-            enforce_aligned_host_addrs,
-        }),
-    );
 
     let is_sysvar_via_syscall_active = invoke_context.is_feature_active(&sysvar_via_syscall::id());
 
@@ -947,59 +929,6 @@ impl<'a> SyscallObject<BpfError> for SyscallSha256<'a> {
             }
         }
         hash_result.copy_from_slice(&hasher.result().to_bytes());
-        *result = Ok(0);
-    }
-}
-
-/// Ristretto point multiply
-pub struct SyscallRistrettoMul<'a> {
-    cost: u64,
-    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
-    loader_id: &'a Pubkey,
-    enforce_aligned_host_addrs: bool,
-}
-impl<'a> SyscallObject<BpfError> for SyscallRistrettoMul<'a> {
-    fn call(
-        &mut self,
-        point_addr: u64,
-        scalar_addr: u64,
-        result_addr: u64,
-        _arg4: u64,
-        _arg5: u64,
-        memory_mapping: &MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
-    ) {
-        question_mark!(self.compute_meter.consume(self.cost), result);
-
-        let point = question_mark!(
-            translate_type::<RistrettoPoint>(
-                memory_mapping,
-                point_addr,
-                self.loader_id,
-                self.enforce_aligned_host_addrs,
-            ),
-            result
-        );
-        let scalar = question_mark!(
-            translate_type::<Scalar>(
-                memory_mapping,
-                scalar_addr,
-                self.loader_id,
-                self.enforce_aligned_host_addrs,
-            ),
-            result
-        );
-        let output = question_mark!(
-            translate_type_mut::<RistrettoPoint>(
-                memory_mapping,
-                result_addr,
-                self.loader_id,
-                self.enforce_aligned_host_addrs,
-            ),
-            result
-        );
-        *output = point * scalar;
-
         *result = Ok(0);
     }
 }
