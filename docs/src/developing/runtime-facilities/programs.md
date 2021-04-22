@@ -68,7 +68,7 @@ to process the instruction.
 Verify secp256k1 public key recovery operations (ecrecover).
 
 - Program id: `KeccakSecp256k11111111111111111111111111111`
-- Instructions: [new_secp256k1_instruction](https://github.com/solana-labs/solana/blob/c1f3f9d27b5f9534f9a37704bae1d690d4335b6b/programs/secp256k1/src/lib.rs#L18)
+- Instructions: [new_secp256k1_instruction](https://github.com/solana-labs/solana/blob/1a658c7f31e1e0d2d39d9efbc0e929350e2c2bcb/sdk/src/secp256k1_instruction.rs#L31)
 
 The secp256k1 program processes an instruction which takes in as the first byte
 a count of the following struct serialized in the instruction data:
