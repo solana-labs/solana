@@ -8854,21 +8854,22 @@ pub mod tests {
             .map(|(account, _)| account)
             .unwrap();
         assert_eq!(account.lamports, 1);
-        assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
+        let expected = 0;
+        assert_eq!(db.read_only_accounts_cache.cache_len(), expected);
         let account = db
             .load_with_fixed_root(&Ancestors::default(), &account_key)
             .map(|(account, _)| account)
             .unwrap();
         assert_eq!(account.lamports, 1);
-        assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
+        assert_eq!(db.read_only_accounts_cache.cache_len(), expected);
         db.store_cached(2, &[(&account_key, &zero_lamport_account)]);
-        assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
+        assert_eq!(db.read_only_accounts_cache.cache_len(), expected);
         let account = db
             .load_with_fixed_root(&Ancestors::default(), &account_key)
             .map(|(account, _)| account)
             .unwrap();
         assert_eq!(account.lamports, 0);
-        assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
+        assert_eq!(db.read_only_accounts_cache.cache_len(), expected);
     }
 
     #[test]
