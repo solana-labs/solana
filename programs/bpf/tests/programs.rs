@@ -27,7 +27,10 @@ use solana_sdk::{
     client::SyncClient,
     clock::{DEFAULT_SLOTS_PER_EPOCH, MAX_PROCESSING_AGE},
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
+<<<<<<< HEAD
     feature_set::try_find_program_address_syscall_enabled,
+=======
+>>>>>>> be4df39a4... Remove unactivated ristretto syscall (#16727)
     instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
     keyed_account::KeyedAccount,
     message::Message,
@@ -429,7 +432,6 @@ fn test_program_bpf_sanity() {
             ("solana_bpf_rust_panic", false),
             ("solana_bpf_rust_param_passing", true),
             ("solana_bpf_rust_rand", true),
-            ("solana_bpf_rust_ristretto", true),
             ("solana_bpf_rust_sanity", true),
             ("solana_bpf_rust_sha256", true),
             ("solana_bpf_rust_sysval", true),
@@ -1231,10 +1233,19 @@ fn assert_instruction_count() {
             ("solana_bpf_rust_external_spend", 514),
             ("solana_bpf_rust_iter", 724),
             ("solana_bpf_rust_many_args", 237),
+<<<<<<< HEAD
             ("solana_bpf_rust_noop", 488),
             ("solana_bpf_rust_param_passing", 48),
             ("solana_bpf_rust_ristretto", 19409),
             ("solana_bpf_rust_sanity", 938),
+=======
+            ("solana_bpf_rust_mem", 2297),
+            ("solana_bpf_rust_noop", 472),
+            ("solana_bpf_rust_param_passing", 46),
+            ("solana_bpf_rust_rand", 475),
+            ("solana_bpf_rust_sanity", 869),
+            ("solana_bpf_rust_sha256", 10830),
+>>>>>>> be4df39a4... Remove unactivated ristretto syscall (#16727)
         ]);
     }
 
@@ -2187,7 +2198,11 @@ fn test_program_upgradeable_locks() {
 
 #[cfg(feature = "bpf_rust")]
 #[test]
+<<<<<<< HEAD
 fn test_program_bpf_syscall_feature_activation() {
+=======
+fn test_program_bpf_finalize() {
+>>>>>>> be4df39a4... Remove unactivated ristretto syscall (#16727)
     solana_logger::setup();
 
     let GenesisConfigInfo {
@@ -2196,12 +2211,16 @@ fn test_program_bpf_syscall_feature_activation() {
         ..
     } = create_genesis_config(50);
     let mut bank = Bank::new(&genesis_config);
+<<<<<<< HEAD
     bank.deactivate_feature(&try_find_program_address_syscall_enabled::id());
+=======
+>>>>>>> be4df39a4... Remove unactivated ristretto syscall (#16727)
     let (name, id, entrypoint) = solana_bpf_loader_program!();
     bank.add_builtin(&name, id, entrypoint);
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);
 
+<<<<<<< HEAD
     let program_id = load_bpf_program(
         &bank_client,
         &bpf_loader::id(),
@@ -2221,4 +2240,50 @@ fn test_program_bpf_syscall_feature_activation() {
     let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
     println!("result: {:?}", result);
     assert!(result.is_ok());
+=======
+    let program_pubkey = load_bpf_program(
+        &bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        "solana_bpf_rust_finalize",
+    );
+
+    let noop_keypair = Keypair::new();
+
+    // Write the noop program into the same program account
+    let elf = read_bpf_program("solana_bpf_rust_noop");
+    let message = Message::new(
+        &[system_instruction::create_account(
+            &mint_keypair.pubkey(),
+            &noop_keypair.pubkey(),
+            1,
+            elf.len() as u64 * 2,
+            &bpf_loader::id(),
+        )],
+        Some(&mint_keypair.pubkey()),
+    );
+    assert!(bank_client
+        .send_and_confirm_message(&[&mint_keypair, &noop_keypair], message)
+        .is_ok());
+    write_bpf_program(
+        &bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        &noop_keypair,
+        &elf,
+    );
+
+    let account_metas = vec![
+        AccountMeta::new(noop_keypair.pubkey(), true),
+        AccountMeta::new_readonly(bpf_loader::id(), false),
+        AccountMeta::new(rent::id(), false),
+    ];
+    let instruction = Instruction::new_with_bytes(program_pubkey, &[], account_metas.clone());
+    let message = Message::new(&[instruction], Some(&mint_keypair.pubkey()));
+    let result = bank_client.send_and_confirm_message(&[&mint_keypair, &noop_keypair], message);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        TransactionError::InstructionError(0, InstructionError::ProgramFailedToComplete)
+    );
+>>>>>>> be4df39a4... Remove unactivated ristretto syscall (#16727)
 }

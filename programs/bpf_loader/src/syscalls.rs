@@ -1,6 +1,5 @@
 use crate::{alloc, BpfError};
 use alloc::Alloc;
-use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use solana_rbpf::{
     ebpf::MM_HEAP_START,
     error::EbpfError,
@@ -17,10 +16,15 @@ use solana_sdk::{
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     feature_set::{
+<<<<<<< HEAD
         abort_on_all_cpi_failures, cpi_data_cost, limit_cpi_loader_invoke, per_byte_logging_cost,
         pubkey_log_syscall_enabled, ristretto_mul_syscall_enabled, sha256_syscall_enabled,
         sol_log_compute_units_syscall, try_find_program_address_syscall_enabled,
         use_loaded_executables, use_loaded_program_accounts,
+=======
+        cpi_data_cost, cpi_share_ro_and_exec_accounts, demote_sysvar_write_locks,
+        enforce_aligned_host_addrs, set_upgrade_authority_via_cpi_enabled, sysvar_via_syscall,
+>>>>>>> be4df39a4... Remove unactivated ristretto syscall (#16727)
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
@@ -123,6 +127,7 @@ pub fn register_syscalls(
         syscall_registry.register_syscall_by_name(b"sol_sha256", SyscallSha256::call)?;
     }
 
+<<<<<<< HEAD
     if invoke_context.is_feature_active(&ristretto_mul_syscall_enabled::id()) {
         syscall_registry
             .register_syscall_by_name(b"sol_ristretto_mul", SyscallRistrettoMul::call)?;
@@ -133,6 +138,11 @@ pub fn register_syscalls(
         SyscallCreateProgramAddress::call,
     )?;
     if invoke_context.is_feature_active(&try_find_program_address_syscall_enabled::id()) {
+=======
+    if invoke_context.is_feature_active(&sysvar_via_syscall::id()) {
+        syscall_registry
+            .register_syscall_by_name(b"sol_get_clock_sysvar", SyscallGetClockSysvar::call)?;
+>>>>>>> be4df39a4... Remove unactivated ristretto syscall (#16727)
         syscall_registry.register_syscall_by_name(
             b"sol_try_find_program_address",
             SyscallTryFindProgramAddress::call,
@@ -237,6 +247,7 @@ pub fn bind_syscall_context_objects<'a>(
         }),
     );
 
+<<<<<<< HEAD
     bind_feature_gated_syscall_context_object!(
         vm,
         invoke_context,
@@ -252,6 +263,33 @@ pub fn bind_syscall_context_objects<'a>(
         Box::new(SyscallCreateProgramAddress {
             cost: bpf_compute_budget.create_program_address_units,
             compute_meter: invoke_context.get_compute_meter(),
+=======
+    let is_sysvar_via_syscall_active = invoke_context.is_feature_active(&sysvar_via_syscall::id());
+
+    let invoke_context = Rc::new(RefCell::new(invoke_context));
+
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        is_sysvar_via_syscall_active,
+        Box::new(SyscallGetClockSysvar {
+            invoke_context: invoke_context.clone(),
+            loader_id,
+        }),
+    );
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        is_sysvar_via_syscall_active,
+        Box::new(SyscallGetEpochScheduleSysvar {
+            invoke_context: invoke_context.clone(),
+            loader_id,
+        }),
+    );
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        is_sysvar_via_syscall_active,
+        Box::new(SyscallGetFeesSysvar {
+            invoke_context: invoke_context.clone(),
+>>>>>>> be4df39a4... Remove unactivated ristretto syscall (#16727)
             loader_id,
         }),
         None,
@@ -821,6 +859,7 @@ impl<'a> SyscallObject<BpfError> for SyscallSha256<'a> {
     }
 }
 
+<<<<<<< HEAD
 /// Ristretto point multiply
 pub struct SyscallRistrettoMul<'a> {
     cost: u64,
@@ -833,11 +872,59 @@ impl<'a> SyscallObject<BpfError> for SyscallRistrettoMul<'a> {
         point_addr: u64,
         scalar_addr: u64,
         result_addr: u64,
+=======
+fn get_sysvar<T: std::fmt::Debug + Sysvar + SysvarId>(
+    id: &Pubkey,
+    var_addr: u64,
+    loader_id: &Pubkey,
+    memory_mapping: &MemoryMapping,
+    invoke_context: Rc<RefCell<&mut dyn InvokeContext>>,
+) -> Result<u64, EbpfError<BpfError>> {
+    let mut invoke_context = invoke_context
+        .try_borrow_mut()
+        .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
+
+    invoke_context.get_compute_meter().consume(
+        invoke_context.get_bpf_compute_budget().sysvar_base_cost + size_of::<T>() as u64,
+    )?;
+    let var = translate_type_mut::<T>(
+        memory_mapping,
+        var_addr,
+        loader_id,
+        invoke_context.is_feature_active(&enforce_aligned_host_addrs::id()),
+    )?;
+
+    let sysvar_data = invoke_context.get_sysvar_data(id).ok_or_else(|| {
+        ic_msg!(invoke_context, "Unable to get Sysvar {}", id);
+        SyscallError::InstructionError(InstructionError::UnsupportedSysvar)
+    })?;
+
+    *var = bincode::deserialize(&sysvar_data).map_err(|e| {
+        ic_msg!(invoke_context, "Unable to get Sysvar {}: {:?}", id, e);
+        SyscallError::InstructionError(InstructionError::UnsupportedSysvar)
+    })?;
+
+    Ok(SUCCESS)
+}
+
+/// Get a Clock sysvar
+struct SyscallGetClockSysvar<'a> {
+    invoke_context: Rc<RefCell<&'a mut dyn InvokeContext>>,
+    loader_id: &'a Pubkey,
+}
+impl<'a> SyscallObject<BpfError> for SyscallGetClockSysvar<'a> {
+    fn call(
+        &mut self,
+        var_addr: u64,
+        _arg2: u64,
+        _arg3: u64,
+>>>>>>> be4df39a4... Remove unactivated ristretto syscall (#16727)
         _arg4: u64,
         _arg5: u64,
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
+<<<<<<< HEAD
         question_mark!(self.compute_meter.consume(self.cost), result);
 
         let point = question_mark!(
@@ -855,6 +942,90 @@ impl<'a> SyscallObject<BpfError> for SyscallRistrettoMul<'a> {
         *output = point * scalar;
 
         *result = Ok(0);
+=======
+        *result = get_sysvar::<Clock>(
+            &sysvar::clock::id(),
+            var_addr,
+            self.loader_id,
+            memory_mapping,
+            self.invoke_context.clone(),
+        );
+    }
+}
+/// Get a EpochSchedule sysvar
+struct SyscallGetEpochScheduleSysvar<'a> {
+    invoke_context: Rc<RefCell<&'a mut dyn InvokeContext>>,
+    loader_id: &'a Pubkey,
+}
+impl<'a> SyscallObject<BpfError> for SyscallGetEpochScheduleSysvar<'a> {
+    fn call(
+        &mut self,
+        var_addr: u64,
+        _arg2: u64,
+        _arg3: u64,
+        _arg4: u64,
+        _arg5: u64,
+        memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        *result = get_sysvar::<EpochSchedule>(
+            &sysvar::epoch_schedule::id(),
+            var_addr,
+            self.loader_id,
+            memory_mapping,
+            self.invoke_context.clone(),
+        );
+    }
+}
+/// Get a Fees sysvar
+struct SyscallGetFeesSysvar<'a> {
+    invoke_context: Rc<RefCell<&'a mut dyn InvokeContext>>,
+    loader_id: &'a Pubkey,
+}
+impl<'a> SyscallObject<BpfError> for SyscallGetFeesSysvar<'a> {
+    fn call(
+        &mut self,
+        var_addr: u64,
+        _arg2: u64,
+        _arg3: u64,
+        _arg4: u64,
+        _arg5: u64,
+        memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        *result = get_sysvar::<Fees>(
+            &sysvar::fees::id(),
+            var_addr,
+            self.loader_id,
+            memory_mapping,
+            self.invoke_context.clone(),
+        );
+    }
+}
+/// Get a Rent sysvar
+struct SyscallGetRentSysvar<'a> {
+    invoke_context: Rc<RefCell<&'a mut dyn InvokeContext>>,
+    loader_id: &'a Pubkey,
+}
+impl<'a> SyscallObject<BpfError> for SyscallGetRentSysvar<'a> {
+    fn call(
+        &mut self,
+        var_addr: u64,
+        _arg2: u64,
+        _arg3: u64,
+        _arg4: u64,
+        _arg5: u64,
+        memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        *result = get_sysvar::<Rent>(
+            &sysvar::rent::id(),
+            var_addr,
+            self.loader_id,
+            memory_mapping,
+            self.invoke_context.clone(),
+        );
+>>>>>>> be4df39a4... Remove unactivated ristretto syscall (#16727)
     }
 }
 

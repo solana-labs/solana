@@ -3959,7 +3959,6 @@ version = "1.5.20"
 dependencies = [
  "bincode",
  "byteorder",
- "curve25519-dalek 3.0.0",
  "log 0.4.11",
  "num-derive",
  "num-traits",
