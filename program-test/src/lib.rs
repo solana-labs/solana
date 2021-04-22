@@ -672,7 +672,8 @@ impl ProgramTest {
         let rent = Rent::default();
         let fee_rate_governor = FeeRateGovernor::default();
         let bootstrap_validator_pubkey = Pubkey::new_unique();
-        let bootstrap_validator_stake_lamports = rent.minimum_balance(VoteState::size_of());
+        let bootstrap_validator_stake_lamports =
+            rent.minimum_balance(VoteState::size_of()) + sol_to_lamports(1_000_000.0);
 
         let mint_keypair = Keypair::new();
         let voting_keypair = Keypair::new();
