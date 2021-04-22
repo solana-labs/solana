@@ -1458,7 +1458,7 @@ impl JsonRpcRequestProcessor {
             Error::invalid_params("Invalid param: could not find account".to_string())
         })?;
 
-        if account.owner != spl_token_id_v2_0() {
+        if account.owner() != &spl_token_id_v2_0() {
             return Err(Error::invalid_params(
                 "Invalid param: not a v2.0 Token account".to_string(),
             ));
@@ -1482,7 +1482,7 @@ impl JsonRpcRequestProcessor {
         let mint_account = bank.get_account(mint).ok_or_else(|| {
             Error::invalid_params("Invalid param: could not find account".to_string())
         })?;
-        if mint_account.owner != spl_token_id_v2_0() {
+        if mint_account.owner() != &spl_token_id_v2_0() {
             return Err(Error::invalid_params(
                 "Invalid param: not a v2.0 Token mint".to_string(),
             ));
@@ -1660,7 +1660,7 @@ impl JsonRpcRequestProcessor {
                 // zero-lamport AccountSharedData::Default() after being wiped and reinitialized in later
                 // updates. We include the redundant filters here to avoid returning these
                 // accounts.
-                account.owner == *program_id && filter_closure(account)
+                account.owner() == program_id && filter_closure(account)
             })
         } else {
             bank.get_filtered_program_accounts(program_id, filter_closure)
@@ -1696,7 +1696,7 @@ impl JsonRpcRequestProcessor {
             .contains(&AccountIndex::SplTokenOwner)
         {
             bank.get_filtered_indexed_accounts(&IndexKey::SplTokenOwner(*owner_key), |account| {
-                account.owner == spl_token_id_v2_0()
+                account.owner() == &spl_token_id_v2_0()
                     && filters.iter().all(|filter_type| match filter_type {
                         RpcFilterType::DataSize(size) => account.data().len() as u64 == *size,
                         RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data()),
@@ -1735,7 +1735,7 @@ impl JsonRpcRequestProcessor {
             .contains(&AccountIndex::SplTokenMint)
         {
             bank.get_filtered_indexed_accounts(&IndexKey::SplTokenMint(*mint_key), |account| {
-                account.owner == spl_token_id_v2_0()
+                account.owner() == &spl_token_id_v2_0()
                     && filters.iter().all(|filter_type| match filter_type {
                         RpcFilterType::DataSize(size) => account.data().len() as u64 == *size,
                         RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data()),
@@ -1838,7 +1838,7 @@ fn get_encoded_account(
 ) -> Result<Option<UiAccount>> {
     let mut response = None;
     if let Some(account) = bank.get_account(pubkey) {
-        if account.owner == spl_token_id_v2_0() && encoding == UiAccountEncoding::JsonParsed {
+        if account.owner() == &spl_token_id_v2_0() && encoding == UiAccountEncoding::JsonParsed {
             response = Some(get_parsed_token_account(bank.clone(), pubkey, account));
         } else if (encoding == UiAccountEncoding::Binary || encoding == UiAccountEncoding::Base58)
             && account.data().len() > 128
@@ -2008,7 +2008,7 @@ fn get_mint_owner_and_decimals(bank: &Arc<Bank>, mint: &Pubkey) -> Result<(Pubke
             Error::invalid_params("Invalid param: could not find mint".to_string())
         })?;
         let decimals = get_mint_decimals(&mint_account.data())?;
-        Ok((mint_account.owner, decimals))
+        Ok((*mint_account.owner(), decimals))
     }
 }
 

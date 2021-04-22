@@ -2102,7 +2102,7 @@ fn main() {
                         let data_len = account.data().len();
                         println!("{}:", pubkey);
                         println!("  - balance: {} SOL", lamports_to_sol(account.lamports));
-                        println!("  - owner: '{}'", account.owner);
+                        println!("  - owner: '{}'", account.owner());
                         println!("  - executable: {}", account.executable);
                         println!("  - slot: {}", slot);
                         println!("  - rent_epoch: {}", account.rent_epoch);
@@ -2449,7 +2449,7 @@ fn main() {
                         rewarded_accounts.sort_unstable_by_key(
                             |(pubkey, account, base_lamports)| {
                                 (
-                                    account.owner,
+                                    account.owner(),
                                     *base_lamports,
                                     account.lamports - base_lamports,
                                     *pubkey,
@@ -2469,7 +2469,7 @@ fn main() {
                             .map(|pubkey| (**pubkey, warped_bank.get_account(pubkey).unwrap()))
                             .collect::<Vec<_>>();
                         unchanged_accounts.sort_unstable_by_key(|(pubkey, account)| {
-                            (account.owner, account.lamports, *pubkey)
+                            (*account.owner(), account.lamports, *pubkey)
                         });
                         let unchanged_accounts = unchanged_accounts.into_iter();
 
@@ -2491,7 +2491,7 @@ fn main() {
                                 println!(
                                     "{:<45}({}): {} => {} (+{} {:>4.9}%) {:?}",
                                     format!("{}", pubkey), // format! is needed to pad/justify correctly.
-                                    base_account.owner,
+                                    base_account.owner(),
                                     Sol(base_account.lamports),
                                     Sol(warped_account.lamports),
                                     Sol(delta),
@@ -2554,7 +2554,7 @@ fn main() {
                                             cluster_type: format!("{:?}", base_bank.cluster_type()),
                                             rewarded_epoch: base_bank.epoch(),
                                             account: format!("{}", pubkey),
-                                            owner: format!("{}", base_account.owner),
+                                            owner: format!("{}", base_account.owner()),
                                             old_balance: base_account.lamports,
                                             new_balance: warped_account.lamports,
                                             data_size: base_account.data().len(),

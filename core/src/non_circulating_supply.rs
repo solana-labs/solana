@@ -2,7 +2,7 @@ use solana_runtime::{
     accounts_index::{AccountIndex, IndexKey},
     bank::Bank,
 };
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::{account::ReadableAccount, pubkey::Pubkey};
 use solana_stake_program::stake_state::StakeState;
 use std::{collections::HashSet, sync::Arc};
 
@@ -34,7 +34,7 @@ pub fn calculate_non_circulating_supply(bank: &Arc<Bank>) -> NonCirculatingSuppl
             // the current AccountsDb implementation, an account may remain in storage as a
             // zero-lamport Account::Default() after being wiped and reinitialized in later
             // updates. We include the redundant filter here to avoid returning these accounts.
-            |account| account.owner == solana_stake_program::id(),
+            |account| account.owner() == &solana_stake_program::id(),
         )
     } else {
         bank.get_program_accounts(&solana_stake_program::id())

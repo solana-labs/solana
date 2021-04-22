@@ -290,7 +290,7 @@ fn filter_account_result(
     // and should notify that the account state has been reverted.
     let results: Box<dyn Iterator<Item = UiAccount>> = if last_modified_slot != last_notified_slot {
         let encoding = encoding.unwrap_or(UiAccountEncoding::Binary);
-        if account.owner == spl_token_id_v2_0() && encoding == UiAccountEncoding::JsonParsed {
+        if account.owner() == &spl_token_id_v2_0() && encoding == UiAccountEncoding::JsonParsed {
             Box::new(iter::once(get_parsed_token_account(bank, pubkey, account)))
         } else {
             Box::new(iter::once(UiAccount::encode(
