@@ -7,7 +7,7 @@ use solana_sdk::{
     clock::Slot,
     pubkey::Pubkey,
 };
-use std::thread::sleep;
+use std::thread::{sleep, Builder, JoinHandle};
 use std::time::Duration;
 use std::{
     sync::{
@@ -35,17 +35,21 @@ pub struct ReadOnlyAccountsCache {
     misses: AtomicU64,
     per_account_size: usize,
     stop: Arc<AtomicBool>,
+    background: Option<JoinHandle<()>>,
 }
 
 impl Drop for ReadOnlyAccountsCache {
     fn drop(&mut self) {
         self.stop.store(true, Ordering::Relaxed);
+        if let Some(background) = self.background.take() {
+            background.join().unwrap();
+        }
     }
 }
 
 impl ReadOnlyAccountsCache {
     pub fn new(max_data_size: usize) -> Self {
-        let result = Self::new_test(max_data_size);
+        let mut result = Self::new_test(max_data_size);
 
         let bg = Self {
             max_data_size,
@@ -55,14 +59,17 @@ impl ReadOnlyAccountsCache {
             misses: AtomicU64::new(0),
             per_account_size: Self::per_account_size(),
             stop: result.stop.clone(),
+            background: None,
         };
 
-        std::thread::Builder::new()
-            .name("solana-readonly-accounts-cache".to_string())
-            .spawn(move || {
-                bg.bg_purge_lru_items(false);
-            })
-            .unwrap();
+        result.background = Some(
+            Builder::new()
+                .name("solana-readonly-accounts-cache".to_string())
+                .spawn(move || {
+                    bg.bg_purge_lru_items(false);
+                })
+                .unwrap(),
+        );
 
         result
     }
@@ -76,6 +83,7 @@ impl ReadOnlyAccountsCache {
             misses: AtomicU64::new(0),
             per_account_size: Self::per_account_size(),
             stop: Arc::new(AtomicBool::new(false)),
+            background: None,
         }
     }
 
