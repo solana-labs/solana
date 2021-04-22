@@ -110,25 +110,19 @@ impl ReadOnlyAccountsCache {
             0
         };
 
-        let new_size = match len.cmp(&previous_len) {
+        match len.cmp(&previous_len) {
             std::cmp::Ordering::Greater => {
                 self.data_size
-                    .fetch_add(len - previous_len, Ordering::Relaxed)
-                    + len
+                    .fetch_add(len - previous_len, Ordering::Relaxed);
             }
             std::cmp::Ordering::Less => {
                 self.data_size
-                    .fetch_sub(previous_len - len, Ordering::Relaxed)
-                    - len
+                    .fetch_sub(previous_len - len, Ordering::Relaxed);
             }
             std::cmp::Ordering::Equal => {
                 // no change in size
-                return;
             }
         };
-
-        // maybe purge after we insert. Insert may have replaced.
-        self.maybe_purge_lru_items(new_size);
     }
 
     pub fn remove(&self, pubkey: &Pubkey, slot: Slot) {
@@ -176,12 +170,6 @@ impl ReadOnlyAccountsCache {
             lru.push((*value.last_used.read().unwrap(), *item.key()));
         }
         (lru, new_size)
-    }
-
-    fn maybe_purge_lru_items(&self, new_total_size: usize) {
-        if new_total_size > self.max_data_size {
-            //self.sender.send(());
-        }
     }
 
     fn bg_purge_lru_items(&self, once: bool) {
