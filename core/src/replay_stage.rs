@@ -1489,7 +1489,7 @@ impl ReplayStage {
             || heaviest_bank_on_same_fork
                 .check_hash_age(&tower.last_vote_tx_blockhash(), MAX_PROCESSING_AGE)
                 .unwrap_or(false)
-            // In order to avoid voting on multiple forks all past MAX_PROCESSING_AGE that don't 
+            // In order to avoid voting on multiple forks all past MAX_PROCESSING_AGE that don't
             // include the last voted blockhash
             || last_vote_refresh_time.elapsed().as_millis() < 5000
         {

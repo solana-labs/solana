@@ -3627,6 +3627,96 @@ mod tests {
     }
 
     #[test]
+    fn test_refresh_vote() {
+        let keys = Keypair::new();
+        let contact_info = ContactInfo::new_localhost(&keys.pubkey(), 0);
+        let cluster_info = ClusterInfo::new_with_invalid_keypair(contact_info);
+
+        // Construct and push a vote for some other slot
+        let unrefresh_slot = 5;
+        let unrefresh_tower = vec![1, 3, unrefresh_slot];
+        let unrefresh_vote = Vote::new(unrefresh_tower.clone(), Hash::new_unique());
+        let unrefresh_ix = vote_instruction::vote(
+            &Pubkey::new_unique(), // vote_pubkey
+            &Pubkey::new_unique(), // authorized_voter_pubkey
+            unrefresh_vote,
+        );
+        let unrefresh_tx = Transaction::new_with_payer(
+            &[unrefresh_ix], // instructions
+            None,            // payer
+        );
+        cluster_info.push_vote(&unrefresh_tower, unrefresh_tx.clone());
+        cluster_info.flush_push_queue();
+        let (_, votes, max_ts) = cluster_info.get_votes(0);
+        assert_eq!(votes, vec![unrefresh_tx.clone()]);
+
+        // Now construct vote for the slot to be refreshed later
+        let refresh_slot = 7;
+        let refresh_tower = vec![1, 3, unrefresh_slot, refresh_slot];
+        let refresh_vote = Vote::new(refresh_tower.clone(), Hash::new_unique());
+        let refresh_ix = vote_instruction::vote(
+            &Pubkey::new_unique(), // vote_pubkey
+            &Pubkey::new_unique(), // authorized_voter_pubkey
+            refresh_vote.clone(),
+        );
+        let refresh_tx = Transaction::new_with_payer(
+            &[refresh_ix], // instructions
+            None,          // payer
+        );
+
+        // Trying to refresh vote when it doesn't yet exist in gossip
+        // shouldn't add the vote
+        cluster_info.refresh_vote(refresh_tx.clone(), refresh_slot);
+        cluster_info.flush_push_queue();
+        let (_, votes, max_ts) = cluster_info.get_votes(max_ts);
+        assert_eq!(votes, vec![]);
+        let (_, votes, _) = cluster_info.get_votes(0);
+        assert_eq!(votes.len(), 1);
+        assert!(votes.contains(&unrefresh_tx));
+
+        // Push the new vote for `refresh_slot`
+        cluster_info.push_vote(&refresh_tower, refresh_tx.clone());
+        cluster_info.flush_push_queue();
+
+        // Should be two votes in gossip
+        let (_, votes, _) = cluster_info.get_votes(0);
+        assert_eq!(votes.len(), 2);
+        assert!(votes.contains(&unrefresh_tx));
+        assert!(votes.contains(&refresh_tx));
+
+        // Refresh a few times, we should only have the latest update
+        let mut latest_refresh_tx = refresh_tx;
+        for _ in 0..10 {
+            let latest_refreshed_recent_blockhash = Hash::new_unique();
+            let new_signer = Keypair::new();
+            let refresh_ix = vote_instruction::vote(
+                &new_signer.pubkey(), // vote_pubkey
+                &new_signer.pubkey(), // authorized_voter_pubkey
+                refresh_vote.clone(),
+            );
+            latest_refresh_tx = Transaction::new_signed_with_payer(
+                &[refresh_ix],
+                None,
+                &[&new_signer],
+                latest_refreshed_recent_blockhash,
+            );
+            cluster_info.refresh_vote(latest_refresh_tx.clone(), refresh_slot);
+        }
+        cluster_info.flush_push_queue();
+
+        // The diff since `max_ts` should only be the latest refreshed vote
+        let (_, votes, _) = cluster_info.get_votes(max_ts);
+        assert_eq!(votes.len(), 1);
+        assert_eq!(votes[0], latest_refresh_tx);
+
+        // Should still be two votes in gossip
+        let (_, votes, _) = cluster_info.get_votes(0);
+        assert_eq!(votes.len(), 2);
+        assert!(votes.contains(&unrefresh_tx));
+        assert!(votes.contains(&latest_refresh_tx));
+    }
+
+    #[test]
     fn test_push_vote() {
         let mut rng = rand::thread_rng();
         let keys = Keypair::new();
