@@ -109,6 +109,7 @@ pub struct Tower {
     threshold_size: f64,
     lockouts: VoteState,
     last_vote: Vote,
+    #[serde(skip)]
     // The blockhash used in the last vote transaction, may or may not equal the
     // blockhash of the voted block itself, depending if the vote slot was refreshed.
     // For instance, a vote for slot 5, may be refreshed/resubmitted for inclusion in
