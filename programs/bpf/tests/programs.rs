@@ -1258,14 +1258,7 @@ fn assert_instruction_count() {
             ("solana_bpf_rust_many_args", 237),
             ("solana_bpf_rust_noop", 472),
             ("solana_bpf_rust_param_passing", 46),
-<<<<<<< HEAD
-            ("solana_bpf_rust_ristretto", 19220),
             ("solana_bpf_rust_sanity", 894),
-=======
-            ("solana_bpf_rust_rand", 475),
-            ("solana_bpf_rust_sanity", 869),
-            ("solana_bpf_rust_sha256", 10830),
->>>>>>> be4df39a4... Remove unactivated ristretto syscall (#16727)
         ]);
     }
 

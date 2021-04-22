@@ -2903,18 +2903,6 @@ dependencies = [
 ]
 
 [[package]]
-<<<<<<< HEAD
-name = "solana-bpf-rust-ristretto"
-version = "1.6.7"
-dependencies = [
- "curve25519-dalek 3.0.0",
- "getrandom 0.1.14",
- "solana-program 1.6.7",
-]
-
-[[package]]
-=======
->>>>>>> be4df39a4... Remove unactivated ristretto syscall (#16727)
 name = "solana-bpf-rust-ro-modify"
 version = "1.6.7"
 dependencies = [
