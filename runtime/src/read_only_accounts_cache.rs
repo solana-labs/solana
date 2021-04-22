@@ -11,7 +11,7 @@ use std::thread::sleep;
 use std::time::Duration;
 use std::{
     sync::{
-        atomic::{AtomicU64, AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
         Arc, RwLock,
     },
     time::Instant,
@@ -34,6 +34,13 @@ pub struct ReadOnlyAccountsCache {
     hits: AtomicU64,
     misses: AtomicU64,
     per_account_size: usize,
+    stop: Arc<AtomicBool>,
+}
+
+impl Drop for ReadOnlyAccountsCache {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Relaxed);
+    }
 }
 
 impl ReadOnlyAccountsCache {
@@ -47,6 +54,7 @@ impl ReadOnlyAccountsCache {
             hits: AtomicU64::new(0),
             misses: AtomicU64::new(0),
             per_account_size: Self::per_account_size(),
+            stop: result.stop.clone(),
         };
 
         std::thread::Builder::new()
@@ -67,6 +75,7 @@ impl ReadOnlyAccountsCache {
             hits: AtomicU64::new(0),
             misses: AtomicU64::new(0),
             per_account_size: Self::per_account_size(),
+            stop: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -186,6 +195,10 @@ impl ReadOnlyAccountsCache {
                 stop = true;
             }
 
+            if self.stop.load(Ordering::Relaxed) {
+                break;
+            }
+
             // purge from the lru list we last made
             if self.purge_lru_list(&lru, &mut lru_index) {
                 continue;
@@ -225,6 +238,15 @@ pub mod tests {
         // size_of(arc(x)) does not return the size of x
         assert!(std::mem::size_of::<Arc<u64>>() == std::mem::size_of::<Arc<u8>>());
         assert!(std::mem::size_of::<Arc<u64>>() == std::mem::size_of::<Arc<[u8; 32]>>());
+    }
+
+    #[test]
+    fn test_read_only_accounts_cache_drop() {
+        solana_logger::setup();
+        let cache = ReadOnlyAccountsCache::new_test(100);
+        let stop = cache.stop.clone();
+        drop(cache);
+        assert!(stop.load(Ordering::Relaxed));
     }
 
     #[test]
