@@ -2109,7 +2109,7 @@ pub mod rpc_minimal {
         fn get_leader_schedule(
             &self,
             meta: Self::Metadata,
-            slot: Option<Slot>,
+            options: Option<RpcLeaderScheduleConfigWrapper>,
             config: Option<RpcLeaderScheduleConfig>,
         ) -> Result<Option<RpcLeaderSchedule>>;
     }
@@ -2214,10 +2214,11 @@ pub mod rpc_minimal {
         fn get_leader_schedule(
             &self,
             meta: Self::Metadata,
-            slot: Option<Slot>,
+            options: Option<RpcLeaderScheduleConfigWrapper>,
             config: Option<RpcLeaderScheduleConfig>,
         ) -> Result<Option<RpcLeaderSchedule>> {
-            let config = config.unwrap_or_default();
+            let (slot, maybe_config) = options.map(|options| options.unzip()).unwrap_or_default();
+            let config = maybe_config.or(config).unwrap_or_default();
 
             if let Some(ref identity) = config.identity {
                 let _ = verify_pubkey(identity)?;
@@ -4250,6 +4251,10 @@ pub mod tests {
                 r#"{{"jsonrpc":"2.0","id":1,"method":"getLeaderSchedule", "params": [null, {{ "identity": "{}" }}]}}"#,
                 bank.collector_id().to_string()
             ),
+            &format!(
+                r#"{{"jsonrpc":"2.0","id":1,"method":"getLeaderSchedule", "params": [{{ "identity": "{}" }}]}}"#,
+                bank.collector_id().to_string()
+            ),
         ]
         .iter()
         {
@@ -4299,7 +4304,7 @@ pub mod tests {
 
         // `bob` is not in the leader schedule, look for an empty response
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getLeaderSchedule", "params": [null, {{ "identity": "{}"}}]}}"#,
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getLeaderSchedule", "params": [{{ "identity": "{}"}}]}}"#,
             bob_pubkey
         );
 
