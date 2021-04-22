@@ -9957,7 +9957,7 @@ pub mod tests {
         // Store an account
         let lamports = 42;
         let mut account = AccountSharedData::new(1, 0, &AccountSharedData::default().owner);
-        account.lamports = lamports;
+        account.set_lamports(lamports);
         db.store_uncached(slot, &[(&pubkey, &account)]);
 
         // Set the slot as a root so account loads will see the contents of this slot
@@ -10032,7 +10032,7 @@ pub mod tests {
         // Store an account
         let lamports = 42;
         let mut account = AccountSharedData::new(1, 0, &AccountSharedData::default().owner);
-        account.lamports = lamports;
+        account.set_lamports(lamports);
         db.store_uncached(slot, &[(&pubkey, &account)]);
 
         let t_purge_slot = {

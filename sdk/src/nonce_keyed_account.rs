@@ -1,6 +1,10 @@
 use crate::{
-    account_utils::State as AccountUtilsState, ic_msg, keyed_account::KeyedAccount,
-    nonce_account::create_account, process_instruction::InvokeContext,
+    account::{ReadableAccount, WritableAccount},
+    account_utils::State as AccountUtilsState,
+    ic_msg,
+    keyed_account::KeyedAccount,
+    nonce_account::create_account,
+    process_instruction::InvokeContext,
 };
 use solana_program::{
     instruction::{checked_add, InstructionError},
@@ -153,14 +157,18 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
             return Err(InstructionError::MissingRequiredSignature);
         }
 
-        let nonce_balance = self.try_account_ref_mut()?.lamports;
-        self.try_account_ref_mut()?.lamports = nonce_balance
-            .checked_sub(lamports)
-            .ok_or(InstructionError::ArithmeticOverflow)?;
-        let to_balance = to.try_account_ref_mut()?.lamports;
-        to.try_account_ref_mut()?.lamports = to_balance
-            .checked_add(lamports)
-            .ok_or(InstructionError::ArithmeticOverflow)?;
+        let nonce_balance = self.try_account_ref_mut()?.lamports();
+        self.try_account_ref_mut()?.set_lamports(
+            nonce_balance
+                .checked_sub(lamports)
+                .ok_or(InstructionError::ArithmeticOverflow)?,
+        );
+        let to_balance = to.try_account_ref_mut()?.lamports();
+        to.try_account_ref_mut()?.set_lamports(
+            to_balance
+                .checked_add(lamports)
+                .ok_or(InstructionError::ArithmeticOverflow)?,
+        );
 
         Ok(())
     }
