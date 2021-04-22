@@ -12,7 +12,7 @@ use solana_runtime::{
     bank::*,
 };
 use solana_sdk::{
-    account::AccountSharedData,
+    account::{AccountSharedData, ReadableAccount},
     genesis_config::{create_genesis_config, ClusterType},
     hash::Hash,
     pubkey::Pubkey,
