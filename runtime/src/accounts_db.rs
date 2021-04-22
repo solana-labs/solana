@@ -6954,7 +6954,7 @@ pub mod tests {
         let some_lamport = 223;
         let zero_lamport = 0;
         let no_data = 0;
-        let owner = AccountSharedData::default().owner;
+        let owner = *AccountSharedData::default().owner();
 
         let account = AccountSharedData::new(some_lamport, no_data, &owner);
         let pubkey = solana_sdk::pubkey::new_rand();
@@ -7033,7 +7033,7 @@ pub mod tests {
         let some_lamport = 223;
         let zero_lamport = 0;
         let no_data = 0;
-        let owner = AccountSharedData::default().owner;
+        let owner = *AccountSharedData::default().owner();
 
         let account = AccountSharedData::new(some_lamport, no_data, &owner);
         let pubkey = solana_sdk::pubkey::new_rand();
@@ -7093,7 +7093,7 @@ pub mod tests {
         let some_lamport = 223;
         let zero_lamport = 0;
         let no_data = 0;
-        let owner = AccountSharedData::default().owner;
+        let owner = *AccountSharedData::default().owner();
 
         let account = AccountSharedData::new(some_lamport, no_data, &owner);
         let pubkey = solana_sdk::pubkey::new_rand();
@@ -7151,7 +7151,7 @@ pub mod tests {
         let zero_lamport = 0;
         let dummy_lamport = 999;
         let no_data = 0;
-        let owner = AccountSharedData::default().owner;
+        let owner = *AccountSharedData::default().owner();
 
         let account = AccountSharedData::new(some_lamport, no_data, &owner);
         let account2 = AccountSharedData::new(some_lamport + 100_001, no_data, &owner);
@@ -7826,7 +7826,7 @@ pub mod tests {
         let old_lamport = 223;
         let zero_lamport = 0;
         let no_data = 0;
-        let owner = AccountSharedData::default().owner;
+        let owner = *AccountSharedData::default().owner();
 
         let account = AccountSharedData::new(old_lamport, no_data, &owner);
         let account2 = AccountSharedData::new(old_lamport + 100_001, no_data, &owner);
@@ -7893,7 +7893,7 @@ pub mod tests {
         // size data so only 1 fits in a 4k store
         let data_size = 2200;
 
-        let owner = AccountSharedData::default().owner;
+        let owner = *AccountSharedData::default().owner();
 
         let account = AccountSharedData::new(old_lamport, data_size, &owner);
         let account2 = AccountSharedData::new(old_lamport + 100_001, data_size, &owner);
@@ -8017,7 +8017,7 @@ pub mod tests {
         let zero_lamport = 0;
         let no_data = 0;
         let dummy_lamport = 999_999;
-        let owner = AccountSharedData::default().owner;
+        let owner = *AccountSharedData::default().owner();
 
         let account = AccountSharedData::new(old_lamport, no_data, &owner);
         let account2 = AccountSharedData::new(old_lamport + 100_001, no_data, &owner);
@@ -8220,7 +8220,7 @@ pub mod tests {
 
         let some_lamport = 223;
         let no_data = 0;
-        let owner = AccountSharedData::default().owner;
+        let owner = *AccountSharedData::default().owner();
 
         let account = AccountSharedData::new(some_lamport, no_data, &owner);
 
@@ -8288,7 +8288,7 @@ pub mod tests {
 
         let some_lamport = 223;
         let no_data = 0;
-        let owner = AccountSharedData::default().owner;
+        let owner = *AccountSharedData::default().owner();
 
         let account = AccountSharedData::new(some_lamport, no_data, &owner);
 
@@ -8348,7 +8348,7 @@ pub mod tests {
 
         let some_lamport = 223;
         let no_data = 0;
-        let owner = AccountSharedData::default().owner;
+        let owner = *AccountSharedData::default().owner();
 
         let account = AccountSharedData::new(some_lamport, no_data, &owner);
 
