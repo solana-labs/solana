@@ -178,11 +178,8 @@ impl ReadOnlyAccountsCache {
     }
 
     fn calculate_lru_list(&self, lru: &mut Vec<LruEntry>) -> usize {
-        let expected_len = self.cache.len();
         lru.clear();
-        if lru.capacity() < expected_len {
-            lru.reserve(expected_len - lru.capacity());
-        }
+        lru.reserve(self.cache.len());
         let mut new_size = 0;
         for item in self.cache.iter() {
             let value = item.value();
