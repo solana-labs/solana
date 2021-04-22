@@ -16,6 +16,8 @@ impl Blockstore {
         let mut purge_stats = PurgeStats::default();
         let purge_result =
             self.run_purge_with_stats(from_slot, to_slot, purge_type, &mut purge_stats);
+        // update only after purge operation
+        crate::blockstore_db::LAST_PURGE_SLOT.store(to_slot, std::sync::atomic::Ordering::Relaxed);
 
         datapoint_info!(
             "blockstore-purge",

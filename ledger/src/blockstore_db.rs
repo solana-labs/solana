@@ -5,8 +5,8 @@ use log::*;
 use prost::Message;
 pub use rocksdb::Direction as IteratorDirection;
 use rocksdb::{
-    self, ColumnFamily, ColumnFamilyDescriptor, DBIterator, DBRawIterator, DBRecoveryMode,
-    IteratorMode as RocksIteratorMode, Options, WriteBatch as RWriteBatch, DB,
+    self, ColumnFamily, ColumnFamilyDescriptor, CompactionDecision, DBIterator, DBRawIterator,
+    DBRecoveryMode, IteratorMode as RocksIteratorMode, Options, WriteBatch as RWriteBatch, DB,
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -17,8 +17,22 @@ use solana_sdk::{
     signature::Signature,
 };
 use solana_storage_proto::convert::generated;
-use std::{collections::HashMap, fs, marker::PhantomData, path::Path, sync::Arc};
+use std::{
+    collections::HashMap,
+    fs,
+    marker::PhantomData,
+    path::Path,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
+};
 use thiserror::Error;
+
+lazy_static! {
+    // shared by multiple blockstores...
+    pub static ref LAST_PURGE_SLOT: AtomicU64 = AtomicU64::default();
+}
 
 const MAX_WRITE_BUFFER_SIZE: u64 = 256 * 1024 * 1024; // 256MB
 
@@ -236,37 +250,51 @@ impl Rocks {
 
         // Column family names
         let meta_cf_descriptor =
-            ColumnFamilyDescriptor::new(SlotMeta::NAME, get_cf_options(&access_type));
+            ColumnFamilyDescriptor::new(SlotMeta::NAME, get_cf_options::<SlotMeta>(&access_type));
         let dead_slots_cf_descriptor =
-            ColumnFamilyDescriptor::new(DeadSlots::NAME, get_cf_options(&access_type));
-        let duplicate_slots_cf_descriptor =
-            ColumnFamilyDescriptor::new(DuplicateSlots::NAME, get_cf_options(&access_type));
-        let erasure_meta_cf_descriptor =
-            ColumnFamilyDescriptor::new(ErasureMeta::NAME, get_cf_options(&access_type));
+            ColumnFamilyDescriptor::new(DeadSlots::NAME, get_cf_options::<DeadSlots>(&access_type));
+        let duplicate_slots_cf_descriptor = ColumnFamilyDescriptor::new(
+            DuplicateSlots::NAME,
+            get_cf_options::<DuplicateSlots>(&access_type),
+        );
+        let erasure_meta_cf_descriptor = ColumnFamilyDescriptor::new(
+            ErasureMeta::NAME,
+            get_cf_options::<ErasureMeta>(&access_type),
+        );
         let orphans_cf_descriptor =
-            ColumnFamilyDescriptor::new(Orphans::NAME, get_cf_options(&access_type));
+            ColumnFamilyDescriptor::new(Orphans::NAME, get_cf_options::<Orphans>(&access_type));
         let root_cf_descriptor =
-            ColumnFamilyDescriptor::new(Root::NAME, get_cf_options(&access_type));
+            ColumnFamilyDescriptor::new(Root::NAME, get_cf_options::<Root>(&access_type));
         let index_cf_descriptor =
-            ColumnFamilyDescriptor::new(Index::NAME, get_cf_options(&access_type));
+            ColumnFamilyDescriptor::new(Index::NAME, get_cf_options::<Index>(&access_type));
         let shred_data_cf_descriptor =
-            ColumnFamilyDescriptor::new(ShredData::NAME, get_cf_options(&access_type));
+            ColumnFamilyDescriptor::new(ShredData::NAME, get_cf_options::<ShredData>(&access_type));
         let shred_code_cf_descriptor =
-            ColumnFamilyDescriptor::new(ShredCode::NAME, get_cf_options(&access_type));
-        let transaction_status_cf_descriptor =
-            ColumnFamilyDescriptor::new(TransactionStatus::NAME, get_cf_options(&access_type));
-        let address_signatures_cf_descriptor =
-            ColumnFamilyDescriptor::new(AddressSignatures::NAME, get_cf_options(&access_type));
-        let transaction_status_index_cf_descriptor =
-            ColumnFamilyDescriptor::new(TransactionStatusIndex::NAME, get_cf_options(&access_type));
+            ColumnFamilyDescriptor::new(ShredCode::NAME, get_cf_options::<ShredCode>(&access_type));
+        let transaction_status_cf_descriptor = ColumnFamilyDescriptor::new(
+            TransactionStatus::NAME,
+            get_cf_options::<TransactionStatus>(&access_type),
+        );
+        let address_signatures_cf_descriptor = ColumnFamilyDescriptor::new(
+            AddressSignatures::NAME,
+            get_cf_options::<AddressSignatures>(&access_type),
+        );
+        let transaction_status_index_cf_descriptor = ColumnFamilyDescriptor::new(
+            TransactionStatusIndex::NAME,
+            get_cf_options::<TransactionStatusIndex>(&access_type),
+        );
         let rewards_cf_descriptor =
-            ColumnFamilyDescriptor::new(Rewards::NAME, get_cf_options(&access_type));
+            ColumnFamilyDescriptor::new(Rewards::NAME, get_cf_options::<Rewards>(&access_type));
         let blocktime_cf_descriptor =
-            ColumnFamilyDescriptor::new(Blocktime::NAME, get_cf_options(&access_type));
-        let perf_samples_cf_descriptor =
-            ColumnFamilyDescriptor::new(PerfSamples::NAME, get_cf_options(&access_type));
-        let block_height_cf_descriptor =
-            ColumnFamilyDescriptor::new(BlockHeight::NAME, get_cf_options(&access_type));
+            ColumnFamilyDescriptor::new(Blocktime::NAME, get_cf_options::<Blocktime>(&access_type));
+        let perf_samples_cf_descriptor = ColumnFamilyDescriptor::new(
+            PerfSamples::NAME,
+            get_cf_options::<PerfSamples>(&access_type),
+        );
+        let block_height_cf_descriptor = ColumnFamilyDescriptor::new(
+            BlockHeight::NAME,
+            get_cf_options::<BlockHeight>(&access_type)
+        );
 
         let cfs = vec![
             (SlotMeta::NAME, meta_cf_descriptor),
@@ -332,6 +360,15 @@ impl Rocks {
                     &[(
                         "ttl",
                         &std::env::var("SOLANA_ROCKSDB_COMPACTION_TTL")
+                            .unwrap_or(format!("{}", 60 * 60 * 24 * 3)),
+                    )],
+                )
+                .unwrap();
+                db.0.set_options_cf(
+                    db.cf_handle(cf_name),
+                    &[(
+                        "periodic_compaction_seconds",
+                        &std::env::var("SOLANA_ROCKSDB_PERIODIC_COMPACTION_SECONDS")
                             .unwrap_or(format!("{}", 60 * 60 * 24 * 3)),
                     )],
                 )
@@ -1051,7 +1088,22 @@ impl<'a> WriteBatch<'a> {
     }
 }
 
-fn get_cf_options(access_type: &AccessType) -> Options {
+fn purged_slot_filter<C: 'static + Column>(
+    _level: u32,
+    key: &[u8],
+    _value: &[u8],
+) -> CompactionDecision {
+    use rocksdb::CompactionDecision::*;
+
+    let slot_in_key = C::primary_index(C::index(key));
+    if slot_in_key > LAST_PURGE_SLOT.load(Ordering::Relaxed) {
+        Keep
+    } else {
+        Remove
+    }
+}
+
+fn get_cf_options<C: 'static + Column>(access_type: &AccessType) -> Options {
     let mut options = Options::default();
     // 256 * 8 = 2GB. 6 of these columns should take at most 12GB of RAM
     options.set_max_write_buffer_number(8);
@@ -1065,6 +1117,7 @@ fn get_cf_options(access_type: &AccessType) -> Options {
     options.set_level_zero_file_num_compaction_trigger(file_num_compaction_trigger as i32);
     options.set_max_bytes_for_level_base(total_size_base);
     options.set_target_file_size_base(file_size_base);
+    options.set_compaction_filter("purged_slot_filter", purged_slot_filter::<C>);
     if matches!(access_type, AccessType::PrimaryOnlyForMaintenance) {
         options.set_disable_auto_compactions(true);
     }
