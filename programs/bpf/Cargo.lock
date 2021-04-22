@@ -2671,7 +2671,6 @@ version = "1.6.7"
 dependencies = [
  "bincode",
  "byteorder 1.3.4",
- "curve25519-dalek 3.0.0",
  "log",
  "num-derive 0.3.0",
  "num-traits",
@@ -2900,15 +2899,6 @@ version = "1.6.7"
 dependencies = [
  "getrandom 0.1.14",
  "rand 0.7.3",
- "solana-program 1.6.7",
-]
-
-[[package]]
-name = "solana-bpf-rust-ristretto"
-version = "1.6.7"
-dependencies = [
- "curve25519-dalek 3.0.0",
- "getrandom 0.1.14",
  "solana-program 1.6.7",
 ]
 
