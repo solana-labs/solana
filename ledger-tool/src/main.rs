@@ -31,7 +31,7 @@ use solana_runtime::{
     snapshot_utils::SnapshotVersion,
 };
 use solana_sdk::{
-    account::{AccountSharedData, ReadableAccount},
+    account::{AccountSharedData, ReadableAccount, WritableAccount},
     clock::{Epoch, Slot},
     feature::{self, Feature},
     feature_set,
@@ -1899,14 +1899,14 @@ fn main() {
                             .get_program_accounts(&solana_stake_program::id())
                             .into_iter()
                         {
-                            account.lamports = 0;
+                            account.set_lamports(0);
                             bank.store_account(&address, &account);
                         }
                     }
 
                     for address in accounts_to_remove {
                         if let Some(mut account) = bank.get_account(&address) {
-                            account.lamports = 0;
+                            account.set_lamports(0);
                             bank.store_account(&address, &account);
                         }
                     }
@@ -1932,7 +1932,7 @@ fn main() {
                             .get_program_accounts(&solana_vote_program::id())
                             .into_iter()
                         {
-                            account.lamports = 0;
+                            account.set_lamports(0);
                             bank.store_account(&address, &account);
                         }
 

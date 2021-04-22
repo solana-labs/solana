@@ -230,7 +230,7 @@ impl Stakes {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use solana_sdk::{pubkey::Pubkey, rent::Rent};
+    use solana_sdk::{account::WritableAccount, pubkey::Pubkey, rent::Rent};
     use solana_stake_program::stake_state;
     use solana_vote_program::vote_state::{self, VoteState, VoteStateVersions};
 
@@ -318,7 +318,7 @@ pub mod tests {
                 );
             }
 
-            stake_account.lamports = 42;
+            stake_account.set_lamports(42);
             stakes.store(&stake_pubkey, &stake_account, true, true);
             {
                 let vote_accounts = stakes.vote_accounts();
@@ -342,7 +342,7 @@ pub mod tests {
                 ); // now stake of 42 is activated
             }
 
-            stake_account.lamports = 0;
+            stake_account.set_lamports(0);
             stakes.store(&stake_pubkey, &stake_account, true, true);
             {
                 let vote_accounts = stakes.vote_accounts();
@@ -394,7 +394,7 @@ pub mod tests {
             assert_eq!(vote_accounts.get(&vote_pubkey).unwrap().0, 10);
         }
 
-        vote_account.lamports = 0;
+        vote_account.set_lamports(0);
         stakes.store(&vote_pubkey, &vote_account, true, true);
 
         {
@@ -402,7 +402,7 @@ pub mod tests {
             assert!(vote_accounts.get(&vote_pubkey).is_none());
         }
 
-        vote_account.lamports = 1;
+        vote_account.set_lamports(1);
         stakes.store(&vote_pubkey, &vote_account, true, true);
 
         {

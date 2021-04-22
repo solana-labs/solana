@@ -33,7 +33,7 @@ use solana_metrics::{datapoint_debug, inc_new_counter_debug, inc_new_counter_inf
 use solana_sdk::{
     account::{
         create_account_shared_data_with_fields as create_account, from_account, Account,
-        AccountSharedData, InheritableAccountFields, ReadableAccount,
+        AccountSharedData, InheritableAccountFields, ReadableAccount, WritableAccount,
     },
     clock::{
         Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp, DEFAULT_TICKS_PER_SECOND,
@@ -2213,7 +2213,7 @@ impl Bank {
 
                     // Resetting account balance to 0 is needed to really purge from AccountsDb and
                     // flush the Stakes cache
-                    account.lamports = 0;
+                    account.set_lamports(0);
                     self.store_account(&program_id, &account);
                     None
                 }
@@ -4988,7 +4988,7 @@ impl Bank {
             for reward_pubkey in self.rewards_pool_pubkeys.iter() {
                 if let Some(mut reward_account) = self.get_account_with_fixed_root(&reward_pubkey) {
                     if reward_account.lamports == u64::MAX {
-                        reward_account.lamports = 0;
+                        reward_account.set_lamports(0);
                         self.store_account(&reward_pubkey, &reward_account);
                         // Adjust capitalization.... it has been wrapping, reducing the real capitalization by 1-lamport
                         self.capitalization.fetch_add(1, Relaxed);
@@ -11833,7 +11833,7 @@ pub(crate) mod tests {
             .copied()
             .unwrap();
         let mut bootstrap_stake_account = bank.get_account(&bootstrap_stake_pubkey).unwrap();
-        bootstrap_stake_account.lamports = 10000000;
+        bootstrap_stake_account.set_lamports(10000000);
         bank.store_account(&bootstrap_stake_pubkey, &bootstrap_stake_account);
 
         assert_eq!(bank.rewrite_stakes(), (1, 1));
@@ -12110,7 +12110,7 @@ pub(crate) mod tests {
             .get_account(&validator_vote_keypairs0.vote_keypair.pubkey())
             .unwrap_or_default();
         let original_lamports = vote_account.lamports;
-        vote_account.lamports = 0;
+        vote_account.set_lamports(0);
         // Simulate vote account removal via full withdrawal
         bank.store_account(
             &validator_vote_keypairs0.vote_keypair.pubkey(),
