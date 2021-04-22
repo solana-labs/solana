@@ -1610,7 +1610,10 @@ mod tests {
         );
         let post_programdata_account = bank.get_account(&programdata_address).unwrap();
         assert_eq!(post_programdata_account.lamports, min_programdata_balance);
-        assert_eq!(post_programdata_account.owner, bpf_loader_upgradeable::id());
+        assert_eq!(
+            post_programdata_account.owner(),
+            &bpf_loader_upgradeable::id()
+        );
         let state: UpgradeableLoaderState = post_programdata_account.state().unwrap();
         assert_eq!(
             state,
