@@ -1340,7 +1340,7 @@ pub mod tests {
         account_indexes
     }
 
-    impl<T: 'static> AccountIndexGetResult<T> {
+    impl<'a, T: 'static, U> AccountIndexGetResult<'a, T, U> {
         pub fn unwrap(self) -> (ReadAccountMapEntry<T>, usize) {
             match self {
                 AccountIndexGetResult::Found(lock, size) => (lock, size),
@@ -1358,7 +1358,7 @@ pub mod tests {
             matches!(self, AccountIndexGetResult::Found(_lock, _size))
         }
 
-        pub fn map<U, F: FnOnce((ReadAccountMapEntry<T>, usize)) -> U>(self, f: F) -> Option<U> {
+        pub fn map<V, F: FnOnce((ReadAccountMapEntry<T>, usize)) -> V>(self, f: F) -> Option<V> {
             match self {
                 AccountIndexGetResult::Found(lock, size) => Some(f((lock, size))),
                 _ => None,

@@ -1569,8 +1569,7 @@ impl AccountsDb {
                                             self.accounts_index
                                                 .roots_and_ref_count(&locked_entry, max_clean_root),
                                         );
-                                    }
-                                    else {
+                                    } else {
                                         // prune zero_lamport_pubkey set which should contain all 0-lamport
                                         // keys whether rooted or not. A 0-lamport update may become rooted
                                         // in the future.
@@ -1596,7 +1595,6 @@ impl AccountsDb {
                                 }
                                 AccountIndexGetResult::NotFoundOnFork => {
                                     // do nothing - pubkey is in index, but not found in a root slot
-                                    ()
                                 }
                                 AccountIndexGetResult::Missing(lock) => {
                                     // pubkey is missing from index, so remove from zero_lamports_list
