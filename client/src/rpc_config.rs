@@ -49,6 +49,22 @@ pub struct RpcLeaderScheduleConfig {
     pub commitment: Option<CommitmentConfig>,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum RpcLeaderScheduleConfigWrapper {
+    SlotOnly(Option<Slot>),
+    ConfigOnly(Option<RpcLeaderScheduleConfig>),
+}
+
+impl RpcLeaderScheduleConfigWrapper {
+    pub fn unzip(&self) -> (Option<Slot>, Option<RpcLeaderScheduleConfig>) {
+        match &self {
+            RpcLeaderScheduleConfigWrapper::SlotOnly(slot) => (*slot, None),
+            RpcLeaderScheduleConfigWrapper::ConfigOnly(config) => (None, config.clone()),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum RpcLargestAccountsFilter {
