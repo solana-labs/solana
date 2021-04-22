@@ -2671,7 +2671,6 @@ version = "1.6.7"
 dependencies = [
  "bincode",
  "byteorder 1.3.4",
- "curve25519-dalek 3.0.0",
  "log",
  "num-derive 0.3.0",
  "num-traits",
@@ -2904,6 +2903,7 @@ dependencies = [
 ]
 
 [[package]]
+<<<<<<< HEAD
 name = "solana-bpf-rust-ristretto"
 version = "1.6.7"
 dependencies = [
@@ -2913,6 +2913,8 @@ dependencies = [
 ]
 
 [[package]]
+=======
+>>>>>>> be4df39a4... Remove unactivated ristretto syscall (#16727)
 name = "solana-bpf-rust-ro-modify"
 version = "1.6.7"
 dependencies = [

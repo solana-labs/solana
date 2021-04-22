@@ -27,7 +27,6 @@ use solana_sdk::{
     client::SyncClient,
     clock::{DEFAULT_SLOTS_PER_EPOCH, MAX_PROCESSING_AGE},
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
-    feature_set::ristretto_mul_syscall_enabled,
     instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
     keyed_account::KeyedAccount,
     message::Message,
@@ -438,7 +437,6 @@ fn test_program_bpf_sanity() {
             ("solana_bpf_rust_panic", false),
             ("solana_bpf_rust_param_passing", true),
             ("solana_bpf_rust_rand", true),
-            ("solana_bpf_rust_ristretto", true),
             ("solana_bpf_rust_sanity", true),
             ("solana_bpf_rust_sha256", true),
             ("solana_bpf_rust_sysvar", true),
@@ -1260,8 +1258,14 @@ fn assert_instruction_count() {
             ("solana_bpf_rust_many_args", 237),
             ("solana_bpf_rust_noop", 472),
             ("solana_bpf_rust_param_passing", 46),
+<<<<<<< HEAD
             ("solana_bpf_rust_ristretto", 19220),
             ("solana_bpf_rust_sanity", 894),
+=======
+            ("solana_bpf_rust_rand", 475),
+            ("solana_bpf_rust_sanity", 869),
+            ("solana_bpf_rust_sha256", 10830),
+>>>>>>> be4df39a4... Remove unactivated ristretto syscall (#16727)
         ]);
     }
 
@@ -2230,44 +2234,6 @@ fn test_program_upgradeable_locks() {
     } else {
         panic!("no meta");
     }
-}
-
-#[cfg(feature = "bpf_rust")]
-#[test]
-fn test_program_bpf_syscall_feature_activation() {
-    solana_logger::setup();
-
-    let GenesisConfigInfo {
-        genesis_config,
-        mint_keypair,
-        ..
-    } = create_genesis_config(50);
-    let mut bank = Bank::new(&genesis_config);
-    bank.deactivate_feature(&ristretto_mul_syscall_enabled::id());
-    let (name, id, entrypoint) = solana_bpf_loader_program!();
-    bank.add_builtin(&name, id, entrypoint);
-    let bank = Arc::new(bank);
-    let bank_client = BankClient::new_shared(&bank);
-
-    let program_id = load_bpf_program(
-        &bank_client,
-        &bpf_loader::id(),
-        &mint_keypair,
-        "solana_bpf_rust_noop",
-    );
-    let instruction = Instruction::new_with_bytes(program_id, &[0], vec![]);
-    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
-    assert!(result.is_ok());
-
-    let mut bank = Bank::new_from_parent(&bank, &Pubkey::default(), 1);
-    bank.activate_feature(&ristretto_mul_syscall_enabled::id());
-
-    let bank = Arc::new(bank);
-    let bank_client = BankClient::new_shared(&bank);
-    let instruction = Instruction::new_with_bytes(program_id, &[1], vec![]);
-    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
-    println!("result: {:?}", result);
-    assert!(result.is_ok());
 }
 
 #[cfg(feature = "bpf_rust")]
