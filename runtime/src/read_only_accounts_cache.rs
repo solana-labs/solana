@@ -177,8 +177,12 @@ impl ReadOnlyAccountsCache {
         done
     }
 
-    fn calculate_lru_list(&self) -> (Vec<LruEntry>, usize) {
-        let mut lru = Vec::with_capacity(self.cache.len());
+    fn calculate_lru_list(&self, lru: &mut Vec<LruEntry>) -> usize {
+        let expected_len = self.cache.len();
+        lru.clear();
+        if lru.capacity() < expected_len {
+            lru.reserve(expected_len - lru.capacity());
+        }
         let mut new_size = 0;
         for item in self.cache.iter() {
             let value = item.value();
@@ -186,7 +190,7 @@ impl ReadOnlyAccountsCache {
             new_size += item_len;
             lru.push((*value.last_used.read().unwrap(), *item.key()));
         }
-        (lru, new_size)
+        new_size
     }
 
     fn bg_purge_lru_items(&self, once: bool) {
@@ -213,9 +217,8 @@ impl ReadOnlyAccountsCache {
             }
 
             // we didn't get enough, so calculate a new list and keep purging
-            let (new_lru, new_size) = self.calculate_lru_list();
+            let new_size = self.calculate_lru_list(&mut lru);
             lru_index = 0;
-            lru = new_lru;
             self.data_size.store(new_size, Ordering::Relaxed);
             lru.sort();
             self.purge_lru_list(&lru, &mut lru_index);
