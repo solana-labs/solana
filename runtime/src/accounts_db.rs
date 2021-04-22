@@ -1879,7 +1879,7 @@ impl AccountsDb {
             stored_accounts
                 .iter()
                 .filter(|(pubkey, stored_account)| {
-                    if let Some((locked_entry, _)) = self.accounts_index.get(pubkey, None, None) {
+                    if let Some(locked_entry) = self.accounts_index.get_account_read_entry(pubkey) {
                         let is_alive = locked_entry.slot_list().iter().any(|(_slot, i)| {
                             i.store_id == stored_account.store_id
                                 && i.offset == stored_account.account.offset
@@ -5117,7 +5117,7 @@ impl AccountsDb {
                         offset,
                         ..
                     } = stored_account;
-                    if let Some((locked_entry, _)) = self.accounts_index.get(pubkey, None, None) {
+                    if let Some(locked_entry) = self.accounts_index.get_account_read_entry(pubkey) {
                         let is_alive = locked_entry
                             .slot_list()
                             .iter()
