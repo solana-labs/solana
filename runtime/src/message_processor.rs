@@ -1458,8 +1458,8 @@ mod tests {
             self
         }
         pub fn lamports(mut self, pre: u64, post: u64) -> Self {
-            self.pre.account.borrow_mut().lamports = pre;
-            self.post.lamports = post;
+            self.pre.account.borrow_mut().set_lamports(pre);
+            self.post.set_lamports(post);
             self
         }
         pub fn owner(mut self, post: &Pubkey) -> Self {
