@@ -1,6 +1,5 @@
 use crate::{alloc, BpfError};
 use alloc::Alloc;
-use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use solana_rbpf::{
     ebpf::MM_HEAP_START,
     error::EbpfError,
@@ -18,9 +17,9 @@ use solana_sdk::{
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     feature_set::{
         abort_on_all_cpi_failures, cpi_data_cost, limit_cpi_loader_invoke, per_byte_logging_cost,
-        pubkey_log_syscall_enabled, ristretto_mul_syscall_enabled, sha256_syscall_enabled,
-        sol_log_compute_units_syscall, try_find_program_address_syscall_enabled,
-        use_loaded_executables, use_loaded_program_accounts,
+        pubkey_log_syscall_enabled, sha256_syscall_enabled, sol_log_compute_units_syscall,
+        try_find_program_address_syscall_enabled, use_loaded_executables,
+        use_loaded_program_accounts,
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
@@ -121,11 +120,6 @@ pub fn register_syscalls(
 
     if invoke_context.is_feature_active(&sha256_syscall_enabled::id()) {
         syscall_registry.register_syscall_by_name(b"sol_sha256", SyscallSha256::call)?;
-    }
-
-    if invoke_context.is_feature_active(&ristretto_mul_syscall_enabled::id()) {
-        syscall_registry
-            .register_syscall_by_name(b"sol_ristretto_mul", SyscallRistrettoMul::call)?;
     }
 
     syscall_registry.register_syscall_by_name(
@@ -232,17 +226,6 @@ pub fn bind_syscall_context_objects<'a>(
         Box::new(SyscallSha256 {
             sha256_base_cost: bpf_compute_budget.sha256_base_cost,
             sha256_byte_cost: bpf_compute_budget.sha256_byte_cost,
-            compute_meter: invoke_context.get_compute_meter(),
-            loader_id,
-        }),
-    );
-
-    bind_feature_gated_syscall_context_object!(
-        vm,
-        invoke_context,
-        &ristretto_mul_syscall_enabled::id(),
-        Box::new(SyscallRistrettoMul {
-            cost: 0,
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
         }),
@@ -817,43 +800,6 @@ impl<'a> SyscallObject<BpfError> for SyscallSha256<'a> {
             }
         }
         hash_result.copy_from_slice(&hasher.result().to_bytes());
-        *result = Ok(0);
-    }
-}
-
-/// Ristretto point multiply
-pub struct SyscallRistrettoMul<'a> {
-    cost: u64,
-    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
-    loader_id: &'a Pubkey,
-}
-impl<'a> SyscallObject<BpfError> for SyscallRistrettoMul<'a> {
-    fn call(
-        &mut self,
-        point_addr: u64,
-        scalar_addr: u64,
-        result_addr: u64,
-        _arg4: u64,
-        _arg5: u64,
-        memory_mapping: &MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
-    ) {
-        question_mark!(self.compute_meter.consume(self.cost), result);
-
-        let point = question_mark!(
-            translate_type::<RistrettoPoint>(memory_mapping, point_addr, self.loader_id),
-            result
-        );
-        let scalar = question_mark!(
-            translate_type::<Scalar>(memory_mapping, scalar_addr, self.loader_id),
-            result
-        );
-        let output = question_mark!(
-            translate_type_mut::<RistrettoPoint>(memory_mapping, result_addr, self.loader_id),
-            result
-        );
-        *output = point * scalar;
-
         *result = Ok(0);
     }
 }

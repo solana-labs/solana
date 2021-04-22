@@ -63,10 +63,6 @@ pub mod no_overflow_rent_distribution {
     solana_sdk::declare_id!("4kpdyrcj5jS47CZb2oJGfVxjYbsMm2Kx97gFyZrxxwXz");
 }
 
-pub mod ristretto_mul_syscall_enabled {
-    solana_sdk::declare_id!("HRe7A6aoxgjKzdjbBv6HTy7tJ4YWqE6tVmYCGho6S9Aq");
-}
-
 pub mod max_invoke_depth_4 {
     solana_sdk::declare_id!("EdM9xggY5y7AhNMskRG8NgGMnaP4JFNsWi8ZZtyT1af5");
 }
@@ -197,7 +193,6 @@ lazy_static! {
         (bpf_compute_budget_balancing::id(), "compute budget balancing"),
         (sha256_syscall_enabled::id(), "sha256 syscall"),
         (no_overflow_rent_distribution::id(), "no overflow rent distribution"),
-        (ristretto_mul_syscall_enabled::id(), "ristretto multiply syscall"),
         (max_invoke_depth_4::id(), "max invoke call depth 4"),
         (max_program_call_depth_64::id(), "max program call depth 64"),
         (sol_log_compute_units_syscall::id(), "sol_log_compute_units syscall (#13243)"),
