@@ -617,6 +617,21 @@ impl JsonRpcRequestProcessor {
         }
     }
 
+    fn minimum_contiguous_ledger_slot(&self) -> Result<RpcResponse<Slot>> {
+        let bank = self.bank(None);
+        self.blockstore
+            .get_lowest_connected_full_parent(bank.slot())
+            .map(|slot| new_response(&bank, slot))
+            .map_err(|err| {
+                warn!(
+                    "get_lowest_connected_root failed({}): {:?}",
+                    bank.slot(),
+                    err
+                );
+                Error::invalid_request()
+            })
+    }
+
     fn get_transaction_count(&self, commitment: Option<CommitmentConfig>) -> u64 {
         self.bank(commitment).transaction_count() as u64
     }
@@ -2423,6 +2438,10 @@ pub mod rpc_full {
             end_slot: Slot,
         ) -> Result<Vec<String>>;
 
+        #[rpc(meta, name = "minimumContiguousLedgerSlot")]
+        fn minimum_contiguous_ledger_slot(&self, meta: Self::Metadata)
+            -> Result<RpcResponse<Slot>>;
+
         #[rpc(meta, name = "minimumLedgerSlot")]
         fn minimum_ledger_slot(&self, meta: Self::Metadata) -> Result<Slot>;
 
@@ -3023,6 +3042,14 @@ pub mod rpc_full {
             }
 
             Ok(slot_leaders)
+        }
+
+        fn minimum_contiguous_ledger_slot(
+            &self,
+            meta: Self::Metadata,
+        ) -> Result<RpcResponse<Slot>> {
+            debug!("minimum_contiguous_ledger_slot rpc request received");
+            meta.minimum_contiguous_ledger_slot()
         }
 
         fn minimum_ledger_slot(&self, meta: Self::Metadata) -> Result<Slot> {
@@ -4032,6 +4059,21 @@ pub mod tests {
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getTransactionCount"}"#;
         let res = io.handle_request_sync(&req, meta);
         let expected = r#"{"jsonrpc":"2.0","result":4,"id":1}"#;
+        let expected: Response =
+            serde_json::from_str(&expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn test_rpc_minimum_contiguous_ledger_slot() {
+        let bob_pubkey = solana_sdk::pubkey::new_rand();
+        let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
+
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"minimumContiguousLedgerSlot"}"#;
+        let res = io.handle_request_sync(&req, meta);
+        let expected = r#"{"jsonrpc":"2.0","result":{"context":{"slot":0},"value":0},"id":1}"#;
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
         let result: Response = serde_json::from_str(&res.expect("actual response"))

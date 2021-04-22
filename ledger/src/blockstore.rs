@@ -2493,6 +2493,30 @@ impl Blockstore {
             .collect())
     }
 
+    pub fn get_lowest_connected_full_parent(&self, mut slot: Slot) -> Result<Slot> {
+        let mut slot_meta = self.meta(slot)?.ok_or(BlockstoreError::SlotUnavailable)?;
+        if !slot_meta.is_full() {
+            return Err(BlockstoreError::SlotUnavailable);
+        }
+
+        loop {
+            if slot == 0 || !slot_meta.is_parent_set() {
+                return Ok(slot);
+            }
+
+            match self.meta(slot_meta.parent_slot) {
+                Ok(Some(parent_slot_meta)) => {
+                    if !parent_slot_meta.is_full() {
+                        return Ok(slot);
+                    }
+                    slot = slot_meta.parent_slot;
+                    slot_meta = parent_slot_meta;
+                }
+                _ => return Ok(slot),
+            }
+        }
+    }
+
     pub fn write_perf_sample(&self, index: Slot, perf_sample: &PerfSample) -> Result<()> {
         self.perf_samples_cf.put(index, perf_sample)
     }

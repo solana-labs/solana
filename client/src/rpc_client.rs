@@ -959,6 +959,10 @@ impl RpcClient {
         self.send(RpcRequest::GetVersion, Value::Null)
     }
 
+    pub fn minimum_contiguous_ledger_slot(&self) -> RpcResult<Slot> {
+        self.send(RpcRequest::MinimumContiguousLedgerSlot, Value::Null)
+    }
+
     pub fn minimum_ledger_slot(&self) -> ClientResult<Slot> {
         self.send(RpcRequest::MinimumLedgerSlot, Value::Null)
     }

@@ -63,6 +63,7 @@ gives a convenient interface for the RPC methods.
 - [getTransactionCount](jsonrpc-api.md#gettransactioncount)
 - [getVersion](jsonrpc-api.md#getversion)
 - [getVoteAccounts](jsonrpc-api.md#getvoteaccounts)
+- [minimumContiguousLedgerSlot](jsonrpc-api.md#minimumcontiguousledgerslot)
 - [minimumLedgerSlot](jsonrpc-api.md#minimumledgerslot)
 - [requestAirdrop](jsonrpc-api.md#requestairdrop)
 - [sendTransaction](jsonrpc-api.md#sendtransaction)
@@ -2905,6 +2906,43 @@ Result:
 }
 ```
 
+### minimumContiguousLedgerSlot
+
+Returns the lowest slot that the node has contiguous information about in its ledger. This
+value may increase over time if the node is configured to purge older ledger data
+
+#### Parameters:
+
+None
+
+#### Results:
+
+The result will be an RpcResponse JSON object with `value` equal to:
+
+- `u64` - Minimum contiguous ledger slot, inclusive
+
+#### Example:
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"minimumContiguousLedgerSlot"}
+'
+```
+
+Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "context": {
+      "slot": 859
+    },
+    "value": 689
+  },
+  "id": 1
+}
+```
+
 ### minimumLedgerSlot
 
 Returns the lowest slot that the node has information about in its ledger. This
@@ -2916,7 +2954,7 @@ None
 
 #### Results:
 
-- `u64` - Minimum ledger slot
+- `u64` - Minimum ledger slot, inclusive
 
 #### Example:
 
@@ -2929,7 +2967,11 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 Result:
 ```json
-{"jsonrpc":"2.0","result":1234,"id":1}
+{
+  "jsonrpc": "2.0",
+  "result": 412,
+  "id": 1
+}
 ```
 
 ### requestAirdrop
