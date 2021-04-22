@@ -7418,19 +7418,19 @@ pub mod tests {
         db.store_uncached(0, &[(&frozen_pubkey, &account)]);
 
         // Store with an increase in lamports is ok
-        account.lamports = 2;
+        account.set_lamports(2);
         db.store_uncached(0, &[(&frozen_pubkey, &account)]);
 
         // Store with an decrease that does not go below the frozen amount of lamports is tolerated
-        account.lamports = 1;
+        account.set_lamports(1);
         db.store_uncached(0, &[(&frozen_pubkey, &account)]);
 
         // A store of any value over the frozen value of '1' across different slots is also ok
-        account.lamports = 3;
+        account.set_lamports(3);
         db.store_uncached(1, &[(&frozen_pubkey, &account)]);
-        account.lamports = 2;
+        account.set_lamports(2);
         db.store_uncached(2, &[(&frozen_pubkey, &account)]);
-        account.lamports = 1;
+        account.set_lamports(1);
         db.store_uncached(3, &[(&frozen_pubkey, &account)]);
     }
 
