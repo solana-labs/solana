@@ -73,7 +73,7 @@ jobs:
 
       language: node_js
       node_js:
-        - "node"
+        - "lts/*"
 
       cache:
         directories:
