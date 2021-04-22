@@ -79,6 +79,20 @@ impl From<Account> for AccountSharedData {
 
 pub trait WritableAccount: ReadableAccount {
     fn set_lamports(&mut self, lamports: u64);
+    fn add_lamports(&mut self, lamports: u64) {
+        self.set_lamports(
+            self.lamports()
+                .checked_add(lamports)
+                .unwrap_or_else(|| panic!("overflow")),
+        );
+    }
+    fn subtract_lamports(&mut self, lamports: u64) {
+        self.set_lamports(
+            self.lamports()
+                .checked_sub(lamports)
+                .unwrap_or_else(|| panic!("underflow")),
+        );
+    }
     fn data_as_mut_slice(&mut self) -> &mut [u8];
     fn set_owner(&mut self, owner: Pubkey);
     fn copy_into_owner_from_slice(&mut self, source: &[u8]);
@@ -707,6 +721,53 @@ pub mod tests {
             accounts_equal(account_expected, account2),
             accounts_equal(account_expected, &Account::from(account2.clone()))
         );
+    }
+
+    #[test]
+    fn test_account_add_sub_lamports() {
+        let key = Pubkey::new_unique();
+        let (mut account1, mut account2) = make_two_accounts(&key);
+        assert!(accounts_equal(&account1, &account2));
+        account1.add_lamports(1);
+        account2.add_lamports(1);
+        assert!(accounts_equal(&account1, &account2));
+        assert_eq!(account1.lamports(), 2);
+        account1.subtract_lamports(2);
+        account2.subtract_lamports(2);
+        assert!(accounts_equal(&account1, &account2));
+        assert_eq!(account1.lamports(), 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "overflow")]
+    fn test_account_add_lamports_overflow() {
+        let key = Pubkey::new_unique();
+        let (mut account1, _account2) = make_two_accounts(&key);
+        account1.add_lamports(u64::MAX);
+    }
+
+    #[test]
+    #[should_panic(expected = "underflow")]
+    fn test_account_sub_lamports_underflow() {
+        let key = Pubkey::new_unique();
+        let (mut account1, _account2) = make_two_accounts(&key);
+        account1.subtract_lamports(u64::MAX);
+    }
+
+    #[test]
+    #[should_panic(expected = "overflow")]
+    fn test_account_add_lamports_overflow2() {
+        let key = Pubkey::new_unique();
+        let (_account1, mut account2) = make_two_accounts(&key);
+        account2.add_lamports(u64::MAX);
+    }
+
+    #[test]
+    #[should_panic(expected = "underflow")]
+    fn test_account_sub_lamports_underflow2() {
+        let key = Pubkey::new_unique();
+        let (_account1, mut account2) = make_two_accounts(&key);
+        account2.subtract_lamports(u64::MAX);
     }
 
     #[test]
