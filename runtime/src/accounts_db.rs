@@ -1570,16 +1570,16 @@ impl AccountsDb {
                                         self.accounts_index
                                             .roots_and_ref_count(&locked_entry, max_clean_root),
                                     );
-                                }
-
-                                // prune zero_lamport_pubkey set which should contain all 0-lamport
-                                // keys whether rooted or not. A 0-lamport update may become rooted
-                                // in the future.
-                                let has_zero_lamport_accounts = slot_list
-                                    .iter()
-                                    .any(|(_slot, account_info)| account_info.lamports == 0);
-                                if !has_zero_lamport_accounts {
-                                    self.accounts_index.remove_zero_lamport_key(pubkey);
+                                } else {
+                                    // prune zero_lamport_pubkey set which should contain all 0-lamport
+                                    // keys whether rooted or not. A 0-lamport update may become rooted
+                                    // in the future.
+                                    let has_zero_lamport_accounts = slot_list
+                                        .iter()
+                                        .any(|(_slot, account_info)| account_info.lamports == 0);
+                                    if !has_zero_lamport_accounts {
+                                        self.accounts_index.remove_zero_lamport_key(pubkey);
+                                    }
                                 }
 
                                 // Release the lock
