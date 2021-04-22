@@ -211,6 +211,7 @@ impl ReadOnlyAccountsCache {
 
             // we didn't get enough, so calculate a new list and keep purging
             let (new_lru, new_size) = self.calculate_lru_list();
+            lru_index = 0;
             lru = new_lru;
             self.data_size.store(new_size, Ordering::Relaxed);
             lru.sort();
