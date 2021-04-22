@@ -155,7 +155,7 @@ fn create_account(
     // if it looks like the `to` account is already in use, bail
     {
         let to = &mut to.try_account_ref_mut()?;
-        if to.lamports > 0 {
+        if to.lamports() > 0 {
             ic_msg!(
                 invoke_context,
                 "Create Account: account {:?} already in use",

@@ -1,6 +1,9 @@
 use crate::{
-    account_utils::State as AccountUtilsState, ic_msg, keyed_account::KeyedAccount,
-    nonce_account::create_account, process_instruction::InvokeContext,
+    account_utils::State as AccountUtilsState,
+    ic_msg,
+    keyed_account::KeyedAccount,
+    nonce_account::create_account,
+    process_instruction::InvokeContext,
 };
 use solana_program::{
     instruction::{checked_add, InstructionError},
@@ -259,6 +262,7 @@ where
 mod test {
     use super::*;
     use crate::{
+        account::ReadableAccount,
         account_utils::State as AccountUtilsState,
         keyed_account::KeyedAccount,
         nonce::{self, State},
@@ -602,9 +606,12 @@ mod test {
                 // Deinitializes Account state
                 assert_eq!(state, State::Uninitialized);
                 // Empties Account balance
-                assert_eq!(nonce_keyed.account.borrow().lamports, expect_nonce_lamports);
+                assert_eq!(
+                    nonce_keyed.account.borrow().lamports(),
+                    expect_nonce_lamports
+                );
                 // Account balance goes to `to`
-                assert_eq!(to_keyed.account.borrow().lamports, expect_to_lamports);
+                assert_eq!(to_keyed.account.borrow().lamports(), expect_to_lamports);
             })
         })
     }
