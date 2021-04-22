@@ -77,21 +77,31 @@ impl From<Account> for AccountSharedData {
     }
 }
 
+#[derive(Debug)]
+pub enum LamportsError {
+    ArithmeticUnderflow,
+    ArithmeticOverflow,
+}
+
 pub trait WritableAccount: ReadableAccount {
     fn set_lamports(&mut self, lamports: u64);
-    fn add_lamports(&mut self, lamports: u64) {
-        self.set_lamports(
-            self.lamports()
-                .checked_add(lamports)
-                .unwrap_or_else(|| panic!("overflow")),
-        );
+    fn checked_add_lamports(&mut self, lamports: u64) -> Result<u64, LamportsError> {
+        match self.lamports().checked_add(lamports) {
+            Some(result) => {
+                self.set_lamports(result);
+                Ok(result)
+            }
+            None => Err(LamportsError::ArithmeticOverflow),
+        }
     }
-    fn subtract_lamports(&mut self, lamports: u64) {
-        self.set_lamports(
-            self.lamports()
-                .checked_sub(lamports)
-                .unwrap_or_else(|| panic!("underflow")),
-        );
+    fn checked_sub_lamports(&mut self, lamports: u64) -> Result<u64, LamportsError> {
+        match self.lamports().checked_sub(lamports) {
+            Some(result) => {
+                self.set_lamports(result);
+                Ok(result)
+            }
+            None => Err(LamportsError::ArithmeticUnderflow),
+        }
     }
     fn data_as_mut_slice(&mut self) -> &mut [u8];
     fn set_owner(&mut self, owner: Pubkey);
@@ -728,46 +738,46 @@ pub mod tests {
         let key = Pubkey::new_unique();
         let (mut account1, mut account2) = make_two_accounts(&key);
         assert!(accounts_equal(&account1, &account2));
-        account1.add_lamports(1);
-        account2.add_lamports(1);
+        account1.checked_add_lamports(1).unwrap();
+        account2.checked_add_lamports(1).unwrap();
         assert!(accounts_equal(&account1, &account2));
         assert_eq!(account1.lamports(), 2);
-        account1.subtract_lamports(2);
-        account2.subtract_lamports(2);
+        account1.checked_sub_lamports(2).unwrap();
+        account2.checked_sub_lamports(2).unwrap();
         assert!(accounts_equal(&account1, &account2));
         assert_eq!(account1.lamports(), 0);
     }
 
     #[test]
-    #[should_panic(expected = "overflow")]
-    fn test_account_add_lamports_overflow() {
+    #[should_panic(expected = "Overflow")]
+    fn test_account_checked_add_lamports_overflow() {
         let key = Pubkey::new_unique();
         let (mut account1, _account2) = make_two_accounts(&key);
-        account1.add_lamports(u64::MAX);
+        account1.checked_add_lamports(u64::MAX).unwrap();
     }
 
     #[test]
-    #[should_panic(expected = "underflow")]
-    fn test_account_sub_lamports_underflow() {
+    #[should_panic(expected = "Underflow")]
+    fn test_account_checked_sub_lamports_underflow() {
         let key = Pubkey::new_unique();
         let (mut account1, _account2) = make_two_accounts(&key);
-        account1.subtract_lamports(u64::MAX);
+        account1.checked_sub_lamports(u64::MAX).unwrap();
     }
 
     #[test]
-    #[should_panic(expected = "overflow")]
-    fn test_account_add_lamports_overflow2() {
+    #[should_panic(expected = "Overflow")]
+    fn test_account_checked_add_lamports_overflow2() {
         let key = Pubkey::new_unique();
         let (_account1, mut account2) = make_two_accounts(&key);
-        account2.add_lamports(u64::MAX);
+        account2.checked_add_lamports(u64::MAX).unwrap();
     }
 
     #[test]
-    #[should_panic(expected = "underflow")]
-    fn test_account_sub_lamports_underflow2() {
+    #[should_panic(expected = "Underflow")]
+    fn test_account_checked_sub_lamports_underflow2() {
         let key = Pubkey::new_unique();
         let (_account1, mut account2) = make_two_accounts(&key);
-        account2.subtract_lamports(u64::MAX);
+        account2.checked_sub_lamports(u64::MAX).unwrap();
     }
 
     #[test]
