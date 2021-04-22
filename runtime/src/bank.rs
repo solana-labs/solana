@@ -4029,7 +4029,7 @@ impl Bank {
                         .minimum_balance(nonce::State::size()),
                     _ => 0,
                 };
-                if lamports + min_balance > account.lamports {
+                if lamports + min_balance > account.lamports() {
                     return Err(TransactionError::InsufficientFundsForFee);
                 }
 

@@ -17,7 +17,7 @@ use dashmap::{
 use log::*;
 use rand::{thread_rng, Rng};
 use solana_sdk::{
-    account::{Account, AccountSharedData},
+    account::{Account, AccountSharedData, ReadableAccount},
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     clock::{Slot, INITIAL_RENT_EPOCH},
@@ -456,7 +456,7 @@ impl Accounts {
         account: AccountSharedData,
         slot: Slot,
     ) -> Option<(AccountSharedData, Slot)> {
-        if account.lamports > 0 {
+        if account.lamports() > 0 {
             Some((account, slot))
         } else {
             None

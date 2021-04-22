@@ -2495,8 +2495,8 @@ fn main() {
                                     Sol(base_account.lamports),
                                     Sol(warped_account.lamports),
                                     Sol(delta),
-                                    ((warped_account.lamports as f64)
-                                        / (base_account.lamports as f64)
+                                    ((warped_account.lamports() as f64)
+                                        / (base_account.lamports() as f64)
                                         * 100_f64)
                                         - 100_f64,
                                     detail,

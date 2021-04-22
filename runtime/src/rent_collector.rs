@@ -84,7 +84,7 @@ impl RentCollector {
                     .due(account.lamports, account.data().len(), years_elapsed);
 
             if exempt || rent_due != 0 {
-                if account.lamports > rent_due {
+                if account.lamports() > rent_due {
                     account.rent_epoch = self.epoch
                         + if exempt {
                             // Rent isn't collected for the next epoch
@@ -158,7 +158,7 @@ mod tests {
         assert_ne!(existing_account.rent_epoch, old_epoch);
 
         // newly created account should be collected for less rent; thus more remaining balance
-        assert!(created_account.lamports > existing_account.lamports);
+        assert!(created_account.lamports() > existing_account.lamports);
         assert_eq!(created_account.rent_epoch, existing_account.rent_epoch);
     }
 

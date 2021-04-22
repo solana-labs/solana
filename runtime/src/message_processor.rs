@@ -125,13 +125,13 @@ impl PreAccount {
 
         // An account not assigned to the program cannot have its balance decrease.
         if *program_id != pre.owner // line coverage used to get branch coverage
-         && pre.lamports > post.lamports
+         && pre.lamports() > post.lamports
         {
             return Err(InstructionError::ExternalAccountLamportSpend);
         }
 
         // The balance of read-only and executable accounts may not change
-        let lamports_changed = pre.lamports != post.lamports;
+        let lamports_changed = pre.lamports() != post.lamports;
         if lamports_changed {
             if !is_writable {
                 return Err(InstructionError::ReadonlyLamportChange);
@@ -1979,7 +1979,7 @@ mod tests {
                     MockSystemInstruction::BorrowFail => {
                         let from_account = keyed_accounts[0].try_account_ref_mut()?;
                         let dup_account = keyed_accounts[2].try_account_ref_mut()?;
-                        if from_account.lamports != dup_account.lamports {
+                        if from_account.lamports() != dup_account.lamports() {
                             return Err(InstructionError::InvalidArgument);
                         }
                         Ok(())
