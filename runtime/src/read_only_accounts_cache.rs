@@ -198,12 +198,6 @@ impl ReadOnlyAccountsCache {
                 stop = true;
             }
 
-            /*
-            match receiver.recv() {
-                Ok(_) => {return;}
-                _ => (),
-            };
-            */
             // purge from the lru list we last made
             if self.purge_lru_list(&lru, &mut lru_index) {
                 continue;
