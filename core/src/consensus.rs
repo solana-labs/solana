@@ -382,7 +382,7 @@ impl Tower {
         self.last_vote_tx_blockhash
     }
 
-    fn last_voted_slot_in_bank(bank: &Bank, vote_account_pubkey: &Pubkey) -> Option<Slot> {
+    pub fn last_voted_slot_in_bank(bank: &Bank, vote_account_pubkey: &Pubkey) -> Option<Slot> {
         let (_stake, vote_account) = bank.get_vote_account(vote_account_pubkey)?;
         let slot = vote_account.vote_state().as_ref().ok()?.last_voted_slot();
         slot
@@ -461,7 +461,7 @@ impl Tower {
 
     #[cfg(test)]
     pub fn record_vote(&mut self, slot: Slot, hash: Hash) -> Option<Slot> {
-        self.record_bank_vote_and_update_lockouts(slot, hash, None)
+        self.record_bank_vote_and_update_lockouts(slot, hash, self.last_voted_slot())
     }
 
     pub fn last_voted_slot(&self) -> Option<Slot> {
@@ -2592,10 +2592,12 @@ pub mod test {
         } else {
             vec![]
         };
-        let expected = Vote::new(slots, Hash::default());
+        let mut expected = Vote::new(slots, Hash::default());
         for i in 0..num_votes {
             tower.record_vote(i as u64, Hash::default());
         }
+
+        expected.timestamp = tower.last_vote.timestamp;
         assert_eq!(expected, tower.last_vote)
     }
 

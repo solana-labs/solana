@@ -69,6 +69,7 @@ pub const MAX_UNCONFIRMED_SLOTS: usize = 5;
 pub const DUPLICATE_LIVENESS_THRESHOLD: f64 = 0.1;
 pub const DUPLICATE_THRESHOLD: f64 = 1.0 - SWITCH_FORK_THRESHOLD - DUPLICATE_LIVENESS_THRESHOLD;
 const MAX_VOTE_SIGNATURES: usize = 200;
+const MAX_VOTE_REFRESH_INTERVAL_MILLIS: usize = 5000;
 
 #[derive(PartialEq, Debug)]
 pub(crate) enum HeaviestForkFailures {
@@ -1491,7 +1492,7 @@ impl ReplayStage {
                 .unwrap_or(false)
             // In order to avoid voting on multiple forks all past MAX_PROCESSING_AGE that don't
             // include the last voted blockhash
-            || last_vote_refresh_time.elapsed().as_millis() < 5000
+            || last_vote_refresh_time.elapsed().as_millis() < MAX_VOTE_REFRESH_INTERVAL_MILLIS as u128
         {
             return;
         }
@@ -2483,6 +2484,7 @@ impl ReplayStage {
 pub(crate) mod tests {
     use super::*;
     use crate::{
+        cluster_info::Node,
         consensus::test::{initialize_state, VoteSimulator},
         consensus::Tower,
         optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
@@ -2514,6 +2516,7 @@ pub(crate) mod tests {
         hash::{hash, Hash},
         instruction::InstructionError,
         packet::PACKET_DATA_SIZE,
+        poh_config::PohConfig,
         signature::{Keypair, Signature, Signer},
         system_transaction,
         transaction::TransactionError,
@@ -2548,10 +2551,15 @@ pub(crate) mod tests {
 
     struct ReplayBlockstoreComponents {
         blockstore: Arc<Blockstore>,
-        validator_voting_keys: HashMap<Pubkey, Pubkey>,
+        validator_node_to_vote_keys: HashMap<Pubkey, Pubkey>,
+        validator_authorized_voter_keypairs: HashMap<Pubkey, ValidatorVoteKeypairs>,
+        my_vote_pubkey: Pubkey,
         progress: ProgressMap,
-        bank_forks: Arc<RwLock<BankForks>>,
+        cluster_info: ClusterInfo,
         leader_schedule_cache: Arc<LeaderScheduleCache>,
+        poh_recorder: Mutex<PohRecorder>,
+        bank_forks: Arc<RwLock<BankForks>>,
+        tower: Tower,
         rpc_subscriptions: Arc<RpcSubscriptions>,
     }
 
@@ -2564,10 +2572,11 @@ pub(crate) mod tests {
         let validator_authorized_voter_keypairs: Vec<_> =
             (0..20).map(|_| ValidatorVoteKeypairs::new_rand()).collect();
 
-        let validator_voting_keys: HashMap<_, _> = validator_authorized_voter_keypairs
-            .iter()
-            .map(|v| (v.node_keypair.pubkey(), v.vote_keypair.pubkey()))
-            .collect();
+        let validator_node_to_vote_keys: HashMap<Pubkey, Pubkey> =
+            validator_authorized_voter_keypairs
+                .iter()
+                .map(|v| (v.node_keypair.pubkey(), v.vote_keypair.pubkey()))
+                .collect();
         let GenesisConfigInfo { genesis_config, .. } =
             genesis_utils::create_genesis_config_with_vote_accounts(
                 10_000,
@@ -2592,11 +2601,44 @@ pub(crate) mod tests {
             ),
         );
 
+        // ClusterInfo
+        let my_keypairs = &validator_authorized_voter_keypairs[0];
+        let cluster_info = ClusterInfo::new(
+            Node::new_localhost().info,
+            Arc::new(Keypair::from_bytes(&my_keypairs.node_keypair.to_bytes()).unwrap()),
+        );
+
         // Leader schedule cache
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank0));
 
+        // PohRecorder
+        let poh_recorder = Mutex::new(
+            PohRecorder::new(
+                bank0.tick_height(),
+                bank0.last_blockhash(),
+                bank0.slot(),
+                None,
+                bank0.ticks_per_slot(),
+                &Pubkey::default(),
+                &blockstore,
+                &leader_schedule_cache,
+                &Arc::new(PohConfig::default()),
+                Arc::new(AtomicBool::new(false)),
+            )
+            .0,
+        );
+
         // BankForks
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank0)));
+
+        // Tower
+        let my_vote_pubkey = my_keypairs.vote_keypair.pubkey();
+        let tower = Tower::new_from_bankforks(
+            &bank_forks.read().unwrap(),
+            &ledger_path,
+            &cluster_info.id(),
+            &my_vote_pubkey,
+        );
 
         // RpcSubscriptions
         let optimistically_confirmed_bank =
@@ -2609,12 +2651,23 @@ pub(crate) mod tests {
             optimistically_confirmed_bank,
         ));
 
+        let validator_authorized_voter_keypairs: HashMap<Pubkey, ValidatorVoteKeypairs> =
+            validator_authorized_voter_keypairs
+                .into_iter()
+                .map(|keys| (keys.vote_keypair.pubkey(), keys))
+                .collect();
+
         ReplayBlockstoreComponents {
             blockstore,
-            validator_voting_keys,
+            validator_node_to_vote_keys,
+            validator_authorized_voter_keypairs,
+            my_vote_pubkey,
             progress,
-            bank_forks,
+            cluster_info,
             leader_schedule_cache,
+            poh_recorder,
+            bank_forks,
+            tower,
             rpc_subscriptions,
         }
     }
@@ -2623,11 +2676,12 @@ pub(crate) mod tests {
     fn test_child_slots_of_same_parent() {
         let ReplayBlockstoreComponents {
             blockstore,
-            validator_voting_keys,
+            validator_node_to_vote_keys,
             mut progress,
             bank_forks,
             leader_schedule_cache,
             rpc_subscriptions,
+            ..
         } = replay_blockstore_components();
 
         // Insert a non-root bank so that the propagation logic will update this
@@ -2642,7 +2696,9 @@ pub(crate) mod tests {
             ForkProgress::new_from_bank(
                 &bank1,
                 bank1.collector_id(),
-                validator_voting_keys.get(&bank1.collector_id()).unwrap(),
+                validator_node_to_vote_keys
+                    .get(&bank1.collector_id())
+                    .unwrap(),
                 Some(0),
                 DuplicateStats::default(),
                 0,
@@ -2712,7 +2768,7 @@ pub(crate) mod tests {
         ];
         for slot in expected_leader_slots {
             let leader = leader_schedule_cache.slot_leader_at(slot, None).unwrap();
-            let vote_key = validator_voting_keys.get(&leader).unwrap();
+            let vote_key = validator_node_to_vote_keys.get(&leader).unwrap();
             assert!(progress
                 .get_propagated_stats(1)
                 .unwrap()
@@ -4420,7 +4476,7 @@ pub(crate) mod tests {
     #[test]
     fn test_leader_snapshot_restart_propagation() {
         let ReplayBlockstoreComponents {
-            validator_voting_keys,
+            validator_node_to_vote_keys,
             mut progress,
             bank_forks,
             leader_schedule_cache,
@@ -4455,7 +4511,7 @@ pub(crate) mod tests {
         let vote_tracker = VoteTracker::default();
 
         // Add votes
-        for vote_key in validator_voting_keys.values() {
+        for vote_key in validator_node_to_vote_keys.values() {
             vote_tracker.insert_vote(root_bank.slot(), *vote_key);
         }
 
@@ -4732,6 +4788,195 @@ pub(crate) mod tests {
             heaviest_subtree_fork_choice.best_overall_slot(),
             (new_bank.slot(), new_bank.hash())
         );
+    }
+
+    #[test]
+    fn test_replay_stage_refresh_last_vote() {
+        let ReplayBlockstoreComponents {
+            mut validator_authorized_voter_keypairs,
+            cluster_info,
+            poh_recorder,
+            bank_forks,
+            mut tower,
+            my_vote_pubkey,
+            ..
+        } = replay_blockstore_components();
+
+        let mut last_vote_refresh_time = Instant::now();
+        let has_new_vote_been_rooted = false;
+        let mut voted_signatures = vec![];
+
+        let my_vote_keypair = vec![Arc::new(
+            validator_authorized_voter_keypairs
+                .remove(&my_vote_pubkey)
+                .unwrap()
+                .vote_keypair,
+        )];
+        let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
+
+        // Simulate landing a vote for slot 0 landing in slot 1
+        let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
+        ReplayStage::push_vote(
+            &cluster_info,
+            &bank0,
+            &poh_recorder,
+            &my_vote_pubkey,
+            &my_vote_keypair,
+            &mut tower,
+            &SwitchForkDecision::SameFork,
+            &mut voted_signatures,
+            has_new_vote_been_rooted,
+        );
+        let (_, votes, max_ts) = cluster_info.get_votes(0);
+        assert_eq!(votes.len(), 1);
+        let vote_tx = &votes[0];
+        assert_eq!(vote_tx.message.recent_blockhash, bank0.hash());
+        assert_eq!(tower.last_vote_tx_blockhash(), bank0.hash());
+        assert_eq!(tower.last_voted_slot().unwrap(), 0);
+        bank1.process_transaction(vote_tx).unwrap();
+        bank1.freeze();
+
+        // Trying to refresh the vote for bank 0 in bank 1 or bank 2 won't succeed because
+        // the last vote has landed already
+        let bank2 = Arc::new(Bank::new_from_parent(&bank1, &Pubkey::default(), 2));
+        bank2.freeze();
+        for refresh_bank in &[&bank1, &bank2] {
+            ReplayStage::refresh_last_vote(
+                &mut tower,
+                &cluster_info,
+                refresh_bank,
+                &poh_recorder,
+                Tower::last_voted_slot_in_bank(&refresh_bank, &my_vote_pubkey).unwrap(),
+                &my_vote_pubkey,
+                &my_vote_keypair,
+                &mut voted_signatures,
+                has_new_vote_been_rooted,
+                &mut last_vote_refresh_time,
+            );
+
+            // No new votes have been submitted to gossip
+            let (_, votes, _max_ts) = cluster_info.get_votes(max_ts);
+            assert!(votes.is_empty());
+            // Tower's latest vote tx blockhash hasn't changed either
+            assert_eq!(tower.last_vote_tx_blockhash(), bank0.hash());
+        }
+
+        // Simulate submitting a new vote for bank 1 to the network, but the vote
+        // not landing
+        ReplayStage::push_vote(
+            &cluster_info,
+            &bank1,
+            &poh_recorder,
+            &my_vote_pubkey,
+            &my_vote_keypair,
+            &mut tower,
+            &SwitchForkDecision::SameFork,
+            &mut voted_signatures,
+            has_new_vote_been_rooted,
+        );
+        let (_, votes, max_ts) = cluster_info.get_votes(max_ts);
+        assert_eq!(votes.len(), 1);
+        let vote_tx = &votes[0];
+        assert_eq!(vote_tx.message.recent_blockhash, bank1.hash());
+        assert_eq!(tower.last_vote_tx_blockhash(), bank1.hash());
+
+        // Trying to refresh the vote for bank 1 in bank 2 won't succeed because
+        // the last vote has not expired yet
+        ReplayStage::refresh_last_vote(
+            &mut tower,
+            &cluster_info,
+            &bank2,
+            &poh_recorder,
+            Tower::last_voted_slot_in_bank(&bank2, &my_vote_pubkey).unwrap(),
+            &my_vote_pubkey,
+            &my_vote_keypair,
+            &mut voted_signatures,
+            has_new_vote_been_rooted,
+            &mut last_vote_refresh_time,
+        );
+        // No new votes have been submitted to gossip
+        let (_, votes, max_ts) = cluster_info.get_votes(max_ts);
+        assert!(votes.is_empty());
+        assert_eq!(tower.last_vote_tx_blockhash(), bank1.hash());
+
+        // Create a bank where the last vote transaction will have expired
+        let expired_bank = Arc::new(Bank::new_from_parent(
+            &bank2,
+            &Pubkey::default(),
+            bank2.slot() + MAX_PROCESSING_AGE as Slot,
+        ));
+        expired_bank.freeze();
+
+        // Now trying to refresh the vote for slot 1 will succeed because the recent blockhash
+        // of the last vote transaction has expired
+        let mut last_vote_refresh_time = last_vote_refresh_time
+            .checked_sub(Duration::from_millis(
+                MAX_VOTE_REFRESH_INTERVAL_MILLIS as u64,
+            ))
+            .unwrap();
+        let clone_refresh_time = last_vote_refresh_time;
+        ReplayStage::refresh_last_vote(
+            &mut tower,
+            &cluster_info,
+            &expired_bank,
+            &poh_recorder,
+            Tower::last_voted_slot_in_bank(&expired_bank, &my_vote_pubkey).unwrap(),
+            &my_vote_pubkey,
+            &my_vote_keypair,
+            &mut voted_signatures,
+            has_new_vote_been_rooted,
+            &mut last_vote_refresh_time,
+        );
+        assert!(last_vote_refresh_time > clone_refresh_time);
+        let (_, votes, max_ts) = cluster_info.get_votes(max_ts);
+        assert_eq!(votes.len(), 1);
+        let vote_tx = &votes[0];
+        assert_eq!(vote_tx.message.recent_blockhash, expired_bank.hash());
+        assert_eq!(tower.last_vote_tx_blockhash(), expired_bank.hash());
+        assert_eq!(tower.last_voted_slot().unwrap(), 1);
+
+        // Processing the vote transaction should be valid
+        let expired_bank_child = Arc::new(Bank::new_from_parent(
+            &expired_bank,
+            &Pubkey::default(),
+            expired_bank.slot() + 1,
+        ));
+        expired_bank_child.process_transaction(vote_tx).unwrap();
+        let (_stake, vote_account) = expired_bank_child
+            .get_vote_account(&my_vote_pubkey)
+            .unwrap();
+        assert_eq!(
+            vote_account.vote_state().as_ref().unwrap().tower(),
+            vec![0, 1]
+        );
+
+        // Trying to refresh the vote on a sibling bank where:
+        // 1) The vote for slot 1 hasn't landed
+        // 2) The latest refresh vote transaction's recent blockhash (the sibling's hash) doesn't exist
+        // This will still not refresh because `MAX_VOTE_REFRESH_INTERVAL_MILLIS` has not expired yet
+        let expired_bank_sibling = Arc::new(Bank::new_from_parent(
+            &bank2,
+            &Pubkey::default(),
+            expired_bank_child.slot() + 1,
+        ));
+        expired_bank_sibling.freeze();
+        let mut last_vote_refresh_time = Instant::now();
+        ReplayStage::refresh_last_vote(
+            &mut tower,
+            &cluster_info,
+            &expired_bank_sibling,
+            &poh_recorder,
+            Tower::last_voted_slot_in_bank(&expired_bank_sibling, &my_vote_pubkey).unwrap(),
+            &my_vote_pubkey,
+            &my_vote_keypair,
+            &mut voted_signatures,
+            has_new_vote_been_rooted,
+            &mut last_vote_refresh_time,
+        );
+        let (_, votes, _max_ts) = cluster_info.get_votes(max_ts);
+        assert!(votes.is_empty());
+        assert_eq!(vote_tx.message.recent_blockhash, expired_bank.hash());
+        assert_eq!(tower.last_vote_tx_blockhash(), expired_bank.hash());
     }
 
     fn run_compute_and_select_forks(
