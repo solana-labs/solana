@@ -225,7 +225,7 @@ impl Tower {
     }
 
     pub(crate) fn collect_vote_lockouts<F>(
-        node_pubkey: &Pubkey,
+        vote_account_pubkey: &Pubkey,
         bank_slot: Slot,
         vote_accounts: F,
         ancestors: &HashMap<Slot, HashSet<Slot>>,
@@ -247,7 +247,7 @@ impl Tower {
             if voted_stake == 0 {
                 continue;
             }
-            trace!("{} {} with stake {}", node_pubkey, key, voted_stake);
+            trace!("{} {} with stake {}", vote_account_pubkey, key, voted_stake);
             let mut vote_state = match account.vote_state().as_ref() {
                 Err(_) => {
                     datapoint_warn!(
@@ -269,7 +269,7 @@ impl Tower {
                     .push((vote.slot, key));
             }
 
-            if key == *node_pubkey || vote_state.node_pubkey == *node_pubkey {
+            if key == *vote_account_pubkey {
                 my_latest_landed_vote = vote_state.nth_recent_vote(0).map(|v| v.slot).unwrap_or(0);
                 debug!("vote state {:?}", vote_state);
                 debug!(

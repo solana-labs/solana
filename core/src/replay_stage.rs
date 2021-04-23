@@ -98,6 +98,11 @@ impl Drop for Finalizer {
     }
 }
 
+struct LastVoteRefreshTime {
+    last_refresh_time: Instant,
+    last_print_time: Instant,
+}
+
 #[derive(Default)]
 struct SkippedSlotsInfo {
     last_retransmit_slot: u64,
@@ -335,7 +340,10 @@ impl ReplayStage {
                 let mut latest_validator_votes_for_frozen_banks: LatestValidatorVotesForFrozenBanks = LatestValidatorVotesForFrozenBanks::default();
                 let mut voted_signatures = Vec::new();
                 let mut has_new_vote_been_rooted = !wait_for_vote_to_start_leader;
-                let mut last_vote_refresh_time = Instant::now();
+                let mut last_vote_refresh_time = LastVoteRefreshTime {
+                    last_refresh_time: Instant::now(),
+                    last_print_time: Instant::now(),
+                };
                 loop {
                     // Stop getting entries if we get exit signal
                     if exit.load(Ordering::Relaxed) {
@@ -1476,7 +1484,7 @@ impl ReplayStage {
         authorized_voter_keypairs: &[Arc<Keypair>],
         vote_signatures: &mut Vec<Signature>,
         has_new_vote_been_rooted: bool,
-        last_vote_refresh_time: &mut Instant,
+        last_vote_refresh_time: &mut LastVoteRefreshTime,
     ) {
         let last_voted_slot = tower.last_voted_slot();
         if last_voted_slot.is_none() {
@@ -1486,13 +1494,20 @@ impl ReplayStage {
         // Refresh the vote if our latest vote hasn't landed, and the recent blockhash of the
         // last attempt at a vote transaction has expired
         let last_voted_slot = last_voted_slot.unwrap();
-        if my_latest_landed_vote >= last_voted_slot
+        let is_landed_greater_than_last_voted_slot = my_latest_landed_vote >= last_voted_slot;
+        if is_landed_greater_than_last_voted_slot
+            && last_vote_refresh_time.last_print_time.elapsed().as_secs() >= 1
+        {
+            last_vote_refresh_time.last_print_time = Instant::now();
+            info!("Last landed vote for slot {} in bank {} is greater than the current last vote for slot: {} tracked by Tower", my_latest_landed_vote, heaviest_bank_on_same_fork.slot(), last_voted_slot);
+        }
+        if is_landed_greater_than_last_voted_slot
             || heaviest_bank_on_same_fork
                 .check_hash_age(&tower.last_vote_tx_blockhash(), MAX_PROCESSING_AGE)
                 .unwrap_or(false)
             // In order to avoid voting on multiple forks all past MAX_PROCESSING_AGE that don't
             // include the last voted blockhash
-            || last_vote_refresh_time.elapsed().as_millis() < MAX_VOTE_REFRESH_INTERVAL_MILLIS as u128
+            || last_vote_refresh_time.last_refresh_time.elapsed().as_millis() < MAX_VOTE_REFRESH_INTERVAL_MILLIS as u128
         {
             return;
         }
@@ -1527,7 +1542,7 @@ impl ReplayStage {
                 crate::banking_stage::next_leader_tpu(cluster_info, poh_recorder),
             );
             cluster_info.refresh_vote(vote_tx, last_voted_slot);
-            *last_vote_refresh_time = Instant::now();
+            last_vote_refresh_time.last_refresh_time = Instant::now();
         }
     }
 
@@ -1770,7 +1785,7 @@ impl ReplayStage {
 
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn compute_bank_stats(
-        my_pubkey: &Pubkey,
+        my_vote_pubkey: &Pubkey,
         ancestors: &HashMap<u64, HashSet<u64>>,
         frozen_banks: &mut Vec<Arc<Bank>>,
         tower: &Tower,
@@ -1795,7 +1810,7 @@ impl ReplayStage {
                     .computed;
                 if !is_computed {
                     let computed_bank_state = Tower::collect_vote_lockouts(
-                        my_pubkey,
+                        my_vote_pubkey,
                         bank_slot,
                         bank.vote_accounts().into_iter(),
                         &ancestors,
@@ -1835,7 +1850,7 @@ impl ReplayStage {
                     );
                     info!(
                         "{} slot_weight: {} {} {} {}",
-                        my_pubkey,
+                        my_vote_pubkey,
                         bank_slot,
                         stats.weight,
                         stats.fork_weight,
@@ -3432,15 +3447,16 @@ pub(crate) mod tests {
     #[test]
     fn test_compute_bank_stats_confirmed() {
         let vote_keypairs = ValidatorVoteKeypairs::new_rand();
-        let node_pubkey = vote_keypairs.node_keypair.pubkey();
-        let keypairs: HashMap<_, _> = vec![(node_pubkey, vote_keypairs)].into_iter().collect();
+        let my_node_pubkey = vote_keypairs.node_keypair.pubkey();
+        let my_vote_pubkey = vote_keypairs.vote_keypair.pubkey();
+        let keypairs: HashMap<_, _> = vec![(my_node_pubkey, vote_keypairs)].into_iter().collect();
 
         let (bank_forks, mut progress, mut heaviest_subtree_fork_choice) =
             initialize_state(&keypairs, 10_000);
         let mut latest_validator_votes_for_frozen_banks =
             LatestValidatorVotesForFrozenBanks::default();
         let bank0 = bank_forks.get(0).unwrap().clone();
-        let my_keypairs = keypairs.get(&node_pubkey).unwrap();
+        let my_keypairs = keypairs.get(&my_node_pubkey).unwrap();
         let vote_tx = vote_transaction::new_vote_transaction(
             vec![0],
             bank0.hash(),
@@ -3452,7 +3468,7 @@ pub(crate) mod tests {
         );
 
         let bank_forks = RwLock::new(bank_forks);
-        let bank1 = Bank::new_from_parent(&bank0, &node_pubkey, 1);
+        let bank1 = Bank::new_from_parent(&bank0, &my_node_pubkey, 1);
         bank1.process_transaction(&vote_tx).unwrap();
         bank1.freeze();
 
@@ -3467,7 +3483,7 @@ pub(crate) mod tests {
             .collect();
         let tower = Tower::new_for_tests(0, 0.67);
         let newly_computed = ReplayStage::compute_bank_stats(
-            &node_pubkey,
+            &my_vote_pubkey,
             &ancestors,
             &mut frozen_banks,
             &tower,
@@ -3518,7 +3534,7 @@ pub(crate) mod tests {
             .cloned()
             .collect();
         let newly_computed = ReplayStage::compute_bank_stats(
-            &node_pubkey,
+            &my_vote_pubkey,
             &ancestors,
             &mut frozen_banks,
             &tower,
@@ -3554,7 +3570,7 @@ pub(crate) mod tests {
             .cloned()
             .collect();
         let newly_computed = ReplayStage::compute_bank_stats(
-            &node_pubkey,
+            &my_vote_pubkey,
             &ancestors,
             &mut frozen_banks,
             &tower,
@@ -3573,8 +3589,8 @@ pub(crate) mod tests {
     fn test_same_weight_select_lower_slot() {
         // Init state
         let mut vote_simulator = VoteSimulator::new(1);
-        let node_pubkey = vote_simulator.node_pubkeys[0];
-        let tower = Tower::new_with_key(&node_pubkey);
+        let my_node_pubkey = vote_simulator.node_pubkeys[0];
+        let tower = Tower::new_with_key(&my_node_pubkey);
 
         // Create the tree of banks in a BankForks object
         let forks = tr(0) / (tr(1)) / (tr(2));
@@ -3591,8 +3607,10 @@ pub(crate) mod tests {
         let mut latest_validator_votes_for_frozen_banks =
             LatestValidatorVotesForFrozenBanks::default();
         let ancestors = vote_simulator.bank_forks.read().unwrap().ancestors();
+
+        let my_vote_pubkey = vote_simulator.vote_pubkeys[0];
         ReplayStage::compute_bank_stats(
-            &node_pubkey,
+            &my_vote_pubkey,
             &ancestors,
             &mut frozen_banks,
             &tower,
@@ -3643,8 +3661,8 @@ pub(crate) mod tests {
     fn test_child_bank_heavier() {
         // Init state
         let mut vote_simulator = VoteSimulator::new(1);
-        let node_pubkey = vote_simulator.node_pubkeys[0];
-        let mut tower = Tower::new_with_key(&node_pubkey);
+        let my_node_pubkey = vote_simulator.node_pubkeys[0];
+        let mut tower = Tower::new_with_key(&my_node_pubkey);
 
         // Create the tree of banks in a BankForks object
         let forks = tr(0) / (tr(1) / (tr(2) / (tr(3))));
@@ -3652,13 +3670,13 @@ pub(crate) mod tests {
         // Set the voting behavior
         let mut cluster_votes = HashMap::new();
         let votes = vec![0, 2];
-        cluster_votes.insert(node_pubkey, votes.clone());
+        cluster_votes.insert(my_node_pubkey, votes.clone());
         vote_simulator.fill_bank_forks(forks, &cluster_votes);
 
         // Fill banks with votes
         for vote in votes {
             assert!(vote_simulator
-                .simulate_vote(vote, &node_pubkey, &mut tower,)
+                .simulate_vote(vote, &my_node_pubkey, &mut tower,)
                 .is_empty());
         }
 
@@ -3671,8 +3689,9 @@ pub(crate) mod tests {
             .cloned()
             .collect();
 
+        let my_vote_pubkey = vote_simulator.vote_pubkeys[0];
         ReplayStage::compute_bank_stats(
-            &node_pubkey,
+            &my_vote_pubkey,
             &vote_simulator.bank_forks.read().unwrap().ancestors(),
             &mut frozen_banks,
             &tower,
@@ -4522,7 +4541,7 @@ pub(crate) mod tests {
         // Update propagation status
         let tower = Tower::new_for_tests(0, 0.67);
         ReplayStage::compute_bank_stats(
-            &my_pubkey,
+            &validator_node_to_vote_keys[&my_pubkey],
             &ancestors,
             &mut frozen_banks,
             &tower,
@@ -4804,7 +4823,10 @@ pub(crate) mod tests {
             ..
         } = replay_blockstore_components();
 
-        let mut last_vote_refresh_time = Instant::now();
+        let mut last_vote_refresh_time = LastVoteRefreshTime {
+            last_refresh_time: Instant::now(),
+            last_print_time: Instant::now(),
+        };
         let has_new_vote_been_rooted = false;
         let mut voted_signatures = vec![];
 
@@ -4929,12 +4951,13 @@ pub(crate) mod tests {
 
         // Now trying to refresh the vote for slot 1 will succeed because the recent blockhash
         // of the last vote transaction has expired
-        let mut last_vote_refresh_time = last_vote_refresh_time
+        last_vote_refresh_time.last_refresh_time = last_vote_refresh_time
+            .last_refresh_time
             .checked_sub(Duration::from_millis(
                 MAX_VOTE_REFRESH_INTERVAL_MILLIS as u64 + 1,
             ))
             .unwrap();
-        let clone_refresh_time = last_vote_refresh_time;
+        let clone_refresh_time = last_vote_refresh_time.last_refresh_time;
         ReplayStage::refresh_last_vote(
             &mut tower,
             &cluster_info,
@@ -4947,7 +4970,7 @@ pub(crate) mod tests {
             has_new_vote_been_rooted,
             &mut last_vote_refresh_time,
         );
-        assert!(last_vote_refresh_time > clone_refresh_time);
+        assert!(last_vote_refresh_time.last_refresh_time > clone_refresh_time);
         let (_, votes, max_ts) = cluster_info.get_votes(max_ts);
         assert_eq!(votes.len(), 1);
         let vote_tx = &votes[0];
@@ -4989,7 +5012,8 @@ pub(crate) mod tests {
         ));
         fill_bank_with_ticks(&expired_bank_sibling);
         expired_bank_sibling.freeze();
-        let mut last_vote_refresh_time = Instant::now();
+        // Set the last refresh to now, shouldn't refresh because the last refresh just happened.
+        last_vote_refresh_time.last_refresh_time = Instant::now();
         ReplayStage::refresh_last_vote(
             &mut tower,
             &cluster_info,
