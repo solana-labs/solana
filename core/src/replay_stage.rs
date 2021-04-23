@@ -2603,10 +2603,12 @@ pub(crate) mod tests {
 
         // ClusterInfo
         let my_keypairs = &validator_authorized_voter_keypairs[0];
+        let my_pubkey = my_keypairs.node_keypair.pubkey();
         let cluster_info = ClusterInfo::new(
-            Node::new_localhost().info,
+            Node::new_localhost_with_pubkey(&my_pubkey).info,
             Arc::new(Keypair::from_bytes(&my_keypairs.node_keypair.to_bytes()).unwrap()),
         );
+        assert_eq!(my_pubkey, cluster_info.id());
 
         // Leader schedule cache
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank0));
@@ -4814,8 +4816,20 @@ pub(crate) mod tests {
         )];
         let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
 
+        fn fill_bank_with_ticks(bank: &Bank) {
+            let parent_distance = bank.slot() - bank.parent_slot();
+            for _ in 0..parent_distance {
+                let last_blockhash = bank.last_blockhash();
+                while bank.last_blockhash() == last_blockhash {
+                    bank.register_tick(&Hash::new_unique())
+                }
+            }
+        }
+
         // Simulate landing a vote for slot 0 landing in slot 1
         let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
+        fill_bank_with_ticks(&bank1);
+        tower.record_bank_vote(&bank0, &my_vote_pubkey);
         ReplayStage::push_vote(
             &cluster_info,
             &bank0,
@@ -4830,8 +4844,8 @@ pub(crate) mod tests {
         let (_, votes, max_ts) = cluster_info.get_votes(0);
         assert_eq!(votes.len(), 1);
         let vote_tx = &votes[0];
-        assert_eq!(vote_tx.message.recent_blockhash, bank0.hash());
-        assert_eq!(tower.last_vote_tx_blockhash(), bank0.hash());
+        assert_eq!(vote_tx.message.recent_blockhash, bank0.last_blockhash());
+        assert_eq!(tower.last_vote_tx_blockhash(), bank0.last_blockhash());
         assert_eq!(tower.last_voted_slot().unwrap(), 0);
         bank1.process_transaction(vote_tx).unwrap();
         bank1.freeze();
@@ -4839,6 +4853,7 @@ pub(crate) mod tests {
         // Trying to refresh the vote for bank 0 in bank 1 or bank 2 won't succeed because
         // the last vote has landed already
         let bank2 = Arc::new(Bank::new_from_parent(&bank1, &Pubkey::default(), 2));
+        fill_bank_with_ticks(&bank2);
         bank2.freeze();
         for refresh_bank in &[&bank1, &bank2] {
             ReplayStage::refresh_last_vote(
@@ -4858,11 +4873,13 @@ pub(crate) mod tests {
             let (_, votes, _max_ts) = cluster_info.get_votes(max_ts);
             assert!(votes.is_empty());
             // Tower's latest vote tx blockhash hasn't changed either
-            assert_eq!(tower.last_vote_tx_blockhash(), bank0.hash());
+            assert_eq!(tower.last_vote_tx_blockhash(), bank0.last_blockhash());
+            assert_eq!(tower.last_voted_slot().unwrap(), 0);
         }
 
         // Simulate submitting a new vote for bank 1 to the network, but the vote
         // not landing
+        tower.record_bank_vote(&bank1, &my_vote_pubkey);
         ReplayStage::push_vote(
             &cluster_info,
             &bank1,
@@ -4877,8 +4894,9 @@ pub(crate) mod tests {
         let (_, votes, max_ts) = cluster_info.get_votes(max_ts);
         assert_eq!(votes.len(), 1);
         let vote_tx = &votes[0];
-        assert_eq!(vote_tx.message.recent_blockhash, bank1.hash());
-        assert_eq!(tower.last_vote_tx_blockhash(), bank1.hash());
+        assert_eq!(vote_tx.message.recent_blockhash, bank1.last_blockhash());
+        assert_eq!(tower.last_vote_tx_blockhash(), bank1.last_blockhash());
+        assert_eq!(tower.last_voted_slot().unwrap(), 1);
 
         // Trying to refresh the vote for bank 1 in bank 2 won't succeed because
         // the last vote has not expired yet
@@ -4897,7 +4915,8 @@ pub(crate) mod tests {
         // No new votes have been submitted to gossip
         let (_, votes, max_ts) = cluster_info.get_votes(max_ts);
         assert!(votes.is_empty());
-        assert_eq!(tower.last_vote_tx_blockhash(), bank1.hash());
+        assert_eq!(tower.last_vote_tx_blockhash(), bank1.last_blockhash());
+        assert_eq!(tower.last_voted_slot().unwrap(), 1);
 
         // Create a bank where the last vote transaction will have expired
         let expired_bank = Arc::new(Bank::new_from_parent(
@@ -4905,13 +4924,14 @@ pub(crate) mod tests {
             &Pubkey::default(),
             bank2.slot() + MAX_PROCESSING_AGE as Slot,
         ));
+        fill_bank_with_ticks(&expired_bank);
         expired_bank.freeze();
 
         // Now trying to refresh the vote for slot 1 will succeed because the recent blockhash
         // of the last vote transaction has expired
         let mut last_vote_refresh_time = last_vote_refresh_time
             .checked_sub(Duration::from_millis(
-                MAX_VOTE_REFRESH_INTERVAL_MILLIS as u64,
+                MAX_VOTE_REFRESH_INTERVAL_MILLIS as u64 + 1,
             ))
             .unwrap();
         let clone_refresh_time = last_vote_refresh_time;
@@ -4931,8 +4951,14 @@ pub(crate) mod tests {
         let (_, votes, max_ts) = cluster_info.get_votes(max_ts);
         assert_eq!(votes.len(), 1);
         let vote_tx = &votes[0];
-        assert_eq!(vote_tx.message.recent_blockhash, expired_bank.hash());
-        assert_eq!(tower.last_vote_tx_blockhash(), expired_bank.hash());
+        assert_eq!(
+            vote_tx.message.recent_blockhash,
+            expired_bank.last_blockhash()
+        );
+        assert_eq!(
+            tower.last_vote_tx_blockhash(),
+            expired_bank.last_blockhash()
+        );
         assert_eq!(tower.last_voted_slot().unwrap(), 1);
 
         // Processing the vote transaction should be valid
@@ -4949,6 +4975,8 @@ pub(crate) mod tests {
             vote_account.vote_state().as_ref().unwrap().tower(),
             vec![0, 1]
         );
+        fill_bank_with_ticks(&expired_bank_child);
+        expired_bank_child.freeze();
 
         // Trying to refresh the vote on a sibling bank where:
         // 1) The vote for slot 1 hasn't landed
@@ -4959,6 +4987,7 @@ pub(crate) mod tests {
             &Pubkey::default(),
             expired_bank_child.slot() + 1,
         ));
+        fill_bank_with_ticks(&expired_bank_sibling);
         expired_bank_sibling.freeze();
         let mut last_vote_refresh_time = Instant::now();
         ReplayStage::refresh_last_vote(
@@ -4975,8 +5004,15 @@ pub(crate) mod tests {
         );
         let (_, votes, _max_ts) = cluster_info.get_votes(max_ts);
         assert!(votes.is_empty());
-        assert_eq!(vote_tx.message.recent_blockhash, expired_bank.hash());
-        assert_eq!(tower.last_vote_tx_blockhash(), expired_bank.hash());
+        assert_eq!(
+            vote_tx.message.recent_blockhash,
+            expired_bank.last_blockhash()
+        );
+        assert_eq!(
+            tower.last_vote_tx_blockhash(),
+            expired_bank.last_blockhash()
+        );
+        assert_eq!(tower.last_voted_slot().unwrap(), 1);
     }
 
     fn run_compute_and_select_forks(
