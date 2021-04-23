@@ -273,7 +273,7 @@ impl LeaderTpuService {
             let recent_slots = recent_slots.clone();
             let leader_tpu_cache = leader_tpu_cache.clone();
             std::thread::Builder::new()
-                .name("solana-leader-tpu-service".to_string())
+                .name("ldr-tpu-srv".to_string())
                 .spawn(move || Self::run(rpc_client, recent_slots, leader_tpu_cache, exit))
                 .unwrap()
         });
