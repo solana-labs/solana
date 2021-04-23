@@ -133,6 +133,29 @@ pub struct ErrorCounters {
     pub not_allowed_during_cluster_maintenance: usize,
 }
 
+pub trait GetHash: Copy {
+    fn get_hash(&self) -> &Hash;
+    fn get_hash_value(self) -> Hash;
+}
+
+impl GetHash for Hash {
+    fn get_hash(&self) -> &Hash {
+        &self
+    }
+    fn get_hash_value(self) -> Hash {
+        self
+    }
+}
+
+impl GetHash for &Hash {
+    fn get_hash(&self) -> &Hash {
+        &self
+    }
+    fn get_hash_value(self) -> Hash {
+        *self
+    }
+}
+
 #[derive(Default, Debug, PartialEq, Clone)]
 pub struct AccountInfo {
     /// index identifying the append storage
@@ -3305,10 +3328,10 @@ impl AccountsDb {
             .fetch_add(count as u64, Ordering::Relaxed)
     }
 
-    fn write_accounts_to_storage<F: FnMut(Slot, usize) -> Arc<AccountStorageEntry>>(
+    fn write_accounts_to_storage<F: FnMut(Slot, usize) -> Arc<AccountStorageEntry>, T: GetHash>(
         &self,
         slot: Slot,
-        hashes: &[&Hash],
+        hashes: &[T],
         mut storage_finder: F,
         accounts_and_meta_to_store: &[(StoredMeta, &AccountSharedData)],
     ) -> Vec<AccountInfo> {
@@ -3650,11 +3673,11 @@ impl AccountsDb {
                 // will be able to find the account in storage
                 let flushed_store =
                     self.create_and_insert_store(slot, aligned_total_size, "flush_slot_cache");
-                let hashes_refs = hashes.iter().collect::<Vec<_>>();
+                //let hashes_refs = hashes.iter().collect::<Vec<_>>();
                 self.store_accounts_frozen(
                     slot,
                     &accounts,
-                    Some(&hashes_refs),
+                    Some(&hashes),
                     Some(Box::new(move |_, _| flushed_store.clone())),
                     None,
                 );
@@ -3689,10 +3712,10 @@ impl AccountsDb {
         }
     }
 
-    fn write_accounts_to_cache(
+    fn write_accounts_to_cache<T: GetHash>(
         &self,
         slot: Slot,
-        hashes: Option<&[&Hash]>,
+        hashes: Option<&[T]>,
         accounts_and_meta_to_store: &[(StoredMeta, &AccountSharedData)],
     ) -> Vec<AccountInfo> {
         let len = accounts_and_meta_to_store.len();
@@ -3730,11 +3753,12 @@ impl AccountsDb {
     fn store_accounts_to<
         F: FnMut(Slot, usize) -> Arc<AccountStorageEntry>,
         P: Iterator<Item = u64>,
+        T: GetHash,
     >(
         &self,
         slot: Slot,
         accounts: &[(&Pubkey, &AccountSharedData)],
-        hashes: Option<&[&Hash]>,
+        hashes: Option<&[T]>,
         storage_finder: F,
         mut write_version_producer: P,
         is_cached_store: bool,
@@ -3774,13 +3798,12 @@ impl AccountsDb {
                     let mut hash_time = Measure::start("hash_accounts");
                     let mut stats = BankHashStats::default();
                     let len = accounts_and_meta_to_store.len();
-                    let mut hashes_store = Vec::with_capacity(len);
+                    let mut hashes = Vec::with_capacity(len);
                     for account in accounts {
                         stats.update(account.1);
                         let hash = Self::hash_account(slot, account.1, account.0);
-                        hashes_store.push(hash);
+                        hashes.push(hash);
                     }
-                    let hashes_refs = hashes_store.iter().collect::<Vec<_>>();
                     hash_time.stop();
                     self.stats
                         .store_hash_accounts
@@ -3788,7 +3811,7 @@ impl AccountsDb {
 
                     self.write_accounts_to_storage(
                         slot,
-                        &hashes_refs,
+                        &hashes,
                         storage_finder,
                         &accounts_and_meta_to_store,
                     )
@@ -4698,11 +4721,11 @@ impl AccountsDb {
         );
     }
 
-    fn store_accounts_frozen<'a>(
+    fn store_accounts_frozen<'a, T: GetHash>(
         &'a self,
         slot: Slot,
         accounts: &[(&Pubkey, &AccountSharedData)],
-        hashes: Option<&[&Hash]>,
+        hashes: Option<&[T]>,
         storage_finder: Option<StorageFinder<'a>>,
         write_version_producer: Option<Box<dyn Iterator<Item = u64>>>,
     ) -> StoreAccountsTiming {
@@ -4722,11 +4745,11 @@ impl AccountsDb {
         )
     }
 
-    fn store_accounts_custom<'a>(
+    fn store_accounts_custom<'a, T: GetHash>(
         &'a self,
         slot: Slot,
         accounts: &[(&Pubkey, &AccountSharedData)],
-        hashes: Option<&[&Hash]>,
+        hashes: Option<&[T]>,
         storage_finder: Option<StorageFinder<'a>>,
         write_version_producer: Option<Box<dyn Iterator<Item = u64>>>,
         is_cached_store: bool,

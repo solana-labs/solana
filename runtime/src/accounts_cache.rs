@@ -1,3 +1,4 @@
+use crate::accounts_db::GetHash;
 use dashmap::DashMap;
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount},
@@ -47,11 +48,11 @@ impl SlotCacheInner {
         );
     }
 
-    pub fn insert(
+    pub fn insert<T: GetHash>(
         &self,
         pubkey: &Pubkey,
         account: AccountSharedData,
-        hash: Option<&Hash>,
+        hash: Option<T>,
         slot: Slot,
     ) -> CachedAccount {
         if self.cache.contains_key(pubkey) {
@@ -64,7 +65,7 @@ impl SlotCacheInner {
         }
         let item = Arc::new(CachedAccountInner {
             account,
-            hash: RwLock::new(hash.copied()),
+            hash: RwLock::new(hash.map(|h| h.get_hash_value())),
             slot,
             pubkey: *pubkey,
         });
@@ -164,12 +165,12 @@ impl AccountsCache {
         );
     }
 
-    pub fn store(
+    pub fn store<T: GetHash>(
         &self,
         slot: Slot,
         pubkey: &Pubkey,
         account: AccountSharedData,
-        hash: Option<&Hash>,
+        hash: Option<T>,
     ) -> CachedAccount {
         let slot_cache = self.slot_cache(slot).unwrap_or_else(||
             // DashMap entry.or_insert() returns a RefMut, essentially a write lock,
