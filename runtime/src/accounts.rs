@@ -1405,32 +1405,32 @@ mod tests {
 
         let mut account = AccountSharedData::new(40, 1, &Pubkey::default());
         account.executable = true;
-        account.owner = native_loader::id();
+        account.set_owner(native_loader::id());
         accounts.push((key1, account));
 
         let mut account = AccountSharedData::new(41, 1, &Pubkey::default());
         account.executable = true;
-        account.owner = key1;
+        account.set_owner(key1);
         accounts.push((key2, account));
 
         let mut account = AccountSharedData::new(42, 1, &Pubkey::default());
         account.executable = true;
-        account.owner = key2;
+        account.set_owner(key2);
         accounts.push((key3, account));
 
         let mut account = AccountSharedData::new(43, 1, &Pubkey::default());
         account.executable = true;
-        account.owner = key3;
+        account.set_owner(key3);
         accounts.push((key4, account));
 
         let mut account = AccountSharedData::new(44, 1, &Pubkey::default());
         account.executable = true;
-        account.owner = key4;
+        account.set_owner(key4);
         accounts.push((key5, account));
 
         let mut account = AccountSharedData::new(45, 1, &Pubkey::default());
         account.executable = true;
-        account.owner = key5;
+        account.set_owner(key5);
         accounts.push((key6, account));
 
         let instructions = vec![CompiledInstruction::new(1, &(), vec![0])];
@@ -1573,13 +1573,13 @@ mod tests {
         let mut account = AccountSharedData::new(40, 1, &Pubkey::default());
         account.executable = true;
         account.rent_epoch = 1;
-        account.owner = native_loader::id();
+        account.set_owner(native_loader::id());
         accounts.push((key1, account));
 
         let mut account = AccountSharedData::new(41, 1, &Pubkey::default());
         account.executable = true;
         account.rent_epoch = 1;
-        account.owner = key1;
+        account.set_owner(key1);
         accounts.push((key2, account));
 
         let instructions = vec![
