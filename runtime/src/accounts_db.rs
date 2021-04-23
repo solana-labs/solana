@@ -1464,39 +1464,42 @@ impl AccountsDb {
         }
     }
 
-    fn collect_uncleaned_pubkeys_to_slot(&self, max_slot: Slot) -> (Vec<Vec<Pubkey>>, Slot) {
-        let mut max_slot_in_uncleaned_pubkeys = 0;
-        let slots: Vec<Slot> = self
-            .uncleaned_pubkeys
+    /// Collect all the uncleaned slots, up to a max slot
+    ///
+    /// Search through the uncleaned Pubkeys and return all the slots, up to a maximum slot.
+    fn collect_uncleaned_slots_up_to_slot(&self, max_slot: Slot) -> Vec<Slot> {
+        self.uncleaned_pubkeys
             .iter()
             .filter_map(|entry| {
-                let slot = entry.key();
-                max_slot_in_uncleaned_pubkeys = max_slot_in_uncleaned_pubkeys.max(*slot);
-                if *slot <= max_slot {
-                    Some(*slot)
-                } else {
-                    None
-                }
+                let slot = *entry.key();
+                (slot <= max_slot).then(|| slot)
             })
-            .collect();
-        (
-            slots
-                .into_iter()
-                .filter_map(|slot| {
-                    let maybe_slot_keys = self.uncleaned_pubkeys.remove(&slot);
-                    if self.accounts_index.is_root(slot) {
-                        // Safe to unwrap on rooted slots since this is called from clean_accounts
-                        // and only clean_accounts operates on rooted slots. purge_slots only
-                        // operates on uncleaned_pubkeys
-                        let (_slot, keys) = maybe_slot_keys.expect("Root slot should exist");
-                        Some(keys)
-                    } else {
-                        None
-                    }
-                })
-                .collect(),
-            max_slot_in_uncleaned_pubkeys,
-        )
+            .collect()
+    }
+
+    /// Remove `slots` from `uncleaned_pubkeys` and collect all pubkeys
+    ///
+    /// For each slot in the list of slots, remove it from the `uncleaned_pubkeys` Map and collect
+    /// all the pubkeys to return.
+    fn remove_uncleaned_slots_and_collect_pubkeys(&self, slots: Vec<Slot>) -> Vec<Vec<Pubkey>> {
+        slots
+            .iter()
+            .filter_map(|slot| {
+                self.uncleaned_pubkeys
+                    .remove(&slot)
+                    .map(|(_slot, pubkeys)| pubkeys)
+            })
+            .collect()
+    }
+
+    /// Remove uncleaned slots, up to a maximum slot, and return the collected pubkeys
+    ///
+    fn remove_uncleaned_slots_and_collect_pubkeys_up_to_slot(
+        &self,
+        max_slot: Slot,
+    ) -> Vec<Vec<Pubkey>> {
+        let slots = self.collect_uncleaned_slots_up_to_slot(max_slot);
+        self.remove_uncleaned_slots_and_collect_pubkeys(slots)
     }
 
     // Construct a vec of pubkeys for cleaning from:
@@ -1515,7 +1518,7 @@ impl AccountsDb {
 
         let mut collect_delta_keys = Measure::start("key_create");
         let max_slot = max_clean_root.unwrap_or_else(|| self.accounts_index.max_root());
-        let (delta_keys, _max_slot) = self.collect_uncleaned_pubkeys_to_slot(max_slot);
+        let delta_keys = self.remove_uncleaned_slots_and_collect_pubkeys_up_to_slot(max_slot);
         collect_delta_keys.stop();
         timings.collect_delta_keys_us += collect_delta_keys.as_us();
 
