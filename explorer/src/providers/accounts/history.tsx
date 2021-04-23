@@ -130,9 +130,9 @@ async function fetchAccountHistory(
   options: {
     before?: TransactionSignature;
     limit: number;
-    additionalSignatures?: string[];
   },
-  fetchTransactions?: boolean
+  fetchTransactions?: boolean,
+  additionalSignatures?: string[]
 ) {
   dispatch({
     type: ActionType.Update,
@@ -166,7 +166,7 @@ async function fetchAccountHistory(
     try {
       const signatures = history.fetched
         .map((signature) => signature.signature)
-        .concat(options.additionalSignatures || []);
+        .concat(additionalSignatures || []);
       transactionMap = await fetchParsedTransactions(url, signatures);
     } catch (error) {
       if (cluster !== Cluster.Custom) {
@@ -256,9 +256,9 @@ export function useFetchAccountHistory() {
           {
             before: oldest,
             limit: 25,
-            additionalSignatures,
           },
-          fetchTransactions
+          fetchTransactions,
+          additionalSignatures
         );
       } else {
         fetchAccountHistory(
