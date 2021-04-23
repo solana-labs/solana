@@ -7,7 +7,11 @@ use chrono::{
     serde::ts_seconds,
 };
 use serde_derive::{Deserialize, Serialize};
-use solana_sdk::{account::AccountSharedData, instruction::InstructionError, pubkey::Pubkey};
+use solana_sdk::{
+    account::{AccountSharedData, WritableAccount},
+    instruction::InstructionError,
+    pubkey::Pubkey,
+};
 use std::cmp::min;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -85,14 +89,15 @@ impl VestState {
         contract_account: &mut AccountSharedData,
         current_date: Date<Utc>,
         payee_account: &mut AccountSharedData,
-    ) {
+    ) -> Result<(), InstructionError> {
         let vested_lamports = self.calc_vested_lamports(current_date);
         let redeemable_lamports = vested_lamports.saturating_sub(self.redeemed_lamports);
 
         contract_account.lamports -= redeemable_lamports;
-        payee_account.lamports += redeemable_lamports;
+        payee_account.checked_add_lamports(redeemable_lamports)?;
 
         self.redeemed_lamports += redeemable_lamports;
+        Ok(())
     }
 
     /// Renege on the given number of tokens and send them to the given payee.
@@ -101,12 +106,13 @@ impl VestState {
         contract_account: &mut AccountSharedData,
         payee_account: &mut AccountSharedData,
         lamports: u64,
-    ) {
+    ) -> Result<(), InstructionError> {
         let reneged_lamports = min(contract_account.lamports, lamports);
-        payee_account.lamports += reneged_lamports;
+        payee_account.checked_add_lamports(reneged_lamports)?;
         contract_account.lamports -= reneged_lamports;
 
         self.reneged_lamports += reneged_lamports;
+        Ok(())
     }
 
     /// Mark this contract as fully vested, regardless of the date.
@@ -158,7 +164,9 @@ mod test {
         assert_eq!(vest_state.calc_vested_lamports(current_date), 1);
 
         // Verify vesting schedule is calculated with original amount.
-        vest_state.renege(&mut contract_account, &mut payee_account, 1);
+        vest_state
+            .renege(&mut contract_account, &mut payee_account, 1)
+            .unwrap();
         assert_eq!(vest_state.calc_vested_lamports(current_date), 1);
         assert_eq!(vest_state.reneged_lamports, 1);
 

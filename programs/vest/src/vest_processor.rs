@@ -118,7 +118,7 @@ pub fn process_instruction(
                 keyed_account_at_index(keyed_accounts, 2)?,
                 &vest_state.payee_pubkey,
             )?;
-            vest_state.redeem_tokens(contract_account, current_date, &mut payee_account);
+            vest_state.redeem_tokens(contract_account, current_date, &mut payee_account)?;
         }
         VestInstruction::Terminate | VestInstruction::Renege(_) => {
             let lamports = if let VestInstruction::Renege(lamports) = instruction {
@@ -136,7 +136,7 @@ pub fn process_instruction(
             } else {
                 terminator_account
             };
-            vest_state.renege(contract_account, &mut payee_account, lamports);
+            vest_state.renege(contract_account, &mut payee_account, lamports)?;
         }
         VestInstruction::VestAll => {
             verify_signed_account(
