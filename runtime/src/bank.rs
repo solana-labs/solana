@@ -4019,7 +4019,7 @@ impl Bank {
         self.store_account(pubkey, new_account);
     }
 
-    pub fn withdraw(&self, pubkey: &Pubkey, lamports: u64) -> Result<()> {
+    fn withdraw(&self, pubkey: &Pubkey, lamports: u64) -> Result<()> {
         match self.get_account_with_fixed_root(pubkey) {
             Some(mut account) => {
                 let min_balance = match get_system_account_kind(&account) {
@@ -4029,9 +4029,11 @@ impl Bank {
                         .minimum_balance(nonce::State::size()),
                     _ => 0,
                 };
-                if lamports + min_balance > account.lamports() {
-                    return Err(TransactionError::InsufficientFundsForFee);
-                }
+
+                lamports
+                    .checked_add(min_balance)
+                    .filter(|required_balance| *required_balance <= account.lamports())
+                    .ok_or(TransactionError::InsufficientFundsForFee)?;
 
                 account.lamports -= lamports;
                 self.store_account(pubkey, &account);
