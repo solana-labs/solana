@@ -5,9 +5,13 @@ use log::*;
 use prost::Message;
 pub use rocksdb::Direction as IteratorDirection;
 use rocksdb::{
-    self, ColumnFamily, ColumnFamilyDescriptor, CompactionDecision, DBIterator, DBRawIterator,
+    self,
+    compaction_filter::CompactionFilter,
+    compaction_filter_factory::{CompactionFilterContext, CompactionFilterFactory},
+    ColumnFamily, ColumnFamilyDescriptor, CompactionDecision, DBIterator, DBRawIterator,
     DBRecoveryMode, IteratorMode as RocksIteratorMode, Options, WriteBatch as RWriteBatch, DB,
 };
+
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use solana_runtime::hardened_unpack::UnpackError;
@@ -19,6 +23,7 @@ use solana_sdk::{
 use solana_storage_proto::convert::generated;
 use std::{
     collections::HashMap,
+    ffi::{CStr, CString},
     fs,
     marker::PhantomData,
     path::Path,
@@ -950,9 +955,7 @@ impl Database {
     }
 
     pub fn set_oldest_slot(&self, oldest_slot: Slot) {
-        self.backend
-            .2
-            .store(oldest_slot, std::sync::atomic::Ordering::Relaxed);
+        self.backend.2.store(oldest_slot, Ordering::Relaxed);
     }
 }
 
@@ -1131,12 +1134,6 @@ impl<'a> WriteBatch<'a> {
     }
 }
 
-use rocksdb::compaction_filter::CompactionFilter;
-use rocksdb::compaction_filter_factory::CompactionFilterContext;
-use rocksdb::compaction_filter_factory::CompactionFilterFactory;
-use std::ffi::CStr;
-use std::ffi::CString;
-
 struct PurgedSlotFilter<C: Column + ColumnName>(Slot, CString, PhantomData<C>);
 
 impl<C: Column + ColumnName> CompactionFilter for PurgedSlotFilter<C> {
@@ -1162,6 +1159,8 @@ impl<C: Column + ColumnName> CompactionFilterFactory for PurgedSlotFilterFactory
     type Filter = PurgedSlotFilter<C>;
 
     fn create(&mut self, _context: CompactionFilterContext) -> Self::Filter {
+        // copy from the AtomicU64 so that the oldest_slot can not mutate across single run of
+        // compaction for simpler reasoning although this isn't strict requirement at the moment
         let oldest_slot = self.0.load(Ordering::Relaxed);
         PurgedSlotFilter::<C>(
             oldest_slot,
@@ -1192,6 +1191,7 @@ fn get_cf_options<C: 'static + Column + ColumnName>(
     options.set_level_zero_file_num_compaction_trigger(file_num_compaction_trigger as i32);
     options.set_max_bytes_for_level_base(total_size_base);
     options.set_target_file_size_base(file_size_base);
+
     if C::NAME != columns::TransactionStatusIndex::NAME {
         options.set_compaction_filter_factory(PurgedSlotFilterFactory::<C>(
             oldest_slot.clone(),
@@ -1199,6 +1199,7 @@ fn get_cf_options<C: 'static + Column + ColumnName>(
             PhantomData::default(),
         ));
     }
+
     if matches!(access_type, AccessType::PrimaryOnlyForMaintenance) {
         options.set_disable_auto_compactions(true);
     }
