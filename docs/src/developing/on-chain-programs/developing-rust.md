@@ -30,8 +30,7 @@ Solana Rust programs may depend directly on each other in order to gain access
 to instruction helpers when making [cross-program
 invocations](developing/../../programming-model/calling-between-programs.md#cross-program-invocations).
 When doing so it's important to not pull in the dependent program's entrypoint
-symbols because they may conflict with the program's own.  To avoid this
-,programs should define an `exclude_entrypoint` feature in `Cargo.toml` and use
+symbols because they may conflict with the program's own.  To avoid this, programs should define an `exclude_entrypoint` feature in `Cargo.toml` and use
 to exclude the entrypoint.
 
 - [Define the
