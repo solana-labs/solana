@@ -179,6 +179,10 @@ pub mod check_duplicates_by_hash {
     solana_sdk::declare_id!("8ZqTSYHgzyaYCcXJPMViRy6afCFSgNvYooPDeVdyj5GC");
 }
 
+pub mod require_stake_for_gossip {
+    solana_sdk::declare_id!("6oNzd5Z3M2L1xo4Q5hoox7CR2DuW7m1ETLWH5jHJthwa");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -224,6 +228,7 @@ lazy_static! {
         (cpi_data_cost::id(), "charge the compute budget for data passed via CPI"),
         (upgradeable_close_instruction::id(), "close upgradeable buffer accounts"),
         (check_duplicates_by_hash::id(), "use transaction message hash for duplicate check"),
+        (require_stake_for_gossip::id(), "require stakes for propagating crds values through gossip #15561"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

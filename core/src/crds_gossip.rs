@@ -106,10 +106,9 @@ impl CrdsGossip {
         &mut self,
         pending_push_messages: Vec<(CrdsValue, u64)>,
         now: u64,
-    ) -> (Pubkey, HashMap<Pubkey, Vec<CrdsValue>>) {
+    ) -> HashMap<Pubkey, Vec<CrdsValue>> {
         self.process_push_messages(pending_push_messages);
-        let push_messages = self.push.new_push_messages(&self.crds, now);
-        (self.id, push_messages)
+        self.push.new_push_messages(&self.crds, now)
     }
 
     pub(crate) fn push_duplicate_shred(
