@@ -22,8 +22,8 @@ use crate::{
     accounts_cache::{AccountsCache, CachedAccount, SlotCache},
     accounts_hash::{AccountsHash, CalculateHashIntermediate, HashStats, PreviousPass},
     accounts_index::{
-        AccountIndex, AccountsIndex, AccountsIndexRootsStats, Ancestors, IndexKey, IsCached,
-        SlotList, SlotSlice, ZeroLamport,
+        AccountIndex, AccountIndexGetResult, AccountsIndex, AccountsIndexRootsStats, Ancestors,
+        IndexKey, IsCached, SlotList, SlotSlice, ZeroLamport,
     },
     append_vec::{AppendVec, StoredAccountMeta, StoredMeta},
     contains::Contains,
@@ -1559,48 +1559,49 @@ impl AccountsDb {
                         let mut purges_in_root = Vec::new();
                         let mut purges = HashMap::new();
                         for pubkey in pubkeys {
-                            if let Some((locked_entry, index)) =
-                                self.accounts_index.get(pubkey, None, max_clean_root)
-                            {
-                                let slot_list = locked_entry.slot_list();
-                                let (slot, account_info) = &slot_list[index];
-                                if account_info.lamports == 0 {
-                                    purges.insert(
-                                        *pubkey,
-                                        self.accounts_index
-                                            .roots_and_ref_count(&locked_entry, max_clean_root),
-                                    );
-                                } else {
-                                    // prune zero_lamport_pubkey set which should contain all 0-lamport
-                                    // keys whether rooted or not. A 0-lamport update may become rooted
-                                    // in the future.
-                                    let has_zero_lamport_accounts = slot_list
-                                        .iter()
-                                        .any(|(_slot, account_info)| account_info.lamports == 0);
-                                    if !has_zero_lamport_accounts {
-                                        self.accounts_index.remove_zero_lamport_key(pubkey);
+                            match self.accounts_index.get(pubkey, None, max_clean_root) {
+                                AccountIndexGetResult::Found(locked_entry, index) => {
+                                    let slot_list = locked_entry.slot_list();
+                                    let (slot, account_info) = &slot_list[index];
+                                    if account_info.lamports == 0 {
+                                        purges.insert(
+                                            *pubkey,
+                                            self.accounts_index
+                                                .roots_and_ref_count(&locked_entry, max_clean_root),
+                                        );
+                                    } else {
+                                        // prune zero_lamport_pubkey set which should contain all 0-lamport
+                                        // keys whether rooted or not. A 0-lamport update may become rooted
+                                        // in the future.
+                                        if !slot_list
+                                            .iter()
+                                            .any(|(_slot, account_info)| account_info.lamports == 0)
+                                        {
+                                            self.accounts_index.remove_zero_lamport_key(pubkey);
+                                        }
+                                    }
+                                    // Release the lock
+                                    let slot = *slot;
+                                    drop(locked_entry);
+
+                                    if self.accounts_index.is_uncleaned_root(slot) {
+                                        // Assertion enforced by `accounts_index.get()`, the latest slot
+                                        // will not be greater than the given `max_clean_root`
+                                        if let Some(max_clean_root) = max_clean_root {
+                                            assert!(slot <= max_clean_root);
+                                        }
+                                        purges_in_root.push(*pubkey);
                                     }
                                 }
-
-                                // Release the lock
-                                let slot = *slot;
-                                drop(locked_entry);
-
-                                if self.accounts_index.is_uncleaned_root(slot) {
-                                    // Assertion enforced by `accounts_index.get()`, the latest slot
-                                    // will not be greater than the given `max_clean_root`
-                                    if let Some(max_clean_root) = max_clean_root {
-                                        assert!(slot <= max_clean_root);
-                                    }
-                                    purges_in_root.push(*pubkey);
+                                AccountIndexGetResult::NotFoundOnFork => {
+                                    // do nothing - pubkey is in index, but not found in a root slot
                                 }
-                            } else {
-                                let r_accounts_index =
-                                    self.accounts_index.account_maps.read().unwrap();
-                                if !r_accounts_index.contains_key(pubkey) {
+                                AccountIndexGetResult::Missing(lock) => {
+                                    // pubkey is missing from index, so remove from zero_lamports_list
                                     self.accounts_index.remove_zero_lamport_key(pubkey);
+                                    drop(lock);
                                 }
-                            }
+                            };
                         }
                         (purges, purges_in_root)
                     })
@@ -2334,8 +2335,16 @@ impl AccountsDb {
         max_root: Option<Slot>,
         clone_in_lock: bool,
     ) -> Option<(Slot, AppendVecId, usize, Option<LoadedAccountAccessor<'a>>)> {
-        let (lock, index) = self.accounts_index.get(pubkey, Some(ancestors), max_root)?;
-        // Notice the subtle `?` at previous line, we bail out pretty early for missing.
+        let (lock, index) = match self.accounts_index.get(pubkey, Some(ancestors), max_root) {
+            AccountIndexGetResult::Found(lock, index) => (lock, index),
+            // we bail out pretty early for missing.
+            AccountIndexGetResult::NotFoundOnFork => {
+                return None;
+            }
+            AccountIndexGetResult::Missing(_) => {
+                return None;
+            }
+        };
 
         let slot_list = lock.slot_list();
         let (
@@ -3883,7 +3892,7 @@ impl AccountsDb {
                         let result: Vec<Hash> = pubkeys
                             .iter()
                             .filter_map(|pubkey| {
-                                if let Some((lock, index)) =
+                                if let AccountIndexGetResult::Found(lock, index) =
                                     self.accounts_index.get(pubkey, Some(ancestors), Some(slot))
                                 {
                                     let (slot, account_info) = &lock.slot_list()[index];
