@@ -988,7 +988,7 @@ impl LatestAccountsIndexRootsStats {
                 i64
             ),
             (
-                "roots_range",
+                "roots_range_width",
                 self.roots_range.load(Ordering::Relaxed) as i64,
                 i64
             ),

@@ -224,7 +224,7 @@ impl RollingBitField {
         );
     }
 
-    pub fn range_loose(&self) -> u64 {
+    pub fn range_width(&self) -> u64 {
         // note that max isn't updated on remove, so it can be above the current max
         self.max - self.min
     }
@@ -1242,7 +1242,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
                     w_roots_tracker.roots.len(),
                     w_roots_tracker.uncleaned_roots.len(),
                     w_roots_tracker.previous_uncleaned_roots.len(),
-                    w_roots_tracker.roots.range_loose(),
+                    w_roots_tracker.roots.range_width(),
                 )
             };
             Some(AccountsIndexRootsStats {
@@ -1582,7 +1582,7 @@ pub mod tests {
             assert!(hashset.contains(&item));
         }
         assert!(
-            bitfield.range_loose()
+            bitfield.range_width()
                 >= if bitfield.is_empty() {
                     0
                 } else {
