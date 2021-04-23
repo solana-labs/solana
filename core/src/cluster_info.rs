@@ -1475,6 +1475,7 @@ impl ClusterInfo {
                     .build_crds_filters(thread_pool, &gossip.crds, MAX_BLOOM_SIZE)
             }
         };
+        self.stats.pull_from_entrypoint_count.add_relaxed(1);
         pulls.push((entrypoint, filters));
     }
 
