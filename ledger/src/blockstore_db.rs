@@ -407,6 +407,43 @@ impl Rocks {
                     continue;
                 }
 
+                // This is the crux of our write-stall-free storage cleaning strategy with consistent
+                // state view for higher-layers
+                //
+                // For the consistent view, we commit delete_range on older slot range by LedgerCleanupService.
+                // simple story here.
+                //
+                // For storage cleaning, we employ RocksDB compaction. But default RocksDB compaction settings
+                // don't work well for us. That's because we're using it rather like a really big (100 GBs)
+                // ring-buffer. RocksDB is basically assuming uniform data write over the key space for
+                // efficient compaction, which isn't true for our use as a ring buffer.
+                //
+                // So, we customize the compaction strategy with 2 combined tweaks:
+                // (1) compaction_filter and (2) shortening its periodic cycles.
+                //
+                // Via the compaction_filter, we finally reclaim previously delete_range()-ed storage occupied
+                // by older slots. When compaction_filter is set, each SST files are re-compacted periodically
+                // to hunt for keys newly expired by the compaction_filter re-evaluation. But RocksDb's default
+                // `periodic_compaction_seconds` is 30 days, which is too long for our case. So, we
+                // shorten it to a day (24 hours).
+                //
+                // As we write newer SST files over time at rather consistent rate of speed, this
+                // effectively makes individual ssts be re-compacted for the filter at well
+                // dispersed different timings.
+                // Overall, we rewrite the whole dataset at every PERIODIC_COMPACTION_SECONDS,
+                // slowly over the duration of PERIODIC_COMPACTION_SECONDS. So, this results in
+                // amortization.
+                // So, there is a bit inefficiency here because we'll rewrite not-so-old SST files
+                // too. But longer period would introduce higher variance of ledger storage sizes over
+                // the long period. And it's much better than the daily IO spike caused by compact_range() by
+                // previous implementation.
+                //
+                // `ttl` and `compact_range`(`ManualCompaction`), doesn't work nicely. That's
+                // because its original intention is delete_range()s to reclaim disk space. So it tries to merge
+                // them with N+1 SST files all way down to the bottommost SSTs, often leading to vastly large amount
+                // (= all) of invalidated SST files, when combined with newer writes happening at the opposite
+                // edge of the key space. This causes a long and heavy disk IOs and possible write
+                // stall and ultimately, the deadly Replay/Banking stage stall at higher layers.
                 db.0.set_options_cf(
                     db.cf_handle(cf_name),
                     &[(
