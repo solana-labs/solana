@@ -1,7 +1,6 @@
 //! Persistent storage for accounts. For more information, see:
 //! https://docs.solana.com/implemented-proposals/persistent-account-storage
 
-use crate::accounts_db::GetHash;
 use log::*;
 use memmap2::MmapMut;
 use serde::{Deserialize, Serialize};
@@ -12,6 +11,7 @@ use solana_sdk::{
     pubkey::Pubkey,
 };
 use std::{
+    borrow::Borrow,
     fs::{remove_file, OpenOptions},
     io,
     io::{Seek, SeekFrom, Write},
@@ -451,10 +451,10 @@ impl AppendVec {
     /// Return the starting offset of each account metadata.
     /// After each account is appended, the internal `current_len` is updated
     /// and will be available to other threads.
-    pub fn append_accounts<T: GetHash>(
+    pub fn append_accounts(
         &self,
         accounts: &[(StoredMeta, &AccountSharedData)],
-        hashes: &[T],
+        hashes: &[impl Borrow<Hash>],
     ) -> Vec<usize> {
         let _lock = self.append_lock.lock().unwrap();
         let mut offset = self.len();
@@ -465,7 +465,7 @@ impl AppendVec {
             let account_meta_ptr = &account_meta as *const AccountMeta;
             let data_len = stored_meta.data_len as usize;
             let data_ptr = account.data().as_ptr();
-            let hash_ptr = hash.get_hash().as_ref().as_ptr();
+            let hash_ptr = hash.borrow().as_ref().as_ptr();
             let ptrs = [
                 (meta_ptr as *const u8, mem::size_of::<StoredMeta>()),
                 (account_meta_ptr as *const u8, mem::size_of::<AccountMeta>()),

@@ -51,7 +51,7 @@ use solana_sdk::{
 };
 use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::{
-    borrow::Cow,
+    borrow::{Borrow, Cow},
     boxed::Box,
     collections::{hash_map::Entry, BTreeMap, BTreeSet, HashMap, HashSet},
     convert::TryFrom,
@@ -131,29 +131,6 @@ pub struct ErrorCounters {
     pub invalid_account_index: usize,
     pub invalid_program_for_execution: usize,
     pub not_allowed_during_cluster_maintenance: usize,
-}
-
-pub trait GetHash: Copy {
-    fn get_hash(&self) -> &Hash;
-    fn get_hash_value(self) -> Hash;
-}
-
-impl GetHash for Hash {
-    fn get_hash(&self) -> &Hash {
-        &self
-    }
-    fn get_hash_value(self) -> Hash {
-        self
-    }
-}
-
-impl GetHash for &Hash {
-    fn get_hash(&self) -> &Hash {
-        &self
-    }
-    fn get_hash_value(self) -> Hash {
-        *self
-    }
 }
 
 #[derive(Default, Debug, PartialEq, Clone)]
@@ -3328,10 +3305,10 @@ impl AccountsDb {
             .fetch_add(count as u64, Ordering::Relaxed)
     }
 
-    fn write_accounts_to_storage<F: FnMut(Slot, usize) -> Arc<AccountStorageEntry>, T: GetHash>(
+    fn write_accounts_to_storage<F: FnMut(Slot, usize) -> Arc<AccountStorageEntry>>(
         &self,
         slot: Slot,
-        hashes: &[T],
+        hashes: &[impl Borrow<Hash>],
         mut storage_finder: F,
         accounts_and_meta_to_store: &[(StoredMeta, &AccountSharedData)],
     ) -> Vec<AccountInfo> {
@@ -3712,10 +3689,10 @@ impl AccountsDb {
         }
     }
 
-    fn write_accounts_to_cache<T: GetHash>(
+    fn write_accounts_to_cache(
         &self,
         slot: Slot,
-        hashes: Option<&[T]>,
+        hashes: Option<&[impl Borrow<Hash>]>,
         accounts_and_meta_to_store: &[(StoredMeta, &AccountSharedData)],
     ) -> Vec<AccountInfo> {
         let len = accounts_and_meta_to_store.len();
@@ -3728,7 +3705,7 @@ impl AccountsDb {
             .iter()
             .enumerate()
             .map(|(i, (meta, account))| {
-                let hash = hashes.map(|hashes| hashes[i]);
+                let hash = hashes.map(|hashes| hashes[i].borrow());
                 let cached_account =
                     self.accounts_cache
                         .store(slot, &meta.pubkey, (*account).clone(), hash);
@@ -3753,12 +3730,11 @@ impl AccountsDb {
     fn store_accounts_to<
         F: FnMut(Slot, usize) -> Arc<AccountStorageEntry>,
         P: Iterator<Item = u64>,
-        T: GetHash,
     >(
         &self,
         slot: Slot,
         accounts: &[(&Pubkey, &AccountSharedData)],
-        hashes: Option<&[T]>,
+        hashes: Option<&[impl Borrow<Hash>]>,
         storage_finder: F,
         mut write_version_producer: P,
         is_cached_store: bool,
@@ -4721,11 +4697,11 @@ impl AccountsDb {
         );
     }
 
-    fn store_accounts_frozen<'a, T: GetHash>(
+    fn store_accounts_frozen<'a>(
         &'a self,
         slot: Slot,
         accounts: &[(&Pubkey, &AccountSharedData)],
-        hashes: Option<&[T]>,
+        hashes: Option<&[impl Borrow<Hash>]>,
         storage_finder: Option<StorageFinder<'a>>,
         write_version_producer: Option<Box<dyn Iterator<Item = u64>>>,
     ) -> StoreAccountsTiming {
@@ -4745,11 +4721,11 @@ impl AccountsDb {
         )
     }
 
-    fn store_accounts_custom<'a, T: GetHash>(
+    fn store_accounts_custom<'a>(
         &'a self,
         slot: Slot,
         accounts: &[(&Pubkey, &AccountSharedData)],
-        hashes: Option<&[T]>,
+        hashes: Option<&[impl Borrow<Hash>]>,
         storage_finder: Option<StorageFinder<'a>>,
         write_version_producer: Option<Box<dyn Iterator<Item = u64>>>,
         is_cached_store: bool,
