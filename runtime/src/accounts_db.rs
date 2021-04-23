@@ -10088,6 +10088,7 @@ pub mod tests {
     }
 
     #[test]
+    #[ignore]
     #[should_panic(
         expected = "Bad index entry detected (CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3, 1, 0, 0, Unspecified)"
     )]
