@@ -457,7 +457,7 @@ impl ReplayStage {
 
                     let mut compute_bank_stats_time = Measure::start("compute_bank_stats");
                     let newly_computed_slot_stats = Self::compute_bank_stats(
-                        &my_pubkey,
+                        &vote_account,
                         &ancestors,
                         &mut frozen_banks,
                         &tower,

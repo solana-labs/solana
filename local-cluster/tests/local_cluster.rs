@@ -1634,6 +1634,7 @@ fn test_fail_entry_verification_leader() {
 
 #[test]
 #[allow(unused_attributes)]
+#[ignore]
 fn test_fake_shreds_broadcast_leader() {
     test_faulty_node(BroadcastStageType::BroadcastFakeShreds);
 }
