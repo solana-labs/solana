@@ -408,7 +408,7 @@ mod test {
                     &MockInvokeContext::new(vec![]),
                 )
                 .unwrap();
-            let pubkey = nonce_account.account.borrow().owner;
+            let pubkey = *nonce_account.account.borrow().owner();
             let nonce_account = KeyedAccount::new(&pubkey, false, nonce_account.account);
             let state = AccountUtilsState::<Versions>::state(&nonce_account)
                 .unwrap()

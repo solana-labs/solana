@@ -10910,7 +10910,7 @@ pub(crate) mod tests {
             bank.get_balance(&inline_spl_token_v2_0::native_mint::id()),
             4200000000
         );
-        assert_eq!(native_mint_account.owner, inline_spl_token_v2_0::id());
+        assert_eq!(native_mint_account.owner(), &inline_spl_token_v2_0::id());
     }
 
     #[test]
