@@ -950,6 +950,7 @@ struct LatestAccountsIndexRootsStats {
     roots_len: AtomicUsize,
     uncleaned_roots_len: AtomicUsize,
     previous_uncleaned_roots_len: AtomicUsize,
+    roots_range: AtomicU64,
 }
 
 impl LatestAccountsIndexRootsStats {
@@ -964,6 +965,8 @@ impl LatestAccountsIndexRootsStats {
             accounts_index_roots_stats.previous_uncleaned_roots_len,
             Ordering::Relaxed,
         );
+        self.roots_range
+            .store(accounts_index_roots_stats.roots_range, Ordering::Relaxed);
     }
 
     fn report(&self) {
@@ -982,6 +985,11 @@ impl LatestAccountsIndexRootsStats {
             (
                 "previous_uncleaned_roots_len",
                 self.previous_uncleaned_roots_len.load(Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "roots_range_width",
+                self.roots_range.load(Ordering::Relaxed) as i64,
                 i64
             ),
         );

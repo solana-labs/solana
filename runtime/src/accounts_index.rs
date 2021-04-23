@@ -224,6 +224,11 @@ impl RollingBitField {
         );
     }
 
+    pub fn range_width(&self) -> u64 {
+        // note that max isn't updated on remove, so it can be above the current max
+        self.max - self.min
+    }
+
     pub fn insert(&mut self, key: u64) {
         self.check_range(key);
         let address = self.get_address(&key);
@@ -254,14 +259,19 @@ impl RollingBitField {
 
     // after removing 'key' where 'key' = min, make min the correct new min value
     fn purge(&mut self, key: &u64) {
-        if key == &self.min && self.count > 0 {
-            let start = self.min + 1; // min just got removed
-            for key in start..self.max {
-                if self.contains_assume_in_range(&key) {
-                    self.min = key;
-                    break;
+        if self.count > 0 {
+            if key == &self.min {
+                let start = self.min + 1; // min just got removed
+                for key in start..self.max {
+                    if self.contains_assume_in_range(&key) {
+                        self.min = key;
+                        break;
+                    }
                 }
             }
+        } else {
+            self.min = Slot::default();
+            self.max = Slot::default();
         }
     }
 
@@ -335,6 +345,7 @@ pub struct AccountsIndexRootsStats {
     pub roots_len: usize,
     pub uncleaned_roots_len: usize,
     pub previous_uncleaned_roots_len: usize,
+    pub roots_range: u64,
 }
 
 pub struct AccountsIndexIterator<'a, T> {
@@ -1222,7 +1233,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
     /// Accounts no longer reference this slot.
     pub fn clean_dead_slot(&self, slot: Slot) -> Option<AccountsIndexRootsStats> {
         if self.is_root(slot) {
-            let (roots_len, uncleaned_roots_len, previous_uncleaned_roots_len) = {
+            let (roots_len, uncleaned_roots_len, previous_uncleaned_roots_len, roots_range) = {
                 let mut w_roots_tracker = self.roots_tracker.write().unwrap();
                 w_roots_tracker.roots.remove(&slot);
                 w_roots_tracker.uncleaned_roots.remove(&slot);
@@ -1231,12 +1242,14 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
                     w_roots_tracker.roots.len(),
                     w_roots_tracker.uncleaned_roots.len(),
                     w_roots_tracker.previous_uncleaned_roots.len(),
+                    w_roots_tracker.roots.range_width(),
                 )
             };
             Some(AccountsIndexRootsStats {
                 roots_len,
                 uncleaned_roots_len,
                 previous_uncleaned_roots_len,
+                roots_range,
             })
         } else {
             None
@@ -1561,9 +1574,24 @@ pub mod tests {
     fn compare(hashset: &HashSet<u64>, bitfield: &RollingBitField) {
         assert_eq!(hashset.len(), bitfield.len());
         assert_eq!(hashset.is_empty(), bitfield.is_empty());
+        let mut min = Slot::MAX;
+        let mut max = Slot::MIN;
         for item in bitfield.get_all() {
+            min = std::cmp::min(min, item);
+            max = std::cmp::max(max, item);
             assert!(hashset.contains(&item));
         }
+        assert!(
+            bitfield.range_width()
+                >= if bitfield.is_empty() {
+                    0
+                } else {
+                    max + 1 - min
+                },
+            "hashset: {:?}, bitfield: {:?}",
+            hashset,
+            bitfield.get_all()
+        );
     }
 
     #[test]
