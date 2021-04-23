@@ -1,6 +1,6 @@
 use log::*;
 use solana_sdk::{
-    account::{AccountSharedData, ReadableAccount},
+    account::{AccountSharedData, ReadableAccount, WritableAccount},
     account_utils::StateMut,
     ic_msg,
     instruction::InstructionError,
@@ -126,7 +126,7 @@ fn assign(
         return Err(SystemError::InvalidProgramId.into());
     }
 
-    account.owner = *owner;
+    account.set_owner(*owner);
     Ok(())
 }
 

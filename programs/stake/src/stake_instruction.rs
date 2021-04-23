@@ -626,7 +626,7 @@ mod tests {
     use super::*;
     use bincode::serialize;
     use solana_sdk::{
-        account::{self, Account, AccountSharedData},
+        account::{self, Account, AccountSharedData, WritableAccount},
         keyed_account::KeyedAccount,
         process_instruction::MockInvokeContext,
         rent::Rent,
@@ -1026,7 +1026,9 @@ mod tests {
         let stake_account = create_default_stake_account();
         let vote_address = Pubkey::default();
         let mut bad_vote_account = create_default_account();
-        bad_vote_account.get_mut().owner = solana_vote_program::id();
+        bad_vote_account
+            .get_mut()
+            .set_owner(solana_vote_program::id());
         let clock_address = sysvar::clock::id();
         let clock_account = RefCell::new(account::create_account_shared_data_for_test(
             &sysvar::clock::Clock::default(),
