@@ -38,8 +38,7 @@ fn apply_signature(
                 contract_keyed_account.try_account_ref_mut()?.lamports -= payment.lamports;
                 witness_keyed_account
                     .try_account_ref_mut()?
-                    .checked_add_lamports(payment.lamports)
-                    .map_err(|_| InstructionError::ArithmeticOverflow)?;
+                    .checked_add_lamports(payment.lamports)?;
                 return Ok(());
             }
         }

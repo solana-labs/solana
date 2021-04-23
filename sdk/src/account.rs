@@ -1,5 +1,6 @@
 use crate::{
     clock::{Epoch, INITIAL_RENT_EPOCH},
+    LamportsError,
     pubkey::Pubkey,
 };
 use solana_program::{account_info::AccountInfo, sysvar::Sysvar};
@@ -75,12 +76,6 @@ impl From<Account> for AccountSharedData {
             rent_epoch: other.rent_epoch,
         }
     }
-}
-
-#[derive(Debug)]
-pub enum LamportsError {
-    ArithmeticUnderflow,
-    ArithmeticOverflow,
 }
 
 pub trait WritableAccount: ReadableAccount {
