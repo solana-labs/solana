@@ -9870,8 +9870,12 @@ pub(crate) mod tests {
                 dup_account.lamports -= lamports;
                 to_account.lamports += lamports;
             }
-            keyed_accounts[0].try_account_ref_mut()?.lamports -= lamports;
-            keyed_accounts[1].try_account_ref_mut()?.lamports += lamports;
+            keyed_accounts[0]
+                .try_account_ref_mut()?
+                .checked_sub_lamports(lamports)?;
+            keyed_accounts[1]
+                .try_account_ref_mut()?
+                .checked_add_lamports(lamports)?;
             Ok(())
         }
 

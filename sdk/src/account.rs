@@ -1,5 +1,6 @@
 use crate::{
     clock::{Epoch, INITIAL_RENT_EPOCH},
+    lamports::LamportsError,
     pubkey::Pubkey,
 };
 use solana_program::{account_info::AccountInfo, sysvar::Sysvar};
@@ -79,6 +80,22 @@ impl From<Account> for AccountSharedData {
 
 pub trait WritableAccount: ReadableAccount {
     fn set_lamports(&mut self, lamports: u64);
+    fn checked_add_lamports(&mut self, lamports: u64) -> Result<(), LamportsError> {
+        self.set_lamports(
+            self.lamports()
+                .checked_add(lamports)
+                .ok_or(LamportsError::ArithmeticOverflow)?,
+        );
+        Ok(())
+    }
+    fn checked_sub_lamports(&mut self, lamports: u64) -> Result<(), LamportsError> {
+        self.set_lamports(
+            self.lamports()
+                .checked_sub(lamports)
+                .ok_or(LamportsError::ArithmeticUnderflow)?,
+        );
+        Ok(())
+    }
     fn data_as_mut_slice(&mut self) -> &mut [u8];
     fn set_owner(&mut self, owner: Pubkey);
     fn copy_into_owner_from_slice(&mut self, source: &[u8]);
@@ -710,6 +727,53 @@ pub mod tests {
     }
 
     #[test]
+    fn test_account_add_sub_lamports() {
+        let key = Pubkey::new_unique();
+        let (mut account1, mut account2) = make_two_accounts(&key);
+        assert!(accounts_equal(&account1, &account2));
+        account1.checked_add_lamports(1).unwrap();
+        account2.checked_add_lamports(1).unwrap();
+        assert!(accounts_equal(&account1, &account2));
+        assert_eq!(account1.lamports(), 2);
+        account1.checked_sub_lamports(2).unwrap();
+        account2.checked_sub_lamports(2).unwrap();
+        assert!(accounts_equal(&account1, &account2));
+        assert_eq!(account1.lamports(), 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "Overflow")]
+    fn test_account_checked_add_lamports_overflow() {
+        let key = Pubkey::new_unique();
+        let (mut account1, _account2) = make_two_accounts(&key);
+        account1.checked_add_lamports(u64::MAX).unwrap();
+    }
+
+    #[test]
+    #[should_panic(expected = "Underflow")]
+    fn test_account_checked_sub_lamports_underflow() {
+        let key = Pubkey::new_unique();
+        let (mut account1, _account2) = make_two_accounts(&key);
+        account1.checked_sub_lamports(u64::MAX).unwrap();
+    }
+
+    #[test]
+    #[should_panic(expected = "Overflow")]
+    fn test_account_checked_add_lamports_overflow2() {
+        let key = Pubkey::new_unique();
+        let (_account1, mut account2) = make_two_accounts(&key);
+        account2.checked_add_lamports(u64::MAX).unwrap();
+    }
+
+    #[test]
+    #[should_panic(expected = "Underflow")]
+    fn test_account_checked_sub_lamports_underflow2() {
+        let key = Pubkey::new_unique();
+        let (_account1, mut account2) = make_two_accounts(&key);
+        account2.checked_sub_lamports(u64::MAX).unwrap();
+    }
+
+    #[test]
     #[allow(clippy::redundant_clone)]
     fn test_account_shared_data_all_fields() {
         let key = Pubkey::new_unique();
@@ -726,15 +790,15 @@ pub mod tests {
             for pass in 0..4 {
                 if field_index == 0 {
                     if pass == 0 {
-                        account1.lamports += 1;
+                        account1.checked_add_lamports(1).unwrap();
                     } else if pass == 1 {
-                        account_expected.lamports += 1;
+                        account_expected.checked_add_lamports(1).unwrap();
                         account2.set_lamports(account2.lamports + 1);
                     } else if pass == 2 {
                         account1.set_lamports(account1.lamports + 1);
                     } else if pass == 3 {
-                        account_expected.lamports += 1;
-                        account2.lamports += 1;
+                        account_expected.checked_add_lamports(1).unwrap();
+                        account2.checked_add_lamports(1).unwrap();
                     }
                 } else if field_index == 1 {
                     if pass == 0 {

@@ -36,7 +36,9 @@ fn apply_signature(
             if &payment.to == key {
                 budget_state.pending_budget = None;
                 contract_keyed_account.try_account_ref_mut()?.lamports -= payment.lamports;
-                witness_keyed_account.try_account_ref_mut()?.lamports += payment.lamports;
+                witness_keyed_account
+                    .try_account_ref_mut()?
+                    .checked_add_lamports(payment.lamports)?;
                 return Ok(());
             }
         }

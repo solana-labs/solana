@@ -6194,7 +6194,7 @@ pub mod tests {
             if let Some((mut account, _)) =
                 accounts.load_without_fixed_root(&ancestors, &pubkeys[idx])
             {
-                account.lamports += 1;
+                account.checked_add_lamports(1).unwrap();
                 accounts.store_uncached(slot, &[(&pubkeys[idx], &account)]);
                 if account.lamports == 0 {
                     let ancestors = vec![(slot, 0)].into_iter().collect();
