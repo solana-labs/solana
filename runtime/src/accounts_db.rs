@@ -3318,10 +3318,8 @@ impl AccountsDb {
         let mut total_storage_find_us = 0;
         while infos.len() < accounts_and_meta_to_store.len() {
             let mut storage_find = Measure::start("storage_finder");
-            let storage = storage_finder(
-                slot,
-                accounts_and_meta_to_store[infos.len()].1.data().len() + STORE_META_OVERHEAD,
-            );
+            let data_len = accounts_and_meta_to_store[infos.len()].1.data().len();
+            let storage = storage_finder(slot, data_len + STORE_META_OVERHEAD);
             storage_find.stop();
             total_storage_find_us += storage_find.as_us();
             let mut append_accounts = Measure::start("append_accounts");
@@ -3336,8 +3334,7 @@ impl AccountsDb {
                 storage.set_status(AccountStorageStatus::Full);
 
                 // See if an account overflows the append vecs in the slot.
-                let data_len = (accounts_and_meta_to_store[infos.len()].1.data().len()
-                    + STORE_META_OVERHEAD) as u64;
+                let data_len = (data_len + STORE_META_OVERHEAD) as u64;
                 if !self.has_space_available(slot, data_len) {
                     let special_store_size = std::cmp::max(data_len * 2, self.file_size);
                     if self
