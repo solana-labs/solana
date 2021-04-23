@@ -453,7 +453,7 @@ impl AppendVec {
     pub fn append_accounts(
         &self,
         accounts: &[(StoredMeta, &AccountSharedData)],
-        hashes: &[Hash],
+        hashes: &[&Hash],
     ) -> Vec<usize> {
         let _lock = self.append_lock.lock().unwrap();
         let mut offset = self.len();
@@ -494,7 +494,7 @@ impl AppendVec {
         account: &AccountSharedData,
         hash: Hash,
     ) -> Option<usize> {
-        let res = self.append_accounts(&[(storage_meta, account)], &[hash]);
+        let res = self.append_accounts(&[(storage_meta, account)], &[&hash]);
         if res.len() == 1 {
             None
         } else {
