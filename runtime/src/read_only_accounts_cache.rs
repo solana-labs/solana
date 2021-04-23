@@ -143,9 +143,10 @@ impl ReadOnlyAccountsCache {
     }
 
     pub fn remove(&self, pubkey: &Pubkey, slot: Slot) {
-        // does not keep track of data size reduction here.
-        // data size will be recomputed the next time we store and we think we may now be too large.
-        self.cache.remove(&(*pubkey, slot));
+        if let Some((_, value)) = self.cache.remove(&(*pubkey, slot)) {
+            self.data_size
+                .fetch_sub(self.account_size(&value.account), Ordering::Relaxed);
+        }
     }
 
     fn purge_lru_list(&self, lru: &[LruEntry], lru_index: &mut usize) -> bool {
@@ -294,7 +295,7 @@ pub mod tests {
         assert!(accounts_equal(&cache.load(&key2, slot).unwrap(), &account1));
         assert_eq!(1, cache.cache_len());
         cache.remove(&key2, slot);
-        assert_eq!(100 + per_account_size, cache.data_size());
+        assert_eq!(0, cache.data_size());
         assert_eq!(0, cache.cache_len());
 
         // can store 2 items, 3rd item kicks oldest item out
