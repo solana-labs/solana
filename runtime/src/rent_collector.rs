@@ -63,7 +63,7 @@ impl RentCollector {
     ) -> u64 {
         if account.executable
             || account.rent_epoch > self.epoch
-            || sysvar::check_id(&account.owner)
+            || sysvar::check_id(account.owner())
             || *address == incinerator::id()
         {
             0

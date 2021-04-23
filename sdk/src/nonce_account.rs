@@ -1,5 +1,5 @@
 use crate::{
-    account::AccountSharedData,
+    account::{AccountSharedData, ReadableAccount},
     account_utils::StateMut,
     fee_calculator::FeeCalculator,
     hash::Hash,
@@ -20,7 +20,7 @@ pub fn create_account(lamports: u64) -> RefCell<AccountSharedData> {
 }
 
 pub fn verify_nonce_account(acc: &AccountSharedData, hash: &Hash) -> bool {
-    if acc.owner != crate::system_program::id() {
+    if acc.owner() != &crate::system_program::id() {
         return false;
     }
     match StateMut::<Versions>::state(acc).map(|v| v.convert_to_current()) {

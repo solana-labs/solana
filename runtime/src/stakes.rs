@@ -110,8 +110,8 @@ impl Stakes {
     }
 
     pub fn is_stake(account: &AccountSharedData) -> bool {
-        solana_vote_program::check_id(&account.owner)
-            || solana_stake_program::check_id(&account.owner)
+        solana_vote_program::check_id(account.owner())
+            || solana_stake_program::check_id(account.owner())
                 && account.data().len() >= std::mem::size_of::<StakeState>()
     }
 
@@ -122,7 +122,7 @@ impl Stakes {
         fix_stake_deactivate: bool,
         check_vote_init: bool,
     ) -> Option<ArcVoteAccount> {
-        if solana_vote_program::check_id(&account.owner) {
+        if solana_vote_program::check_id(account.owner()) {
             // unconditionally remove existing at first; there is no dependent calculated state for
             // votes, not like stakes (stake codepath maintains calculated stake value grouped by
             // delegated vote pubkey)
@@ -148,7 +148,7 @@ impl Stakes {
                     .insert(*pubkey, (stake, ArcVoteAccount::from(account.clone())));
             }
             old.map(|(_, account)| account)
-        } else if solana_stake_program::check_id(&account.owner) {
+        } else if solana_stake_program::check_id(account.owner()) {
             //  old_stake is stake lamports and voter_pubkey from the pre-store() version
             let old_stake = self.stake_delegations.get(pubkey).map(|delegation| {
                 (

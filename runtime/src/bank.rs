@@ -1779,15 +1779,15 @@ impl Bank {
                                 stake_pubkey,
                                 &InflationPointCalculationEvent::Delegation(
                                     *delegation,
-                                    vote_account.owner,
+                                    *vote_account.owner(),
                                 ),
                             ));
                         }
                         if self
                             .feature_set
                             .is_active(&feature_set::filter_stake_delegation_accounts::id())
-                            && (stake_account.owner != solana_stake_program::id()
-                                || vote_account.owner != solana_vote_program::id())
+                            && (stake_account.owner() != &solana_stake_program::id()
+                                || vote_account.owner() != &solana_vote_program::id())
                         {
                             datapoint_warn!(
                                 "bank-stake_delegation_accounts-invalid-account",
@@ -2203,7 +2203,7 @@ impl Bank {
                 // it's very unlikely to be squatted at program_id as non-system account because of burden to
                 // find victim's pubkey/hash. So, when account.owner is indeed native_loader's, it's
                 // safe to assume it's a genuine program.
-                if native_loader::check_id(&account.owner) {
+                if native_loader::check_id(&account.owner()) {
                     Some(account)
                 } else {
                     // malicious account is pre-occupying at program_id
@@ -4954,7 +4954,7 @@ impl Bank {
             let store = if let Some(existing_native_mint_account) =
                 self.get_account_with_fixed_root(&inline_spl_token_v2_0::native_mint::id())
             {
-                if existing_native_mint_account.owner == solana_sdk::system_program::id() {
+                if existing_native_mint_account.owner() == &solana_sdk::system_program::id() {
                     native_mint_account.lamports = existing_native_mint_account.lamports;
                     true
                 } else {

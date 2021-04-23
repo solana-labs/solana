@@ -280,7 +280,7 @@ impl<'a> LoadedAccount<'a> {
     pub fn owner(&self) -> &Pubkey {
         match self {
             LoadedAccount::Stored(stored_account_meta) => &stored_account_meta.account_meta.owner,
-            LoadedAccount::Cached((_, cached_account)) => &cached_account.account.owner,
+            LoadedAccount::Cached((_, cached_account)) => &cached_account.account.owner(),
         }
     }
 
@@ -3254,7 +3254,7 @@ impl AccountsDb {
         let mut hasher = Hasher::default();
 
         hasher.hash(&account.data());
-        hasher.hash(&account.owner.as_ref());
+        hasher.hash(&account.owner().as_ref());
 
         if account.executable {
             hasher.hash(&[1u8; 1]);
