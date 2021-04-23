@@ -6687,10 +6687,10 @@ pub mod tests {
         account_data_with_mint[..PUBKEY_BYTES].clone_from_slice(&(mint_key.to_bytes()));
 
         let mut normal_account = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
-        normal_account.owner = inline_spl_token_v2_0::id();
+        normal_account.set_owner(inline_spl_token_v2_0::id());
         normal_account.set_data(account_data_with_mint.clone());
         let mut zero_account = AccountSharedData::new(0, 0, AccountSharedData::default().owner());
-        zero_account.owner = inline_spl_token_v2_0::id();
+        zero_account.set_owner(inline_spl_token_v2_0::id());
         zero_account.set_data(account_data_with_mint);
 
         //store an account

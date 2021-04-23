@@ -916,7 +916,9 @@ impl MessageProcessor {
                         return Err(InstructionError::InvalidRealloc);
                     }
                     dst_keyed_account.try_account_ref_mut()?.lamports = src_keyed_account.lamports;
-                    dst_keyed_account.try_account_ref_mut()?.owner = src_keyed_account.owner;
+                    dst_keyed_account
+                        .try_account_ref_mut()?
+                        .set_owner(src_keyed_account.owner);
                     dst_keyed_account
                         .try_account_ref_mut()?
                         .set_data(src_keyed_account.data().to_vec());
@@ -1463,7 +1465,7 @@ mod tests {
             self
         }
         pub fn owner(mut self, post: &Pubkey) -> Self {
-            self.post.owner = *post;
+            self.post.set_owner(*post);
             self
         }
         pub fn data(mut self, pre: Vec<u8>, post: Vec<u8>) -> Self {

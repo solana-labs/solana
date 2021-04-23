@@ -2455,7 +2455,7 @@ mod tests {
             min_program_balance,
             min_programdata_balance,
         );
-        program_account.borrow_mut().owner = Pubkey::new_unique();
+        program_account.borrow_mut().set_owner(Pubkey::new_unique());
         let keyed_accounts = vec![
             KeyedAccount::new(&programdata_address, false, &programdata_account),
             KeyedAccount::new(&program_address, false, &program_account),

@@ -12121,7 +12121,7 @@ pub(crate) mod tests {
         // freely modified with malicious data
         let bogus_vote_program = Pubkey::new_unique();
         vote_account.lamports = original_lamports;
-        vote_account.owner = bogus_vote_program;
+        vote_account.set_owner(bogus_vote_program);
         bank.store_account(
             &validator_vote_keypairs0.vote_keypair.pubkey(),
             &vote_account,
@@ -12135,7 +12135,7 @@ pub(crate) mod tests {
         let mut stake_account = bank
             .get_account(&validator_vote_keypairs1.stake_keypair.pubkey())
             .unwrap_or_default();
-        stake_account.owner = bogus_stake_program;
+        stake_account.set_owner(bogus_stake_program);
         bank.store_account(
             &validator_vote_keypairs1.stake_keypair.pubkey(),
             &stake_account,

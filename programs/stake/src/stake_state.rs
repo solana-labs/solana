@@ -1708,8 +1708,11 @@ mod tests {
     use super::*;
     use crate::id;
     use solana_sdk::{
-        account::AccountSharedData, native_token, process_instruction::MockInvokeContext,
-        pubkey::Pubkey, system_program,
+        account::{AccountSharedData, WritableAccount},
+        native_token,
+        process_instruction::MockInvokeContext,
+        pubkey::Pubkey,
+        system_program,
     };
     use solana_vote_program::vote_state;
     use std::{cell::RefCell, iter::FromIterator};
@@ -2010,7 +2013,9 @@ mod tests {
 
         // signed but faked vote account
         let faked_vote_account = vote_account.clone();
-        faked_vote_account.borrow_mut().owner = solana_sdk::pubkey::new_rand();
+        faked_vote_account
+            .borrow_mut()
+            .set_owner(solana_sdk::pubkey::new_rand());
         let faked_vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &faked_vote_account);
         assert_eq!(
             stake_keyed_account.delegate(
