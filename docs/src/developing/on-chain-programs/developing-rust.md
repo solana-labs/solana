@@ -48,7 +48,7 @@ using the `exclude_entrypoint` feature.
 At a minimum, Solana Rust programs must pull in the
 [solana-program](https://crates.io/crates/solana-program) crate.
 
-Solana BPF programs have some [restrictions](#Restrictions) that may prevent the
+Solana BPF programs have some [restrictions](#restrictions) that may prevent the
 inclusion of some crates as dependencies or require special handling.
 
 For example:
