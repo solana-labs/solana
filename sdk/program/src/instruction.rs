@@ -2,7 +2,7 @@
 //! Defines a composable Instruction type and a memory-efficient CompiledInstruction.
 
 use crate::sanitize::Sanitize;
-use crate::{pubkey::Pubkey, short_vec, LamportsError};
+use crate::{pubkey::Pubkey, short_vec};
 use bincode::serialize;
 use borsh::BorshSerialize;
 use serde::Serialize;
@@ -352,15 +352,6 @@ impl CompiledInstruction {
             unique_index += 1;
         }
         Ok(())
-    }
-}
-
-impl From<LamportsError> for InstructionError {
-    fn from(error: LamportsError) -> Self {
-        match error {
-            LamportsError::ArithmeticOverflow => InstructionError::ArithmeticOverflow,
-            LamportsError::ArithmeticUnderflow => InstructionError::ArithmeticOverflow,
-        }
     }
 }
 

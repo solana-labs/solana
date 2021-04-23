@@ -1,7 +1,7 @@
 use crate::{
     clock::{Epoch, INITIAL_RENT_EPOCH},
+    lamports::LamportsError,
     pubkey::Pubkey,
-    LamportsError,
 };
 use solana_program::{account_info::AccountInfo, sysvar::Sysvar};
 use std::{cell::Ref, cell::RefCell, cmp, fmt, rc::Rc, sync::Arc};

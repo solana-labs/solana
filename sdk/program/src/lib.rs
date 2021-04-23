@@ -20,6 +20,7 @@ pub mod fee_calculator;
 pub mod hash;
 pub mod incinerator;
 pub mod instruction;
+pub mod lamports;
 pub mod loader_instruction;
 pub mod loader_upgradeable_instruction;
 pub mod log;
@@ -66,7 +67,6 @@ pub mod sysvar;
 /// assert_eq!(id(), my_id);
 /// ```
 pub use solana_sdk_macro::program_declare_id as declare_id;
-use thiserror::Error;
 
 #[macro_use]
 extern crate serde_derive;
@@ -178,17 +178,6 @@ macro_rules! unchecked_div_by_const {
         let quotient = $num / $den;
         quotient
     }};
-}
-
-#[derive(Debug, Error)]
-pub enum LamportsError {
-    /// arithmetic underflowed
-    #[error("Arithmetic underflowed")]
-    ArithmeticUnderflow,
-
-    /// arithmetic overflowed
-    #[error("Arithmetic overflowed")]
-    ArithmeticOverflow,
 }
 
 #[cfg(test)]
