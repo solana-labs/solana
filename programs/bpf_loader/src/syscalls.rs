@@ -1826,7 +1826,7 @@ fn get_upgradeable_executable(
     program_account: &Rc<RefCell<AccountSharedData>>,
     invoke_context: &Ref<&mut dyn InvokeContext>,
 ) -> Result<Option<(Pubkey, Rc<RefCell<AccountSharedData>>)>, EbpfError<BpfError>> {
-    if program_account.borrow().owner == bpf_loader_upgradeable::id() {
+    if program_account.borrow().owner() == &bpf_loader_upgradeable::id() {
         match program_account.borrow().state() {
             Ok(UpgradeableLoaderState::Program {
                 programdata_address,
@@ -1992,7 +1992,7 @@ fn call<'a>(
             if let Some(account_ref) = account_ref {
                 if message.is_writable(i, demote_sysvar_write_locks) && !account.executable {
                     *account_ref.lamports = account.lamports;
-                    *account_ref.owner = account.owner;
+                    *account_ref.owner = *account.owner();
                     if account_ref.data.len() != account.data().len() {
                         if !account_ref.data.is_empty() {
                             // Only support for `CreateAccount` at this time.

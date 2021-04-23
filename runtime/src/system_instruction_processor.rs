@@ -111,7 +111,7 @@ fn assign(
     invoke_context: &dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     // no work to do, just return
-    if account.owner == *owner {
+    if account.owner() == owner {
         return Ok(());
     }
 
@@ -430,7 +430,7 @@ pub enum SystemAccountKind {
 }
 
 pub fn get_system_account_kind(account: &AccountSharedData) -> Option<SystemAccountKind> {
-    if system_program::check_id(&account.owner) {
+    if system_program::check_id(account.owner()) {
         if account.data().is_empty() {
             Some(SystemAccountKind::System)
         } else if account.data().len() == nonce::State::size() {

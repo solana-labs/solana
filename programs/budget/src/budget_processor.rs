@@ -572,7 +572,7 @@ mod tests {
             &bob_pubkey,
             &budget_pubkey,
             &game_pubkey,
-            &game_account.owner,
+            game_account.owner(),
             game_hash,
             41,
         );

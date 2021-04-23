@@ -349,13 +349,13 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
                     let mut data = account_info.try_borrow_mut_data()?;
                     let account_borrow = account.borrow();
                     let new_data = account_borrow.data();
-                    if *account_info.owner != account.borrow().owner {
+                    if account_info.owner != account.borrow().owner() {
                         // TODO Figure out a better way to allow the System Program to set the account owner
                         #[allow(clippy::transmute_ptr_to_ptr)]
                         #[allow(mutable_transmutes)]
                         let account_info_mut =
                             unsafe { transmute::<&Pubkey, &mut Pubkey>(account_info.owner) };
-                        *account_info_mut = account.borrow().owner;
+                        *account_info_mut = *account.borrow().owner();
                     }
                     if data.len() != new_data.len() {
                         // TODO: Figure out how to allow the System Program to resize the account data
