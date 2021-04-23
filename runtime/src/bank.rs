@@ -9871,11 +9871,11 @@ pub(crate) mod tests {
             keyed_accounts[0]
                 .try_account_ref_mut()?
                 .checked_sub_lamports(lamports)
-                .unwrap();
+                .map_err(|_| InstructionError::ArithmeticOverflow)?;
             keyed_accounts[1]
                 .try_account_ref_mut()?
                 .checked_add_lamports(lamports)
-                .unwrap();
+                .map_err(|_| InstructionError::ArithmeticOverflow)?;
             Ok(())
         }
 

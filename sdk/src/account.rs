@@ -85,20 +85,20 @@ pub enum LamportsError {
 
 pub trait WritableAccount: ReadableAccount {
     fn set_lamports(&mut self, lamports: u64);
-    fn checked_add_lamports(&mut self, lamports: u64) -> Result<u64, LamportsError> {
+    fn checked_add_lamports(&mut self, lamports: u64) -> Result<(), LamportsError> {
         match self.lamports().checked_add(lamports) {
             Some(result) => {
                 self.set_lamports(result);
-                Ok(result)
+                Ok(())
             }
             None => Err(LamportsError::ArithmeticOverflow),
         }
     }
-    fn checked_sub_lamports(&mut self, lamports: u64) -> Result<u64, LamportsError> {
+    fn checked_sub_lamports(&mut self, lamports: u64) -> Result<(), LamportsError> {
         match self.lamports().checked_sub(lamports) {
             Some(result) => {
                 self.set_lamports(result);
-                Ok(result)
+                Ok(())
             }
             None => Err(LamportsError::ArithmeticUnderflow),
         }
