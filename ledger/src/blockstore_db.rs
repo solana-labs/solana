@@ -222,8 +222,30 @@ impl From<BlockstoreRecoveryMode> for DBRecoveryMode {
     }
 }
 
+#[derive(Default, Clone, Debug)]
+struct OldestSlot(Arc<AtomicU64>);
+
+impl OldestSlot {
+    pub fn set(&self, oldest_slot: Slot) {
+        // this is independently used for compaction_filter without any data dependency.
+        // also, compaction_fileters are created via its factories, creating short-lived copies of
+        // this atomic value for the single job of compaction. So, Relaxed store can be justified
+        // in total
+        self.0.store(oldest_slot, Ordering::Relaxed);
+    }
+
+    pub fn get(&self) -> Slot {
+        // copy from the AtomicU64 as a general precaution so that the oldest_slot can not mutate
+        // across single run of compaction for simpler reasoning although this isn't strict
+        // requirement at the moment
+        // also eventual propagation (very Relaxed) load is Ok, because compaction by nature doesn't
+        // require strictly synchronized semantics in this regard
+        self.0.load(Ordering::Relaxed)
+    }
+}
+
 #[derive(Debug)]
-struct Rocks(rocksdb::DB, ActualAccessType, Arc<AtomicU64>);
+struct Rocks(rocksdb::DB, ActualAccessType, OldestSlot);
 
 impl Rocks {
     fn open(
@@ -248,7 +270,7 @@ impl Rocks {
             db_options.set_wal_recovery_mode(recovery_mode.into());
         }
 
-        let oldest_slot = Arc::new(AtomicU64::new(Slot::default()));
+        let oldest_slot = OldestSlot::default();
 
         // Column family names
         let meta_cf_descriptor = ColumnFamilyDescriptor::new(
@@ -955,7 +977,7 @@ impl Database {
     }
 
     pub fn set_oldest_slot(&self, oldest_slot: Slot) {
-        self.backend.2.store(oldest_slot, Ordering::Relaxed);
+        self.backend.2.set(oldest_slot);
     }
 }
 
@@ -1153,18 +1175,21 @@ impl<C: Column + ColumnName> CompactionFilter for PurgedSlotFilter<C> {
     }
 }
 
-struct PurgedSlotFilterFactory<C: Column + ColumnName>(Arc<AtomicU64>, CString, PhantomData<C>);
+struct PurgedSlotFilterFactory<C: Column + ColumnName>(OldestSlot, CString, PhantomData<C>);
 
 impl<C: Column + ColumnName> CompactionFilterFactory for PurgedSlotFilterFactory<C> {
     type Filter = PurgedSlotFilter<C>;
 
     fn create(&mut self, _context: CompactionFilterContext) -> Self::Filter {
-        // copy from the AtomicU64 so that the oldest_slot can not mutate across single run of
-        // compaction for simpler reasoning although this isn't strict requirement at the moment
-        let oldest_slot = self.0.load(Ordering::Relaxed);
+        let copied_oldest_slot = self.0.get();
         PurgedSlotFilter::<C>(
-            oldest_slot,
-            CString::new(format!("purged_slot_filter({}, {})", C::NAME, oldest_slot)).unwrap(),
+            copied_oldest_slot,
+            CString::new(format!(
+                "purged_slot_filter({}, {:?})",
+                C::NAME,
+                copied_oldest_slot
+            ))
+            .unwrap(),
             PhantomData::default(),
         )
     }
@@ -1176,7 +1201,7 @@ impl<C: Column + ColumnName> CompactionFilterFactory for PurgedSlotFilterFactory
 
 fn get_cf_options<C: 'static + Column + ColumnName>(
     access_type: &AccessType,
-    oldest_slot: &Arc<AtomicU64>,
+    oldest_slot: &OldestSlot,
 ) -> Options {
     let mut options = Options::default();
     // 256 * 8 = 2GB. 6 of these columns should take at most 12GB of RAM
