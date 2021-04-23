@@ -81,6 +81,7 @@ pub trait WritableAccount: ReadableAccount {
     fn set_lamports(&mut self, lamports: u64);
     fn data_as_mut_slice(&mut self) -> &mut [u8];
     fn set_owner(&mut self, owner: Pubkey);
+    fn copy_into_owner_from_slice(&mut self, source: &[u8]);
     fn set_executable(&mut self, executable: bool);
     fn set_rent_epoch(&mut self, epoch: Epoch);
     fn create(
@@ -128,6 +129,9 @@ impl WritableAccount for Account {
     fn set_owner(&mut self, owner: Pubkey) {
         self.owner = owner;
     }
+    fn copy_into_owner_from_slice(&mut self, source: &[u8]) {
+        self.owner.as_mut().copy_from_slice(source);
+    }
     fn set_executable(&mut self, executable: bool) {
         self.executable = executable;
     }
@@ -161,6 +165,9 @@ impl WritableAccount for AccountSharedData {
     }
     fn set_owner(&mut self, owner: Pubkey) {
         self.owner = owner;
+    }
+    fn copy_into_owner_from_slice(&mut self, source: &[u8]) {
+        self.owner.as_mut().copy_from_slice(source);
     }
     fn set_executable(&mut self, executable: bool) {
         self.executable = executable;
@@ -563,6 +570,17 @@ pub mod tests {
         account2.rent_epoch = 4;
         assert!(accounts_equal(&account1, &account2));
         (account1, account2)
+    }
+
+    #[test]
+    fn test_account_data_copy_as_slice() {
+        let key = Pubkey::new_unique();
+        let key2 = Pubkey::new_unique();
+        let (mut account1, mut account2) = make_two_accounts(&key);
+        account1.copy_into_owner_from_slice(key2.as_ref());
+        account2.copy_into_owner_from_slice(key2.as_ref());
+        assert!(accounts_equal(&account1, &account2));
+        assert_eq!(account1.owner(), &key2);
     }
 
     #[test]

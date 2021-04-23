@@ -1,8 +1,12 @@
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use solana_rbpf::{aligned_memory::AlignedMemory, ebpf::HOST_ALIGN};
 use solana_sdk::{
-    account::ReadableAccount, bpf_loader_deprecated, entrypoint::MAX_PERMITTED_DATA_INCREASE,
-    instruction::InstructionError, keyed_account::KeyedAccount, pubkey::Pubkey,
+    account::{ReadableAccount, WritableAccount},
+    bpf_loader_deprecated,
+    entrypoint::MAX_PERMITTED_DATA_INCREASE,
+    instruction::InstructionError,
+    keyed_account::KeyedAccount,
+    pubkey::Pubkey,
 };
 use std::{
     io::prelude::*,
@@ -263,10 +267,7 @@ pub fn deserialize_parameters_aligned(
                 + size_of::<u8>() // executable
                 + 4 // padding to 128-bit aligned
                 + size_of::<Pubkey>(); // key
-            account
-                .owner
-                .as_mut()
-                .copy_from_slice(&buffer[start..start + size_of::<Pubkey>()]);
+            account.copy_into_owner_from_slice(&buffer[start..start + size_of::<Pubkey>()]);
             start += size_of::<Pubkey>(); // owner
             account.lamports = LittleEndian::read_u64(&buffer[start..]);
             start += size_of::<u64>(); // lamports
