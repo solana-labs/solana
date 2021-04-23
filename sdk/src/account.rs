@@ -81,22 +81,20 @@ impl From<Account> for AccountSharedData {
 pub trait WritableAccount: ReadableAccount {
     fn set_lamports(&mut self, lamports: u64);
     fn checked_add_lamports(&mut self, lamports: u64) -> Result<(), LamportsError> {
-        match self.lamports().checked_add(lamports) {
-            Some(result) => {
-                self.set_lamports(result);
-                Ok(())
-            }
-            None => Err(LamportsError::ArithmeticOverflow),
-        }
+        self.set_lamports(
+            self.lamports()
+                .checked_add(lamports)
+                .ok_or(LamportsError::ArithmeticOverflow)?,
+        );
+        Ok(())
     }
     fn checked_sub_lamports(&mut self, lamports: u64) -> Result<(), LamportsError> {
-        match self.lamports().checked_sub(lamports) {
-            Some(result) => {
-                self.set_lamports(result);
-                Ok(())
-            }
-            None => Err(LamportsError::ArithmeticUnderflow),
-        }
+        self.set_lamports(
+            self.lamports()
+                .checked_sub(lamports)
+                .ok_or(LamportsError::ArithmeticUnderflow)?,
+        );
+        Ok(())
     }
     fn data_as_mut_slice(&mut self) -> &mut [u8];
     fn set_owner(&mut self, owner: Pubkey);
