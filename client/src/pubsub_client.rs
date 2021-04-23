@@ -3,7 +3,9 @@ use {
         rpc_config::{
             RpcSignatureSubscribeConfig, RpcTransactionLogsConfig, RpcTransactionLogsFilter,
         },
-        rpc_response::{Response as RpcResponse, RpcLogsResponse, RpcSignatureResult, SlotInfo},
+        rpc_response::{
+            Response as RpcResponse, RpcLogsResponse, RpcSignatureResult, SlotInfo, SlotUpdate,
+        },
     },
     log::*,
     serde::de::DeserializeOwned,
@@ -339,6 +341,54 @@ impl PubsubClient {
         };
 
         Ok((result, receiver))
+    }
+
+    pub fn slot_updates_subscribe(
+        url: &str,
+        handler: impl Fn(SlotUpdate) + Send + 'static,
+    ) -> Result<PubsubClientSubscription<SlotUpdate>, PubsubClientError> {
+        let url = Url::parse(url)?;
+        let (socket, _response) = connect(url)?;
+
+        let socket = Arc::new(RwLock::new(socket));
+        let exit = Arc::new(AtomicBool::new(false));
+        let exit_clone = exit.clone();
+        let subscription_id = PubsubClientSubscription::<SlotUpdate>::send_subscribe(
+            &socket,
+            json!({
+                "jsonrpc":"2.0","id":1,"method":"slotsUpdatesSubscribe","params":[]
+            })
+            .to_string(),
+        )?;
+
+        let t_cleanup = {
+            let socket = socket.clone();
+            std::thread::spawn(move || {
+                loop {
+                    if exit_clone.load(Ordering::Relaxed) {
+                        break;
+                    }
+                    match PubsubClientSubscription::read_message(&socket) {
+                        Ok(message) => handler(message),
+                        Err(err) => {
+                            info!("receive error: {:?}", err);
+                            break;
+                        }
+                    }
+                }
+
+                info!("websocket - exited receive loop");
+            })
+        };
+
+        Ok(PubsubClientSubscription {
+            message_type: PhantomData,
+            operation: "slotsUpdates",
+            socket,
+            subscription_id,
+            t_cleanup: Some(t_cleanup),
+            exit,
+        })
     }
 }
 
