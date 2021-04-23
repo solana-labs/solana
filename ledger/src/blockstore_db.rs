@@ -72,6 +72,9 @@ const PERF_SAMPLES_CF: &str = "perf_samples";
 /// Column family for BlockHeight
 const BLOCK_HEIGHT_CF: &str = "block_height";
 
+// 1 day is chosen for the same reasoning of DEFAULT_COMPACTION_SLOT_INTERVAL
+const PERIODIC_COMPACTION_SECONDS: u64 = 60 * 60 * 24;
+
 #[derive(Error, Debug)]
 pub enum BlockstoreError {
     ShredForIndexExists,
@@ -395,10 +398,11 @@ impl Rocks {
                 }
             }
         };
-        if db.1 == ActualAccessType::Primary {
-            // Setting ttl only makes sense for primary access mode; and forcing so with secondary
-            // access causes hard-errors from RocksDB...
+        // this is only needed for LedgerCleanupService. so guard with PrimaryOnly (i.e. running solana-validator)
+        if matches!(access_type, AccessType::PrimaryOnly) {
             for cf_name in cf_names {
+                // this special column family must be excluded from LedgerCleanupService's rocksdb
+                // compactions
                 if cf_name == TransactionStatusIndex::NAME {
                     continue;
                 }
@@ -406,18 +410,9 @@ impl Rocks {
                 db.0.set_options_cf(
                     db.cf_handle(cf_name),
                     &[(
-                        "ttl",
-                        &std::env::var("SOLANA_ROCKSDB_COMPACTION_TTL")
-                            .unwrap_or(format!("{}", 60 * 60 * 24 * 3)),
-                    )],
-                )
-                .unwrap();
-                db.0.set_options_cf(
-                    db.cf_handle(cf_name),
-                    &[(
                         "periodic_compaction_seconds",
                         &std::env::var("SOLANA_ROCKSDB_PERIODIC_COMPACTION_SECONDS")
-                            .unwrap_or(format!("{}", 60 * 60 * 24 * 3)),
+                            .unwrap_or(format!("{}", PERIODIC_COMPACTION_SECONDS)),
                     )],
                 )
                 .unwrap();
@@ -1217,7 +1212,11 @@ fn get_cf_options<C: 'static + Column + ColumnName>(
     options.set_max_bytes_for_level_base(total_size_base);
     options.set_target_file_size_base(file_size_base);
 
-    if C::NAME != columns::TransactionStatusIndex::NAME {
+    // TransactionStatusIndex must be excluded from LedgerCleanupService's rocksdb
+    // compactions....
+    if matches!(access_type, AccessType::PrimaryOnly)
+        && C::NAME != columns::TransactionStatusIndex::NAME
+    {
         options.set_compaction_filter_factory(PurgedSlotFilterFactory::<C>(
             oldest_slot.clone(),
             CString::new(format!("purged_slot_filter_factory({})", C::NAME)).unwrap(),
