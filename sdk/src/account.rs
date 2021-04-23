@@ -797,15 +797,15 @@ pub mod tests {
             for pass in 0..4 {
                 if field_index == 0 {
                     if pass == 0 {
-                        account1.lamports += 1;
+                        account1.checked_add_lamports(1).unwrap();
                     } else if pass == 1 {
-                        account_expected.lamports += 1;
+                        account_expected.checked_add_lamports(1).unwrap();
                         account2.set_lamports(account2.lamports + 1);
                     } else if pass == 2 {
                         account1.set_lamports(account1.lamports + 1);
                     } else if pass == 3 {
-                        account_expected.lamports += 1;
-                        account2.lamports += 1;
+                        account_expected.checked_add_lamports(1).unwrap();
+                        account2.checked_add_lamports(1).unwrap();
                     }
                 } else if field_index == 1 {
                     if pass == 0 {
