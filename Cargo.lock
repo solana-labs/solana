@@ -1415,15 +1415,7 @@ dependencies = [
  "slab",
 ]
 
-[[package]]
-name = "gag"
-version = "0.1.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8cc0b9f53275dc5fada808f1d2f82e3688a6c14d735633d1590b7be8eb2307b5"
-dependencies = [
- "libc",
- "tempfile",
-]
+
 
 [[package]]
 name = "generic-array"
@@ -4706,7 +4698,7 @@ dependencies = [
  "assert_matches",
  "crossbeam-channel 0.4.4",
  "fs_extra",
- "gag",
+
  "itertools",
  "log 0.4.11",
  "rand 0.7.3",
