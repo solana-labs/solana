@@ -364,6 +364,7 @@ mod tests {
     use std::time::Duration;
 
     #[test]
+    #[ignore]
     fn test_poh_service() {
         solana_logger::setup();
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(2);
