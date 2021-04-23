@@ -4277,7 +4277,6 @@ dependencies = [
  "reqwest",
  "retain_mut",
  "rustc_version",
- "rustversion",
  "serde",
  "serde_bytes",
  "serde_derive",
