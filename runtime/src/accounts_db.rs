@@ -7403,8 +7403,8 @@ pub mod tests {
 
         // Owner may not be modified
         let mut account_modified = account.clone();
-        account_modified.owner =
-            Pubkey::from_str("My11111111111111111111111111111111111111111").unwrap();
+        account_modified
+            .set_owner(Pubkey::from_str("My11111111111111111111111111111111111111111").unwrap());
         assert_ne!(
             hash,
             AccountsDb::hash_frozen_account_data(&account_modified)
