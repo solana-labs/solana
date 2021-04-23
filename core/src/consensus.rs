@@ -1,4 +1,7 @@
-use crate::progress_map::{LockoutIntervals, ProgressMap};
+use crate::{
+    latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
+    progress_map::{LockoutIntervals, ProgressMap},
+};
 use chrono::prelude::*;
 use solana_ledger::{ancestor_iterator::AncestorIterator, blockstore::Blockstore, blockstore_db};
 use solana_measure::measure::Measure;
@@ -95,7 +98,6 @@ pub(crate) struct ComputedBankState {
     // Tree of intervals of lockouts of the form [slot, slot + slot.lockout],
     // keyed by end of the range
     pub lockout_intervals: LockoutIntervals,
-    pub pubkey_votes: Arc<PubkeyVotes>,
 }
 
 #[frozen_abi(digest = "Eay84NBbJqiMBfE7HHH2o6e51wcvoU79g8zCi5sw6uj3")]
@@ -219,6 +221,8 @@ impl Tower {
         bank_slot: Slot,
         vote_accounts: F,
         ancestors: &HashMap<Slot, HashSet<Slot>>,
+        get_frozen_hash: impl Fn(Slot) -> Option<Hash>,
+        latest_validator_votes_for_frozen_banks: &mut LatestValidatorVotesForFrozenBanks,
     ) -> ComputedBankState
     where
         F: IntoIterator<Item = (Pubkey, (u64, ArcVoteAccount))>,
@@ -230,7 +234,6 @@ impl Tower {
         // Tree of intervals of lockouts of the form [slot, slot + slot.lockout],
         // keyed by end of the range
         let mut lockout_intervals = LockoutIntervals::new();
-        let mut pubkey_votes = vec![];
         for (key, (voted_stake, account)) in vote_accounts {
             if voted_stake == 0 {
                 continue;
@@ -277,8 +280,12 @@ impl Tower {
             let start_root = vote_state.root_slot;
 
             // Add the last vote to update the `heaviest_subtree_fork_choice`
-            if let Some(last_voted_slot) = vote_state.last_voted_slot() {
-                pubkey_votes.push((key, last_voted_slot));
+            if let Some(last_landed_voted_slot) = vote_state.last_voted_slot() {
+                latest_validator_votes_for_frozen_banks.check_add_vote(
+                    key,
+                    last_landed_voted_slot,
+                    get_frozen_hash(last_landed_voted_slot),
+                );
             }
 
             vote_state.process_slot_vote_unchecked(bank_slot);
@@ -341,7 +348,6 @@ impl Tower {
             total_stake,
             bank_weight,
             lockout_intervals,
-            pubkey_votes: Arc::new(pubkey_votes),
         }
     }
 
@@ -1272,11 +1278,13 @@ pub mod test {
     use super::*;
     use crate::{
         cluster_info_vote_listener::VoteTracker,
+        cluster_slot_state_verifier::GossipDuplicateConfirmedSlots,
         cluster_slots::ClusterSlots,
         fork_choice::SelectVoteAndResetForkResult,
-        heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
+        heaviest_subtree_fork_choice::{HeaviestSubtreeForkChoice, SlotHashKey},
         progress_map::{DuplicateStats, ForkProgress},
         replay_stage::{HeaviestForkFailures, ReplayStage},
+        unfrozen_gossip_verified_vote_hashes::UnfrozenGossipVerifiedVoteHashes,
     };
     use solana_ledger::{blockstore::make_slot_entries, get_tmp_ledger_path};
     use solana_runtime::{
@@ -1300,7 +1308,7 @@ pub mod test {
         vote_transaction,
     };
     use std::{
-        collections::{BTreeMap, HashMap},
+        collections::HashMap,
         fs::{remove_file, OpenOptions},
         io::{Read, Seek, SeekFrom, Write},
         sync::RwLock,
@@ -1315,6 +1323,7 @@ pub mod test {
         pub bank_forks: RwLock<BankForks>,
         pub progress: ProgressMap,
         pub heaviest_subtree_fork_choice: HeaviestSubtreeForkChoice,
+        pub latest_validator_votes_for_frozen_banks: LatestValidatorVotesForFrozenBanks,
     }
 
     impl VoteSimulator {
@@ -1334,6 +1343,8 @@ pub mod test {
                 bank_forks: RwLock::new(bank_forks),
                 progress,
                 heaviest_subtree_fork_choice,
+                latest_validator_votes_for_frozen_banks:
+                    LatestValidatorVotesForFrozenBanks::default(),
             }
         }
         pub(crate) fn fill_bank_forks(
@@ -1415,6 +1426,7 @@ pub mod test {
                 &ClusterSlots::default(),
                 &self.bank_forks,
                 &mut self.heaviest_subtree_fork_choice,
+                &mut self.latest_validator_votes_for_frozen_banks,
             );
 
             let vote_bank = self
@@ -1461,8 +1473,8 @@ pub mod test {
                 &AbsRequestSender::default(),
                 None,
                 &mut self.heaviest_subtree_fork_choice,
-                &mut BTreeMap::new(),
-                &mut BTreeMap::new(),
+                &mut GossipDuplicateConfirmedSlots::default(),
+                &mut UnfrozenGossipVerifiedVoteHashes::default(),
                 &mut true,
                 &mut Vec::new(),
             )
@@ -2130,24 +2142,34 @@ pub mod test {
         //two accounts voting for slot 0 with 1 token staked
         let mut accounts = gen_stakes(&[(1, &[0]), (1, &[0])]);
         accounts.sort_by_key(|(pk, _)| *pk);
-        let account_latest_votes: PubkeyVotes =
-            accounts.iter().map(|(pubkey, _)| (*pubkey, 0)).collect();
+        let account_latest_votes: Vec<(Pubkey, SlotHashKey)> = accounts
+            .iter()
+            .map(|(pubkey, _)| (*pubkey, (0, Hash::default())))
+            .collect();
 
         let ancestors = vec![(1, vec![0].into_iter().collect()), (0, HashSet::new())]
             .into_iter()
             .collect();
+        let mut latest_validator_votes_for_frozen_banks =
+            LatestValidatorVotesForFrozenBanks::default();
         let ComputedBankState {
             voted_stakes,
             total_stake,
             bank_weight,
-            pubkey_votes,
             ..
-        } = Tower::collect_vote_lockouts(&Pubkey::default(), 1, accounts.into_iter(), &ancestors);
+        } = Tower::collect_vote_lockouts(
+            &Pubkey::default(),
+            1,
+            accounts.into_iter(),
+            &ancestors,
+            |_| Some(Hash::default()),
+            &mut latest_validator_votes_for_frozen_banks,
+        );
         assert_eq!(voted_stakes[&0], 2);
         assert_eq!(total_stake, 2);
-        let mut pubkey_votes = Arc::try_unwrap(pubkey_votes).unwrap();
-        pubkey_votes.sort();
-        assert_eq!(pubkey_votes, account_latest_votes);
+        let mut new_votes = latest_validator_votes_for_frozen_banks.take_votes_dirty_set(0);
+        new_votes.sort();
+        assert_eq!(new_votes, account_latest_votes);
 
         // Each account has 1 vote in it. After simulating a vote in collect_vote_lockouts,
         // the account will have 2 votes, with lockout 2 + 4 = 6. So expected weight for
@@ -2160,9 +2182,14 @@ pub mod test {
         //two accounts voting for slots 0..MAX_LOCKOUT_HISTORY with 1 token staked
         let mut accounts = gen_stakes(&[(1, &votes), (1, &votes)]);
         accounts.sort_by_key(|(pk, _)| *pk);
-        let account_latest_votes: PubkeyVotes = accounts
+        let account_latest_votes: Vec<(Pubkey, SlotHashKey)> = accounts
             .iter()
-            .map(|(pubkey, _)| (*pubkey, (MAX_LOCKOUT_HISTORY - 1) as Slot))
+            .map(|(pubkey, _)| {
+                (
+                    *pubkey,
+                    ((MAX_LOCKOUT_HISTORY - 1) as Slot, Hash::default()),
+                )
+            })
             .collect();
         let mut tower = Tower::new_for_tests(0, 0.67);
         let mut ancestors = HashMap::new();
@@ -2184,16 +2211,19 @@ pub mod test {
             + root_weight;
         let expected_bank_weight = 2 * vote_account_expected_weight;
         assert_eq!(tower.lockouts.root_slot, Some(0));
+        let mut latest_validator_votes_for_frozen_banks =
+            LatestValidatorVotesForFrozenBanks::default();
         let ComputedBankState {
             voted_stakes,
             bank_weight,
-            pubkey_votes,
             ..
         } = Tower::collect_vote_lockouts(
             &Pubkey::default(),
             MAX_LOCKOUT_HISTORY as u64,
             accounts.into_iter(),
             &ancestors,
+            |_| Some(Hash::default()),
+            &mut latest_validator_votes_for_frozen_banks,
         );
         for i in 0..MAX_LOCKOUT_HISTORY {
             assert_eq!(voted_stakes[&(i as u64)], 2);
@@ -2201,9 +2231,9 @@ pub mod test {
 
         // should be the sum of all the weights for root
         assert_eq!(bank_weight, expected_bank_weight);
-        let mut pubkey_votes = Arc::try_unwrap(pubkey_votes).unwrap();
-        pubkey_votes.sort();
-        assert_eq!(pubkey_votes, account_latest_votes);
+        let mut new_votes = latest_validator_votes_for_frozen_banks.take_votes_dirty_set(root.slot);
+        new_votes.sort();
+        assert_eq!(new_votes, account_latest_votes);
     }
 
     #[test]
@@ -2500,6 +2530,8 @@ pub mod test {
             vote_to_evaluate,
             accounts.clone().into_iter(),
             &ancestors,
+            |_| None,
+            &mut LatestValidatorVotesForFrozenBanks::default(),
         );
         assert!(tower.check_vote_stake_threshold(vote_to_evaluate, &voted_stakes, total_stake,));
 
@@ -2516,6 +2548,8 @@ pub mod test {
             vote_to_evaluate,
             accounts.into_iter(),
             &ancestors,
+            |_| None,
+            &mut LatestValidatorVotesForFrozenBanks::default(),
         );
         assert!(!tower.check_vote_stake_threshold(vote_to_evaluate, &voted_stakes, total_stake,));
     }
