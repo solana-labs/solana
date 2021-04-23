@@ -3516,7 +3516,6 @@ mod tests {
     use itertools::izip;
     use rand::{seq::SliceRandom, SeedableRng};
     use rand_chacha::ChaChaRng;
-    use serial_test::serial;
     use solana_ledger::shred::Shredder;
     use solana_sdk::signature::{Keypair, Signer};
     use solana_vote_program::{vote_instruction, vote_state::Vote};
@@ -4787,8 +4786,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
-    #[ignore]
+    #[ignore] // TODO: debug why this is flaky on buildkite!
     fn test_pull_request_time_pruning() {
         let node = Node::new_localhost();
         let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(node.info));
