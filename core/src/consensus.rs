@@ -98,7 +98,7 @@ pub(crate) struct ComputedBankState {
     // Tree of intervals of lockouts of the form [slot, slot + slot.lockout],
     // keyed by end of the range
     pub lockout_intervals: LockoutIntervals,
-    pub my_latest_landed_vote: Slot,
+    pub my_latest_landed_vote: Option<Slot>,
 }
 
 #[frozen_abi(digest = "Eay84NBbJqiMBfE7HHH2o6e51wcvoU79g8zCi5sw6uj3")]
@@ -242,7 +242,7 @@ impl Tower {
         // Tree of intervals of lockouts of the form [slot, slot + slot.lockout],
         // keyed by end of the range
         let mut lockout_intervals = LockoutIntervals::new();
-        let mut my_latest_landed_vote = 0;
+        let mut my_latest_landed_vote = None;
         for (key, (voted_stake, account)) in vote_accounts {
             if voted_stake == 0 {
                 continue;
@@ -270,7 +270,7 @@ impl Tower {
             }
 
             if key == *vote_account_pubkey {
-                my_latest_landed_vote = vote_state.nth_recent_vote(0).map(|v| v.slot).unwrap_or(0);
+                my_latest_landed_vote = vote_state.nth_recent_vote(0).map(|v| v.slot);
                 debug!("vote state {:?}", vote_state);
                 debug!(
                     "observed slot {}",
@@ -382,14 +382,41 @@ impl Tower {
         self.last_vote_tx_blockhash
     }
 
+    pub fn refresh_last_vote_tx_blockhash(&mut self, new_vote_tx_blockhash: Hash) {
+        self.last_vote_tx_blockhash = new_vote_tx_blockhash;
+    }
+
+    fn apply_vote_and_generate_vote_diff(
+        local_vote_state: &mut VoteState,
+        slot: Slot,
+        hash: Hash,
+        last_voted_slot_in_bank: Option<Slot>,
+    ) -> Vote {
+        let vote = Vote::new(vec![slot], hash);
+        local_vote_state.process_vote_unchecked(&vote);
+        let slots = if let Some(last_voted_slot_in_bank) = last_voted_slot_in_bank {
+            local_vote_state
+                .votes
+                .iter()
+                .map(|v| v.slot)
+                .skip_while(|s| *s <= last_voted_slot_in_bank)
+                .collect()
+        } else {
+            local_vote_state.votes.iter().map(|v| v.slot).collect()
+        };
+        trace!(
+            "new vote with {:?} {:?} {:?}",
+            last_voted_slot_in_bank,
+            slots,
+            local_vote_state.votes
+        );
+        Vote::new(slots, hash)
+    }
+
     pub fn last_voted_slot_in_bank(bank: &Bank, vote_account_pubkey: &Pubkey) -> Option<Slot> {
         let (_stake, vote_account) = bank.get_vote_account(vote_account_pubkey)?;
         let slot = vote_account.vote_state().as_ref().ok()?.last_voted_slot();
         slot
-    }
-
-    pub fn refresh_last_vote_tx_blockhash(&mut self, new_vote_tx_blockhash: Hash) {
-        self.last_vote_tx_blockhash = new_vote_tx_blockhash;
     }
 
     pub fn record_bank_vote(&mut self, bank: &Bank, vote_account_pubkey: &Pubkey) -> Option<Slot> {
@@ -430,33 +457,6 @@ impl Tower {
         } else {
             None
         }
-    }
-
-    fn apply_vote_and_generate_vote_diff(
-        local_vote_state: &mut VoteState,
-        slot: Slot,
-        hash: Hash,
-        last_voted_slot_in_bank: Option<Slot>,
-    ) -> Vote {
-        let vote = Vote::new(vec![slot], hash);
-        local_vote_state.process_vote_unchecked(&vote);
-        let slots = if let Some(last_voted_slot_in_bank) = last_voted_slot_in_bank {
-            local_vote_state
-                .votes
-                .iter()
-                .map(|v| v.slot)
-                .skip_while(|s| *s <= last_voted_slot_in_bank)
-                .collect()
-        } else {
-            local_vote_state.votes.iter().map(|v| v.slot).collect()
-        };
-        trace!(
-            "new vote with {:?} {:?} {:?}",
-            last_voted_slot_in_bank,
-            slots,
-            local_vote_state.votes
-        );
-        Vote::new(slots, hash)
     }
 
     #[cfg(test)]
