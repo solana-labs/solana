@@ -212,6 +212,8 @@ impl LedgerCleanupService {
                         lowest_cleanup_slot,
                         PurgeType::PrimaryIndex,
                     );
+                    // update only after purge operation
+                    blockstore.set_last_purged_slot(lowest_cleanup_slot);
                     purge_time.stop();
                     info!("{}", purge_time);
 

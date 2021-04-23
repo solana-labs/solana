@@ -29,11 +29,6 @@ use std::{
 };
 use thiserror::Error;
 
-lazy_static! {
-    // shared by multiple blockstores...
-    pub static ref LAST_PURGE_SLOT: AtomicU64 = AtomicU64::default();
-}
-
 const MAX_WRITE_BUFFER_SIZE: u64 = 256 * 1024 * 1024; // 256MB
 
 // Column family for metadata about a leader slot
@@ -223,7 +218,7 @@ impl From<BlockstoreRecoveryMode> for DBRecoveryMode {
 }
 
 #[derive(Debug)]
-struct Rocks(rocksdb::DB, ActualAccessType);
+struct Rocks(rocksdb::DB, ActualAccessType, Arc<AtomicU64>);
 
 impl Rocks {
     fn open(
@@ -248,48 +243,68 @@ impl Rocks {
             db_options.set_wal_recovery_mode(recovery_mode.into());
         }
 
+        let oldest_slot = Arc::new(AtomicU64::new(Slot::default()));
+
         // Column family names
-        let meta_cf_descriptor =
-            ColumnFamilyDescriptor::new(SlotMeta::NAME, get_cf_options::<SlotMeta>(&access_type));
-        let dead_slots_cf_descriptor =
-            ColumnFamilyDescriptor::new(DeadSlots::NAME, get_cf_options::<DeadSlots>(&access_type));
+        let meta_cf_descriptor = ColumnFamilyDescriptor::new(
+            SlotMeta::NAME,
+            get_cf_options::<SlotMeta>(&access_type, &oldest_slot),
+        );
+        let dead_slots_cf_descriptor = ColumnFamilyDescriptor::new(
+            DeadSlots::NAME,
+            get_cf_options::<DeadSlots>(&access_type, &oldest_slot),
+        );
         let duplicate_slots_cf_descriptor = ColumnFamilyDescriptor::new(
             DuplicateSlots::NAME,
-            get_cf_options::<DuplicateSlots>(&access_type),
+            get_cf_options::<DuplicateSlots>(&access_type, &oldest_slot),
         );
         let erasure_meta_cf_descriptor = ColumnFamilyDescriptor::new(
             ErasureMeta::NAME,
-            get_cf_options::<ErasureMeta>(&access_type),
+            get_cf_options::<ErasureMeta>(&access_type, &oldest_slot),
         );
-        let orphans_cf_descriptor =
-            ColumnFamilyDescriptor::new(Orphans::NAME, get_cf_options::<Orphans>(&access_type));
-        let root_cf_descriptor =
-            ColumnFamilyDescriptor::new(Root::NAME, get_cf_options::<Root>(&access_type));
-        let index_cf_descriptor =
-            ColumnFamilyDescriptor::new(Index::NAME, get_cf_options::<Index>(&access_type));
-        let shred_data_cf_descriptor =
-            ColumnFamilyDescriptor::new(ShredData::NAME, get_cf_options::<ShredData>(&access_type));
-        let shred_code_cf_descriptor =
-            ColumnFamilyDescriptor::new(ShredCode::NAME, get_cf_options::<ShredCode>(&access_type));
+        let orphans_cf_descriptor = ColumnFamilyDescriptor::new(
+            Orphans::NAME,
+            get_cf_options::<Orphans>(&access_type, &oldest_slot),
+        );
+        let root_cf_descriptor = ColumnFamilyDescriptor::new(
+            Root::NAME,
+            get_cf_options::<Root>(&access_type, &oldest_slot),
+        );
+        let index_cf_descriptor = ColumnFamilyDescriptor::new(
+            Index::NAME,
+            get_cf_options::<Index>(&access_type, &oldest_slot),
+        );
+        let shred_data_cf_descriptor = ColumnFamilyDescriptor::new(
+            ShredData::NAME,
+            get_cf_options::<ShredData>(&access_type, &oldest_slot),
+        );
+        let shred_code_cf_descriptor = ColumnFamilyDescriptor::new(
+            ShredCode::NAME,
+            get_cf_options::<ShredCode>(&access_type, &oldest_slot),
+        );
         let transaction_status_cf_descriptor = ColumnFamilyDescriptor::new(
             TransactionStatus::NAME,
-            get_cf_options::<TransactionStatus>(&access_type),
+            get_cf_options::<TransactionStatus>(&access_type, &oldest_slot),
         );
         let address_signatures_cf_descriptor = ColumnFamilyDescriptor::new(
             AddressSignatures::NAME,
-            get_cf_options::<AddressSignatures>(&access_type),
+            get_cf_options::<AddressSignatures>(&access_type, &oldest_slot),
         );
         let transaction_status_index_cf_descriptor = ColumnFamilyDescriptor::new(
             TransactionStatusIndex::NAME,
-            get_cf_options::<TransactionStatusIndex>(&access_type),
+            get_cf_options::<TransactionStatusIndex>(&access_type, &oldest_slot),
         );
-        let rewards_cf_descriptor =
-            ColumnFamilyDescriptor::new(Rewards::NAME, get_cf_options::<Rewards>(&access_type));
-        let blocktime_cf_descriptor =
-            ColumnFamilyDescriptor::new(Blocktime::NAME, get_cf_options::<Blocktime>(&access_type));
+        let rewards_cf_descriptor = ColumnFamilyDescriptor::new(
+            Rewards::NAME,
+            get_cf_options::<Rewards>(&access_type, &oldest_slot),
+        );
+        let blocktime_cf_descriptor = ColumnFamilyDescriptor::new(
+            Blocktime::NAME,
+            get_cf_options::<Blocktime>(&access_type, &oldest_slot),
+        );
         let perf_samples_cf_descriptor = ColumnFamilyDescriptor::new(
             PerfSamples::NAME,
-            get_cf_options::<PerfSamples>(&access_type),
+            get_cf_options::<PerfSamples>(&access_type, &oldest_slot),
         );
         let block_height_cf_descriptor = ColumnFamilyDescriptor::new(
             BlockHeight::NAME,
@@ -324,10 +339,11 @@ impl Rocks {
             AccessType::PrimaryOnly | AccessType::PrimaryOnlyForMaintenance => Rocks(
                 DB::open_cf_descriptors(&db_options, path, cfs.into_iter().map(|c| c.1))?,
                 ActualAccessType::Primary,
+                oldest_slot,
             ),
             AccessType::TryPrimaryThenSecondary => {
                 match DB::open_cf_descriptors(&db_options, path, cfs.into_iter().map(|c| c.1)) {
-                    Ok(db) => Rocks(db, ActualAccessType::Primary),
+                    Ok(db) => Rocks(db, ActualAccessType::Primary, oldest_slot),
                     Err(err) => {
                         let secondary_path = path.join("solana-secondary");
 
@@ -346,6 +362,7 @@ impl Rocks {
                                 cf_names.clone(),
                             )?,
                             ActualAccessType::Secondary,
+                            oldest_slot,
                         )
                     }
                 }
@@ -355,6 +372,10 @@ impl Rocks {
             // Setting ttl only makes sense for primary access mode; and forcing so with secondary
             // access causes hard-errors from RocksDB...
             for cf_name in cf_names {
+                if cf_name == TransactionStatusIndex::NAME {
+                    continue;
+                }
+
                 db.0.set_options_cf(
                     db.cf_handle(cf_name),
                     &[(
@@ -471,9 +492,13 @@ pub trait Column {
 
     fn key(index: Self::Index) -> Vec<u8>;
     fn index(key: &[u8]) -> Self::Index;
-    fn primary_index(index: Self::Index) -> Slot;
+    // this return Slot or some u64
+    fn primary_index(index: Self::Index) -> u64;
     #[allow(clippy::wrong_self_convention)]
     fn as_index(slot: Slot) -> Self::Index;
+    fn slot(index: Self::Index) -> Slot {
+        Self::primary_index(index)
+    }
 }
 
 pub trait ColumnName {
@@ -547,6 +572,10 @@ impl Column for columns::TransactionStatus {
         index.0
     }
 
+    fn slot(index: Self::Index) -> Slot {
+        index.2
+    }
+
     #[allow(clippy::wrong_self_convention)]
     fn as_index(index: u64) -> Self::Index {
         (index, Signature::default(), 0)
@@ -584,6 +613,10 @@ impl Column for columns::AddressSignatures {
         index.0
     }
 
+    fn slot(index: Self::Index) -> Slot {
+        index.2
+    }
+
     #[allow(clippy::wrong_self_convention)]
     fn as_index(index: u64) -> Self::Index {
         (index, Pubkey::default(), 0, Signature::default())
@@ -609,6 +642,10 @@ impl Column for columns::TransactionStatusIndex {
 
     fn primary_index(index: u64) -> u64 {
         index
+    }
+
+    fn slot(_index: Self::Index) -> Slot {
+        unimplemented!()
     }
 
     #[allow(clippy::wrong_self_convention)]
@@ -911,6 +948,12 @@ impl Database {
     pub fn is_primary_access(&self) -> bool {
         self.backend.is_primary_access()
     }
+
+    pub fn set_oldest_slot(&self, oldest_slot: Slot) {
+        self.backend
+            .2
+            .store(oldest_slot, std::sync::atomic::Ordering::Relaxed);
+    }
 }
 
 impl<C> LedgerColumn<C>
@@ -1088,22 +1131,54 @@ impl<'a> WriteBatch<'a> {
     }
 }
 
-fn purged_slot_filter<C: 'static + Column>(
-    _level: u32,
-    key: &[u8],
-    _value: &[u8],
-) -> CompactionDecision {
-    use rocksdb::CompactionDecision::*;
+use rocksdb::compaction_filter::CompactionFilter;
+use rocksdb::compaction_filter_factory::CompactionFilterContext;
+use rocksdb::compaction_filter_factory::CompactionFilterFactory;
+use std::ffi::CStr;
+use std::ffi::CString;
 
-    let slot_in_key = C::primary_index(C::index(key));
-    if slot_in_key > LAST_PURGE_SLOT.load(Ordering::Relaxed) {
-        Keep
-    } else {
-        Remove
+struct PurgedSlotFilter<C: Column + ColumnName>(Slot, CString, PhantomData<C>);
+
+impl<C: Column + ColumnName> CompactionFilter for PurgedSlotFilter<C> {
+    fn filter(&mut self, _level: u32, key: &[u8], _value: &[u8]) -> CompactionDecision {
+        use rocksdb::CompactionDecision::*;
+
+        let slot_in_key = C::slot(C::index(key));
+        if slot_in_key >= self.0 {
+            Keep
+        } else {
+            Remove
+        }
+    }
+
+    fn name(&self) -> &CStr {
+        &self.1
     }
 }
 
-fn get_cf_options<C: 'static + Column>(access_type: &AccessType) -> Options {
+struct PurgedSlotFilterFactory<C: Column + ColumnName>(Arc<AtomicU64>, CString, PhantomData<C>);
+
+impl<C: Column + ColumnName> CompactionFilterFactory for PurgedSlotFilterFactory<C> {
+    type Filter = PurgedSlotFilter<C>;
+
+    fn create(&mut self, _context: CompactionFilterContext) -> Self::Filter {
+        let oldest_slot = self.0.load(Ordering::Relaxed);
+        PurgedSlotFilter::<C>(
+            oldest_slot,
+            CString::new(format!("purged_slot_filter({}, {})", C::NAME, oldest_slot)).unwrap(),
+            PhantomData::default(),
+        )
+    }
+
+    fn name(&self) -> &CStr {
+        &self.1
+    }
+}
+
+fn get_cf_options<C: 'static + Column + ColumnName>(
+    access_type: &AccessType,
+    oldest_slot: &Arc<AtomicU64>,
+) -> Options {
     let mut options = Options::default();
     // 256 * 8 = 2GB. 6 of these columns should take at most 12GB of RAM
     options.set_max_write_buffer_number(8);
@@ -1117,7 +1192,13 @@ fn get_cf_options<C: 'static + Column>(access_type: &AccessType) -> Options {
     options.set_level_zero_file_num_compaction_trigger(file_num_compaction_trigger as i32);
     options.set_max_bytes_for_level_base(total_size_base);
     options.set_target_file_size_base(file_size_base);
-    options.set_compaction_filter("purged_slot_filter", purged_slot_filter::<C>);
+    if C::NAME != columns::TransactionStatusIndex::NAME {
+        options.set_compaction_filter_factory(PurgedSlotFilterFactory::<C>(
+            oldest_slot.clone(),
+            CString::new(format!("purged_slot_filter_factory({})", C::NAME)).unwrap(),
+            PhantomData::default(),
+        ));
+    }
     if matches!(access_type, AccessType::PrimaryOnlyForMaintenance) {
         options.set_disable_auto_compactions(true);
     }

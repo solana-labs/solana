@@ -16,8 +16,6 @@ impl Blockstore {
         let mut purge_stats = PurgeStats::default();
         let purge_result =
             self.run_purge_with_stats(from_slot, to_slot, purge_type, &mut purge_stats);
-        // update only after purge operation
-        crate::blockstore_db::LAST_PURGE_SLOT.store(to_slot, std::sync::atomic::Ordering::Relaxed);
 
         datapoint_info!(
             "blockstore-purge",
@@ -32,6 +30,13 @@ impl Blockstore {
                 e, from_slot, to_slot
             );
         }
+    }
+
+    pub fn set_last_purged_slot(&self, to_slot: Slot) {
+        // convert here from inclusive puraged range end to inclusive alive range start to align
+        // with Slot::defualt() for initial compaction filter behavior consistency
+        let to_slot = to_slot.checked_add(1).unwrap();
+        self.db.set_oldest_slot(to_slot);
     }
 
     pub fn purge_and_compact_slots(&self, from_slot: Slot, to_slot: Slot) {
