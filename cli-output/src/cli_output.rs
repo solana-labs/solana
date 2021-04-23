@@ -343,18 +343,24 @@ impl fmt::Display for CliValidators {
             validator: &CliValidator,
             total_active_stake: u64,
             use_lamports_unit: bool,
+            highest_last_vote: u64,
+            highest_root: u64,
         ) -> fmt::Result {
-            fn non_zero_or_dash(v: u64) -> String {
+            fn non_zero_or_dash(v: u64, max_v: u64) -> String {
                 if v == 0 {
-                    "-".into()
+                    "-         ".into()
+                } else if v == max_v {
+                    format!("{:>8} (  0)", v)
+                } else if v > max_v.saturating_sub(100) {
+                    format!("{:>8} ({:>3})", v, -(max_v.saturating_sub(v) as isize))
                 } else {
-                    format!("{}", v)
+                    format!("{:>8}      ", v)
                 }
             }
 
             writeln!(
                 f,
-                "{} {:<44}  {:<44}  {:>3}%   {:>8}  {:>10} {:>13} {:>7}  {}",
+                "{} {:<44}  {:<44}  {:>3}%   {:>14}  {:>14} {:>13} {:>7}  {}",
                 if validator.delinquent {
                     WARNING.to_string()
                 } else {
@@ -363,8 +369,8 @@ impl fmt::Display for CliValidators {
                 validator.identity_pubkey,
                 validator.vote_account_pubkey,
                 validator.commission,
-                non_zero_or_dash(validator.last_vote),
-                non_zero_or_dash(validator.root_slot),
+                non_zero_or_dash(validator.last_vote, highest_last_vote),
+                non_zero_or_dash(validator.root_slot, highest_root),
                 validator.epoch_credits,
                 validator.version,
                 if validator.activated_stake > 0 {
@@ -390,8 +396,8 @@ impl fmt::Display for CliValidators {
             "Identity",
             "Vote Account",
             "Commission",
-            "Last Vote",
-            "Root Block",
+            "Last Vote      ",
+            "Root Slot     ",
             "Epoch Credits",
             "Version",
             "Active Stake",
@@ -432,6 +438,17 @@ impl fmt::Display for CliValidators {
             sorted_validators.reverse();
         }
 
+        let highest_root = sorted_validators
+            .iter()
+            .map(|v| v.root_slot)
+            .max()
+            .unwrap_or_default();
+        let highest_last_vote = sorted_validators
+            .iter()
+            .map(|v| v.last_vote)
+            .max()
+            .unwrap_or_default();
+
         for (i, validator) in sorted_validators.iter().enumerate() {
             if padding > 0 {
                 write!(f, "{:padding$}", i + 1, padding = padding)?;
@@ -441,6 +458,8 @@ impl fmt::Display for CliValidators {
                 validator,
                 self.total_active_stake,
                 self.use_lamports_unit,
+                highest_last_vote,
+                highest_root,
             )?;
         }
 
