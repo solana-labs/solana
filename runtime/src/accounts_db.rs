@@ -5509,7 +5509,7 @@ pub mod tests {
                 &AccountSharedData::new(
                     raw_expected[0].lamports,
                     1,
-                    &AccountSharedData::default().owner,
+                    AccountSharedData::default().owner(),
                 ),
             )],
         );
@@ -5517,21 +5517,21 @@ pub mod tests {
             SLOT,
             &[(
                 &pubkey127,
-                &AccountSharedData::new(128, 1, &AccountSharedData::default().owner),
+                &AccountSharedData::new(128, 1, AccountSharedData::default().owner()),
             )],
         );
         accounts.store_uncached(
             SLOT,
             &[(
                 &pubkey128,
-                &AccountSharedData::new(129, 1, &AccountSharedData::default().owner),
+                &AccountSharedData::new(129, 1, AccountSharedData::default().owner()),
             )],
         );
         accounts.store_uncached(
             SLOT,
             &[(
                 &pubkey255,
-                &AccountSharedData::new(256, 1, &AccountSharedData::default().owner),
+                &AccountSharedData::new(256, 1, AccountSharedData::default().owner()),
             )],
         );
         accounts.add_root(SLOT);
@@ -5796,7 +5796,7 @@ pub mod tests {
         let arc = Arc::new(data);
         let storages = vec![vec![arc]];
         let pubkey = solana_sdk::pubkey::new_rand();
-        let acc = AccountSharedData::new(1, 48, &AccountSharedData::default().owner);
+        let acc = AccountSharedData::new(1, 48, AccountSharedData::default().owner());
         let sm = StoredMeta {
             data_len: 1,
             pubkey,
@@ -6162,7 +6162,7 @@ pub mod tests {
         for t in 0..num {
             let pubkey = solana_sdk::pubkey::new_rand();
             let account =
-                AccountSharedData::new((t + 1) as u64, space, &AccountSharedData::default().owner);
+                AccountSharedData::new((t + 1) as u64, space, AccountSharedData::default().owner());
             pubkeys.push(pubkey);
             assert!(accounts
                 .load_without_fixed_root(&ancestors, &pubkey)
@@ -6255,7 +6255,7 @@ pub mod tests {
                 AccountSharedData::new(
                     (idx + count) as u64,
                     0,
-                    &AccountSharedData::default().owner,
+                    AccountSharedData::default().owner(),
                 ),
                 slot,
             ));
@@ -6275,7 +6275,7 @@ pub mod tests {
             let account = AccountSharedData::new(
                 (idx + count) as u64,
                 0,
-                &AccountSharedData::default().owner,
+                AccountSharedData::default().owner(),
             );
             accounts.store_uncached(slot, &[(&pubkeys[idx], &account)]);
         }
@@ -6432,7 +6432,7 @@ pub mod tests {
         //not root, it means we are retaining dead banks.
         let accounts = AccountsDb::new(Vec::new(), &ClusterType::Development);
         let pubkey = solana_sdk::pubkey::new_rand();
-        let account = AccountSharedData::new(1, 0, &AccountSharedData::default().owner);
+        let account = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
         //store an account
         accounts.store_uncached(0, &[(&pubkey, &account)]);
         let ancestors = vec![(0, 0)].into_iter().collect();
@@ -6507,9 +6507,9 @@ pub mod tests {
         let accounts = AccountsDb::new(Vec::new(), &ClusterType::Development);
         let pubkey1 = solana_sdk::pubkey::new_rand();
         let pubkey2 = solana_sdk::pubkey::new_rand();
-        let account = AccountSharedData::new(1, 1, &AccountSharedData::default().owner);
+        let account = AccountSharedData::new(1, 1, AccountSharedData::default().owner());
         let zero_lamport_account =
-            AccountSharedData::new(0, 0, &AccountSharedData::default().owner);
+            AccountSharedData::new(0, 0, AccountSharedData::default().owner());
 
         // Store two accounts
         accounts.store_uncached(0, &[(&pubkey1, &account)]);
@@ -6563,9 +6563,9 @@ pub mod tests {
 
         let accounts = AccountsDb::new(Vec::new(), &ClusterType::Development);
         let pubkey = solana_sdk::pubkey::new_rand();
-        let account = AccountSharedData::new(1, 0, &AccountSharedData::default().owner);
+        let account = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
         let zero_lamport_account =
-            AccountSharedData::new(0, 0, &AccountSharedData::default().owner);
+            AccountSharedData::new(0, 0, AccountSharedData::default().owner());
 
         // Store a zero-lamport account
         accounts.store_uncached(0, &[(&pubkey, &account)]);
@@ -6603,7 +6603,7 @@ pub mod tests {
 
         let accounts = AccountsDb::new(Vec::new(), &ClusterType::Development);
         let pubkey = solana_sdk::pubkey::new_rand();
-        let account = AccountSharedData::new(1, 0, &AccountSharedData::default().owner);
+        let account = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
         //store an account
         accounts.store_uncached(0, &[(&pubkey, &account)]);
         accounts.store_uncached(1, &[(&pubkey, &account)]);
@@ -6632,8 +6632,8 @@ pub mod tests {
         let accounts = AccountsDb::new(Vec::new(), &ClusterType::Development);
         let pubkey1 = solana_sdk::pubkey::new_rand();
         let pubkey2 = solana_sdk::pubkey::new_rand();
-        let normal_account = AccountSharedData::new(1, 0, &AccountSharedData::default().owner);
-        let zero_account = AccountSharedData::new(0, 0, &AccountSharedData::default().owner);
+        let normal_account = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
+        let zero_account = AccountSharedData::new(0, 0, AccountSharedData::default().owner());
         //store an account
         accounts.store_uncached(0, &[(&pubkey1, &normal_account)]);
         accounts.store_uncached(1, &[(&pubkey1, &zero_account)]);
@@ -6678,10 +6678,10 @@ pub mod tests {
             vec![0; inline_spl_token_v2_0::state::Account::get_packed_len()];
         account_data_with_mint[..PUBKEY_BYTES].clone_from_slice(&(mint_key.to_bytes()));
 
-        let mut normal_account = AccountSharedData::new(1, 0, &AccountSharedData::default().owner);
+        let mut normal_account = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
         normal_account.owner = inline_spl_token_v2_0::id();
         normal_account.set_data(account_data_with_mint.clone());
-        let mut zero_account = AccountSharedData::new(0, 0, &AccountSharedData::default().owner);
+        let mut zero_account = AccountSharedData::new(0, 0, AccountSharedData::default().owner());
         zero_account.owner = inline_spl_token_v2_0::id();
         zero_account.set_data(account_data_with_mint);
 
@@ -6748,8 +6748,8 @@ pub mod tests {
 
         let accounts = AccountsDb::new(Vec::new(), &ClusterType::Development);
         let pubkey = solana_sdk::pubkey::new_rand();
-        let account = AccountSharedData::new(1, 0, &AccountSharedData::default().owner);
-        let zero_account = AccountSharedData::new(0, 0, &AccountSharedData::default().owner);
+        let account = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
+        let zero_account = AccountSharedData::new(0, 0, AccountSharedData::default().owner());
 
         // store an account, make it a zero lamport account
         // in slot 1
@@ -6785,7 +6785,7 @@ pub mod tests {
 
         let accounts = AccountsDb::new(Vec::new(), &ClusterType::Development);
         let pubkey = solana_sdk::pubkey::new_rand();
-        let account = AccountSharedData::new(1, 0, &AccountSharedData::default().owner);
+        let account = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
         //store an account
         accounts.store_uncached(0, &[(&pubkey, &account)]);
         assert_eq!(accounts.accounts_index.uncleaned_roots_len(), 0);
@@ -6843,7 +6843,7 @@ pub mod tests {
         modify_accounts(&accounts, &pubkeys, latest_slot, 10, 3);
         // Overwrite account 30 from slot 0 with lamports=0 into slot 1.
         // Slot 1 should now have 10 + 1 = 11 accounts
-        let account = AccountSharedData::new(0, 0, &AccountSharedData::default().owner);
+        let account = AccountSharedData::new(0, 0, AccountSharedData::default().owner());
         accounts.store_uncached(latest_slot, &[(&pubkeys[30], &account)]);
 
         // Create 10 new accounts in slot 1, should now have 11 + 10 = 21
@@ -6863,7 +6863,7 @@ pub mod tests {
         accounts.clean_accounts(None);
         // Overwrite account 31 from slot 0 with lamports=0 into slot 2.
         // Slot 2 should now have 20 + 1 = 21 accounts
-        let account = AccountSharedData::new(0, 0, &AccountSharedData::default().owner);
+        let account = AccountSharedData::new(0, 0, AccountSharedData::default().owner());
         accounts.store_uncached(latest_slot, &[(&pubkeys[31], &account)]);
 
         // Create 10 new accounts in slot 2. Slot 2 should now have
@@ -7813,7 +7813,7 @@ pub mod tests {
     fn test_storage_remove_account_double_remove() {
         let accounts = AccountsDb::new(Vec::new(), &ClusterType::Development);
         let pubkey = solana_sdk::pubkey::new_rand();
-        let account = AccountSharedData::new(1, 0, &AccountSharedData::default().owner);
+        let account = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
         accounts.store_uncached(0, &[(&pubkey, &account)]);
         let storage_entry = accounts
             .storage
@@ -8634,7 +8634,7 @@ pub mod tests {
         let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
         let account_key = Pubkey::new_unique();
         let zero_lamport_account =
-            AccountSharedData::new(0, 0, &AccountSharedData::default().owner);
+            AccountSharedData::new(0, 0, AccountSharedData::default().owner());
 
         // Store zero lamport account into slots 0 and 1, root both slots
         db.store_uncached(0, &[(&account_key, &zero_lamport_account)]);
@@ -8845,8 +8845,8 @@ pub mod tests {
 
         let account_key = Pubkey::new_unique();
         let zero_lamport_account =
-            AccountSharedData::new(0, 0, &AccountSharedData::default().owner);
-        let slot1_account = AccountSharedData::new(1, 1, &AccountSharedData::default().owner);
+            AccountSharedData::new(0, 0, AccountSharedData::default().owner());
+        let slot1_account = AccountSharedData::new(1, 1, AccountSharedData::default().owner());
         db.store_cached(0, &[(&account_key, &zero_lamport_account)]);
         db.store_cached(1, &[(&account_key, &slot1_account)]);
 
@@ -8892,8 +8892,8 @@ pub mod tests {
 
         let account_key = Pubkey::new_unique();
         let zero_lamport_account =
-            AccountSharedData::new(0, 0, &AccountSharedData::default().owner);
-        let slot1_account = AccountSharedData::new(1, 1, &AccountSharedData::default().owner);
+            AccountSharedData::new(0, 0, AccountSharedData::default().owner());
+        let slot1_account = AccountSharedData::new(1, 1, AccountSharedData::default().owner());
         db.store_cached(0, &[(&account_key, &zero_lamport_account)]);
         db.store_cached(1, &[(&account_key, &slot1_account)]);
 
@@ -8943,9 +8943,9 @@ pub mod tests {
 
         let original_lamports = 1;
         let slot0_account =
-            AccountSharedData::new(original_lamports, 1, &AccountSharedData::default().owner);
+            AccountSharedData::new(original_lamports, 1, AccountSharedData::default().owner());
         let zero_lamport_account =
-            AccountSharedData::new(0, 0, &AccountSharedData::default().owner);
+            AccountSharedData::new(0, 0, AccountSharedData::default().owner());
 
         // Store into slot 0, and then flush the slot to storage
         db.store_cached(0, &[(&zero_lamport_account_key, &slot0_account)]);
@@ -9071,9 +9071,9 @@ pub mod tests {
         let account_key = Pubkey::new_unique();
         let account_key2 = Pubkey::new_unique();
         let zero_lamport_account =
-            AccountSharedData::new(0, 0, &AccountSharedData::default().owner);
-        let slot1_account = AccountSharedData::new(1, 1, &AccountSharedData::default().owner);
-        let slot2_account = AccountSharedData::new(2, 1, &AccountSharedData::default().owner);
+            AccountSharedData::new(0, 0, AccountSharedData::default().owner());
+        let slot1_account = AccountSharedData::new(1, 1, AccountSharedData::default().owner());
+        let slot2_account = AccountSharedData::new(2, 1, AccountSharedData::default().owner());
 
         /*
             Store zero lamport account into slots 0, 1, 2 where
@@ -9626,7 +9626,7 @@ pub mod tests {
         );
         let account_key1 = Pubkey::new_unique();
         let account_key2 = Pubkey::new_unique();
-        let account1 = AccountSharedData::new(1, 0, &AccountSharedData::default().owner);
+        let account1 = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
 
         // Store into slot 0
         db.store_cached(0, &[(&account_key1, &account1)]);
@@ -9704,10 +9704,10 @@ pub mod tests {
         let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
         let account_key1 = Pubkey::new_unique();
         let account_key2 = Pubkey::new_unique();
-        let account1 = AccountSharedData::new(1, 0, &AccountSharedData::default().owner);
-        let account2 = AccountSharedData::new(2, 0, &AccountSharedData::default().owner);
-        let account3 = AccountSharedData::new(3, 0, &AccountSharedData::default().owner);
-        let account4 = AccountSharedData::new(4, 0, &AccountSharedData::default().owner);
+        let account1 = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
+        let account2 = AccountSharedData::new(2, 0, AccountSharedData::default().owner());
+        let account3 = AccountSharedData::new(3, 0, AccountSharedData::default().owner());
+        let account4 = AccountSharedData::new(4, 0, AccountSharedData::default().owner());
 
         // Store accounts into slots 0 and 1
         db.store_uncached(0, &[(&account_key1, &account1)]);
@@ -9894,7 +9894,7 @@ pub mod tests {
             0,
             &[(
                 &pubkey,
-                &AccountSharedData::new(1, 0, &AccountSharedData::default().owner),
+                &AccountSharedData::new(1, 0, AccountSharedData::default().owner()),
             )],
         );
         db.add_root(0);
@@ -9904,7 +9904,7 @@ pub mod tests {
             let db = db.clone();
             let exit = exit.clone();
             let pubkey = pubkey.clone();
-            let mut account = AccountSharedData::new(1, 0, &AccountSharedData::default().owner);
+            let mut account = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
             std::thread::Builder::new()
                 .name("account-cache-flush".to_string())
                 .spawn(move || {
@@ -9965,7 +9965,7 @@ pub mod tests {
 
         // Store an account
         let lamports = 42;
-        let mut account = AccountSharedData::new(1, 0, &AccountSharedData::default().owner);
+        let mut account = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
         account.set_lamports(lamports);
         db.store_uncached(slot, &[(&pubkey, &account)]);
 
@@ -10040,7 +10040,7 @@ pub mod tests {
 
         // Store an account
         let lamports = 42;
-        let mut account = AccountSharedData::new(1, 0, &AccountSharedData::default().owner);
+        let mut account = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
         account.set_lamports(lamports);
         db.store_uncached(slot, &[(&pubkey, &account)]);
 

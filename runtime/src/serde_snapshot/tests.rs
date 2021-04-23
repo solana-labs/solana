@@ -10,7 +10,7 @@ use {
     bincode::serialize_into,
     rand::{thread_rng, Rng},
     solana_sdk::{
-        account::AccountSharedData,
+        account::{AccountSharedData, ReadableAccount},
         clock::Slot,
         genesis_config::{create_genesis_config, ClusterType},
         pubkey::Pubkey,
@@ -48,7 +48,7 @@ fn check_accounts(accounts: &Accounts, pubkeys: &[Pubkey], num: usize) {
         let ancestors = vec![(0, 0)].into_iter().collect();
         let account = accounts.load_without_fixed_root(&ancestors, &pubkeys[idx]);
         let account1 = Some((
-            AccountSharedData::new((idx + 1) as u64, 0, &AccountSharedData::default().owner),
+            AccountSharedData::new((idx + 1) as u64, 0, AccountSharedData::default().owner()),
             0,
         ));
         assert_eq!(account, account1);
