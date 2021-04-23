@@ -46,7 +46,7 @@ fn get_declaration_packed_len(
         None => match declaration {
             "u8" | "i8" => 1,
             "u16" | "i16" => 2,
-            "u32" | "i32" => 2,
+            "u32" | "i32" => 4,
             "u64" | "i64" => 8,
             "u128" | "i128" => 16,
             "nil" => 0,
@@ -99,7 +99,8 @@ mod tests {
     #[derive(BorshSerialize, BorshDeserialize, BorshSchema)]
     struct TestStruct {
         pub array: [u64; 16],
-        pub number: u128,
+        pub number_u128: u128,
+        pub number_u32: u32,
         pub tuple: (u8, u16),
         pub enumeration: TestEnum,
     }
@@ -152,6 +153,7 @@ mod tests {
             get_packed_len::<TestStruct>(),
             size_of::<u64>() * 16
                 + size_of::<u128>()
+                + size_of::<u32>()
                 + size_of::<u8>()
                 + size_of::<u16>()
                 + get_packed_len::<TestEnum>()
