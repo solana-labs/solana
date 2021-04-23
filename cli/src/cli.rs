@@ -444,7 +444,7 @@ pub struct CliConfig<'a> {
     pub websocket_url: String,
     pub signers: Vec<&'a dyn Signer>,
     pub keypair_path: String,
-    pub rpc_client: Option<RpcClient>,
+    pub rpc_client: Option<Arc<RpcClient>>,
     pub rpc_timeout: Duration,
     pub verbose: bool,
     pub output_format: OutputFormat,
@@ -1284,17 +1284,15 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         println_name_value("Commitment:", &config.commitment.commitment.to_string());
     }
 
-    let mut _rpc_client;
     let rpc_client = if config.rpc_client.is_none() {
-        _rpc_client = RpcClient::new_with_timeout_and_commitment(
+        Arc::new(RpcClient::new_with_timeout_and_commitment(
             config.json_rpc_url.to_string(),
             config.rpc_timeout,
             config.commitment,
-        );
-        &_rpc_client
+        ))
     } else {
         // Primarily for testing
-        config.rpc_client.as_ref().unwrap()
+        config.rpc_client.as_ref().unwrap().clone()
     };
 
     match &config.command {
@@ -1502,7 +1500,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             use_deprecated_loader,
             allow_excessive_balance,
         } => process_deploy(
-            &rpc_client,
+            rpc_client,
             config,
             program_location,
             *address,
@@ -1510,7 +1508,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *allow_excessive_balance,
         ),
         CliCommand::Program(program_subcommand) => {
-            process_program_subcommand(&rpc_client, config, program_subcommand)
+            process_program_subcommand(rpc_client, config, program_subcommand)
         }
 
         // Stake Commands
@@ -2585,7 +2583,7 @@ mod tests {
     fn test_cli_process_command() {
         // Success cases
         let mut config = CliConfig {
-            rpc_client: Some(RpcClient::new_mock("succeeds".to_string())),
+            rpc_client: Some(Arc::new(RpcClient::new_mock("succeeds".to_string()))),
             json_rpc_url: "http://127.0.0.1:8899".to_string(),
             ..CliConfig::default()
         };
@@ -2785,13 +2783,13 @@ mod tests {
         assert!(process_command(&config).is_ok());
 
         // sig_not_found case
-        config.rpc_client = Some(RpcClient::new_mock("sig_not_found".to_string()));
+        config.rpc_client = Some(Arc::new(RpcClient::new_mock("sig_not_found".to_string())));
         let missing_signature = Signature::new(&bs58::decode("5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW").into_vec().unwrap());
         config.command = CliCommand::Confirm(missing_signature);
         assert_eq!(process_command(&config).unwrap(), "Not found");
 
         // Tx error case
-        config.rpc_client = Some(RpcClient::new_mock("account_in_use".to_string()));
+        config.rpc_client = Some(Arc::new(RpcClient::new_mock("account_in_use".to_string())));
         let any_signature = Signature::new(&bs58::decode(SIGNATURE).into_vec().unwrap());
         config.command = CliCommand::Confirm(any_signature);
         assert_eq!(
@@ -2800,7 +2798,7 @@ mod tests {
         );
 
         // Failure cases
-        config.rpc_client = Some(RpcClient::new_mock("fails".to_string()));
+        config.rpc_client = Some(Arc::new(RpcClient::new_mock("fails".to_string())));
 
         config.command = CliCommand::Airdrop {
             pubkey: None,
@@ -2870,7 +2868,7 @@ mod tests {
         mocks.insert(RpcRequest::GetAccountInfo, account_info_response);
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
 
-        config.rpc_client = Some(rpc_client);
+        config.rpc_client = Some(Arc::new(rpc_client));
         let default_keypair = Keypair::new();
         config.signers = vec![&default_keypair];
 

@@ -9,6 +9,7 @@ use solana_client::{
     rpc_client::RpcClient,
     rpc_config::{RpcAccountInfoConfig, RpcSignatureSubscribeConfig},
     rpc_response::{Response, RpcSignatureResult, SlotUpdate},
+    tpu_client::{TpuClient, TpuClientConfig},
 };
 use solana_core::{rpc_pubsub::gen_client::Client as PubsubClient, test_validator::TestValidator};
 use solana_sdk::{
@@ -375,6 +376,40 @@ fn test_rpc_subscriptions() {
                     transactions.len()
                 );
             }
+        }
+    }
+}
+
+#[test]
+fn test_tpu_send_transaction() {
+    let mint_keypair = Keypair::new();
+    let mint_pubkey = mint_keypair.pubkey();
+    let test_validator = TestValidator::with_no_fees(mint_pubkey, None);
+    let rpc_client = Arc::new(RpcClient::new_with_commitment(
+        test_validator.rpc_url(),
+        CommitmentConfig::processed(),
+    ));
+
+    let tpu_client = TpuClient::new(
+        rpc_client.clone(),
+        &test_validator.rpc_pubsub_url(),
+        TpuClientConfig::default(),
+    )
+    .unwrap();
+
+    let recent_blockhash = rpc_client.get_recent_blockhash().unwrap().0;
+    let tx =
+        system_transaction::transfer(&mint_keypair, &Pubkey::new_unique(), 42, recent_blockhash);
+    assert!(tpu_client.send_transaction(&tx));
+
+    let timeout = Duration::from_secs(5);
+    let now = Instant::now();
+    let signatures = vec![tx.signatures[0]];
+    loop {
+        assert!(now.elapsed() < timeout);
+        let statuses = rpc_client.get_signature_statuses(&signatures).unwrap();
+        if statuses.value.get(0).is_some() {
+            return;
         }
     }
 }

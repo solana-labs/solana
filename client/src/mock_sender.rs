@@ -124,6 +124,7 @@ impl RpcSender for MockSender {
             }
             RpcRequest::GetTransactionCount => Value::Number(Number::from(1234)),
             RpcRequest::GetSlot => Value::Number(Number::from(0)),
+            RpcRequest::GetMaxShredInsertSlot => Value::Number(Number::from(0)),
             RpcRequest::RequestAirdrop => Value::String(Signature::new(&[8; 64]).to_string()),
             RpcRequest::SendTransaction => {
                 let signature = if self.url == "malicious" {

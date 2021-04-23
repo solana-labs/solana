@@ -2421,7 +2421,7 @@ pub mod rpc_full {
             &self,
             meta: Self::Metadata,
             start_slot: Slot,
-            end_slot: Slot,
+            limit: u64,
         ) -> Result<Vec<String>>;
 
         #[rpc(meta, name = "minimumLedgerSlot")]
