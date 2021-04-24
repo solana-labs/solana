@@ -130,7 +130,7 @@ async function fetchAccountInfo(
   let data;
   let fetchStatus;
   try {
-    const connection = new Connection(url, "single");
+    const connection = new Connection(url, "confirmed");
     const result = (await connection.getParsedAccountInfo(pubkey)).value;
 
     let lamports, details;

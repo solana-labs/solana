@@ -71,7 +71,7 @@ export async function fetchBlock(
   let data: Block | undefined = undefined;
 
   try {
-    const connection = new Connection(url, "max");
+    const connection = new Connection(url, "finalized");
     data = { block: await connection.getConfirmedBlock(Number(key)) };
     status = FetchStatus.Fetched;
   } catch (err) {

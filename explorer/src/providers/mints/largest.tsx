@@ -67,7 +67,7 @@ async function fetchLargestAccounts(
   try {
     data = {
       largest: (
-        await new Connection(url, "single").getTokenLargestAccounts(pubkey)
+        await new Connection(url, "confirmed").getTokenLargestAccounts(pubkey)
       ).value,
     };
 
@@ -76,7 +76,7 @@ async function fetchLargestAccounts(
         async (account): Promise<TokenAccountBalancePairWithOwner> => {
           try {
             const accountInfo = (
-              await new Connection(url, "single").getParsedAccountInfo(
+              await new Connection(url, "confirmed").getParsedAccountInfo(
                 account.address
               )
             ).value;
