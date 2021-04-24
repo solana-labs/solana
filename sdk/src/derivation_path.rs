@@ -1,7 +1,11 @@
 use {
     core::{iter::IntoIterator, slice::Iter},
     derivation_path::{ChildIndex, DerivationPath as DerivationPathInner},
-    std::{convert::{Infallible, TryFrom}, fmt, str::FromStr},
+    std::{
+        convert::{Infallible, TryFrom},
+        fmt,
+        str::FromStr,
+    },
     thiserror::Error,
 };
 
