@@ -58,6 +58,9 @@ pub enum RemoteWalletError {
 
     #[error("remote wallet operation rejected by the user")]
     UserCancel,
+
+    #[error(transparent)]
+    LocatorError(#[from] LocatorError),
 }
 
 impl From<hidapi::HidError> for RemoteWalletError {
@@ -240,7 +243,7 @@ pub struct RemoteWalletInfo {
     /// RemoteWallet device model
     pub model: String,
     /// RemoteWallet device manufacturer
-    pub manufacturer: String,
+    pub manufacturer: Manufacturer,
     /// RemoteWallet device serial number
     pub serial: String,
     /// RemoteWallet host device path
@@ -444,63 +447,19 @@ impl Locator {
 
 impl RemoteWalletInfo {
     pub fn parse_path(path: String) -> Result<(Self, DerivationPath), RemoteWalletError> {
-        let wallet_path = Url::parse(&path).map_err(|e| {
-            Into::<RemoteWalletError>::into(DerivationPathError::InvalidDerivationPath(format!(
-                "parse error: {:?}",
-                e
-            )))
-        })?;
-
-        if wallet_path.host_str().is_none() {
-            return Err(DerivationPathError::InvalidDerivationPath(
-                "missing remote wallet type".to_string(),
-            )
-            .into());
-        }
-
-        let mut wallet_info = RemoteWalletInfo {
-            manufacturer: wallet_path.host_str().unwrap().to_string(),
-            ..RemoteWalletInfo::default()
-        };
-
-        if let Some(wallet_id) = wallet_path.path_segments().map(|c| c.collect::<Vec<_>>()) {
-            if !wallet_id[0].is_empty() {
-                wallet_info.pubkey = Pubkey::from_str(wallet_id[0]).map_err(|e| {
-                    Into::<RemoteWalletError>::into(DerivationPathError::InvalidDerivationPath(
-                        format!("pubkey from_str error: {:?}", e),
-                    ))
-                })?;
-            }
-        }
-
-        let mut derivation_path = DerivationPath::default();
-        let mut query_pairs = wallet_path.query_pairs();
-        if query_pairs.count() > 0 {
-            for _ in 0..query_pairs.count() {
-                if let Some(mut pair) = query_pairs.next() {
-                    if pair.0 == "key" {
-                        let key_path = pair.1.to_mut();
-                        if key_path.ends_with('/') {
-                            key_path.pop();
-                        }
-                        derivation_path = DerivationPath::from_key_str(key_path)?;
-                    } else {
-                        return Err(DerivationPathError::InvalidDerivationPath(format!(
-                            "invalid query string `{}={}`, only `key` supported",
-                            pair.0, pair.1
-                        ))
-                        .into());
-                    }
-                }
-                if query_pairs.next().is_some() {
-                    return Err(DerivationPathError::InvalidDerivationPath(
-                        "invalid query string, extra fields not supported".to_string(),
-                    )
-                    .into());
-                }
-            }
-        }
-        Ok((wallet_info, derivation_path))
+        let Locator {
+            manufacturer,
+            pubkey,
+            derivation_path,
+        } = Locator::new_from_path(path)?;
+        Ok((
+            RemoteWalletInfo {
+                manufacturer,
+                pubkey: pubkey.unwrap_or_default(),
+                ..RemoteWalletInfo::default()
+            },
+            derivation_path.unwrap_or_default(),
+        ))
     }
 
     pub fn get_pretty_path(&self) -> String {
@@ -548,7 +507,7 @@ mod tests {
             RemoteWalletInfo::parse_path(format!("usb://ledger/{:?}?key=1/2", pubkey)).unwrap();
         assert!(wallet_info.matches(&RemoteWalletInfo {
             model: "nano-s".to_string(),
-            manufacturer: "ledger".to_string(),
+            manufacturer: Manufacturer::Ledger,
             serial: "".to_string(),
             host_device_path: "/host/device/path".to_string(),
             pubkey,
@@ -559,7 +518,7 @@ mod tests {
             RemoteWalletInfo::parse_path(format!("usb://ledger/{:?}?key=1'/2'", pubkey)).unwrap();
         assert!(wallet_info.matches(&RemoteWalletInfo {
             model: "nano-s".to_string(),
-            manufacturer: "ledger".to_string(),
+            manufacturer: Manufacturer::Ledger,
             serial: "".to_string(),
             host_device_path: "/host/device/path".to_string(),
             pubkey,
@@ -570,7 +529,7 @@ mod tests {
             RemoteWalletInfo::parse_path(format!("usb://ledger/{:?}?key=1\'/2\'", pubkey)).unwrap();
         assert!(wallet_info.matches(&RemoteWalletInfo {
             model: "nano-s".to_string(),
-            manufacturer: "ledger".to_string(),
+            manufacturer: Manufacturer::Ledger,
             serial: "".to_string(),
             host_device_path: "/host/device/path".to_string(),
             pubkey,
@@ -581,7 +540,7 @@ mod tests {
             RemoteWalletInfo::parse_path(format!("usb://ledger/{:?}?key=1/2/", pubkey)).unwrap();
         assert!(wallet_info.matches(&RemoteWalletInfo {
             model: "nano-s".to_string(),
-            manufacturer: "ledger".to_string(),
+            manufacturer: Vendor::Ledger,
             serial: "".to_string(),
             host_device_path: "/host/device/path".to_string(),
             pubkey,
@@ -592,7 +551,7 @@ mod tests {
             RemoteWalletInfo::parse_path(format!("usb://ledger/{:?}?key=1/", pubkey)).unwrap();
         assert!(wallet_info.matches(&RemoteWalletInfo {
             model: "nano-s".to_string(),
-            manufacturer: "ledger".to_string(),
+            manufacturer: Vendor::Ledger,
             serial: "".to_string(),
             host_device_path: "/host/device/path".to_string(),
             pubkey,
@@ -605,7 +564,7 @@ mod tests {
             RemoteWalletInfo::parse_path("usb://ledger?key=1".to_string()).unwrap();
         assert!(wallet_info.matches(&RemoteWalletInfo {
             model: "nano-s".to_string(),
-            manufacturer: "ledger".to_string(),
+            manufacturer: Manufacturer::Ledger,
             serial: "".to_string(),
             host_device_path: "/host/device/path".to_string(),
             pubkey: Pubkey::default(),
@@ -616,7 +575,7 @@ mod tests {
             RemoteWalletInfo::parse_path("usb://ledger/?key=1/2".to_string()).unwrap();
         assert!(wallet_info.matches(&RemoteWalletInfo {
             model: "".to_string(),
-            manufacturer: "ledger".to_string(),
+            manufacturer: Manufacturer::Ledger,
             serial: "".to_string(),
             host_device_path: "/host/device/path".to_string(),
             pubkey: Pubkey::default(),
@@ -644,7 +603,7 @@ mod tests {
     fn test_remote_wallet_info_matches() {
         let pubkey = solana_sdk::pubkey::new_rand();
         let info = RemoteWalletInfo {
-            manufacturer: "Ledger".to_string(),
+            manufacturer: Manufacturer::Ledger,
             model: "Nano S".to_string(),
             serial: "0001".to_string(),
             host_device_path: "/host/device/path".to_string(),
@@ -652,11 +611,11 @@ mod tests {
             error: None,
         };
         let mut test_info = RemoteWalletInfo {
-            manufacturer: "Not Ledger".to_string(),
+            manufacturer: Manufacturer::Unknown,
             ..RemoteWalletInfo::default()
         };
         assert!(!info.matches(&test_info));
-        test_info.manufacturer = "Ledger".to_string();
+        test_info.manufacturer = Manufacturer::Ledger;
         assert!(info.matches(&test_info));
         test_info.model = "Other".to_string();
         assert!(info.matches(&test_info));
@@ -677,7 +636,7 @@ mod tests {
         let pubkey_str = pubkey.to_string();
         let remote_wallet_info = RemoteWalletInfo {
             model: "nano-s".to_string(),
-            manufacturer: "ledger".to_string(),
+            manufacturer: Manufacturer::Ledger,
             serial: "".to_string(),
             host_device_path: "/host/device/path".to_string(),
             pubkey,
