@@ -1158,16 +1158,19 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         reclaims: &mut SlotList<T>,
         max_clean_root: Option<Slot>,
         account_indexes: &HashSet<AccountIndex>,
-    ) {
+    ) -> usize {
+        let mut count = 0;
         let roots_tracker = &self.roots_tracker.read().unwrap();
         let max_root = Self::get_max_root(&roots_tracker.roots, &list, max_clean_root);
 
         let mut purged_slots: HashSet<Slot> = HashSet::new();
+
         list.retain(|(slot, value)| {
             let should_purge = Self::can_purge(max_root, *slot) && !value.is_cached();
             if should_purge {
                 reclaims.push((*slot, value.clone()));
                 purged_slots.insert(*slot);
+                count += 1;
                 false
             } else {
                 true
@@ -1175,8 +1178,10 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         });
 
         self.purge_secondary_indexes_by_inner_key(pubkey, Some(&purged_slots), account_indexes);
+        count
     }
 
+    // `is_cached` closure is needed to work around the generic (`T`) indexed type.
     pub fn clean_rooted_entries(
         &self,
         pubkey: &Pubkey,
@@ -1185,8 +1190,9 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         account_indexes: &HashSet<AccountIndex>,
     ) {
         if let Some(mut locked_entry) = self.get_account_write_entry(pubkey) {
+            let mut ct = 0;
             locked_entry.slot_list_mut(|slot_list| {
-                self.purge_older_root_entries(
+                ct = self.purge_older_root_entries(
                     pubkey,
                     slot_list,
                     reclaims,
@@ -1194,6 +1200,12 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
                     account_indexes,
                 );
             });
+            if ct > 0 {
+                assert!(locked_entry.ref_count().load(Ordering::Relaxed) >= ct as u64);
+                locked_entry
+                    .ref_count()
+                    .fetch_sub(ct as u64, Ordering::Relaxed);
+            }
         }
     }
 
