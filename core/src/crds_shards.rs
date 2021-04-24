@@ -130,19 +130,17 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::contact_info::ContactInfo;
-    use crate::crds_value::{CrdsData, CrdsValue};
+    use crate::{crds::Crds, crds_value::CrdsValue};
     use rand::{thread_rng, Rng};
     use solana_sdk::timing::timestamp;
-    use std::collections::HashSet;
-    use std::ops::Index;
+    use std::{collections::HashSet, iter::repeat_with, ops::Index};
 
-    fn new_test_crds_value() -> VersionedCrdsValue {
-        let data = CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &solana_sdk::pubkey::new_rand(),
-            timestamp(),
-        ));
-        VersionedCrdsValue::new(timestamp(), CrdsValue::new_unsigned(data))
+    fn new_test_crds_value<R: Rng>(rng: &mut R) -> VersionedCrdsValue {
+        let value = CrdsValue::new_rand(rng, None);
+        let label = value.label();
+        let mut crds = Crds::default();
+        crds.insert(value, timestamp()).unwrap();
+        crds.remove(&label).unwrap()
     }
 
     // Returns true if the first mask_bits most significant bits of hash is the
@@ -176,7 +174,7 @@ mod test {
     fn test_crds_shards_round_trip() {
         let mut rng = thread_rng();
         // Generate some random hash and crds value labels.
-        let mut values: Vec<_> = std::iter::repeat_with(new_test_crds_value)
+        let mut values: Vec<_> = repeat_with(|| new_test_crds_value(&mut rng))
             .take(4096)
             .collect();
         // Insert everything into the crds shards.

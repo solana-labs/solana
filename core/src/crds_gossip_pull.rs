@@ -12,7 +12,7 @@
 use crate::{
     cluster_info::CRDS_UNIQUE_PUBKEY_CAPACITY,
     contact_info::ContactInfo,
-    crds::{Crds, VersionedCrdsValue},
+    crds::{Crds, CrdsError},
     crds_gossip::{get_stake, get_weight, CRDS_GOSSIP_DEFAULT_BLOOM_ITEMS},
     crds_gossip_error::CrdsGossipError,
     crds_value::{CrdsValue, CrdsValueLabel},
@@ -23,8 +23,10 @@ use rand::distributions::{Distribution, WeightedIndex};
 use rand::Rng;
 use rayon::{prelude::*, ThreadPool};
 use solana_runtime::bloom::{AtomicBloom, Bloom};
-use solana_sdk::hash::Hash;
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::{
+    hash::{hash, Hash},
+    pubkey::Pubkey,
+};
 use std::cmp;
 use std::collections::VecDeque;
 use std::collections::{HashMap, HashSet};
@@ -330,16 +332,16 @@ impl CrdsGossipPull {
         responses: Vec<CrdsValue>,
         now: u64,
         stats: &mut ProcessPullStats,
-    ) -> (Vec<VersionedCrdsValue>, Vec<VersionedCrdsValue>, Vec<Hash>) {
-        let mut versioned = vec![];
-        let mut versioned_expired_timestamp = vec![];
+    ) -> (Vec<CrdsValue>, Vec<CrdsValue>, Vec<Hash>) {
+        let mut active_values = vec![];
+        let mut expired_values = vec![];
         let mut failed_inserts = vec![];
-        let mut maybe_push = |response, values: &mut Vec<VersionedCrdsValue>| {
-            let (push, value) = crds.would_insert(response, now);
-            if push {
-                values.push(value);
+        let mut maybe_push = |response, values: &mut Vec<CrdsValue>| {
+            if crds.upserts(&response) {
+                values.push(response);
             } else {
-                failed_inserts.push(value.value_hash)
+                let response = bincode::serialize(&response).unwrap();
+                failed_inserts.push(hash(&response));
             }
         };
         let default_timeout = timeouts
@@ -354,17 +356,17 @@ impl CrdsGossipPull {
             // owner exists in the table. If it doesn't, that implies that this
             // value can be discarded
             if now <= response.wallclock().saturating_add(timeout) {
-                maybe_push(response, &mut versioned);
+                maybe_push(response, &mut active_values);
             } else if crds.get_contact_info(owner).is_some() {
                 // Silently insert this old value without bumping record
                 // timestamps
-                maybe_push(response, &mut versioned_expired_timestamp);
+                maybe_push(response, &mut expired_values);
             } else {
                 stats.timeout_count += 1;
                 stats.failed_timeout += 1;
             }
         }
-        (versioned, versioned_expired_timestamp, failed_inserts)
+        (active_values, expired_values, failed_inserts)
     }
 
     /// process a vec of pull responses
@@ -372,33 +374,34 @@ impl CrdsGossipPull {
         &mut self,
         crds: &mut Crds,
         from: &Pubkey,
-        responses: Vec<VersionedCrdsValue>,
-        responses_expired_timeout: Vec<VersionedCrdsValue>,
+        responses: Vec<CrdsValue>,
+        responses_expired_timeout: Vec<CrdsValue>,
         mut failed_inserts: Vec<Hash>,
         now: u64,
         stats: &mut ProcessPullStats,
     ) -> Vec<(CrdsValueLabel, Hash, u64)> {
         let mut success = vec![];
         let mut owners = HashSet::new();
-        for r in responses_expired_timeout {
-            let value_hash = r.value_hash;
-            match crds.insert_versioned(r) {
+        for response in responses_expired_timeout {
+            match crds.insert(response, now) {
                 Ok(None) => (),
                 Ok(Some(old)) => self.purged_values.push_back((old.value_hash, now)),
-                Err(_) => failed_inserts.push(value_hash),
+                Err(CrdsError::InsertFailed(value_hash)) => failed_inserts.push(value_hash),
+                Err(CrdsError::UnknownStakes) => (),
             }
         }
-        for r in responses {
-            let label = r.value.label();
-            let wc = r.value.wallclock();
-            let hash = r.value_hash;
-            match crds.insert_versioned(r) {
-                Err(_) => failed_inserts.push(hash),
+        for response in responses {
+            let label = response.label();
+            let wallclock = response.wallclock();
+            match crds.insert(response, now) {
+                Err(CrdsError::InsertFailed(value_hash)) => failed_inserts.push(value_hash),
+                Err(CrdsError::UnknownStakes) => (),
                 Ok(old) => {
                     stats.success += 1;
                     self.num_pulls += 1;
                     owners.insert(label.pubkey());
-                    success.push((label, hash, wc));
+                    let value_hash = crds.get(&label).unwrap().value_hash;
+                    success.push((label, value_hash, wallclock));
                     if let Some(val) = old {
                         self.purged_values.push_back((val.value_hash, now))
                     }

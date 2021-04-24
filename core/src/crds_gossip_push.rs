@@ -172,29 +172,29 @@ impl CrdsGossipPush {
         now: u64,
     ) -> Result<Option<VersionedCrdsValue>, CrdsGossipError> {
         self.num_total += 1;
-        if now > value.wallclock().checked_add(self.msg_timeout).unwrap_or(0) {
-            return Err(CrdsGossipError::PushMessageTimeout);
-        }
-        if now + self.msg_timeout < value.wallclock() {
+        let range = now.saturating_sub(self.msg_timeout)..=now.saturating_add(self.msg_timeout);
+        if !range.contains(&value.wallclock()) {
             return Err(CrdsGossipError::PushMessageTimeout);
         }
         let label = value.label();
         let origin = label.pubkey();
-        let new_value = crds.new_versioned(now, value);
-        let value_hash = new_value.value_hash;
-        let received_set = self
-            .received_cache
+        self.received_cache
             .entry(origin)
-            .or_insert_with(HashMap::new);
-        received_set.entry(*from).or_insert((false, 0)).1 = now;
-
-        let old = crds.insert_versioned(new_value);
-        if old.is_err() {
-            self.num_old += 1;
-            return Err(CrdsGossipError::PushMessageOldVersion);
+            .or_default()
+            .entry(*from)
+            .and_modify(|(_pruned, timestamp)| *timestamp = now)
+            .or_insert((/*pruned:*/ false, now));
+        match crds.insert(value, now) {
+            Err(_) => {
+                self.num_old += 1;
+                Err(CrdsGossipError::PushMessageOldVersion)
+            }
+            Ok(old) => {
+                let value_hash = crds.get(&label).unwrap().value_hash;
+                self.push_messages.insert(label, value_hash);
+                Ok(old)
+            }
         }
-        self.push_messages.insert(label, value_hash);
-        Ok(old.unwrap())
     }
 
     /// push pull responses
