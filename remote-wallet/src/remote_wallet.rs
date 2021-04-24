@@ -536,28 +536,6 @@ mod tests {
             error: None,
         }));
         assert_eq!(derivation_path, DerivationPath::new_bip44(Some(1), Some(2)));
-        let (wallet_info, derivation_path) =
-            RemoteWalletInfo::parse_path(format!("usb://ledger/{:?}?key=1/2/", pubkey)).unwrap();
-        assert!(wallet_info.matches(&RemoteWalletInfo {
-            model: "nano-s".to_string(),
-            manufacturer: Vendor::Ledger,
-            serial: "".to_string(),
-            host_device_path: "/host/device/path".to_string(),
-            pubkey,
-            error: None,
-        }));
-        assert_eq!(derivation_path, DerivationPath::new_bip44(Some(1), Some(2)));
-        let (wallet_info, derivation_path) =
-            RemoteWalletInfo::parse_path(format!("usb://ledger/{:?}?key=1/", pubkey)).unwrap();
-        assert!(wallet_info.matches(&RemoteWalletInfo {
-            model: "nano-s".to_string(),
-            manufacturer: Vendor::Ledger,
-            serial: "".to_string(),
-            host_device_path: "/host/device/path".to_string(),
-            pubkey,
-            error: None,
-        }));
-        assert_eq!(derivation_path, DerivationPath::new_bip44(Some(1), None));
 
         // Test that wallet id need not be complete for key derivation to work
         let (wallet_info, derivation_path) =
