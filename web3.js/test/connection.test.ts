@@ -545,6 +545,51 @@ describe('Connection', () => {
     }
   });
 
+  it('get inflation reward', async () => {
+    await mockRpcResponse({
+      method: 'getInflationReward',
+      params: [
+        [
+          '7GHnTRB8Rz14qZQhDXf8ox1Kfu7mPcPLpKaBJJirmYj2',
+          'CrinLuHjVGDDcQfrEoCmM4k31Ni9sMoTCEEvNSUSh7Jg',
+        ],
+        {
+          epoch: 0,
+        },
+      ],
+      value: [
+        {
+          amount: 3646143,
+          effectiveSlot: 432000,
+          epoch: 0,
+          postBalance: 30504783,
+        },
+        null,
+      ],
+    });
+
+    let inflationReward;
+    try {
+      inflationReward = await connection.getInflationReward(
+        [
+          new PublicKey('7GHnTRB8Rz14qZQhDXf8ox1Kfu7mPcPLpKaBJJirmYj2'),
+          new PublicKey('CrinLuHjVGDDcQfrEoCmM4k31Ni9sMoTCEEvNSUSh7Jg'),
+        ],
+        0,
+      );
+    } catch (error) {
+      // a live server needs to have slots up to 432000
+      // in order to have rewards for epoch 0
+      if (!mockServer && error.message.match(/Block not available/)) {
+        return;
+      }
+
+      throw error;
+    }
+
+    expect(inflationReward).to.have.lengthOf(2);
+  });
+
   it('get epoch info', async () => {
     await mockRpcResponse({
       method: 'getEpochInfo',
