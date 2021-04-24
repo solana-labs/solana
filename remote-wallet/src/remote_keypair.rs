@@ -2,7 +2,7 @@ use {
     crate::{
         ledger::get_ledger_from_info,
         remote_wallet::{
-            RemoteWallet, RemoteWalletError, RemoteWalletInfo, RemoteWalletManager,
+            Manufacturer, RemoteWallet, RemoteWalletError, RemoteWalletInfo, RemoteWalletManager,
             RemoteWalletType,
         },
     },
@@ -61,7 +61,7 @@ pub fn generate_remote_keypair(
     keypair_name: &str,
 ) -> Result<RemoteKeypair, RemoteWalletError> {
     let (remote_wallet_info, derivation_path) = RemoteWalletInfo::parse_path(path)?;
-    if remote_wallet_info.manufacturer == "ledger" {
+    if remote_wallet_info.manufacturer == Manufacturer::Ledger {
         let ledger = get_ledger_from_info(remote_wallet_info, keypair_name, wallet_manager)?;
         let path = format!("{}{}", ledger.pretty_path, derivation_path.get_query());
         Ok(RemoteKeypair::new(
