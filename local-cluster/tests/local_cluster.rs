@@ -789,56 +789,41 @@ fn test_fork_choice_refresh_old_votes() {
 
             info!("Opened blockstores");
 
-            // Find the first slot on the smaller fork
-            let mut first_slot_in_lighter_partition = 0;
-            for ((heavier_slot, _heavier_slot_meta), (lighter_slot, _lighter_slot_meta)) in
-                heaviest_blockstore
-                    .slot_meta_iterator(0)
-                    .unwrap()
-                    .zip(lighter_fork_blockstore.slot_meta_iterator(0).unwrap())
-            {
-                if heavier_slot != lighter_slot {
-                    let heavier_ancestors: BTreeSet<Slot> =
-                        AncestorIterator::new(heavier_slot, &heaviest_blockstore).collect();
-                    let lighter_ancestors: BTreeSet<Slot> =
-                        AncestorIterator::new(lighter_slot, &lighter_fork_blockstore).collect();
-                    let last_common_ancestor = *heavier_ancestors
-                        .iter()
-                        .rev()
-                        .zip(lighter_ancestors.iter().rev())
-                        .find(|(x, y)| x == y)
-                        .unwrap()
-                        .0;
+            // Get latest votes
+            let lighter_fork_latest_vote = last_vote_in_tower(
+                &lighter_fork_ledger_path,
+                &context.lighter_fork_validator_key,
+            )
+            .unwrap();
+            let heaviest_fork_latest_vote =
+                last_vote_in_tower(&heaviest_ledger_path, &context.heaviest_validator_key).unwrap();
 
-                    // Find the parent of the fork point
-                    let lighter_fork_parent_meta = lighter_fork_blockstore
-                        .meta(last_common_ancestor)
-                        .unwrap()
-                        .unwrap();
-                    // Lighter fork should only <=2 next slots, since only two validators
-                    // could have generated children
-                    info!(
-                        "lighter parent: {}, next slots: {:?} h: {}, l: {}",
-                        last_common_ancestor,
-                        lighter_fork_parent_meta.next_slots,
-                        heavier_slot,
-                        lighter_slot
-                    );
-                    assert!(lighter_fork_parent_meta.next_slots.len() <= 2);
-                    for child in lighter_fork_parent_meta.next_slots {
-                        if child == lighter_slot || lighter_ancestors.contains(&child) {
-                            first_slot_in_lighter_partition = child;
-                        }
-                    }
-                    // Must have been updated in the above loop
-                    assert!(first_slot_in_lighter_partition != 0);
-                    info!(
-                        "First slot in lighter partition is {}",
-                        first_slot_in_lighter_partition
-                    );
-                    break;
-                }
-            }
+            // Find the first slot on the smaller fork
+            let lighter_ancestors: BTreeSet<Slot> = std::iter::once(lighter_fork_latest_vote)
+                .chain(AncestorIterator::new(
+                    lighter_fork_latest_vote,
+                    &lighter_fork_blockstore,
+                ))
+                .collect();
+            let heavier_ancestors: BTreeSet<Slot> = std::iter::once(heaviest_fork_latest_vote)
+                .chain(AncestorIterator::new(
+                    heaviest_fork_latest_vote,
+                    &heaviest_blockstore,
+                ))
+                .collect();
+            let first_slot_in_lighter_partition = *lighter_ancestors
+                .iter()
+                .zip(heavier_ancestors.iter())
+                .find(|(x, y)| x != y)
+                .unwrap()
+                .0;
+
+            // Must have been updated in the above loop
+            assert!(first_slot_in_lighter_partition != 0);
+            info!(
+                "First slot in lighter partition is {}",
+                first_slot_in_lighter_partition
+            );
 
             assert!(first_slot_in_lighter_partition != 0);
 
