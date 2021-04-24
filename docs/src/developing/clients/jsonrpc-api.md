@@ -1209,10 +1209,10 @@ Returns the inflation reward for a list of addresses for an epoch
 
 The result field will be a JSON array with the following fields:
 
-- `epoch: <u64>`, epoch
-- `effective_slot: <u64>`, the slot in which the rewards are effective
+- `epoch: <u64>`, epoch for which reward occured
+- `effectiveSlot: <u64>`, the slot in which the rewards are effective
 - `amount: <u64>`, reward amount in lamports
-- `post_balance: <u64>`, post balance of the account in lamports
+- `postBalance: <u64>`, post balance of the account in lamports
 
 #### Example
 
