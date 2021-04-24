@@ -1494,14 +1494,13 @@ impl ReplayStage {
         // Refresh the vote if our latest vote hasn't landed, and the recent blockhash of the
         // last attempt at a vote transaction has expired
         let last_voted_slot = last_voted_slot.unwrap();
-        let is_landed_greater_than_last_voted_slot = my_latest_landed_vote >= last_voted_slot;
-        if is_landed_greater_than_last_voted_slot
+        if my_latest_landed_vote > last_voted_slot
             && last_vote_refresh_time.last_print_time.elapsed().as_secs() >= 1
         {
             last_vote_refresh_time.last_print_time = Instant::now();
             info!("Last landed vote for slot {} in bank {} is greater than the current last vote for slot: {} tracked by Tower", my_latest_landed_vote, heaviest_bank_on_same_fork.slot(), last_voted_slot);
         }
-        if is_landed_greater_than_last_voted_slot
+        if my_latest_landed_vote >= last_voted_slot
             || heaviest_bank_on_same_fork
                 .check_hash_age(&tower.last_vote_tx_blockhash(), MAX_PROCESSING_AGE)
                 .unwrap_or(false)

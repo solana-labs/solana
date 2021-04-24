@@ -427,7 +427,7 @@ impl Tower {
         self.record_bank_vote_and_update_lockouts(bank.slot(), bank.hash(), last_voted_slot_in_bank)
     }
 
-    pub fn record_bank_vote_and_update_lockouts(
+    fn record_bank_vote_and_update_lockouts(
         &mut self,
         vote_slot: Slot,
         vote_hash: Hash,
