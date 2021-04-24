@@ -71,7 +71,7 @@ use std::{
     ops::{Deref, DerefMut},
     path::{Path, PathBuf},
     sync::atomic::{AtomicBool, AtomicU64, Ordering},
-    sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
+    sync::{Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard},
     thread::{sleep, Builder, JoinHandle},
     time::{Duration, Instant},
 };
@@ -318,7 +318,7 @@ pub struct ClusterInfo {
     id: Pubkey,
     stats: GossipStats,
     socket: UdpSocket,
-    local_message_pending_push_queue: RwLock<Vec<(CrdsValue, u64)>>,
+    local_message_pending_push_queue: Mutex<Vec<CrdsValue>>,
     contact_debug_interval: u64, // milliseconds, 0 = disabled
     contact_save_interval: u64,  // milliseconds, 0 = disabled
     instance: NodeInstance,
@@ -588,7 +588,7 @@ impl ClusterInfo {
             id,
             stats: GossipStats::default(),
             socket: UdpSocket::bind("0.0.0.0:0").unwrap(),
-            local_message_pending_push_queue: RwLock::new(vec![]),
+            local_message_pending_push_queue: Mutex::default(),
             contact_debug_interval: DEFAULT_CONTACT_DEBUG_INTERVAL_MILLIS,
             instance: NodeInstance::new(&mut thread_rng(), id, timestamp()),
             contact_info_path: PathBuf::default(),
@@ -620,9 +620,9 @@ impl ClusterInfo {
             id: *new_id,
             stats: GossipStats::default(),
             socket: UdpSocket::bind("0.0.0.0:0").unwrap(),
-            local_message_pending_push_queue: RwLock::new(
+            local_message_pending_push_queue: Mutex::new(
                 self.local_message_pending_push_queue
-                    .read()
+                    .lock()
                     .unwrap()
                     .clone(),
             ),
@@ -651,13 +651,10 @@ impl ClusterInfo {
         .into_iter()
         .map(|v| CrdsValue::new_signed(v, &self.keypair))
         .collect();
-        {
-            let mut local_message_pending_push_queue =
-                self.local_message_pending_push_queue.write().unwrap();
-            for entry in entries {
-                local_message_pending_push_queue.push((entry, now));
-            }
-        }
+        self.local_message_pending_push_queue
+            .lock()
+            .unwrap()
+            .extend(entries);
         self.gossip
             .write()
             .unwrap()
@@ -1008,9 +1005,9 @@ impl ClusterInfo {
                 &self.keypair,
             );
             self.local_message_pending_push_queue
-                .write()
+                .lock()
                 .unwrap()
-                .push((entry, now));
+                .push(entry);
         }
     }
 
@@ -1064,9 +1061,9 @@ impl ClusterInfo {
             if n > 0 {
                 let entry = CrdsValue::new_signed(CrdsData::EpochSlots(ix, slots), &self.keypair);
                 self.local_message_pending_push_queue
-                    .write()
+                    .lock()
                     .unwrap()
-                    .push((entry, now));
+                    .push(entry);
             }
             num += n;
             if num < update.len() {
@@ -1092,12 +1089,11 @@ impl ClusterInfo {
         GossipWriteLock::new(self.gossip.write().unwrap(), label, counter)
     }
 
-    pub fn push_message(&self, message: CrdsValue) {
-        let now = message.wallclock();
+    pub(crate) fn push_message(&self, message: CrdsValue) {
         self.local_message_pending_push_queue
-            .write()
+            .lock()
             .unwrap()
-            .push((message, now));
+            .push(message);
     }
 
     pub fn push_accounts_hashes(&self, accounts_hashes: Vec<(Slot, Hash)>) {
@@ -1695,15 +1691,16 @@ impl ClusterInfo {
             })
             .collect()
     }
-    fn drain_push_queue(&self) -> Vec<(CrdsValue, u64)> {
-        let mut push_queue = self.local_message_pending_push_queue.write().unwrap();
+
+    fn drain_push_queue(&self) -> Vec<CrdsValue> {
+        let mut push_queue = self.local_message_pending_push_queue.lock().unwrap();
         std::mem::take(&mut *push_queue)
     }
     #[cfg(test)]
     pub fn flush_push_queue(&self) {
         let pending_push_messages = self.drain_push_queue();
         let mut gossip = self.gossip.write().unwrap();
-        gossip.process_push_messages(pending_push_messages);
+        gossip.process_push_messages(pending_push_messages, timestamp());
     }
     fn new_push_requests(
         &self,
