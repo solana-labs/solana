@@ -1,7 +1,7 @@
 use {
     core::{iter::IntoIterator, slice::Iter},
     derivation_path::{ChildIndex, DerivationPath as DerivationPathInner},
-    std::{fmt, str::FromStr},
+    std::{convert::{Infallible, TryFrom}, fmt, str::FromStr},
     thiserror::Error,
 };
 
@@ -9,18 +9,33 @@ const ACCOUNT_INDEX: usize = 2;
 const CHANGE_INDEX: usize = 3;
 
 /// Derivation path error.
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug, Clone, PartialEq)]
 pub enum DerivationPathError {
     #[error("invalid derivation path: {0}")]
     InvalidDerivationPath(String),
+    #[error("infallible")]
+    Infallible,
 }
 
-#[derive(PartialEq)]
+impl From<Infallible> for DerivationPathError {
+    fn from(_: Infallible) -> Self {
+        Self::Infallible
+    }
+}
+
+#[derive(Clone, PartialEq)]
 pub struct DerivationPath(DerivationPathInner);
 
 impl Default for DerivationPath {
     fn default() -> Self {
         Self::new_bip44(None, None)
+    }
+}
+
+impl TryFrom<&str> for DerivationPath {
+    type Error = DerivationPathError;
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        Self::from_key_str(s)
     }
 }
 
