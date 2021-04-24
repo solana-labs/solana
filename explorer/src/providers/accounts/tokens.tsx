@@ -63,7 +63,7 @@ async function fetchAccountTokens(
   try {
     const { value } = await new Connection(
       url,
-      "recent"
+      "processed"
     ).getParsedTokenAccountsByOwner(pubkey, { programId: TOKEN_PROGRAM_ID });
     data = {
       tokens: value.map((accountInfo) => {
