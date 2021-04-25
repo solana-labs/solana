@@ -4932,6 +4932,7 @@ dependencies = [
  "solana-frozen-abi-macro 1.7.0",
  "solana-logger 1.7.0",
  "solana-sdk-macro 1.7.0",
+ "static_assertions",
  "thiserror",
 ]
 
