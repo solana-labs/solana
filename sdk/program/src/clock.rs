@@ -4,8 +4,12 @@
 // rate at any given time should be expected to drift
 pub const DEFAULT_TICKS_PER_SECOND: u64 = 160;
 
+#[cfg(test)]
+static_assertions::const_assert_eq!(MS_PER_TICK, 6);
 pub const MS_PER_TICK: u64 = 1000 / DEFAULT_TICKS_PER_SECOND;
 
+#[cfg(test)]
+static_assertions::const_assert_eq!(SLOT_MS, 400);
 pub const SLOT_MS: u64 = (DEFAULT_TICKS_PER_SLOT * 1000) / DEFAULT_TICKS_PER_SECOND;
 
 // At 160 ticks/s, 64 ticks per slot implies that leader rotation and voting will happen
@@ -15,22 +19,33 @@ pub const DEFAULT_TICKS_PER_SLOT: u64 = 64;
 // GCP n1-standard hardware and also a xeon e5-2520 v4 are about this rate of hashes/s
 pub const DEFAULT_HASHES_PER_SECOND: u64 = 2_000_000;
 
+#[cfg(test)]
+static_assertions::const_assert_eq!(DEFAULT_HASHES_PER_TICK, 12_500);
 pub const DEFAULT_HASHES_PER_TICK: u64 = DEFAULT_HASHES_PER_SECOND / DEFAULT_TICKS_PER_SECOND;
 
 // 1 Dev Epoch = 400 ms * 8192 ~= 55 minutes
 pub const DEFAULT_DEV_SLOTS_PER_EPOCH: u64 = 8192;
 
+#[cfg(test)]
+static_assertions::const_assert_eq!(SECONDS_PER_DAY, 86_400);
 pub const SECONDS_PER_DAY: u64 = 24 * 60 * 60;
+
+#[cfg(test)]
+static_assertions::const_assert_eq!(TICKS_PER_DAY, 13_824_000);
 pub const TICKS_PER_DAY: u64 = DEFAULT_TICKS_PER_SECOND * SECONDS_PER_DAY;
 
+#[cfg(test)]
+static_assertions::const_assert_eq!(DEFAULT_SLOTS_PER_EPOCH, 432_000);
 // 1 Epoch ~= 2 days
 pub const DEFAULT_SLOTS_PER_EPOCH: u64 = 2 * TICKS_PER_DAY / DEFAULT_TICKS_PER_SLOT;
 
 // leader schedule is governed by this
 pub const NUM_CONSECUTIVE_LEADER_SLOTS: u64 = 4;
 
-pub const DEFAULT_S_PER_SLOT: f64 = DEFAULT_TICKS_PER_SLOT as f64 / DEFAULT_TICKS_PER_SECOND as f64;
+#[cfg(test)]
+static_assertions::const_assert_eq!(DEFAULT_MS_PER_SLOT, 400);
 pub const DEFAULT_MS_PER_SLOT: u64 = 1_000 * DEFAULT_TICKS_PER_SLOT / DEFAULT_TICKS_PER_SECOND;
+pub const DEFAULT_S_PER_SLOT: f64 = DEFAULT_TICKS_PER_SLOT as f64 / DEFAULT_TICKS_PER_SECOND as f64;
 
 /// The time window of recent block hash values that the bank will track the signatures
 /// of over. Once the bank discards a block hash, it will reject any transactions that use
@@ -40,10 +55,14 @@ pub const DEFAULT_MS_PER_SLOT: u64 = 1_000 * DEFAULT_TICKS_PER_SLOT / DEFAULT_TI
 /// not be processed by the network.
 pub const MAX_HASH_AGE_IN_SECONDS: usize = 120;
 
+#[cfg(test)]
+static_assertions::const_assert_eq!(MAX_RECENT_BLOCKHASHES, 300);
 // Number of maximum recent blockhashes (one blockhash per slot)
 pub const MAX_RECENT_BLOCKHASHES: usize =
     MAX_HASH_AGE_IN_SECONDS * DEFAULT_TICKS_PER_SECOND as usize / DEFAULT_TICKS_PER_SLOT as usize;
 
+#[cfg(test)]
+static_assertions::const_assert_eq!(MAX_PROCESSING_AGE, 150);
 // The maximum age of a blockhash that will be accepted by the leader
 pub const MAX_PROCESSING_AGE: usize = MAX_RECENT_BLOCKHASHES / 2;
 
