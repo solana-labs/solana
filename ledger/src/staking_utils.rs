@@ -11,7 +11,7 @@ pub fn get_supermajority_slot(bank: &Bank, epoch: Epoch) -> Option<u64> {
     // Find the amount of stake needed for supermajority
     let stakes_and_lockouts = epoch_stakes_and_lockouts(bank, epoch);
     let total_stake: u64 = stakes_and_lockouts.iter().map(|s| s.0).sum();
-    let supermajority_stake = total_stake * 2 / 3;
+    let supermajority_stake = total_stake * 1 / 2;
 
     // Filter out the states that don't have a max lockout
     find_supermajority_slot(supermajority_stake, stakes_and_lockouts.iter())
