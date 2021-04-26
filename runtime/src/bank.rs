@@ -4030,6 +4030,10 @@ impl Bank {
                     _ => 0,
                 };
 
+                lamports
+                    .checked_add(min_balance)
+                    .filter(|required_balance| *required_balance <= account.lamports())
+                    .ok_or(TransactionError::InsufficientFundsForFee)?;
                 account
                     .checked_sub_lamports(lamports)
                     .or_else(|_| Err(TransactionError::InsufficientFundsForFee))?;
