@@ -1499,6 +1499,7 @@ impl AccountsDb {
         max_slot: Slot,
     ) -> Vec<Vec<Pubkey>> {
         let slots = self.collect_uncleaned_slots_up_to_slot(max_slot);
+        warn!("bprumo DEBUG: uncleaned slots: {:?}", slots);
         self.remove_uncleaned_slots_and_collect_pubkeys(slots)
     }
 
@@ -1519,6 +1520,7 @@ impl AccountsDb {
         let mut collect_delta_keys = Measure::start("key_create");
         let max_slot = max_clean_root.unwrap_or_else(|| self.accounts_index.max_root());
         let delta_keys = self.remove_uncleaned_slots_and_collect_pubkeys_up_to_slot(max_slot);
+        warn!("bprumo DEBUG: delta pubkeys: {:?}", delta_keys);
         collect_delta_keys.stop();
         timings.collect_delta_keys_us += collect_delta_keys.as_us();
 
@@ -1549,6 +1551,10 @@ impl AccountsDb {
     // can be purged because there are no live append vecs in the ancestors
     pub fn clean_accounts(&self, max_clean_root: Option<Slot>) {
         let max_clean_root = self.max_clean_root(max_clean_root);
+        warn!(
+            "bprumo DEBUG: clean_accounts(), max_clean_root: {:?}",
+            max_clean_root
+        );
 
         // hold a lock to prevent slot shrinking from running because it might modify some rooted
         // slot storages which can not happen as long as we're cleaning accounts because we're also
@@ -1563,7 +1569,7 @@ impl AccountsDb {
 
         warn!(
             "bprumo DEBUG: pubkeys (aka construct_candidate_clean_keys): {:?}",
-            candidates_v1
+            pubkeys
         );
 
         warn!(
@@ -1586,6 +1592,12 @@ impl AccountsDb {
                                 AccountIndexGetResult::Found(locked_entry, index) => {
                                     let slot_list = locked_entry.slot_list();
                                     let (slot, account_info) = &slot_list[index];
+                                    warn!(
+                                        "bprumo DEBUG: clean_accounts() pubkeys loop, pubkey: {:?}, lamports: {}, slot list: {:?}",
+                                        pubkey,
+                                        account_info.lamports,
+                                        slot_list
+                                    );
                                     if account_info.lamports == 0 {
                                         purges.insert(
                                             *pubkey,
@@ -1618,10 +1630,11 @@ impl AccountsDb {
                                 }
                                 AccountIndexGetResult::NotFoundOnFork => {
                                     // do nothing - pubkey is in index, but not found in a root slot
-                                    warn!("bprumo DEBUG: NotFoundOnFork pubkey: {:?}", pubkey);
+                                    warn!("bprumo DEBUG: pubkey is in index, but not found in a root slot, pubkey: {:?}", pubkey);
                                 }
                                 AccountIndexGetResult::Missing(lock) => {
                                     // pubkey is missing from index, so remove from zero_lamports_list
+                                    warn!("bprumo DEBUG: pubkey is missing from index, so remove from zero_lamports_list, pubkey: {:?}", pubkey);
                                     self.accounts_index.remove_zero_lamport_key(pubkey);
                                     drop(lock);
                                 }
