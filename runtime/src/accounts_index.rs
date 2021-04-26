@@ -1197,8 +1197,8 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         }
     }
 
-    pub fn can_purge(max_root: Slot, slot: Slot) -> bool {
-        slot < max_root
+    pub fn can_purge(max_clean_root: Slot, max_present_root: Slot, slot: Slot) -> bool {
+        slot < max_clean_root && slot != max_present_root
     }
 
     pub fn is_root(&self, slot: Slot) -> bool {
