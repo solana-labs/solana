@@ -28,9 +28,7 @@ use solana_measure::measure::Measure;
 use solana_metrics::inc_new_counter_error;
 use solana_perf::packet::{Packet, Packets};
 use solana_runtime::{bank::Bank, bank_forks::BankForks};
-use solana_sdk::{
-    clock::Slot, epoch_schedule::EpochSchedule, feature_set, pubkey::Pubkey, timing::timestamp,
-};
+use solana_sdk::{clock::Slot, epoch_schedule::EpochSchedule, pubkey::Pubkey, timing::timestamp};
 use solana_streamer::streamer::PacketReceiver;
 use std::{
     cmp,
@@ -273,22 +271,6 @@ fn check_if_first_shred_received(
     }
 }
 
-// Returns true if turbine retransmit peers patch (#14565) is enabled.
-fn enable_turbine_retransmit_peers_patch(shred_slot: Slot, root_bank: &Bank) -> bool {
-    let feature_slot = root_bank
-        .feature_set
-        .activated_slot(&feature_set::turbine_retransmit_peers_patch::id());
-    match feature_slot {
-        None => false,
-        Some(feature_slot) => {
-            let epoch_schedule = root_bank.epoch_schedule();
-            let feature_epoch = epoch_schedule.get_epoch(feature_slot);
-            let shred_epoch = epoch_schedule.get_epoch(shred_slot);
-            feature_epoch < shred_epoch
-        }
-    }
-}
-
 // Drops shred slot leader from retransmit peers.
 // TODO: decide which bank should be used here.
 fn get_retransmit_peers(
@@ -424,17 +406,13 @@ fn retransmit(
                 r_bank.deref(),
                 r_epoch_stakes_cache.deref(),
             );
-            let (my_index, mut shuffled_stakes_and_index) = ClusterInfo::shuffle_peers_and_index(
+            let (my_index, shuffled_stakes_and_index) = ClusterInfo::shuffle_peers_and_index(
                 &my_id,
                 &r_epoch_stakes_cache.peers,
                 &stakes_and_index,
                 packet.meta.seed,
             );
             peers_len = cmp::max(peers_len, shuffled_stakes_and_index.len());
-            // Until the patch is activated, do the old buggy thing.
-            if !enable_turbine_retransmit_peers_patch(shred_slot, root_bank.deref()) {
-                shuffled_stakes_and_index.remove(my_index);
-            }
             // split off the indexes, we don't need the stakes anymore
             let indexes: Vec<_> = shuffled_stakes_and_index
                 .into_iter()
