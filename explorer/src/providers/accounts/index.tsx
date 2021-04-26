@@ -24,6 +24,7 @@ import {
   ProgramDataAccountInfo,
   UpgradeableLoaderAccount,
 } from "validators/accounts/upgradeable-program";
+import { RewardsProvider } from "./rewards";
 export { useAccountHistory } from "./history";
 
 export type StakeProgramData = {
@@ -106,7 +107,9 @@ export function AccountsProvider({ children }: AccountsProviderProps) {
       <DispatchContext.Provider value={dispatch}>
         <TokensProvider>
           <HistoryProvider>
-            <FlaggedAccountsProvider>{children}</FlaggedAccountsProvider>
+            <RewardsProvider>
+              <FlaggedAccountsProvider>{children}</FlaggedAccountsProvider>
+            </RewardsProvider>
           </HistoryProvider>
         </TokensProvider>
       </DispatchContext.Provider>
