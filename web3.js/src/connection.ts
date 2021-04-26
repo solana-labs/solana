@@ -322,6 +322,36 @@ const GetInflationGovernorResult = pick({
 });
 
 /**
+ * The inflation reward for an epoch
+ */
+export type InflationReward = {
+  /** epoch for which the reward occurs */
+  epoch: number;
+  /** the slot in which the rewards are effective */
+  effectiveSlot: number;
+  /** reward amount in lamports */
+  amount: number;
+  /** post balance of the account in lamports */
+  postBalance: number;
+};
+
+/**
+ * Expected JSON RPC response for the "getInflationReward" message
+ */
+const GetInflationRewardResult = jsonRpcResult(
+  array(
+    nullable(
+      pick({
+        epoch: number(),
+        effectiveSlot: number(),
+        amount: number(),
+        postBalance: number(),
+      }),
+    ),
+  ),
+);
+
+/**
  * Information about the current epoch
  */
 export type EpochInfo = {
@@ -2512,6 +2542,30 @@ export class Connection {
     const res = create(unsafeRes, GetInflationGovernorRpcResult);
     if ('error' in res) {
       throw new Error('failed to get inflation: ' + res.error.message);
+    }
+    return res.result;
+  }
+
+  /**
+   * Fetch the inflation reward for a list of addresses for an epoch
+   */
+  async getInflationReward(
+    addresses: PublicKey[],
+    epoch?: number,
+    commitment?: Commitment,
+  ): Promise<(InflationReward | null)[]> {
+    const args = this._buildArgs(
+      [addresses.map(pubkey => pubkey.toBase58())],
+      commitment,
+      undefined,
+      {
+        epoch,
+      },
+    );
+    const unsafeRes = await this._rpcRequest('getInflationReward', args);
+    const res = create(unsafeRes, GetInflationRewardResult);
+    if ('error' in res) {
+      throw new Error('failed to get inflation reward: ' + res.error.message);
     }
     return res.result;
   }

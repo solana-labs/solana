@@ -588,6 +588,42 @@ describe('Connection', () => {
     }
   });
 
+  it('get inflation reward', async () => {
+    if (mockServer) {
+      await mockRpcResponse({
+        method: 'getInflationReward',
+        params: [
+          [
+            '7GHnTRB8Rz14qZQhDXf8ox1Kfu7mPcPLpKaBJJirmYj2',
+            'CrinLuHjVGDDcQfrEoCmM4k31Ni9sMoTCEEvNSUSh7Jg',
+          ],
+          {
+            epoch: 0,
+          },
+        ],
+        value: [
+          {
+            amount: 3646143,
+            effectiveSlot: 432000,
+            epoch: 0,
+            postBalance: 30504783,
+          },
+          null,
+        ],
+      });
+
+      const inflationReward = await connection.getInflationReward(
+        [
+          new PublicKey('7GHnTRB8Rz14qZQhDXf8ox1Kfu7mPcPLpKaBJJirmYj2'),
+          new PublicKey('CrinLuHjVGDDcQfrEoCmM4k31Ni9sMoTCEEvNSUSh7Jg'),
+        ],
+        0,
+      );
+
+      expect(inflationReward).to.have.lengthOf(2);
+    }
+  });
+
   it('get epoch info', async () => {
     await mockRpcResponse({
       method: 'getEpochInfo',
