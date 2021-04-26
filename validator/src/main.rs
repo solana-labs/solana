@@ -1506,6 +1506,7 @@ pub fn main() {
             Arg::with_name("rocksdb_compaction")
                 .long("rocksdb-compaction")
                 .takes_value(false)
+                .conflicts_with("no_rocksdb_compaction")
                 .help("Enable manual compaction of the ledger database.")
         )
         .arg(
@@ -2026,7 +2027,7 @@ pub fn main() {
         matches.is_present("rocksdb_compaction"),
         matches.is_present("no_rocksdb_compaction"),
     ) {
-        (true, true) => panic!("conflicting options are supplied!"),
+        (true, true) => unreachable!(),
         (true, false) => true,
         (false, true) => false,
         (false, false) => false, // no MANUAL compaction as default behavior
