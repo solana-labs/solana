@@ -1281,6 +1281,7 @@ impl Blockstore {
         leader_schedule: Option<&Arc<LeaderScheduleCache>>,
         is_recovered: bool,
     ) -> bool {
+        use crate::shred::SHRED_PAYLOAD_SIZE;
         let shred_index = u64::from(shred.index());
         let slot = shred.slot();
         let last_in_slot = if shred.last_in_slot() {
@@ -1291,6 +1292,9 @@ impl Blockstore {
         };
 
         if shred.data_header.size == 0 {
+            return false;
+        }
+        if shred.payload.len() > SHRED_PAYLOAD_SIZE {
             return false;
         }
 
@@ -1381,7 +1385,6 @@ impl Blockstore {
         shred: &Shred,
         write_batch: &mut WriteBatch,
     ) -> Result<Vec<(u32, u32)>> {
-        use crate::shred::SHRED_PAYLOAD_SIZE;
         let slot = shred.slot();
         let index = u64::from(shred.index());
 
@@ -1415,14 +1418,6 @@ impl Blockstore {
 
         // Commit step: commit all changes to the mutable structures at once, or none at all.
         // We don't want only a subset of these changes going through.
-        if shred.payload.len() > SHRED_PAYLOAD_SIZE {
-            return Err(BlockstoreError::InvalidShredData(Box::new(
-                bincode::ErrorKind::Custom(format!(
-                    "Data shred with slot {}, index {} has payload that is too large to be valid.",
-                    slot, index
-                )),
-            )));
-        }
         write_batch.put_bytes::<cf::ShredData>(
             (slot, index),
             // Payload will be padded out to SHRED_PAYLOAD_SIZE
@@ -5302,6 +5297,23 @@ pub mod tests {
             blockstore
                 .insert_shreds(shreds[0..5].to_vec(), None, false)
                 .unwrap();
+
+            let slot_meta = blockstore.meta(0).unwrap().unwrap();
+            // Corrupt shred by making it too large
+            let mut shred5 = shreds[5].clone();
+            shred5.payload.push(10);
+            shred5.data_header.size = shred5.payload.len() as u16;
+            assert_eq!(
+                blockstore.should_insert_data_shred(
+                    &shred5,
+                    &slot_meta,
+                    &HashMap::new(),
+                    &last_root,
+                    None,
+                    false
+                ),
+                false
+            );
 
             // Trying to insert another "is_last" shred with index < the received index should fail
             // skip over shred 7
