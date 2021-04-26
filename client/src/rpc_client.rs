@@ -876,7 +876,7 @@ impl RpcClient {
         &self,
         slot: Option<Slot>,
     ) -> ClientResult<Option<RpcLeaderSchedule>> {
-        self.get_leader_schedule_with_config(slot, RpcLeaderScheduleConfig::default())
+        self.get_leader_schedule_with_commitment(slot, self.commitment_config)
     }
 
     pub fn get_leader_schedule_with_commitment(
