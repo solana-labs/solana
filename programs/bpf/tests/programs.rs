@@ -984,7 +984,7 @@ fn test_program_bpf_invoke_sanity() {
 
         assert_eq!(43, bank.get_balance(&derived_key1));
         let account = bank.get_account(&derived_key1).unwrap();
-        assert_eq!(invoke_program_id, account.owner);
+        assert_eq!(&invoke_program_id, account.owner());
         assert_eq!(
             MAX_PERMITTED_DATA_INCREASE,
             bank.get_account(&derived_key1).unwrap().data().len()
