@@ -35,7 +35,7 @@ pub struct AccountSharedData {
     /// data held in this account
     data: Arc<Vec<u8>>,
     /// the program that owns this account. If executable, the program that loads this account.
-    pub owner: Pubkey,
+    owner: Pubkey,
     /// this account's data contains a loaded program (and is now read-only)
     pub executable: bool,
     /// the epoch at which this account will next owe rent

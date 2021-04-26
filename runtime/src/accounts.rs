@@ -1038,7 +1038,7 @@ pub fn create_test_accounts(
     for t in 0..num {
         let pubkey = solana_sdk::pubkey::new_rand();
         let account =
-            AccountSharedData::new((t + 1) as u64, 0, &AccountSharedData::default().owner());
+            AccountSharedData::new((t + 1) as u64, 0, AccountSharedData::default().owner());
         accounts.store_slow_uncached(slot, &pubkey, &account);
         pubkeys.push(pubkey);
     }
@@ -1049,7 +1049,7 @@ pub fn create_test_accounts(
 pub fn update_accounts_bench(accounts: &Accounts, pubkeys: &[Pubkey], slot: u64) {
     for pubkey in pubkeys {
         let amount = thread_rng().gen_range(0, 10);
-        let account = AccountSharedData::new(amount, 0, &AccountSharedData::default().owner());
+        let account = AccountSharedData::new(amount, 0, AccountSharedData::default().owner());
         accounts.store_slow_uncached(slot, &pubkey, &account);
     }
 }
