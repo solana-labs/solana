@@ -3374,7 +3374,8 @@ impl Bank {
                     let mut account = self
                         .get_account_with_fixed_root(&pubkey)
                         .unwrap_or_default();
-                    account.lamports += rent_to_be_paid;
+                    // unwrap since no straightforward ability to do something useful with error
+                    account.checked_add_lamports(rent_to_be_paid).unwrap();
                     self.store_account(&pubkey, &account);
                     rewards.push((
                         pubkey,
