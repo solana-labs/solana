@@ -4503,7 +4503,6 @@ dependencies = [
  "solana-sdk",
  "solana-stake-program",
  "solana-version",
- "solana-vest-program",
  "solana-vote-program",
  "tempfile",
 ]
@@ -4687,7 +4686,6 @@ dependencies = [
  "solana-runtime",
  "solana-sdk",
  "solana-stake-program",
- "solana-vest-program",
  "solana-vote-program",
  "tempfile",
 ]
@@ -5414,22 +5412,6 @@ dependencies = [
  "solana-frozen-abi-macro 1.7.0",
  "solana-logger 1.7.0",
  "solana-sdk",
-]
-
-[[package]]
-name = "solana-vest-program"
-version = "1.7.0"
-dependencies = [
- "bincode",
- "chrono",
- "num-derive",
- "num-traits",
- "serde",
- "serde_derive",
- "solana-config-program",
- "solana-runtime",
- "solana-sdk",
- "thiserror",
 ]
 
 [[package]]

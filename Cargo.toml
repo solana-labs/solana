@@ -49,7 +49,6 @@ members = [
     "programs/noop",
     "programs/ownable",
     "programs/stake",
-    "programs/vest",
     "programs/vote",
     "remote-wallet",
     "ramp-tps",
