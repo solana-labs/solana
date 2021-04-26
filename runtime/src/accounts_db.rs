@@ -3090,9 +3090,6 @@ impl AccountsDb {
             // It should not be possible that a slot is neither in the cache or storage. Even in
             // a slot with all ticks, `Bank::new_from_parent()` immediately stores some sysvars
             // on bank creation.
-
-            // Remove any delta pubkey set if existing.
-            self.uncleaned_pubkeys.remove(remove_slot);
         }
         remove_storages_elapsed.stop();
 
