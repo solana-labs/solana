@@ -6,7 +6,11 @@ use solana_runtime::{
     accounts_index::Ancestors,
 };
 use solana_sdk::genesis_config::ClusterType;
-use solana_sdk::{account::AccountSharedData, clock::Slot, pubkey::Pubkey};
+use solana_sdk::{
+    account::{AccountSharedData, WritableAccount},
+    clock::Slot,
+    pubkey::Pubkey,
+};
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -47,7 +51,7 @@ fn test_shrink_and_clean() {
             alive_accounts.retain(|(_pubkey, account)| account.lamports >= 1);
 
             for (pubkey, account) in alive_accounts.iter_mut() {
-                account.lamports -= 1;
+                account.checked_sub_lamports(1).unwrap();
                 accounts.store_uncached(current_slot, &[(&pubkey, &account)]);
             }
             accounts.add_root(current_slot);

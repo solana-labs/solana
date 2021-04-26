@@ -7376,7 +7376,7 @@ pub mod tests {
 
         // Lamports changes to not affect the hash
         let mut account_modified = account.clone();
-        account_modified.lamports -= 1;
+        account_modified.checked_sub_lamports(1).unwrap();
         assert_eq!(
             hash,
             AccountsDb::hash_frozen_account_data(&account_modified)
@@ -7464,7 +7464,7 @@ pub mod tests {
         db.freeze_accounts(&ancestors, &[frozen_pubkey]);
 
         // Store with a decrease below the frozen amount of lamports is not ok
-        account.lamports -= 1;
+        account.checked_sub_lamports(1).unwrap();
         db.store_uncached(0, &[(&frozen_pubkey, &account)]);
     }
 
@@ -7566,7 +7566,7 @@ pub mod tests {
 
         db.store_uncached(some_slot, &[(&key, &account)]);
         let mut account = db.load_without_fixed_root(&ancestors, &key).unwrap().0;
-        account.lamports -= 1;
+        account.checked_sub_lamports(1).unwrap();
         account.executable = true;
         db.store_uncached(some_slot, &[(&key, &account)]);
         db.add_root(some_slot);
