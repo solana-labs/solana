@@ -1175,6 +1175,12 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         });
 
         self.purge_secondary_indexes_by_inner_key(pubkey, Some(&purged_slots), account_indexes);
+        use log::warn; // bprumo DEBUG
+        warn!(
+            "bprumo DEBUG: purge_older_root_entries() slot list empty? {}, pubkey: {:?}",
+            list.is_empty(),
+            pubkey
+        );
     }
 
     pub fn clean_rooted_entries(
@@ -1184,6 +1190,8 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         max_clean_root: Option<Slot>,
         account_indexes: &HashSet<AccountIndex>,
     ) {
+        use log::warn; // bprumo DEBUG
+        warn!("bprumo DEBUG: clean_rooted_entries(), pubkey: {:?}", pubkey);
         let mut empty_key = false;
         if let Some(mut locked_entry) = self.get_account_write_entry(pubkey) {
             locked_entry.slot_list_mut(|slot_list| {
@@ -1198,10 +1206,15 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
             });
         }
         if empty_key {
+            warn!("bprumo DEBUG: pubkey is empty! pubkey: {:?}", pubkey);
             let mut w_maps = self.account_maps.write().unwrap();
             if let Some(x) = w_maps.get(pubkey) {
                 if x.slot_list.read().unwrap().is_empty() {
                     w_maps.remove(pubkey);
+                    warn!(
+                        "bprumo DEBUG: pubkey removed from account_maps! pubkey: {:?}",
+                        pubkey
+                    );
                 }
             }
         }
