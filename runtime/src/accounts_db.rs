@@ -289,7 +289,7 @@ impl<'a> LoadedAccount<'a> {
             LoadedAccount::Stored(stored_account_meta) => {
                 stored_account_meta.account_meta.executable
             }
-            LoadedAccount::Cached((_, cached_account)) => cached_account.account.executable,
+            LoadedAccount::Cached((_, cached_account)) => cached_account.account.executable(),
         }
     }
 
@@ -3256,7 +3256,7 @@ impl AccountsDb {
         hasher.hash(&account.data());
         hasher.hash(&account.owner().as_ref());
 
-        if account.executable {
+        if account.executable() {
             hasher.hash(&[1u8; 1]);
         } else {
             hasher.hash(&[0u8; 1]);

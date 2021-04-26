@@ -2103,7 +2103,7 @@ fn main() {
                         println!("{}:", pubkey);
                         println!("  - balance: {} SOL", lamports_to_sol(account.lamports));
                         println!("  - owner: '{}'", account.owner());
-                        println!("  - executable: {}", account.executable);
+                        println!("  - executable: {}", account.executable());
                         println!("  - slot: {}", slot);
                         println!("  - rent_epoch: {}", account.rent_epoch);
                         if !exclude_account_data {
