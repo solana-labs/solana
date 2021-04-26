@@ -1,7 +1,7 @@
 #![allow(clippy::integer_arithmetic)]
 use assert_matches::assert_matches;
 use crossbeam_channel::{unbounded, Receiver};
-#[cfg(not(target_os="windows"))]
+#[cfg(not(target_os = "windows"))]
 use gag::BufferRedirect;
 use log::*;
 use serial_test::serial;
