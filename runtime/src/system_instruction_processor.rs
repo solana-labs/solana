@@ -190,7 +190,7 @@ fn transfer_verified(
     }
 
     from.try_account_ref_mut()?.lamports -= lamports;
-    to.try_account_ref_mut()?.lamports += lamports;
+    to.try_account_ref_mut()?.checked_add_lamports(lamports)?;
     Ok(())
 }
 
