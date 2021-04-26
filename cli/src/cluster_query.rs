@@ -46,9 +46,10 @@ use solana_sdk::{
     rent::Rent,
     rpc_port::DEFAULT_RPC_PORT_STR,
     signature::Signature,
-    system_instruction, system_program,
+    slot_history, system_instruction, system_program,
     sysvar::{
         self,
+        slot_history::SlotHistory,
         stake_history::{self},
     },
     timing,
@@ -1119,8 +1120,6 @@ pub fn process_show_block_production(
         return Err(format!("Epoch {} is in the future", epoch).into());
     }
 
-    let minimum_ledger_slot = rpc_client.minimum_ledger_slot()?;
-
     let first_slot_in_epoch = epoch_schedule.get_first_slot_in_epoch(epoch);
     let end_slot = std::cmp::min(
         epoch_info.absolute_slot,
@@ -1133,32 +1132,60 @@ pub fn process_show_block_production(
         first_slot_in_epoch
     };
 
-    if minimum_ledger_slot > end_slot {
-        return Err(format!(
-            "Ledger data not available for slots {} to {} (minimum ledger slot is {})",
-            start_slot, end_slot, minimum_ledger_slot
-        )
-        .into());
-    }
-
-    if minimum_ledger_slot > start_slot {
-        println!(
-            "\n{}",
-            style(format!(
-                "Note: Requested start slot was {} but minimum ledger slot is {}",
-                start_slot, minimum_ledger_slot
-            ))
-            .italic(),
-        );
-        start_slot = minimum_ledger_slot;
-    }
-
     let progress_bar = new_spinner_progress_bar();
     progress_bar.set_message(&format!(
         "Fetching confirmed blocks between slots {} and {}...",
         start_slot, end_slot
     ));
-    let confirmed_blocks = rpc_client.get_blocks(start_slot, Some(end_slot))?;
+
+    let slot_history_account = rpc_client
+        .get_account_with_commitment(&sysvar::slot_history::id(), CommitmentConfig::finalized())?
+        .value
+        .unwrap();
+
+    let slot_history: SlotHistory = from_account(&slot_history_account).ok_or_else(|| {
+        CliError::RpcRequestError("Failed to deserialize slot history".to_string())
+    })?;
+
+    let (confirmed_blocks, start_slot) =
+        if start_slot >= slot_history.oldest() && end_slot <= slot_history.newest() {
+            // Fast, more reliable path using the SlotHistory sysvar
+
+            let confirmed_blocks: Vec<_> = (start_slot..=end_slot)
+                .filter(|slot| slot_history.check(*slot) == slot_history::Check::Found)
+                .collect();
+            (confirmed_blocks, start_slot)
+        } else {
+            // Slow, less reliable path using `getBlocks`.
+            //
+            // "less reliable" because if the RPC node has holds in its ledger then the block production data will be
+            // incorrect.  This condition currently can't be detected over RPC
+            //
+
+            let minimum_ledger_slot = rpc_client.minimum_ledger_slot()?;
+            if minimum_ledger_slot > end_slot {
+                return Err(format!(
+                    "Ledger data not available for slots {} to {} (minimum ledger slot is {})",
+                    start_slot, end_slot, minimum_ledger_slot
+                )
+                .into());
+            }
+
+            if minimum_ledger_slot > start_slot {
+                progress_bar.println(format!(
+                    "{}",
+                    style(format!(
+                        "Note: Requested start slot was {} but minimum ledger slot is {}",
+                        start_slot, minimum_ledger_slot
+                    ))
+                    .italic(),
+                ));
+                start_slot = minimum_ledger_slot;
+            }
+
+            let confirmed_blocks = rpc_client.get_blocks(start_slot, Some(end_slot))?;
+            (confirmed_blocks, start_slot)
+        };
 
     let start_slot_index = (start_slot - first_slot_in_epoch) as usize;
     let end_slot_index = (end_slot - first_slot_in_epoch) as usize;
