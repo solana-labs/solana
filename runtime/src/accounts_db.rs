@@ -1556,8 +1556,20 @@ impl AccountsDb {
         let mut candidates_v1 = self.shrink_candidate_slots_v1.lock().unwrap();
         self.report_store_stats();
 
+        warn!("bprumo DEBUG: candidates_v1: {:?}", candidates_v1);
+
         let mut key_timings = CleanKeyTimings::default();
         let pubkeys = self.construct_candidate_clean_keys(max_clean_root, &mut key_timings);
+
+        warn!(
+            "bprumo DEBUG: pubkeys (aka construct_candidate_clean_keys): {:?}",
+            candidates_v1
+        );
+
+        warn!(
+            "bprumo DEBUG: before the 1st big loop, uncleaned_pubkeys: {:?}",
+            self.uncleaned_pubkeys
+        );
 
         let total_keys_count = pubkeys.len();
         let mut accounts_scan = Measure::start("accounts_scan");
@@ -1606,6 +1618,7 @@ impl AccountsDb {
                                 }
                                 AccountIndexGetResult::NotFoundOnFork => {
                                     // do nothing - pubkey is in index, but not found in a root slot
+                                    warn!("bprumo DEBUG: NotFoundOnFork pubkey: {:?}", pubkey);
                                 }
                                 AccountIndexGetResult::Missing(lock) => {
                                     // pubkey is missing from index, so remove from zero_lamports_list
@@ -1628,6 +1641,14 @@ impl AccountsDb {
             })
         };
         accounts_scan.stop();
+
+        warn!(
+            "bprumo DEBUG: after the 1st big loop, uncleaned_pubkeys: {:?}",
+            self.uncleaned_pubkeys
+        );
+
+        warn!("bprumo DEBUG: purges: {:?}", purges);
+        warn!("bprumo DEBUG: purges_in_root: {:?}", purges_in_root);
 
         let mut clean_old_rooted = Measure::start("clean_old_roots");
         let (purged_account_slots, removed_accounts) =
