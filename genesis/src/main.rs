@@ -17,7 +17,7 @@ use solana_ledger::{
 };
 use solana_runtime::hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE;
 use solana_sdk::{
-    account::{Account, AccountSharedData},
+    account::{Account, AccountSharedData, WritableAccount},
     clock,
     epoch_schedule::EpochSchedule,
     fee_calculator::FeeRateGovernor,
@@ -91,7 +91,7 @@ pub fn load_genesis_accounts(file: &str, genesis_config: &mut GenesisConfig) -> 
                 })?,
             );
         }
-        account.executable = account_details.executable;
+        account.set_executable(account_details.executable);
         lamports += account.lamports;
         genesis_config.add_account(pubkey, account);
     }
