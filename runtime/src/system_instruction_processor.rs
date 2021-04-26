@@ -79,7 +79,7 @@ fn allocate(
 
     // if it looks like the `to` account is already in use, bail
     //   (note that the id check is also enforced by message_processor)
-    if !account.data().is_empty() || !system_program::check_id(&account.owner) {
+    if !account.data().is_empty() || !system_program::check_id(&account.owner()) {
         ic_msg!(
             invoke_context,
             "Allocate: account {:?} already in use",

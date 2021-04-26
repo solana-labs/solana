@@ -113,18 +113,18 @@ impl PreAccount {
         //   only if the account is writable and
         //   only if the account is not executable and
         //   only if the data is zero-initialized or empty
-        let owner_changed = pre.owner != post.owner;
+        let owner_changed = pre.owner() != post.owner();
         if owner_changed
             && (!is_writable // line coverage used to get branch coverage
                 || pre.executable
-                || *program_id != pre.owner
+                || program_id != pre.owner()
             || !Self::is_zeroed(&post.data()))
         {
             return Err(InstructionError::ModifiedProgramId);
         }
 
         // An account not assigned to the program cannot have its balance decrease.
-        if *program_id != pre.owner // line coverage used to get branch coverage
+        if program_id != pre.owner() // line coverage used to get branch coverage
          && pre.lamports() > post.lamports
         {
             return Err(InstructionError::ExternalAccountLamportSpend);
@@ -146,7 +146,7 @@ impl PreAccount {
         let data_len_changed = pre.data().len() != post.data().len();
         if data_len_changed
             && (!system_program::check_id(program_id) // line coverage used to get branch coverage
-                || !system_program::check_id(&pre.owner))
+                || !system_program::check_id(pre.owner()))
         {
             return Err(InstructionError::AccountDataSizeChanged);
         }
@@ -154,7 +154,7 @@ impl PreAccount {
         // Only the owner may change account data
         //   and if the account is writable
         //   and if the account is not executable
-        if !(*program_id == pre.owner
+        if !(program_id == pre.owner()
             && is_writable  // line coverage used to get branch coverage
             && !pre.executable)
             && pre.data() != post.data()
@@ -176,7 +176,7 @@ impl PreAccount {
             }
             if !is_writable // line coverage used to get branch coverage
                 || pre.executable
-                || *program_id != pre.owner
+                || program_id != pre.owner()
             {
                 return Err(InstructionError::ExecutableModified);
             }
@@ -840,7 +840,7 @@ impl MessageProcessor {
                 );
                 return Err(InstructionError::AccountNotExecutable);
             }
-            let programdata = if program_account.borrow().owner == bpf_loader_upgradeable::id() {
+            let programdata = if program_account.borrow().owner() == &bpf_loader_upgradeable::id() {
                 if let UpgradeableLoaderState::Program {
                     programdata_address,
                 } = program_account.borrow().state()?
@@ -918,7 +918,7 @@ impl MessageProcessor {
                     dst_keyed_account.try_account_ref_mut()?.lamports = src_keyed_account.lamports;
                     dst_keyed_account
                         .try_account_ref_mut()?
-                        .set_owner(src_keyed_account.owner);
+                        .set_owner(*src_keyed_account.owner());
                     dst_keyed_account
                         .try_account_ref_mut()?
                         .set_data(src_keyed_account.data().to_vec());

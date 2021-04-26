@@ -228,7 +228,7 @@ impl Accounts {
                             })
                             .unwrap_or_default();
 
-                        if account.executable && bpf_loader_upgradeable::check_id(&account.owner) {
+                        if account.executable && bpf_loader_upgradeable::check_id(account.owner()) {
                             // The upgradeable loader requires the derived ProgramData account
                             if let Ok(UpgradeableLoaderState::Program {
                                 programdata_address,
@@ -666,7 +666,7 @@ impl Accounts {
             ancestors,
             |collector: &mut Vec<(Pubkey, AccountSharedData)>, some_account_tuple| {
                 Self::load_while_filtering(collector, some_account_tuple, |account| {
-                    account.owner == *program_id
+                    account.owner() == program_id
                 })
             },
         )
@@ -682,7 +682,7 @@ impl Accounts {
             ancestors,
             |collector: &mut Vec<(Pubkey, AccountSharedData)>, some_account_tuple| {
                 Self::load_while_filtering(collector, some_account_tuple, |account| {
-                    account.owner == *program_id && filter(account)
+                    account.owner() == program_id && filter(account)
                 })
             },
         )
@@ -1038,7 +1038,7 @@ pub fn create_test_accounts(
     for t in 0..num {
         let pubkey = solana_sdk::pubkey::new_rand();
         let account =
-            AccountSharedData::new((t + 1) as u64, 0, AccountSharedData::default().owner());
+            AccountSharedData::new((t + 1) as u64, 0, &AccountSharedData::default().owner());
         accounts.store_slow_uncached(slot, &pubkey, &account);
         pubkeys.push(pubkey);
     }
@@ -1049,7 +1049,7 @@ pub fn create_test_accounts(
 pub fn update_accounts_bench(accounts: &Accounts, pubkeys: &[Pubkey], slot: u64) {
     for pubkey in pubkeys {
         let amount = thread_rng().gen_range(0, 10);
-        let account = AccountSharedData::new(amount, 0, AccountSharedData::default().owner());
+        let account = AccountSharedData::new(amount, 0, &AccountSharedData::default().owner());
         accounts.store_slow_uncached(slot, &pubkey, &account);
     }
 }

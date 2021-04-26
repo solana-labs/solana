@@ -24,7 +24,7 @@ pub fn process_instruction(
     let current_data: ConfigKeys = {
         let config_account = config_keyed_account.try_account_ref_mut()?;
         if invoke_context.is_feature_active(&feature_set::check_program_owner::id())
-            && config_account.owner != crate::id()
+            && config_account.owner() != &crate::id()
         {
             return Err(InstructionError::InvalidAccountOwner);
         }

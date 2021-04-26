@@ -48,7 +48,7 @@ impl<'a> KeyedAccount<'a> {
     }
 
     pub fn owner(&self) -> Result<Pubkey, InstructionError> {
-        Ok(self.try_borrow()?.owner)
+        Ok(*self.try_borrow()?.owner())
     }
 
     pub fn executable(&self) -> Result<bool, InstructionError> {
