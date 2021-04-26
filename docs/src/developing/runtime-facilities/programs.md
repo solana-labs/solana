@@ -63,6 +63,8 @@ instruction via a program id, the Solana runtime will load both your the program
 and its owner, the BPF Upgradeable Loader. The runtime then passes your program
 to the BPF Upgradeable Loader to process the instruction.
 
+[More information about deployment](cli/deploy-a-program.md)
+
 ## Secp256k1 Program
 
 Verify secp256k1 public key recovery operations (ecrecover).
