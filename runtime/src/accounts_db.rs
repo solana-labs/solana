@@ -951,6 +951,8 @@ struct LatestAccountsIndexRootsStats {
     uncleaned_roots_len: AtomicUsize,
     previous_uncleaned_roots_len: AtomicUsize,
     roots_range: AtomicU64,
+    cleaned_roots: AtomicUsize,
+    not_a_root_cleaned: AtomicUsize,
 }
 
 impl LatestAccountsIndexRootsStats {
@@ -967,6 +969,12 @@ impl LatestAccountsIndexRootsStats {
         );
         self.roots_range
             .store(accounts_index_roots_stats.roots_range, Ordering::Relaxed);
+        self.cleaned_roots
+            .store(accounts_index_roots_stats.cleaned_roots, Ordering::Relaxed);
+        self.not_a_root_cleaned.store(
+            accounts_index_roots_stats.not_a_root_cleaned,
+            Ordering::Relaxed,
+        );
     }
 
     fn report(&self) {
@@ -990,6 +998,16 @@ impl LatestAccountsIndexRootsStats {
             (
                 "roots_range_width",
                 self.roots_range.load(Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "not_a_root_cleaned",
+                self.not_a_root_cleaned.load(Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "cleaned_roots",
+                self.cleaned_roots.load(Ordering::Relaxed) as i64,
                 i64
             ),
         );
@@ -4425,16 +4443,24 @@ impl AccountsDb {
         }
 
         let mut accounts_index_root_stats = AccountsIndexRootsStats::default();
+        let mut not_a_root_count = 0;
+        let mut dead_slots_count = 0;
         let dead_slots: Vec<_> = dead_slots_iter
             .clone()
             .map(|slot| {
+                dead_slots_count += 1;
                 if let Some(latest) = self.accounts_index.clean_dead_slot(*slot) {
                     accounts_index_root_stats = latest;
+                } else {
+                    not_a_root_count += 1;
                 }
                 *slot
             })
             .collect();
         info!("finalize_dead_slot_removal: slots {:?}", dead_slots);
+
+        accounts_index_root_stats.cleaned_roots += dead_slots_count;
+        accounts_index_root_stats.not_a_root_cleaned += not_a_root_count;
 
         self.clean_accounts_stats
             .latest_accounts_index_roots_stats
