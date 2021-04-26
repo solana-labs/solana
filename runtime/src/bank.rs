@@ -12463,38 +12463,34 @@ pub(crate) mod tests {
         let (genesis_config, mint_keypair) = create_genesis_config(100);
         let bank0 = Arc::new(Bank::new(&genesis_config));
 
-        use std::str::FromStr; // bprumo DEBUG
-        let collector = Pubkey::from_str("Co11111111111111111111111111111111111111111").unwrap(); // bprumo DEBUG: Pubkey::new_unique();
-        let pubkey1 = Pubkey::from_str("My11111111111111111111111111111111111111111").unwrap(); // bprumo DEBUG: Pubkey::new_unique();
-        let pubkey2 = Pubkey::from_str("My22222222222222222221111111111111111111111").unwrap(); // bprumo DEBUG: Pubkey::new_unique();
+        let collector = Pubkey::new_unique();
+        let pubkey1 = Pubkey::new_unique();
+        let pubkey2 = Pubkey::new_unique();
 
-        bank0.transfer(2, &mint_keypair, &pubkey1).unwrap();
+        bank0.transfer(2, &mint_keypair, &pubkey2).unwrap();
         bank0.freeze();
 
         let slot = 1;
         let bank1 = Bank::new_from_parent(&bank0, &collector, slot);
-        bank1.transfer(3, &mint_keypair, &pubkey2).unwrap();
+        bank1.transfer(3, &mint_keypair, &pubkey1).unwrap();
         bank1.freeze();
 
         let slot = slot + 1;
         let bank2 = Bank::new_from_parent(&bank0, &collector, slot);
-        bank2.transfer(4, &mint_keypair, &pubkey1).unwrap();
+        bank2.transfer(4, &mint_keypair, &pubkey2).unwrap();
         bank2.freeze();
         bank2.squash();
+
         drop(bank1);
-        warn!("bprumo DEBUG: before clean");
-        bank2.print_accounts_stats(); // bprumo TODO: remove me
-        warn!("bprumo DEBUG: cleaning..");
+
         bank2.clean_accounts(false);
-        warn!("bprumo DEBUG: after clean");
-        bank2.print_accounts_stats(); // bprumo TODO: remove me
         assert_eq!(
             bank2
                 .rc
                 .accounts
                 .accounts_db
                 .accounts_index
-                .ref_count_from_storage(&pubkey2),
+                .ref_count_from_storage(&pubkey1),
             0
         );
     }
