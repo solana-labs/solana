@@ -1455,7 +1455,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     config_offline.command = CliCommand::WithdrawStake {
         stake_account_pubkey: stake_pubkey,
         destination_account_pubkey: recipient_pubkey,
-        lamports: 42,
+        amount: SpendAmount::Some(42),
         withdraw_authority: 0,
         custodian: None,
         sign_only: true,
@@ -1474,7 +1474,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     config.command = CliCommand::WithdrawStake {
         stake_account_pubkey: stake_pubkey,
         destination_account_pubkey: recipient_pubkey,
-        lamports: 42,
+        amount: SpendAmount::Some(42),
         withdraw_authority: 0,
         custodian: None,
         sign_only: false,
