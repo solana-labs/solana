@@ -1596,7 +1596,7 @@ mod tests {
         assert_eq!(None, bank.get_account(&buffer_address));
         let post_program_account = bank.get_account(&program_keypair.pubkey()).unwrap();
         assert_eq!(post_program_account.lamports, min_program_balance);
-        assert_eq!(post_program_account.owner, bpf_loader_upgradeable::id());
+        assert_eq!(post_program_account.owner(), &bpf_loader_upgradeable::id());
         assert_eq!(
             post_program_account.data().len(),
             UpgradeableLoaderState::program_len().unwrap()

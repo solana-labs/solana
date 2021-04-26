@@ -8979,12 +8979,12 @@ pub(crate) mod tests {
         // Post-processing filter
         let indexed_accounts = bank
             .get_filtered_indexed_accounts(&IndexKey::ProgramId(program_id), |account| {
-                account.owner == program_id
+                account.owner() == &program_id
             });
         assert!(indexed_accounts.is_empty());
         let indexed_accounts = bank
             .get_filtered_indexed_accounts(&IndexKey::ProgramId(another_program_id), |account| {
-                account.owner == another_program_id
+                account.owner() == &another_program_id
             });
         assert_eq!(indexed_accounts.len(), 1);
         assert_eq!(indexed_accounts[0], (address, new_account));
@@ -10885,7 +10885,7 @@ pub(crate) mod tests {
             bank.get_balance(&inline_spl_token_v2_0::native_mint::id()),
             4200000000
         );
-        assert_eq!(native_mint_account.owner, inline_spl_token_v2_0::id());
+        assert_eq!(native_mint_account.owner(), &inline_spl_token_v2_0::id());
 
         // MainnetBeta - Native mint blinks into existence at epoch 75
         genesis_config.cluster_type = ClusterType::MainnetBeta;

@@ -571,7 +571,7 @@ mod tests {
         );
         assert_eq!(from_account.borrow().lamports, 50);
         assert_eq!(to_account.borrow().lamports, 50);
-        assert_eq!(to_account.borrow().owner, new_owner);
+        assert_eq!(to_account.borrow().owner(), &new_owner);
         assert_eq!(to_account.borrow().data(), &[0, 0]);
     }
 
@@ -608,7 +608,7 @@ mod tests {
         );
         assert_eq!(from_account.borrow().lamports, 50);
         assert_eq!(to_account.borrow().lamports, 50);
-        assert_eq!(to_account.borrow().owner, new_owner);
+        assert_eq!(to_account.borrow().owner(), &new_owner);
         assert_eq!(to_account.borrow().data(), &[0, 0]);
     }
 
