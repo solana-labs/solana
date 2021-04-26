@@ -52,16 +52,18 @@ Create and manage accounts that track validator voting state and rewards.
 
 ## BPF Loader
 
-Deploy programs to the chain, load and execute them.
+Deploys, upgrades, and executes programs on the chain.
 
-- Program id: `BPFLoader1111111111111111111111111111111111`
-- Instructions: [LoaderInstruction](https://docs.rs/solana-sdk/VERSION_FOR_DOCS_RS/solana_sdk/loader_instruction/enum.LoaderInstruction.html)
+- Program id: `BPFLoaderUpgradeab1e11111111111111111111111`
+- Instructions: [LoaderInstruction](https://docs.rs/solana-sdk/VERSION_FOR_DOCS_RS/solana_sdk/loader_upgradeable_instruction/enum.UpgradeableLoaderInstruction.html)
 
-The BPF Loader marks itself as its "owner" of the executable account it
-creates to store your program. When a user invokes an instruction via a
-program id, the Solana runtime will load both your executable account and its
-owner, the BPF Loader. The runtime then passes your program to the BPF Loader
-to process the instruction.
+The BPF Upgradeable Loader marks itself as "owner" of the executable and
+program-data accounts it creates to store your program. When a user invokes an
+instruction via a program id, the Solana runtime will load both your the program
+and its owner, the BPF Upgradeable Loader. The runtime then passes your program
+to the BPF Upgradeable Loader to process the instruction.
+
+[More information about deployment](cli/deploy-a-program.md)
 
 ## Secp256k1 Program
 
