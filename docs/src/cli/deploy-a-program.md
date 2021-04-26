@@ -150,7 +150,7 @@ When asked, enter the 12-word seed phrase.
 Then issue a new `deploy` command and specify the buffer:
 
 ```bash
-solana program deploy --buffer <KEYPAIR_PATH> <PROGRAM_FILEPATH>
+solana program deploy --buffer <KEYPAIR_PATH>
 ```
 
 ### Closing buffer accounts and reclaiming their lamports
