@@ -246,7 +246,7 @@ impl RollingBitField {
         }
     }
 
-    pub fn remove(&mut self, key: &u64) {
+    pub fn remove(&mut self, key: &u64) -> bool {
         self.check_range(*key);
         let address = self.get_address(key);
         let value = self.bits.get(address);
@@ -255,6 +255,7 @@ impl RollingBitField {
             self.bits.set(address, false);
             self.purge(key);
         }
+        value
     }
 
     // after removing 'key' where 'key' = min, make min the correct new min value
@@ -1557,8 +1558,7 @@ pub mod tests {
         let start = 0;
         let (mut bitfield, _hash) = setup_wide(width, start);
         let slot = width;
-        // not set anyway, so no need to assert
-        bitfield.remove(&slot);
+        assert!(!bitfield.remove(&slot));
     }
 
     #[test]
@@ -1568,7 +1568,7 @@ pub mod tests {
         let start = 100;
         let (mut bitfield, _hash) = setup_wide(width, start);
         let slot = start + 1 - width;
-        bitfield.remove(&slot);
+        assert!(!bitfield.remove(&slot));
     }
 
     fn compare(hashset: &HashSet<u64>, bitfield: &RollingBitField) {
@@ -1635,19 +1635,21 @@ pub mod tests {
                     assert_eq!(bitfield.contains(&slot), hash.contains(&slot));
                 }
 
-                let all = bitfield.get_all();
-
                 if width > 0 {
                     hash.remove(&slot);
-                    bitfield.remove(&slot);
+                    assert!(bitfield.remove(&slot));
+                    assert!(!bitfield.remove(&slot));
                 }
 
                 compare(&hash, &bitfield);
+                let all = bitfield.get_all();
 
                 // remove the rest, including a call that removes slot again
                 for item in all.iter() {
-                    hash.remove(&item);
-                    bitfield.remove(&item);
+                    assert!(hash.remove(&item));
+                    assert!(!hash.remove(&item));
+                    assert!(bitfield.remove(&item));
+                    assert!(!bitfield.remove(&item));
                     compare(&hash, &bitfield);
                 }
 
@@ -1724,11 +1726,12 @@ pub mod tests {
         bitfield_insert_and_test(&mut bitfield, 3);
         bitfield.insert(3); // redundant insert
         assert_eq!(bitfield.get_all(), vec![0, 2, 3]);
-        bitfield.remove(&0);
+        assert!(bitfield.remove(&0));
+        assert!(!bitfield.remove(&0));
         assert_eq!(bitfield.min, 2);
         assert_eq!(bitfield.max, 4);
         assert_eq!(bitfield.len(), 2);
-        bitfield.remove(&0); // redundant remove
+        assert!(!bitfield.remove(&0)); // redundant remove
         assert_eq!(bitfield.len(), 2);
         assert_eq!(bitfield.get_all(), vec![2, 3]);
         bitfield.insert(4); // wrapped around value - same bit as '0'
@@ -1736,27 +1739,27 @@ pub mod tests {
         assert_eq!(bitfield.max, 5);
         assert_eq!(bitfield.len(), 3);
         assert_eq!(bitfield.get_all(), vec![2, 3, 4]);
-        bitfield.remove(&2);
+        assert!(bitfield.remove(&2));
         assert_eq!(bitfield.min, 3);
         assert_eq!(bitfield.max, 5);
         assert_eq!(bitfield.len(), 2);
         assert_eq!(bitfield.get_all(), vec![3, 4]);
-        bitfield.remove(&3);
+        assert!(bitfield.remove(&3));
         assert_eq!(bitfield.min, 4);
         assert_eq!(bitfield.max, 5);
         assert_eq!(bitfield.len(), 1);
         assert_eq!(bitfield.get_all(), vec![4]);
-        bitfield.remove(&4);
+        assert!(bitfield.remove(&4));
         assert_eq!(bitfield.len(), 0);
         assert!(bitfield.is_empty());
         assert!(bitfield.get_all().is_empty());
         bitfield_insert_and_test(&mut bitfield, 8);
-        bitfield.remove(&8);
+        assert!(bitfield.remove(&8));
         assert_eq!(bitfield.len(), 0);
         assert!(bitfield.is_empty());
         assert!(bitfield.get_all().is_empty());
         bitfield_insert_and_test(&mut bitfield, 9);
-        bitfield.remove(&9);
+        assert!(bitfield.remove(&9));
         assert_eq!(bitfield.len(), 0);
         assert!(bitfield.is_empty());
         assert!(bitfield.get_all().is_empty());
