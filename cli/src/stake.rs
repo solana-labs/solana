@@ -348,9 +348,9 @@ impl StakeSubCommands for App<'_, '_> {
                         .index(3)
                         .value_name("AMOUNT")
                         .takes_value(true)
-                        .validator(is_amount)
+                        .validator(is_amount_or_all)
                         .required(true)
-                        .help("The amount to withdraw from the stake account, in SOL")
+                        .help("The amount to withdraw from the stake account, in SOL; accepts keyword ALL")
                 )
                 .arg(
                     Arg::with_name("seed")
@@ -474,7 +474,7 @@ impl StakeSubCommands for App<'_, '_> {
     }
 }
 
-pub fn parse_stake_create_account(
+pub fn parse_create_stake_account(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
@@ -814,7 +814,7 @@ pub fn parse_stake_withdraw_stake(
         pubkey_of_signer(matches, "stake_account_pubkey", wallet_manager)?.unwrap();
     let destination_account_pubkey =
         pubkey_of_signer(matches, "destination_account_pubkey", wallet_manager)?.unwrap();
-    let lamports = lamports_of_sol(matches, "amount").unwrap();
+    let amount = SpendAmount::new_from_matches(matches, "amount");
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
     let dump_transaction_message = matches.is_present(DUMP_TRANSACTION_MESSAGE.name);
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
@@ -842,7 +842,7 @@ pub fn parse_stake_withdraw_stake(
         command: CliCommand::WithdrawStake {
             stake_account_pubkey,
             destination_account_pubkey,
-            lamports,
+            amount,
             withdraw_authority: signer_info.index_of(withdraw_authority_pubkey).unwrap(),
             sign_only,
             dump_transaction_message,
@@ -1244,7 +1244,7 @@ pub fn process_withdraw_stake(
     config: &CliConfig,
     stake_account_pubkey: &Pubkey,
     destination_account_pubkey: &Pubkey,
-    lamports: u64,
+    amount: SpendAmount,
     withdraw_authority: SignerIndex,
     custodian: Option<SignerIndex>,
     sign_only: bool,
@@ -1256,8 +1256,6 @@ pub fn process_withdraw_stake(
     seed: Option<&String>,
     fee_payer: SignerIndex,
 ) -> ProcessResult {
-    let (recent_blockhash, fee_calculator) =
-        blockhash_query.get_blockhash_and_fee_calculator(rpc_client, config.commitment)?;
     let withdraw_authority = config.signers[withdraw_authority];
     let custodian = custodian.map(|index| config.signers[index]);
 
@@ -1267,28 +1265,45 @@ pub fn process_withdraw_stake(
         *stake_account_pubkey
     };
 
-    let ixs = vec![stake_instruction::withdraw(
-        &stake_account_address,
-        &withdraw_authority.pubkey(),
-        destination_account_pubkey,
-        lamports,
-        custodian.map(|signer| signer.pubkey()).as_ref(),
-    )]
-    .with_memo(memo);
+    let (recent_blockhash, fee_calculator) =
+        blockhash_query.get_blockhash_and_fee_calculator(rpc_client, config.commitment)?;
 
     let fee_payer = config.signers[fee_payer];
     let nonce_authority = config.signers[nonce_authority];
 
-    let message = if let Some(nonce_account) = &nonce_account {
-        Message::new_with_nonce(
-            ixs,
-            Some(&fee_payer.pubkey()),
-            nonce_account,
-            &nonce_authority.pubkey(),
-        )
-    } else {
-        Message::new(&ixs, Some(&fee_payer.pubkey()))
+    let build_message = |lamports| {
+        let ixs = vec![stake_instruction::withdraw(
+            &stake_account_address,
+            &withdraw_authority.pubkey(),
+            destination_account_pubkey,
+            lamports,
+            custodian.map(|signer| signer.pubkey()).as_ref(),
+        )]
+        .with_memo(memo);
+
+        if let Some(nonce_account) = &nonce_account {
+            Message::new_with_nonce(
+                ixs,
+                Some(&fee_payer.pubkey()),
+                nonce_account,
+                &nonce_authority.pubkey(),
+            )
+        } else {
+            Message::new(&ixs, Some(&fee_payer.pubkey()))
+        }
     };
+
+    let (message, _) = resolve_spend_tx_and_check_account_balances(
+        rpc_client,
+        sign_only,
+        amount,
+        &fee_calculator,
+        &stake_account_address,
+        &fee_payer.pubkey(),
+        build_message,
+        config.commitment,
+    )?;
+
     let mut tx = Transaction::new_unsigned(message);
 
     if sign_only {
@@ -3096,7 +3111,7 @@ mod tests {
                 command: CliCommand::WithdrawStake {
                     stake_account_pubkey,
                     destination_account_pubkey: stake_account_pubkey,
-                    lamports: 42_000_000_000,
+                    amount: SpendAmount::Some(42_000_000_000),
                     withdraw_authority: 0,
                     custodian: None,
                     sign_only: false,
@@ -3129,7 +3144,7 @@ mod tests {
                 command: CliCommand::WithdrawStake {
                     stake_account_pubkey,
                     destination_account_pubkey: stake_account_pubkey,
-                    lamports: 42_000_000_000,
+                    amount: SpendAmount::Some(42_000_000_000),
                     withdraw_authority: 1,
                     custodian: None,
                     sign_only: false,
@@ -3167,7 +3182,7 @@ mod tests {
                 command: CliCommand::WithdrawStake {
                     stake_account_pubkey,
                     destination_account_pubkey: stake_account_pubkey,
-                    lamports: 42_000_000_000,
+                    amount: SpendAmount::Some(42_000_000_000),
                     withdraw_authority: 0,
                     custodian: Some(1),
                     sign_only: false,
@@ -3213,7 +3228,7 @@ mod tests {
                 command: CliCommand::WithdrawStake {
                     stake_account_pubkey,
                     destination_account_pubkey: stake_account_pubkey,
-                    lamports: 42_000_000_000,
+                    amount: SpendAmount::Some(42_000_000_000),
                     withdraw_authority: 0,
                     custodian: None,
                     sign_only: false,
