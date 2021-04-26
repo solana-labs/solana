@@ -1468,10 +1468,6 @@ impl AccountsDb {
     ///
     /// Search through the uncleaned Pubkeys and return all the slots, up to a maximum slot.
     fn collect_uncleaned_slots_up_to_slot(&self, max_slot: Slot) -> Vec<Slot> {
-        warn!(
-            "bprumo DEBUG: max_slot: {}, uncleaned pubkeys: {:?}",
-            max_slot, self.uncleaned_pubkeys
-        );
         self.uncleaned_pubkeys
             .iter()
             .filter_map(|entry| {
@@ -1486,7 +1482,6 @@ impl AccountsDb {
     /// For each slot in the list of slots, remove it from the `uncleaned_pubkeys` Map and collect
     /// all the pubkeys to return.
     fn remove_uncleaned_slots_and_collect_pubkeys(&self, slots: Vec<Slot>) -> Vec<Vec<Pubkey>> {
-        warn!("bprumo DEBUG: slots: {:?}", slots);
         slots
             .iter()
             .filter_map(|slot| {
@@ -1504,7 +1499,6 @@ impl AccountsDb {
         max_slot: Slot,
     ) -> Vec<Vec<Pubkey>> {
         let slots = self.collect_uncleaned_slots_up_to_slot(max_slot);
-        warn!("bprumo DEBUG: uncleaned slots: {:?}", slots);
         self.remove_uncleaned_slots_and_collect_pubkeys(slots)
     }
 
@@ -1525,7 +1519,6 @@ impl AccountsDb {
         let mut collect_delta_keys = Measure::start("key_create");
         let max_slot = max_clean_root.unwrap_or_else(|| self.accounts_index.max_root());
         let delta_keys = self.remove_uncleaned_slots_and_collect_pubkeys_up_to_slot(max_slot);
-        warn!("bprumo DEBUG: delta pubkeys: {:?}", delta_keys);
         collect_delta_keys.stop();
         timings.collect_delta_keys_us += collect_delta_keys.as_us();
 
@@ -1556,10 +1549,6 @@ impl AccountsDb {
     // can be purged because there are no live append vecs in the ancestors
     pub fn clean_accounts(&self, max_clean_root: Option<Slot>) {
         let max_clean_root = self.max_clean_root(max_clean_root);
-        warn!(
-            "bprumo DEBUG: clean_accounts(), max_clean_root: {:?}",
-            max_clean_root
-        );
 
         // hold a lock to prevent slot shrinking from running because it might modify some rooted
         // slot storages which can not happen as long as we're cleaning accounts because we're also
@@ -1567,20 +1556,8 @@ impl AccountsDb {
         let mut candidates_v1 = self.shrink_candidate_slots_v1.lock().unwrap();
         self.report_store_stats();
 
-        warn!("bprumo DEBUG: candidates_v1: {:?}", candidates_v1);
-
         let mut key_timings = CleanKeyTimings::default();
         let pubkeys = self.construct_candidate_clean_keys(max_clean_root, &mut key_timings);
-
-        warn!(
-            "bprumo DEBUG: pubkeys (aka construct_candidate_clean_keys): {:?}",
-            pubkeys
-        );
-
-        warn!(
-            "bprumo DEBUG: before the 1st big loop, uncleaned_pubkeys: {:?}",
-            self.uncleaned_pubkeys
-        );
 
         let total_keys_count = pubkeys.len();
         let mut accounts_scan = Measure::start("accounts_scan");
@@ -1594,17 +1571,10 @@ impl AccountsDb {
                         let mut purges_in_root = Vec::new();
                         let mut purges_unrooted = Vec::new();
                         for pubkey in pubkeys {
-                            warn!("bprumo DEBUG: pubkeys for loop, pubkey: {:?}", pubkey);
                             match self.accounts_index.get(pubkey, None, max_clean_root) {
                                 AccountIndexGetResult::Found(locked_entry, index) => {
                                     let slot_list = locked_entry.slot_list();
                                     let (slot, account_info) = &slot_list[index];
-                                    warn!(
-                                        "bprumo DEBUG: clean_accounts() pubkeys loop, pubkey: {:?}, lamports: {}, slot list: {:?}",
-                                        pubkey,
-                                        account_info.lamports,
-                                        slot_list
-                                    );
                                     if account_info.lamports == 0 {
                                         purges_zero_lamports.insert(
                                             *pubkey,
@@ -1636,13 +1606,12 @@ impl AccountsDb {
                                     }
                                 }
                                 AccountIndexGetResult::NotFoundOnFork => {
-                                    // do nothing - pubkey is in index, but not found in a root slot
-                                    warn!("bprumo DEBUG: pubkey is in index, but not found in a root slot, pubkey: {:?}", pubkey);
+                                    // pubkey is in the index but not in a root slot, so clean it
+                                    // up by adding it to the to-be-purged list
                                     purges_unrooted.push(*pubkey);
                                 }
                                 AccountIndexGetResult::Missing(lock) => {
                                     // pubkey is missing from index, so remove from zero_lamports_list
-                                    warn!("bprumo DEBUG: pubkey is missing from index, so remove from zero_lamports_list, pubkey: {:?}", pubkey);
                                     self.accounts_index.remove_zero_lamport_key(pubkey);
                                     drop(lock);
                                 }
@@ -1663,17 +1632,6 @@ impl AccountsDb {
             })
         };
         accounts_scan.stop();
-
-        warn!(
-            "bprumo DEBUG: after the 1st big loop, uncleaned_pubkeys: {:?}",
-            self.uncleaned_pubkeys
-        );
-
-        warn!(
-            "bprumo DEBUG: purges_zero_lamports: {:?}",
-            purges_zero_lamports
-        );
-        warn!("bprumo DEBUG: purges_in_root: {:?}", purges_in_root);
 
         let mut clean_old_rooted = Measure::start("clean_old_roots");
         let purges = [purges_in_root, purges_unrooted].concat();
@@ -4313,7 +4271,7 @@ impl AccountsDb {
         let ret = AccountsHash::accumulate_account_hashes(hashes);
         accumulate.stop();
         let mut uncleaned_time = Measure::start("uncleaned_index");
-        self.uncleaned_pubkeys.insert(slot, dirty_keys); // bprumo TODO: need to do this same thing in Drop, if bank is *not* frozen
+        self.uncleaned_pubkeys.insert(slot, dirty_keys);
         uncleaned_time.stop();
         self.stats
             .store_uncleaned_update
