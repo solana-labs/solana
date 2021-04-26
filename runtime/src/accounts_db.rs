@@ -1468,6 +1468,10 @@ impl AccountsDb {
     ///
     /// Search through the uncleaned Pubkeys and return all the slots, up to a maximum slot.
     fn collect_uncleaned_slots_up_to_slot(&self, max_slot: Slot) -> Vec<Slot> {
+        warn!(
+            "bprumo DEBUG: max_slot: {}, uncleaned pubkeys: {:?}",
+            max_slot, self.uncleaned_pubkeys
+        );
         self.uncleaned_pubkeys
             .iter()
             .filter_map(|entry| {
@@ -1482,6 +1486,7 @@ impl AccountsDb {
     /// For each slot in the list of slots, remove it from the `uncleaned_pubkeys` Map and collect
     /// all the pubkeys to return.
     fn remove_uncleaned_slots_and_collect_pubkeys(&self, slots: Vec<Slot>) -> Vec<Vec<Pubkey>> {
+        warn!("bprumo DEBUG: slots: {:?}", slots);
         slots
             .iter()
             .filter_map(|slot| {
