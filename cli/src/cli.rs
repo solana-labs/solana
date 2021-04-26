@@ -292,7 +292,7 @@ pub enum CliCommand {
     WithdrawStake {
         stake_account_pubkey: Pubkey,
         destination_account_pubkey: Pubkey,
-        lamports: u64,
+        amount: SpendAmount,
         withdraw_authority: SignerIndex,
         custodian: Option<SignerIndex>,
         sign_only: bool,
@@ -710,7 +710,7 @@ pub fn parse_command(
         }
         // Stake Commands
         ("create-stake-account", Some(matches)) => {
-            parse_stake_create_account(matches, default_signer, wallet_manager)
+            parse_create_stake_account(matches, default_signer, wallet_manager)
         }
         ("delegate-stake", Some(matches)) => {
             parse_stake_delegate_stake(matches, default_signer, wallet_manager)
@@ -1721,7 +1721,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::WithdrawStake {
             stake_account_pubkey,
             destination_account_pubkey,
-            lamports,
+            amount,
             withdraw_authority,
             custodian,
             sign_only,
@@ -1737,7 +1737,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             config,
             &stake_account_pubkey,
             &destination_account_pubkey,
-            *lamports,
+            *amount,
             *withdraw_authority,
             *custodian,
             *sign_only,
@@ -2683,7 +2683,7 @@ mod tests {
         config.command = CliCommand::WithdrawStake {
             stake_account_pubkey,
             destination_account_pubkey: to_pubkey,
-            lamports: 100,
+            amount: SpendAmount::All,
             withdraw_authority: 0,
             custodian: None,
             sign_only: false,
@@ -2752,7 +2752,7 @@ mod tests {
         };
         config.signers = vec![&keypair, &merge_stake_account];
         let result = process_command(&config);
-        assert!(dbg!(result).is_ok());
+        assert!(result.is_ok());
 
         config.command = CliCommand::GetSlot;
         assert_eq!(process_command(&config).unwrap(), "0");
