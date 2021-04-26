@@ -1030,7 +1030,7 @@ impl RpcClient {
         commitment_config: CommitmentConfig,
     ) -> RpcResult<Option<Account>> {
         let config = RpcAccountInfoConfig {
-            encoding: Some(UiAccountEncoding::Base64),
+            encoding: Some(UiAccountEncoding::Base64Zstd),
             commitment: Some(self.maybe_map_commitment(commitment_config)?),
             data_slice: None,
         };
@@ -1085,7 +1085,7 @@ impl RpcClient {
         commitment_config: CommitmentConfig,
     ) -> RpcResult<Vec<Option<Account>>> {
         let config = RpcAccountInfoConfig {
-            encoding: Some(UiAccountEncoding::Base64),
+            encoding: Some(UiAccountEncoding::Base64Zstd),
             commitment: Some(self.maybe_map_commitment(commitment_config)?),
             data_slice: None,
         };
@@ -1153,7 +1153,7 @@ impl RpcClient {
             RpcProgramAccountsConfig {
                 filters: None,
                 account_config: RpcAccountInfoConfig {
-                    encoding: Some(UiAccountEncoding::Base64),
+                    encoding: Some(UiAccountEncoding::Base64Zstd),
                     commitment: Some(self.commitment_config),
                     ..RpcAccountInfoConfig::default()
                 },
