@@ -3650,7 +3650,6 @@ impl AccountsDb {
                 // will be able to find the account in storage
                 let flushed_store =
                     self.create_and_insert_store(slot, aligned_total_size, "flush_slot_cache");
-                //let hashes_refs = hashes.iter().collect::<Vec<_>>();
                 self.store_accounts_frozen(
                     slot,
                     &accounts,
