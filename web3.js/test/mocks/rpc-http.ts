@@ -5,7 +5,7 @@ import * as mockttp from 'mockttp';
 
 import {mockRpcMessage} from './rpc-websockets';
 import {Account, Connection, PublicKey, Transaction} from '../../src';
-import type {Commitment, RpcParams} from '../../src/connection';
+import type {Commitment, HttpHeaders, RpcParams} from '../../src/connection';
 
 export const mockServer: mockttp.Mockttp | undefined =
   process.env.TEST_LIVE === undefined ? mockttp.getLocal() : undefined;
@@ -64,12 +64,14 @@ export const mockRpcResponse = async ({
   value,
   error,
   withContext,
+  withHeaders,
 }: {
   method: string;
   params: Array<any>;
   value?: any;
   error?: any;
   withContext?: boolean;
+  withHeaders?: HttpHeaders;
 }) => {
   if (!mockServer) return;
 
@@ -90,6 +92,7 @@ export const mockRpcResponse = async ({
       method,
       params,
     })
+    .withHeaders(withHeaders || {})
     .thenReply(
       200,
       JSON.stringify({

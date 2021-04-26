@@ -622,10 +622,31 @@ export type PerfSample = {
   samplePeriodSecs: number;
 };
 
-function createRpcClient(url: string, useHttps: boolean): RpcClient {
+function createRpcClient(
+  url: string,
+  useHttps: boolean,
+  httpHeaders?: HttpHeaders,
+  fetchMiddleware?: FetchMiddleware,
+): RpcClient {
   let agentManager: AgentManager | undefined;
   if (!process.env.BROWSER) {
     agentManager = new AgentManager(useHttps);
+  }
+
+  let fetchWithMiddleware: (url: string, options: any) => Promise<Response>;
+
+  if (fetchMiddleware) {
+    fetchWithMiddleware = (url: string, options: any) => {
+      return new Promise<Response>((resolve, reject) => {
+        fetchMiddleware(url, options, async (url: string, options: any) => {
+          try {
+            resolve(await fetch(url, options));
+          } catch (error) {
+            reject(error);
+          }
+        });
+      });
+    };
   }
 
   const clientBrowser = new RpcClient(async (request, callback) => {
@@ -634,9 +655,12 @@ function createRpcClient(url: string, useHttps: boolean): RpcClient {
       method: 'POST',
       body: request,
       agent,
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: Object.assign(
+        {
+          'Content-Type': 'application/json',
+        },
+        httpHeaders || {},
+      ),
     };
 
     try {
@@ -644,7 +668,12 @@ function createRpcClient(url: string, useHttps: boolean): RpcClient {
       let res: Response;
       let waitTime = 500;
       for (;;) {
-        res = await fetch(url, options);
+        if (fetchWithMiddleware) {
+          res = await fetchWithMiddleware(url, options);
+        } else {
+          res = await fetch(url, options);
+        }
+
         if (res.status !== 429 /* Too many requests */) {
           break;
         }
@@ -1674,6 +1703,32 @@ export type ConfirmedSignatureInfo = {
 };
 
 /**
+ * An object defining headers to be passed to the RPC server
+ */
+export type HttpHeaders = {[header: string]: string};
+
+/**
+ * A callback used to augment the outgoing HTTP request
+ */
+export type FetchMiddleware = (
+  url: string,
+  options: any,
+  fetch: Function,
+) => void;
+
+/**
+ * Configuration for instantiating a Connection
+ */
+export type ConnectionConfig = {
+  /** Optional commitment level */
+  commitment?: Commitment;
+  /** Optional HTTP headers object */
+  httpHeaders?: HttpHeaders;
+  /** Optional fetch middleware callback */
+  fetchMiddleware?: FetchMiddleware;
+};
+
+/**
  * A connection to a fullnode JSON RPC endpoint
  */
 export class Connection {
@@ -1734,18 +1789,36 @@ export class Connection {
    * Establish a JSON RPC connection
    *
    * @param endpoint URL to the fullnode JSON RPC endpoint
-   * @param commitment optional default commitment level
+   * @param commitmentOrConfig optional default commitment level or optional ConnectionConfig configuration object
    */
-  constructor(endpoint: string, commitment?: Commitment) {
+  constructor(
+    endpoint: string,
+    commitmentOrConfig?: Commitment | ConnectionConfig,
+  ) {
     this._rpcEndpoint = endpoint;
 
     let url = urlParse(endpoint);
     const useHttps = url.protocol === 'https:';
 
-    this._rpcClient = createRpcClient(url.href, useHttps);
+    let httpHeaders;
+    let fetchMiddleware;
+    if (commitmentOrConfig && typeof commitmentOrConfig === 'string') {
+      this._commitment = commitmentOrConfig;
+    } else if (commitmentOrConfig) {
+      this._commitment = commitmentOrConfig.commitment;
+      httpHeaders = commitmentOrConfig.httpHeaders;
+      fetchMiddleware = commitmentOrConfig.fetchMiddleware;
+    }
+
+    this._rpcClient = createRpcClient(
+      url.href,
+      useHttps,
+      httpHeaders,
+      fetchMiddleware,
+    );
     this._rpcRequest = createRpcRequest(this._rpcClient);
     this._rpcBatchRequest = createRpcBatchRequest(this._rpcClient);
-    this._commitment = commitment;
+
     this._blockhashInfo = {
       recentBlockhash: null,
       lastFetch: 0,
@@ -1764,6 +1837,7 @@ export class Connection {
     if (url.port !== null) {
       url.port = String(Number(url.port) + 1);
     }
+
     this._rpcWebSocket = new RpcWebSocketClient(urlFormat(url), {
       autoconnect: false,
       max_reconnects: Infinity,
