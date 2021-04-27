@@ -61,7 +61,7 @@ impl RentCollector {
         address: &Pubkey,
         account: &mut AccountSharedData,
     ) -> u64 {
-        if account.executable
+        if account.executable()
             || account.rent_epoch > self.epoch
             || sysvar::check_id(account.owner())
             || *address == incinerator::id()

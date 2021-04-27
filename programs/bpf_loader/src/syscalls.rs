@@ -1733,7 +1733,7 @@ where
         })?;
 
         if i == program_account_index
-            || account.borrow().executable
+            || account.borrow().executable()
             || (invoke_context.is_feature_active(&cpi_share_ro_and_exec_accounts::id())
                 && !caller_write_privileges[i])
         {
@@ -1990,7 +1990,7 @@ fn call<'a>(
         for (i, (account, account_ref)) in accounts.iter().zip(account_refs).enumerate() {
             let account = account.borrow();
             if let Some(account_ref) = account_ref {
-                if message.is_writable(i, demote_sysvar_write_locks) && !account.executable {
+                if message.is_writable(i, demote_sysvar_write_locks) && !account.executable() {
                     *account_ref.lamports = account.lamports;
                     *account_ref.owner = *account.owner();
                     if account_ref.data.len() != account.data().len() {

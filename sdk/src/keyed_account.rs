@@ -52,7 +52,7 @@ impl<'a> KeyedAccount<'a> {
     }
 
     pub fn executable(&self) -> Result<bool, InstructionError> {
-        Ok(self.try_borrow()?.executable)
+        Ok(self.try_borrow()?.executable())
     }
 
     pub fn rent_epoch(&self) -> Result<Epoch, InstructionError> {

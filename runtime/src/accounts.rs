@@ -228,7 +228,8 @@ impl Accounts {
                             })
                             .unwrap_or_default();
 
-                        if account.executable && bpf_loader_upgradeable::check_id(account.owner()) {
+                        if account.executable() && bpf_loader_upgradeable::check_id(account.owner())
+                        {
                             // The upgradeable loader requires the derived ProgramData account
                             if let Ok(UpgradeableLoaderState::Program {
                                 programdata_address,
@@ -352,7 +353,7 @@ impl Accounts {
                     return Err(TransactionError::ProgramAccountNotFound);
                 }
             };
-            if !program.executable {
+            if !program.executable() {
                 error_counters.invalid_program_for_execution += 1;
                 return Err(TransactionError::InvalidProgramForExecution);
             }

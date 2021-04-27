@@ -116,7 +116,7 @@ impl PreAccount {
         let owner_changed = pre.owner() != post.owner();
         if owner_changed
             && (!is_writable // line coverage used to get branch coverage
-                || pre.executable
+                || pre.executable()
                 || program_id != pre.owner()
             || !Self::is_zeroed(&post.data()))
         {
@@ -136,7 +136,7 @@ impl PreAccount {
             if !is_writable {
                 return Err(InstructionError::ReadonlyLamportChange);
             }
-            if pre.executable {
+            if pre.executable() {
                 return Err(InstructionError::ExecutableLamportChange);
             }
         }
@@ -156,10 +156,10 @@ impl PreAccount {
         //   and if the account is not executable
         if !(program_id == pre.owner()
             && is_writable  // line coverage used to get branch coverage
-            && !pre.executable)
+            && !pre.executable())
             && pre.data() != post.data()
         {
-            if pre.executable {
+            if pre.executable() {
                 return Err(InstructionError::ExecutableDataModified);
             } else if is_writable {
                 return Err(InstructionError::ExternalAccountDataModified);
@@ -169,13 +169,13 @@ impl PreAccount {
         }
 
         // executable is one-way (false->true) and only the account owner may set it.
-        let executable_changed = pre.executable != post.executable;
+        let executable_changed = pre.executable() != post.executable();
         if executable_changed {
             if !rent.is_exempt(post.lamports, post.data().len()) {
                 return Err(InstructionError::ExecutableAccountNotRentExempt);
             }
             if !is_writable // line coverage used to get branch coverage
-                || pre.executable
+                || pre.executable()
                 || program_id != pre.owner()
             {
                 return Err(InstructionError::ExecutableModified);
@@ -832,7 +832,7 @@ impl MessageProcessor {
                         ic_msg!(invoke_context, "Unknown program {}", callee_program_id);
                         InstructionError::MissingAccount
                     })?;
-            if !program_account.borrow().executable {
+            if !program_account.borrow().executable() {
                 ic_msg!(
                     invoke_context,
                     "Account {} is not executable",
@@ -902,7 +902,7 @@ impl MessageProcessor {
                 let dst_keyed_account = &keyed_accounts[dst_keyed_account_index];
                 let src_keyed_account = account.borrow();
                 if message.is_writable(src_keyed_account_index, demote_sysvar_write_locks)
-                    && !src_keyed_account.executable
+                    && !src_keyed_account.executable()
                 {
                     if dst_keyed_account.data_len()? != src_keyed_account.data().len()
                         && dst_keyed_account.data_len()? != 0
@@ -1108,7 +1108,7 @@ impl MessageProcessor {
                         )?;
                         pre_sum += u128::from(pre_account.lamports());
                         post_sum += u128::from(account.lamports);
-                        if is_writable && !account.executable {
+                        if is_writable && !account.executable() {
                             pre_account.update(&account);
                         }
                         return Ok(());
