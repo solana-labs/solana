@@ -241,7 +241,7 @@ impl ReadOnlyAccountsCache {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use solana_sdk::account::{accounts_equal, Account};
+    use solana_sdk::account::{accounts_equal, Account, WritableAccount};
     #[test]
     fn test_accountsdb_sizeof() {
         // size_of(arc(x)) does not return the size of x
@@ -278,9 +278,9 @@ pub mod tests {
             ..Account::default()
         });
         let mut account2 = account1.clone();
-        account2.lamports += 1; // so they compare differently
+        account2.checked_add_lamports(1).unwrap(); // so they compare differently
         let mut account3 = account1.clone();
-        account3.lamports += 4; // so they compare differently
+        account3.checked_add_lamports(4).unwrap(); // so they compare differently
         cache.store(&key1, slot, &account1);
         assert_eq!(100 + per_account_size, cache.data_size());
         assert!(accounts_equal(&cache.load(&key1, slot).unwrap(), &account1));
