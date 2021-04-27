@@ -10110,4 +10110,132 @@ pub mod tests {
         // Conversely, we show that we're preventing this race condition from occurring
         do_test_load_account_and_purge_race(false);
     }
+
+    #[test]
+    fn test_collect_uncleaned_slots_up_to_slot() {
+        solana_logger::setup();
+        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+
+        let slot1 = 11;
+        let slot2 = 222;
+        let slot3 = 3333;
+
+        let pubkey1 = Pubkey::new_unique();
+        let pubkey2 = Pubkey::new_unique();
+        let pubkey3 = Pubkey::new_unique();
+
+        db.uncleaned_pubkeys.insert(slot1, vec![pubkey1]);
+        db.uncleaned_pubkeys.insert(slot2, vec![pubkey2]);
+        db.uncleaned_pubkeys.insert(slot3, vec![pubkey3]);
+
+        let mut uncleaned_slots1 = db.collect_uncleaned_slots_up_to_slot(slot1);
+        let mut uncleaned_slots2 = db.collect_uncleaned_slots_up_to_slot(slot2);
+        let mut uncleaned_slots3 = db.collect_uncleaned_slots_up_to_slot(slot3);
+
+        uncleaned_slots1.sort();
+        uncleaned_slots2.sort();
+        uncleaned_slots3.sort();
+
+        assert_eq!(uncleaned_slots1, [slot1]);
+        assert_eq!(uncleaned_slots2, [slot1, slot2]);
+        assert_eq!(uncleaned_slots3, [slot1, slot2, slot3]);
+    }
+
+    #[test]
+    fn test_remove_uncleaned_slots_and_collect_pubkeys() {
+        solana_logger::setup();
+        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+
+        let slot1 = 11;
+        let slot2 = 222;
+        let slot3 = 3333;
+
+        let pubkey1 = Pubkey::new_unique();
+        let pubkey2 = Pubkey::new_unique();
+        let pubkey3 = Pubkey::new_unique();
+
+        let account1 = AccountSharedData::new(0, 0, &pubkey1);
+        let account2 = AccountSharedData::new(0, 0, &pubkey2);
+        let account3 = AccountSharedData::new(0, 0, &pubkey3);
+
+        db.store_uncached(slot1, &[(&pubkey1, &account1)]);
+        db.store_uncached(slot2, &[(&pubkey2, &account2)]);
+        db.store_uncached(slot3, &[(&pubkey3, &account3)]);
+
+        db.add_root(slot1);
+        db.add_root(slot2);
+        db.add_root(slot3);
+
+        db.uncleaned_pubkeys.insert(slot1, vec![pubkey1]);
+        db.uncleaned_pubkeys.insert(slot2, vec![pubkey2]);
+        db.uncleaned_pubkeys.insert(slot3, vec![pubkey3]);
+
+        let uncleaned_pubkeys1 = db
+            .remove_uncleaned_slots_and_collect_pubkeys(vec![slot1])
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+        let uncleaned_pubkeys2 = db
+            .remove_uncleaned_slots_and_collect_pubkeys(vec![slot2])
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+        let uncleaned_pubkeys3 = db
+            .remove_uncleaned_slots_and_collect_pubkeys(vec![slot3])
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+
+        assert!(uncleaned_pubkeys1.contains(&pubkey1));
+        assert!(!uncleaned_pubkeys1.contains(&pubkey2));
+        assert!(!uncleaned_pubkeys1.contains(&pubkey3));
+
+        assert!(!uncleaned_pubkeys2.contains(&pubkey1));
+        assert!(uncleaned_pubkeys2.contains(&pubkey2));
+        assert!(!uncleaned_pubkeys2.contains(&pubkey3));
+
+        assert!(!uncleaned_pubkeys3.contains(&pubkey1));
+        assert!(!uncleaned_pubkeys3.contains(&pubkey2));
+        assert!(uncleaned_pubkeys3.contains(&pubkey3));
+    }
+
+    #[test]
+    fn test_remove_uncleaned_slots_and_collect_pubkeys_up_to_slot() {
+        solana_logger::setup();
+        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+
+        let slot1 = 11;
+        let slot2 = 222;
+        let slot3 = 3333;
+
+        let pubkey1 = Pubkey::new_unique();
+        let pubkey2 = Pubkey::new_unique();
+        let pubkey3 = Pubkey::new_unique();
+
+        let account1 = AccountSharedData::new(0, 0, &pubkey1);
+        let account2 = AccountSharedData::new(0, 0, &pubkey2);
+        let account3 = AccountSharedData::new(0, 0, &pubkey3);
+
+        db.store_uncached(slot1, &[(&pubkey1, &account1)]);
+        db.store_uncached(slot2, &[(&pubkey2, &account2)]);
+        db.store_uncached(slot3, &[(&pubkey3, &account3)]);
+
+        db.add_root(slot1);
+        db.add_root(slot2);
+        db.add_root(slot3);
+
+        db.uncleaned_pubkeys.insert(slot1, vec![pubkey1]);
+        db.uncleaned_pubkeys.insert(slot2, vec![pubkey2]);
+        db.uncleaned_pubkeys.insert(slot3, vec![pubkey3]);
+
+        let uncleaned_pubkeys = db
+            .remove_uncleaned_slots_and_collect_pubkeys_up_to_slot(slot3)
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+
+        assert!(uncleaned_pubkeys.contains(&pubkey1));
+        assert!(uncleaned_pubkeys.contains(&pubkey2));
+        assert!(uncleaned_pubkeys.contains(&pubkey3));
+    }
 }
