@@ -424,7 +424,7 @@ mod tests {
             assert_eq!(account.data(), &account_info.data.borrow()[..]);
             assert_eq!(account.owner(), account_info.owner);
             assert_eq!(account.executable, account_info.executable);
-            assert_eq!(account.rent_epoch, account_info.rent_epoch);
+            assert_eq!(account.rent_epoch(), account_info.rent_epoch);
 
             assert_eq!(
                 (*account_info.lamports.borrow() as *const u64).align_offset(align_of::<u64>()),
@@ -472,7 +472,7 @@ mod tests {
             );
             assert_eq!(*account.owner(), de_keyed_account.owner().unwrap());
             assert_eq!(account.executable, de_keyed_account.executable().unwrap());
-            assert_eq!(account.rent_epoch, de_keyed_account.rent_epoch().unwrap());
+            assert_eq!(account.rent_epoch(), de_keyed_account.rent_epoch().unwrap());
         }
 
         // check serialize_parameters_unaligned
@@ -496,7 +496,7 @@ mod tests {
             assert_eq!(account.data(), &account_info.data.borrow()[..]);
             assert_eq!(account.owner(), account_info.owner);
             assert_eq!(account.executable, account_info.executable);
-            assert_eq!(account.rent_epoch, account_info.rent_epoch);
+            assert_eq!(account.rent_epoch(), account_info.rent_epoch);
         }
 
         let de_accounts = accounts.clone();
@@ -531,7 +531,7 @@ mod tests {
             );
             assert_eq!(*account.owner(), de_keyed_account.owner().unwrap());
             assert_eq!(account.executable, de_keyed_account.executable().unwrap());
-            assert_eq!(account.rent_epoch, de_keyed_account.rent_epoch().unwrap());
+            assert_eq!(account.rent_epoch(), de_keyed_account.rent_epoch().unwrap());
         }
     }
 

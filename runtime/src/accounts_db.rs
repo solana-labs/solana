@@ -7384,7 +7384,7 @@ pub mod tests {
 
         // Rent epoch may changes to not affect the hash
         let mut account_modified = account.clone();
-        account_modified.rent_epoch += 1;
+        account_modified.set_rent_epoch(account_modified.rent_epoch() + 1);
         assert_eq!(
             hash,
             AccountsDb::hash_frozen_account_data(&account_modified)

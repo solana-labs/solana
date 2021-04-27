@@ -1356,11 +1356,11 @@ mod tests {
         let key1 = Pubkey::new(&[5u8; 32]);
 
         let mut account = AccountSharedData::new(1, 0, &Pubkey::default());
-        account.rent_epoch = 1;
+        account.set_rent_epoch(1);
         accounts.push((key0, account));
 
         let mut account = AccountSharedData::new(2, 1, &Pubkey::default());
-        account.rent_epoch = 1;
+        account.set_rent_epoch(1);
         accounts.push((key1, account));
 
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
@@ -1568,18 +1568,18 @@ mod tests {
         let key2 = Pubkey::new(&[6u8; 32]);
 
         let mut account = AccountSharedData::new(1, 0, &Pubkey::default());
-        account.rent_epoch = 1;
+        account.set_rent_epoch(1);
         accounts.push((key0, account));
 
         let mut account = AccountSharedData::new(40, 1, &Pubkey::default());
         account.executable = true;
-        account.rent_epoch = 1;
+        account.set_rent_epoch(1);
         account.set_owner(native_loader::id());
         accounts.push((key1, account));
 
         let mut account = AccountSharedData::new(41, 1, &Pubkey::default());
         account.executable = true;
-        account.rent_epoch = 1;
+        account.set_rent_epoch(1);
         account.set_owner(key1);
         accounts.push((key2, account));
 

@@ -148,18 +148,18 @@ mod tests {
             .collect_from_created_account(&solana_sdk::pubkey::new_rand(), &mut created_account);
         assert!(created_account.lamports < old_lamports);
         assert_eq!(created_account.lamports + collected, old_lamports);
-        assert_ne!(created_account.rent_epoch, old_epoch);
+        assert_ne!(created_account.rent_epoch(), old_epoch);
 
         // collect rent on a already-existing account
         let collected = rent_collector
             .collect_from_existing_account(&solana_sdk::pubkey::new_rand(), &mut existing_account);
         assert!(existing_account.lamports < old_lamports);
         assert_eq!(existing_account.lamports + collected, old_lamports);
-        assert_ne!(existing_account.rent_epoch, old_epoch);
+        assert_ne!(existing_account.rent_epoch(), old_epoch);
 
         // newly created account should be collected for less rent; thus more remaining balance
         assert!(created_account.lamports() > existing_account.lamports);
-        assert_eq!(created_account.rent_epoch, existing_account.rent_epoch);
+        assert_eq!(created_account.rent_epoch(), existing_account.rent_epoch());
     }
 
     #[test]
@@ -172,7 +172,7 @@ mod tests {
         let pubkey = solana_sdk::pubkey::new_rand();
 
         account.lamports = huge_lamports;
-        assert_eq!(account.rent_epoch, 0);
+        assert_eq!(account.rent_epoch(), 0);
 
         // create a tested rent collector
         let rent_collector = RentCollector::default().clone_with_epoch(epoch);

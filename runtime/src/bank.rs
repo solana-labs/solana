@@ -6151,7 +6151,7 @@ pub(crate) mod tests {
         // Rent deducted on store side
         let account8 = bank.get_account(&keypairs[7].pubkey()).unwrap();
         // Epoch should be set correctly.
-        assert_eq!(account8.rent_epoch, bank.epoch + 1);
+        assert_eq!(account8.rent_epoch(), bank.epoch + 1);
         rent_collected += magic_rent_number;
 
         // 49921 - generic_rent_due_for_system_account(Rent) - 929(Transfer)
@@ -6161,7 +6161,7 @@ pub(crate) mod tests {
         let account10 = bank.get_account(&keypairs[9].pubkey()).unwrap();
         // Account was overwritten at load time, since it didn't have sufficient balance to pay rent
         // Then, at store time we deducted `magic_rent_number` rent for the current epoch, once it has balance
-        assert_eq!(account10.rent_epoch, bank.epoch + 1);
+        assert_eq!(account10.rent_epoch(), bank.epoch + 1);
         // account data is blank now
         assert_eq!(account10.data().len(), 0);
         // 10 - 10(Rent) + 929(Transfer) - magic_rent_number(Rent)
@@ -6853,7 +6853,7 @@ pub(crate) mod tests {
             bank.get_account(&rent_due_pubkey).unwrap().lamports,
             little_lamports
         );
-        assert_eq!(bank.get_account(&rent_due_pubkey).unwrap().rent_epoch, 0);
+        assert_eq!(bank.get_account(&rent_due_pubkey).unwrap().rent_epoch(), 0);
         assert_eq!(
             bank.slots_by_pubkey(&rent_due_pubkey, &ancestors),
             vec![genesis_slot]
@@ -6875,12 +6875,15 @@ pub(crate) mod tests {
             bank.get_account(&rent_due_pubkey).unwrap().lamports,
             little_lamports - rent_collected
         );
-        assert_eq!(bank.get_account(&rent_due_pubkey).unwrap().rent_epoch, 6);
+        assert_eq!(bank.get_account(&rent_due_pubkey).unwrap().rent_epoch(), 6);
         assert_eq!(
             bank.get_account(&rent_exempt_pubkey).unwrap().lamports,
             large_lamports
         );
-        assert_eq!(bank.get_account(&rent_exempt_pubkey).unwrap().rent_epoch, 5);
+        assert_eq!(
+            bank.get_account(&rent_exempt_pubkey).unwrap().rent_epoch(),
+            5
+        );
         assert_eq!(
             bank.slots_by_pubkey(&rent_due_pubkey, &ancestors),
             vec![genesis_slot, some_slot]
