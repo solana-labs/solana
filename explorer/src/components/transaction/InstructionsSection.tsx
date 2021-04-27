@@ -20,6 +20,7 @@ import { TokenLendingDetailsCard } from "components/instruction/TokenLendingDeta
 import { TokenSwapDetailsCard } from "components/instruction/TokenSwapDetailsCard";
 import { WormholeDetailsCard } from "components/instruction/WormholeDetailsCard";
 import { UnknownDetailsCard } from "components/instruction/UnknownDetailsCard";
+import { BonfidaBotDetailsCard } from "components/instruction/BonfidaBotDetails";
 import {
   SignatureProps,
   INNER_INSTRUCTIONS_START_SLOT,
@@ -28,6 +29,7 @@ import { intoTransactionInstruction } from "utils/tx";
 import { isSerumInstruction } from "components/instruction/serum/types";
 import { isTokenLendingInstruction } from "components/instruction/token-lending/types";
 import { isTokenSwapInstruction } from "components/instruction/token-swap/types";
+import { isBonfidaBotInstruction } from "components/instruction/bonfida-bot/types";
 import { useFetchTransactionDetails } from "providers/transactions/details";
 import {
   useTransactionDetails,
@@ -208,7 +210,9 @@ function renderInstructionCard({
     childIndex,
   };
 
-  if (isSerumInstruction(transactionIx)) {
+  if (isBonfidaBotInstruction(transactionIx)) {
+    return <BonfidaBotDetailsCard key={key} {...props} />;
+  } else if (isSerumInstruction(transactionIx)) {
     return <SerumDetailsCard key={key} {...props} />;
   } else if (isTokenSwapInstruction(transactionIx)) {
     return <TokenSwapDetailsCard key={key} {...props} />;
