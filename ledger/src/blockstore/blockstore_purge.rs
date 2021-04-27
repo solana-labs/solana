@@ -206,6 +206,10 @@ impl Blockstore {
         write_timer.stop();
         purge_stats.delete_range += delete_range_timer.as_us();
         purge_stats.write_batch += write_timer.as_us();
+        // only drop w_active_transaction_status_index after we do db.write(write_batch);
+        // otherwise, readers might be confused with inconsistent state between
+        // self.active_transaction_status_index and RockDb's TransactionStatusIndex contents
+        drop(w_active_transaction_status_index);
         Ok(columns_purged)
     }
 
@@ -336,18 +340,26 @@ impl Blockstore {
         w_active_transaction_status_index: &mut u64,
         to_slot: Slot,
     ) -> Result<()> {
-        if let Some(index) = self.toggle_transaction_status_index(
+        if let Some(purged_index) = self.toggle_transaction_status_index(
             write_batch,
             w_active_transaction_status_index,
             to_slot,
         )? {
             *columns_purged &= self
                 .db
-                .delete_range_cf::<cf::TransactionStatus>(write_batch, index, index + 1)
+                .delete_range_cf::<cf::TransactionStatus>(
+                    write_batch,
+                    purged_index,
+                    purged_index + 1,
+                )
                 .is_ok()
                 & self
                     .db
-                    .delete_range_cf::<cf::AddressSignatures>(write_batch, index, index + 1)
+                    .delete_range_cf::<cf::AddressSignatures>(
+                        write_batch,
+                        purged_index,
+                        purged_index + 1,
+                    )
                     .is_ok();
         }
         Ok(())

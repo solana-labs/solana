@@ -1957,7 +1957,7 @@ impl Blockstore {
             batch.put::<cf::TransactionStatusIndex>(0, &index0)?;
             Ok(None)
         } else {
-            let result = if index0.frozen && to_slot > index0.max_slot {
+            let purge_target_primary_index = if index0.frozen && to_slot > index0.max_slot {
                 info!(
                     "Pruning expired primary index 0 at slot {} (requested: {})",
                     index0.max_slot, to_slot
@@ -1973,8 +1973,8 @@ impl Blockstore {
                 None
             };
 
-            if result.is_some() {
-                *w_active_transaction_status_index = if index0.frozen { 0 } else { 1 };
+            if let Some(purge_target_primary_index) = purge_target_primary_index {
+                *w_active_transaction_status_index = purge_target_primary_index;
                 if index0.frozen {
                     index0.max_slot = 0
                 };
@@ -1987,13 +1987,14 @@ impl Blockstore {
                 batch.put::<cf::TransactionStatusIndex>(1, &index1)?;
             }
 
-            Ok(result)
+            Ok(purge_target_primary_index)
         }
     }
 
-    fn get_primary_index(
+    fn get_primary_index_to_write(
         &self,
         slot: Slot,
+        // take &mut to require critical section semantics at call site
         w_active_transaction_status_index: &mut u64,
     ) -> Result<u64> {
         let i = *w_active_transaction_status_index;
@@ -2037,7 +2038,8 @@ impl Blockstore {
         // writes to that column
         let mut w_active_transaction_status_index =
             self.active_transaction_status_index.write().unwrap();
-        let primary_index = self.get_primary_index(slot, &mut w_active_transaction_status_index)?;
+        let primary_index =
+            self.get_primary_index_to_write(slot, &mut w_active_transaction_status_index)?;
         self.transaction_status_cf
             .put_protobuf((primary_index, signature, slot), &status)?;
         for address in writable_keys {

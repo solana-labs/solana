@@ -216,14 +216,17 @@ impl LedgerCleanupService {
                     // update only after purge operation
                     // safety: Firstly, this value can thereafter be used by compaction_filters
                     // shared via Arc<AtomicU64>. Compactions are async and run in multi-threaded
-                    // as a background job. Sounds racy? ;) But this shouldn't cause consistecy issue,
-                    // regarding application's consistent view like iterators and getters.
+                    // as a background job. Sounds racy? ;) But this shouldn't cause consistency issues,
+                    // from higher layer's view point like iterators and getters.
                     // That's because we have already shadowed all affected keys (older than or
                     // equal to lowest_cleanup_slot) by the above `purge_slots`.
                     // According to the general RocksDB design where SST files and immutable, even
                     // running iterators aren't affected; it grabs implicitly-created snapshot of
-                    // live set of sst files at the creation.
-                    // so, with those enogh bla bla, it can be said SAFU.
+                    // live set of sst files at iterator's creation.
+                    // Also, we passed the PurgeType::CompactionFilter, meaning no delete_range
+                    // for transaction_status and address_signatures CFs.  These are fine because
+                    // they don't require strong consistent view for workings.
+                    // so, with those enough bla bla, it can be said SAFU.
                     blockstore.set_last_purged_slot(lowest_cleanup_slot);
 
                     purge_time.stop();
