@@ -3,6 +3,7 @@ import {Buffer} from 'buffer';
 import {expect, use} from 'chai';
 import chaiAsPromised from 'chai-as-promised';
 
+import {Account} from '../src/account';
 import {PublicKey, MAX_SEED_LENGTH} from '../src/publickey';
 
 use(chaiAsPromised);
@@ -327,5 +328,18 @@ describe('PublicKey', function () {
         ),
       ),
     ).to.be.true;
+  });
+
+  it('isOnCurve', () => {
+    let onCurve = new Account().publicKey;
+    expect(PublicKey.isOnCurve(onCurve.toBuffer())).to.be.true;
+    // A program address, yanked from one of the above tests. This is a pretty
+    // poor test vector since it was created by the same code it is testing.
+    // Unfortunately, I've been unable to find a golden negative example input
+    // for curve25519 point decompression :/
+    let offCurve = new PublicKey(
+      '12rqwuEgBYiGhBrDJStCiqEtzQpTTiZbh7teNVLuYcFA',
+    );
+    expect(PublicKey.isOnCurve(offCurve.toBuffer())).to.be.false;
   });
 });
