@@ -150,6 +150,13 @@ export class PublicKey {
     }
     throw new Error(`Unable to find a viable program address nonce`);
   }
+
+  /**
+   * Check that a pubkey is on the ed25519 curve.
+   */
+  static isOnCurve(pubkey: Uint8Array): boolean {
+    return is_on_curve(pubkey) == 1;
+  }
 }
 
 // @ts-ignore
