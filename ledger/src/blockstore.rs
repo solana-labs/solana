@@ -1281,6 +1281,7 @@ impl Blockstore {
         leader_schedule: Option<&Arc<LeaderScheduleCache>>,
         is_recovered: bool,
     ) -> bool {
+        use crate::shred::SHRED_PAYLOAD_SIZE;
         let shred_index = u64::from(shred.index());
         let slot = shred.slot();
         let last_in_slot = if shred.last_in_slot() {
@@ -1289,6 +1290,13 @@ impl Blockstore {
         } else {
             false
         };
+
+        if shred.data_header.size == 0 {
+            return false;
+        }
+        if shred.payload.len() > SHRED_PAYLOAD_SIZE {
+            return false;
+        }
 
         // Check that we do not receive shred_index >= than the last_index
         // for the slot
@@ -1410,7 +1418,12 @@ impl Blockstore {
 
         // Commit step: commit all changes to the mutable structures at once, or none at all.
         // We don't want only a subset of these changes going through.
-        write_batch.put_bytes::<cf::ShredData>((slot, index), &shred.payload)?;
+        write_batch.put_bytes::<cf::ShredData>(
+            (slot, index),
+            // Payload will be padded out to SHRED_PAYLOAD_SIZE
+            // But only need to store the bytes within data_header.size
+            &shred.payload[..shred.data_header.size as usize],
+        )?;
         data_index.set_present(index, true);
         let newly_completed_data_sets = update_slot_meta(
             last_in_slot,
@@ -1438,7 +1451,16 @@ impl Blockstore {
     }
 
     pub fn get_data_shred(&self, slot: Slot, index: u64) -> Result<Option<Vec<u8>>> {
-        self.data_shred_cf.get_bytes((slot, index))
+        use crate::shred::SHRED_PAYLOAD_SIZE;
+        self.data_shred_cf.get_bytes((slot, index)).map(|data| {
+            data.map(|mut d| {
+                // Only data_header.size bytes stored in the blockstore so
+                // pad the payload out to SHRED_PAYLOAD_SIZE so that the
+                // erasure recovery works properly.
+                d.resize(cmp::max(d.len(), SHRED_PAYLOAD_SIZE), 0);
+                d
+            })
+        })
     }
 
     pub fn get_data_shreds_for_slot(
@@ -2805,7 +2827,7 @@ impl Blockstore {
         &self,
         slot: u64,
         index: u32,
-        new_shred: &[u8],
+        new_shred_raw: &[u8],
         is_data: bool,
     ) -> Option<Vec<u8>> {
         let res = if is_data {
@@ -2816,8 +2838,14 @@ impl Blockstore {
                 .expect("fetch from DuplicateSlots column family failed")
         };
 
+        let mut payload = new_shred_raw.to_vec();
+        payload.resize(
+            std::cmp::max(new_shred_raw.len(), crate::shred::SHRED_PAYLOAD_SIZE),
+            0,
+        );
+        let new_shred = Shred::new_from_serialized_shred(payload).unwrap();
         res.map(|existing_shred| {
-            if existing_shred != new_shred {
+            if existing_shred != new_shred.payload {
                 Some(existing_shred)
             } else {
                 None
@@ -5269,6 +5297,23 @@ pub mod tests {
             blockstore
                 .insert_shreds(shreds[0..5].to_vec(), None, false)
                 .unwrap();
+
+            let slot_meta = blockstore.meta(0).unwrap().unwrap();
+            // Corrupt shred by making it too large
+            let mut shred5 = shreds[5].clone();
+            shred5.payload.push(10);
+            shred5.data_header.size = shred5.payload.len() as u16;
+            assert_eq!(
+                blockstore.should_insert_data_shred(
+                    &shred5,
+                    &slot_meta,
+                    &HashMap::new(),
+                    &last_root,
+                    None,
+                    false
+                ),
+                false
+            );
 
             // Trying to insert another "is_last" shred with index < the received index should fail
             // skip over shred 7
@@ -7722,7 +7767,7 @@ pub mod tests {
                     &duplicate_shred.payload,
                     duplicate_shred.is_data()
                 ),
-                Some(shred.payload.clone())
+                Some(shred.payload.to_vec())
             );
             assert!(blockstore
                 .is_shred_duplicate(
