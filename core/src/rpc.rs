@@ -702,9 +702,17 @@ impl JsonRpcRequestProcessor {
 
     fn get_vote_accounts(
         &self,
-        commitment: Option<CommitmentConfig>,
+        config: Option<RpcGetVoteAccountsConfig>,
     ) -> Result<RpcVoteAccountStatus> {
-        let bank = self.bank(commitment);
+        let config = config.unwrap_or_default();
+
+        let filter_by_vote_pubkey = if let Some(ref vote_pubkey) = config.vote_pubkey {
+            Some(verify_pubkey(vote_pubkey)?)
+        } else {
+            None
+        };
+
+        let bank = self.bank(config.commitment);
         let vote_accounts = bank.vote_accounts();
         let epoch_vote_accounts = bank
             .epoch_vote_accounts(bank.get_epoch_and_slot_index(bank.slot()).0)
@@ -715,7 +723,13 @@ impl JsonRpcRequestProcessor {
             Vec<RpcVoteAccountInfo>,
         ) = vote_accounts
             .iter()
-            .map(|(pubkey, (activated_stake, account))| {
+            .filter_map(|(vote_pubkey, (activated_stake, account))| {
+                if let Some(filter_by_vote_pubkey) = filter_by_vote_pubkey {
+                    if *vote_pubkey != filter_by_vote_pubkey {
+                        return None;
+                    }
+                }
+
                 let vote_state = account.vote_state();
                 let vote_state = vote_state.as_ref().unwrap_or(&default_vote_state);
                 let last_vote = if let Some(vote) = vote_state.votes.iter().last() {
@@ -735,16 +749,16 @@ impl JsonRpcRequestProcessor {
                     epoch_credits.clone()
                 };
 
-                RpcVoteAccountInfo {
-                    vote_pubkey: (pubkey).to_string(),
+                Some(RpcVoteAccountInfo {
+                    vote_pubkey: vote_pubkey.to_string(),
                     node_pubkey: vote_state.node_pubkey.to_string(),
                     activated_stake: *activated_stake,
                     commission: vote_state.commission,
                     root_slot: vote_state.root_slot.unwrap_or(0),
                     epoch_credits,
-                    epoch_vote_account: epoch_vote_accounts.contains_key(pubkey),
+                    epoch_vote_account: epoch_vote_accounts.contains_key(vote_pubkey),
                     last_vote,
-                }
+                })
             })
             .partition(|vote_account_info| {
                 if bank.slot() >= DELINQUENT_VALIDATOR_SLOT_DISTANCE as u64 {
@@ -2100,7 +2114,7 @@ pub mod rpc_minimal {
         fn get_vote_accounts(
             &self,
             meta: Self::Metadata,
-            commitment: Option<CommitmentConfig>,
+            config: Option<RpcGetVoteAccountsConfig>,
         ) -> Result<RpcVoteAccountStatus>;
 
         // TODO: Refactor `solana-validator wait-for-restart-window` to not require this method, so
@@ -2203,10 +2217,10 @@ pub mod rpc_minimal {
         fn get_vote_accounts(
             &self,
             meta: Self::Metadata,
-            commitment: Option<CommitmentConfig>,
+            config: Option<RpcGetVoteAccountsConfig>,
         ) -> Result<RpcVoteAccountStatus> {
             debug!("get_vote_accounts rpc request received");
-            meta.get_vote_accounts(commitment)
+            meta.get_vote_accounts(config)
         }
 
         // TODO: Refactor `solana-validator wait-for-restart-window` to not require this method, so
@@ -6045,6 +6059,33 @@ pub mod tests {
                 (1, expected_credits + 1, expected_credits) // one vote in current epoch
             ]
         );
+
+        // Filter request based on the leader:
+        {
+            let req = format!(
+                r#"{{"jsonrpc":"2.0","id":1,"method":"getVoteAccounts","params":{}}}"#,
+                json!([RpcGetVoteAccountsConfig {
+                    vote_pubkey: Some(leader_vote_keypair.pubkey().to_string()),
+                    commitment: Some(CommitmentConfig::processed())
+                }])
+            );
+
+            let res = io.handle_request_sync(&req, meta.clone());
+            let result: Value = serde_json::from_str(&res.expect("actual response"))
+                .expect("actual response deserialization");
+
+            let vote_account_status: RpcVoteAccountStatus =
+                serde_json::from_value(result["result"].clone()).unwrap();
+
+            assert_eq!(vote_account_status.current.len(), 1);
+            assert_eq!(vote_account_status.delinquent.len(), 0);
+            for vote_account_info in vote_account_status.current {
+                assert_eq!(
+                    vote_account_info.vote_pubkey,
+                    leader_vote_keypair.pubkey().to_string()
+                );
+            }
+        }
 
         // Overflow the epoch credits history and ensure only `MAX_RPC_EPOCH_CREDITS_HISTORY`
         // results are returned

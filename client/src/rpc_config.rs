@@ -49,6 +49,14 @@ pub struct RpcLeaderScheduleConfig {
     pub commitment: Option<CommitmentConfig>,
 }
 
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcGetVoteAccountsConfig {
+    pub vote_pubkey: Option<String>, // validator vote address, as a base-58 encoded string
+    #[serde(flatten)]
+    pub commitment: Option<CommitmentConfig>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum RpcLeaderScheduleConfigWrapper {
