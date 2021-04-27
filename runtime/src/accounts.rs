@@ -976,7 +976,7 @@ impl Accounts {
                             _ => panic!("unexpected nonce_rollback condition"),
                         }
                     }
-                    if account.rent_epoch == INITIAL_RENT_EPOCH {
+                    if account.rent_epoch() == INITIAL_RENT_EPOCH {
                         loaded_transaction.rent +=
                             rent_collector.collect_from_created_account(&key, account);
                     }

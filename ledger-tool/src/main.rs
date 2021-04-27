@@ -2105,7 +2105,7 @@ fn main() {
                         println!("  - owner: '{}'", account.owner());
                         println!("  - executable: {}", account.executable());
                         println!("  - slot: {}", slot);
-                        println!("  - rent_epoch: {}", account.rent_epoch);
+                        println!("  - rent_epoch: {}", account.rent_epoch());
                         if !exclude_account_data {
                             println!("  - data: '{}'", bs58::encode(account.data()).into_string());
                         }

@@ -183,7 +183,7 @@ impl PreAccount {
         }
 
         // No one modifies rent_epoch (yet).
-        let rent_epoch_changed = pre.rent_epoch != post.rent_epoch;
+        let rent_epoch_changed = pre.rent_epoch() != post.rent_epoch();
         if rent_epoch_changed {
             return Err(InstructionError::RentEpochModified);
         }

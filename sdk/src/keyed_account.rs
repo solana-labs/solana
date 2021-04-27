@@ -56,7 +56,7 @@ impl<'a> KeyedAccount<'a> {
     }
 
     pub fn rent_epoch(&self) -> Result<Epoch, InstructionError> {
-        Ok(self.try_borrow()?.rent_epoch)
+        Ok(self.try_borrow()?.rent_epoch())
     }
 
     pub fn try_account_ref(&'a self) -> Result<Ref<AccountSharedData>, InstructionError> {
