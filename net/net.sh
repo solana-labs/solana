@@ -835,7 +835,7 @@ while [[ -n $1 ]]; do
       doBuild=false
       shift 1
     elif [[ $1 = --limit-ledger-size ]]; then
-      maybeLimitLedgerSize="$1" "$2"
+      maybeLimitLedgerSize="$1 $2"
       shift 2
     elif [[ $1 = --skip-poh-verify ]]; then
       maybeSkipLedgerVerify="$1"
