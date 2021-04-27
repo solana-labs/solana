@@ -49,7 +49,9 @@ fn apply_signature(
         }
         budget_state.pending_budget = None;
         contract_keyed_account.try_account_ref_mut()?.lamports -= payment.lamports;
-        to_keyed_account.try_account_ref_mut()?.lamports += payment.lamports;
+        to_keyed_account
+            .try_account_ref_mut()?
+            .checked_add_lamports(payment.lamports)?;
     }
     Ok(())
 }
@@ -80,7 +82,9 @@ fn apply_timestamp(
         }
         budget_state.pending_budget = None;
         contract_keyed_account.try_account_ref_mut()?.lamports -= payment.lamports;
-        to_keyed_account.try_account_ref_mut()?.lamports += payment.lamports;
+        to_keyed_account
+            .try_account_ref_mut()?
+            .checked_add_lamports(payment.lamports)?;
     }
     Ok(())
 }
@@ -111,7 +115,9 @@ fn apply_account_data(
         }
         budget_state.pending_budget = None;
         contract_keyed_account.try_account_ref_mut()?.lamports -= payment.lamports;
-        to_keyed_account.try_account_ref_mut()?.lamports += payment.lamports;
+        to_keyed_account
+            .try_account_ref_mut()?
+            .checked_add_lamports(payment.lamports)?;
     }
     Ok(())
 }
@@ -135,7 +141,9 @@ pub fn process_instruction(
                 let to_keyed_account = contract_keyed_account;
                 let contract_keyed_account = keyed_account_at_index(keyed_accounts, 1)?;
                 contract_keyed_account.try_account_ref_mut()?.lamports = 0;
-                to_keyed_account.try_account_ref_mut()?.lamports += payment.lamports;
+                to_keyed_account
+                    .try_account_ref_mut()?
+                    .checked_add_lamports(payment.lamports)?;
                 return Ok(());
             }
             let existing =

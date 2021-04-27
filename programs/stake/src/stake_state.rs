@@ -10,7 +10,7 @@ use crate::{
 };
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
-    account::{AccountSharedData, ReadableAccount},
+    account::{AccountSharedData, ReadableAccount, WritableAccount},
     account_utils::{State, StateMut},
     clock::{Clock, Epoch, UnixTimestamp},
     ic_msg,
@@ -1155,7 +1155,9 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                 self.set_state(&StakeState::Uninitialized)?;
             }
 
-            split.try_account_ref_mut()?.lamports += lamports;
+            split
+                .try_account_ref_mut()?
+                .checked_add_lamports(lamports)?;
             self.try_account_ref_mut()?.lamports -= lamports;
             Ok(())
         } else {
@@ -1203,7 +1205,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         // Drain the source stake account
         let lamports = source_account.lamports()?;
         source_account.try_account_ref_mut()?.lamports -= lamports;
-        self.try_account_ref_mut()?.lamports += lamports;
+        self.try_account_ref_mut()?.checked_add_lamports(lamports)?;
         Ok(())
     }
 
@@ -1284,7 +1286,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         }
 
         self.try_account_ref_mut()?.lamports -= lamports;
-        to.try_account_ref_mut()?.lamports += lamports;
+        to.try_account_ref_mut()?.checked_add_lamports(lamports)?;
         Ok(())
     }
 }
@@ -1486,8 +1488,8 @@ pub fn redeem_rewards(
             inflation_point_calc_tracer,
             fix_stake_deactivate,
         ) {
-            stake_account.lamports += stakers_reward;
-            vote_account.lamports += voters_reward;
+            stake_account.checked_add_lamports(stakers_reward)?;
+            vote_account.checked_add_lamports(voters_reward)?;
 
             stake_account.set_state(&StakeState::Stake(meta, stake))?;
 
@@ -3171,7 +3173,7 @@ mod tests {
         );
 
         // simulate rewards
-        stake_account.borrow_mut().lamports += 10;
+        stake_account.borrow_mut().checked_add_lamports(10).unwrap();
         // withdrawal before deactivate works for rewards amount
         let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
         let to_keyed_account = KeyedAccount::new(&to, false, &to_account);
@@ -3188,7 +3190,7 @@ mod tests {
         );
 
         // simulate rewards
-        stake_account.borrow_mut().lamports += 10;
+        stake_account.borrow_mut().checked_add_lamports(10).unwrap();
         // withdrawal of rewards fails if not in excess of stake
         let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
         let to_keyed_account = KeyedAccount::new(&to, false, &to_account);
@@ -5964,7 +5966,11 @@ mod tests {
         stake_keyed_account.deactivate(&clock, &signers).unwrap();
 
         // Out of band deposit
-        stake_keyed_account.try_account_ref_mut().unwrap().lamports += withdraw_lamports;
+        stake_keyed_account
+            .try_account_ref_mut()
+            .unwrap()
+            .checked_add_lamports(withdraw_lamports)
+            .unwrap();
 
         clock.epoch += 1;
         stake_keyed_account
