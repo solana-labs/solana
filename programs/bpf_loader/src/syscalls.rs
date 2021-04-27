@@ -21,6 +21,7 @@ use solana_sdk::{
     feature_set::{
         cpi_data_cost, cpi_share_ro_and_exec_accounts, demote_sysvar_write_locks,
         enforce_aligned_host_addrs, set_upgrade_authority_via_cpi_enabled, sysvar_via_syscall,
+        update_data_on_realloc,
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
@@ -1989,7 +1990,7 @@ fn call<'a>(
         let invoke_context = syscall.get_context()?;
         for (i, (account, account_ref)) in accounts.iter().zip(account_refs).enumerate() {
             let account = account.borrow();
-            if let Some(account_ref) = account_ref {
+            if let Some(mut account_ref) = account_ref {
                 if message.is_writable(i, demote_sysvar_write_locks) && !account.executable() {
                     *account_ref.lamports = account.lamports;
                     *account_ref.owner = *account.owner();
@@ -2019,12 +2020,22 @@ fn call<'a>(
                             )
                             .into());
                         }
-                        let _ = translate(
-                            memory_mapping,
-                            AccessType::Store,
-                            account_ref.vm_data_addr,
-                            account.data().len() as u64,
-                        )?;
+                        if invoke_context.is_feature_active(&update_data_on_realloc::id()) {
+                            account_ref.data = translate_slice_mut::<u8>(
+                                memory_mapping,
+                                account_ref.vm_data_addr,
+                                account.data().len() as u64,
+                                &bpf_loader_deprecated::id(), // Don't care since it is byte aligned
+                                true,
+                            )?;
+                        } else {
+                            let _ = translate(
+                                memory_mapping,
+                                AccessType::Store,
+                                account_ref.vm_data_addr,
+                                account.data().len() as u64,
+                            )?;
+                        }
                         *account_ref.ref_to_len_in_vm = account.data().len() as u64;
                         *account_ref.serialized_len_ptr = account.data().len() as u64;
                     }

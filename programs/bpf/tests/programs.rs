@@ -876,6 +876,8 @@ fn test_program_bpf_invoke_sanity() {
                 invoked_program_id.clone(),
                 invoked_program_id.clone(),
                 invoked_program_id.clone(),
+                invoked_program_id.clone(),
+                solana_sdk::system_program::id(),
             ],
         };
         assert_eq!(invoked_programs.len(), expected_invoked_programs.len());

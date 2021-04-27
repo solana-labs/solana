@@ -374,6 +374,32 @@ fn process_instruction(
                     accounts[INVOKED_ARGUMENT_INDEX].data.borrow_mut()[..NUM_BYTES]
                 );
             }
+
+            msg!("Create account and init data");
+            {
+                let from_lamports = accounts[FROM_INDEX].lamports();
+                let to_lamports = accounts[DERIVED_KEY2_INDEX].lamports();
+
+                let instruction = create_instruction(
+                    *accounts[INVOKED_PROGRAM_INDEX].key,
+                    &[
+                        (accounts[FROM_INDEX].key, true, true),
+                        (accounts[DERIVED_KEY2_INDEX].key, true, false),
+                        (accounts[SYSTEM_PROGRAM_INDEX].key, false, false),
+                    ],
+                    vec![CREATE_AND_INIT, bump_seed2],
+                );
+                invoke(&instruction, accounts)?;
+
+                assert_eq!(accounts[FROM_INDEX].lamports(), from_lamports - 1);
+                assert_eq!(accounts[DERIVED_KEY2_INDEX].lamports(), to_lamports + 1);
+                let data = accounts[DERIVED_KEY2_INDEX].try_borrow_mut_data()?;
+                assert_eq!(data[0], 0x0e);
+                assert_eq!(data[MAX_PERMITTED_DATA_INCREASE - 1], 0x0f);
+                for i in 1..20 {
+                    assert_eq!(data[i], i as u8);
+                }
+            }
         }
         TEST_PRIVILEGE_ESCALATION_SIGNER => {
             msg!("Test privilege escalation signer");

@@ -6,11 +6,12 @@ use crate::instruction::*;
 use solana_program::{
     account_info::AccountInfo,
     bpf_loader, entrypoint,
-    entrypoint::ProgramResult,
+    entrypoint::{ProgramResult, MAX_PERMITTED_DATA_INCREASE},
     msg,
     program::{invoke, invoke_signed},
     program_error::ProgramError,
     pubkey::Pubkey,
+    system_instruction,
 };
 
 entrypoint!(process_instruction);
@@ -234,6 +235,52 @@ fn process_instruction(
 
             for i in 0..instruction_data[1] {
                 accounts[ARGUMENT_INDEX].data.borrow_mut()[i as usize] = instruction_data[1];
+            }
+        }
+        CREATE_AND_INIT => {
+            msg!("Create and init data");
+            {
+                const FROM_INDEX: usize = 0;
+                const DERIVED_KEY2_INDEX: usize = 1;
+
+                let from_lamports = accounts[FROM_INDEX].lamports();
+                let to_lamports = accounts[DERIVED_KEY2_INDEX].lamports();
+                assert_eq!(accounts[DERIVED_KEY2_INDEX].data_len(), 0);
+                assert!(solana_program::system_program::check_id(
+                    accounts[DERIVED_KEY2_INDEX].owner
+                ));
+
+                let bump_seed2 = instruction_data[1];
+                let instruction = system_instruction::create_account(
+                    accounts[FROM_INDEX].key,
+                    accounts[DERIVED_KEY2_INDEX].key,
+                    1,
+                    MAX_PERMITTED_DATA_INCREASE as u64,
+                    program_id,
+                );
+                invoke_signed(
+                    &instruction,
+                    accounts,
+                    &[&[b"Lil'", b"Bits", &[bump_seed2]]],
+                )?;
+
+                assert_eq!(accounts[FROM_INDEX].lamports(), from_lamports - 1);
+                assert_eq!(accounts[DERIVED_KEY2_INDEX].lamports(), to_lamports + 1);
+                assert_eq!(program_id, accounts[DERIVED_KEY2_INDEX].owner);
+                assert_eq!(
+                    accounts[DERIVED_KEY2_INDEX].data_len(),
+                    MAX_PERMITTED_DATA_INCREASE
+                );
+                let mut data = accounts[DERIVED_KEY2_INDEX].try_borrow_mut_data()?;
+                assert_eq!(data[0], 0);
+                data[0] = 0x0e;
+                assert_eq!(data[0], 0x0e);
+                assert_eq!(data[MAX_PERMITTED_DATA_INCREASE - 1], 0);
+                data[MAX_PERMITTED_DATA_INCREASE - 1] = 0x0f;
+                assert_eq!(data[MAX_PERMITTED_DATA_INCREASE - 1], 0x0f);
+                for i in 1..20 {
+                    data[i] = i as u8;
+                }
             }
         }
         _ => panic!(),
