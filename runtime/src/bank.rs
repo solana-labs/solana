@@ -4036,7 +4036,7 @@ impl Bank {
                     .ok_or(TransactionError::InsufficientFundsForFee)?;
                 account
                     .checked_sub_lamports(lamports)
-                    .or_else(|_| Err(TransactionError::InsufficientFundsForFee))?;
+                    .map_err(|_| TransactionError::InsufficientFundsForFee)?;
                 self.store_account(pubkey, &account);
 
                 Ok(())
