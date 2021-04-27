@@ -2449,7 +2449,7 @@ fn main() {
                         rewarded_accounts.sort_unstable_by_key(
                             |(pubkey, account, base_lamports)| {
                                 (
-                                    account.owner(),
+                                    *account.owner(),
                                     *base_lamports,
                                     account.lamports - base_lamports,
                                     *pubkey,
