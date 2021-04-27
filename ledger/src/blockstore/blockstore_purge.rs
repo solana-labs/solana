@@ -191,7 +191,7 @@ impl Blockstore {
                 // this purge type completely and indefinitely relies on the proper working of compaction
                 // filter for those speical column families, never toggling the primary index from the
                 // current one. Overall, this enables well uniformly distributed writes, resulting
-                // in no spiky periodic compaction for them.
+                // in no spiky periodic huge delete_range for them.
             }
         }
         delete_range_timer.stop();
