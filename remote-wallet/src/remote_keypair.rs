@@ -1,8 +1,9 @@
 use {
     crate::{
         ledger::get_ledger_from_info,
+        locator::Manufacturer,
         remote_wallet::{
-            Manufacturer, RemoteWallet, RemoteWalletError, RemoteWalletInfo, RemoteWalletManager,
+            RemoteWallet, RemoteWalletError, RemoteWalletInfo, RemoteWalletManager,
             RemoteWalletType,
         },
     },
