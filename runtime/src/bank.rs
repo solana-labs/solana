@@ -5993,7 +5993,7 @@ pub(crate) mod tests {
         let account_balance = 1;
         let mut account =
             AccountSharedData::new(account_balance, 0, &solana_sdk::pubkey::new_rand());
-        account.executable = true;
+        account.set_executable(true);
         bank.store_account(&account_pubkey, &account);
 
         let transfer_lamports = 1;
@@ -10380,7 +10380,7 @@ pub(crate) mod tests {
         // Add a new program owned by the first
         let program2_pubkey = solana_sdk::pubkey::new_rand();
         let mut program2_account = AccountSharedData::new(42, 1, &program1_pubkey);
-        program2_account.executable = true;
+        program2_account.set_executable(true);
         bank.store_account(&program2_pubkey, &program2_account);
 
         let instruction = Instruction::new_with_bincode(program2_pubkey, &10, vec![]);

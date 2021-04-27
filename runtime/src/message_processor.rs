@@ -1455,8 +1455,8 @@ mod tests {
             self
         }
         pub fn executable(mut self, pre: bool, post: bool) -> Self {
-            self.pre.account.borrow_mut().executable = pre;
-            self.post.executable = post;
+            self.pre.account.borrow_mut().set_executable(pre);
+            self.post.set_executable(post);
             self
         }
         pub fn lamports(mut self, pre: u64, post: u64) -> Self {
@@ -2187,7 +2187,7 @@ mod tests {
         let callee_program_id = solana_sdk::pubkey::new_rand();
 
         let mut program_account = AccountSharedData::new(1, 0, &native_loader::id());
-        program_account.executable = true;
+        program_account.set_executable(true);
         let executable_accounts = vec![(
             callee_program_id,
             Rc::new(RefCell::new(program_account.clone())),

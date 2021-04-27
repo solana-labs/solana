@@ -558,7 +558,7 @@ pub mod tests {
     use super::*;
     use assert_matches::assert_matches;
     use rand::{thread_rng, Rng};
-    use solana_sdk::timing::duration_as_ms;
+    use solana_sdk::{account::WritableAccount, timing::duration_as_ms};
     use std::time::Instant;
 
     impl AppendVec {
@@ -807,7 +807,7 @@ pub mod tests {
         av.append_account_test(&create_test_account(10)).unwrap();
         {
             let mut executable_account = create_test_account(10);
-            executable_account.1.executable = true;
+            executable_account.1.set_executable(true);
             av.append_account_test(&executable_account).unwrap();
         }
 

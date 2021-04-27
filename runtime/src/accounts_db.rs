@@ -7409,7 +7409,7 @@ pub mod tests {
 
         // Executable may not be modified
         let mut account_modified = account;
-        account_modified.executable = true;
+        account_modified.set_executable(true);
         assert_ne!(
             hash,
             AccountsDb::hash_frozen_account_data(&account_modified)
@@ -7567,7 +7567,7 @@ pub mod tests {
         db.store_uncached(some_slot, &[(&key, &account)]);
         let mut account = db.load_without_fixed_root(&ancestors, &key).unwrap().0;
         account.checked_sub_lamports(1).unwrap();
-        account.executable = true;
+        account.set_executable(true);
         db.store_uncached(some_slot, &[(&key, &account)]);
         db.add_root(some_slot);
 
