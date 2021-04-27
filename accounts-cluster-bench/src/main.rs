@@ -1,5 +1,5 @@
 #![allow(clippy::integer_arithmetic)]
-use clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg};
+use clap::{crate_description, crate_name, value_t, values_t_or_exit, App, Arg};
 use log::*;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
@@ -359,7 +359,7 @@ fn make_close_message(
 fn run_accounts_bench(
     entrypoint_addr: SocketAddr,
     faucet_addr: SocketAddr,
-    keypair: &Keypair,
+    payer_keypairs: &[&Keypair],
     iterations: usize,
     maybe_space: Option<u64>,
     batch_size: usize,
@@ -372,7 +372,7 @@ fn run_accounts_bench(
     let client =
         RpcClient::new_socket_with_commitment(entrypoint_addr, CommitmentConfig::confirmed());
 
-    info!("Targetting {}", entrypoint_addr);
+    info!("Targeting {}", entrypoint_addr);
 
     let mut last_blockhash = Instant::now();
     let mut last_log = Instant::now();
@@ -381,7 +381,10 @@ fn run_accounts_bench(
     let mut tx_sent_count = 0;
     let mut total_accounts_created = 0;
     let mut total_accounts_closed = 0;
-    let mut balance = client.get_balance(&keypair.pubkey()).unwrap_or(0);
+    let mut balances: Vec<_> = payer_keypairs
+        .iter()
+        .map(|keypair| client.get_balance(&keypair.pubkey()).unwrap_or(0))
+        .collect();
     let mut last_balance = Instant::now();
 
     let default_max_lamports = 1000;
@@ -398,7 +401,7 @@ fn run_accounts_bench(
         max_closed: Arc::new(AtomicU64::default()),
     };
 
-    info!("Starting balance: {}", balance);
+    info!("Starting balance(s): {:?}", balances);
 
     let executor = TransactionExecutor::new(entrypoint_addr);
 
@@ -414,19 +417,26 @@ fn run_accounts_bench(
             .saturating_mul(NUM_SIGNATURES);
         let lamports = min_balance + fee;
 
-        if balance < lamports || last_balance.elapsed().as_millis() > 2000 {
-            if let Ok(b) = client.get_balance(&keypair.pubkey()) {
-                balance = b;
-            }
-            last_balance = Instant::now();
-            if balance < lamports {
-                info!(
-                    "Balance {} is less than needed: {}, doing aidrop...",
-                    balance, lamports
-                );
-                if !airdrop_lamports(&client, &faucet_addr, keypair, lamports * 100_000) {
-                    warn!("failed airdrop, exiting");
-                    return;
+        for (i, balance) in balances.iter_mut().enumerate() {
+            if *balance < lamports || last_balance.elapsed().as_millis() > 2000 {
+                if let Ok(b) = client.get_balance(&payer_keypairs[i].pubkey()) {
+                    *balance = b;
+                }
+                last_balance = Instant::now();
+                if *balance < lamports * 2 {
+                    info!(
+                        "Balance {} is less than needed: {}, doing aidrop...",
+                        balance, lamports
+                    );
+                    if !airdrop_lamports(
+                        &client,
+                        &faucet_addr,
+                        &payer_keypairs[i],
+                        lamports * 100_000,
+                    ) {
+                        warn!("failed airdrop, exiting");
+                        return;
+                    }
                 }
             }
         }
@@ -434,29 +444,36 @@ fn run_accounts_bench(
         let sigs_len = executor.num_outstanding();
         if sigs_len < batch_size {
             let num_to_create = batch_size - sigs_len;
-            info!("creating {} new", num_to_create);
-            let txs: Vec<_> = (0..num_to_create)
-                .into_par_iter()
-                .map(|_| {
-                    let message = make_create_message(
-                        keypair,
-                        &base_keypair,
-                        seed_tracker.max_created.clone(),
-                        num_instructions,
-                        min_balance,
-                        maybe_space,
-                        mint,
-                    );
-                    let signers: Vec<&Keypair> = vec![keypair, &base_keypair];
-                    Transaction::new(&signers, message, recent_blockhash.0)
-                })
-                .collect();
-            balance = balance.saturating_sub(lamports * txs.len() as u64);
-            info!("txs: {}", txs.len());
-            let new_ids = executor.push_transactions(txs);
-            info!("ids: {}", new_ids.len());
-            tx_sent_count += new_ids.len();
-            total_accounts_created += num_instructions * new_ids.len();
+            if num_to_create >= payer_keypairs.len() {
+                info!("creating {} new", num_to_create);
+                let chunk_size = num_to_create / payer_keypairs.len();
+                if chunk_size > 0 {
+                    for (i, keypair) in payer_keypairs.iter().enumerate() {
+                        let txs: Vec<_> = (0..chunk_size)
+                            .into_par_iter()
+                            .map(|_| {
+                                let message = make_create_message(
+                                    keypair,
+                                    &base_keypair,
+                                    seed_tracker.max_created.clone(),
+                                    num_instructions,
+                                    min_balance,
+                                    maybe_space,
+                                    mint,
+                                );
+                                let signers: Vec<&Keypair> = vec![keypair, &base_keypair];
+                                Transaction::new(&signers, message, recent_blockhash.0)
+                            })
+                            .collect();
+                        balances[i] = balances[i].saturating_sub(lamports * txs.len() as u64);
+                        info!("txs: {}", txs.len());
+                        let new_ids = executor.push_transactions(txs);
+                        info!("ids: {}", new_ids.len());
+                        tx_sent_count += new_ids.len();
+                        total_accounts_created += num_instructions * new_ids.len();
+                    }
+                }
+            }
 
             if close_nth > 0 {
                 let expected_closed = total_accounts_created as u64 / close_nth;
@@ -465,18 +482,18 @@ fn run_accounts_bench(
                         .into_par_iter()
                         .map(|_| {
                             let message = make_close_message(
-                                keypair,
+                                &payer_keypairs[0],
                                 &base_keypair,
                                 seed_tracker.max_closed.clone(),
                                 1,
                                 min_balance,
                                 mint.is_some(),
                             );
-                            let signers: Vec<&Keypair> = vec![keypair, &base_keypair];
+                            let signers: Vec<&Keypair> = vec![&payer_keypairs[0], &base_keypair];
                             Transaction::new(&signers, message, recent_blockhash.0)
                         })
                         .collect();
-                    balance = balance.saturating_sub(fee * txs.len() as u64);
+                    balances[0] = balances[0].saturating_sub(fee * txs.len() as u64);
                     info!("close txs: {}", txs.len());
                     let new_ids = executor.push_transactions(txs);
                     info!("close ids: {}", new_ids.len());
@@ -491,8 +508,8 @@ fn run_accounts_bench(
         count += 1;
         if last_log.elapsed().as_millis() > 3000 {
             info!(
-                "total_accounts_created: {} total_accounts_closed: {} tx_sent_count: {} loop_count: {} balance: {}",
-                total_accounts_created, total_accounts_closed, tx_sent_count, count, balance
+                "total_accounts_created: {} total_accounts_closed: {} tx_sent_count: {} loop_count: {} balance(s): {:?}",
+                total_accounts_created, total_accounts_closed, tx_sent_count, count, balances
             );
             last_log = Instant::now();
         }
@@ -543,6 +560,7 @@ fn main() {
             Arg::with_name("identity")
                 .long("identity")
                 .takes_value(true)
+                .multiple(true)
                 .value_name("FILE")
                 .help("keypair file"),
         )
@@ -624,8 +642,17 @@ fn main() {
 
     let mint = pubkey_of(&matches, "mint");
 
-    let keypair =
-        read_keypair_file(&value_t_or_exit!(matches, "identity", String)).expect("bad keypair");
+    let payer_keypairs: Vec<_> = values_t_or_exit!(matches, "identity", String)
+        .iter()
+        .map(|keypair_string| {
+            read_keypair_file(keypair_string)
+                .unwrap_or_else(|_| panic!("bad keypair {:?}", keypair_string))
+        })
+        .collect();
+    let mut payer_keypair_refs: Vec<&Keypair> = vec![];
+    for keypair in payer_keypairs.iter() {
+        payer_keypair_refs.push(keypair);
+    }
 
     let rpc_addr = if !skip_gossip {
         info!("Finding cluster entry: {:?}", entrypoint_addr);
@@ -654,7 +681,7 @@ fn main() {
     run_accounts_bench(
         rpc_addr,
         faucet_addr,
-        &keypair,
+        &payer_keypair_refs,
         iterations,
         space,
         batch_size,
@@ -700,7 +727,7 @@ pub mod test {
         run_accounts_bench(
             cluster.entry_point_info.rpc,
             faucet_addr,
-            &cluster.funding_keypair,
+            &[&cluster.funding_keypair],
             iterations,
             maybe_space,
             batch_size,
