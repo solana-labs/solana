@@ -446,29 +446,31 @@ fn run_accounts_bench(
             let num_to_create = batch_size - sigs_len;
             info!("creating {} new", num_to_create);
             let chunk_size = num_to_create / payer_keypairs.len();
-            for (i, keypair) in payer_keypairs.iter().enumerate() {
-                let txs: Vec<_> = (0..chunk_size)
-                    .into_par_iter()
-                    .map(|_| {
-                        let message = make_create_message(
-                            keypair,
-                            &base_keypair,
-                            seed_tracker.max_created.clone(),
-                            num_instructions,
-                            min_balance,
-                            maybe_space,
-                            mint,
-                        );
-                        let signers: Vec<&Keypair> = vec![keypair, &base_keypair];
-                        Transaction::new(&signers, message, recent_blockhash.0)
-                    })
-                    .collect();
-                balances[i] = balances[i].saturating_sub(lamports * txs.len() as u64);
-                info!("txs: {}", txs.len());
-                let new_ids = executor.push_transactions(txs);
-                info!("ids: {}", new_ids.len());
-                tx_sent_count += new_ids.len();
-                total_accounts_created += num_instructions * new_ids.len();
+            if chunk_size > 0 {
+                for (i, keypair) in payer_keypairs.iter().enumerate() {
+                    let txs: Vec<_> = (0..chunk_size)
+                        .into_par_iter()
+                        .map(|_| {
+                            let message = make_create_message(
+                                keypair,
+                                &base_keypair,
+                                seed_tracker.max_created.clone(),
+                                num_instructions,
+                                min_balance,
+                                maybe_space,
+                                mint,
+                            );
+                            let signers: Vec<&Keypair> = vec![keypair, &base_keypair];
+                            Transaction::new(&signers, message, recent_blockhash.0)
+                        })
+                        .collect();
+                    balances[i] = balances[i].saturating_sub(lamports * txs.len() as u64);
+                    info!("txs: {}", txs.len());
+                    let new_ids = executor.push_transactions(txs);
+                    info!("ids: {}", new_ids.len());
+                    tx_sent_count += new_ids.len();
+                    total_accounts_created += num_instructions * new_ids.len();
+                }
             }
 
             if close_nth > 0 {
