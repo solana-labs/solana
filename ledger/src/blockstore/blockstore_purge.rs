@@ -187,6 +187,12 @@ impl Blockstore {
                     to_slot,
                 )?;
             }
+            PurgeType::CompactionFilter => {
+                // this purge type completely and indefinitely relies on the proper working of compaction
+                // filter for those speical column families, never toggling the primary index from the
+                // current one. Overall, this enables well uniformly distributed writes, resulting
+                // in no spiky periodic compaction for them.
+            }
         }
         delete_range_timer.stop();
         let mut write_timer = Measure::start("write_batch");

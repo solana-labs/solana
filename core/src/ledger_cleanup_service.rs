@@ -211,7 +211,7 @@ impl LedgerCleanupService {
                     blockstore.purge_slots(
                         purge_first_slot,
                         lowest_cleanup_slot,
-                        PurgeType::PrimaryIndex,
+                        PurgeType::CompactionFilter,
                     );
                     // update only after purge operation
                     // safety: Firstly, this value can thereafter be used by compaction_filters

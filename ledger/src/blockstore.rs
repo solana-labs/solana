@@ -92,6 +92,7 @@ type CompletedRanges = Vec<(u32, u32)>;
 pub enum PurgeType {
     Exact,
     PrimaryIndex,
+    CompactionFilter,
 }
 
 #[derive(Error, Debug)]
