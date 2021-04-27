@@ -896,20 +896,10 @@ impl Shredder {
             let shred = shreds.last().unwrap();
             shred.data_complete() || shred.last_in_slot()
         };
-<<<<<<< HEAD
-
-        Ok(Self::reassemble_payload(num_data, data_shred_bufs))
-    }
-
-    fn reassemble_payload(num_data: usize, data_shred_bufs: Vec<&Vec<u8>>) -> Vec<u8> {
-        let valid_data_len = SHRED_PAYLOAD_SIZE - SIZE_OF_DATA_SHRED_IGNORED_TAIL;
-        data_shred_bufs[..num_data]
-=======
         if !data_complete || !aligned {
             return Err(TooFewDataShards);
         }
         let data: Vec<_> = shreds
->>>>>>> 0f3ac51cf... limits to data_header.size when combining shreds' payloads (#16708)
             .iter()
             .flat_map(|shred| {
                 let size = shred.data_header.size as usize;
