@@ -4034,8 +4034,9 @@ impl Bank {
                     .checked_add(min_balance)
                     .filter(|required_balance| *required_balance <= account.lamports())
                     .ok_or(TransactionError::InsufficientFundsForFee)?;
-
-                account.lamports -= lamports;
+                account
+                    .checked_sub_lamports(lamports)
+                    .map_err(|_| TransactionError::InsufficientFundsForFee)?;
                 self.store_account(pubkey, &account);
 
                 Ok(())
