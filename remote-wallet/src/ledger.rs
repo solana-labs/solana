@@ -1,9 +1,8 @@
 use {
     crate::{
         ledger_error::LedgerError,
-        remote_wallet::{
-            Manufacturer, RemoteWallet, RemoteWalletError, RemoteWalletInfo, RemoteWalletManager,
-        },
+        locator::Manufacturer,
+        remote_wallet::{RemoteWallet, RemoteWalletError, RemoteWalletInfo, RemoteWalletManager},
     },
     console::Emoji,
     dialoguer::{theme::ColorfulTheme, Select},
