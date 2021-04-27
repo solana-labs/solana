@@ -418,7 +418,7 @@ fn process_loader_upgradeable_instruction(
             program.set_state(&UpgradeableLoaderState::Program {
                 programdata_address: *programdata.unsigned_key(),
             })?;
-            program.try_account_ref_mut()?.executable = true;
+            program.try_account_ref_mut()?.set_executable(true);
 
             // Drain the Buffer account back to the payer
             payer
@@ -695,7 +695,7 @@ fn process_loader_instruction(
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
             let program = keyed_account_at_index(keyed_accounts, 0)?;
             invoke_context.add_executor(program.unsigned_key(), executor);
-            program.try_account_ref_mut()?.executable = true;
+            program.try_account_ref_mut()?.set_executable(true);
             ic_msg!(
                 invoke_context,
                 "Finalized account {:?}",
