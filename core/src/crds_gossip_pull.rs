@@ -382,8 +382,10 @@ impl CrdsGossipPull {
         let mut owners = HashSet::new();
         for r in responses_expired_timeout {
             let value_hash = r.value_hash;
-            if crds.insert_versioned(r).is_err() {
-                failed_inserts.push(value_hash);
+            match crds.insert_versioned(r) {
+                Ok(None) => (),
+                Ok(Some(old)) => self.purged_values.push_back((old.value_hash, now)),
+                Err(_) => failed_inserts.push(value_hash),
             }
         }
         for r in responses {
