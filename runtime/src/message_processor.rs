@@ -1828,7 +1828,10 @@ mod tests {
                     MockSystemInstruction::Correct => Ok(()),
                     MockSystemInstruction::AttemptCredit { lamports } => {
                         keyed_accounts[0].account.borrow_mut().lamports -= lamports;
-                        keyed_accounts[1].account.borrow_mut().lamports += lamports;
+                        keyed_accounts[1]
+                            .account
+                            .borrow_mut()
+                            .checked_add_lamports(lamports)?;
                         Ok(())
                     }
                     // Change data in a read-only account
@@ -2005,11 +2008,13 @@ mod tests {
                             let mut to_account = keyed_accounts[1].try_account_ref_mut()?;
                             let mut dup_account = keyed_accounts[2].try_account_ref_mut()?;
                             dup_account.lamports -= lamports;
-                            to_account.lamports += lamports;
+                            to_account.checked_add_lamports(lamports)?;
                             dup_account.set_data(vec![data]);
                         }
                         keyed_accounts[0].try_account_ref_mut()?.lamports -= lamports;
-                        keyed_accounts[1].try_account_ref_mut()?.lamports += lamports;
+                        keyed_accounts[1]
+                            .try_account_ref_mut()?
+                            .checked_add_lamports(lamports)?;
                         Ok(())
                     }
                 }

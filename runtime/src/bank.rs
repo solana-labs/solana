@@ -5449,7 +5449,10 @@ pub(crate) mod tests {
         if let Ok(instruction) = bincode::deserialize(data) {
             match instruction {
                 MockInstruction::Deduction => {
-                    keyed_accounts[1].account.borrow_mut().lamports += 1;
+                    keyed_accounts[1]
+                        .account
+                        .borrow_mut()
+                        .checked_add_lamports(1)?;
                     keyed_accounts[2].account.borrow_mut().lamports -= 1;
                     Ok(())
                 }
@@ -9868,7 +9871,7 @@ pub(crate) mod tests {
                 let mut to_account = keyed_accounts[1].try_account_ref_mut()?;
                 let mut dup_account = keyed_accounts[2].try_account_ref_mut()?;
                 dup_account.lamports -= lamports;
-                to_account.lamports += lamports;
+                to_account.checked_add_lamports(lamports).unwrap();
             }
             keyed_accounts[0]
                 .try_account_ref_mut()?
@@ -10359,7 +10362,7 @@ pub(crate) mod tests {
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
             assert_eq!(42, keyed_accounts[0].lamports().unwrap());
             let mut account = keyed_accounts[0].try_account_ref_mut()?;
-            account.lamports += 1;
+            account.checked_add_lamports(1)?;
             Ok(())
         }
 
