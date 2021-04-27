@@ -1474,8 +1474,8 @@ mod tests {
             self
         }
         pub fn rent_epoch(mut self, pre: u64, post: u64) -> Self {
-            self.pre.account.borrow_mut().rent_epoch = pre;
-            self.post.rent_epoch = post;
+            self.pre.account.borrow_mut().set_rent_epoch(pre);
+            self.post.set_rent_epoch(post);
             self
         }
         pub fn verify(&self) -> Result<(), InstructionError> {
