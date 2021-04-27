@@ -10132,9 +10132,9 @@ pub mod tests {
         let mut uncleaned_slots2 = db.collect_uncleaned_slots_up_to_slot(slot2);
         let mut uncleaned_slots3 = db.collect_uncleaned_slots_up_to_slot(slot3);
 
-        uncleaned_slots1.sort();
-        uncleaned_slots2.sort();
-        uncleaned_slots3.sort();
+        uncleaned_slots1.sort_unstable();
+        uncleaned_slots2.sort_unstable();
+        uncleaned_slots3.sort_unstable();
 
         assert_eq!(uncleaned_slots1, [slot1]);
         assert_eq!(uncleaned_slots2, [slot1, slot2]);
