@@ -2063,10 +2063,19 @@ impl Blockstore {
         signature: Signature,
         confirmed_unrooted_slots: &[Slot],
     ) -> Result<(Option<(Slot, TransactionStatusMeta)>, u64)> {
+        // transaction_status doesn't employ strong read consystency with slot-based
+        // delete_range via LedgerCleanupService, because of inefficiency.
+        // so, ensure consistent result by using lowest_cleanup_slot as the lower bound
+        // for reading
+        let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
         let mut counter = 0;
         for transaction_status_cf_primary_index in 0..=1 {
             let index_iterator = self.transaction_status_cf.iter(IteratorMode::From(
-                (transaction_status_cf_primary_index, signature, 0),
+                (
+                    transaction_status_cf_primary_index,
+                    signature,
+                    *lowest_cleanup_slot,
+                ),
                 IteratorDirection::Forward,
             ))?;
             for ((i, sig, slot), _data) in index_iterator {
@@ -2208,13 +2217,18 @@ impl Blockstore {
         start_slot: Slot,
         end_slot: Slot,
     ) -> Result<Vec<(Slot, Signature)>> {
+        // transaction_status doesn't employ strong read consystency with slot-based
+        // delete_range via LedgerCleanupService, because of inefficiency.
+        // so, ensure consistent result by using lowest_cleanup_slot as the lower bound
+        // for reading
+        let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
         let mut signatures: Vec<(Slot, Signature)> = vec![];
         for transaction_status_cf_primary_index in 0..=1 {
             let index_iterator = self.address_signatures_cf.iter(IteratorMode::From(
                 (
                     transaction_status_cf_primary_index,
                     pubkey,
-                    start_slot,
+                    start_slot.max(*lowest_cleanup_slot),
                     Signature::default(),
                 ),
                 IteratorDirection::Forward,
@@ -2241,13 +2255,18 @@ impl Blockstore {
         pubkey: Pubkey,
         slot: Slot,
     ) -> Result<Vec<(Slot, Signature)>> {
+        // transaction_status doesn't employ strong read consystency with slot-based
+        // delete_range via LedgerCleanupService, because of inefficiency.
+        // so, ensure consistent result by using lowest_cleanup_slot as the lower bound
+        // for reading
+        let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
         let mut signatures: Vec<(Slot, Signature)> = vec![];
         for transaction_status_cf_primary_index in 0..=1 {
             let index_iterator = self.address_signatures_cf.iter(IteratorMode::From(
                 (
                     transaction_status_cf_primary_index,
                     pubkey,
-                    slot,
+                    slot.max(*lowest_cleanup_slot),
                     Signature::default(),
                 ),
                 IteratorDirection::Forward,
