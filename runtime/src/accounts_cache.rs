@@ -6,6 +6,7 @@ use solana_sdk::{
     pubkey::Pubkey,
 };
 use std::{
+    borrow::Borrow,
     collections::BTreeSet,
     ops::Deref,
     sync::{
@@ -51,7 +52,7 @@ impl SlotCacheInner {
         &self,
         pubkey: &Pubkey,
         account: AccountSharedData,
-        hash: Option<Hash>,
+        hash: Option<impl Borrow<Hash>>,
         slot: Slot,
     ) -> CachedAccount {
         if self.cache.contains_key(pubkey) {
@@ -64,7 +65,7 @@ impl SlotCacheInner {
         }
         let item = Arc::new(CachedAccountInner {
             account,
-            hash: RwLock::new(hash),
+            hash: RwLock::new(hash.map(|h| *h.borrow())),
             slot,
             pubkey: *pubkey,
         });
@@ -169,7 +170,7 @@ impl AccountsCache {
         slot: Slot,
         pubkey: &Pubkey,
         account: AccountSharedData,
-        hash: Option<Hash>,
+        hash: Option<impl Borrow<Hash>>,
     ) -> CachedAccount {
         let slot_cache = self.slot_cache(slot).unwrap_or_else(||
             // DashMap entry.or_insert() returns a RefMut, essentially a write lock,
@@ -283,7 +284,7 @@ pub mod tests {
             inserted_slot,
             &Pubkey::new_unique(),
             AccountSharedData::new(1, 0, &Pubkey::default()),
-            Some(Hash::default()),
+            Some(&Hash::default()),
         );
         // If the cache is told the size limit is 0, it should return the one slot
         let removed = cache.remove_slots_le(0);
@@ -301,7 +302,7 @@ pub mod tests {
             inserted_slot,
             &Pubkey::new_unique(),
             AccountSharedData::new(1, 0, &Pubkey::default()),
-            Some(Hash::default()),
+            Some(&Hash::default()),
         );
 
         // If the cache is told the size limit is 0, it should return nothing because there's only

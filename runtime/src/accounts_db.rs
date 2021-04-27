@@ -51,7 +51,7 @@ use solana_sdk::{
 };
 use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::{
-    borrow::Cow,
+    borrow::{Borrow, Cow},
     boxed::Box,
     collections::{hash_map::Entry, BTreeMap, BTreeSet, HashMap, HashSet},
     convert::TryFrom,
@@ -1937,7 +1937,7 @@ impl AccountsDb {
 
             for (_pubkey, alive_account) in alive_accounts.iter() {
                 stored_accounts.push(alive_account.account.clone_account());
-                hashes.push(*alive_account.account.hash);
+                hashes.push(alive_account.account.hash);
                 write_versions.push(alive_account.account.meta.write_version);
             }
             let accounts = alive_accounts
@@ -3308,7 +3308,7 @@ impl AccountsDb {
     fn write_accounts_to_storage<F: FnMut(Slot, usize) -> Arc<AccountStorageEntry>>(
         &self,
         slot: Slot,
-        hashes: &[Hash],
+        hashes: &[impl Borrow<Hash>],
         mut storage_finder: F,
         accounts_and_meta_to_store: &[(StoredMeta, &AccountSharedData)],
     ) -> Vec<AccountInfo> {
@@ -3691,7 +3691,7 @@ impl AccountsDb {
     fn write_accounts_to_cache(
         &self,
         slot: Slot,
-        hashes: Option<&[Hash]>,
+        hashes: Option<&[impl Borrow<Hash>]>,
         accounts_and_meta_to_store: &[(StoredMeta, &AccountSharedData)],
     ) -> Vec<AccountInfo> {
         let len = accounts_and_meta_to_store.len();
@@ -3704,7 +3704,7 @@ impl AccountsDb {
             .iter()
             .enumerate()
             .map(|(i, (meta, account))| {
-                let hash = hashes.map(|hashes| hashes[i]);
+                let hash = hashes.map(|hashes| hashes[i].borrow());
                 let cached_account =
                     self.accounts_cache
                         .store(slot, &meta.pubkey, (*account).clone(), hash);
@@ -3733,7 +3733,7 @@ impl AccountsDb {
         &self,
         slot: Slot,
         accounts: &[(&Pubkey, &AccountSharedData)],
-        hashes: Option<&[Hash]>,
+        hashes: Option<&[impl Borrow<Hash>]>,
         storage_finder: F,
         mut write_version_producer: P,
         is_cached_store: bool,
@@ -4674,7 +4674,7 @@ impl AccountsDb {
         &self,
         slot: Slot,
         accounts: &[(&Pubkey, &AccountSharedData)],
-        hashes: Option<&[Hash]>,
+        hashes: Option<&[&Hash]>,
         is_cached_store: bool,
     ) {
         // This path comes from a store to a non-frozen slot.
@@ -4700,7 +4700,7 @@ impl AccountsDb {
         &'a self,
         slot: Slot,
         accounts: &[(&Pubkey, &AccountSharedData)],
-        hashes: Option<&[Hash]>,
+        hashes: Option<&[impl Borrow<Hash>]>,
         storage_finder: Option<StorageFinder<'a>>,
         write_version_producer: Option<Box<dyn Iterator<Item = u64>>>,
     ) -> StoreAccountsTiming {
@@ -4724,7 +4724,7 @@ impl AccountsDb {
         &'a self,
         slot: Slot,
         accounts: &[(&Pubkey, &AccountSharedData)],
-        hashes: Option<&[Hash]>,
+        hashes: Option<&[impl Borrow<Hash>]>,
         storage_finder: Option<StorageFinder<'a>>,
         write_version_producer: Option<Box<dyn Iterator<Item = u64>>>,
         is_cached_store: bool,
@@ -5178,7 +5178,7 @@ impl AccountsDb {
 
             for (pubkey, alive_account) in alive_accounts {
                 accounts.push((pubkey, &alive_account.account));
-                hashes.push(alive_account.account_hash);
+                hashes.push(&alive_account.account_hash);
                 write_versions.push(alive_account.write_version);
             }
             start.stop();
@@ -5809,7 +5809,7 @@ pub mod tests {
         };
         storages[0][0]
             .accounts
-            .append_accounts(&[(sm, &acc)], &[Hash::default()]);
+            .append_accounts(&[(sm, &acc)], &[&Hash::default()]);
 
         let calls = AtomicU64::new(0);
         let result = AccountsDb::scan_account_storage_no_bank(
@@ -7704,7 +7704,7 @@ pub mod tests {
         }
         // provide bogus account hashes
         let some_hash = Hash::new(&[0xca; HASH_BYTES]);
-        db.store_accounts_unfrozen(some_slot, accounts, Some(&[some_hash]), false);
+        db.store_accounts_unfrozen(some_slot, accounts, Some(&[&some_hash]), false);
         db.add_root(some_slot);
         assert_matches!(
             db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1),

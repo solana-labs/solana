@@ -11,6 +11,7 @@ use solana_sdk::{
     pubkey::Pubkey,
 };
 use std::{
+    borrow::Borrow,
     fs::{remove_file, OpenOptions},
     io,
     io::{Seek, SeekFrom, Write},
@@ -453,7 +454,7 @@ impl AppendVec {
     pub fn append_accounts(
         &self,
         accounts: &[(StoredMeta, &AccountSharedData)],
-        hashes: &[Hash],
+        hashes: &[impl Borrow<Hash>],
     ) -> Vec<usize> {
         let _lock = self.append_lock.lock().unwrap();
         let mut offset = self.len();
@@ -464,7 +465,7 @@ impl AppendVec {
             let account_meta_ptr = &account_meta as *const AccountMeta;
             let data_len = stored_meta.data_len as usize;
             let data_ptr = account.data().as_ptr();
-            let hash_ptr = hash.as_ref().as_ptr();
+            let hash_ptr = hash.borrow().as_ref().as_ptr();
             let ptrs = [
                 (meta_ptr as *const u8, mem::size_of::<StoredMeta>()),
                 (account_meta_ptr as *const u8, mem::size_of::<AccountMeta>()),
@@ -494,7 +495,7 @@ impl AppendVec {
         account: &AccountSharedData,
         hash: Hash,
     ) -> Option<usize> {
-        let res = self.append_accounts(&[(storage_meta, account)], &[hash]);
+        let res = self.append_accounts(&[(storage_meta, account)], &[&hash]);
         if res.len() == 1 {
             None
         } else {
