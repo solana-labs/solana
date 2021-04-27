@@ -496,10 +496,17 @@ impl RpcClient {
         &self,
         commitment_config: CommitmentConfig,
     ) -> ClientResult<RpcVoteAccountStatus> {
-        self.send(
-            RpcRequest::GetVoteAccounts,
-            json!([self.maybe_map_commitment(commitment_config)?]),
-        )
+        self.get_vote_accounts_with_config(RpcGetVoteAccountsConfig {
+            commitment: Some(self.maybe_map_commitment(commitment_config)?),
+            ..RpcGetVoteAccountsConfig::default()
+        })
+    }
+
+    pub fn get_vote_accounts_with_config(
+        &self,
+        config: RpcGetVoteAccountsConfig,
+    ) -> ClientResult<RpcVoteAccountStatus> {
+        self.send(RpcRequest::GetVoteAccounts, json!([config]))
     }
 
     pub fn wait_for_max_stake(
@@ -884,15 +891,12 @@ impl RpcClient {
         slot: Option<Slot>,
         commitment_config: CommitmentConfig,
     ) -> ClientResult<Option<RpcLeaderSchedule>> {
-        self.send(
-            RpcRequest::GetLeaderSchedule,
-            json!([
-                slot,
-                RpcLeaderScheduleConfig {
-                    commitment: Some(self.maybe_map_commitment(commitment_config)?),
-                    ..RpcLeaderScheduleConfig::default()
-                }
-            ]),
+        self.get_leader_schedule_with_config(
+            slot,
+            RpcLeaderScheduleConfig {
+                commitment: Some(self.maybe_map_commitment(commitment_config)?),
+                ..RpcLeaderScheduleConfig::default()
+            },
         )
     }
 
