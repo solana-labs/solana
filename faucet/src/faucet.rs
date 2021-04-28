@@ -22,7 +22,7 @@ use {
         transaction::Transaction,
     },
     std::{
-        collections::HashMap,
+        collections::{HashMap, HashSet},
         io::{Read, Write},
         net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream},
         sync::{mpsc::Sender, Arc, Mutex},
@@ -106,6 +106,7 @@ pub struct Faucet {
     pub time_slice: Duration,
     per_time_cap: Option<u64>,
     per_request_cap: Option<u64>,
+    allowed_ips: HashSet<IpAddr>,
 }
 
 impl Faucet {
@@ -114,7 +115,23 @@ impl Faucet {
         time_input: Option<u64>,
         per_time_cap: Option<u64>,
         per_request_cap: Option<u64>,
-    ) -> Faucet {
+    ) -> Self {
+        Self::new_with_allowed_ips(
+            faucet_keypair,
+            time_input,
+            per_time_cap,
+            per_request_cap,
+            HashSet::new(),
+        )
+    }
+
+    pub fn new_with_allowed_ips(
+        faucet_keypair: Keypair,
+        time_input: Option<u64>,
+        per_time_cap: Option<u64>,
+        per_request_cap: Option<u64>,
+        allowed_ips: HashSet<IpAddr>,
+    ) -> Self {
         let time_slice = Duration::new(time_input.unwrap_or(TIME_SLICE), 0);
         if let Some((per_request_cap, per_time_cap)) = per_request_cap.zip(per_time_cap) {
             if per_time_cap < per_request_cap {
@@ -126,13 +143,14 @@ impl Faucet {
                 );
             }
         }
-        Faucet {
+        Self {
             faucet_keypair,
             ip_cache: HashMap::new(),
             address_cache: HashMap::new(),
             time_slice,
             per_time_cap,
             per_request_cap,
+            allowed_ips,
         }
     }
 
@@ -205,7 +223,7 @@ impl Faucet {
                         )));
                     }
                 }
-                if !ip.is_loopback() {
+                if !ip.is_loopback() && !self.allowed_ips.contains(&ip) {
                     self.check_time_request_limit(lamports, ip)?;
                 }
                 self.check_time_request_limit(lamports, to)?;
@@ -574,6 +592,25 @@ mod tests {
         let mint = Keypair::new();
         faucet = Faucet::new(mint, None, Some(2), None);
         let ip = socketaddr!([127, 0, 0, 1], 0).ip();
+        let other = Pubkey::new_unique();
+        let _tx0 = faucet.build_airdrop_transaction(request, ip).unwrap(); // first request succeeds
+        let request1 = FaucetRequest::GetAirdrop {
+            lamports: 2,
+            to: other,
+            blockhash,
+        };
+        let _tx1 = faucet.build_airdrop_transaction(request1, ip).unwrap(); // first request succeeds
+        let tx0 = faucet.build_airdrop_transaction(request, ip);
+        assert!(tx0.is_err());
+        let tx1 = faucet.build_airdrop_transaction(request1, ip);
+        assert!(tx1.is_err());
+
+        // Test multiple requests from allowed ip with different addresses succeed
+        let mint = Keypair::new();
+        let ip = socketaddr!([203, 0, 113, 1], 0).ip();
+        let mut allowed_ips = HashSet::new();
+        allowed_ips.insert(ip);
+        faucet = Faucet::new_with_allowed_ips(mint, None, Some(2), None, allowed_ips);
         let other = Pubkey::new_unique();
         let _tx0 = faucet.build_airdrop_transaction(request, ip).unwrap(); // first request succeeds
         let request1 = FaucetRequest::GetAirdrop {
