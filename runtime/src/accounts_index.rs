@@ -1780,6 +1780,7 @@ pub mod tests {
                     max = std::cmp::max(max, item);
                 }
             }
+            assert_eq!(bitfield.get_all().len(), hashset.len());
             // range isn't tracked for excess items
             if bitfield.excess.len() != bitfield.len() {
                 let width = if bitfield.is_empty() {
