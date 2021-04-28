@@ -9993,7 +9993,7 @@ pub(crate) mod tests {
         assert_eq!(result, Ok(()));
         let account = bank.get_account(&solana_vote_program::id()).unwrap();
         info!("account: {:?}", account);
-        assert!(account.executable);
+        assert!(account.executable());
     }
 
     #[test]
@@ -10298,7 +10298,7 @@ pub(crate) mod tests {
             }
             for (key, name) in &program_keys {
                 let account = bank.get_account(key).unwrap();
-                assert!(account.executable);
+                assert!(account.executable());
                 assert_eq!(account.data(), name);
             }
             info!("result: {:?}", result);
