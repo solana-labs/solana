@@ -1479,25 +1479,18 @@ impl AccountsDb {
 
     /// Remove `slots` from `uncleaned_pubkeys` and collect all pubkeys
     ///
-    /// For each slot in the list of slots, remove it from the `uncleaned_pubkeys` Map and collect
-    /// all the pubkeys from root slots to return.
+    /// For each slot in the list of uncleaned slots, remove it from the `uncleaned_pubkeys` Map
+    /// and collect all the pubkeys to return.
     fn remove_uncleaned_slots_and_collect_pubkeys(
         &self,
         uncleaned_slots: Vec<Slot>,
     ) -> Vec<Vec<Pubkey>> {
         uncleaned_slots
             .into_iter()
-            .filter_map(|slot| {
-                let maybe_slot_keys = self.uncleaned_pubkeys.remove(&slot);
-                if self.accounts_index.is_root(slot) {
-                    // Safe to unwrap on rooted slots since this is called from clean_accounts
-                    // and only clean_accounts operates on rooted slots. purge_slots only
-                    // operates on uncleaned_pubkeys
-                    let (_slot, keys) = maybe_slot_keys.expect("Root slot should exist");
-                    Some(keys)
-                } else {
-                    None
-                }
+            .filter_map(|uncleaned_slot| {
+                self.uncleaned_pubkeys
+                    .remove(&uncleaned_slot)
+                    .map(|(_removed_slot, removed_pubkeys)| removed_pubkeys)
             })
             .collect()
     }
@@ -10173,7 +10166,7 @@ pub mod tests {
         db.store_uncached(slot3, &[(&pubkey3, &account3)]);
 
         db.add_root(slot1);
-        db.add_root(slot2);
+        // slot 2 is _not_ a root on purpose
         db.add_root(slot3);
 
         db.uncleaned_pubkeys.insert(slot1, vec![pubkey1]);
@@ -10230,7 +10223,7 @@ pub mod tests {
         db.store_uncached(slot2, &[(&pubkey2, &account2)]);
         db.store_uncached(slot3, &[(&pubkey3, &account3)]);
 
-        db.add_root(slot1);
+        // slot 1 is _not_ a root on purpose
         db.add_root(slot2);
         db.add_root(slot3);
 
