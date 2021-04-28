@@ -347,6 +347,8 @@ pub struct AccountsIndexRootsStats {
     pub uncleaned_roots_len: usize,
     pub previous_uncleaned_roots_len: usize,
     pub roots_range: u64,
+    pub rooted_cleaned_count: usize,
+    pub unrooted_cleaned_count: usize,
 }
 
 pub struct AccountsIndexIterator<'a, T> {
@@ -1251,6 +1253,8 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
                 uncleaned_roots_len,
                 previous_uncleaned_roots_len,
                 roots_range,
+                rooted_cleaned_count: 0,
+                unrooted_cleaned_count: 0,
             })
         } else {
             None
