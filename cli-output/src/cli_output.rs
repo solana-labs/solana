@@ -311,6 +311,7 @@ pub enum CliValidatorsSortOrder {
     Identity,
     LastVote,
     Root,
+    SkipRate,
     Stake,
     VoteAccount,
 }
@@ -360,7 +361,7 @@ impl fmt::Display for CliValidators {
 
             writeln!(
                 f,
-                "{} {:<44}  {:<44}  {:>3}%   {:>14}  {:>14} {:>13} {:>7}  {}",
+                "{} {:<44}  {:<44}  {:>3}%  {:>14}  {:>14} {:>7} {:>8}  {:>7}  {}",
                 if validator.delinquent {
                     WARNING.to_string()
                 } else {
@@ -371,6 +372,11 @@ impl fmt::Display for CliValidators {
                 validator.commission,
                 non_zero_or_dash(validator.last_vote, highest_last_vote),
                 non_zero_or_dash(validator.root_slot, highest_root),
+                if let Some(skip_rate) = validator.skip_rate {
+                    format!("{:.2}%", skip_rate)
+                } else {
+                    "- ".to_string()
+                },
                 validator.epoch_credits,
                 validator.version,
                 if validator.activated_stake > 0 {
@@ -391,14 +397,15 @@ impl fmt::Display for CliValidators {
             0
         };
         let header = style(format!(
-            "{:padding$} {:<44}  {:<38}  {}  {}  {} {:>11} {:^7}  {}",
+            "{:padding$} {:<44}  {:<38}  {}  {}  {} {}  {}  {}  {}",
             " ",
             "Identity",
             "Vote Account",
             "Commission",
-            "Last Vote      ",
-            "Root Slot     ",
-            "Epoch Credits",
+            "Last Vote     ",
+            "Root Slot   ",
+            "Skip Rate",
+            "Credits",
             "Version",
             "Active Stake",
             padding = padding + 1
@@ -428,6 +435,17 @@ impl fmt::Display for CliValidators {
             }
             CliValidatorsSortOrder::VoteAccount => {
                 sorted_validators.sort_by(|a, b| a.vote_account_pubkey.cmp(&b.vote_account_pubkey));
+            }
+            CliValidatorsSortOrder::SkipRate => {
+                sorted_validators.sort_by(|a, b| {
+                    use std::cmp::Ordering;
+                    match (a.skip_rate, b.skip_rate) {
+                        (None, None) => Ordering::Equal,
+                        (None, Some(_)) => Ordering::Greater,
+                        (Some(_), None) => Ordering::Less,
+                        (Some(a), Some(b)) => a.partial_cmp(&b).unwrap_or(Ordering::Equal),
+                    }
+                });
             }
             CliValidatorsSortOrder::Stake => {
                 sorted_validators.sort_by_key(|a| a.activated_stake);
@@ -537,6 +555,7 @@ pub struct CliValidator {
     pub activated_stake: u64,
     pub version: String,
     pub delinquent: bool,
+    pub skip_rate: Option<f64>,
 }
 
 impl CliValidator {
@@ -544,24 +563,41 @@ impl CliValidator {
         vote_account: &RpcVoteAccountInfo,
         current_epoch: Epoch,
         version: String,
+        skip_rate: Option<f64>,
         address_labels: &HashMap<String, String>,
     ) -> Self {
-        Self::_new(vote_account, current_epoch, version, address_labels, false)
+        Self::_new(
+            vote_account,
+            current_epoch,
+            version,
+            skip_rate,
+            address_labels,
+            false,
+        )
     }
 
     pub fn new_delinquent(
         vote_account: &RpcVoteAccountInfo,
         current_epoch: Epoch,
         version: String,
+        skip_rate: Option<f64>,
         address_labels: &HashMap<String, String>,
     ) -> Self {
-        Self::_new(vote_account, current_epoch, version, address_labels, true)
+        Self::_new(
+            vote_account,
+            current_epoch,
+            version,
+            skip_rate,
+            address_labels,
+            true,
+        )
     }
 
     fn _new(
         vote_account: &RpcVoteAccountInfo,
         current_epoch: Epoch,
         version: String,
+        skip_rate: Option<f64>,
         address_labels: &HashMap<String, String>,
         delinquent: bool,
     ) -> Self {
@@ -587,6 +623,7 @@ impl CliValidator {
             activated_stake: vote_account.activated_stake,
             version,
             delinquent,
+            skip_rate,
         }
     }
 }
