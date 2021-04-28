@@ -295,6 +295,7 @@ impl Tower {
                     key,
                     last_landed_voted_slot,
                     get_frozen_hash(last_landed_voted_slot),
+                    true,
                 );
             }
 
