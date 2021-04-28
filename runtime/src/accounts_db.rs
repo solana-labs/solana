@@ -969,11 +969,11 @@ impl LatestAccountsIndexRootsStats {
         );
         self.roots_range
             .store(accounts_index_roots_stats.roots_range, Ordering::Relaxed);
-        self.rooted_cleaned_count.store(
+        self.rooted_cleaned_count.fetch_add(
             accounts_index_roots_stats.rooted_cleaned_count,
             Ordering::Relaxed,
         );
-        self.unrooted_cleaned_count.store(
+        self.unrooted_cleaned_count.fetch_add(
             accounts_index_roots_stats.unrooted_cleaned_count,
             Ordering::Relaxed,
         );
@@ -1004,12 +1004,12 @@ impl LatestAccountsIndexRootsStats {
             ),
             (
                 "unrooted_cleaned_count",
-                self.unrooted_cleaned_count.load(Ordering::Relaxed) as i64,
+                self.unrooted_cleaned_count.swap(0, Ordering::Relaxed) as i64,
                 i64
             ),
             (
                 "rooted_cleaned_count",
-                self.rooted_cleaned_count.load(Ordering::Relaxed) as i64,
+                self.rooted_cleaned_count.swap(0, Ordering::Relaxed) as i64,
                 i64
             ),
         );
