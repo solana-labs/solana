@@ -1022,7 +1022,7 @@ mod tests {
             process_instruction(&bpf_loader::id(), &instruction_data, &mut invoke_context)
         );
         let keyed_accounts = invoke_context.get_keyed_accounts().unwrap();
-        assert!(keyed_accounts[0].account.borrow().executable);
+        assert!(keyed_accounts[0].account.borrow().executable());
 
         program_account.borrow_mut().executable = false; // Un-finalize the account
 
