@@ -685,7 +685,9 @@ pub fn withdraw<S: std::hash::BuildHasher>(
         }
         _ => (),
     }
-    vote_account.try_account_ref_mut()?.lamports -= lamports;
+    vote_account
+        .try_account_ref_mut()?
+        .checked_sub_lamports(lamports)?;
     to_account
         .try_account_ref_mut()?
         .checked_add_lamports(lamports)?;
