@@ -259,6 +259,7 @@ pub(crate) struct ForkStats {
     pub(crate) computed: bool,
     pub(crate) lockout_intervals: LockoutIntervals,
     pub(crate) bank_hash: Option<Hash>,
+    pub(crate) my_latest_landed_vote: Option<Slot>,
 }
 
 #[derive(Clone, Default)]
@@ -530,6 +531,12 @@ impl ProgressMap {
                 // this confirmation on `S` is irrelevant to them.
             }
         }
+    }
+
+    pub fn my_latest_landed_vote(&self, slot: Slot) -> Option<Slot> {
+        self.progress_map
+            .get(&slot)
+            .and_then(|s| s.fork_stats.my_latest_landed_vote)
     }
 
     pub fn set_supermajority_confirmed_slot(&mut self, slot: Slot) {
