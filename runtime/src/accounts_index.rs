@@ -1685,8 +1685,7 @@ pub mod tests {
                         // subsequent roots to add
                         for slot2 in (slot + 1)..max {
                             // reverse_slots = 1 means add slots in reverse order (max to min). This causes us to add second and later slots to excess.
-                            for reverse_slots in 0..2 {
-                                let reverse_slots = reverse_slots == 1;
+                            for reverse_slots in [false, true].iter().map(|x| *x) {
                                 let maybe_reverse = |slot| {
                                     if reverse_slots {
                                         max - slot
