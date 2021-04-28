@@ -1161,18 +1161,18 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         account_indexes: &HashSet<AccountIndex>,
     ) {
         let roots_tracker = &self.roots_tracker.read().unwrap();
-        let max_root = Self::get_max_root(&roots_tracker.roots, &list, max_clean_root);
+        let max_present_root = Self::get_max_root(&roots_tracker.roots, &list, max_clean_root);
+        let max_clean_root = max_clean_root.unwrap_or(roots_tracker.max_root);
 
         let mut purged_slots: HashSet<Slot> = HashSet::new();
         list.retain(|(slot, value)| {
-            let should_purge = Self::can_purge(max_root, *slot) && !value.is_cached();
+            let should_purge =
+                Self::can_purge(max_clean_root, max_present_root, *slot) && !value.is_cached();
             if should_purge {
                 reclaims.push((*slot, value.clone()));
                 purged_slots.insert(*slot);
-                false
-            } else {
-                true
             }
+            !should_purge
         });
 
         self.purge_secondary_indexes_by_inner_key(pubkey, Some(&purged_slots), account_indexes);
@@ -1185,6 +1185,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         max_clean_root: Option<Slot>,
         account_indexes: &HashSet<AccountIndex>,
     ) {
+        let mut empty_key = false;
         if let Some(mut locked_entry) = self.get_account_write_entry(pubkey) {
             locked_entry.slot_list_mut(|slot_list| {
                 self.purge_older_root_entries(
@@ -1194,12 +1195,21 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
                     max_clean_root,
                     account_indexes,
                 );
+                empty_key = slot_list.is_empty();
             });
+        }
+        if empty_key {
+            let mut w_maps = self.account_maps.write().unwrap();
+            if let Some(x) = w_maps.get(pubkey) {
+                if x.slot_list.read().unwrap().is_empty() {
+                    w_maps.remove(pubkey);
+                }
+            }
         }
     }
 
-    pub fn can_purge(max_root: Slot, slot: Slot) -> bool {
-        slot < max_root
+    pub fn can_purge(max_clean_root: Slot, max_present_root: Slot, slot: Slot) -> bool {
+        slot < max_clean_root && slot != max_present_root
     }
 
     pub fn is_root(&self, slot: Slot) -> bool {
