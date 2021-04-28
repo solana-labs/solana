@@ -1,6 +1,7 @@
 use {
     crate::{
         ledger_error::LedgerError,
+        locator::Manufacturer,
         remote_wallet::{RemoteWallet, RemoteWalletError, RemoteWalletInfo, RemoteWalletManager},
     },
     console::Emoji,
@@ -9,7 +10,7 @@ use {
     num_traits::FromPrimitive,
     semver::Version as FirmwareVersion,
     solana_sdk::{derivation_path::DerivationPath, pubkey::Pubkey, signature::Signature},
-    std::{cmp::min, fmt, sync::Arc},
+    std::{cmp::min, convert::TryFrom, fmt, sync::Arc},
 };
 
 static CHECK_MARK: Emoji = Emoji("✅ ", "");
@@ -363,10 +364,8 @@ impl RemoteWallet for LedgerWallet {
     ) -> Result<RemoteWalletInfo, RemoteWalletError> {
         let manufacturer = dev_info
             .manufacturer_string()
-            .clone()
-            .unwrap_or("Unknown")
-            .to_lowercase()
-            .replace(" ", "-");
+            .and_then(|s| Manufacturer::try_from(s).ok())
+            .unwrap_or_default();
         let model = dev_info
             .product_string()
             .clone()
