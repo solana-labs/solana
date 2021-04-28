@@ -3374,8 +3374,16 @@ impl Bank {
                     let mut account = self
                         .get_account_with_fixed_root(&pubkey)
                         .unwrap_or_default();
-                    // unwrap since no straightforward ability to do something useful with error
-                    account.checked_add_lamports(rent_to_be_paid).unwrap();
+                    if account.checked_add_lamports(rent_to_be_paid).is_err() {
+                        // overflow adding lamports
+                        self.capitalization.fetch_sub(rent_to_be_paid, Relaxed);
+                        error!("Incinerated {} rent lamports", rent_to_be_paid);
+                        inc_new_counter_error!(
+                            "bank-incinerated_rent_lamports",
+                            rent_to_be_paid as usize
+                        );
+                    }
+
                     self.store_account(&pubkey, &account);
                     rewards.push((
                         pubkey,
