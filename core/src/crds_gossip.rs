@@ -265,7 +265,11 @@ impl CrdsGossip {
         response: Vec<CrdsValue>,
         now: u64,
         process_pull_stats: &mut ProcessPullStats,
-    ) -> (Vec<VersionedCrdsValue>, Vec<VersionedCrdsValue>, Vec<Hash>) {
+    ) -> (
+        Vec<CrdsValue>, // valid responses.
+        Vec<CrdsValue>, // responses with expired timestamps.
+        Vec<Hash>,      // hash of outdated values.
+    ) {
         self.pull
             .filter_pull_responses(&self.crds, timeouts, response, now, process_pull_stats)
     }
@@ -274,8 +278,8 @@ impl CrdsGossip {
     pub fn process_pull_responses(
         &mut self,
         from: &Pubkey,
-        responses: Vec<VersionedCrdsValue>,
-        responses_expired_timeout: Vec<VersionedCrdsValue>,
+        responses: Vec<CrdsValue>,
+        responses_expired_timeout: Vec<CrdsValue>,
         failed_inserts: Vec<Hash>,
         now: u64,
         process_pull_stats: &mut ProcessPullStats,
