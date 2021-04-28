@@ -152,6 +152,7 @@ pub(crate) fn parse_signer_source<S: AsRef<str>>(source: S) -> SignerSource {
                 match scheme.as_str() {
                     "ask" => SignerSource::Ask,
                     "file" => SignerSource::Filepath(uri.path().to_string()),
+                    "stdin" => SignerSource::Stdin,
                     "usb" => SignerSource::Usb(source.to_string()),
                     _ => SignerSource::Filepath(source.to_string()),
                 }
@@ -461,6 +462,8 @@ mod tests {
     #[test]
     fn test_parse_signer_source() {
         assert!(matches!(parse_signer_source("-"), SignerSource::Stdin));
+        let ask = "stdin:".to_string();
+        assert!(matches!(parse_signer_source(&ask), SignerSource::Stdin));
         assert!(matches!(
             parse_signer_source(ASK_KEYWORD),
             SignerSource::Ask
