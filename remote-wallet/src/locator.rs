@@ -402,6 +402,25 @@ mod tests {
         };
         assert_eq!(Locator::new_from_uri(&uri), Ok(expect));
 
+        // usb://ledger?key=0\'/0\'
+        let mut builder = URIReferenceBuilder::new();
+        builder
+            .try_scheme(Some("usb"))
+            .unwrap()
+            .try_authority(Some(Manufacturer::Ledger.as_ref()))
+            .unwrap()
+            .try_path("")
+            .unwrap()
+            .try_query(Some("key=0\'/0\'"))
+            .unwrap();
+        let uri = builder.build().unwrap();
+        let expect = Locator {
+            manufacturer,
+            pubkey: None,
+            derivation_path: Some(derivation_path.clone()),
+        };
+        assert_eq!(Locator::new_from_uri(&uri), Ok(expect));
+
         // usb://ledger/?key=0/0
         let mut builder = URIReferenceBuilder::new();
         builder
@@ -420,6 +439,23 @@ mod tests {
             derivation_path: Some(derivation_path),
         };
         assert_eq!(Locator::new_from_uri(&uri), Ok(expect));
+
+        // usb://ledger?key=0/0/0
+        let mut builder = URIReferenceBuilder::new();
+        builder
+            .try_scheme(Some("usb"))
+            .unwrap()
+            .try_authority(Some(Manufacturer::Ledger.as_ref()))
+            .unwrap()
+            .try_path("")
+            .unwrap()
+            .try_query(Some("key=0/0/0"))
+            .unwrap();
+        let uri = builder.build().unwrap();
+        assert!(matches!(
+            Locator::new_from_uri(&uri),
+            Err(LocatorError::DerivationPathError(_))
+        ));
 
         // bad-scheme://ledger
         let mut builder = URIReferenceBuilder::new();
@@ -465,6 +501,23 @@ mod tests {
             Locator::new_from_uri(&uri),
             Err(LocatorError::PubkeyError(ParsePubkeyError::Invalid))
         );
+
+        // usb://ledger?key=0/0&bad-key=0/0
+        let mut builder = URIReferenceBuilder::new();
+        builder
+            .try_scheme(Some("usb"))
+            .unwrap()
+            .try_authority(Some(Manufacturer::Ledger.as_ref()))
+            .unwrap()
+            .try_path("")
+            .unwrap()
+            .try_query(Some("key=0/0&bad-key=0/0"))
+            .unwrap();
+        let uri = builder.build().unwrap();
+        assert!(matches!(
+            Locator::new_from_uri(&uri),
+            Err(LocatorError::DerivationPathError(_))
+        ));
 
         // usb://ledger?bad-key=0/0
         let mut builder = URIReferenceBuilder::new();
