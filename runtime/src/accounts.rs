@@ -17,7 +17,7 @@ use dashmap::{
 use log::*;
 use rand::{thread_rng, Rng};
 use solana_sdk::{
-    account::{Account, AccountSharedData, ReadableAccount},
+    account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     clock::{Slot, INITIAL_RENT_EPOCH},
@@ -287,7 +287,9 @@ impl Accounts {
                         error_counters.insufficient_funds += 1;
                         Err(TransactionError::InsufficientFundsForFee)
                     } else {
-                        accounts[payer_index].lamports -= fee;
+                        accounts[payer_index]
+                            .checked_sub_lamports(fee)
+                            .map_err(|_| TransactionError::InsufficientFundsForFee)?;
 
                         let message = tx.message();
                         let loaders = message
