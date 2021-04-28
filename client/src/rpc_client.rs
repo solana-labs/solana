@@ -444,6 +444,18 @@ impl RpcClient {
             })
     }
 
+    /// Get block production for the current epoch
+    pub fn get_block_production(&self) -> RpcResult<RpcBlockProduction> {
+        self.send(RpcRequest::GetBlockProduction, Value::Null)
+    }
+
+    pub fn get_block_production_with_config(
+        &self,
+        config: RpcBlockProductionConfig,
+    ) -> RpcResult<RpcBlockProduction> {
+        self.send(RpcRequest::GetBlockProduction, json!(config))
+    }
+
     pub fn get_stake_activation(
         &self,
         stake_account: Pubkey,

@@ -604,6 +604,43 @@ impl JsonRpcRequestProcessor {
         self.bank(commitment).collector_id().to_string()
     }
 
+    fn get_slot_leaders(
+        &self,
+        commitment: Option<CommitmentConfig>,
+        start_slot: Slot,
+        limit: usize,
+    ) -> Result<Vec<Pubkey>> {
+        let bank = self.bank(commitment);
+
+        let (mut epoch, mut slot_index) =
+            bank.epoch_schedule().get_epoch_and_slot_index(start_slot);
+
+        let mut slot_leaders = Vec::with_capacity(limit);
+        while slot_leaders.len() < limit {
+            if let Some(leader_schedule) =
+                self.leader_schedule_cache.get_epoch_leader_schedule(epoch)
+            {
+                slot_leaders.extend(
+                    leader_schedule
+                        .get_slot_leaders()
+                        .iter()
+                        .skip(slot_index as usize)
+                        .take(limit.saturating_sub(slot_leaders.len())),
+                );
+            } else {
+                return Err(Error::invalid_params(format!(
+                    "Invalid slot range: leader schedule for epoch {} is unavailable",
+                    epoch
+                )));
+            }
+
+            epoch += 1;
+            slot_index = 0;
+        }
+
+        Ok(slot_leaders)
+    }
+
     fn minimum_ledger_slot(&self) -> Result<Slot> {
         match self.blockstore.slot_meta_iterator(0) {
             Ok(mut metas) => match metas.next() {
@@ -2498,6 +2535,13 @@ pub mod rpc_full {
             config: Option<RpcEpochConfig>,
         ) -> Result<RpcStakeActivation>;
 
+        #[rpc(meta, name = "getBlockProduction")]
+        fn get_block_production(
+            &self,
+            meta: Self::Metadata,
+            config: Option<RpcBlockProductionConfig>,
+        ) -> Result<RpcResponse<RpcBlockProduction>>;
+
         // SPL Token-specific RPC endpoints
         // See https://github.com/solana-labs/solana-program-library/releases/tag/token-v2.0.0 for
         // program details
@@ -3009,35 +3053,11 @@ pub mod rpc_full {
                 )));
             }
 
-            let bank = meta.bank(None);
-            let (mut epoch, mut slot_index) =
-                bank.epoch_schedule().get_epoch_and_slot_index(start_slot);
-
-            let mut slot_leaders = Vec::with_capacity(limit);
-            while slot_leaders.len() < limit {
-                if let Some(leader_schedule) =
-                    meta.leader_schedule_cache.get_epoch_leader_schedule(epoch)
-                {
-                    slot_leaders.extend(
-                        leader_schedule
-                            .get_slot_leaders()
-                            .iter()
-                            .skip(slot_index as usize)
-                            .take(limit.saturating_sub(slot_leaders.len()))
-                            .map(|pubkey| pubkey.to_string()),
-                    );
-                } else {
-                    return Err(Error::invalid_params(format!(
-                        "Invalid slot range: leader schedule for epoch {} is unavailable",
-                        epoch
-                    )));
-                }
-
-                epoch += 1;
-                slot_index = 0;
-            }
-
-            Ok(slot_leaders)
+            Ok(meta
+                .get_slot_leaders(None, start_slot, limit)?
+                .into_iter()
+                .map(|identity| identity.to_string())
+                .collect())
         }
 
         fn minimum_ledger_slot(&self, meta: Self::Metadata) -> Result<Slot> {
@@ -3152,6 +3172,94 @@ pub mod rpc_full {
             );
             let pubkey = verify_pubkey(&pubkey_str)?;
             meta.get_stake_activation(&pubkey, config)
+        }
+
+        fn get_block_production(
+            &self,
+            meta: Self::Metadata,
+            config: Option<RpcBlockProductionConfig>,
+        ) -> Result<RpcResponse<RpcBlockProduction>> {
+            debug!("get_block_production rpc request received");
+
+            let config = config.unwrap_or_default();
+            let filter_by_identity = if let Some(ref identity) = config.identity {
+                Some(verify_pubkey(identity)?)
+            } else {
+                None
+            };
+
+            let bank = meta.bank(config.commitment);
+            let (first_slot, last_slot) = match config.range {
+                None => (
+                    bank.epoch_schedule().get_first_slot_in_epoch(bank.epoch()),
+                    bank.slot(),
+                ),
+                Some(range) => {
+                    let first_slot = range.first_slot;
+                    let last_slot = range.last_slot.unwrap_or_else(|| bank.slot());
+                    if last_slot < first_slot {
+                        return Err(Error::invalid_params(format!(
+                            "lastSlot, {}, cannot be less than firstSlot, {}",
+                            last_slot, first_slot
+                        )));
+                    }
+                    (first_slot, last_slot)
+                }
+            };
+
+            let slot_history = bank.get_slot_history();
+            if first_slot < slot_history.oldest() {
+                return Err(Error::invalid_params(format!(
+                    "firstSlot, {}, is too small; min {}",
+                    first_slot,
+                    slot_history.oldest()
+                )));
+            }
+            if last_slot > slot_history.newest() {
+                return Err(Error::invalid_params(format!(
+                    "lastSlot, {}, is too large; max {}",
+                    last_slot,
+                    slot_history.newest()
+                )));
+            }
+
+            let slot_leaders = meta.get_slot_leaders(
+                config.commitment,
+                first_slot,
+                last_slot.saturating_sub(first_slot) as usize + 1, // +1 because last_slot is inclusive
+            )?;
+
+            let mut block_production: HashMap<_, (usize, usize)> = HashMap::new();
+
+            let mut slot = first_slot;
+            for identity in slot_leaders {
+                slot += 1;
+                if let Some(ref filter_by_identity) = filter_by_identity {
+                    if identity != *filter_by_identity {
+                        continue;
+                    }
+                }
+
+                let mut entry = block_production.entry(identity).or_default();
+                if slot_history.check(slot) == solana_sdk::slot_history::Check::Found {
+                    entry.1 += 1; // Increment blocks_produced
+                }
+                entry.0 += 1; // Increment leader_slots
+            }
+
+            Ok(new_response(
+                &bank,
+                RpcBlockProduction {
+                    by_identity: block_production
+                        .into_iter()
+                        .map(|(k, v)| (k.to_string(), v))
+                        .collect(),
+                    range: RpcBlockProductionRange {
+                        first_slot,
+                        last_slot,
+                    },
+                },
+            ))
         }
 
         fn get_inflation_reward(
