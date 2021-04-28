@@ -109,6 +109,17 @@ impl TryFrom<&str> for Pubkey {
     }
 }
 
+pub fn bytes_are_curve_point<T: AsRef<[u8]>>(_bytes: T) -> bool {
+    #[cfg(not(target_arch = "bpf"))]
+    {
+        curve25519_dalek::edwards::CompressedEdwardsY::from_slice(_bytes.as_ref())
+            .decompress()
+            .is_some()
+    }
+    #[cfg(target_arch = "bpf")]
+    unimplemented!();
+}
+
 impl Pubkey {
     pub fn new(pubkey_vec: &[u8]) -> Self {
         Self(
@@ -200,10 +211,7 @@ impl Pubkey {
             hasher.hashv(&[program_id.as_ref(), "ProgramDerivedAddress".as_ref()]);
             let hash = hasher.result();
 
-            if curve25519_dalek::edwards::CompressedEdwardsY::from_slice(hash.as_ref())
-                .decompress()
-                .is_some()
-            {
+            if bytes_are_curve_point(hash) {
                 return Err(PubkeyError::InvalidSeeds);
             }
 
@@ -322,6 +330,10 @@ impl Pubkey {
 
     pub fn to_bytes(self) -> [u8; 32] {
         self.0
+    }
+
+    pub fn is_on_curve(&self) -> bool {
+        bytes_are_curve_point(self)
     }
 
     /// Log a `Pubkey` from a program
