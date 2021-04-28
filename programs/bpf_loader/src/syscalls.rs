@@ -1992,7 +1992,7 @@ fn call<'a>(
             let account = account.borrow();
             if let Some(mut account_ref) = account_ref {
                 if message.is_writable(i, demote_sysvar_write_locks) && !account.executable() {
-                    *account_ref.lamports = account.lamports;
+                    *account_ref.lamports = account.lamports();
                     *account_ref.owner = *account.owner();
                     if account_ref.data.len() != account.data().len() {
                         if !account_ref.data.is_empty() {
