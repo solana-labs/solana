@@ -2063,7 +2063,7 @@ impl Blockstore {
         signature: Signature,
         confirmed_unrooted_slots: &[Slot],
     ) -> Result<(Option<(Slot, TransactionStatusMeta)>, u64)> {
-        // transaction_status doesn't employ strong read consystency with slot-based
+        // transaction_status_cf doesn't employ strong read consystency with slot-based
         // delete_range via LedgerCleanupService, because of inefficiency.
         // so, ensure consistent result by using lowest_cleanup_slot as the lower bound
         // for reading
@@ -2217,7 +2217,7 @@ impl Blockstore {
         start_slot: Slot,
         end_slot: Slot,
     ) -> Result<Vec<(Slot, Signature)>> {
-        // transaction_status doesn't employ strong read consystency with slot-based
+        // adress_signatures_cf doesn't employ strong read consystency with slot-based
         // delete_range via LedgerCleanupService, because of inefficiency.
         // so, ensure consistent result by using lowest_cleanup_slot as the lower bound
         // for reading
@@ -2255,7 +2255,7 @@ impl Blockstore {
         pubkey: Pubkey,
         slot: Slot,
     ) -> Result<Vec<(Slot, Signature)>> {
-        // transaction_status doesn't employ strong read consystency with slot-based
+        // address_signatures_cf doesn't employ strong read consystency with slot-based
         // delete_range via LedgerCleanupService, because of inefficiency.
         // so, ensure consistent result by using lowest_cleanup_slot as the lower bound
         // for reading
