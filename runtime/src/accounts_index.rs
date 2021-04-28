@@ -1675,42 +1675,43 @@ pub mod tests {
     #[test]
     fn test_bitfield_excess() {
         solana_logger::setup();
-        let width = 16;
-        let (mut bitfield, mut hash_set) = setup_empty(width);
         // start at slot 0 or a separate, higher slot
-        for start in [0, width * 5].iter() {
-            let start = *start;
-            // recreate = 1 means create empty bitfield with each iteration, otherwise re-use
-            for recreate in 0..2 {
-                let max = start + 3;
-                // first root to add
-                for slot in start..max {
-                    // subsequent roots to add
-                    for slot2 in (slot + 1)..max {
-                        // reverse_slots = 1 means add slots in reverse order (max to min). This causes us to add second and later slots to excess.
-                        for reverse_slots in 0..2 {
-                            let reverse_slots = reverse_slots == 1;
-                            let maybe_reverse = |slot| {
-                                if reverse_slots {
-                                    max - slot
-                                } else {
-                                    slot
+        for width in [16, 4194304].iter() {
+            let width = *width;
+            let (mut bitfield, mut hash_set) = setup_empty(width);
+            for start in [0, width * 5].iter() {
+                let start = *start;
+                // recreate = 1 means create empty bitfield with each iteration, otherwise re-use
+                for recreate in 0..2 {
+                    let max = start + 3;
+                    // first root to add
+                    for slot in start..max {
+                        // subsequent roots to add
+                        for slot2 in (slot + 1)..max {
+                            // reverse_slots = 1 means add slots in reverse order (max to min). This causes us to add second and later slots to excess.
+                            for reverse_slots in 0..2 {
+                                let reverse_slots = reverse_slots == 1;
+                                let maybe_reverse = |slot| {
+                                    if reverse_slots {
+                                        max - slot
+                                    } else {
+                                        slot
+                                    }
+                                };
+                                if recreate == 1 {
+                                    let recreated = setup_empty(width);
+                                    bitfield = recreated.0;
+                                    hash_set = recreated.1;
                                 }
-                            };
-                            if recreate == 1 {
-                                let recreated = setup_empty(width);
-                                bitfield = recreated.0;
-                                hash_set = recreated.1;
-                            }
 
-                            // insert
-                            for slot in slot..=slot2 {
-                                let slot_use = maybe_reverse(slot);
-                                bitfield.insert(slot_use);
-                                hash_set.insert(slot_use);
-                                assert!(bitfield.contains(&slot_use));
-                                compare(&hash_set, &bitfield);
-                                debug!(
+                                // insert
+                                for slot in slot..=slot2 {
+                                    let slot_use = maybe_reverse(slot);
+                                    bitfield.insert(slot_use);
+                                    hash_set.insert(slot_use);
+                                    assert!(bitfield.contains(&slot_use));
+                                    compare(&hash_set, &bitfield);
+                                    debug!(
                                     "slot: {}, bitfield: {:?}, reverse: {}, len: {}, excess: {:?}",
                                     slot_use,
                                     bitfield,
@@ -1718,37 +1719,38 @@ pub mod tests {
                                     bitfield.len(),
                                     bitfield.excess
                                 );
-                                assert!(
-                                    (reverse_slots && bitfield.len() > 1)
-                                        ^ bitfield.excess.is_empty()
-                                );
-                            }
-                            if start > width * 2 {
-                                assert!(!bitfield.contains(&(start - width * 2)));
-                            }
-                            assert!(!bitfield.contains(&(start + width * 2)));
-                            let len = (slot2 - slot + 1) as usize;
-                            assert_eq!(bitfield.len(), len);
-                            assert_eq!(bitfield.count, len);
+                                    assert!(
+                                        (reverse_slots && bitfield.len() > 1)
+                                            ^ bitfield.excess.is_empty()
+                                    );
+                                }
+                                if start > width * 2 {
+                                    assert!(!bitfield.contains(&(start - width * 2)));
+                                }
+                                assert!(!bitfield.contains(&(start + width * 2)));
+                                let len = (slot2 - slot + 1) as usize;
+                                assert_eq!(bitfield.len(), len);
+                                assert_eq!(bitfield.count, len);
 
-                            // remove
-                            for slot in slot..=slot2 {
-                                let slot_use = maybe_reverse(slot);
-                                assert!(bitfield.remove(&slot_use));
-                                hash_set.remove(&slot_use);
-                                assert!(!bitfield.contains(&slot_use));
-                                compare(&hash_set, &bitfield);
-                                assert!(
-                                    (reverse_slots && !bitfield.is_empty())
-                                        ^ bitfield.excess.is_empty()
-                                );
+                                // remove
+                                for slot in slot..=slot2 {
+                                    let slot_use = maybe_reverse(slot);
+                                    assert!(bitfield.remove(&slot_use));
+                                    hash_set.remove(&slot_use);
+                                    assert!(!bitfield.contains(&slot_use));
+                                    compare(&hash_set, &bitfield);
+                                    assert!(
+                                        (reverse_slots && !bitfield.is_empty())
+                                            ^ bitfield.excess.is_empty()
+                                    );
+                                }
+                                assert!(bitfield.is_empty());
+                                assert_eq!(bitfield.count, 0);
+                                if start > width * 2 {
+                                    assert!(!bitfield.contains(&(start - width * 2)));
+                                }
+                                assert!(!bitfield.contains(&(start + width * 2)));
                             }
-                            assert!(bitfield.is_empty());
-                            assert_eq!(bitfield.count, 0);
-                            if start > width * 2 {
-                                assert!(!bitfield.contains(&(start - width * 2)));
-                            }
-                            assert!(!bitfield.contains(&(start + width * 2)));
                         }
                     }
                 }
