@@ -28,6 +28,7 @@ use {
         str::FromStr,
         sync::Arc,
     },
+    thiserror::Error,
 };
 
 pub struct SignOnly {
@@ -142,27 +143,35 @@ pub(crate) enum SignerSource {
     Pubkey(Pubkey),
 }
 
-pub(crate) fn parse_signer_source<S: AsRef<str>>(source: S) -> SignerSource {
+#[derive(Debug, Error)]
+pub(crate) enum SignerSourceError {
+    #[error("unrecognized signer source")]
+    UnrecognizedSource,
+}
+
+pub(crate) fn parse_signer_source<S: AsRef<str>>(
+    source: S,
+) -> Result<SignerSource, SignerSourceError> {
     let source = source.as_ref();
     match uriparse::URIReference::try_from(source) {
-        Err(_) => SignerSource::Filepath(source.to_string()),
+        Err(_) => Err(SignerSourceError::UnrecognizedSource),
         Ok(uri) => {
             if let Some(scheme) = uri.scheme() {
                 let scheme = scheme.as_str().to_ascii_lowercase();
                 match scheme.as_str() {
-                    "ask" => SignerSource::Ask,
-                    "file" => SignerSource::Filepath(uri.path().to_string()),
-                    "stdin" => SignerSource::Stdin,
-                    "usb" => SignerSource::Usb(source.to_string()),
-                    _ => SignerSource::Filepath(source.to_string()),
+                    "ask" => Ok(SignerSource::Ask),
+                    "file" => Ok(SignerSource::Filepath(uri.path().to_string())),
+                    "stdin" => Ok(SignerSource::Stdin),
+                    "usb" => Ok(SignerSource::Usb(source.to_string())),
+                    _ => Err(SignerSourceError::UnrecognizedSource),
                 }
             } else {
                 match source {
-                    "-" => SignerSource::Stdin,
-                    ASK_KEYWORD => SignerSource::Ask,
+                    "-" => Ok(SignerSource::Stdin),
+                    ASK_KEYWORD => Ok(SignerSource::Ask),
                     _ => match Pubkey::from_str(source) {
-                        Ok(pubkey) => SignerSource::Pubkey(pubkey),
-                        Err(_) => SignerSource::Filepath(source.to_string()),
+                        Ok(pubkey) => Ok(SignerSource::Pubkey(pubkey)),
+                        Err(_) => Ok(SignerSource::Filepath(source.to_string())),
                     },
                 }
             }
@@ -213,7 +222,7 @@ pub fn signer_from_path_with_config(
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
     config: &SignerFromPathConfig,
 ) -> Result<Box<dyn Signer>, Box<dyn error::Error>> {
-    match parse_signer_source(path) {
+    match parse_signer_source(path)? {
         SignerSource::Ask => {
             let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
             Ok(Box::new(keypair_from_seed_phrase(
@@ -274,7 +283,7 @@ pub fn pubkey_from_path(
     keypair_name: &str,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<Pubkey, Box<dyn error::Error>> {
-    match parse_signer_source(path) {
+    match parse_signer_source(path)? {
         SignerSource::Pubkey(pubkey) => Ok(pubkey),
         _ => Ok(signer_from_path(matches, path, keypair_name, wallet_manager)?.pubkey()),
     }
@@ -286,7 +295,7 @@ pub fn resolve_signer_from_path(
     keypair_name: &str,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<Option<String>, Box<dyn error::Error>> {
-    match parse_signer_source(path) {
+    match parse_signer_source(path)? {
         SignerSource::Ask => {
             let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
             // This method validates the seed phrase, but returns `None` because there is no path
@@ -461,37 +470,52 @@ mod tests {
 
     #[test]
     fn test_parse_signer_source() {
-        assert!(matches!(parse_signer_source("-"), SignerSource::Stdin));
-        let ask = "stdin:".to_string();
-        assert!(matches!(parse_signer_source(&ask), SignerSource::Stdin));
         assert!(matches!(
-            parse_signer_source(ASK_KEYWORD),
+            parse_signer_source("-").unwrap(),
+            SignerSource::Stdin
+        ));
+        let ask = "stdin:".to_string();
+        assert!(matches!(
+            parse_signer_source(&ask).unwrap(),
+            SignerSource::Stdin
+        ));
+        assert!(matches!(
+            parse_signer_source(ASK_KEYWORD).unwrap(),
             SignerSource::Ask
         ));
         let pubkey = Pubkey::new_unique();
         assert!(
-            matches!(parse_signer_source(&pubkey.to_string()), SignerSource::Pubkey(p) if p == pubkey)
+            matches!(parse_signer_source(&pubkey.to_string()).unwrap(), SignerSource::Pubkey(p) if p == pubkey)
         );
         let path = "/absolute/path".to_string();
-        assert!(matches!(parse_signer_source(&path), SignerSource::Filepath(p) if p == path));
+        assert!(
+            matches!(parse_signer_source(&path).unwrap(), SignerSource::Filepath(p) if p == path)
+        );
         let path = "relative/path".to_string();
-        assert!(matches!(parse_signer_source(&path), SignerSource::Filepath(p) if p == path));
+        assert!(
+            matches!(parse_signer_source(&path).unwrap(), SignerSource::Filepath(p) if p == path)
+        );
         let usb = "usb://ledger".to_string();
-        assert!(matches!(parse_signer_source(&usb), SignerSource::Usb(u) if u == usb));
+        assert!(matches!(parse_signer_source(&usb).unwrap(), SignerSource::Usb(u) if u == usb));
         // Catchall into SignerSource::Filepath
         let junk = "sometextthatisnotapubkey".to_string();
         assert!(Pubkey::from_str(&junk).is_err());
-        assert!(matches!(parse_signer_source(&junk), SignerSource::Filepath(j) if j == junk));
+        assert!(
+            matches!(parse_signer_source(&junk).unwrap(), SignerSource::Filepath(j) if j == junk)
+        );
 
         let ask = "ask:".to_string();
-        assert!(matches!(parse_signer_source(&ask), SignerSource::Ask));
+        assert!(matches!(
+            parse_signer_source(&ask).unwrap(),
+            SignerSource::Ask
+        ));
         let path = "/absolute/path".to_string();
         assert!(
-            matches!(parse_signer_source(&format!("file:{}", path)), SignerSource::Filepath(p) if p == path)
+            matches!(parse_signer_source(&format!("file:{}", path)).unwrap(), SignerSource::Filepath(p) if p == path)
         );
         let path = "relative/path".to_string();
         assert!(
-            matches!(parse_signer_source(&format!("file:{}", path)), SignerSource::Filepath(p) if p == path)
+            matches!(parse_signer_source(&format!("file:{}", path)).unwrap(), SignerSource::Filepath(p) if p == path)
         );
     }
 }

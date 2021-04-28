@@ -110,7 +110,7 @@ pub fn is_valid_pubkey<T>(string: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
 {
-    match parse_signer_source(string.as_ref()) {
+    match parse_signer_source(string.as_ref()).map_err(|err| format!("{}", err))? {
         SignerSource::Filepath(path) => is_keypair(path),
         _ => Ok(()),
     }
