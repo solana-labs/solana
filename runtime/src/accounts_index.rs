@@ -1520,18 +1520,8 @@ pub mod tests {
         let (mut bitfield, mut hash_set) = setup_empty(width);
 
         compare(&hash_set, &bitfield);
-
-        let mut slot = start;
-        bitfield.insert(slot);
-        hash_set.insert(slot);
-
-        compare(&hash_set, &bitfield);
-
-        slot += 1;
-        bitfield.insert(slot);
-        hash_set.insert(slot);
-
-        compare(&hash_set, &bitfield);
+        insert_and_compare(start, &mut bitfield, &mut hash_set);
+        insert_and_compare(start + 1, &mut bitfield, &mut hash_set);
         (bitfield, hash_set)
     }
 
@@ -1620,6 +1610,29 @@ pub mod tests {
         assert!(!bitfield.remove(&slot));
     }
 
+    fn insert_and_compare(
+        slot: Slot,
+        bitfield: &mut RollingBitField,
+        hash_set: &mut HashSet<Slot>,
+    ) {
+        bitfield.insert(slot);
+        hash_set.insert(slot);
+        assert!(bitfield.contains(&slot));
+        compare(&hash_set, &bitfield);
+    }
+
+    fn remove_and_compare(
+        slot: &Slot,
+        bitfield: &mut RollingBitField,
+        hash_set: &mut HashSet<Slot>,
+    ) -> bool {
+        let result = bitfield.remove(slot);
+        assert_eq!(result, hash_set.remove(slot));
+        assert!(!bitfield.contains(&slot));
+        compare(&hash_set, &bitfield);
+        result
+    }
+
     #[test]
     fn test_bitfield_excess2() {
         solana_logger::setup();
@@ -1627,48 +1640,31 @@ pub mod tests {
         let (mut bitfield, mut hash_set) = setup_empty(width);
         let slot = 100;
         // insert 1st slot
-        bitfield.insert(slot);
-        hash_set.insert(slot);
-        assert!(bitfield.contains(&slot));
-        compare(&hash_set, &bitfield);
+        insert_and_compare(slot, &mut bitfield, &mut hash_set);
         assert!(bitfield.excess.is_empty());
 
         // insert a slot before the previous one. this is 'excess' since we don't use this pattern in normal operation
         let slot2 = slot - 1;
-        bitfield.insert(slot2);
-        hash_set.insert(slot2);
-        assert!(bitfield.contains(&slot2));
-        compare(&hash_set, &bitfield);
+        insert_and_compare(slot2, &mut bitfield, &mut hash_set);
         assert_eq!(bitfield.excess.len(), 1);
 
         // remove the 1st slot. we will be left with only excess
-        assert!(bitfield.remove(&slot));
-        assert!(hash_set.remove(&slot));
+        remove_and_compare(&slot, &mut bitfield, &mut hash_set);
         assert!(bitfield.contains(&slot2));
-        assert!(bitfield.contains(&slot2));
-        compare(&hash_set, &bitfield);
         assert_eq!(bitfield.excess.len(), 1);
 
         // re-insert at valid range, making sure we don't insert into excess
-        bitfield.insert(slot);
-        hash_set.insert(slot);
-        assert!(bitfield.contains(&slot));
+        insert_and_compare(slot, &mut bitfield, &mut hash_set);
         compare(&hash_set, &bitfield);
         assert_eq!(bitfield.excess.len(), 1);
 
         // remove the excess slot.
-        assert!(bitfield.remove(&slot2));
-        assert!(hash_set.remove(&slot2));
+        remove_and_compare(&slot2, &mut bitfield, &mut hash_set);
         assert!(bitfield.contains(&slot));
-        assert!(bitfield.contains(&slot));
-        compare(&hash_set, &bitfield);
         assert!(bitfield.excess.is_empty());
 
         // re-insert the excess slot
-        bitfield.insert(slot2);
-        hash_set.insert(slot2);
-        assert!(bitfield.contains(&slot2));
-        compare(&hash_set, &bitfield);
+        insert_and_compare(slot2, &mut bitfield, &mut hash_set);
         assert_eq!(bitfield.excess.len(), 1);
     }
 
@@ -1707,10 +1703,7 @@ pub mod tests {
                                 // insert
                                 for slot in slot..=slot2 {
                                     let slot_use = maybe_reverse(slot);
-                                    bitfield.insert(slot_use);
-                                    hash_set.insert(slot_use);
-                                    assert!(bitfield.contains(&slot_use));
-                                    compare(&hash_set, &bitfield);
+                                    insert_and_compare(slot_use, &mut bitfield, &mut hash_set);
                                     debug!(
                                     "slot: {}, bitfield: {:?}, reverse: {}, len: {}, excess: {:?}",
                                     slot_use,
@@ -1735,10 +1728,11 @@ pub mod tests {
                                 // remove
                                 for slot in slot..=slot2 {
                                     let slot_use = maybe_reverse(slot);
-                                    assert!(bitfield.remove(&slot_use));
-                                    hash_set.remove(&slot_use);
-                                    assert!(!bitfield.contains(&slot_use));
-                                    compare(&hash_set, &bitfield);
+                                    assert!(remove_and_compare(
+                                        &slot_use,
+                                        &mut bitfield,
+                                        &mut hash_set
+                                    ));
                                     assert!(
                                         (reverse_slots && !bitfield.is_empty())
                                             ^ bitfield.excess.is_empty()
@@ -1830,8 +1824,7 @@ pub mod tests {
                         // with max_bitfield_width of 1 and 2, there is no room for dead slots
                         continue;
                     }
-                    hash_set.insert(slot);
-                    bitfield.insert(slot);
+                    insert_and_compare(slot, &mut bitfield, &mut hash_set);
                 }
                 let max = slot + 1;
 
@@ -1842,9 +1835,8 @@ pub mod tests {
                 }
 
                 if width > 0 {
-                    hash_set.remove(&slot);
-                    assert!(bitfield.remove(&slot));
-                    assert!(!bitfield.remove(&slot));
+                    assert!(remove_and_compare(&slot, &mut bitfield, &mut hash_set));
+                    assert!(!remove_and_compare(&slot, &mut bitfield, &mut hash_set));
                 }
 
                 compare(&hash_set, &bitfield);
@@ -1852,21 +1844,14 @@ pub mod tests {
 
                 // remove the rest, including a call that removes slot again
                 for item in all.iter() {
-                    assert!(hash_set.remove(&item));
-                    assert!(!hash_set.remove(&item));
-                    assert!(bitfield.remove(&item));
-                    assert!(!bitfield.remove(&item));
-                    compare(&hash_set, &bitfield);
+                    assert!(remove_and_compare(&item, &mut bitfield, &mut hash_set));
+                    assert!(!remove_and_compare(&item, &mut bitfield, &mut hash_set));
                 }
 
                 let min = max + ((width * 2) as u64) + 3;
                 let slot = min; // several widths past previous min
                 let max = slot + 1;
-                hash_set.insert(slot);
-                bitfield.insert(slot);
-                compare(&hash_set, &bitfield);
-
-                assert!(hash_set.contains(&slot));
+                insert_and_compare(slot, &mut bitfield, &mut hash_set);
 
                 for slot in (min - 10)..max + 100 {
                     assert_eq!(bitfield.contains(&slot), hash_set.contains(&slot));
