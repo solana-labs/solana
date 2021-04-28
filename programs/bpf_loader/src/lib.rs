@@ -424,7 +424,7 @@ fn process_loader_upgradeable_instruction(
             payer
                 .try_account_ref_mut()?
                 .checked_add_lamports(buffer.lamports()?)?;
-            buffer.try_account_ref_mut()?.lamports = 0;
+            buffer.try_account_ref_mut()?.set_lamports(0);
 
             ic_logger_msg!(logger, "Deployed program {:?}", program.unsigned_key());
         }
@@ -553,8 +553,10 @@ fn process_loader_upgradeable_instruction(
                 (programdata.lamports()? + buffer.lamports()?)
                     .saturating_sub(programdata_balance_required),
             )?;
-            buffer.try_account_ref_mut()?.lamports = 0;
-            programdata.try_account_ref_mut()?.lamports = programdata_balance_required;
+            buffer.try_account_ref_mut()?.set_lamports(0);
+            programdata
+                .try_account_ref_mut()?
+                .set_lamports(programdata_balance_required);
 
             ic_logger_msg!(logger, "Upgraded program {:?}", program.unsigned_key());
         }
@@ -646,7 +648,7 @@ fn process_loader_upgradeable_instruction(
                 recipient_account
                     .try_account_ref_mut()?
                     .checked_add_lamports(close_account.lamports()?)?;
-                close_account.try_account_ref_mut()?.lamports = 0;
+                close_account.try_account_ref_mut()?.set_lamports(0);
                 for elt in close_account.try_account_ref_mut()?.data_as_mut_slice() {
                     *elt = 0;
                 }

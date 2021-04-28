@@ -14,7 +14,7 @@ use {
         genesis_utils::{create_genesis_config_with_leader_ex, GenesisConfigInfo},
     },
     solana_sdk::{
-        account::{Account, AccountSharedData, ReadableAccount},
+        account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
         account_info::AccountInfo,
         clock::{Clock, Slot},
         entrypoint::{ProgramResult, SUCCESS},
@@ -158,7 +158,7 @@ pub fn builtin_process_instruction(
         let mut account = keyed_account.account.borrow_mut();
         let key = keyed_account.unsigned_key();
         let (lamports, data, _owner) = &account_refs[key];
-        account.lamports = **lamports.borrow();
+        account.set_lamports(**lamports.borrow());
         account.set_data(data.borrow().to_vec());
     }
 
