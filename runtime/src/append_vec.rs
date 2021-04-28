@@ -69,6 +69,15 @@ impl<'a, T: ReadableAccount> From<&'a T> for AccountMeta {
     }
 }
 
+impl<'a, T: ReadableAccount> From<Option<&'a T>> for AccountMeta {
+    fn from(account: Option<&'a T>) -> Self {
+        match account {
+            Some(account) => AccountMeta::from(account),
+            None => AccountMeta::default(),
+        }
+    }
+}
+
 /// References to account data stored elsewhere. Getting an `Account` requires cloning
 /// (see `StoredAccountMeta::clone_account()`).
 #[derive(PartialEq, Debug)]
@@ -453,7 +462,7 @@ impl AppendVec {
     /// and will be available to other threads.
     pub fn append_accounts(
         &self,
-        accounts: &[(StoredMeta, &AccountSharedData)],
+        accounts: &[(StoredMeta, Option<&AccountSharedData>)],
         hashes: &[impl Borrow<Hash>],
     ) -> Vec<usize> {
         let _lock = self.append_lock.lock().unwrap();
@@ -464,7 +473,10 @@ impl AppendVec {
             let account_meta = AccountMeta::from(*account);
             let account_meta_ptr = &account_meta as *const AccountMeta;
             let data_len = stored_meta.data_len as usize;
-            let data_ptr = account.data().as_ptr();
+            let data_ptr = account
+                .map(|account| account.data())
+                .unwrap_or_default()
+                .as_ptr();
             let hash_ptr = hash.borrow().as_ref().as_ptr();
             let ptrs = [
                 (meta_ptr as *const u8, mem::size_of::<StoredMeta>()),
@@ -495,7 +507,7 @@ impl AppendVec {
         account: &AccountSharedData,
         hash: Hash,
     ) -> Option<usize> {
-        let res = self.append_accounts(&[(storage_meta, account)], &[&hash]);
+        let res = self.append_accounts(&[(storage_meta, Some(account))], &[&hash]);
         if res.len() == 1 {
             None
         } else {
@@ -590,6 +602,43 @@ pub mod tests {
                 *(&self.account_meta.executable as *const bool as *mut u8) = new_executable_byte;
             }
         }
+    }
+
+    #[test]
+    fn test_account_meta_default() {
+        let def1 = AccountMeta::default();
+        let def2 = AccountMeta::from(&Account::default());
+        assert_eq!(&def1, &def2);
+        let def2 = AccountMeta::from(&AccountSharedData::default());
+        assert_eq!(&def1, &def2);
+        let def2 = AccountMeta::from(Some(&AccountSharedData::default()));
+        assert_eq!(&def1, &def2);
+        let none: Option<&AccountSharedData> = None;
+        let def2 = AccountMeta::from(none);
+        assert_eq!(&def1, &def2);
+    }
+
+    #[test]
+    fn test_account_meta_non_default() {
+        let def1 = AccountMeta {
+            lamports: 1,
+            owner: Pubkey::new_unique(),
+            executable: true,
+            rent_epoch: 3,
+        };
+        let def2_account = Account {
+            lamports: def1.lamports,
+            owner: def1.owner,
+            executable: def1.executable,
+            rent_epoch: def1.rent_epoch,
+            data: Vec::new(),
+        };
+        let def2 = AccountMeta::from(&def2_account);
+        assert_eq!(&def1, &def2);
+        let def2 = AccountMeta::from(&AccountSharedData::from(def2_account.clone()));
+        assert_eq!(&def1, &def2);
+        let def2 = AccountMeta::from(Some(&AccountSharedData::from(def2_account)));
+        assert_eq!(&def1, &def2);
     }
 
     #[test]

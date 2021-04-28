@@ -3323,7 +3323,7 @@ impl AccountsDb {
         slot: Slot,
         hashes: &[impl Borrow<Hash>],
         mut storage_finder: F,
-        accounts_and_meta_to_store: &[(StoredMeta, &AccountSharedData)],
+        accounts_and_meta_to_store: &[(StoredMeta, Option<&AccountSharedData>)],
     ) -> Vec<AccountInfo> {
         assert_eq!(hashes.len(), accounts_and_meta_to_store.len());
         let mut infos: Vec<AccountInfo> = Vec::with_capacity(accounts_and_meta_to_store.len());
@@ -3331,7 +3331,10 @@ impl AccountsDb {
         let mut total_storage_find_us = 0;
         while infos.len() < accounts_and_meta_to_store.len() {
             let mut storage_find = Measure::start("storage_finder");
-            let data_len = accounts_and_meta_to_store[infos.len()].1.data().len();
+            let data_len = accounts_and_meta_to_store[infos.len()]
+                .1
+                .map(|account| account.data().len())
+                .unwrap_or_default();
             let storage = storage_finder(slot, data_len + STORE_META_OVERHEAD);
             storage_find.stop();
             total_storage_find_us += storage_find.as_us();
@@ -3377,7 +3380,9 @@ impl AccountsDb {
                     store_id: storage.append_vec_id(),
                     offset: offsets[0],
                     stored_size,
-                    lamports: account.lamports(),
+                    lamports: account
+                        .map(|account| account.lamports())
+                        .unwrap_or_default(),
                 });
             }
             // restore the state to available
@@ -3705,7 +3710,7 @@ impl AccountsDb {
         &self,
         slot: Slot,
         hashes: Option<&[impl Borrow<Hash>]>,
-        accounts_and_meta_to_store: &[(StoredMeta, &AccountSharedData)],
+        accounts_and_meta_to_store: &[(StoredMeta, Option<&AccountSharedData>)],
     ) -> Vec<AccountInfo> {
         let len = accounts_and_meta_to_store.len();
         let hashes = hashes.map(|hashes| {
@@ -3718,9 +3723,17 @@ impl AccountsDb {
             .enumerate()
             .map(|(i, (meta, account))| {
                 let hash = hashes.map(|hashes| hashes[i].borrow());
-                let cached_account =
-                    self.accounts_cache
-                        .store(slot, &meta.pubkey, (*account).clone(), hash);
+
+                let account = account.cloned().unwrap_or_default();
+
+                let account_info = AccountInfo {
+                    store_id: CACHE_VIRTUAL_STORAGE_ID,
+                    offset: CACHE_VIRTUAL_OFFSET,
+                    stored_size: CACHE_VIRTUAL_STORED_SIZE,
+                    lamports: account.lamports(),
+                };
+
+                let cached_account = self.accounts_cache.store(slot, &meta.pubkey, account, hash);
                 // hash this account in the bg
                 match &self.sender_bg_hasher {
                     Some(ref sender) => {
@@ -3728,13 +3741,7 @@ impl AccountsDb {
                     }
                     None => (),
                 };
-
-                AccountInfo {
-                    store_id: CACHE_VIRTUAL_STORAGE_ID,
-                    offset: CACHE_VIRTUAL_OFFSET,
-                    stored_size: CACHE_VIRTUAL_STORED_SIZE,
-                    lamports: account.lamports(),
-                }
+                account_info
             })
             .collect()
     }
@@ -3751,17 +3758,18 @@ impl AccountsDb {
         mut write_version_producer: P,
         is_cached_store: bool,
     ) -> Vec<AccountInfo> {
-        let default_account = AccountSharedData::default();
-        let accounts_and_meta_to_store: Vec<(StoredMeta, &AccountSharedData)> = accounts
+        let accounts_and_meta_to_store: Vec<(StoredMeta, Option<&AccountSharedData>)> = accounts
             .iter()
             .map(|(pubkey, account)| {
                 self.read_only_accounts_cache.remove(pubkey, slot);
-                let account = if account.lamports() == 0 {
-                    &default_account
+                // this is the source of Some(Account) or None.
+                // Some(Account) = store 'Account'
+                // None = store a default/empty account with 0 lamports
+                let (account, data_len) = if account.lamports() == 0 {
+                    (None, 0)
                 } else {
-                    *account
+                    (Some(*account), account.data().len() as u64)
                 };
-                let data_len = account.data().len() as u64;
                 let meta = StoredMeta {
                     write_version: write_version_producer.next().unwrap(),
                     pubkey: **pubkey,
@@ -5822,7 +5830,7 @@ pub mod tests {
         };
         storages[0][0]
             .accounts
-            .append_accounts(&[(sm, &acc)], &[&Hash::default()]);
+            .append_accounts(&[(sm, Some(&acc))], &[&Hash::default()]);
 
         let calls = AtomicU64::new(0);
         let result = AccountsDb::scan_account_storage_no_bank(
