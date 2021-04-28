@@ -32,7 +32,7 @@ solana-vote-program = { path = "../programs/vote", version = "=1.7.0" }
 tempfile = "3.1.0"
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.7.0" }
 
-[target.'cfg(target_os = "unix")'.dev-dependencies]
+[target.'cfg(not(target_os = "windows"))'.dev-dependencies]
 gag = "0.1.10"
 
 [dev-dependencies]
