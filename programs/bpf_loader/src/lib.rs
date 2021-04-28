@@ -1024,7 +1024,7 @@ mod tests {
         let keyed_accounts = invoke_context.get_keyed_accounts().unwrap();
         assert!(keyed_accounts[0].account.borrow().executable());
 
-        program_account.borrow_mut().executable = false; // Un-finalize the account
+        program_account.borrow_mut().set_executable(false); // Un-finalize the account
 
         // Case: Finalize
         program_account.borrow_mut().data_as_mut_slice()[0] = 0; // bad elf
@@ -1050,7 +1050,7 @@ mod tests {
         file.read_to_end(&mut elf).unwrap();
         let program_account = AccountSharedData::new_ref(1, 0, &program_id);
         program_account.borrow_mut().set_data(elf);
-        program_account.borrow_mut().executable = true;
+        program_account.borrow_mut().set_executable(true);
 
         let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &program_account)];
 
@@ -1071,7 +1071,7 @@ mod tests {
         );
 
         // Case: Account not a program
-        keyed_accounts[0].account.borrow_mut().executable = false;
+        keyed_accounts[0].account.borrow_mut().set_executable(false);
         assert_eq!(
             Err(InstructionError::InvalidInstructionData),
             process_instruction(
@@ -1080,7 +1080,7 @@ mod tests {
                 &mut MockInvokeContext::new(keyed_accounts.clone())
             )
         );
-        keyed_accounts[0].account.borrow_mut().executable = true;
+        keyed_accounts[0].account.borrow_mut().set_executable(true);
 
         // Case: With program and parameter account
         let parameter_account = AccountSharedData::new_ref(1, 0, &program_id);
@@ -1143,7 +1143,7 @@ mod tests {
         file.read_to_end(&mut elf).unwrap();
         let program_account = AccountSharedData::new_ref(1, 0, &program_id);
         program_account.borrow_mut().set_data(elf);
-        program_account.borrow_mut().executable = true;
+        program_account.borrow_mut().set_executable(true);
         let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &program_account)];
 
         // Case: With program and parameter account
@@ -1185,7 +1185,7 @@ mod tests {
         file.read_to_end(&mut elf).unwrap();
         let program_account = AccountSharedData::new_ref(1, 0, &program_id);
         program_account.borrow_mut().set_data(elf);
-        program_account.borrow_mut().executable = true;
+        program_account.borrow_mut().set_executable(true);
         let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &program_account)];
 
         // Case: With program and parameter account
@@ -2239,7 +2239,7 @@ mod tests {
                 UpgradeableLoaderState::program_len().unwrap(),
                 &bpf_loader_upgradeable::id(),
             );
-            program_account.borrow_mut().executable = true;
+            program_account.borrow_mut().set_executable(true);
             program_account
                 .borrow_mut()
                 .set_state(&UpgradeableLoaderState::Program {
@@ -2429,7 +2429,7 @@ mod tests {
             min_program_balance,
             min_programdata_balance,
         );
-        program_account.borrow_mut().executable = false;
+        program_account.borrow_mut().set_executable(false);
         let keyed_accounts = vec![
             KeyedAccount::new(&programdata_address, false, &programdata_account),
             KeyedAccount::new(&program_address, false, &program_account),
@@ -3332,7 +3332,7 @@ mod tests {
             |bytes: &mut [u8]| {
                 let program_account = AccountSharedData::new_ref(1, 0, &program_id);
                 program_account.borrow_mut().set_data(bytes.to_vec());
-                program_account.borrow_mut().executable = true;
+                program_account.borrow_mut().set_executable(true);
 
                 let parameter_account = AccountSharedData::new_ref(1, 0, &program_id);
                 let keyed_accounts = vec![
