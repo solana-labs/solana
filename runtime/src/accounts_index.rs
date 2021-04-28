@@ -1675,8 +1675,7 @@ pub mod tests {
         for width in [16, 4194304].iter() {
             let width = *width;
             let mut tester = setup_empty(width);
-            for start in [0, width * 5].iter() {
-                let start = *start;
+            for start in [0, width * 5].iter().map(|x| *x) {
                 // recreate means create empty bitfield with each iteration, otherwise re-use
                 for recreate in [false, true].iter().map(|x| *x) {
                     let max = start + 3;
