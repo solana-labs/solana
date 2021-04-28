@@ -4956,7 +4956,7 @@ impl Bank {
                 self.get_account_with_fixed_root(&inline_spl_token_v2_0::native_mint::id())
             {
                 if existing_native_mint_account.owner() == &solana_sdk::system_program::id() {
-                    native_mint_account.lamports = existing_native_mint_account.lamports;
+                    native_mint_account.set_lamports(existing_native_mint_account.lamports());
                     true
                 } else {
                     false
