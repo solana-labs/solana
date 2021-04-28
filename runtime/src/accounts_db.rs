@@ -1314,7 +1314,7 @@ impl AccountsDb {
         max_clean_root: Option<Slot>,
     ) -> ReclaimResult {
         if purges.is_empty() {
-            return (HashMap::new(), HashMap::new());
+            return ReclaimResult::default();
         }
         // This number isn't carefully chosen; just guessed randomly such that
         // the hot loop will be the order of ~Xms.
@@ -1345,7 +1345,7 @@ impl AccountsDb {
         // and those stores may be used for background hashing.
         let reset_accounts = false;
 
-        let mut reclaim_result = (HashMap::new(), HashMap::new());
+        let mut reclaim_result = ReclaimResult::default();
         self.handle_reclaims(
             &reclaims,
             None,
