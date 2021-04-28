@@ -423,7 +423,8 @@ fn network_run_pull(
             network_values
                 .par_iter()
                 .filter_map(|from| {
-                    from.lock()
+                    let (peer, filters) = from
+                        .lock()
                         .unwrap()
                         .new_pull_request(
                             &thread_pool,
@@ -432,7 +433,11 @@ fn network_run_pull(
                             &HashMap::new(),
                             cluster_info::MAX_BLOOM_SIZE,
                         )
-                        .ok()
+                        .ok()?;
+                    let gossip = from.gossip.lock().unwrap();
+                    let label = CrdsValueLabel::ContactInfo(gossip.id);
+                    let self_info = gossip.crds.get(&label).unwrap().value.clone();
+                    Some((peer.id, filters, self_info))
                 })
                 .collect()
         };
@@ -478,7 +483,7 @@ fn network_run_pull(
                 msgs += rsp.len();
                 if let Some(node) = network.get(&from) {
                     let mut node = node.lock().unwrap();
-                    node.mark_pull_request_creation_time(&from, now);
+                    node.mark_pull_request_creation_time(from, now);
                     let mut stats = ProcessPullStats::default();
                     let (vers, vers_expired_timeout, failed_inserts) =
                         node.filter_pull_responses(&timeouts, rsp, now, &mut stats);

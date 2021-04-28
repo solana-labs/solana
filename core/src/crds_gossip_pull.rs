@@ -213,7 +213,7 @@ impl CrdsGossipPull {
         gossip_validators: Option<&HashSet<Pubkey>>,
         stakes: &HashMap<Pubkey, u64>,
         bloom_size: usize,
-    ) -> Result<(Pubkey, Vec<CrdsFilter>, CrdsValue), CrdsGossipError> {
+    ) -> Result<(ContactInfo, Vec<CrdsFilter>), CrdsGossipError> {
         let options = self.pull_options(
             crds,
             &self_id,
@@ -228,10 +228,8 @@ impl CrdsGossipPull {
         let filters = self.build_crds_filters(thread_pool, crds, bloom_size);
         let index = WeightedIndex::new(options.iter().map(|weighted| weighted.0)).unwrap();
         let random = index.sample(&mut rand::thread_rng());
-        let self_info = crds
-            .lookup(&CrdsValueLabel::ContactInfo(*self_id))
-            .unwrap_or_else(|| panic!("self_id invalid {}", self_id));
-        Ok((options[random].1.id, filters, self_info.clone()))
+        let (_weight, peer) = options[random];
+        Ok((peer.clone(), filters))
     }
 
     fn pull_options<'a>(
@@ -285,8 +283,8 @@ impl CrdsGossipPull {
     /// This is used for weighted random selection during `new_pull_request`
     /// It's important to use the local nodes request creation time as the weight
     /// instead of the response received time otherwise failed nodes will increase their weight.
-    pub fn mark_pull_request_creation_time(&mut self, from: &Pubkey, now: u64) {
-        self.pull_request_time.put(*from, now);
+    pub fn mark_pull_request_creation_time(&mut self, from: Pubkey, now: u64) {
+        self.pull_request_time.put(from, now);
     }
 
     /// Store an old hash in the purged values set
@@ -941,7 +939,7 @@ mod test {
             Err(CrdsGossipError::NoPeers)
         );
 
-        crds.insert(entry.clone(), 0).unwrap();
+        crds.insert(entry, 0).unwrap();
         assert_eq!(
             node.new_pull_request(
                 &thread_pool,
@@ -971,9 +969,8 @@ mod test {
             &HashMap::new(),
             PACKET_DATA_SIZE,
         );
-        let (to, _, self_info) = req.unwrap();
-        assert_eq!(to, new.label().pubkey());
-        assert_eq!(self_info, entry);
+        let (peer, _) = req.unwrap();
+        assert_eq!(peer, *new.contact_info().unwrap());
     }
 
     #[test]
@@ -987,7 +984,7 @@ mod test {
         )));
         let node_pubkey = entry.label().pubkey();
         let mut node = CrdsGossipPull::default();
-        crds.insert(entry.clone(), now).unwrap();
+        crds.insert(entry, now).unwrap();
         let old = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
             &solana_sdk::pubkey::new_rand(),
             0,
@@ -1001,7 +998,7 @@ mod test {
 
         // set request creation time to now.
         let now = now + 50_000;
-        node.mark_pull_request_creation_time(&new.label().pubkey(), now);
+        node.mark_pull_request_creation_time(new.label().pubkey(), now);
 
         // odds of getting the other request should be close to 1.
         let now = now + 1_000;
@@ -1016,9 +1013,8 @@ mod test {
                 &HashMap::new(),
                 PACKET_DATA_SIZE,
             );
-            let (to, _, self_info) = req.unwrap();
-            assert_eq!(to, old.label().pubkey());
-            assert_eq!(self_info, entry);
+            let (peer, _) = req.unwrap();
+            assert_eq!(peer, *old.contact_info().unwrap());
         }
     }
 
@@ -1033,7 +1029,7 @@ mod test {
         for k in 0..NUM_REPS {
             let pubkey = pubkeys[rng.gen_range(0, pubkeys.len())];
             let now = now + k as u64;
-            node.mark_pull_request_creation_time(&pubkey, now);
+            node.mark_pull_request_creation_time(pubkey, now);
             *requests.entry(pubkey).or_default() = now;
         }
         assert!(node.pull_request_time.len() <= CRDS_UNIQUE_PUBKEY_CAPACITY);
@@ -1065,6 +1061,7 @@ mod test {
             &solana_sdk::pubkey::new_rand(),
             0,
         )));
+        let caller = entry.clone();
         let node_pubkey = entry.label().pubkey();
         let node = CrdsGossipPull::default();
         node_crds.insert(entry, 0).unwrap();
@@ -1086,7 +1083,7 @@ mod test {
 
         let mut dest_crds = Crds::default();
         let dest = CrdsGossipPull::default();
-        let (_, filters, caller) = req.unwrap();
+        let (_, filters) = req.unwrap();
         let mut filters: Vec<_> = filters.into_iter().map(|f| (caller.clone(), f)).collect();
         let rsp = dest.generate_pull_responses(
             &dest_crds,
@@ -1141,6 +1138,7 @@ mod test {
             &solana_sdk::pubkey::new_rand(),
             0,
         )));
+        let caller = entry.clone();
         let node_pubkey = entry.label().pubkey();
         let node = CrdsGossipPull::default();
         node_crds.insert(entry, 0).unwrap();
@@ -1162,7 +1160,7 @@ mod test {
 
         let mut dest_crds = Crds::default();
         let mut dest = CrdsGossipPull::default();
-        let (_, filters, caller) = req.unwrap();
+        let (_, filters) = req.unwrap();
         let filters: Vec<_> = filters.into_iter().map(|f| (caller.clone(), f)).collect();
         let rsp = dest.generate_pull_responses(
             &dest_crds,
@@ -1200,6 +1198,7 @@ mod test {
             &solana_sdk::pubkey::new_rand(),
             1,
         )));
+        let caller = entry.clone();
         let node_pubkey = entry.label().pubkey();
         let mut node = CrdsGossipPull::default();
         node_crds.insert(entry, 0).unwrap();
@@ -1245,7 +1244,7 @@ mod test {
                 &HashMap::new(),
                 PACKET_DATA_SIZE,
             );
-            let (_, filters, caller) = req.unwrap();
+            let (_, filters) = req.unwrap();
             let filters: Vec<_> = filters.into_iter().map(|f| (caller.clone(), f)).collect();
             let mut rsp = dest.generate_pull_responses(
                 &dest_crds,
