@@ -4233,59 +4233,117 @@ impl AccountsDb {
         }
     }
 
-    pub fn get_accounts_delta_hash(&self, slot: Slot) -> Hash {
-        let mut scan = Measure::start("scan");
-
-        let scan_result: ScanStorageResult<(Pubkey, Hash), DashMapVersionHash> = self
-            .scan_account_storage(
-                slot,
-                |loaded_account: LoadedAccount| {
-                    // Cache only has one version per key, don't need to worry about versioning
-                    Some((*loaded_account.pubkey(), loaded_account.loaded_hash()))
-                },
-                |accum: &DashMap<Pubkey, (u64, Hash)>, loaded_account: LoadedAccount| {
-                    let loaded_write_version = loaded_account.write_version();
-                    let loaded_hash = loaded_account.loaded_hash();
-                    let should_insert =
-                        if let Some(existing_entry) = accum.get(loaded_account.pubkey()) {
-                            loaded_write_version > existing_entry.value().version()
-                        } else {
-                            true
-                        };
-                    if should_insert {
-                        // Detected insertion is necessary, grabs the write lock to commit the write,
-                        match accum.entry(*loaded_account.pubkey()) {
-                            // Double check in case another thread interleaved a write between the read + write.
-                            Occupied(mut occupied_entry) => {
-                                if loaded_write_version > occupied_entry.get().version() {
-                                    occupied_entry.insert((loaded_write_version, loaded_hash));
-                                }
-                            }
-
-                            Vacant(vacant_entry) => {
-                                vacant_entry.insert((loaded_write_version, loaded_hash));
+    /// Scan a slot in the account storage for dirty pubkeys and hashes
+    fn scan_slot_for_dirty_pubkeys_and_hashes(
+        &self,
+        slot: Slot,
+    ) -> ScanStorageResult<(Pubkey, Hash), DashMapVersionHash> {
+        self.scan_account_storage(
+            slot,
+            |loaded_account: LoadedAccount| {
+                // Cache only has one version per key, don't need to worry about versioning
+                Some((*loaded_account.pubkey(), loaded_account.loaded_hash()))
+            },
+            |accum: &DashMap<Pubkey, (u64, Hash)>, loaded_account: LoadedAccount| {
+                let loaded_write_version = loaded_account.write_version();
+                let loaded_hash = loaded_account.loaded_hash();
+                let should_insert = if let Some(existing_entry) = accum.get(loaded_account.pubkey())
+                {
+                    loaded_write_version > existing_entry.value().version()
+                } else {
+                    true
+                };
+                if should_insert {
+                    // Detected insertion is necessary, grabs the write lock to commit the write,
+                    match accum.entry(*loaded_account.pubkey()) {
+                        // Double check in case another thread interleaved a write between the read + write.
+                        Occupied(mut occupied_entry) => {
+                            if loaded_write_version > occupied_entry.get().version() {
+                                occupied_entry.insert((loaded_write_version, loaded_hash));
                             }
                         }
-                    }
-                },
-            );
-        scan.stop();
 
-        let mut accumulate = Measure::start("accumulate");
-        let hashes: Vec<_> = match scan_result {
+                        Vacant(vacant_entry) => {
+                            vacant_entry.insert((loaded_write_version, loaded_hash));
+                        }
+                    }
+                }
+            },
+        )
+    }
+
+    /// Scan a slot in the account storage for dirty pubkeys and hashes, and measure the execution
+    /// time
+    fn scan_slot_for_dirty_pubkeys_and_hashes_with_measure(
+        &self,
+        slot: Slot,
+    ) -> (
+        ScanStorageResult<(Pubkey, Hash), DashMapVersionHash>,
+        Measure,
+    ) {
+        let mut measure = Measure::start("scan");
+        let result = self.scan_slot_for_dirty_pubkeys_and_hashes(slot);
+        measure.stop();
+        (result, measure)
+    }
+
+    /// Given results of `scan_slot_for_dirty_pubkeys_and_hashes()`, map them to a Vec of Pubkey
+    /// and Hash
+    fn map_scan_result_to_pubkeys_and_hashes(
+        &self,
+        scan_result: ScanStorageResult<(Pubkey, Hash), DashMapVersionHash>,
+    ) -> Vec<(Pubkey, Hash)> {
+        match scan_result {
             ScanStorageResult::Cached(cached_result) => cached_result,
             ScanStorageResult::Stored(stored_result) => stored_result
                 .into_iter()
                 .map(|(pubkey, (_latest_write_version, hash))| (pubkey, hash))
-                .collect(),
-        };
-        let dirty_keys = hashes.iter().map(|(pubkey, _hash)| *pubkey).collect();
+                .collect::<Vec<_>>(),
+        }
+    }
 
+    /// Given results of `scan_slot_for_dirty_pubkeys_and_hashes()`, map them to a Vec of Pubkey
+    /// and Hash, and measure the execution time
+    fn map_scan_result_to_pubkeys_and_hashes_with_measure(
+        &self,
+        scan_result: ScanStorageResult<(Pubkey, Hash), DashMapVersionHash>,
+    ) -> (Vec<(Pubkey, Hash)>, Measure) {
+        let mut measure = Measure::start("accumulate");
+        let result = self.map_scan_result_to_pubkeys_and_hashes(scan_result);
+        measure.stop();
+        (result, measure)
+    }
+
+    /// Scan a slot in the account storage for dirty pubkeys and insert them into the list of
+    /// uncleaned pubkeys
+    ///
+    /// This function is called in Bank::drop() when the bank is _not_ frozen, so that its pubkeys
+    /// are considered for cleanup
+    pub fn scan_slot_and_insert_dirty_pubkeys_into_uncleaned_pubkeys(&self, slot: Slot) {
+        let scan_result = self.scan_slot_for_dirty_pubkeys_and_hashes(slot);
+        let mapped_result = self.map_scan_result_to_pubkeys_and_hashes(scan_result);
+        let dirty_pubkeys = mapped_result
+            .into_iter()
+            .map(|(pubkey, _hash)| pubkey)
+            .collect();
+        self.uncleaned_pubkeys.insert(slot, dirty_pubkeys);
+    }
+
+    pub fn get_accounts_delta_hash(&self, slot: Slot) -> Hash {
+        let (scan_result, scan) = self.scan_slot_for_dirty_pubkeys_and_hashes_with_measure(slot);
+
+        let (hashes, accumulate1) =
+            self.map_scan_result_to_pubkeys_and_hashes_with_measure(scan_result);
+
+        let mut accumulate2 = Measure::start("accumulate");
+        let dirty_keys = hashes.iter().map(|(pubkey, _hash)| *pubkey).collect();
         let ret = AccountsHash::accumulate_account_hashes(hashes);
-        accumulate.stop();
+        accumulate2.stop();
+
         let mut uncleaned_time = Measure::start("uncleaned_index");
         self.uncleaned_pubkeys.insert(slot, dirty_keys);
         uncleaned_time.stop();
+
         self.stats
             .store_uncleaned_update
             .fetch_add(uncleaned_time.as_us(), Ordering::Relaxed);
@@ -4295,7 +4353,10 @@ impl AccountsDb {
             .fetch_add(scan.as_us(), Ordering::Relaxed);
         self.stats
             .delta_hash_accumulate_time_total_us
-            .fetch_add(accumulate.as_us(), Ordering::Relaxed);
+            .fetch_add(accumulate1.as_us(), Ordering::Relaxed);
+        self.stats
+            .delta_hash_accumulate_time_total_us
+            .fetch_add(accumulate2.as_us(), Ordering::Relaxed);
         self.stats.delta_hash_num.fetch_add(1, Ordering::Relaxed);
         ret
     }
