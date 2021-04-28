@@ -3749,6 +3749,9 @@ impl AccountsDb {
             .iter()
             .map(|(pubkey, account)| {
                 self.read_only_accounts_cache.remove(pubkey, slot);
+                // this is the source of Some(Account) or None.
+                // Some(Account) = store 'Account'
+                // None = store a default/empty account with 0 lamports
                 let (account, data_len) = if account.lamports() == 0 {
                     (None, 0)
                 } else {
