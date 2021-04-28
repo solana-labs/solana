@@ -1,5 +1,7 @@
-use crate::{input_validators, ArgConstant};
-use clap::Arg;
+use {
+    crate::{input_validators, ArgConstant},
+    clap::Arg,
+};
 
 pub const FEE_PAYER_ARG: ArgConstant<'static> = ArgConstant {
     name: "fee_payer",

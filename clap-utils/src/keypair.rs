@@ -1,31 +1,33 @@
-use crate::{
-    input_parsers::pubkeys_sigs_of,
-    offline::{SIGNER_ARG, SIGN_ONLY_ARG},
-    ArgConstant,
-};
-use bip39::{Language, Mnemonic, Seed};
-use clap::ArgMatches;
-use rpassword::prompt_password_stderr;
-use solana_remote_wallet::{
-    remote_keypair::generate_remote_keypair,
-    remote_wallet::{maybe_wallet_manager, RemoteWalletError, RemoteWalletManager},
-};
-use solana_sdk::{
-    hash::Hash,
-    message::Message,
-    pubkey::Pubkey,
-    signature::{
-        keypair_from_seed, keypair_from_seed_phrase_and_passphrase, read_keypair,
-        read_keypair_file, Keypair, NullSigner, Presigner, Signature, Signer,
+use {
+    crate::{
+        input_parsers::pubkeys_sigs_of,
+        offline::{SIGNER_ARG, SIGN_ONLY_ARG},
+        ArgConstant,
     },
-};
-use std::{
-    convert::TryFrom,
-    error,
-    io::{stdin, stdout, Write},
-    process::exit,
-    str::FromStr,
-    sync::Arc,
+    bip39::{Language, Mnemonic, Seed},
+    clap::ArgMatches,
+    rpassword::prompt_password_stderr,
+    solana_remote_wallet::{
+        remote_keypair::generate_remote_keypair,
+        remote_wallet::{maybe_wallet_manager, RemoteWalletError, RemoteWalletManager},
+    },
+    solana_sdk::{
+        hash::Hash,
+        message::Message,
+        pubkey::Pubkey,
+        signature::{
+            keypair_from_seed, keypair_from_seed_phrase_and_passphrase, read_keypair,
+            read_keypair_file, Keypair, NullSigner, Presigner, Signature, Signer,
+        },
+    },
+    std::{
+        convert::TryFrom,
+        error,
+        io::{stdin, stdout, Write},
+        process::exit,
+        str::FromStr,
+        sync::Arc,
+    },
 };
 
 pub struct SignOnly {
