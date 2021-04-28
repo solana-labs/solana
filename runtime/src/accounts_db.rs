@@ -1165,6 +1165,24 @@ impl solana_frozen_abi::abi_example::AbiExample for AccountsDb {
     }
 }
 
+impl<'a> ReadableAccount for StoredAccountMeta<'a> {
+    fn lamports(&self) -> u64 {
+        self.account_meta.lamports
+    }
+    fn data(&self) -> &[u8] {
+        self.data
+    }
+    fn owner(&self) -> &Pubkey {
+        &self.account_meta.owner
+    }
+    fn executable(&self) -> bool {
+        self.account_meta.executable
+    }
+    fn rent_epoch(&self) -> Epoch {
+        self.account_meta.rent_epoch
+    }
+}
+
 impl Default for AccountsDb {
     fn default() -> Self {
         let num_threads = get_thread_count();
@@ -1964,14 +1982,14 @@ impl AccountsDb {
             let mut write_versions = Vec::with_capacity(alive_accounts.len());
 
             for (_pubkey, alive_account) in alive_accounts.iter() {
-                stored_accounts.push(alive_account.account.clone_account());
+                stored_accounts.push(&alive_account.account);
                 hashes.push(alive_account.account.hash);
                 write_versions.push(alive_account.account.meta.write_version);
             }
             let accounts = alive_accounts
                 .iter()
                 .map(|(pubkey, _)| *pubkey)
-                .zip(stored_accounts.iter())
+                .zip(stored_accounts.into_iter())
                 .collect::<Vec<_>>();
             start.stop();
             find_alive_elapsed = start.as_us();
