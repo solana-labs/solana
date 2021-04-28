@@ -5026,7 +5026,7 @@ impl Drop for Bank {
             self.rc
                 .accounts
                 .accounts_db
-                .get_accounts_delta_hash(self.slot);
+                .scan_slot_and_insert_dirty_pubkeys_into_uncleaned_pubkeys(self.slot);
         }
 
         if let Some(drop_callback) = self.drop_callback.read().unwrap().0.as_ref() {
