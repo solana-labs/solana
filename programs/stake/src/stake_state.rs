@@ -1158,7 +1158,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
             split
                 .try_account_ref_mut()?
                 .checked_add_lamports(lamports)?;
-            self.try_account_ref_mut()?.lamports -= lamports;
+            self.try_account_ref_mut()?.checked_sub_lamports(lamports)?;
             Ok(())
         } else {
             Err(InstructionError::InvalidAccountData)
@@ -1204,7 +1204,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
 
         // Drain the source stake account
         let lamports = source_account.lamports()?;
-        source_account.try_account_ref_mut()?.lamports -= lamports;
+        source_account.try_account_ref_mut()?.checked_sub_lamports(lamports)?;
         self.try_account_ref_mut()?.checked_add_lamports(lamports)?;
         Ok(())
     }
@@ -1285,7 +1285,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
             self.set_state(&StakeState::Uninitialized)?;
         }
 
-        self.try_account_ref_mut()?.lamports -= lamports;
+        self.try_account_ref_mut()?.checked_sub_lamports(lamports)?;
         to.try_account_ref_mut()?.checked_add_lamports(lamports)?;
         Ok(())
     }
@@ -1558,7 +1558,7 @@ pub fn rewrite_stakes(
             let meta_status = meta.rewrite_rent_exempt_reserve(rent, stake_account.data().len());
             let stake_status = stake
                 .delegation
-                .rewrite_stake(stake_account.lamports, meta.rent_exempt_reserve);
+                .rewrite_stake(stake_account.lamports(), meta.rent_exempt_reserve);
 
             if meta_status.is_none() && stake_status.is_none() {
                 return Err(InstructionError::InvalidAccountData);

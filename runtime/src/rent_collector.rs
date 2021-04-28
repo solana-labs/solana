@@ -81,7 +81,7 @@ impl RentCollector {
 
             let (rent_due, exempt) =
                 self.rent
-                    .due(account.lamports, account.data().len(), years_elapsed);
+                    .due(account.lamports(), account.data().len(), years_elapsed);
 
             if exempt || rent_due != 0 {
                 if account.lamports() > rent_due {
@@ -96,10 +96,10 @@ impl RentCollector {
                                 1
                             },
                     );
-                    account.lamports -= rent_due;
+                    account.checked_sub_lamports(rent_due).unwrap(); // will not fail. We check above.
                     rent_due
                 } else {
-                    let rent_charged = account.lamports;
+                    let rent_charged = account.lamports();
                     *account = AccountSharedData::default();
                     rent_charged
                 }

@@ -4,7 +4,7 @@ use bincode::{deserialize, serialized_size};
 use serde_derive::{Deserialize, Serialize};
 use solana_config_program::{create_config_account, get_config_data, ConfigState};
 use solana_sdk::{
-    account::{AccountSharedData, ReadableAccount},
+    account::{AccountSharedData, ReadableAccount, WritableAccount},
     genesis_config::GenesisConfig,
     instruction::InstructionError,
     keyed_account::KeyedAccount,
@@ -53,7 +53,7 @@ pub fn add_genesis_account(genesis_config: &mut GenesisConfig) -> u64 {
     let mut account = create_config_account(vec![], &Config::default(), 0);
     let lamports = genesis_config.rent.minimum_balance(account.data().len());
 
-    account.lamports = lamports.max(1);
+    account.set_lamports(lamports.max(1));
 
     genesis_config.add_account(id(), account);
 
