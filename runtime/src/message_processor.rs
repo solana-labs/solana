@@ -915,7 +915,9 @@ impl MessageProcessor {
                         );
                         return Err(InstructionError::InvalidRealloc);
                     }
-                    dst_keyed_account.try_account_ref_mut()?.lamports = src_keyed_account.lamports;
+                    dst_keyed_account
+                        .try_account_ref_mut()?
+                        .set_lamports(src_keyed_account.lamports());
                     dst_keyed_account
                         .try_account_ref_mut()?
                         .set_owner(*src_keyed_account.owner());
