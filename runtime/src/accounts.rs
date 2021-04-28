@@ -266,7 +266,7 @@ impl Accounts {
                 if payer_index != 0 {
                     warn!("Payer index should be 0! {:?}", tx);
                 }
-                if accounts[payer_index].lamports == 0 {
+                if accounts[payer_index].lamports() == 0 {
                     error_counters.account_not_found += 1;
                     Err(TransactionError::AccountNotFound)
                 } else {
@@ -283,7 +283,7 @@ impl Accounts {
                         }
                     };
 
-                    if accounts[payer_index].lamports < fee + min_balance {
+                    if accounts[payer_index].lamports() < fee + min_balance {
                         error_counters.insufficient_funds += 1;
                         Err(TransactionError::InsufficientFundsForFee)
                     } else {
@@ -574,7 +574,7 @@ impl Accounts {
             ancestors,
             |collector: &mut BinaryHeap<Reverse<(u64, Pubkey)>>, option| {
                 if let Some((pubkey, account, _slot)) = option {
-                    if account.lamports == 0 {
+                    if account.lamports() == 0 {
                         return;
                     }
                     let contains_address = filter_by_address.contains(pubkey);
@@ -589,12 +589,12 @@ impl Accounts {
                         let Reverse(entry) = collector
                             .peek()
                             .expect("BinaryHeap::peek should succeed when len > 0");
-                        if *entry >= (account.lamports, *pubkey) {
+                        if *entry >= (account.lamports(), *pubkey) {
                             return;
                         }
                         collector.pop();
                     }
-                    collector.push(Reverse((account.lamports, *pubkey)));
+                    collector.push(Reverse((account.lamports(), *pubkey)));
                 }
             },
         );
@@ -651,7 +651,7 @@ impl Accounts {
         filter: F,
     ) {
         if let Some(mapped_account_tuple) = some_account_tuple
-            .filter(|(_, account, _)| Self::is_loadable(account.lamports) && filter(account))
+            .filter(|(_, account, _)| Self::is_loadable(account.lamports()) && filter(account))
             .map(|(pubkey, account, _slot)| (*pubkey, account))
         {
             collector.push(mapped_account_tuple)
@@ -708,8 +708,8 @@ impl Accounts {
         self.accounts_db.scan_accounts(
             ancestors,
             |collector: &mut Vec<(Pubkey, AccountSharedData, Slot)>, some_account_tuple| {
-                if let Some((pubkey, account, slot)) =
-                    some_account_tuple.filter(|(_, account, _)| Self::is_loadable(account.lamports))
+                if let Some((pubkey, account, slot)) = some_account_tuple
+                    .filter(|(_, account, _)| Self::is_loadable(account.lamports()))
                 {
                     collector.push((*pubkey, account, slot))
                 }

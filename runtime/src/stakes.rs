@@ -187,7 +187,7 @@ impl Stakes {
                 }
             }
 
-            if account.lamports == 0 {
+            if account.lamports() == 0 {
                 // when account is removed (lamports == 0), remove it from Stakes as well
                 // so that given `pubkey` can be used for any owner in the future, while not
                 // affecting Stakes.

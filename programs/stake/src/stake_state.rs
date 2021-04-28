@@ -1558,7 +1558,7 @@ pub fn rewrite_stakes(
             let meta_status = meta.rewrite_rent_exempt_reserve(rent, stake_account.data().len());
             let stake_status = stake
                 .delegation
-                .rewrite_stake(stake_account.lamports, meta.rent_exempt_reserve);
+                .rewrite_stake(stake_account.lamports(), meta.rent_exempt_reserve);
 
             if meta_status.is_none() && stake_status.is_none() {
                 return Err(InstructionError::InvalidAccountData);
