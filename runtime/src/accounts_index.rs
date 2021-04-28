@@ -1681,8 +1681,8 @@ pub mod tests {
             let (mut bitfield, mut hash_set) = setup_empty(width);
             for start in [0, width * 5].iter() {
                 let start = *start;
-                // recreate = 1 means create empty bitfield with each iteration, otherwise re-use
-                for recreate in 0..2 {
+                // recreate means create empty bitfield with each iteration, otherwise re-use
+                for recreate in [false, true].iter().map(|x| *x) {
                     let max = start + 3;
                     // first root to add
                     for slot in start..max {
@@ -1698,7 +1698,7 @@ pub mod tests {
                                         slot
                                     }
                                 };
-                                if recreate == 1 {
+                                if recreate {
                                     let recreated = setup_empty(width);
                                     bitfield = recreated.0;
                                     hash_set = recreated.1;
