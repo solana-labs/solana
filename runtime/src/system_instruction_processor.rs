@@ -189,7 +189,7 @@ fn transfer_verified(
         return Err(SystemError::ResultWithNegativeLamports.into());
     }
 
-    from.try_account_ref_mut()?.lamports -= lamports;
+    from.try_account_ref_mut()?.checked_sub_lamports(lamports)?;
     to.try_account_ref_mut()?.checked_add_lamports(lamports)?;
     Ok(())
 }
