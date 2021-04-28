@@ -211,6 +211,21 @@ pub struct RpcContactInfo {
 /// Map of leader base58 identity pubkeys to the slot indices relative to the first epoch slot
 pub type RpcLeaderSchedule = HashMap<String, Vec<usize>>;
 
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcBlockProductionRange {
+    pub first_slot: Slot,
+    pub last_slot: Slot,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcBlockProduction {
+    /// Map of leader base58 identity pubkeys to a tuple of `(number of leader slots, number of blocks produced)`
+    pub by_identity: HashMap<String, (usize, usize)>,
+    pub range: RpcBlockProductionRange,
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct RpcVersionInfo {

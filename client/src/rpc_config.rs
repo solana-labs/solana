@@ -51,6 +51,22 @@ pub struct RpcLeaderScheduleConfig {
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct RpcBlockProductionConfigRange {
+    pub first_slot: Slot,
+    pub last_slot: Option<Slot>,
+}
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcBlockProductionConfig {
+    pub identity: Option<String>, // validator identity, as a base-58 encoded string
+    pub range: Option<RpcBlockProductionConfigRange>, // current epoch if `None`
+    #[serde(flatten)]
+    pub commitment: Option<CommitmentConfig>,
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RpcGetVoteAccountsConfig {
     pub vote_pubkey: Option<String>, // validator vote address, as a base-58 encoded string
     #[serde(flatten)]

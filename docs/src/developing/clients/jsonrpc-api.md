@@ -21,6 +21,7 @@ gives a convenient interface for the RPC methods.
 - [getAccountInfo](jsonrpc-api.md#getaccountinfo)
 - [getBalance](jsonrpc-api.md#getbalance)
 - [getBlock](jsonrpc-api.md#getblock)
+- [getBlockProduction](jsonrpc-api.md#getblockproduction)
 - [getBlockCommitment](jsonrpc-api.md#getblockcommitment)
 - [getBlocks](jsonrpc-api.md#getblocks)
 - [getBlocksWithLimit](jsonrpc-api.md#getblockswithlimit)
@@ -572,6 +573,112 @@ The JSON structure of token balances is defined as a list of objects in the foll
   - `decimals: <number>` - Number of decimals configured for token's mint.
   - `uiAmount: <number | null>` - Token amount as a float, accounting for decimals. **DEPRECATED**
   - `uiAmountString: <string>` - Token amount as a string, accounting for decimals.
+
+
+### getBlockProduction
+
+Returns recent block production information from the current or previous epoch.
+
+#### Parameters:
+
+- `<object>` - (optional) Configuration object containing the following optional fields:
+  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - (optional) `range: <object>` - Slot range to return block production for. If parameter not provided, defaults to current epoch.
+    - `firstSlot: <u64>` - first slot to return block production information for (inclusive)
+    - (optional) `lastSlot: <u64>` - last slot to return block production information for (inclusive). If parameter not provided, defaults to the highest slot
+  - (optional) `identity: <string>` - Only return results for this validator identity (base-58 encoded)
+
+#### Results:
+
+The result will be an RpcResponse JSON object with `value` equal to:
+- `<object>`
+  - `byIdentity: <object>` - a dictionary of validator identities,
+    as base-58 encoded strings.  Value is a two element array containing the
+    number of leader slots and the number of blocks produced.
+  - `range: <object>` - Slot range to return block production for. If parameter not provided, defaults to current epoch.
+    - `firstSlot: <u64>` - first slot of the block production information (inclusive)
+    - `lastSlot: <u64>` - last slot of block production information (inclusive)
+
+#### Example:
+
+Request:
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"getBlockProduction"}
+'
+```
+
+Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "context": {
+      "slot": 9887
+    },
+    "value": {
+      "byIdentity": {
+        "85iYT5RuzRTDgjyRa3cP8SYhM2j21fj7NhfJ3peu1DPr": [
+          9888,
+          9886
+        ]
+      },
+      "range": {
+        "firstSlot": 0,
+        "lastSlot": 9887,
+      }
+    }
+  },
+  "id": 1
+}
+```
+
+#### Example:
+
+Request:
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getBlockProduction",
+    "params": [
+      {
+        "identity": "85iYT5RuzRTDgjyRa3cP8SYhM2j21fj7NhfJ3peu1DPr",
+        "range": {
+          "firstSlot": 40,
+          "lastSlot": 50
+        }
+      }
+    ]
+  }
+'
+```
+
+Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "context": {
+      "slot": 10102
+    },
+    "value": {
+      "byIdentity": {
+        "85iYT5RuzRTDgjyRa3cP8SYhM2j21fj7NhfJ3peu1DPr": [
+          11,
+          11
+        ]
+      },
+      "range": {
+        "firstSlot": 50,
+        "lastSlot": 40
+      }
+    }
+  },
+  "id": 1
+}
+```
 
 ### getBlockCommitment
 
