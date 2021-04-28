@@ -1464,39 +1464,52 @@ impl AccountsDb {
         }
     }
 
-    fn collect_uncleaned_pubkeys_to_slot(&self, max_slot: Slot) -> (Vec<Vec<Pubkey>>, Slot) {
-        let mut max_slot_in_uncleaned_pubkeys = 0;
-        let slots: Vec<Slot> = self
-            .uncleaned_pubkeys
+    /// Collect all the uncleaned slots, up to a max slot
+    ///
+    /// Search through the uncleaned Pubkeys and return all the slots, up to a maximum slot.
+    fn collect_uncleaned_slots_up_to_slot(&self, max_slot: Slot) -> Vec<Slot> {
+        self.uncleaned_pubkeys
             .iter()
             .filter_map(|entry| {
-                let slot = entry.key();
-                max_slot_in_uncleaned_pubkeys = max_slot_in_uncleaned_pubkeys.max(*slot);
-                if *slot <= max_slot {
-                    Some(*slot)
+                let slot = *entry.key();
+                (slot <= max_slot).then(|| slot)
+            })
+            .collect()
+    }
+
+    /// Remove `slots` from `uncleaned_pubkeys` and collect all pubkeys
+    ///
+    /// For each slot in the list of slots, remove it from the `uncleaned_pubkeys` Map and collect
+    /// all the pubkeys from root slots to return.
+    fn remove_uncleaned_slots_and_collect_pubkeys(
+        &self,
+        uncleaned_slots: Vec<Slot>,
+    ) -> Vec<Vec<Pubkey>> {
+        uncleaned_slots
+            .into_iter()
+            .filter_map(|slot| {
+                let maybe_slot_keys = self.uncleaned_pubkeys.remove(&slot);
+                if self.accounts_index.is_root(slot) {
+                    // Safe to unwrap on rooted slots since this is called from clean_accounts
+                    // and only clean_accounts operates on rooted slots. purge_slots only
+                    // operates on uncleaned_pubkeys
+                    let (_slot, keys) = maybe_slot_keys.expect("Root slot should exist");
+                    Some(keys)
                 } else {
                     None
                 }
             })
-            .collect();
-        (
-            slots
-                .into_iter()
-                .filter_map(|slot| {
-                    let maybe_slot_keys = self.uncleaned_pubkeys.remove(&slot);
-                    if self.accounts_index.is_root(slot) {
-                        // Safe to unwrap on rooted slots since this is called from clean_accounts
-                        // and only clean_accounts operates on rooted slots. purge_slots only
-                        // operates on uncleaned_pubkeys
-                        let (_slot, keys) = maybe_slot_keys.expect("Root slot should exist");
-                        Some(keys)
-                    } else {
-                        None
-                    }
-                })
-                .collect(),
-            max_slot_in_uncleaned_pubkeys,
-        )
+            .collect()
+    }
+
+    /// Remove uncleaned slots, up to a maximum slot, and return the collected pubkeys
+    ///
+    fn remove_uncleaned_slots_and_collect_pubkeys_up_to_slot(
+        &self,
+        max_slot: Slot,
+    ) -> Vec<Vec<Pubkey>> {
+        let uncleaned_slots = self.collect_uncleaned_slots_up_to_slot(max_slot);
+        self.remove_uncleaned_slots_and_collect_pubkeys(uncleaned_slots)
     }
 
     // Construct a vec of pubkeys for cleaning from:
@@ -1515,7 +1528,7 @@ impl AccountsDb {
 
         let mut collect_delta_keys = Measure::start("key_create");
         let max_slot = max_clean_root.unwrap_or_else(|| self.accounts_index.max_root());
-        let (delta_keys, _max_slot) = self.collect_uncleaned_pubkeys_to_slot(max_slot);
+        let delta_keys = self.remove_uncleaned_slots_and_collect_pubkeys_up_to_slot(max_slot);
         collect_delta_keys.stop();
         timings.collect_delta_keys_us += collect_delta_keys.as_us();
 
@@ -10096,5 +10109,133 @@ pub mod tests {
         // this tests impossible situation in the wild, so panic is expected
         // Conversely, we show that we're preventing this race condition from occurring
         do_test_load_account_and_purge_race(false);
+    }
+
+    #[test]
+    fn test_collect_uncleaned_slots_up_to_slot() {
+        solana_logger::setup();
+        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+
+        let slot1 = 11;
+        let slot2 = 222;
+        let slot3 = 3333;
+
+        let pubkey1 = Pubkey::new_unique();
+        let pubkey2 = Pubkey::new_unique();
+        let pubkey3 = Pubkey::new_unique();
+
+        db.uncleaned_pubkeys.insert(slot1, vec![pubkey1]);
+        db.uncleaned_pubkeys.insert(slot2, vec![pubkey2]);
+        db.uncleaned_pubkeys.insert(slot3, vec![pubkey3]);
+
+        let mut uncleaned_slots1 = db.collect_uncleaned_slots_up_to_slot(slot1);
+        let mut uncleaned_slots2 = db.collect_uncleaned_slots_up_to_slot(slot2);
+        let mut uncleaned_slots3 = db.collect_uncleaned_slots_up_to_slot(slot3);
+
+        uncleaned_slots1.sort_unstable();
+        uncleaned_slots2.sort_unstable();
+        uncleaned_slots3.sort_unstable();
+
+        assert_eq!(uncleaned_slots1, [slot1]);
+        assert_eq!(uncleaned_slots2, [slot1, slot2]);
+        assert_eq!(uncleaned_slots3, [slot1, slot2, slot3]);
+    }
+
+    #[test]
+    fn test_remove_uncleaned_slots_and_collect_pubkeys() {
+        solana_logger::setup();
+        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+
+        let slot1 = 11;
+        let slot2 = 222;
+        let slot3 = 3333;
+
+        let pubkey1 = Pubkey::new_unique();
+        let pubkey2 = Pubkey::new_unique();
+        let pubkey3 = Pubkey::new_unique();
+
+        let account1 = AccountSharedData::new(0, 0, &pubkey1);
+        let account2 = AccountSharedData::new(0, 0, &pubkey2);
+        let account3 = AccountSharedData::new(0, 0, &pubkey3);
+
+        db.store_uncached(slot1, &[(&pubkey1, &account1)]);
+        db.store_uncached(slot2, &[(&pubkey2, &account2)]);
+        db.store_uncached(slot3, &[(&pubkey3, &account3)]);
+
+        db.add_root(slot1);
+        db.add_root(slot2);
+        db.add_root(slot3);
+
+        db.uncleaned_pubkeys.insert(slot1, vec![pubkey1]);
+        db.uncleaned_pubkeys.insert(slot2, vec![pubkey2]);
+        db.uncleaned_pubkeys.insert(slot3, vec![pubkey3]);
+
+        let uncleaned_pubkeys1 = db
+            .remove_uncleaned_slots_and_collect_pubkeys(vec![slot1])
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+        let uncleaned_pubkeys2 = db
+            .remove_uncleaned_slots_and_collect_pubkeys(vec![slot2])
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+        let uncleaned_pubkeys3 = db
+            .remove_uncleaned_slots_and_collect_pubkeys(vec![slot3])
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+
+        assert!(uncleaned_pubkeys1.contains(&pubkey1));
+        assert!(!uncleaned_pubkeys1.contains(&pubkey2));
+        assert!(!uncleaned_pubkeys1.contains(&pubkey3));
+
+        assert!(!uncleaned_pubkeys2.contains(&pubkey1));
+        assert!(uncleaned_pubkeys2.contains(&pubkey2));
+        assert!(!uncleaned_pubkeys2.contains(&pubkey3));
+
+        assert!(!uncleaned_pubkeys3.contains(&pubkey1));
+        assert!(!uncleaned_pubkeys3.contains(&pubkey2));
+        assert!(uncleaned_pubkeys3.contains(&pubkey3));
+    }
+
+    #[test]
+    fn test_remove_uncleaned_slots_and_collect_pubkeys_up_to_slot() {
+        solana_logger::setup();
+        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+
+        let slot1 = 11;
+        let slot2 = 222;
+        let slot3 = 3333;
+
+        let pubkey1 = Pubkey::new_unique();
+        let pubkey2 = Pubkey::new_unique();
+        let pubkey3 = Pubkey::new_unique();
+
+        let account1 = AccountSharedData::new(0, 0, &pubkey1);
+        let account2 = AccountSharedData::new(0, 0, &pubkey2);
+        let account3 = AccountSharedData::new(0, 0, &pubkey3);
+
+        db.store_uncached(slot1, &[(&pubkey1, &account1)]);
+        db.store_uncached(slot2, &[(&pubkey2, &account2)]);
+        db.store_uncached(slot3, &[(&pubkey3, &account3)]);
+
+        db.add_root(slot1);
+        db.add_root(slot2);
+        db.add_root(slot3);
+
+        db.uncleaned_pubkeys.insert(slot1, vec![pubkey1]);
+        db.uncleaned_pubkeys.insert(slot2, vec![pubkey2]);
+        db.uncleaned_pubkeys.insert(slot3, vec![pubkey3]);
+
+        let uncleaned_pubkeys = db
+            .remove_uncleaned_slots_and_collect_pubkeys_up_to_slot(slot3)
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+
+        assert!(uncleaned_pubkeys.contains(&pubkey1));
+        assert!(uncleaned_pubkeys.contains(&pubkey2));
+        assert!(uncleaned_pubkeys.contains(&pubkey3));
     }
 }
