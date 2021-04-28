@@ -1737,7 +1737,9 @@ impl AccountsDb {
         // Don't reset from clean, since the pubkeys in those stores may need to be unref'ed
         // and those stores may be used for background hashing.
         let reset_accounts = false;
-        self.handle_reclaims(&reclaims, None, false, None, reset_accounts);
+        let mut reclaim_result = ReclaimResult::default();
+        let reclaim_result = Some(&mut reclaim_result);
+        self.handle_reclaims(&reclaims, None, false, reclaim_result, reset_accounts);
 
         reclaims_time.stop();
 
