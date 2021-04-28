@@ -28,7 +28,7 @@ use crate::{
     result::{Error, Result},
     weighted_shuffle::weighted_shuffle,
 };
-use rand::{CryptoRng, Rng};
+use rand::{seq::SliceRandom, CryptoRng, Rng};
 use solana_ledger::shred::Shred;
 use solana_sdk::sanitize::{Sanitize, SanitizeError};
 
@@ -1440,52 +1440,43 @@ impl ClusterInfo {
     fn append_entrypoint_to_pulls(
         &self,
         thread_pool: &ThreadPool,
-        pulls: &mut Vec<(Pubkey, CrdsFilter, SocketAddr, CrdsValue)>,
+        pulls: &mut Vec<(ContactInfo, Vec<CrdsFilter>)>,
     ) {
-        let entrypoint_id_and_gossip = {
+        const THROTTLE_DELAY: u64 = CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS / 2;
+        let entrypoint = {
             let mut entrypoints = self.entrypoints.write().unwrap();
-            if entrypoints.is_empty() {
-                None
-            } else {
-                let i = thread_rng().gen_range(0, entrypoints.len());
-                let entrypoint = &mut entrypoints[i];
-
-                if pulls.is_empty() {
-                    // Nobody else to pull from, try an entrypoint
-                    Some((entrypoint.id, entrypoint.gossip))
-                } else {
-                    let now = timestamp();
-                    if now - entrypoint.wallclock <= CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS / 2 {
-                        None
-                    } else {
-                        entrypoint.wallclock = now;
-                        if self
-                            .time_gossip_read_lock("entrypoint", &self.stats.entrypoint)
-                            .crds
-                            .get_nodes_contact_info()
-                            .any(|node| node.gossip == entrypoint.gossip)
-                        {
-                            None // Found the entrypoint, no need to pull from it
-                        } else {
-                            Some((entrypoint.id, entrypoint.gossip))
-                        }
-                    }
+            let entrypoint = match entrypoints.choose_mut(&mut rand::thread_rng()) {
+                Some(entrypoint) => entrypoint,
+                None => return,
+            };
+            if !pulls.is_empty() {
+                let now = timestamp();
+                if now <= entrypoint.wallclock.saturating_add(THROTTLE_DELAY) {
+                    return;
+                }
+                entrypoint.wallclock = now;
+                if self
+                    .time_gossip_read_lock("entrypoint", &self.stats.entrypoint)
+                    .crds
+                    .get_nodes_contact_info()
+                    .any(|node| node.gossip == entrypoint.gossip)
+                {
+                    return; // Found the entrypoint, no need to pull from it
                 }
             }
+            entrypoint.clone()
         };
-
-        if let Some((id, gossip)) = entrypoint_id_and_gossip {
-            let r_gossip = self.time_gossip_read_lock("entrypoint", &self.stats.entrypoint2);
-            let self_info = r_gossip
-                .crds
-                .lookup(&CrdsValueLabel::ContactInfo(self.id()))
-                .unwrap_or_else(|| panic!("self_id invalid {}", self.id()));
-            r_gossip
-                .pull
-                .build_crds_filters(thread_pool, &r_gossip.crds, MAX_BLOOM_SIZE)
-                .into_iter()
-                .for_each(|filter| pulls.push((id, filter, gossip, self_info.clone())));
-        }
+        let filters = match pulls.first() {
+            Some((_, filters)) => filters.clone(),
+            None => {
+                let gossip = self.time_gossip_read_lock("entrypoint", &self.stats.entrypoint2);
+                gossip
+                    .pull
+                    .build_crds_filters(thread_pool, &gossip.crds, MAX_BLOOM_SIZE)
+            }
+        };
+        self.stats.pull_from_entrypoint_count.add_relaxed(1);
+        pulls.push((entrypoint, filters));
     }
 
     /// Splits an input feed of serializable data into chunks where the sum of
@@ -1546,45 +1537,36 @@ impl ClusterInfo {
     ) -> Vec<(SocketAddr, Protocol)> {
         let now = timestamp();
         let mut pulls: Vec<_> = {
-            let r_gossip =
-                self.time_gossip_read_lock("new_pull_reqs", &self.stats.new_pull_requests);
-            r_gossip
-                .new_pull_request(thread_pool, now, gossip_validators, stakes, MAX_BLOOM_SIZE)
-                .ok()
-                .into_iter()
-                .filter_map(|(peer, filters, me)| {
-                    let peer_label = CrdsValueLabel::ContactInfo(peer);
-                    r_gossip
-                        .crds
-                        .lookup(&peer_label)
-                        .and_then(CrdsValue::contact_info)
-                        .map(move |peer_info| {
-                            filters
-                                .into_iter()
-                                .map(move |f| (peer, f, peer_info.gossip, me.clone()))
-                        })
-                })
-                .flatten()
-                .collect()
+            let gossip = self.time_gossip_read_lock("new_pull_reqs", &self.stats.new_pull_requests);
+            match gossip.new_pull_request(
+                thread_pool,
+                now,
+                gossip_validators,
+                stakes,
+                MAX_BLOOM_SIZE,
+            ) {
+                Err(_) => Vec::default(),
+                Ok((peer, filters)) => vec![(peer, filters)],
+            }
         };
         self.append_entrypoint_to_pulls(thread_pool, &mut pulls);
-        self.stats
-            .new_pull_requests_count
-            .add_relaxed(pulls.len() as u64);
-        // There are at most 2 unique peers here: The randomly
-        // selected pull peer, and possibly also the entrypoint.
-        let peers: Vec<Pubkey> = pulls.iter().map(|(peer, _, _, _)| *peer).dedup().collect();
+        let num_requests = pulls.iter().map(|(_, filters)| filters.len() as u64).sum();
+        self.stats.new_pull_requests_count.add_relaxed(num_requests);
         {
             let mut gossip =
                 self.time_gossip_write_lock("mark_pull", &self.stats.mark_pull_request);
-            for peer in peers {
-                gossip.mark_pull_request_creation_time(&peer, now);
+            for (peer, _) in &pulls {
+                gossip.mark_pull_request_creation_time(peer.id, now);
             }
         }
+        let self_info = CrdsData::ContactInfo(self.my_contact_info());
+        let self_info = CrdsValue::new_signed(self_info, &self.keypair);
         pulls
             .into_iter()
-            .map(|(_, filter, gossip, self_info)| {
-                (gossip, Protocol::PullRequest(filter, self_info))
+            .flat_map(|(peer, filters)| std::iter::repeat(peer.gossip).zip(filters))
+            .map(|(gossip_addr, filter)| {
+                let request = Protocol::PullRequest(filter, self_info.clone());
+                (gossip_addr, request)
             })
             .collect()
     }
@@ -3573,7 +3555,7 @@ mod tests {
             .values()
             .for_each(|v| v.par_iter().for_each(|v| assert!(v.verify())));
 
-        let (_, _, val) = cluster_info
+        cluster_info
             .gossip
             .write()
             .unwrap()
@@ -3586,7 +3568,6 @@ mod tests {
             )
             .ok()
             .unwrap();
-        assert!(val.verify());
     }
 
     #[test]
@@ -4397,7 +4378,7 @@ mod tests {
                 .gossip
                 .write()
                 .unwrap()
-                .mark_pull_request_creation_time(&peer, now);
+                .mark_pull_request_creation_time(peer, now);
         }
         assert_eq!(
             cluster_info

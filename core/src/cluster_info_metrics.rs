@@ -96,6 +96,7 @@ pub(crate) struct GossipStats {
     pub(crate) prune_message_count: Counter,
     pub(crate) prune_message_len: Counter,
     pub(crate) prune_received_cache: Counter,
+    pub(crate) pull_from_entrypoint_count: Counter,
     pub(crate) pull_request_ping_pong_check_failed_count: Counter,
     pub(crate) pull_requests_count: Counter,
     pub(crate) purge: Counter,
@@ -287,6 +288,11 @@ pub(crate) fn submit_gossip_stats(stats: &GossipStats, gossip: &RwLock<CrdsGossi
         (
             "new_pull_requests_count",
             stats.new_pull_requests_count.clear(),
+            i64
+        ),
+        (
+            "pull_from_entrypoint_count",
+            stats.pull_from_entrypoint_count.clear(),
             i64
         ),
         (
