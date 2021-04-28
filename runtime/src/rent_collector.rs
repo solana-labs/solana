@@ -1,6 +1,6 @@
 //! calculate and collect rent from Accounts
 use solana_sdk::{
-    account::{AccountSharedData, ReadableAccount},
+    account::{AccountSharedData, ReadableAccount, WritableAccount},
     clock::Epoch,
     epoch_schedule::EpochSchedule,
     genesis_config::GenesisConfig,
@@ -62,13 +62,13 @@ impl RentCollector {
         account: &mut AccountSharedData,
     ) -> u64 {
         if account.executable()
-            || account.rent_epoch > self.epoch
+            || account.rent_epoch() > self.epoch
             || sysvar::check_id(account.owner())
             || *address == incinerator::id()
         {
             0
         } else {
-            let slots_elapsed: u64 = (account.rent_epoch..=self.epoch)
+            let slots_elapsed: u64 = (account.rent_epoch()..=self.epoch)
                 .map(|epoch| self.epoch_schedule.get_slots_in_epoch(epoch + 1))
                 .sum();
 
@@ -85,15 +85,17 @@ impl RentCollector {
 
             if exempt || rent_due != 0 {
                 if account.lamports() > rent_due {
-                    account.rent_epoch = self.epoch
-                        + if exempt {
-                            // Rent isn't collected for the next epoch
-                            // Make sure to check exempt status later in current epoch again
-                            0
-                        } else {
-                            // Rent is collected for next epoch
-                            1
-                        };
+                    account.set_rent_epoch(
+                        self.epoch
+                            + if exempt {
+                                // Rent isn't collected for the next epoch
+                                // Make sure to check exempt status later in current epoch again
+                                0
+                            } else {
+                                // Rent is collected for next epoch
+                                1
+                            },
+                    );
                     account.lamports -= rent_due;
                     rent_due
                 } else {
@@ -115,7 +117,7 @@ impl RentCollector {
         account: &mut AccountSharedData,
     ) -> u64 {
         // initialize rent_epoch as created at this epoch
-        account.rent_epoch = self.epoch;
+        account.set_rent_epoch(self.epoch);
         self.collect_from_existing_account(address, account)
     }
 }
