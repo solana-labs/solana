@@ -5018,16 +5018,25 @@ impl Bank {
 
 impl Drop for Bank {
     fn drop(&mut self) {
-        if !self.skip_drop.load(Relaxed) {
-            if let Some(drop_callback) = self.drop_callback.read().unwrap().0.as_ref() {
-                drop_callback.callback(self);
-            } else {
-                // Default case
-                // 1. Tests
-                // 2. At startup when replaying blockstore and there's no
-                // AccountsBackgroundService to perform cleanups yet.
-                self.rc.accounts.purge_slot(self.slot());
-            }
+        if self.skip_drop.load(Relaxed) {
+            return;
+        }
+
+        if !self.is_frozen() {
+            self.rc
+                .accounts
+                .accounts_db
+                .get_accounts_delta_hash(self.slot);
+        }
+
+        if let Some(drop_callback) = self.drop_callback.read().unwrap().0.as_ref() {
+            drop_callback.callback(self);
+        } else {
+            // Default case
+            // 1. Tests
+            // 2. At startup when replaying blockstore and there's no
+            // AccountsBackgroundService to perform cleanups yet.
+            self.rc.accounts.purge_slot(self.slot());
         }
     }
 }
