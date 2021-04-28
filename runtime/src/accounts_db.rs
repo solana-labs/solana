@@ -5462,7 +5462,7 @@ pub mod tests {
     use assert_matches::assert_matches;
     use rand::{thread_rng, Rng};
     use solana_sdk::{
-        account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
+        account::{accounts_equal, Account, AccountSharedData, ReadableAccount, WritableAccount},
         hash::HASH_BYTES,
         pubkey::PUBKEY_BYTES,
     };
@@ -7561,6 +7561,45 @@ pub mod tests {
 
         account.data_as_mut_slice()[0] = 42;
         db.store_uncached(0, &[(&frozen_pubkey, &account)]);
+    }
+
+    #[test]
+    fn test_stored_readable_account() {
+        let lamports = 1;
+        let owner = Pubkey::new_unique();
+        let executable = true;
+        let rent_epoch = 2;
+        let meta = StoredMeta {
+            write_version: 5,
+            pubkey: Pubkey::new_unique(),
+            data_len: 7,
+        };
+        let account_meta = AccountMeta {
+            lamports,
+            owner,
+            executable,
+            rent_epoch,
+        };
+        let data = Vec::new();
+        let account = Account {
+            lamports,
+            owner,
+            executable,
+            rent_epoch,
+            data: data.clone(),
+        };
+        let offset = 99;
+        let stored_size = 101;
+        let hash = Hash::new_unique();
+        let stored_account = StoredAccountMeta {
+            meta: &meta,
+            account_meta: &account_meta,
+            data: &data,
+            offset,
+            stored_size,
+            hash: &hash,
+        };
+        assert!(accounts_equal(&account, &stored_account));
     }
 
     #[test]
