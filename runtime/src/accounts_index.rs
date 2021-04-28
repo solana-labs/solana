@@ -1675,16 +1675,16 @@ pub mod tests {
         for width in [16, 4194304].iter() {
             let width = *width;
             let mut tester = setup_empty(width);
-            for start in [0, width * 5].iter().map(|x| *x) {
+            for start in [0, width * 5].iter().cloned() {
                 // recreate means create empty bitfield with each iteration, otherwise re-use
-                for recreate in [false, true].iter().map(|x| *x) {
+                for recreate in [false, true].iter().cloned() {
                     let max = start + 3;
                     // first root to add
                     for slot in start..max {
                         // subsequent roots to add
                         for slot2 in (slot + 1)..max {
                             // reverse_slots = 1 means add slots in reverse order (max to min). This causes us to add second and later slots to excess.
-                            for reverse_slots in [false, true].iter().map(|x| *x) {
+                            for reverse_slots in [false, true].iter().cloned() {
                                 let maybe_reverse = |slot| {
                                     if reverse_slots {
                                         max - slot
