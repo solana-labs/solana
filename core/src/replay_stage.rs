@@ -2501,6 +2501,7 @@ pub(crate) mod tests {
         cluster_info::Node,
         consensus::test::{initialize_state, VoteSimulator},
         consensus::Tower,
+        crds::Cursor,
         optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
         progress_map::ValidatorStakeInfo,
         replay_stage::ReplayStage,
@@ -4792,7 +4793,8 @@ pub(crate) mod tests {
             &mut voted_signatures,
             has_new_vote_been_rooted,
         );
-        let (_, votes, max_ts) = cluster_info.get_votes(0);
+        let mut cursor = Cursor::default();
+        let (_, votes) = cluster_info.get_votes(&mut cursor);
         assert_eq!(votes.len(), 1);
         let vote_tx = &votes[0];
         assert_eq!(vote_tx.message.recent_blockhash, bank0.last_blockhash());
@@ -4821,7 +4823,7 @@ pub(crate) mod tests {
             );
 
             // No new votes have been submitted to gossip
-            let (_, votes, _max_ts) = cluster_info.get_votes(max_ts);
+            let (_, votes) = cluster_info.get_votes(&mut cursor);
             assert!(votes.is_empty());
             // Tower's latest vote tx blockhash hasn't changed either
             assert_eq!(tower.last_vote_tx_blockhash(), bank0.last_blockhash());
@@ -4842,7 +4844,7 @@ pub(crate) mod tests {
             &mut voted_signatures,
             has_new_vote_been_rooted,
         );
-        let (_, votes, max_ts) = cluster_info.get_votes(max_ts);
+        let (_, votes) = cluster_info.get_votes(&mut cursor);
         assert_eq!(votes.len(), 1);
         let vote_tx = &votes[0];
         assert_eq!(vote_tx.message.recent_blockhash, bank1.last_blockhash());
@@ -4864,7 +4866,7 @@ pub(crate) mod tests {
             &mut last_vote_refresh_time,
         );
         // No new votes have been submitted to gossip
-        let (_, votes, max_ts) = cluster_info.get_votes(max_ts);
+        let (_, votes) = cluster_info.get_votes(&mut cursor);
         assert!(votes.is_empty());
         assert_eq!(tower.last_vote_tx_blockhash(), bank1.last_blockhash());
         assert_eq!(tower.last_voted_slot().unwrap(), 1);
@@ -4900,7 +4902,7 @@ pub(crate) mod tests {
             &mut last_vote_refresh_time,
         );
         assert!(last_vote_refresh_time.last_refresh_time > clone_refresh_time);
-        let (_, votes, max_ts) = cluster_info.get_votes(max_ts);
+        let (_, votes) = cluster_info.get_votes(&mut cursor);
         assert_eq!(votes.len(), 1);
         let vote_tx = &votes[0];
         assert_eq!(
@@ -4955,7 +4957,7 @@ pub(crate) mod tests {
             has_new_vote_been_rooted,
             &mut last_vote_refresh_time,
         );
-        let (_, votes, _max_ts) = cluster_info.get_votes(max_ts);
+        let (_, votes) = cluster_info.get_votes(&mut cursor);
         assert!(votes.is_empty());
         assert_eq!(
             vote_tx.message.recent_blockhash,

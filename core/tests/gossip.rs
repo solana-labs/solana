@@ -3,8 +3,11 @@
 extern crate log;
 
 use rayon::iter::*;
-use solana_core::cluster_info::{ClusterInfo, Node};
-use solana_core::gossip_service::GossipService;
+use solana_core::{
+    cluster_info::{ClusterInfo, Node},
+    crds::Cursor,
+    gossip_service::GossipService,
+};
 use solana_runtime::bank_forks::BankForks;
 
 use solana_perf::packet::Packet;
@@ -305,12 +308,11 @@ pub fn cluster_info_scale() {
             let mut num_push_total = 0;
             let mut num_pushes = 0;
             let mut num_pulls = 0;
-            let mut num_inserts = 0;
             for node in nodes.iter() {
                 //if node.0.get_votes(0).1.len() != (num_nodes * num_votes) {
                 let has_tx = node
                     .0
-                    .get_votes(0)
+                    .get_votes(&mut Cursor::default())
                     .1
                     .iter()
                     .filter(|v| v.message.account_keys == tx.message.account_keys)
@@ -319,7 +321,6 @@ pub fn cluster_info_scale() {
                 num_push_total += node.0.gossip.read().unwrap().push.num_total;
                 num_pushes += node.0.gossip.read().unwrap().push.num_pushes;
                 num_pulls += node.0.gossip.read().unwrap().pull.num_pulls;
-                num_inserts += node.0.gossip.read().unwrap().crds.num_inserts;
                 if has_tx == 0 {
                     not_done += 1;
                 }
@@ -329,7 +330,6 @@ pub fn cluster_info_scale() {
             warn!("num_push_total: {}", num_push_total);
             warn!("num_pushes: {}", num_pushes);
             warn!("num_pulls: {}", num_pulls);
-            warn!("num_inserts: {}", num_inserts);
             success = not_done < (nodes.len() / 20);
             if success {
                 break;
@@ -347,7 +347,6 @@ pub fn cluster_info_scale() {
             node.0.gossip.write().unwrap().push.num_total = 0;
             node.0.gossip.write().unwrap().push.num_pushes = 0;
             node.0.gossip.write().unwrap().pull.num_pulls = 0;
-            node.0.gossip.write().unwrap().crds.num_inserts = 0;
         }
     }
 
