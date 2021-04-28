@@ -742,7 +742,7 @@ impl Tower {
         total_stake: Stake,
     ) -> bool {
 
-        info!(
+        trace!(
             "check_vote_stake_threshold_init (Slot: {} total_stake: {} threshold_depth {}",
             slot,
             total_stake,
@@ -755,7 +755,7 @@ impl Tower {
         if let Some(vote) = vote {
             if let Some(fork_stake) = voted_stakes.get(&vote.slot) {
                 let lockout = *fork_stake as f64 / total_stake as f64;
-                info!(
+                trace!(
                     "check_vote_stake_threshold_mid fork_stake slot: {}, vote slot: {}, lockout: {} fork_stake: {} total_stake: {} confirmation_count: {}",
                     slot, vote.slot, lockout, fork_stake, total_stake, vote.confirmation_count
                 );
