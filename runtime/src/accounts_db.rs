@@ -3338,7 +3338,7 @@ impl AccountsDb {
         slot: Slot,
         hashes: &[impl Borrow<Hash>],
         mut storage_finder: F,
-        accounts_and_meta_to_store: &[(StoredMeta, Option<&AccountSharedData>)],
+        accounts_and_meta_to_store: &[(StoredMeta, Option<&impl ReadableAccount>)],
     ) -> Vec<AccountInfo> {
         assert_eq!(hashes.len(), accounts_and_meta_to_store.len());
         let mut infos: Vec<AccountInfo> = Vec::with_capacity(accounts_and_meta_to_store.len());
@@ -3725,7 +3725,7 @@ impl AccountsDb {
         &self,
         slot: Slot,
         hashes: Option<&[impl Borrow<Hash>]>,
-        accounts_and_meta_to_store: &[(StoredMeta, Option<&AccountSharedData>)],
+        accounts_and_meta_to_store: &[(StoredMeta, Option<&impl ReadableAccount>)],
     ) -> Vec<AccountInfo> {
         let len = accounts_and_meta_to_store.len();
         let hashes = hashes.map(|hashes| {
@@ -3739,8 +3739,9 @@ impl AccountsDb {
             .map(|(i, (meta, account))| {
                 let hash = hashes.map(|hashes| hashes[i].borrow());
 
-                let account = account.cloned().unwrap_or_default();
-
+                let account = account
+                    .map(|account| account.to_account_shared_data())
+                    .unwrap_or_default();
                 let account_info = AccountInfo {
                     store_id: CACHE_VIRTUAL_STORAGE_ID,
                     offset: CACHE_VIRTUAL_OFFSET,
@@ -3767,13 +3768,13 @@ impl AccountsDb {
     >(
         &self,
         slot: Slot,
-        accounts: &[(&Pubkey, &AccountSharedData)],
+        accounts: &[(&Pubkey, &impl ReadableAccount)],
         hashes: Option<&[impl Borrow<Hash>]>,
         storage_finder: F,
         mut write_version_producer: P,
         is_cached_store: bool,
     ) -> Vec<AccountInfo> {
-        let accounts_and_meta_to_store: Vec<(StoredMeta, Option<&AccountSharedData>)> = accounts
+        let accounts_and_meta_to_store: Vec<_> = accounts
             .iter()
             .map(|(pubkey, account)| {
                 self.read_only_accounts_cache.remove(pubkey, slot);
@@ -4322,7 +4323,7 @@ impl AccountsDb {
         &self,
         slot: Slot,
         infos: Vec<AccountInfo>,
-        accounts: &[(&Pubkey, &AccountSharedData)],
+        accounts: &[(&Pubkey, &impl ReadableAccount)],
     ) -> SlotList<AccountInfo> {
         let mut reclaims = SlotList::<AccountInfo>::with_capacity(infos.len() * 2);
         for (info, pubkey_account) in infos.into_iter().zip(accounts.iter()) {
@@ -4743,7 +4744,7 @@ impl AccountsDb {
     fn store_accounts_frozen<'a>(
         &'a self,
         slot: Slot,
-        accounts: &[(&Pubkey, &AccountSharedData)],
+        accounts: &[(&Pubkey, &impl ReadableAccount)],
         hashes: Option<&[impl Borrow<Hash>]>,
         storage_finder: Option<StorageFinder<'a>>,
         write_version_producer: Option<Box<dyn Iterator<Item = u64>>>,
@@ -4767,7 +4768,7 @@ impl AccountsDb {
     fn store_accounts_custom<'a>(
         &'a self,
         slot: Slot,
-        accounts: &[(&Pubkey, &AccountSharedData)],
+        accounts: &[(&Pubkey, &impl ReadableAccount)],
         hashes: Option<&[impl Borrow<Hash>]>,
         storage_finder: Option<StorageFinder<'a>>,
         write_version_producer: Option<Box<dyn Iterator<Item = u64>>>,

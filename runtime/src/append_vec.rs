@@ -462,7 +462,7 @@ impl AppendVec {
     /// and will be available to other threads.
     pub fn append_accounts(
         &self,
-        accounts: &[(StoredMeta, Option<&AccountSharedData>)],
+        accounts: &[(StoredMeta, Option<&impl ReadableAccount>)],
         hashes: &[impl Borrow<Hash>],
     ) -> Vec<usize> {
         let _lock = self.append_lock.lock().unwrap();
