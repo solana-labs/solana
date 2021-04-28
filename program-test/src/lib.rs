@@ -344,7 +344,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             for account_info in account_infos {
                 if account_info.unsigned_key() == account_pubkey {
                     let account = &accounts[i];
-                    **account_info.try_borrow_mut_lamports().unwrap() = account.borrow().lamports;
+                    **account_info.try_borrow_mut_lamports().unwrap() = account.borrow().lamports();
 
                     let mut data = account_info.try_borrow_mut_data()?;
                     let account_borrow = account.borrow();
