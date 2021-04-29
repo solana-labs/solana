@@ -44,6 +44,12 @@ impl TryFrom<&str> for DerivationPath {
     }
 }
 
+impl AsRef<[ChildIndex]> for DerivationPath {
+    fn as_ref(&self) -> &[ChildIndex] {
+        &self.0.as_ref()
+    }
+}
+
 impl DerivationPath {
     fn new<P: Into<Box<[ChildIndex]>>>(path: P) -> Self {
         Self(DerivationPathInner::new(path))
