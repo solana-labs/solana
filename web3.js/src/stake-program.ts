@@ -507,8 +507,8 @@ export class StakeProgram {
    * Generate an Initialize instruction to add to a Stake Create transaction
    */
   static initialize(params: InitializeStakeParams): TransactionInstruction {
-    const {stakePubkey, authorized, lockup: maybe_lockup} = params;
-    const lockup: Lockup = (typeof maybe_lockup !== 'undefined') ? maybe_lockup : Lockup.default;
+    const {stakePubkey, authorized, lockup: maybeLockup} = params;
+    const lockup: Lockup = maybeLockup || Lockup.default;
     const type = STAKE_INSTRUCTION_LAYOUTS.Initialize;
     const data = encodeData(type, {
       authorized: {
