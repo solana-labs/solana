@@ -4107,6 +4107,7 @@ dependencies = [
  "rpassword",
  "solana-remote-wallet",
  "solana-sdk",
+ "tempfile",
  "thiserror",
  "tiny-bip39 0.8.0",
  "uriparse",

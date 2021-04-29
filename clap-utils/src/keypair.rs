@@ -167,6 +167,8 @@ pub(crate) enum SignerSourceError {
     RemoteWalletLocatorError(#[from] RemoteWalletLocatorError),
     #[error(transparent)]
     DerivationPathError(#[from] DerivationPathError),
+    #[error(transparent)]
+    IoError(#[from] std::io::Error),
 }
 
 pub(crate) fn parse_signer_source<S: AsRef<str>>(
@@ -196,9 +198,11 @@ pub(crate) fn parse_signer_source<S: AsRef<str>>(
                     ASK_KEYWORD => Ok(SignerSource::new(SignerSourceKind::Ask)),
                     _ => match Pubkey::from_str(source) {
                         Ok(pubkey) => Ok(SignerSource::new(SignerSourceKind::Pubkey(pubkey))),
-                        Err(_) => Ok(SignerSource::new(SignerSourceKind::Filepath(
-                            source.to_string(),
-                        ))),
+                        Err(_) => std::fs::metadata(source)
+                            .map(|_| {
+                                SignerSource::new(SignerSourceKind::Filepath(source.to_string()))
+                            })
+                            .map_err(|err| err.into()),
                     },
                 }
             }
@@ -466,6 +470,7 @@ mod tests {
     use super::*;
     use solana_remote_wallet::locator::Manufacturer;
     use solana_sdk::system_instruction;
+    use tempfile::NamedTempFile;
 
     #[test]
     fn test_sanitize_seed_phrase() {
@@ -539,16 +544,32 @@ mod tests {
             }
             if p == pubkey)
         );
-        let path = "/absolute/path".to_string();
-        assert!(matches!(parse_signer_source(&path).unwrap(), SignerSource {
+
+        // Set up absolute and relative path strs
+        let file0 = NamedTempFile::new().unwrap();
+        let path = file0.path();
+        assert!(path.is_absolute());
+        let absolute_path_str = path.to_str().unwrap();
+
+        let file1 = NamedTempFile::new_in(std::env::current_dir().unwrap()).unwrap();
+        let path = file1.path().file_name().unwrap().to_str().unwrap();
+        let path = std::path::Path::new(path);
+        assert!(path.is_relative());
+        let relative_path_str = path.to_str().unwrap();
+
+        assert!(
+            matches!(parse_signer_source(absolute_path_str).unwrap(), SignerSource {
                 kind: SignerSourceKind::Filepath(p),
                 derivation_path: None,
-            } if p == path));
-        let path = "relative/path".to_string();
-        assert!(matches!(parse_signer_source(&path).unwrap(), SignerSource {
+            } if p == absolute_path_str)
+        );
+        assert!(
+            matches!(parse_signer_source(&relative_path_str).unwrap(), SignerSource {
                 kind: SignerSourceKind::Filepath(p),
                 derivation_path: None,
-            } if p == path));
+            } if p == relative_path_str)
+        );
+
         let usb = "usb://ledger".to_string();
         let expected_locator = RemoteWalletLocator {
             manufacturer: Manufacturer::Ledger,
@@ -568,13 +589,13 @@ mod tests {
                 kind: SignerSourceKind::Usb(u),
                 derivation_path: d,
             } if u == expected_locator && d == expected_derivation_path));
-        // Catchall into SignerSource::Filepath
-        let junk = "sometextthatisnotapubkey".to_string();
+        // Catchall into SignerSource::Filepath fails
+        let junk = "sometextthatisnotapubkeyorfile".to_string();
         assert!(Pubkey::from_str(&junk).is_err());
-        assert!(matches!(parse_signer_source(&junk).unwrap(), SignerSource {
-                kind: SignerSourceKind::Filepath(j),
-                derivation_path: None,
-            } if j == junk));
+        assert!(matches!(
+            parse_signer_source(&junk),
+            Err(SignerSourceError::IoError(_))
+        ));
 
         let ask = "ask:".to_string();
         assert!(matches!(
@@ -584,19 +605,17 @@ mod tests {
                 derivation_path: None,
             }
         ));
-        let path = "/absolute/path".to_string();
         assert!(
-            matches!(parse_signer_source(&format!("file:{}", path)).unwrap(), SignerSource {
+            matches!(parse_signer_source(&format!("file:{}", absolute_path_str)).unwrap(), SignerSource {
                 kind: SignerSourceKind::Filepath(p),
                 derivation_path: None,
-            } if p == path)
+            } if p == absolute_path_str)
         );
-        let path = "relative/path".to_string();
         assert!(
-            matches!(parse_signer_source(&format!("file:{}", path)).unwrap(), SignerSource {
+            matches!(parse_signer_source(&format!("file:{}", relative_path_str)).unwrap(), SignerSource {
                 kind: SignerSourceKind::Filepath(p),
                 derivation_path: None,
-            } if p == path)
+            } if p == relative_path_str)
         );
     }
 }
