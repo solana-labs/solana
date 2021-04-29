@@ -2024,10 +2024,10 @@ impl Bank {
                 }
                 Err(_) => {
                     error!(
-                        "Incinerated {} fee lamports instead of sending to {}",
+                        "Burning {} fee instead of crediting {}",
                         deposit, self.collector_id
                     );
-                    inc_new_counter_error!("bank-incinerated_fee_lamports", deposit as usize);
+                    inc_new_counter_error!("bank-burned_fee_lamports", deposit as usize);
                     burn += deposit;
                 }
             }
