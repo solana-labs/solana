@@ -36,31 +36,35 @@ impl Measure {
         self.duration as f32 / (1000.0f32 * 1000.0f32 * 1000.0f32)
     }
 
-    /// Wrap a function with Measure
+    /// Measure this function
     ///
-    /// Use `Measure::wrap()` when you have a function that you want to measure.  `wrap()` will
+    /// Use `Measure::this()` when you have a function that you want to measure.  `this()` will
     /// start a new `Measure`, call your function, stop the measure, then return the `Measure`
     /// object along with your function's return value.
     ///
-    /// You will likely need to wrap your function in a closure, and wrap the arguments in a tuple.
-    /// See the tests for more details.
+    /// If your function takes more than one parameter, you will need to wrap your function in a
+    /// closure, and wrap the arguments in a tuple.  The same thing applies to methods.  See the
+    /// tests for more details.
     ///
     /// # Examples
     ///
     /// ```ignore
-    /// // Call a function
-    /// let (result, measure) = Measure::wrap(|(arg1, arg2)| my_function(arg1, arg2), ("abc", 123), "my_func");
+    /// // Call a function with a single argument
+    /// let (result, measure) = Measure::this(my_function, fizz, "my_func");
+
+    /// // Call a function with multiple arguments
+    /// let (result, measure) = Measure::this(|(arg1, arg2)| my_function(arg1, arg2), ("abc", 123), "my_func");
     /// ```
     ///
     /// ```ignore
     /// /// Call a method
     /// struct Foo { ...  }
-    /// impl Foo { fn bar(&self) { ... } }
+    /// impl Foo { fn bar(&self, some_arg: i32) { ... } }
     ///
     /// let foo = Foo { };
-    /// let (result, measure) = Measure::wrap(|this| Foo::bar(&this), &foo, "bar");
+    /// let (result, measure) = Measure::this(|this, arg| Foo::bar(&this, arg), (&foo, arg), "bar");
     /// ```
-    pub fn wrap<T, R, F: FnOnce(T) -> R>(func: F, args: T, name: &'static str) -> (R, Self) {
+    pub fn this<T, R, F: FnOnce(T) -> R>(func: F, args: T, name: &'static str) -> (R, Self) {
         let mut measure = Self::start(name);
         let result = func(args);
         measure.stop();
@@ -138,6 +142,15 @@ mod tests {
         x * y
     }
 
+    fn my_multiply_tuple(args: (i32, i32)) -> i32 {
+        let (x, y) = args;
+        my_multiply(x, y)
+    }
+
+    fn square(x: i32) -> i32 {
+        my_multiply(x, x)
+    }
+
     struct SomeStruct {
         x: i32,
     }
@@ -151,47 +164,59 @@ mod tests {
     fn test_measure_with() {
         // Ensure that the measurement side actually works
         {
-            let (_result, measure) = Measure::wrap(|s| sleep(Duration::from_secs(s)), 1, "test");
+            let (_result, measure) = Measure::this(|s| sleep(Duration::from_secs(s)), 1, "test");
             assert!(measure.as_s() >= 0.99f32 && measure.as_s() <= 1.01f32);
             assert!(measure.as_ms() >= 990 && measure.as_ms() <= 1_010);
             assert!(measure.as_us() >= 999_000 && measure.as_us() <= 1_010_000);
         }
 
-        // Ensure that wrap() can be called with a simple closure
+        // Ensure that this() can be called with a simple closure
         {
             let expected = 1;
-            let (actual, _measure) = Measure::wrap(|x| x, expected, "test");
+            let (actual, _measure) = Measure::this(|x| x, expected, "test");
             assert_eq!(actual, expected);
         }
 
-        // Ensure that wrap() can be called with a tuple
+        // Ensure that this() can be called with a tuple
         {
-            let (result, _measure) = Measure::wrap(|(x, y)| x + y, (1, 2), "test");
+            let (result, _measure) = Measure::this(|(x, y)| x + y, (1, 2), "test");
             assert_eq!(result, 1 + 2);
         }
 
-        // Ensure that wrap() can be called with a normal function
+        // Ensure that this() can be called with a normal function
         {
-            let (result, _measure) = Measure::wrap(|(x, y)| my_multiply(x, y), (3, 4), "test");
+            let (result, _measure) = Measure::this(|(x, y)| my_multiply(x, y), (3, 4), "test");
             assert_eq!(result, 3 * 4);
         }
 
-        // Ensure that wrap() can be called with a method (and self)
+        // Ensure that this() can be called with a normal function with one argument
+        {
+            let (result, _measure) = Measure::this(square, 5, "test");
+            assert_eq!(result, 5 * 5)
+        }
+
+        // Ensure that this() can be called with a normal function
+        {
+            let (result, _measure) = Measure::this(my_multiply_tuple, (3, 4), "test");
+            assert_eq!(result, 3 * 4);
+        }
+
+        // Ensure that this() can be called with a method (and self)
         {
             let some_struct = SomeStruct { x: 42 };
-            let (result, _measure) = Measure::wrap(
-                |(this, x)| SomeStruct::add_to(&this, x),
+            let (result, _measure) = Measure::this(
+                |(obj, x)| SomeStruct::add_to(&obj, x),
                 (some_struct, 4),
                 "test",
             );
             assert_eq!(result, 42 + 4);
         }
 
-        // Ensure that wrap() can be called with a method (and &self)
+        // Ensure that this() can be called with a method (and &self)
         {
             let some_struct = SomeStruct { x: 42 };
-            let (result, _measure) = Measure::wrap(
-                |(this, x)| SomeStruct::add_to(&this, x),
+            let (result, _measure) = Measure::this(
+                |(obj, x)| SomeStruct::add_to(&obj, x),
                 (&some_struct, 4),
                 "test",
             );
