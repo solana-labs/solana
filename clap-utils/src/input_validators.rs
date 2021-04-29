@@ -1,5 +1,5 @@
 use {
-    crate::keypair::{parse_signer_source, SignerSource, ASK_KEYWORD},
+    crate::keypair::{parse_signer_source, SignerSourceKind, ASK_KEYWORD},
     chrono::DateTime,
     solana_sdk::{
         clock::{Epoch, Slot},
@@ -110,8 +110,11 @@ pub fn is_valid_pubkey<T>(string: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
 {
-    match parse_signer_source(string.as_ref()).map_err(|err| format!("{}", err))? {
-        SignerSource::Filepath(path) => is_keypair(path),
+    match parse_signer_source(string.as_ref())
+        .map_err(|err| format!("{}", err))?
+        .kind
+    {
+        SignerSourceKind::Filepath(path) => is_keypair(path),
         _ => Ok(()),
     }
 }
