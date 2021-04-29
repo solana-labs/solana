@@ -9,6 +9,8 @@ import {
   array,
   string,
   optional,
+  coerce,
+  any,
 } from "superstruct";
 import {
   Instruction,
@@ -23,6 +25,8 @@ export const Side = enums([0, 1]);
 
 export type OrderType = Infer<typeof OrderType>;
 export const OrderType = enums([0, 1, 2]);
+
+const PublicKeyToString = coerce(string(), any(), (value) => value.toBase58());
 
 export type InitializeBot = {
   systemProgramAccount: PublicKey;
@@ -88,7 +92,7 @@ export const CreateBotDecode = type({
   feeCollectionPeriod: number(),
   feeRatio: number(),
   depositAmounts: array(number()),
-  markets: array(string()),
+  markets: array(PublicKeyToString),
 });
 
 export const decodeCreateBot = (ix: TransactionInstruction): CreateBot => {
@@ -299,7 +303,7 @@ export type SettleFunds = {
 export const SettleFundsDecode = type({
   poolSeed: string(),
   pcIndex: number(),
-  orderId: number(),
+  orderId: optional(number()),
 });
 
 export const decodeSettleFunds = (ix: TransactionInstruction): SettleFunds => {

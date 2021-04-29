@@ -13,13 +13,12 @@ export function SettleFundsDetailsCard(props: {
   childIndex?: number;
 }) {
   const { ix, index, result, info, innerCards, childIndex } = props;
-
   return (
     <InstructionCard
       ix={ix}
       index={index}
       result={result}
-      title="Serum: Cancel Order"
+      title="Bonfida Bot: Settle Funds"
       innerCards={innerCards}
       childIndex={childIndex}
     >
