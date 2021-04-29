@@ -37,7 +37,7 @@
     "node-sass": "^4.14.1",
     "prettier": "^2.2.1",
     "react": "^17.0.2",
-    "react-chartjs-2": "^2.11.1",
+    "react-chartjs-2": "^2.11.2",
     "react-countup": "^4.3.3",
     "react-dom": "^17.0.2",
     "react-moment": "^1.1.1",
