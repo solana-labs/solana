@@ -376,6 +376,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                             "identity",
                             "last-vote",
                             "root",
+                            "skip-rate",
                             "stake",
                             "vote-account",
                         ])
@@ -624,6 +625,7 @@ pub fn parse_show_validators(matches: &ArgMatches<'_>) -> Result<CliCommandInfo,
         "identity" => CliValidatorsSortOrder::Identity,
         "last-vote" => CliValidatorsSortOrder::LastVote,
         "root" => CliValidatorsSortOrder::Root,
+        "skip-rate" => CliValidatorsSortOrder::SkipRate,
         "stake" => CliValidatorsSortOrder::Stake,
         "vote-account" => CliValidatorsSortOrder::VoteAccount,
         _ => unreachable!(),
@@ -1811,9 +1813,32 @@ pub fn process_show_validators(
     validators_reverse_sort: bool,
     number_validators: bool,
 ) -> ProcessResult {
+    let progress_bar = new_spinner_progress_bar();
+    progress_bar.set_message("Fetching vote accounts...");
     let epoch_info = rpc_client.get_epoch_info()?;
     let vote_accounts = rpc_client.get_vote_accounts()?;
 
+    progress_bar.set_message("Fetching block production...");
+    let skip_rate: HashMap<_, _> = rpc_client
+        .get_block_production()
+        .ok()
+        .map(|result| {
+            result
+                .value
+                .by_identity
+                .into_iter()
+                .map(|(identity, (leader_slots, blocks_produced))| {
+                    (
+                        identity,
+                        100. * (leader_slots.saturating_sub(blocks_produced)) as f64
+                            / leader_slots as f64,
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    progress_bar.set_message("Fetching version information...");
     let mut node_version = HashMap::new();
     let unknown_version = "unknown".to_string();
     for contact_info in rpc_client.get_cluster_nodes()? {
@@ -1824,6 +1849,8 @@ pub fn process_show_validators(
                 .unwrap_or_else(|| unknown_version.clone()),
         );
     }
+
+    progress_bar.finish_and_clear();
 
     let total_active_stake = vote_accounts
         .current
@@ -1850,6 +1877,7 @@ pub fn process_show_validators(
                     .get(&vote_account.node_pubkey)
                     .unwrap_or(&unknown_version)
                     .clone(),
+                skip_rate.get(&vote_account.node_pubkey).cloned(),
                 &config.address_labels,
             )
         })
@@ -1865,6 +1893,7 @@ pub fn process_show_validators(
                     .get(&vote_account.node_pubkey)
                     .unwrap_or(&unknown_version)
                     .clone(),
+                skip_rate.get(&vote_account.node_pubkey).cloned(),
                 &config.address_labels,
             )
         })
