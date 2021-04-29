@@ -3377,7 +3377,10 @@ impl Bank {
                     if account.checked_add_lamports(rent_to_be_paid).is_err() {
                         // overflow adding lamports
                         self.capitalization.fetch_sub(rent_to_be_paid, Relaxed);
-                        error!("Incinerated {} rent lamports", rent_to_be_paid);
+                        error!(
+                            "Incinerated {} rent lamports instead of sending to {}",
+                            rent_to_be_paid, pubkey
+                        );
                         inc_new_counter_error!(
                             "bank-incinerated_rent_lamports",
                             rent_to_be_paid as usize
