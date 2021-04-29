@@ -1,5 +1,7 @@
-use crate::{input_validators::*, ArgConstant};
-use clap::{App, Arg};
+use {
+    crate::{input_validators::*, ArgConstant},
+    clap::{App, Arg},
+};
 
 pub const BLOCKHASH_ARG: ArgConstant<'static> = ArgConstant {
     name: "blockhash",

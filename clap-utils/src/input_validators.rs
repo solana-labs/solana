@@ -1,13 +1,15 @@
-use crate::keypair::{parse_signer_source, SignerSource, ASK_KEYWORD};
-use chrono::DateTime;
-use solana_sdk::{
-    clock::{Epoch, Slot},
-    hash::Hash,
-    pubkey::{Pubkey, MAX_SEED_LEN},
-    signature::{read_keypair_file, Signature},
+use {
+    crate::keypair::{parse_signer_source, SignerSourceKind, ASK_KEYWORD},
+    chrono::DateTime,
+    solana_sdk::{
+        clock::{Epoch, Slot},
+        hash::Hash,
+        pubkey::{Pubkey, MAX_SEED_LEN},
+        signature::{read_keypair_file, Signature},
+    },
+    std::fmt::Display,
+    std::str::FromStr,
 };
-use std::fmt::Display;
-use std::str::FromStr;
 
 fn is_parsable_generic<U, T>(string: T) -> Result<(), String>
 where
@@ -108,8 +110,11 @@ pub fn is_valid_pubkey<T>(string: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
 {
-    match parse_signer_source(string.as_ref()) {
-        SignerSource::Filepath(path) => is_keypair(path),
+    match parse_signer_source(string.as_ref())
+        .map_err(|err| format!("{}", err))?
+        .kind
+    {
+        SignerSourceKind::Filepath(path) => is_keypair(path),
         _ => Ok(()),
     }
 }

@@ -4009,6 +4009,7 @@ dependencies = [
  "rpassword",
  "solana-remote-wallet",
  "solana-sdk",
+ "tempfile",
  "thiserror",
  "tiny-bip39",
  "uriparse",
@@ -5007,6 +5008,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "pbkdf2 0.6.0",
+ "qstring",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
  "rustc_version",
@@ -5025,6 +5027,7 @@ dependencies = [
  "solana-sdk-macro 1.5.20",
  "thiserror",
  "tiny-bip39",
+ "uriparse",
 ]
 
 [[package]]
