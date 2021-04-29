@@ -7,6 +7,7 @@ use {
         str::FromStr,
     },
     thiserror::Error,
+    uriparse::URIReference,
 };
 
 const ACCOUNT_INDEX: usize = 2;
@@ -109,6 +110,7 @@ impl DerivationPath {
         self.0.path()
     }
 
+    // Assumes `key` query-string key
     pub fn get_query(&self) -> String {
         if let Some(account) = &self.account() {
             if let Some(change) = &self.change() {
@@ -118,6 +120,34 @@ impl DerivationPath {
             }
         } else {
             "".to_string()
+        }
+    }
+
+    // Only accepts single query string pair of type `key`
+    pub fn from_uri(uri: &URIReference<'_>) -> Result<Option<Self>, DerivationPathError> {
+        if let Some(query) = uri.query() {
+            let query_str = query.as_str();
+            if query_str.is_empty() {
+                return Ok(None);
+            }
+            let query = qstring::QString::from(query_str);
+            if query.len() > 1 {
+                return Err(DerivationPathError::InvalidDerivationPath(
+                    "invalid query string, extra fields not supported".to_string(),
+                ));
+            }
+            let key = query.get("key");
+            if key.is_none() {
+                return Err(DerivationPathError::InvalidDerivationPath(format!(
+                    "invalid query string `{}`, only `key` supported",
+                    query_str,
+                )));
+            }
+            // Use from_key_str instead of TryInto here to make it a little more explicit that this
+            // generates a Solana bip44 DerivationPath
+            key.map(Self::from_key_str).transpose()
+        } else {
+            Ok(None)
         }
     }
 }
@@ -161,6 +191,7 @@ impl Bip44 for Solana {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use uriparse::URIReferenceBuilder;
 
     struct TestCoin;
     impl Bip44 for TestCoin {
@@ -261,6 +292,190 @@ mod tests {
                 ChildIndex::Hardened(0),
             ])
         );
+    }
+
+    #[test]
+    fn test_new_from_uri() {
+        let derivation_path = DerivationPath::new_bip44(Some(0), Some(0));
+
+        // test://path?key=0/0
+        let mut builder = URIReferenceBuilder::new();
+        builder
+            .try_scheme(Some("test"))
+            .unwrap()
+            .try_authority(Some("path"))
+            .unwrap()
+            .try_path("")
+            .unwrap()
+            .try_query(Some("key=0/0"))
+            .unwrap();
+        let uri = builder.build().unwrap();
+        assert_eq!(
+            DerivationPath::from_uri(&uri).unwrap(),
+            Some(derivation_path.clone())
+        );
+
+        // test://path?key=0'/0'
+        let mut builder = URIReferenceBuilder::new();
+        builder
+            .try_scheme(Some("test"))
+            .unwrap()
+            .try_authority(Some("path"))
+            .unwrap()
+            .try_path("")
+            .unwrap()
+            .try_query(Some("key=0'/0'"))
+            .unwrap();
+        let uri = builder.build().unwrap();
+        assert_eq!(
+            DerivationPath::from_uri(&uri).unwrap(),
+            Some(derivation_path.clone())
+        );
+
+        // test://path?key=0\'/0\'
+        let mut builder = URIReferenceBuilder::new();
+        builder
+            .try_scheme(Some("test"))
+            .unwrap()
+            .try_authority(Some("path"))
+            .unwrap()
+            .try_path("")
+            .unwrap()
+            .try_query(Some("key=0\'/0\'"))
+            .unwrap();
+        let uri = builder.build().unwrap();
+        assert_eq!(
+            DerivationPath::from_uri(&uri).unwrap(),
+            Some(derivation_path)
+        );
+
+        // test://path
+        let mut builder = URIReferenceBuilder::new();
+        builder
+            .try_scheme(Some("test"))
+            .unwrap()
+            .try_authority(Some("path"))
+            .unwrap()
+            .try_path("")
+            .unwrap();
+        let uri = builder.build().unwrap();
+        assert_eq!(DerivationPath::from_uri(&uri).unwrap(), None);
+
+        // test://path?
+        let mut builder = URIReferenceBuilder::new();
+        builder
+            .try_scheme(Some("test"))
+            .unwrap()
+            .try_authority(Some("path"))
+            .unwrap()
+            .try_path("")
+            .unwrap()
+            .try_query(Some(""))
+            .unwrap();
+        let uri = builder.build().unwrap();
+        assert_eq!(DerivationPath::from_uri(&uri).unwrap(), None);
+
+        // test://path?key=0/0/0
+        let mut builder = URIReferenceBuilder::new();
+        builder
+            .try_scheme(Some("test"))
+            .unwrap()
+            .try_authority(Some("path"))
+            .unwrap()
+            .try_path("")
+            .unwrap()
+            .try_query(Some("key=0/0/0"))
+            .unwrap();
+        let uri = builder.build().unwrap();
+        assert!(matches!(
+            DerivationPath::from_uri(&uri),
+            Err(DerivationPathError::InvalidDerivationPath(_))
+        ));
+
+        // test://path?key=0/0&bad-key=0/0
+        let mut builder = URIReferenceBuilder::new();
+        builder
+            .try_scheme(Some("test"))
+            .unwrap()
+            .try_authority(Some("path"))
+            .unwrap()
+            .try_path("")
+            .unwrap()
+            .try_query(Some("key=0/0&bad-key=0/0"))
+            .unwrap();
+        let uri = builder.build().unwrap();
+        assert!(matches!(
+            DerivationPath::from_uri(&uri),
+            Err(DerivationPathError::InvalidDerivationPath(_))
+        ));
+
+        // test://path?bad-key=0/0
+        let mut builder = URIReferenceBuilder::new();
+        builder
+            .try_scheme(Some("test"))
+            .unwrap()
+            .try_authority(Some("path"))
+            .unwrap()
+            .try_path("")
+            .unwrap()
+            .try_query(Some("bad-key=0/0"))
+            .unwrap();
+        let uri = builder.build().unwrap();
+        assert!(matches!(
+            DerivationPath::from_uri(&uri),
+            Err(DerivationPathError::InvalidDerivationPath(_))
+        ));
+
+        // test://path?key=bad-value
+        let mut builder = URIReferenceBuilder::new();
+        builder
+            .try_scheme(Some("test"))
+            .unwrap()
+            .try_authority(Some("path"))
+            .unwrap()
+            .try_path("")
+            .unwrap()
+            .try_query(Some("key=bad-value"))
+            .unwrap();
+        let uri = builder.build().unwrap();
+        assert!(matches!(
+            DerivationPath::from_uri(&uri),
+            Err(DerivationPathError::InvalidDerivationPath(_))
+        ));
+
+        // test://path?key=
+        let mut builder = URIReferenceBuilder::new();
+        builder
+            .try_scheme(Some("test"))
+            .unwrap()
+            .try_authority(Some("path"))
+            .unwrap()
+            .try_path("")
+            .unwrap()
+            .try_query(Some("key="))
+            .unwrap();
+        let uri = builder.build().unwrap();
+        assert!(matches!(
+            DerivationPath::from_uri(&uri),
+            Err(DerivationPathError::InvalidDerivationPath(_))
+        ));
+
+        // test://path?key
+        let mut builder = URIReferenceBuilder::new();
+        builder
+            .try_scheme(Some("test"))
+            .unwrap()
+            .try_authority(Some("path"))
+            .unwrap()
+            .try_path("")
+            .unwrap()
+            .try_query(Some("key"))
+            .unwrap();
+        let uri = builder.build().unwrap();
+        assert!(matches!(
+            DerivationPath::from_uri(&uri),
+            Err(DerivationPathError::InvalidDerivationPath(_))
+        ));
     }
 
     #[test]
