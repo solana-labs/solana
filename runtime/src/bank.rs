@@ -3386,16 +3386,17 @@ impl Bank {
                             rent_to_be_paid as usize
                         );
                     }
-
-                    self.store_account(&pubkey, &account);
-                    rewards.push((
-                        pubkey,
-                        RewardInfo {
-                            reward_type: RewardType::Rent,
-                            lamports: rent_to_be_paid as i64,
-                            post_balance: account.lamports(),
-                        },
-                    ));
+                    else {
+                        self.store_account(&pubkey, &account);
+                        rewards.push((
+                            pubkey,
+                            RewardInfo {
+                                reward_type: RewardType::Rent,
+                                lamports: rent_to_be_paid as i64,
+                                post_balance: account.lamports(),
+                            },
+                        ));
+                    }
                 }
             });
         self.rewards.write().unwrap().append(&mut rewards);
