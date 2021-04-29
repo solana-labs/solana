@@ -725,7 +725,6 @@ mod tests {
     use super::*;
     use crate::entry::Entry;
     use chrono::prelude::Utc;
-    use solana_budget_program::budget_instruction;
     use solana_sdk::{
         hash::{hash, new_rand as hash_new_rand, Hash},
         message::Message,
