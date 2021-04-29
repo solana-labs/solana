@@ -68,7 +68,7 @@ Check out our [guide to using SolFlare](wallet-guide/solflare.md) for details.
  Ledger Nano.
  [Staking commands using the Solana Command Line Tools](cli/delegate-stake.md).
 
- - Exodus software wallet makes the process very simple. See their [FAQ](https://support.exodus.com/article/1551-solana-staking-faq) for details.
+ - Exodus makes the process very simple. See their [FAQ](https://support.exodus.com/article/1551-solana-staking-faq) for details.
 
 #### Create a Stake Account
 A stake account is a different type of account from a wallet address
