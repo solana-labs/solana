@@ -3328,6 +3328,7 @@ dependencies = [
  "num-derive 0.3.0",
  "num-traits",
  "pbkdf2 0.6.0",
+ "qstring",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
  "rustc_version",
@@ -3345,6 +3346,7 @@ dependencies = [
  "solana-program 1.5.20",
  "solana-sdk-macro 1.5.20",
  "thiserror",
+ "uriparse",
 ]
 
 [[package]]
