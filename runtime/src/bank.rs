@@ -2002,21 +2002,21 @@ impl Bank {
         let collector_fees = self.collector_fees.load(Relaxed) as u64;
 
         if collector_fees != 0 {
-            let (unburned, mut burned) = self.fee_rate_governor.burn(collector_fees);
+            let (deposit, mut burn) = self.fee_rate_governor.burn(collector_fees);
             // burn a portion of fees
             debug!(
                 "distributed fee: {} (rounded from: {}, burned: {})",
-                unburned, collector_fees, burned
+                deposit, collector_fees, burn
             );
 
-            match self.deposit(&self.collector_id, unburned) {
+            match self.deposit(&self.collector_id, deposit) {
                 Ok(post_balance) => {
-                    if unburned != 0 {
+                    if deposit != 0 {
                         self.rewards.write().unwrap().push((
                             self.collector_id,
                             RewardInfo {
                                 reward_type: RewardType::Fee,
-                                lamports: unburned as i64,
+                                lamports: deposit as i64,
                                 post_balance,
                             },
                         ));
@@ -2025,13 +2025,13 @@ impl Bank {
                 Err(_) => {
                     error!(
                         "Incinerated {} fee lamports instead of sending to {}",
-                        unburned, self.collector_id
+                        deposit, self.collector_id
                     );
-                    inc_new_counter_error!("bank-incinerated_fee_lamports", unburned as usize);
-                    burned += unburned;
+                    inc_new_counter_error!("bank-incinerated_fee_lamports", deposit as usize);
+                    burn += deposit;
                 }
             }
-            self.capitalization.fetch_sub(burned, Relaxed);
+            self.capitalization.fetch_sub(burn, Relaxed);
         }
     }
 
