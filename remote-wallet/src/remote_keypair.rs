@@ -57,11 +57,12 @@ impl Signer for RemoteKeypair {
 
 pub fn generate_remote_keypair(
     locator: Locator,
+    derivation_path: DerivationPath,
     wallet_manager: &RemoteWalletManager,
     confirm_key: bool,
     keypair_name: &str,
 ) -> Result<RemoteKeypair, RemoteWalletError> {
-    let (remote_wallet_info, derivation_path) = RemoteWalletInfo::parse_locator(locator);
+    let remote_wallet_info = RemoteWalletInfo::parse_locator(locator);
     if remote_wallet_info.manufacturer == Manufacturer::Ledger {
         let ledger = get_ledger_from_info(remote_wallet_info, keypair_name, wallet_manager)?;
         let path = format!("{}{}", ledger.pretty_path, derivation_path.get_query());

@@ -13,6 +13,7 @@ use {
         remote_wallet::{maybe_wallet_manager, RemoteWalletError, RemoteWalletManager},
     },
     solana_sdk::{
+        derivation_path::{DerivationPath, DerivationPathError},
         hash::Hash,
         message::Message,
         pubkey::Pubkey,
@@ -139,7 +140,7 @@ impl DefaultSigner {
 pub(crate) enum SignerSource {
     Ask,
     Filepath(String),
-    Usb(RemoteWalletLocator),
+    Usb(RemoteWalletLocator, Option<DerivationPath>),
     Stdin,
     Pubkey(Pubkey),
 }
@@ -150,6 +151,8 @@ pub(crate) enum SignerSourceError {
     UnrecognizedSource,
     #[error(transparent)]
     RemoteWalletLocatorError(#[from] RemoteWalletLocatorError),
+    #[error(transparent)]
+    DerivationPathError(#[from] DerivationPathError),
 }
 
 pub(crate) fn parse_signer_source<S: AsRef<str>>(
@@ -165,7 +168,10 @@ pub(crate) fn parse_signer_source<S: AsRef<str>>(
                     "ask" => Ok(SignerSource::Ask),
                     "file" => Ok(SignerSource::Filepath(uri.path().to_string())),
                     "stdin" => Ok(SignerSource::Stdin),
-                    "usb" => Ok(SignerSource::Usb(RemoteWalletLocator::new_from_uri(&uri)?)),
+                    "usb" => Ok(SignerSource::Usb(
+                        RemoteWalletLocator::new_from_uri(&uri)?,
+                        DerivationPath::from_uri(&uri)?,
+                    )),
                     _ => Err(SignerSourceError::UnrecognizedSource),
                 }
             } else {
@@ -246,13 +252,14 @@ pub fn signer_from_path_with_config(
             let mut stdin = std::io::stdin();
             Ok(Box::new(read_keypair(&mut stdin)?))
         }
-        SignerSource::Usb(locator) => {
+        SignerSource::Usb(locator, derivation_path) => {
             if wallet_manager.is_none() {
                 *wallet_manager = maybe_wallet_manager()?;
             }
             if let Some(wallet_manager) = wallet_manager {
                 Ok(Box::new(generate_remote_keypair(
                     locator,
+                    derivation_path.unwrap_or_default(),
                     wallet_manager,
                     matches.is_present("confirm_key"),
                     keypair_name,
@@ -319,13 +326,14 @@ pub fn resolve_signer_from_path(
             // path on disk or to a device
             read_keypair(&mut stdin).map(|_| None)
         }
-        SignerSource::Usb(locator) => {
+        SignerSource::Usb(locator, derivation_path) => {
             if wallet_manager.is_none() {
                 *wallet_manager = maybe_wallet_manager()?;
             }
             if let Some(wallet_manager) = wallet_manager {
                 let path = generate_remote_keypair(
                     locator,
+                    derivation_path.unwrap_or_default(),
                     wallet_manager,
                     matches.is_present("confirm_key"),
                     keypair_name,
@@ -503,10 +511,9 @@ mod tests {
         let expected_locator = RemoteWalletLocator {
             manufacturer: Manufacturer::Ledger,
             pubkey: None,
-            derivation_path: None,
         };
         assert!(
-            matches!(parse_signer_source(&usb).unwrap(), SignerSource::Usb(u) if u == expected_locator)
+            matches!(parse_signer_source(&usb).unwrap(), SignerSource::Usb(u, None) if u == expected_locator)
         );
         // Catchall into SignerSource::Filepath
         let junk = "sometextthatisnotapubkey".to_string();

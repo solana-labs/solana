@@ -253,15 +253,12 @@ pub struct RemoteWalletInfo {
 }
 
 impl RemoteWalletInfo {
-    pub fn parse_locator(locator: Locator) -> (Self, DerivationPath) {
-        (
-            RemoteWalletInfo {
-                manufacturer: locator.manufacturer,
-                pubkey: locator.pubkey.unwrap_or_default(),
-                ..RemoteWalletInfo::default()
-            },
-            locator.derivation_path.unwrap_or_default(),
-        )
+    pub fn parse_locator(locator: Locator) -> Self {
+        RemoteWalletInfo {
+            manufacturer: locator.manufacturer,
+            pubkey: locator.pubkey.unwrap_or_default(),
+            ..RemoteWalletInfo::default()
+        }
     }
 
     pub fn get_pretty_path(&self) -> String {
@@ -308,9 +305,8 @@ mod tests {
         let locator = Locator {
             manufacturer: Manufacturer::Ledger,
             pubkey: Some(pubkey),
-            derivation_path: Some(DerivationPath::from_key_str("1/2").unwrap()),
         };
-        let (wallet_info, derivation_path) = RemoteWalletInfo::parse_locator(locator);
+        let wallet_info = RemoteWalletInfo::parse_locator(locator);
         assert!(wallet_info.matches(&RemoteWalletInfo {
             model: "nano-s".to_string(),
             manufacturer: Manufacturer::Ledger,
@@ -319,15 +315,13 @@ mod tests {
             pubkey,
             error: None,
         }));
-        assert_eq!(derivation_path, DerivationPath::new_bip44(Some(1), Some(2)));
 
-        // Test that wallet id need not be complete for key derivation to work
+        // Test that pubkey need not be populated
         let locator = Locator {
             manufacturer: Manufacturer::Ledger,
             pubkey: None,
-            derivation_path: Some(DerivationPath::from_key_str("1").unwrap()),
         };
-        let (wallet_info, derivation_path) = RemoteWalletInfo::parse_locator(locator);
+        let wallet_info = RemoteWalletInfo::parse_locator(locator);
         assert!(wallet_info.matches(&RemoteWalletInfo {
             model: "nano-s".to_string(),
             manufacturer: Manufacturer::Ledger,
@@ -336,22 +330,6 @@ mod tests {
             pubkey: Pubkey::default(),
             error: None,
         }));
-        assert_eq!(derivation_path, DerivationPath::new_bip44(Some(1), None));
-        let locator = Locator {
-            manufacturer: Manufacturer::Ledger,
-            pubkey: None,
-            derivation_path: Some(DerivationPath::from_key_str("1/2").unwrap()),
-        };
-        let (wallet_info, derivation_path) = RemoteWalletInfo::parse_locator(locator);
-        assert!(wallet_info.matches(&RemoteWalletInfo {
-            model: "".to_string(),
-            manufacturer: Manufacturer::Ledger,
-            serial: "".to_string(),
-            host_device_path: "/host/device/path".to_string(),
-            pubkey: Pubkey::default(),
-            error: None,
-        }));
-        assert_eq!(derivation_path, DerivationPath::new_bip44(Some(1), Some(2)));
     }
 
     #[test]
