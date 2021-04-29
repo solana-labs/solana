@@ -59,6 +59,11 @@ export class Lockup {
     this.epoch = epoch;
     this.custodian = custodian;
   }
+
+  /**
+   * Default, inactive Lockup value
+   */
+  static default: Lockup = new Lockup(0, 0, PublicKey.default);
 }
 
 /**
@@ -72,7 +77,7 @@ export type CreateStakeAccountParams = {
   /** Authorities of the new stake account */
   authorized: Authorized;
   /** Lockup of the new stake account */
-  lockup: Lockup;
+  lockup?: Lockup;
   /** Funding amount */
   lamports: number;
 };
@@ -86,7 +91,7 @@ export type CreateStakeAccountWithSeedParams = {
   basePubkey: PublicKey;
   seed: string;
   authorized: Authorized;
-  lockup: Lockup;
+  lockup?: Lockup;
   lamports: number;
 };
 
@@ -96,7 +101,7 @@ export type CreateStakeAccountWithSeedParams = {
 export type InitializeStakeParams = {
   stakePubkey: PublicKey;
   authorized: Authorized;
-  lockup: Lockup;
+  lockup?: Lockup;
 };
 
 /**
@@ -502,7 +507,8 @@ export class StakeProgram {
    * Generate an Initialize instruction to add to a Stake Create transaction
    */
   static initialize(params: InitializeStakeParams): TransactionInstruction {
-    const {stakePubkey, authorized, lockup} = params;
+    const {stakePubkey, authorized, lockup: maybeLockup} = params;
+    const lockup: Lockup = maybeLockup || Lockup.default;
     const type = STAKE_INSTRUCTION_LAYOUTS.Initialize;
     const data = encodeData(type, {
       authorized: {

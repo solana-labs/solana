@@ -40,6 +40,11 @@ export class PublicKey {
   }
 
   /**
+   * Default public key value. (All zeros)
+   */
+  static default: PublicKey = new PublicKey('11111111111111111111111111111111');
+
+  /**
    * Checks if two publicKeys are equal
    */
   equals(publicKey: PublicKey): boolean {
