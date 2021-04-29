@@ -220,14 +220,6 @@ mod tests {
             Locator::new_from_parts(manufacturer, Some("bad-pubkey")),
             Err(LocatorError::PubkeyError(e)) if e == ParsePubkeyError::Invalid,
         ));
-<<<<<<< HEAD
-        let bad_path = "bad-derivation-path".to_string();
-        assert!(matches!(
-            Locator::new_from_parts(manufacturer, None::<Pubkey>, Some(bad_path.as_str())),
-            Err(LocatorError::DerivationPathError(DerivationPathError::InvalidDerivationPath(_))),
-        ));
-=======
->>>>>>> d6f30b753... Refactor SignerSource to expose DerivationPath to other kinds of signers (#16933)
     }
 
     #[test]

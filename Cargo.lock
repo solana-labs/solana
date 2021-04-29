@@ -5026,12 +5026,8 @@ dependencies = [
  "solana-program 1.5.20",
  "solana-sdk-macro 1.5.20",
  "thiserror",
-<<<<<<< HEAD
  "tiny-bip39",
-=======
- "tiny-bip39 0.7.3",
  "uriparse",
->>>>>>> d6f30b753... Refactor SignerSource to expose DerivationPath to other kinds of signers (#16933)
 ]
 
 [[package]]
