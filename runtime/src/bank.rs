@@ -2023,7 +2023,10 @@ impl Bank {
                     }
                 }
                 Err(_) => {
-                    error!("Incinerated {} fee lamports", unburned);
+                    error!(
+                        "Incinerated {} fee lamports instead of sending to {}",
+                        unburned, self.collector_id
+                    );
                     inc_new_counter_error!("bank-incinerated_fee_lamports", unburned as usize);
                     burned += unburned;
                 }
