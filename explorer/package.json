@@ -26,6 +26,7 @@
     "@types/socket.io-client": "^1.4.36",
     "bignumber.js": "^9.0.1",
     "bn.js": "^5.2.0",
+    "bonfida-bot": "^0.4.9",
     "bootstrap": "^4.6.0",
     "bs58": "^4.0.1",
     "chai": "^4.3.4",

@@ -39,6 +39,10 @@ import {
   isSerumInstruction,
   parseSerumInstructionTitle,
 } from "components/instruction/serum/types";
+import {
+  isBonfidaBotInstruction,
+  parseBonfidaBotInstructionTitle,
+} from "components/instruction/bonfida-bot/types";
 import { INNER_INSTRUCTIONS_START_SLOT } from "pages/TransactionDetailsPage";
 import { useCluster, Cluster } from "providers/cluster";
 import { Link } from "react-router-dom";
@@ -484,6 +488,16 @@ const TokenTransactionRow = React.memo(
           ) {
             try {
               name = parseTokenLendingInstructionTitle(transactionInstruction);
+            } catch (error) {
+              reportError(error, { signature: tx.signature });
+              return undefined;
+            }
+          } else if (
+            transactionInstruction &&
+            isBonfidaBotInstruction(transactionInstruction)
+          ) {
+            try {
+              name = parseBonfidaBotInstructionTitle(transactionInstruction);
             } catch (error) {
               reportError(error, { signature: tx.signature });
               return undefined;
