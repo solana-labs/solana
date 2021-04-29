@@ -278,6 +278,12 @@ program's `Cargo.toml`:
 getrandom = { version = "0.1.14", features = ["dummy"] }
 ```
 
+or if the dependency is on getrandom v0.2 add:
+
+```
+getrandom = { version = "0.2.2", features = ["custom"] }
+```
+
 ## Logging
 
 Rust's `println!` macro is computationally expensive and not supported. Instead
