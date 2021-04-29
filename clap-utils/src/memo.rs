@@ -1,5 +1,4 @@
-use crate::ArgConstant;
-use clap::Arg;
+use {crate::ArgConstant, clap::Arg};
 
 pub const MEMO_ARG: ArgConstant<'static> = ArgConstant {
     name: "memo",
