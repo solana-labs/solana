@@ -1378,7 +1378,7 @@ impl Bank {
         old_account: &Option<AccountSharedData>,
     ) -> InheritableAccountFields {
         (
-            old_account.as_ref().map(|a| a.lamports).unwrap_or(1),
+            old_account.as_ref().map(|a| a.lamports()).unwrap_or(1),
             INITIAL_RENT_EPOCH,
         )
     }
@@ -1854,7 +1854,7 @@ impl Bank {
         // pay according to point value
         for (vote_pubkey, (stake_group, vote_account)) in stake_delegation_accounts.iter_mut() {
             let mut vote_account_changed = false;
-            let voters_account_pre_balance = vote_account.lamports;
+            let voters_account_pre_balance = vote_account.lamports();
 
             for (stake_pubkey, stake_account) in stake_group.iter_mut() {
                 // curry closure to add the contextual stake_pubkey
@@ -1884,7 +1884,7 @@ impl Bank {
                             RewardInfo {
                                 reward_type: RewardType::Staking,
                                 lamports: stakers_reward as i64,
-                                post_balance: stake_account.lamports,
+                                post_balance: stake_account.lamports(),
                             },
                         ));
                     }
@@ -1897,7 +1897,7 @@ impl Bank {
             }
 
             if vote_account_changed {
-                let post_balance = vote_account.lamports;
+                let post_balance = vote_account.lamports();
                 let lamports = (post_balance - voters_account_pre_balance) as i64;
                 if lamports != 0 {
                     rewards.push((
@@ -2209,7 +2209,7 @@ impl Bank {
                     // malicious account is pre-occupying at program_id
                     // forcibly burn and purge it
 
-                    self.capitalization.fetch_sub(account.lamports, Relaxed);
+                    self.capitalization.fetch_sub(account.lamports(), Relaxed);
 
                     // Resetting account balance to 0 is needed to really purge from AccountsDb and
                     // flush the Stakes cache
@@ -3381,7 +3381,7 @@ impl Bank {
                         RewardInfo {
                             reward_type: RewardType::Rent,
                             lamports: rent_to_be_paid as i64,
-                            post_balance: account.lamports,
+                            post_balance: account.lamports(),
                         },
                     ));
                 }
@@ -3444,7 +3444,7 @@ impl Bank {
         if let Some((account, _)) =
             self.get_account_modified_since_parent_with_fixed_root(&incinerator::id())
         {
-            self.capitalization.fetch_sub(account.lamports, Relaxed);
+            self.capitalization.fetch_sub(account.lamports(), Relaxed);
             self.store_account(&incinerator::id(), &AccountSharedData::default());
         }
     }
@@ -3931,7 +3931,7 @@ impl Bank {
     }
 
     pub fn read_balance(account: &AccountSharedData) -> u64 {
-        account.lamports
+        account.lamports()
     }
     /// Each program would need to be able to introspect its own state
     /// this is hard-coded to the Budget language
@@ -4001,19 +4001,20 @@ impl Bank {
         new_account: &AccountSharedData,
     ) {
         if let Some(old_account) = self.get_account_with_fixed_root(&pubkey) {
-            match new_account.lamports.cmp(&old_account.lamports) {
+            match new_account.lamports().cmp(&old_account.lamports()) {
                 std::cmp::Ordering::Greater => {
                     self.capitalization
-                        .fetch_add(new_account.lamports - old_account.lamports, Relaxed);
+                        .fetch_add(new_account.lamports() - old_account.lamports(), Relaxed);
                 }
                 std::cmp::Ordering::Less => {
                     self.capitalization
-                        .fetch_sub(old_account.lamports - new_account.lamports, Relaxed);
+                        .fetch_sub(old_account.lamports() - new_account.lamports(), Relaxed);
                 }
                 std::cmp::Ordering::Equal => {}
             }
         } else {
-            self.capitalization.fetch_add(new_account.lamports, Relaxed);
+            self.capitalization
+                .fetch_add(new_account.lamports(), Relaxed);
         }
 
         self.store_account(pubkey, new_account);
@@ -4051,7 +4052,7 @@ impl Bank {
         let mut account = self.get_account_with_fixed_root(pubkey).unwrap_or_default();
         account.lamports += lamports;
         self.store_account(pubkey, &account);
-        account.lamports
+        account.lamports()
     }
 
     pub fn accounts(&self) -> Arc<Accounts> {
@@ -4917,7 +4918,8 @@ impl Bank {
                 );
 
                 // Burn lamports in the old token account
-                self.capitalization.fetch_sub(old_account.lamports, Relaxed);
+                self.capitalization
+                    .fetch_sub(old_account.lamports(), Relaxed);
 
                 // Transfer new token account to old token account
                 self.store_account(&inline_spl_token_v2_0::id(), &new_account);
@@ -4963,7 +4965,7 @@ impl Bank {
                 }
             } else {
                 self.capitalization
-                    .fetch_add(native_mint_account.lamports, Relaxed);
+                    .fetch_add(native_mint_account.lamports(), Relaxed);
                 true
             };
 
@@ -4990,7 +4992,7 @@ impl Bank {
         if purge_window_epoch {
             for reward_pubkey in self.rewards_pool_pubkeys.iter() {
                 if let Some(mut reward_account) = self.get_account_with_fixed_root(&reward_pubkey) {
-                    if reward_account.lamports == u64::MAX {
+                    if reward_account.lamports() == u64::MAX {
                         reward_account.set_lamports(0);
                         self.store_account(&reward_pubkey, &reward_account);
                         // Adjust capitalization.... it has been wrapping, reducing the real capitalization by 1-lamport

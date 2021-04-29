@@ -335,7 +335,7 @@ impl<'a> LoadedAccount<'a> {
     pub fn lamports(&self) -> u64 {
         match self {
             LoadedAccount::Stored(stored_account_meta) => stored_account_meta.account_meta.lamports,
-            LoadedAccount::Cached((_, cached_account)) => cached_account.account.lamports,
+            LoadedAccount::Cached((_, cached_account)) => cached_account.account.lamports(),
         }
     }
 
@@ -4516,7 +4516,7 @@ impl AccountsDb {
             {
                 let frozen_account_info = FrozenAccountInfo {
                     hash: Self::hash_frozen_account_data(&account),
-                    lamports: account.lamports,
+                    lamports: account.lamports(),
                 };
                 warn!(
                     "Account {} is now frozen at lamports={}, hash={}",
@@ -4540,11 +4540,13 @@ impl AccountsDb {
         }
         for (account_pubkey, account) in accounts.iter() {
             if let Some(frozen_account_info) = self.frozen_accounts.get(*account_pubkey) {
-                if account.lamports < frozen_account_info.lamports {
+                if account.lamports() < frozen_account_info.lamports {
                     FROZEN_ACCOUNT_PANIC.store(true, Ordering::Relaxed);
                     panic!(
                         "Frozen account {} modified.  Lamports decreased from {} to {}",
-                        account_pubkey, frozen_account_info.lamports, account.lamports,
+                        account_pubkey,
+                        frozen_account_info.lamports,
+                        account.lamports(),
                     )
                 }
 
