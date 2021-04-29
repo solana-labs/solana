@@ -367,7 +367,6 @@ describe('StakeProgram', () => {
             authorized.publicKey,
             authorized.publicKey,
           ),
-          lockup: new Lockup(0, 0, new PublicKey(0)),
           lamports: minimumAmount + 42,
         });
 
