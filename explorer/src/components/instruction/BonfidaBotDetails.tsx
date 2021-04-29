@@ -83,7 +83,7 @@ export function BonfidaBotDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title={`Serum: ${title || "Unknown"}`}
+      title={`Bonfida Bot: ${title || "Unknown"}`}
       innerCards={innerCards}
       childIndex={childIndex}
       defaultRaw
