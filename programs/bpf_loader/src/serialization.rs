@@ -138,8 +138,9 @@ pub fn deserialize_parameters_unaligned(
                 start += size_of::<u8>(); // is_signer
                 start += size_of::<u8>(); // is_writable
                 start += size_of::<Pubkey>(); // key
-                keyed_account.try_account_ref_mut()?.lamports =
-                    LittleEndian::read_u64(&buffer[start..]);
+                keyed_account
+                    .try_account_ref_mut()?
+                    .set_lamports(LittleEndian::read_u64(&buffer[start..]));
                 start += size_of::<u64>() // lamports
                 + size_of::<u64>(); // data length
                 let end = start + keyed_account.data_len()?;
@@ -269,7 +270,7 @@ pub fn deserialize_parameters_aligned(
                 + size_of::<Pubkey>(); // key
             account.copy_into_owner_from_slice(&buffer[start..start + size_of::<Pubkey>()]);
             start += size_of::<Pubkey>(); // owner
-            account.lamports = LittleEndian::read_u64(&buffer[start..]);
+            account.set_lamports(LittleEndian::read_u64(&buffer[start..]));
             start += size_of::<u64>(); // lamports
             let pre_len = account.data().len();
             let post_len = LittleEndian::read_u64(&buffer[start..]) as usize;

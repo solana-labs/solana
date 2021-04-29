@@ -140,7 +140,9 @@ pub fn process_instruction(
             if let Some(payment) = expr.final_payment() {
                 let to_keyed_account = contract_keyed_account;
                 let contract_keyed_account = keyed_account_at_index(keyed_accounts, 1)?;
-                contract_keyed_account.try_account_ref_mut()?.lamports = 0;
+                contract_keyed_account
+                    .try_account_ref_mut()?
+                    .set_lamports(0);
                 to_keyed_account
                     .try_account_ref_mut()?
                     .checked_add_lamports(payment.lamports)?;
