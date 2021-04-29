@@ -173,17 +173,17 @@ fn test_bank_serialize_style(serde_style: SerdeStyle) {
 
     // Create an account on a non-root fork
     let key1 = Keypair::new();
-    bank1.deposit(&key1.pubkey(), 5);
+    bank1.deposit(&key1.pubkey(), 5).unwrap();
 
     let bank2 = Bank::new_from_parent(&bank0, &Pubkey::default(), 2);
 
     // Test new account
     let key2 = Keypair::new();
-    bank2.deposit(&key2.pubkey(), 10);
+    bank2.deposit(&key2.pubkey(), 10).unwrap();
     assert_eq!(bank2.get_balance(&key2.pubkey()), 10);
 
     let key3 = Keypair::new();
-    bank2.deposit(&key3.pubkey(), 0);
+    bank2.deposit(&key3.pubkey(), 0).unwrap();
 
     bank2.freeze();
     bank2.squash();

@@ -15,6 +15,7 @@ use solana_sdk::{
     account::{AccountSharedData, ReadableAccount},
     genesis_config::{create_genesis_config, ClusterType},
     hash::Hash,
+    lamports::LamportsError,
     pubkey::Pubkey,
 };
 use std::{
@@ -25,16 +26,17 @@ use std::{
 };
 use test::Bencher;
 
-fn deposit_many(bank: &Bank, pubkeys: &mut Vec<Pubkey>, num: usize) {
+fn deposit_many(bank: &Bank, pubkeys: &mut Vec<Pubkey>, num: usize) -> Result<(), LamportsError> {
     for t in 0..num {
         let pubkey = solana_sdk::pubkey::new_rand();
         let account =
             AccountSharedData::new((t + 1) as u64, 0, AccountSharedData::default().owner());
         pubkeys.push(pubkey);
         assert!(bank.get_account(&pubkey).is_none());
-        bank.deposit(&pubkey, (t + 1) as u64);
+        bank.deposit(&pubkey, (t + 1) as u64)?;
         assert_eq!(bank.get_account(&pubkey).unwrap(), account);
     }
+    Ok(())
 }
 
 #[bench]
@@ -59,7 +61,7 @@ fn test_accounts_create(bencher: &mut Bencher) {
     );
     bencher.iter(|| {
         let mut pubkeys: Vec<Pubkey> = vec![];
-        deposit_many(&bank0, &mut pubkeys, 1000);
+        deposit_many(&bank0, &mut pubkeys, 1000).unwrap();
     });
 }
 
@@ -77,7 +79,7 @@ fn test_accounts_squash(bencher: &mut Bencher) {
         false,
     ));
     let mut pubkeys: Vec<Pubkey> = vec![];
-    deposit_many(&prev_bank, &mut pubkeys, 250_000);
+    deposit_many(&prev_bank, &mut pubkeys, 250_000).unwrap();
     prev_bank.freeze();
 
     // Measures the performance of the squash operation.
@@ -86,7 +88,7 @@ fn test_accounts_squash(bencher: &mut Bencher) {
     let mut slot = 1u64;
     bencher.iter(|| {
         let next_bank = Arc::new(Bank::new_from_parent(&prev_bank, &Pubkey::default(), slot));
-        next_bank.deposit(&pubkeys[0], 1);
+        next_bank.deposit(&pubkeys[0], 1).unwrap();
         next_bank.squash();
         slot += 1;
         prev_bank = next_bank;
