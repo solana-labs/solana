@@ -693,6 +693,14 @@ impl Tower {
                     }
                 }
 
+
+
+                info!(
+                    "switch_fork_threshold: SWITCH_FORK_THRESHOLD: {}, locked_out_stake: {} total_stake: {}",
+                    SWITCH_FORK_THRESHOLD, locked_out_stake, total_stake
+                );
+
+
                 if (locked_out_stake as f64 / total_stake as f64) > SWITCH_FORK_THRESHOLD {
                     SwitchForkDecision::SwitchProof(switch_proof)
                 } else {
