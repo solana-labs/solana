@@ -34,6 +34,7 @@ full = [
     "libsecp256k1",
     "sha3",
     "digest",
+    "uriparse",
 ]
 
 [dependencies]
@@ -75,7 +76,7 @@ solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.5.20" }
 solana-program = { path = "program", version = "=1.5.20" }
 solana-sdk-macro = { path = "macro", version = "=1.5.20" }
 thiserror = "1.0"
-uriparse = "0.6.3"
+uriparse = { version = "0.6.3", optional = true }
 
 [dev-dependencies]
 curve25519-dalek = "2.1.0"
