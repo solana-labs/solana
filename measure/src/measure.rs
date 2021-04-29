@@ -138,10 +138,10 @@ mod tests {
         x * y
     }
 
-    struct Foo {
+    struct SomeStruct {
         x: i32,
     }
-    impl Foo {
+    impl SomeStruct {
         fn add_to(&self, x: i32) -> i32 {
             x + self.x
         }
@@ -178,19 +178,25 @@ mod tests {
 
         // Ensure that wrap() can be called with a method (and self)
         {
-            let foo = Foo { x: 42 };
-            let (result, _measure) =
-                Measure::wrap(|(this, x)| Foo::add_to(&this, x), (foo, 4), "test");
+            let some_struct = SomeStruct { x: 42 };
+            let (result, _measure) = Measure::wrap(
+                |(this, x)| SomeStruct::add_to(&this, x),
+                (some_struct, 4),
+                "test",
+            );
             assert_eq!(result, 42 + 4);
         }
 
         // Ensure that wrap() can be called with a method (and &self)
         {
-            let foo = Foo { x: 42 };
-            let (result, _measure) =
-                Measure::wrap(|(this, x)| Foo::add_to(&this, x), (&foo, 4), "test");
+            let some_struct = SomeStruct { x: 42 };
+            let (result, _measure) = Measure::wrap(
+                |(this, x)| SomeStruct::add_to(&this, x),
+                (&some_struct, 4),
+                "test",
+            );
             assert_eq!(result, 42 + 4);
-            assert_eq!(foo.add_to(6), 42 + 6);
+            assert_eq!(some_struct.add_to(6), 42 + 6);
         }
     }
 }
