@@ -4272,21 +4272,6 @@ impl AccountsDb {
         )
     }
 
-    /// Scan a slot in the account storage for dirty pubkeys and hashes, and measure the execution
-    /// time
-    fn scan_slot_for_dirty_pubkeys_and_hashes_with_measure(
-        &self,
-        slot: Slot,
-    ) -> (
-        ScanStorageResult<(Pubkey, Hash), DashMapVersionHash>,
-        Measure,
-    ) {
-        let mut measure = Measure::start("scan");
-        let result = self.scan_slot_for_dirty_pubkeys_and_hashes(slot);
-        measure.stop();
-        (result, measure)
-    }
-
     /// Given results of `scan_slot_for_dirty_pubkeys_and_hashes()`, map them to a Vec of Pubkey
     /// and Hash
     fn map_scan_result_to_pubkeys_and_hashes(
@@ -4300,18 +4285,6 @@ impl AccountsDb {
                 .map(|(pubkey, (_latest_write_version, hash))| (pubkey, hash))
                 .collect::<Vec<_>>(),
         }
-    }
-
-    /// Given results of `scan_slot_for_dirty_pubkeys_and_hashes()`, map them to a Vec of Pubkey
-    /// and Hash, and measure the execution time
-    fn map_scan_result_to_pubkeys_and_hashes_with_measure(
-        &self,
-        scan_result: ScanStorageResult<(Pubkey, Hash), DashMapVersionHash>,
-    ) -> (Vec<(Pubkey, Hash)>, Measure) {
-        let mut measure = Measure::start("accumulate");
-        let result = self.map_scan_result_to_pubkeys_and_hashes(scan_result);
-        measure.stop();
-        (result, measure)
     }
 
     /// Scan a slot in the account storage for dirty pubkeys and insert them into the list of
@@ -4330,10 +4303,17 @@ impl AccountsDb {
     }
 
     pub fn get_accounts_delta_hash(&self, slot: Slot) -> Hash {
-        let (scan_result, scan) = self.scan_slot_for_dirty_pubkeys_and_hashes_with_measure(slot);
+        let (scan_result, scan_measure) = Measure::wrap(
+            |this| AccountsDb::scan_slot_for_dirty_pubkeys_and_hashes(&this, slot),
+            &self,
+            "scan",
+        );
 
-        let (hashes, accumulate1) =
-            self.map_scan_result_to_pubkeys_and_hashes_with_measure(scan_result);
+        let (hashes, accumulate1) = Measure::wrap(
+            |this| AccountsDb::map_scan_result_to_pubkeys_and_hashes(&this, scan_result),
+            &self,
+            "accumulate",
+        );
 
         let mut accumulate2 = Measure::start("accumulate");
         let dirty_keys = hashes.iter().map(|(pubkey, _hash)| *pubkey).collect();
@@ -4350,7 +4330,7 @@ impl AccountsDb {
 
         self.stats
             .delta_hash_scan_time_total_us
-            .fetch_add(scan.as_us(), Ordering::Relaxed);
+            .fetch_add(scan_measure.as_us(), Ordering::Relaxed);
         self.stats
             .delta_hash_accumulate_time_total_us
             .fetch_add(accumulate1.as_us(), Ordering::Relaxed);
