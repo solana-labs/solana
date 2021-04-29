@@ -1,5 +1,7 @@
-use crate::{input_validators::*, offline::BLOCKHASH_ARG, ArgConstant};
-use clap::{App, Arg};
+use {
+    crate::{input_validators::*, offline::BLOCKHASH_ARG, ArgConstant},
+    clap::{App, Arg},
+};
 
 pub const NONCE_ARG: ArgConstant<'static> = ArgConstant {
     name: "nonce",
