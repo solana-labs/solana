@@ -83,8 +83,7 @@ pub fn should_retransmit_and_persist(
 }
 
 fn run_check_duplicate(
-    cluster_info: &ClusterInfo,
-    blockstore: &Blockstore,
+    blockstore: &Arc<Blockstore>,
     shred_receiver: &CrossbeamReceiver<Shred>,
 ) -> Result<()> {
     let check_duplicate = |shred: Shred| -> Result<()> {
@@ -95,7 +94,6 @@ fn run_check_duplicate(
                 &shred.payload,
                 shred.is_data(),
             ) {
-                cluster_info.push_duplicate_shred(&shred, &existing_shred_payload)?;
                 blockstore.store_duplicate_slot(
                     shred.slot(),
                     existing_shred_payload,
@@ -341,12 +339,8 @@ impl WindowService {
         let (insert_sender, insert_receiver) = unbounded();
         let (duplicate_sender, duplicate_receiver) = unbounded();
 
-        let t_check_duplicate = Self::start_check_duplicate_thread(
-            cluster_info.clone(),
-            exit.clone(),
-            blockstore.clone(),
-            duplicate_receiver,
-        );
+        let t_check_duplicate =
+            Self::start_check_duplicate_thread(exit, &blockstore, duplicate_receiver);
 
         let t_insert = Self::start_window_insert_thread(
             exit,
@@ -377,11 +371,12 @@ impl WindowService {
     }
 
     fn start_check_duplicate_thread(
-        cluster_info: Arc<ClusterInfo>,
-        exit: Arc<AtomicBool>,
-        blockstore: Arc<Blockstore>,
+        exit: &Arc<AtomicBool>,
+        blockstore: &Arc<Blockstore>,
         duplicate_receiver: CrossbeamReceiver<Shred>,
     ) -> JoinHandle<()> {
+        let exit = exit.clone();
+        let blockstore = blockstore.clone();
         let handle_error = || {
             inc_new_counter_error!("solana-check-duplicate-error", 1, 1);
         };
@@ -393,8 +388,7 @@ impl WindowService {
                 }
 
                 let mut noop = || {};
-                if let Err(e) = run_check_duplicate(&cluster_info, &blockstore, &duplicate_receiver)
-                {
+                if let Err(e) = run_check_duplicate(&blockstore, &duplicate_receiver) {
                     if Self::should_exit_on_error(e, &mut noop, &handle_error) {
                         break;
                     }
@@ -557,7 +551,6 @@ impl WindowService {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::contact_info::ContactInfo;
     use solana_ledger::{
         blockstore::{make_many_slot_entries, Blockstore},
         entry::{create_ticks, Entry},
@@ -570,7 +563,6 @@ mod test {
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         hash::Hash,
         signature::{Keypair, Signer},
-        timing::timestamp,
     };
     use std::sync::Arc;
 
@@ -689,10 +681,7 @@ mod test {
         let duplicate_shred_slot = duplicate_shred.slot();
         sender.send(duplicate_shred).unwrap();
         assert!(!blockstore.has_duplicate_shreds_in_slot(duplicate_shred_slot));
-        let keypair = Keypair::new();
-        let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), timestamp());
-        let cluster_info = ClusterInfo::new(contact_info, Arc::new(keypair));
-        run_check_duplicate(&cluster_info, &blockstore, &receiver).unwrap();
+        run_check_duplicate(&blockstore, &receiver).unwrap();
         assert!(blockstore.has_duplicate_shreds_in_slot(duplicate_shred_slot));
     }
 }
