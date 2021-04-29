@@ -96,7 +96,7 @@ impl RentCollector {
                                 1
                             },
                     );
-                    account.lamports -= rent_due;
+                    let _ = account.checked_sub_lamports(rent_due); // will not fail. We check above.
                     rent_due
                 } else {
                     let rent_charged = account.lamports();
