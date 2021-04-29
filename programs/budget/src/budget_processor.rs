@@ -35,7 +35,9 @@ fn apply_signature(
         if let Some(key) = witness_keyed_account.signer_key() {
             if &payment.to == key {
                 budget_state.pending_budget = None;
-                contract_keyed_account.try_account_ref_mut()?.lamports -= payment.lamports;
+                contract_keyed_account
+                    .try_account_ref_mut()?
+                    .checked_sub_lamports(payment.lamports)?;
                 witness_keyed_account
                     .try_account_ref_mut()?
                     .checked_add_lamports(payment.lamports)?;
@@ -48,7 +50,9 @@ fn apply_signature(
             return Err(BudgetError::DestinationMissing.into());
         }
         budget_state.pending_budget = None;
-        contract_keyed_account.try_account_ref_mut()?.lamports -= payment.lamports;
+        contract_keyed_account
+            .try_account_ref_mut()?
+            .checked_sub_lamports(payment.lamports)?;
         to_keyed_account
             .try_account_ref_mut()?
             .checked_add_lamports(payment.lamports)?;
@@ -81,7 +85,9 @@ fn apply_timestamp(
             return Err(BudgetError::DestinationMissing.into());
         }
         budget_state.pending_budget = None;
-        contract_keyed_account.try_account_ref_mut()?.lamports -= payment.lamports;
+        contract_keyed_account
+            .try_account_ref_mut()?
+            .checked_sub_lamports(payment.lamports)?;
         to_keyed_account
             .try_account_ref_mut()?
             .checked_add_lamports(payment.lamports)?;
@@ -114,7 +120,9 @@ fn apply_account_data(
             return Err(BudgetError::DestinationMissing.into());
         }
         budget_state.pending_budget = None;
-        contract_keyed_account.try_account_ref_mut()?.lamports -= payment.lamports;
+        contract_keyed_account
+            .try_account_ref_mut()?
+            .checked_sub_lamports(payment.lamports)?;
         to_keyed_account
             .try_account_ref_mut()?
             .checked_add_lamports(payment.lamports)?;
