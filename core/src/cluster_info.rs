@@ -59,6 +59,7 @@ use solana_sdk::{
     timing::timestamp,
     transaction::Transaction,
 };
+use solana_streamer::packet;
 use solana_streamer::sendmmsg::multicast;
 use solana_streamer::streamer::{PacketReceiver, PacketSender};
 use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
@@ -3108,6 +3109,20 @@ impl Node {
             },
         }
     }
+}
+
+pub fn push_messages_to_peer(
+    messages: Vec<CrdsValue>,
+    self_id: Pubkey,
+    peer_gossip: SocketAddr,
+) -> Result<()> {
+    let reqs: Vec<_> = ClusterInfo::split_gossip_messages(PUSH_MESSAGE_MAX_PAYLOAD_SIZE, messages)
+        .map(move |payload| (peer_gossip, Protocol::PushMessage(self_id, payload)))
+        .collect();
+    let packets = to_packets_with_destination(PacketsRecycler::default(), &reqs);
+    let sock = UdpSocket::bind("0.0.0.0:0").unwrap();
+    packet::send_to(&packets, &sock)?;
+    Ok(())
 }
 
 pub fn stake_weight_peers(
