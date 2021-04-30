@@ -163,7 +163,7 @@ export function AccountHeader({
         <div className="col mb-3 ml-n3 ml-md-n2">
           <h6 className="header-pretitle">Token</h6>
           <h2 className="header-title">
-            {tokenDetails?.name || "Unlisted Token"}
+            {tokenDetails?.name || "Unknown Token"}
           </h2>
         </div>
       </div>
