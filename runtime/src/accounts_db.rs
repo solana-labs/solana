@@ -1565,13 +1565,13 @@ impl AccountsDb {
         let total_keys_count = pubkeys.len();
         let mut accounts_scan = Measure::start("accounts_scan");
         // parallel scan the index.
-        let (mut purges_zero_lamports, purges_in_root, purges_unrooted) = {
+        let (mut purges_zero_lamports, purges_rooted, purges_unrooted) = {
             self.thread_pool_clean.install(|| {
                 pubkeys
                     .par_chunks(4096)
                     .map(|pubkeys: &[Pubkey]| {
                         let mut purges_zero_lamports = HashMap::new();
-                        let mut purges_in_root = Vec::new();
+                        let mut purges_rooted = Vec::new();
                         let mut purges_unrooted = Vec::new();
                         for pubkey in pubkeys {
                             match self.accounts_index.get(pubkey, None, max_clean_root) {
@@ -1605,7 +1605,7 @@ impl AccountsDb {
                                         if let Some(max_clean_root) = max_clean_root {
                                             assert!(slot <= max_clean_root);
                                         }
-                                        purges_in_root.push(*pubkey);
+                                        purges_rooted.push(*pubkey);
                                     }
                                 }
                                 AccountIndexGetResult::NotFoundOnFork => {
@@ -1624,7 +1624,7 @@ impl AccountsDb {
                                 }
                             };
                         }
-                        (purges_zero_lamports, purges_in_root, purges_unrooted)
+                        (purges_zero_lamports, purges_rooted, purges_unrooted)
                     })
                     .reduce(
                         || (HashMap::new(), Vec::new(), Vec::new()),
@@ -1641,7 +1641,7 @@ impl AccountsDb {
         accounts_scan.stop();
 
         let mut clean_old_rooted = Measure::start("clean_old_roots");
-        let purges = [purges_in_root, purges_unrooted].concat();
+        let purges = [purges_rooted, purges_unrooted].concat();
         let (purged_account_slots, removed_accounts) =
             self.clean_old_rooted_accounts(purges, max_clean_root);
 
