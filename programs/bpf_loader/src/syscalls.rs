@@ -20,12 +20,8 @@ use solana_sdk::{
     epoch_schedule::EpochSchedule,
     feature_set::{
         cpi_data_cost, cpi_share_ro_and_exec_accounts, demote_sysvar_write_locks,
-<<<<<<< HEAD
-        enforce_aligned_host_addrs, sysvar_via_syscall, update_data_on_realloc,
-=======
-        enforce_aligned_host_addrs, ristretto_mul_syscall_enabled,
-        set_upgrade_authority_via_cpi_enabled, sysvar_via_syscall,
->>>>>>> 1a658c7f3... Allow SetUpgradeAuthority instruction in CPI calls (#16676)
+        enforce_aligned_host_addrs, set_upgrade_authority_via_cpi_enabled, sysvar_via_syscall,
+        update_data_on_realloc,
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
