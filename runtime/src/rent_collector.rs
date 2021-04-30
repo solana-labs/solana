@@ -173,7 +173,7 @@ mod tests {
         let mut collected;
         let pubkey = solana_sdk::pubkey::new_rand();
 
-        account.lamports = huge_lamports;
+        account.set_lamports(huge_lamports);
         assert_eq!(account.rent_epoch(), 0);
 
         // create a tested rent collector
@@ -185,7 +185,7 @@ mod tests {
         assert_eq!(collected, 0);
 
         // decrease the balance not to be rent-exempt
-        account.lamports = tiny_lamports;
+        account.set_lamports(tiny_lamports);
 
         // ... and trigger another rent collection on the same epoch and check that rent is working
         collected = rent_collector.collect_from_existing_account(&pubkey, &mut account);
