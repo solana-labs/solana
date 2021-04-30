@@ -1609,8 +1609,12 @@ impl AccountsDb {
                                     }
                                 }
                                 AccountIndexGetResult::NotFoundOnFork => {
-                                    // pubkey is in the index but not in a root slot, so clean it
-                                    // up by adding it to the to-be-purged list
+                                    // This pubkey is in the index but not in a root slot, so clean
+                                    // it up by adding it to the to-be-purged list.
+                                    //
+                                    // Also, this pubkey must have been touched by some slot since
+                                    // it was in the dirty list, so we assume that the slot it was
+                                    // touched in must be unrooted.
                                     purges_unrooted.push(*pubkey);
                                 }
                                 AccountIndexGetResult::Missing(lock) => {
