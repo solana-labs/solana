@@ -1165,6 +1165,24 @@ impl solana_frozen_abi::abi_example::AbiExample for AccountsDb {
     }
 }
 
+impl<'a> ReadableAccount for StoredAccountMeta<'a> {
+    fn lamports(&self) -> u64 {
+        self.account_meta.lamports
+    }
+    fn data(&self) -> &[u8] {
+        self.data
+    }
+    fn owner(&self) -> &Pubkey {
+        &self.account_meta.owner
+    }
+    fn executable(&self) -> bool {
+        self.account_meta.executable
+    }
+    fn rent_epoch(&self) -> Epoch {
+        self.account_meta.rent_epoch
+    }
+}
+
 impl Default for AccountsDb {
     fn default() -> Self {
         let num_threads = get_thread_count();
@@ -1969,14 +1987,14 @@ impl AccountsDb {
             let mut write_versions = Vec::with_capacity(alive_accounts.len());
 
             for (_pubkey, alive_account) in alive_accounts.iter() {
-                stored_accounts.push(alive_account.account.clone_account());
+                stored_accounts.push(&alive_account.account);
                 hashes.push(alive_account.account.hash);
                 write_versions.push(alive_account.account.meta.write_version);
             }
             let accounts = alive_accounts
                 .iter()
                 .map(|(pubkey, _)| *pubkey)
-                .zip(stored_accounts.iter())
+                .zip(stored_accounts.into_iter())
                 .collect::<Vec<_>>();
             start.stop();
             find_alive_elapsed = start.as_us();
@@ -5448,7 +5466,7 @@ pub mod tests {
     use assert_matches::assert_matches;
     use rand::{thread_rng, Rng};
     use solana_sdk::{
-        account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
+        account::{accounts_equal, Account, AccountSharedData, ReadableAccount, WritableAccount},
         hash::HASH_BYTES,
         pubkey::PUBKEY_BYTES,
     };
@@ -7547,6 +7565,45 @@ pub mod tests {
 
         account.data_as_mut_slice()[0] = 42;
         db.store_uncached(0, &[(&frozen_pubkey, &account)]);
+    }
+
+    #[test]
+    fn test_stored_readable_account() {
+        let lamports = 1;
+        let owner = Pubkey::new_unique();
+        let executable = true;
+        let rent_epoch = 2;
+        let meta = StoredMeta {
+            write_version: 5,
+            pubkey: Pubkey::new_unique(),
+            data_len: 7,
+        };
+        let account_meta = AccountMeta {
+            lamports,
+            owner,
+            executable,
+            rent_epoch,
+        };
+        let data = Vec::new();
+        let account = Account {
+            lamports,
+            owner,
+            executable,
+            rent_epoch,
+            data: data.clone(),
+        };
+        let offset = 99;
+        let stored_size = 101;
+        let hash = Hash::new_unique();
+        let stored_account = StoredAccountMeta {
+            meta: &meta,
+            account_meta: &account_meta,
+            data: &data,
+            offset,
+            stored_size,
+            hash: &hash,
+        };
+        assert!(accounts_equal(&account, &stored_account));
     }
 
     #[test]
