@@ -3374,16 +3374,28 @@ impl Bank {
                     let mut account = self
                         .get_account_with_fixed_root(&pubkey)
                         .unwrap_or_default();
-                    account.lamports += rent_to_be_paid;
-                    self.store_account(&pubkey, &account);
-                    rewards.push((
-                        pubkey,
-                        RewardInfo {
-                            reward_type: RewardType::Rent,
-                            lamports: rent_to_be_paid as i64,
-                            post_balance: account.lamports(),
-                        },
-                    ));
+                    if account.checked_add_lamports(rent_to_be_paid).is_err() {
+                        // overflow adding lamports
+                        self.capitalization.fetch_sub(rent_to_be_paid, Relaxed);
+                        error!(
+                            "Burned {} rent lamports instead of sending to {}",
+                            rent_to_be_paid, pubkey
+                        );
+                        inc_new_counter_error!(
+                            "bank-burned_rent_lamports",
+                            rent_to_be_paid as usize
+                        );
+                    } else {
+                        self.store_account(&pubkey, &account);
+                        rewards.push((
+                            pubkey,
+                            RewardInfo {
+                                reward_type: RewardType::Rent,
+                                lamports: rent_to_be_paid as i64,
+                                post_balance: account.lamports(),
+                            },
+                        ));
+                    }
                 }
             });
         self.rewards.write().unwrap().append(&mut rewards);
