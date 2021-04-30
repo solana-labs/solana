@@ -1185,7 +1185,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         max_clean_root: Option<Slot>,
         account_indexes: &HashSet<AccountIndex>,
     ) {
-        let mut empty_key = false;
+        let mut is_slot_list_empty = false;
         if let Some(mut locked_entry) = self.get_account_write_entry(pubkey) {
             locked_entry.slot_list_mut(|slot_list| {
                 self.purge_older_root_entries(
@@ -1195,10 +1195,10 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
                     max_clean_root,
                     account_indexes,
                 );
-                empty_key = slot_list.is_empty();
+                is_slot_list_empty = slot_list.is_empty();
             });
         }
-        if empty_key {
+        if is_slot_list_empty {
             let mut w_maps = self.account_maps.write().unwrap();
             if let Some(x) = w_maps.get(pubkey) {
                 if x.slot_list.read().unwrap().is_empty() {
