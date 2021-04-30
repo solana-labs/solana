@@ -76,23 +76,26 @@ use solana_sdk::{
         INITIAL_RENT_EPOCH, MAX_PROCESSING_AGE, MAX_RECENT_BLOCKHASHES,
         MAX_TRANSACTION_FORWARDING_DELAY, SECONDS_PER_DAY,
     },
+    compute_budget,
     epoch_info::EpochInfo,
     epoch_schedule::EpochSchedule,
     feature,
-    feature_set::{self, FeatureSet},
+    feature_set::{self, tx_wide_compute_cap, FeatureSet},
     fee_calculator::{FeeCalculator, FeeRateGovernor},
     genesis_config::{ClusterType, GenesisConfig},
     hard_forks::HardForks,
     hash::{extend_and_hash, hashv, Hash},
     incinerator,
     inflation::Inflation,
-    instruction::CompiledInstruction,
+    instruction::{CompiledInstruction, InstructionError},
     lamports::LamportsError,
     message::Message,
     native_loader,
     native_token::sol_to_lamports,
     nonce, nonce_account,
-    process_instruction::{BpfComputeBudget, Executor, ProcessInstructionWithContext},
+    process_instruction::{
+        BpfComputeBudget, ComputeMeter, Executor, ProcessInstructionWithContext,
+    },
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     recent_blockhashes_account,
@@ -409,6 +412,28 @@ impl CachedExecutors {
     }
     fn remove(&mut self, pubkey: &Pubkey) {
         let _ = self.executors.remove(pubkey);
+    }
+}
+
+pub struct TxComputeMeter {
+    remaining: u64,
+}
+impl TxComputeMeter {
+    pub fn new(cap: u64) -> Self {
+        Self { remaining: cap }
+    }
+}
+impl ComputeMeter for TxComputeMeter {
+    fn consume(&mut self, amount: u64) -> std::result::Result<(), InstructionError> {
+        let exceeded = self.remaining < amount;
+        self.remaining = self.remaining.saturating_sub(amount);
+        if exceeded {
+            return Err(InstructionError::ComputationalBudgetExceeded);
+        }
+        Ok(())
+    }
+    fn get_remaining(&self) -> u64 {
+        self.remaining
     }
 }
 
@@ -3172,76 +3197,96 @@ impl Bank {
             Vec::with_capacity(sanitized_txs.len());
         let mut transaction_log_messages: Vec<Option<Vec<String>>> =
             Vec::with_capacity(sanitized_txs.len());
-        let bpf_compute_budget = self
-            .bpf_compute_budget
-            .unwrap_or_else(BpfComputeBudget::new);
 
         let executed: Vec<TransactionExecutionResult> = loaded_txs
             .iter_mut()
             .zip(sanitized_txs.as_transactions_iter())
             .map(|(accs, tx)| match accs {
                 (Err(e), _nonce_rollback) => {
-                    inner_instructions.push(None);
                     transaction_log_messages.push(None);
+                    inner_instructions.push(None);
                     (Err(e.clone()), None)
                 }
                 (Ok(loaded_transaction), nonce_rollback) => {
+                    let feature_set = self.feature_set.clone();
                     signature_count += u64::from(tx.message().header.num_required_signatures);
-                    let executors = self.get_executors(&tx.message, &loaded_transaction.loaders);
 
-                    let (account_refcells, loader_refcells) = Self::accounts_to_refcells(
-                        &mut loaded_transaction.accounts,
-                        &mut loaded_transaction.loaders,
-                    );
+                    let mut bpf_compute_budget = self
+                        .bpf_compute_budget
+                        .unwrap_or_else(BpfComputeBudget::new);
 
-                    let instruction_recorders = if enable_cpi_recording {
-                        let ix_count = tx.message.instructions.len();
-                        let mut recorders = Vec::with_capacity(ix_count);
-                        recorders.resize_with(ix_count, InstructionRecorder::default);
-                        Some(recorders)
+                    let mut process_result = if feature_set.is_active(&tx_wide_compute_cap::id()) {
+                        compute_budget::process_request(&mut bpf_compute_budget, tx)
                     } else {
-                        None
+                        Ok(())
                     };
-
-                    let log_collector = if enable_log_recording {
-                        Some(Rc::new(LogCollector::default()))
-                    } else {
-                        None
-                    };
-
-                    let mut process_result = self.message_processor.process_message(
-                        tx.message(),
-                        &loader_refcells,
-                        &account_refcells,
-                        &self.rent_collector,
-                        log_collector.clone(),
-                        executors.clone(),
-                        instruction_recorders.as_deref(),
-                        self.feature_set.clone(),
-                        bpf_compute_budget,
-                        &mut timings.details,
-                        self.rc.accounts.clone(),
-                        &self.ancestors,
-                    );
-
-                    transaction_log_messages.push(Self::collect_log_messages(log_collector));
-                    inner_instructions.push(Self::compile_recorded_instructions(
-                        instruction_recorders,
-                        &tx.message,
-                    ));
-
-                    if let Err(e) = Self::refcells_to_accounts(
-                        &mut loaded_transaction.accounts,
-                        &mut loaded_transaction.loaders,
-                        account_refcells,
-                        loader_refcells,
-                    ) {
-                        warn!("Account lifetime mismanagement");
-                        process_result = Err(e);
-                    }
 
                     if process_result.is_ok() {
-                        self.update_executors(executors);
+                        let executors =
+                            self.get_executors(&tx.message, &loaded_transaction.loaders);
+
+                        let (account_refcells, loader_refcells) = Self::accounts_to_refcells(
+                            &mut loaded_transaction.accounts,
+                            &mut loaded_transaction.loaders,
+                        );
+
+                        let instruction_recorders = if enable_cpi_recording {
+                            let ix_count = tx.message.instructions.len();
+                            let mut recorders = Vec::with_capacity(ix_count);
+                            recorders.resize_with(ix_count, InstructionRecorder::default);
+                            Some(recorders)
+                        } else {
+                            None
+                        };
+
+                        let log_collector = if enable_log_recording {
+                            Some(Rc::new(LogCollector::default()))
+                        } else {
+                            None
+                        };
+
+                        let compute_meter = Rc::new(RefCell::new(TxComputeMeter::new(
+                            bpf_compute_budget.max_units,
+                        )));
+
+                        process_result = self.message_processor.process_message(
+                            tx.message(),
+                            &loader_refcells,
+                            &account_refcells,
+                            &self.rent_collector,
+                            log_collector.clone(),
+                            executors.clone(),
+                            instruction_recorders.as_deref(),
+                            feature_set,
+                            bpf_compute_budget,
+                            compute_meter,
+                            &mut timings.details,
+                            self.rc.accounts.clone(),
+                            &self.ancestors,
+                        );
+
+                        transaction_log_messages.push(Self::collect_log_messages(log_collector));
+                        inner_instructions.push(Self::compile_recorded_instructions(
+                            instruction_recorders,
+                            &tx.message,
+                        ));
+
+                        if let Err(e) = Self::refcells_to_accounts(
+                            &mut loaded_transaction.accounts,
+                            &mut loaded_transaction.loaders,
+                            account_refcells,
+                            loader_refcells,
+                        ) {
+                            warn!("Account lifetime mismanagement");
+                            process_result = Err(e);
+                        }
+
+                        if process_result.is_ok() {
+                            self.update_executors(executors);
+                        }
+                    } else {
+                        transaction_log_messages.push(None);
+                        inner_instructions.push(None);
                     }
 
                     let nonce_rollback =
@@ -5490,6 +5535,7 @@ pub(crate) mod tests {
     use solana_sdk::{
         account::Account,
         clock::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
+        compute_budget,
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         feature::Feature,
         genesis_config::create_genesis_config,
@@ -13707,5 +13753,48 @@ pub(crate) mod tests {
         assert_eq!(rent_debits.0.len(), 1);
         rent_debits.push(&Pubkey::default(), i64::MAX as u64, 0);
         assert_eq!(rent_debits.0.len(), 2);
+    }
+
+    #[test]
+    fn test_compute_request_instruction() {
+        solana_logger::setup();
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config_with_leader(
+            1_000_000_000_000_000,
+            &Pubkey::new_unique(),
+            bootstrap_validator_stake_lamports(),
+        );
+        let mut bank = Bank::new(&genesis_config);
+
+        fn mock_ix_processor(
+            _pubkey: &Pubkey,
+            _data: &[u8],
+            invoke_context: &mut dyn InvokeContext,
+        ) -> std::result::Result<(), InstructionError> {
+            let compute_budget = invoke_context.get_bpf_compute_budget();
+            assert_eq!(
+                *compute_budget,
+                BpfComputeBudget {
+                    max_units: 1,
+                    ..BpfComputeBudget::default()
+                }
+            );
+            Ok(())
+        }
+        let program_id = solana_sdk::pubkey::new_rand();
+        bank.add_builtin("mock_program", program_id, mock_ix_processor);
+
+        let message = Message::new(
+            &[
+                compute_budget::request_units(1),
+                Instruction::new_with_bincode(program_id, &0, vec![]),
+            ],
+            Some(&mint_keypair.pubkey()),
+        );
+        let tx = Transaction::new(&[&mint_keypair], message, bank.last_blockhash());
+        bank.process_transaction(&tx).unwrap();
     }
 }
