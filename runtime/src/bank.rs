@@ -51,6 +51,7 @@ use solana_sdk::{
     incinerator,
     inflation::Inflation,
     instruction::CompiledInstruction,
+    lamports::LamportsError,
     message::Message,
     native_loader,
     native_token::sol_to_lamports,
@@ -2001,25 +2002,36 @@ impl Bank {
         let collector_fees = self.collector_fees.load(Relaxed) as u64;
 
         if collector_fees != 0 {
-            let (unburned, burned) = self.fee_rate_governor.burn(collector_fees);
+            let (deposit, mut burn) = self.fee_rate_governor.burn(collector_fees);
             // burn a portion of fees
             debug!(
                 "distributed fee: {} (rounded from: {}, burned: {})",
-                unburned, collector_fees, burned
+                deposit, collector_fees, burn
             );
 
-            let post_balance = self.deposit(&self.collector_id, unburned);
-            if unburned != 0 {
-                self.rewards.write().unwrap().push((
-                    self.collector_id,
-                    RewardInfo {
-                        reward_type: RewardType::Fee,
-                        lamports: unburned as i64,
-                        post_balance,
-                    },
-                ));
+            match self.deposit(&self.collector_id, deposit) {
+                Ok(post_balance) => {
+                    if deposit != 0 {
+                        self.rewards.write().unwrap().push((
+                            self.collector_id,
+                            RewardInfo {
+                                reward_type: RewardType::Fee,
+                                lamports: deposit as i64,
+                                post_balance,
+                            },
+                        ));
+                    }
+                }
+                Err(_) => {
+                    error!(
+                        "Burning {} fee instead of crediting {}",
+                        deposit, self.collector_id
+                    );
+                    inc_new_counter_error!("bank-burned_fee_lamports", deposit as usize);
+                    burn += deposit;
+                }
             }
-            self.capitalization.fetch_sub(burned, Relaxed);
+            self.capitalization.fetch_sub(burn, Relaxed);
         }
     }
 
@@ -4058,13 +4070,17 @@ impl Bank {
         }
     }
 
-    pub fn deposit(&self, pubkey: &Pubkey, lamports: u64) -> u64 {
+    pub fn deposit(
+        &self,
+        pubkey: &Pubkey,
+        lamports: u64,
+    ) -> std::result::Result<u64, LamportsError> {
         // This doesn't collect rents intentionally.
         // Rents should only be applied to actual TXes
         let mut account = self.get_account_with_fixed_root(pubkey).unwrap_or_default();
-        account.lamports += lamports;
+        account.checked_add_lamports(lamports)?;
         self.store_account(pubkey, &account);
-        account.lamports()
+        Ok(account.lamports())
     }
 
     pub fn accounts(&self) -> Arc<Accounts> {
@@ -7453,12 +7469,12 @@ pub(crate) mod tests {
 
         // Test new account
         let key = Keypair::new();
-        let new_balance = bank.deposit(&key.pubkey(), 10);
+        let new_balance = bank.deposit(&key.pubkey(), 10).unwrap();
         assert_eq!(new_balance, 10);
         assert_eq!(bank.get_balance(&key.pubkey()), 10);
 
         // Existing account
-        let new_balance = bank.deposit(&key.pubkey(), 3);
+        let new_balance = bank.deposit(&key.pubkey(), 3).unwrap();
         assert_eq!(new_balance, 13);
         assert_eq!(bank.get_balance(&key.pubkey()), 13);
     }
@@ -7475,7 +7491,7 @@ pub(crate) mod tests {
             Err(TransactionError::AccountNotFound)
         );
 
-        bank.deposit(&key.pubkey(), 3);
+        bank.deposit(&key.pubkey(), 3).unwrap();
         assert_eq!(bank.get_balance(&key.pubkey()), 3);
 
         // Low balance
@@ -10465,8 +10481,8 @@ pub(crate) mod tests {
         // Store some lamports in bank 1
         let some_lamports = 123;
         let mut bank1 = Arc::new(new_from_parent(&bank0));
-        bank1.deposit(&pubkey1, some_lamports);
-        bank1.deposit(&pubkey2, some_lamports);
+        bank1.deposit(&pubkey1, some_lamports).unwrap();
+        bank1.deposit(&pubkey2, some_lamports).unwrap();
         goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank1).unwrap());
         bank1.freeze();
         bank1.squash();
@@ -10476,7 +10492,7 @@ pub(crate) mod tests {
 
         // Store some lamports for pubkey1 in bank 2, root bank 2
         let mut bank2 = Arc::new(new_from_parent(&bank1));
-        bank2.deposit(&pubkey1, some_lamports);
+        bank2.deposit(&pubkey1, some_lamports).unwrap();
         bank2.store_account(&pubkey0, &account0);
         goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank2).unwrap());
         bank2.freeze();
@@ -10530,13 +10546,13 @@ pub(crate) mod tests {
 
         let some_lamports = 123;
         let mut bank = Arc::new(new_from_parent(&bank));
-        bank.deposit(&pubkey1, some_lamports);
-        bank.deposit(&pubkey2, some_lamports);
+        bank.deposit(&pubkey1, some_lamports).unwrap();
+        bank.deposit(&pubkey2, some_lamports).unwrap();
 
         goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank).unwrap());
 
         let mut bank = Arc::new(new_from_parent(&bank));
-        bank.deposit(&pubkey1, some_lamports);
+        bank.deposit(&pubkey1, some_lamports).unwrap();
 
         goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank).unwrap());
 
@@ -10801,7 +10817,7 @@ pub(crate) mod tests {
         // someone mess with program_id's balance
         bank.withdraw(&mint_keypair.pubkey(), 10).unwrap();
         assert_ne!(bank.capitalization(), bank.calculate_capitalization());
-        bank.deposit(&program_id, 10);
+        bank.deposit(&program_id, 10).unwrap();
         assert_eq!(bank.capitalization(), bank.calculate_capitalization());
 
         bank.add_native_program("mock_program v2", &program_id, true);
@@ -10817,7 +10833,7 @@ pub(crate) mod tests {
         // someone managed to squat at program_id!
         bank.withdraw(&mint_keypair.pubkey(), 10).unwrap();
         assert_ne!(bank.capitalization(), bank.calculate_capitalization());
-        bank.deposit(&program_id, 10);
+        bank.deposit(&program_id, 10).unwrap();
         assert_eq!(bank.capitalization(), bank.calculate_capitalization());
 
         bank.add_native_program("mock_program", &program_id, false);
@@ -10890,7 +10906,8 @@ pub(crate) mod tests {
             bank.get_balance(&inline_spl_token_v2_0::native_mint::id()),
             0
         );
-        bank.deposit(&inline_spl_token_v2_0::native_mint::id(), 4200000000);
+        bank.deposit(&inline_spl_token_v2_0::native_mint::id(), 4200000000)
+            .unwrap();
 
         let bank = Bank::new_from_parent(
             &bank,
@@ -10915,7 +10932,8 @@ pub(crate) mod tests {
             bank.get_balance(&inline_spl_token_v2_0::native_mint::id()),
             0
         );
-        bank.deposit(&inline_spl_token_v2_0::native_mint::id(), 4200000000);
+        bank.deposit(&inline_spl_token_v2_0::native_mint::id(), 4200000000)
+            .unwrap();
 
         let bank = Bank::new_from_parent(
             &bank,
@@ -11183,7 +11201,7 @@ pub(crate) mod tests {
         assert!(!bank.feature_set.is_active(&test_feature));
 
         // Depositing into the `test_feature` account should do nothing
-        bank.deposit(&test_feature, 42);
+        bank.deposit(&test_feature, 42).unwrap();
         let new_activations = bank.compute_active_feature_set(true);
         assert!(new_activations.is_empty());
         assert!(!bank.feature_set.is_active(&test_feature));
