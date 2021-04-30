@@ -1025,7 +1025,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
     }
 
     // Get the maximum root <= `max_allowed_root` from the given `slice`
-    fn get_max_root(
+    fn get_newest_root_in_slot_list(
         roots: &RollingBitField,
         slice: SlotSlice<T>,
         max_allowed_root: Option<Slot>,
@@ -1202,24 +1202,26 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
     fn purge_older_root_entries(
         &self,
         pubkey: &Pubkey,
-        list: &mut SlotList<T>,
+        slot_list: &mut SlotList<T>,
         reclaims: &mut SlotList<T>,
         max_clean_root: Option<Slot>,
         account_indexes: &HashSet<AccountIndex>,
     ) {
         let roots_tracker = &self.roots_tracker.read().unwrap();
-        let max_root = Self::get_max_root(&roots_tracker.roots, &list, max_clean_root);
+        let newest_root_in_slot_list =
+            Self::get_newest_root_in_slot_list(&roots_tracker.roots, &slot_list, max_clean_root);
+        let max_clean_root = max_clean_root.unwrap_or(roots_tracker.max_root);
 
         let mut purged_slots: HashSet<Slot> = HashSet::new();
-        list.retain(|(slot, value)| {
-            let should_purge = Self::can_purge(max_root, *slot) && !value.is_cached();
+        slot_list.retain(|(slot, value)| {
+            let should_purge =
+                Self::can_purge_older_entries(max_clean_root, newest_root_in_slot_list, *slot)
+                    && !value.is_cached();
             if should_purge {
                 reclaims.push((*slot, value.clone()));
                 purged_slots.insert(*slot);
-                false
-            } else {
-                true
             }
+            !should_purge
         });
 
         self.purge_secondary_indexes_by_inner_key(pubkey, Some(&purged_slots), account_indexes);
@@ -1232,6 +1234,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         max_clean_root: Option<Slot>,
         account_indexes: &HashSet<AccountIndex>,
     ) {
+        let mut is_slot_list_empty = false;
         if let Some(mut locked_entry) = self.get_account_write_entry(pubkey) {
             locked_entry.slot_list_mut(|slot_list| {
                 self.purge_older_root_entries(
@@ -1241,12 +1244,42 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
                     max_clean_root,
                     account_indexes,
                 );
+                is_slot_list_empty = slot_list.is_empty();
             });
+        }
+
+        // If the slot list is empty, remove the pubkey from `account_maps`.  Make sure to grab the
+        // lock and double check the slot list is still empty, because another writer could have
+        // locked and inserted the pubkey inbetween when `is_slot_list_empty=true` and the call to
+        // remove() below.
+        if is_slot_list_empty {
+            let mut w_maps = self.account_maps.write().unwrap();
+            if let Some(x) = w_maps.get(pubkey) {
+                if x.slot_list.read().unwrap().is_empty() {
+                    w_maps.remove(pubkey);
+                }
+            }
         }
     }
 
-    pub fn can_purge(max_root: Slot, slot: Slot) -> bool {
-        slot < max_root
+    /// When can an entry be purged?
+    ///
+    /// If we get a slot update where slot != newest_root_in_slot_list for an account where slot <
+    /// max_clean_root, then we know it's safe to delete because:
+    ///
+    /// a) If slot < newest_root_in_slot_list, then we know the update is outdated by a later rooted
+    /// update, namely the one in newest_root_in_slot_list
+    ///
+    /// b) If slot > newest_root_in_slot_list, then because slot < max_clean_root and we know there are
+    /// no roots in the slot list between newest_root_in_slot_list and max_clean_root, (otherwise there
+    /// would be a bigger newest_root_in_slot_list, which is a contradiction), then we know slot must be
+    /// an unrooted slot less than max_clean_root and thus safe to clean as well.
+    fn can_purge_older_entries(
+        max_clean_root: Slot,
+        newest_root_in_slot_list: Slot,
+        slot: Slot,
+    ) -> bool {
+        slot < max_clean_root && slot != newest_root_in_slot_list
     }
 
     pub fn is_root(&self, slot: Slot) -> bool {

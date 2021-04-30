@@ -12470,4 +12470,54 @@ pub(crate) mod tests {
             ))
         );
     }
+
+    #[test]
+    fn test_clean_unrooted_dropped_banks() {
+        //! Test that unrooted banks are cleaned up properly
+        //!
+        //! slot 0:       bank0 (rooted)
+        //!               /   \
+        //! slot 1:      /   bank1 (unrooted and dropped)
+        //!             /
+        //! slot 2:  bank2 (rooted)
+        //!
+        //! In the scenario above, when `clean_accounts()` is called on bank2, the keys that exist
+        //! _only_ in bank1 should be cleaned up, since those keys are unreachable.
+        //
+        solana_logger::setup();
+
+        let (genesis_config, mint_keypair) = create_genesis_config(100);
+        let bank0 = Arc::new(Bank::new(&genesis_config));
+
+        let collector = Pubkey::new_unique();
+        let pubkey1 = Pubkey::new_unique();
+        let pubkey2 = Pubkey::new_unique();
+
+        bank0.transfer(2, &mint_keypair, &pubkey2).unwrap();
+        bank0.freeze();
+
+        let slot = 1;
+        let bank1 = Bank::new_from_parent(&bank0, &collector, slot);
+        bank1.transfer(3, &mint_keypair, &pubkey1).unwrap();
+        bank1.freeze();
+
+        let slot = slot + 1;
+        let bank2 = Bank::new_from_parent(&bank0, &collector, slot);
+        bank2.transfer(4, &mint_keypair, &pubkey2).unwrap();
+        bank2.freeze(); // the freeze here is not strictly necessary, but more for illustration
+        bank2.squash();
+
+        drop(bank1);
+
+        bank2.clean_accounts(false);
+        assert_eq!(
+            bank2
+                .rc
+                .accounts
+                .accounts_db
+                .accounts_index
+                .ref_count_from_storage(&pubkey1),
+            0
+        );
+    }
 }

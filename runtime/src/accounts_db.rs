@@ -1289,13 +1289,13 @@ impl AccountsDb {
             .expect("Cluster type must be set at initialization")
     }
 
-    // Reclaim older states of rooted accounts for AccountsDb bloat mitigation
-    fn clean_old_rooted_accounts(
+    /// Reclaim older states of accounts older than max_clean_root for AccountsDb bloat mitigation
+    fn clean_accounts_older_than_root(
         &self,
-        purges_in_root: Vec<Pubkey>,
+        purges: Vec<Pubkey>,
         max_clean_root: Option<Slot>,
     ) -> ReclaimResult {
-        if purges_in_root.is_empty() {
+        if purges.is_empty() {
             return (HashMap::new(), HashMap::new());
         }
         // This number isn't carefully chosen; just guessed randomly such that
@@ -1303,21 +1303,20 @@ impl AccountsDb {
         const INDEX_CLEAN_BULK_COUNT: usize = 4096;
 
         let mut clean_rooted = Measure::start("clean_old_root-ms");
-        let reclaim_vecs =
-            purges_in_root
-                .par_chunks(INDEX_CLEAN_BULK_COUNT)
-                .map(|pubkeys: &[Pubkey]| {
-                    let mut reclaims = Vec::new();
-                    for pubkey in pubkeys {
-                        self.accounts_index.clean_rooted_entries(
-                            &pubkey,
-                            &mut reclaims,
-                            max_clean_root,
-                            &self.account_indexes,
-                        );
-                    }
-                    reclaims
-                });
+        let reclaim_vecs = purges
+            .par_chunks(INDEX_CLEAN_BULK_COUNT)
+            .map(|pubkeys: &[Pubkey]| {
+                let mut reclaims = Vec::new();
+                for pubkey in pubkeys {
+                    self.accounts_index.clean_rooted_entries(
+                        &pubkey,
+                        &mut reclaims,
+                        max_clean_root,
+                        &self.account_indexes,
+                    );
+                }
+                reclaims
+            });
         let reclaims: Vec<_> = reclaim_vecs.flatten().collect();
         clean_rooted.stop();
         inc_new_counter_info!("clean-old-root-par-clean-ms", clean_rooted.as_ms() as usize);
@@ -1585,20 +1584,20 @@ impl AccountsDb {
         let total_keys_count = pubkeys.len();
         let mut accounts_scan = Measure::start("accounts_scan");
         // parallel scan the index.
-        let (mut purges, purges_in_root) = {
+        let (mut purges_zero_lamports, purges_old_accounts) = {
             self.thread_pool_clean.install(|| {
                 pubkeys
                     .par_chunks(4096)
                     .map(|pubkeys: &[Pubkey]| {
-                        let mut purges_in_root = Vec::new();
-                        let mut purges = HashMap::new();
+                        let mut purges_zero_lamports = HashMap::new();
+                        let mut purges_old_accounts = Vec::new();
                         for pubkey in pubkeys {
                             match self.accounts_index.get(pubkey, None, max_clean_root) {
                                 AccountIndexGetResult::Found(locked_entry, index) => {
                                     let slot_list = locked_entry.slot_list();
                                     let (slot, account_info) = &slot_list[index];
                                     if account_info.lamports == 0 {
-                                        purges.insert(
+                                        purges_zero_lamports.insert(
                                             *pubkey,
                                             self.accounts_index
                                                 .roots_and_ref_count(&locked_entry, max_clean_root),
@@ -1624,11 +1623,17 @@ impl AccountsDb {
                                         if let Some(max_clean_root) = max_clean_root {
                                             assert!(slot <= max_clean_root);
                                         }
-                                        purges_in_root.push(*pubkey);
+                                        purges_old_accounts.push(*pubkey);
                                     }
                                 }
                                 AccountIndexGetResult::NotFoundOnFork => {
-                                    // do nothing - pubkey is in index, but not found in a root slot
+                                    // This pubkey is in the index but not in a root slot, so clean
+                                    // it up by adding it to the to-be-purged list.
+                                    //
+                                    // Also, this pubkey must have been touched by some slot since
+                                    // it was in the dirty list, so we assume that the slot it was
+                                    // touched in must be unrooted.
+                                    purges_old_accounts.push(*pubkey);
                                 }
                                 AccountIndexGetResult::Missing(lock) => {
                                     // pubkey is missing from index, so remove from zero_lamports_list
@@ -1637,7 +1642,7 @@ impl AccountsDb {
                                 }
                             };
                         }
-                        (purges, purges_in_root)
+                        (purges_zero_lamports, purges_old_accounts)
                     })
                     .reduce(
                         || (HashMap::new(), Vec::new()),
@@ -1654,7 +1659,7 @@ impl AccountsDb {
 
         let mut clean_old_rooted = Measure::start("clean_old_roots");
         let (purged_account_slots, removed_accounts) =
-            self.clean_old_rooted_accounts(purges_in_root, max_clean_root);
+            self.clean_accounts_older_than_root(purges_old_accounts, max_clean_root);
 
         if self.caching_enabled {
             self.do_reset_uncleaned_roots(max_clean_root);
@@ -1668,7 +1673,7 @@ impl AccountsDb {
         // Calculate store counts as if everything was purged
         // Then purge if we can
         let mut store_counts: HashMap<AppendVecId, (usize, HashSet<Pubkey>)> = HashMap::new();
-        for (key, (account_infos, ref_count)) in purges.iter_mut() {
+        for (key, (account_infos, ref_count)) in purges_zero_lamports.iter_mut() {
             if purged_account_slots.contains_key(&key) {
                 *ref_count = self.accounts_index.ref_count_from_storage(&key);
             }
@@ -1683,7 +1688,7 @@ impl AccountsDb {
                     return false;
                 }
                 // Check if this update in `slot` to the account with `key` was reclaimed earlier by
-                // `clean_old_rooted_accounts()`
+                // `clean_accounts_older_than_root()`
                 let was_reclaimed = removed_accounts
                     .get(&account_info.store_id)
                     .map(|store_removed| store_removed.contains(&account_info.offset))
@@ -1714,13 +1719,13 @@ impl AccountsDb {
         store_counts_time.stop();
 
         let mut calc_deps_time = Measure::start("calc_deps");
-        Self::calc_delete_dependencies(&purges, &mut store_counts);
+        Self::calc_delete_dependencies(&purges_zero_lamports, &mut store_counts);
         calc_deps_time.stop();
 
-        // Only keep purges where the entire history of the account in the root set
+        // Only keep purges_zero_lamports where the entire history of the account in the root set
         // can be purged. All AppendVecs for those updates are dead.
         let mut purge_filter = Measure::start("purge_filter");
-        purges.retain(|_pubkey, (account_infos, _ref_count)| {
+        purges_zero_lamports.retain(|_pubkey, (account_infos, _ref_count)| {
             for (_slot, account_info) in account_infos.iter() {
                 if store_counts.get(&account_info.store_id).unwrap().0 != 0 {
                     return false;
@@ -1732,7 +1737,7 @@ impl AccountsDb {
 
         let mut reclaims_time = Measure::start("reclaims");
         // Recalculate reclaims with new purge set
-        let pubkey_to_slot_set: Vec<_> = purges
+        let pubkey_to_slot_set: Vec<_> = purges_zero_lamports
             .into_iter()
             .map(|(key, (slots_list, _ref_count))| {
                 (
@@ -2513,7 +2518,7 @@ impl AccountsDb {
         //        purge_slot_cache_pubkeys()      | (removes existing store_id, offset for caches)
         //      OR                                |
         //    clean_accounts()/                   |
-        //        clean_old_rooted_accounts()     | (removes existing store_id, offset for stores)
+        //        clean_accounts_older_than_root()| (removes existing store_id, offset for stores)
         //                                        V
         //
         // Remarks for purger: So, for any reading operations, it's a race condition
@@ -3076,9 +3081,6 @@ impl AccountsDb {
             // It should not be possible that a slot is neither in the cache or storage. Even in
             // a slot with all ticks, `Bank::new_from_parent()` immediately stores some sysvars
             // on bank creation.
-
-            // Remove any delta pubkey set if existing.
-            self.uncleaned_pubkeys.remove(remove_slot);
         }
         remove_storages_elapsed.stop();
 
