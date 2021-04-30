@@ -73,7 +73,7 @@ other instructions in the same transaction. Read more information on
 
 - Address: `Sysvar1nstructions1111111111111111111111111`
 - Layout:
-  [Instructions](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/sysvar/instructions/type.Instructions.html)
+  [Instructions](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/sysvar/instructions/struct.Instructions.html)
 
 ## RecentBlockhashes
 
