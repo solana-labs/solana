@@ -1270,12 +1270,12 @@ impl AccountsDb {
     }
 
     // Reclaim older states of rooted accounts for AccountsDb bloat mitigation
-    fn clean_old_rooted_accounts(
+    fn clean_purgeable_accounts(
         &self,
-        purges_in_root: Vec<Pubkey>,
+        purges: Vec<Pubkey>,
         max_clean_root: Option<Slot>,
     ) -> ReclaimResult {
-        if purges_in_root.is_empty() {
+        if purges.is_empty() {
             return (HashMap::new(), HashMap::new());
         }
         // This number isn't carefully chosen; just guessed randomly such that
@@ -1283,21 +1283,20 @@ impl AccountsDb {
         const INDEX_CLEAN_BULK_COUNT: usize = 4096;
 
         let mut clean_rooted = Measure::start("clean_old_root-ms");
-        let reclaim_vecs =
-            purges_in_root
-                .par_chunks(INDEX_CLEAN_BULK_COUNT)
-                .map(|pubkeys: &[Pubkey]| {
-                    let mut reclaims = Vec::new();
-                    for pubkey in pubkeys {
-                        self.accounts_index.clean_rooted_entries(
-                            &pubkey,
-                            &mut reclaims,
-                            max_clean_root,
-                            &self.account_indexes,
-                        );
-                    }
-                    reclaims
-                });
+        let reclaim_vecs = purges
+            .par_chunks(INDEX_CLEAN_BULK_COUNT)
+            .map(|pubkeys: &[Pubkey]| {
+                let mut reclaims = Vec::new();
+                for pubkey in pubkeys {
+                    self.accounts_index.clean_rooted_entries(
+                        &pubkey,
+                        &mut reclaims,
+                        max_clean_root,
+                        &self.account_indexes,
+                    );
+                }
+                reclaims
+            });
         let reclaims: Vec<_> = reclaim_vecs.flatten().collect();
         clean_rooted.stop();
         inc_new_counter_info!("clean-old-root-par-clean-ms", clean_rooted.as_ms() as usize);
@@ -1643,7 +1642,7 @@ impl AccountsDb {
         let mut clean_old_rooted = Measure::start("clean_old_roots");
         let purges = [purges_rooted, purges_unrooted].concat();
         let (purged_account_slots, removed_accounts) =
-            self.clean_old_rooted_accounts(purges, max_clean_root);
+            self.clean_purgeable_accounts(purges, max_clean_root);
 
         if self.caching_enabled {
             self.do_reset_uncleaned_roots(max_clean_root);
@@ -1672,7 +1671,7 @@ impl AccountsDb {
                     return false;
                 }
                 // Check if this update in `slot` to the account with `key` was reclaimed earlier by
-                // `clean_old_rooted_accounts()`
+                // `clean_purgeable_accounts()`
                 let was_reclaimed = removed_accounts
                     .get(&account_info.store_id)
                     .map(|store_removed| store_removed.contains(&account_info.offset))
@@ -2502,7 +2501,7 @@ impl AccountsDb {
         //        purge_slot_cache_pubkeys()      | (removes existing store_id, offset for caches)
         //      OR                                |
         //    clean_accounts()/                   |
-        //        clean_old_rooted_accounts()     | (removes existing store_id, offset for stores)
+        //        clean_purgeable_accounts()      | (removes existing store_id, offset for stores)
         //                                        V
         //
         // Remarks for purger: So, for any reading operations, it's a race condition
