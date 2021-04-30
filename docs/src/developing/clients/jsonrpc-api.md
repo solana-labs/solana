@@ -1887,7 +1887,7 @@ An RpcResponse containing a JSON object consisting of a string blockhash and Fee
 
 Request:
 ```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d 'i
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getRecentBlockhash"}
 '
 ```
