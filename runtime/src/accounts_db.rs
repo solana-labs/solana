@@ -1564,14 +1564,13 @@ impl AccountsDb {
         let total_keys_count = pubkeys.len();
         let mut accounts_scan = Measure::start("accounts_scan");
         // parallel scan the index.
-        let (mut purges_zero_lamports, purges_rooted, purges_unrooted) = {
+        let (mut purges_zero_lamports, purges_old_accounts) = {
             self.thread_pool_clean.install(|| {
                 pubkeys
                     .par_chunks(4096)
                     .map(|pubkeys: &[Pubkey]| {
                         let mut purges_zero_lamports = HashMap::new();
-                        let mut purges_rooted = Vec::new();
-                        let mut purges_unrooted = Vec::new();
+                        let mut purges_old_accounts = Vec::new();
                         for pubkey in pubkeys {
                             match self.accounts_index.get(pubkey, None, max_clean_root) {
                                 AccountIndexGetResult::Found(locked_entry, index) => {
@@ -1604,7 +1603,7 @@ impl AccountsDb {
                                         if let Some(max_clean_root) = max_clean_root {
                                             assert!(slot <= max_clean_root);
                                         }
-                                        purges_rooted.push(*pubkey);
+                                        purges_old_accounts.push(*pubkey);
                                     }
                                 }
                                 AccountIndexGetResult::NotFoundOnFork => {
@@ -1614,7 +1613,7 @@ impl AccountsDb {
                                     // Also, this pubkey must have been touched by some slot since
                                     // it was in the dirty list, so we assume that the slot it was
                                     // touched in must be unrooted.
-                                    purges_unrooted.push(*pubkey);
+                                    purges_old_accounts.push(*pubkey);
                                 }
                                 AccountIndexGetResult::Missing(lock) => {
                                     // pubkey is missing from index, so remove from zero_lamports_list
@@ -1623,15 +1622,14 @@ impl AccountsDb {
                                 }
                             };
                         }
-                        (purges_zero_lamports, purges_rooted, purges_unrooted)
+                        (purges_zero_lamports, purges_old_accounts)
                     })
                     .reduce(
-                        || (HashMap::new(), Vec::new(), Vec::new()),
+                        || (HashMap::new(), Vec::new()),
                         |mut m1, m2| {
                             // Collapse down the hashmaps/vecs into one.
                             m1.0.extend(m2.0);
                             m1.1.extend(m2.1);
-                            m1.2.extend(m2.2);
                             m1
                         },
                     )
@@ -1640,9 +1638,8 @@ impl AccountsDb {
         accounts_scan.stop();
 
         let mut clean_old_rooted = Measure::start("clean_old_roots");
-        let purges = [purges_rooted, purges_unrooted].concat();
         let (purged_account_slots, removed_accounts) =
-            self.clean_accounts_older_than_root(purges, max_clean_root);
+            self.clean_accounts_older_than_root(purges_old_accounts, max_clean_root);
 
         if self.caching_enabled {
             self.do_reset_uncleaned_roots(max_clean_root);
