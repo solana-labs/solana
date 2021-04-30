@@ -3455,7 +3455,10 @@ mod tests {
             );
         }
         // reset balance
-        stake_keyed_account.account.borrow_mut().lamports = total_lamports;
+        stake_keyed_account
+            .account
+            .borrow_mut()
+            .set_lamports(total_lamports);
 
         // lockup has expired
         let to_keyed_account = KeyedAccount::new(&to, false, &to_account);

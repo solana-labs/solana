@@ -9965,7 +9965,7 @@ pub mod tests {
                         if exit.load(Ordering::Relaxed) {
                             return;
                         }
-                        account.lamports = slot + 1;
+                        account.set_lamports(slot + 1);
                         db.store_cached(slot, &[(&pubkey, &account)]);
                         db.add_root(slot);
                         sleep(Duration::from_millis(RACY_SLEEP_MS));
