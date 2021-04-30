@@ -105,7 +105,7 @@ function Home() {
         {features && features.length > 0 && (
           <section className={styles.features}>
             <div className="row cards__container">
-              <div class="alert alert--primary" role="alert">
+              <div className="alert alert--primary" role="alert">
                 <b>Announcing the Solana Season Hackathon</b>
                 <br />
                 Jumpstart your next project on Solana & join the fastest growing
@@ -116,7 +116,7 @@ function Home() {
                   rel="noopener noreferrer"
                   target="_blank"
                 >
-                  <button class="button button--outline button--secondary">
+                  <button className="button button--outline button--secondary">
                     Register Now
                   </button>
                 </a>
