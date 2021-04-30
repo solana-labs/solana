@@ -183,7 +183,7 @@ pub(crate) fn parse_signer_source<S: AsRef<str>>(
                 match scheme.as_str() {
                     "ask" => Ok(SignerSource {
                         kind: SignerSourceKind::Ask,
-                        derivation_path: DerivationPath::from_uri(&uri)?,
+                        derivation_path: DerivationPath::from_uri(&uri, false)?,
                     }),
                     "file" => Ok(SignerSource::new(SignerSourceKind::Filepath(
                         uri.path().to_string(),
@@ -191,7 +191,7 @@ pub(crate) fn parse_signer_source<S: AsRef<str>>(
                     "stdin" => Ok(SignerSource::new(SignerSourceKind::Stdin)),
                     "usb" => Ok(SignerSource {
                         kind: SignerSourceKind::Usb(RemoteWalletLocator::new_from_uri(&uri)?),
-                        derivation_path: DerivationPath::from_uri(&uri)?,
+                        derivation_path: DerivationPath::from_uri(&uri, true)?,
                     }),
                     _ => Err(SignerSourceError::UnrecognizedSource),
                 }

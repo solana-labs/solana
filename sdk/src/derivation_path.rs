@@ -75,7 +75,7 @@ impl DerivationPath {
         Ok(Self::new_bip44_with_coin(coin, account, change))
     }
 
-    fn _from_absolute_path_str(path: &str) -> Result<Self, DerivationPathError> {
+    fn from_absolute_path_str(path: &str) -> Result<Self, DerivationPathError> {
         let inner = DerivationPath::_from_absolute_path_insecure_str(path)?
             .into_iter()
             .map(|c| ChildIndex::Hardened(c.to_u32()))
@@ -129,8 +129,10 @@ impl DerivationPath {
         }
     }
 
-    // Only accepts single query string pair of type `key`
-    pub fn from_uri(uri: &URIReference<'_>) -> Result<Option<Self>, DerivationPathError> {
+    pub fn from_uri(
+        uri: &URIReference<'_>,
+        key_only: bool,
+    ) -> Result<Option<Self>, DerivationPathError> {
         if let Some(query) = uri.query() {
             let query_str = query.as_str();
             if query_str.is_empty() {
@@ -142,16 +144,26 @@ impl DerivationPath {
                     "invalid query string, extra fields not supported".to_string(),
                 ));
             }
-            let key = query.get("key");
-            if key.is_none() {
+            let key = query.get(&QueryKey::Key.to_string());
+            if let Some(key) = key {
+                // Use from_key_str instead of TryInto here to make it more explicit that this
+                // generates a Solana bip44 DerivationPath
+                return Self::from_key_str(key).map(Some);
+            }
+            if key_only {
                 return Err(DerivationPathError::InvalidDerivationPath(format!(
                     "invalid query string `{}`, only `key` supported",
                     query_str,
                 )));
             }
-            // Use from_key_str instead of TryInto here to make it a little more explicit that this
-            // generates a Solana bip44 DerivationPath
-            key.map(Self::from_key_str).transpose()
+            let full_path = query.get(&QueryKey::FullPath.to_string());
+            if let Some(full_path) = full_path {
+                return Self::from_absolute_path_str(full_path).map(Some);
+            }
+            Err(DerivationPathError::InvalidDerivationPath(format!(
+                "invalid query string `{}`, only `key` and `full-path` supported",
+                query_str,
+            )))
         } else {
             Ok(None)
         }
@@ -173,6 +185,46 @@ impl<'a> IntoIterator for &'a DerivationPath {
     type Item = &'a ChildIndex;
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
+    }
+}
+
+const QUERY_KEY_FULL_PATH: &str = "full-path";
+const QUERY_KEY_KEY: &str = "key";
+
+#[derive(Clone, Debug, Error, PartialEq)]
+#[error("invalid query key `{0}`")]
+struct QueryKeyError(String);
+
+enum QueryKey {
+    FullPath,
+    Key,
+}
+
+impl FromStr for QueryKey {
+    type Err = QueryKeyError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let lowercase = s.to_ascii_lowercase();
+        match lowercase.as_str() {
+            QUERY_KEY_FULL_PATH => Ok(Self::FullPath),
+            QUERY_KEY_KEY => Ok(Self::Key),
+            _ => Err(QueryKeyError(s.to_string())),
+        }
+    }
+}
+
+impl AsRef<str> for QueryKey {
+    fn as_ref(&self) -> &str {
+        match self {
+            Self::FullPath => QUERY_KEY_FULL_PATH,
+            Self::Key => QUERY_KEY_KEY,
+        }
+    }
+}
+
+impl std::fmt::Display for QueryKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let s: &str = self.as_ref();
+        write!(f, "{}", s)
     }
 }
 
@@ -246,41 +298,41 @@ mod tests {
     fn test_from_absolute_path_str() {
         let s = "m/44/501";
         assert_eq!(
-            DerivationPath::_from_absolute_path_str(s).unwrap(),
+            DerivationPath::from_absolute_path_str(s).unwrap(),
             DerivationPath::default()
         );
         let s = "m/44'/501'";
         assert_eq!(
-            DerivationPath::_from_absolute_path_str(s).unwrap(),
+            DerivationPath::from_absolute_path_str(s).unwrap(),
             DerivationPath::default()
         );
         let s = "m/44'/501'/1/2";
         assert_eq!(
-            DerivationPath::_from_absolute_path_str(s).unwrap(),
+            DerivationPath::from_absolute_path_str(s).unwrap(),
             DerivationPath::new_bip44(Some(1), Some(2))
         );
         let s = "m/44'/501'/1'/2'";
         assert_eq!(
-            DerivationPath::_from_absolute_path_str(s).unwrap(),
+            DerivationPath::from_absolute_path_str(s).unwrap(),
             DerivationPath::new_bip44(Some(1), Some(2))
         );
 
         // Test non-Solana Bip44
         let s = "m/44'/999'/1/2";
         assert_eq!(
-            DerivationPath::_from_absolute_path_str(s).unwrap(),
+            DerivationPath::from_absolute_path_str(s).unwrap(),
             DerivationPath::new_bip44_with_coin(TestCoin, Some(1), Some(2))
         );
         let s = "m/44'/999'/1'/2'";
         assert_eq!(
-            DerivationPath::_from_absolute_path_str(s).unwrap(),
+            DerivationPath::from_absolute_path_str(s).unwrap(),
             DerivationPath::new_bip44_with_coin(TestCoin, Some(1), Some(2))
         );
 
         // Test non-bip44 paths
         let s = "m/501'/0'/0/0";
         assert_eq!(
-            DerivationPath::_from_absolute_path_str(s).unwrap(),
+            DerivationPath::from_absolute_path_str(s).unwrap(),
             DerivationPath::new(vec![
                 ChildIndex::Hardened(501),
                 ChildIndex::Hardened(0),
@@ -290,7 +342,7 @@ mod tests {
         );
         let s = "m/501'/0'/0'/0'";
         assert_eq!(
-            DerivationPath::_from_absolute_path_str(s).unwrap(),
+            DerivationPath::from_absolute_path_str(s).unwrap(),
             DerivationPath::new(vec![
                 ChildIndex::Hardened(501),
                 ChildIndex::Hardened(0),
@@ -301,7 +353,7 @@ mod tests {
     }
 
     #[test]
-    fn test_new_from_uri() {
+    fn test_from_uri() {
         let derivation_path = DerivationPath::new_bip44(Some(0), Some(0));
 
         // test://path?key=0/0
@@ -317,7 +369,7 @@ mod tests {
             .unwrap();
         let uri = builder.build().unwrap();
         assert_eq!(
-            DerivationPath::from_uri(&uri).unwrap(),
+            DerivationPath::from_uri(&uri, true).unwrap(),
             Some(derivation_path.clone())
         );
 
@@ -334,7 +386,7 @@ mod tests {
             .unwrap();
         let uri = builder.build().unwrap();
         assert_eq!(
-            DerivationPath::from_uri(&uri).unwrap(),
+            DerivationPath::from_uri(&uri, true).unwrap(),
             Some(derivation_path.clone())
         );
 
@@ -351,7 +403,7 @@ mod tests {
             .unwrap();
         let uri = builder.build().unwrap();
         assert_eq!(
-            DerivationPath::from_uri(&uri).unwrap(),
+            DerivationPath::from_uri(&uri, true).unwrap(),
             Some(derivation_path)
         );
 
@@ -365,7 +417,7 @@ mod tests {
             .try_path("")
             .unwrap();
         let uri = builder.build().unwrap();
-        assert_eq!(DerivationPath::from_uri(&uri).unwrap(), None);
+        assert_eq!(DerivationPath::from_uri(&uri, true).unwrap(), None);
 
         // test://path?
         let mut builder = URIReferenceBuilder::new();
@@ -379,7 +431,7 @@ mod tests {
             .try_query(Some(""))
             .unwrap();
         let uri = builder.build().unwrap();
-        assert_eq!(DerivationPath::from_uri(&uri).unwrap(), None);
+        assert_eq!(DerivationPath::from_uri(&uri, true).unwrap(), None);
 
         // test://path?key=0/0/0
         let mut builder = URIReferenceBuilder::new();
@@ -394,7 +446,7 @@ mod tests {
             .unwrap();
         let uri = builder.build().unwrap();
         assert!(matches!(
-            DerivationPath::from_uri(&uri),
+            DerivationPath::from_uri(&uri, true),
             Err(DerivationPathError::InvalidDerivationPath(_))
         ));
 
@@ -411,7 +463,7 @@ mod tests {
             .unwrap();
         let uri = builder.build().unwrap();
         assert!(matches!(
-            DerivationPath::from_uri(&uri),
+            DerivationPath::from_uri(&uri, true),
             Err(DerivationPathError::InvalidDerivationPath(_))
         ));
 
@@ -428,7 +480,7 @@ mod tests {
             .unwrap();
         let uri = builder.build().unwrap();
         assert!(matches!(
-            DerivationPath::from_uri(&uri),
+            DerivationPath::from_uri(&uri, true),
             Err(DerivationPathError::InvalidDerivationPath(_))
         ));
 
@@ -445,7 +497,7 @@ mod tests {
             .unwrap();
         let uri = builder.build().unwrap();
         assert!(matches!(
-            DerivationPath::from_uri(&uri),
+            DerivationPath::from_uri(&uri, true),
             Err(DerivationPathError::InvalidDerivationPath(_))
         ));
 
@@ -462,7 +514,7 @@ mod tests {
             .unwrap();
         let uri = builder.build().unwrap();
         assert!(matches!(
-            DerivationPath::from_uri(&uri),
+            DerivationPath::from_uri(&uri, true),
             Err(DerivationPathError::InvalidDerivationPath(_))
         ));
 
@@ -479,7 +531,165 @@ mod tests {
             .unwrap();
         let uri = builder.build().unwrap();
         assert!(matches!(
-            DerivationPath::from_uri(&uri),
+            DerivationPath::from_uri(&uri, true),
+            Err(DerivationPathError::InvalidDerivationPath(_))
+        ));
+    }
+
+    #[test]
+    fn test_from_uri_full_path() {
+        let derivation_path = DerivationPath::from_absolute_path_str("m/44'/999'/1'").unwrap();
+
+        // test://path?full-path=m/44/999/1
+        let mut builder = URIReferenceBuilder::new();
+        builder
+            .try_scheme(Some("test"))
+            .unwrap()
+            .try_authority(Some("path"))
+            .unwrap()
+            .try_path("")
+            .unwrap()
+            .try_query(Some("full-path=m/44/999/1"))
+            .unwrap();
+        let uri = builder.build().unwrap();
+        assert_eq!(
+            DerivationPath::from_uri(&uri, false).unwrap(),
+            Some(derivation_path.clone())
+        );
+
+        // test://path?full-path=m/44'/999'/1'
+        let mut builder = URIReferenceBuilder::new();
+        builder
+            .try_scheme(Some("test"))
+            .unwrap()
+            .try_authority(Some("path"))
+            .unwrap()
+            .try_path("")
+            .unwrap()
+            .try_query(Some("full-path=m/44'/999'/1'"))
+            .unwrap();
+        let uri = builder.build().unwrap();
+        assert_eq!(
+            DerivationPath::from_uri(&uri, false).unwrap(),
+            Some(derivation_path.clone())
+        );
+
+        // test://path?full-path=m/44\'/999\'/1\'
+        let mut builder = URIReferenceBuilder::new();
+        builder
+            .try_scheme(Some("test"))
+            .unwrap()
+            .try_authority(Some("path"))
+            .unwrap()
+            .try_path("")
+            .unwrap()
+            .try_query(Some("full-path=m/44\'/999\'/1\'"))
+            .unwrap();
+        let uri = builder.build().unwrap();
+        assert_eq!(
+            DerivationPath::from_uri(&uri, false).unwrap(),
+            Some(derivation_path)
+        );
+
+        // test://path?full-path=m/44/999/1, only `key` supported
+        let mut builder = URIReferenceBuilder::new();
+        builder
+            .try_scheme(Some("test"))
+            .unwrap()
+            .try_authority(Some("path"))
+            .unwrap()
+            .try_path("")
+            .unwrap()
+            .try_query(Some("full-path=m/44/999/1"))
+            .unwrap();
+        let uri = builder.build().unwrap();
+        assert!(matches!(
+            DerivationPath::from_uri(&uri, true),
+            Err(DerivationPathError::InvalidDerivationPath(_))
+        ));
+
+        // test://path?key=0/0&full-path=m/44/999/1
+        let mut builder = URIReferenceBuilder::new();
+        builder
+            .try_scheme(Some("test"))
+            .unwrap()
+            .try_authority(Some("path"))
+            .unwrap()
+            .try_path("")
+            .unwrap()
+            .try_query(Some("key=0/0&full-path=m/44/999/1"))
+            .unwrap();
+        let uri = builder.build().unwrap();
+        assert!(matches!(
+            DerivationPath::from_uri(&uri, false),
+            Err(DerivationPathError::InvalidDerivationPath(_))
+        ));
+
+        // test://path?full-path=m/44/999/1&bad-key=0/0
+        let mut builder = URIReferenceBuilder::new();
+        builder
+            .try_scheme(Some("test"))
+            .unwrap()
+            .try_authority(Some("path"))
+            .unwrap()
+            .try_path("")
+            .unwrap()
+            .try_query(Some("full-path=m/44/999/1&bad-key=0/0"))
+            .unwrap();
+        let uri = builder.build().unwrap();
+        assert!(matches!(
+            DerivationPath::from_uri(&uri, false),
+            Err(DerivationPathError::InvalidDerivationPath(_))
+        ));
+
+        // test://path?full-path=bad-value
+        let mut builder = URIReferenceBuilder::new();
+        builder
+            .try_scheme(Some("test"))
+            .unwrap()
+            .try_authority(Some("path"))
+            .unwrap()
+            .try_path("")
+            .unwrap()
+            .try_query(Some("full-path=bad-value"))
+            .unwrap();
+        let uri = builder.build().unwrap();
+        assert!(matches!(
+            DerivationPath::from_uri(&uri, false),
+            Err(DerivationPathError::InvalidDerivationPath(_))
+        ));
+
+        // test://path?full-path=
+        let mut builder = URIReferenceBuilder::new();
+        builder
+            .try_scheme(Some("test"))
+            .unwrap()
+            .try_authority(Some("path"))
+            .unwrap()
+            .try_path("")
+            .unwrap()
+            .try_query(Some("full-path="))
+            .unwrap();
+        let uri = builder.build().unwrap();
+        assert!(matches!(
+            DerivationPath::from_uri(&uri, false),
+            Err(DerivationPathError::InvalidDerivationPath(_))
+        ));
+
+        // test://path?full-path
+        let mut builder = URIReferenceBuilder::new();
+        builder
+            .try_scheme(Some("test"))
+            .unwrap()
+            .try_authority(Some("path"))
+            .unwrap()
+            .try_path("")
+            .unwrap()
+            .try_query(Some("full-path"))
+            .unwrap();
+        let uri = builder.build().unwrap();
+        assert!(matches!(
+            DerivationPath::from_uri(&uri, false),
             Err(DerivationPathError::InvalidDerivationPath(_))
         ));
     }
