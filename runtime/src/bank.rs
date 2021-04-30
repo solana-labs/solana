@@ -86,13 +86,15 @@ use solana_sdk::{
     hash::{extend_and_hash, hashv, Hash},
     incinerator,
     inflation::Inflation,
-    instruction::CompiledInstruction,
+    instruction::{CompiledInstruction, InstructionError},
     lamports::LamportsError,
     message::Message,
     native_loader,
     native_token::sol_to_lamports,
     nonce, nonce_account,
-    process_instruction::{BpfComputeBudget, Executor, ProcessInstructionWithContext},
+    process_instruction::{
+        BpfComputeBudget, ComputeMeter, Executor, ProcessInstructionWithContext,
+    },
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     recent_blockhashes_account,
@@ -406,6 +408,28 @@ impl CachedExecutors {
     }
     fn remove(&mut self, pubkey: &Pubkey) {
         let _ = self.executors.remove(pubkey);
+    }
+}
+
+pub struct TxComputeMeter {
+    remaining: u64,
+}
+impl TxComputeMeter {
+    pub fn new(cap: u64) -> Self {
+        Self { remaining: cap }
+    }
+}
+impl ComputeMeter for TxComputeMeter {
+    fn consume(&mut self, amount: u64) -> std::result::Result<(), InstructionError> {
+        let exceeded = self.remaining < amount;
+        self.remaining = self.remaining.saturating_sub(amount);
+        if exceeded {
+            return Err(InstructionError::ComputationalBudgetExceeded);
+        }
+        Ok(())
+    }
+    fn get_remaining(&self) -> u64 {
+        self.remaining
     }
 }
 
@@ -3157,6 +3181,10 @@ impl Bank {
                         None
                     };
 
+                    let compute_meter = Rc::new(RefCell::new(TxComputeMeter::new(
+                        bpf_compute_budget.max_units,
+                    )));
+
                     let mut process_result = self.message_processor.process_message(
                         tx.message(),
                         &loader_refcells,
@@ -3168,6 +3196,7 @@ impl Bank {
                         instruction_recorders.as_deref(),
                         self.feature_set.clone(),
                         bpf_compute_budget,
+                        compute_meter,
                         &mut timings.details,
                         self.rc.accounts.clone(),
                         &self.ancestors,
