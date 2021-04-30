@@ -39,7 +39,7 @@ pub struct AccountSharedData {
     /// this account's data contains a loaded program (and is now read-only)
     executable: bool,
     /// the epoch at which this account will next owe rent
-    pub rent_epoch: Epoch,
+    rent_epoch: Epoch,
 }
 
 /// Compares two ReadableAccounts
