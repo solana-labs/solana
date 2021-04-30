@@ -108,7 +108,9 @@ fn test_bad_bank_hash() {
                 existing.insert(idx);
                 break;
             }
-            accounts_keys[idx].1.lamports = thread_rng().gen_range(0, 1000);
+            accounts_keys[idx]
+                .1
+                .set_lamports(thread_rng().gen_range(0, 1000));
         });
 
         let account_refs: Vec<_> = existing

@@ -12135,7 +12135,7 @@ pub(crate) mod tests {
         // Modify staked vote account owner; a vote account owned by another program could be
         // freely modified with malicious data
         let bogus_vote_program = Pubkey::new_unique();
-        vote_account.lamports = original_lamports;
+        vote_account.set_lamports(original_lamports);
         vote_account.set_owner(bogus_vote_program);
         bank.store_account(
             &validator_vote_keypairs0.vote_keypair.pubkey(),

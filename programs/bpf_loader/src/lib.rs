@@ -1950,7 +1950,7 @@ mod tests {
             &AccountSharedData::new(u64::MAX / 2, 0, &system_program::id()),
         );
         let mut modified_buffer_account = buffer_account.clone();
-        modified_buffer_account.lamports = u64::MAX / 2;
+        modified_buffer_account.set_lamports(u64::MAX / 2);
         bank.store_account(&buffer_address, &modified_buffer_account);
         bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
         bank.store_account(&programdata_address, &AccountSharedData::default());
