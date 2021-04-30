@@ -3385,8 +3385,7 @@ impl Bank {
                             "bank-burned_rent_lamports",
                             rent_to_be_paid as usize
                         );
-                    }
-                    else {
+                    } else {
                         self.store_account(&pubkey, &account);
                         rewards.push((
                             pubkey,
