@@ -15,7 +15,7 @@ use crate::{
     crds::{Crds, CrdsError},
     crds_gossip::{get_stake, get_weight, CRDS_GOSSIP_DEFAULT_BLOOM_ITEMS},
     crds_gossip_error::CrdsGossipError,
-    crds_value::{CrdsValue, CrdsValueLabel},
+    crds_value::CrdsValue,
     ping_pong::PingCache,
 };
 use itertools::Itertools;
@@ -412,8 +412,7 @@ impl CrdsGossipPull {
         mut failed_inserts: Vec<Hash>,
         now: u64,
         stats: &mut ProcessPullStats,
-    ) -> Vec<(CrdsValueLabel, Hash, u64)> {
-        let mut success = vec![];
+    ) {
         let mut owners = HashSet::new();
         for response in responses_expired_timeout {
             match crds.insert(response, now) {
@@ -424,17 +423,14 @@ impl CrdsGossipPull {
             }
         }
         for response in responses {
-            let label = response.label();
-            let wallclock = response.wallclock();
+            let owner = response.pubkey();
             match crds.insert(response, now) {
                 Err(CrdsError::InsertFailed(value_hash)) => failed_inserts.push(value_hash),
                 Err(CrdsError::UnknownStakes) => (),
                 Ok(old) => {
                     stats.success += 1;
                     self.num_pulls += 1;
-                    owners.insert(label.pubkey());
-                    let value_hash = crds.get(&label).unwrap().value_hash;
-                    success.push((label, value_hash, wallclock));
+                    owners.insert(owner);
                     if let Some(val) = old {
                         self.purged_values.push_back((val.value_hash, now))
                     }
@@ -449,7 +445,6 @@ impl CrdsGossipPull {
         self.purge_failed_inserts(now);
         self.failed_inserts
             .extend(failed_inserts.into_iter().zip(std::iter::repeat(now)));
-        success
     }
 
     pub fn purge_failed_inserts(&mut self, now: u64) {
