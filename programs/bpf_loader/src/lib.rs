@@ -2290,12 +2290,12 @@ mod tests {
                 &mut MockInvokeContext::new(keyed_accounts)
             )
         );
-        assert_eq!(0, buffer_account.borrow().lamports);
+        assert_eq!(0, buffer_account.borrow().lamports());
         assert_eq!(
             min_programdata_balance,
-            programdata_account.borrow().lamports
+            programdata_account.borrow().lamports()
         );
-        assert_eq!(1, spill_account.borrow().lamports);
+        assert_eq!(1, spill_account.borrow().lamports());
         let state: UpgradeableLoaderState = programdata_account.borrow().state().unwrap();
         assert_eq!(
             state,

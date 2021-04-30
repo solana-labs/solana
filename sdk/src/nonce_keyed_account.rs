@@ -360,10 +360,10 @@ mod test {
             assert_eq!(state, State::Initialized(data));
             with_test_keyed_account(42, false, |to_keyed| {
                 let recent_blockhashes = create_test_recent_blockhashes(0);
-                let withdraw_lamports = keyed_account.account.borrow().lamports;
+                let withdraw_lamports = keyed_account.account.borrow().lamports();
                 let expect_nonce_lamports =
-                    keyed_account.account.borrow().lamports - withdraw_lamports;
-                let expect_to_lamports = to_keyed.account.borrow().lamports + withdraw_lamports;
+                    keyed_account.account.borrow().lamports() - withdraw_lamports;
+                let expect_to_lamports = to_keyed.account.borrow().lamports() + withdraw_lamports;
                 keyed_account
                     .withdraw_nonce_account(
                         withdraw_lamports,
@@ -376,11 +376,11 @@ mod test {
                     .unwrap();
                 // Empties Account balance
                 assert_eq!(
-                    keyed_account.account.borrow().lamports,
+                    keyed_account.account.borrow().lamports(),
                     expect_nonce_lamports
                 );
                 // Account balance goes to `to`
-                assert_eq!(to_keyed.account.borrow().lamports, expect_to_lamports);
+                assert_eq!(to_keyed.account.borrow().lamports(), expect_to_lamports);
                 let state = AccountUtilsState::<Versions>::state(keyed_account)
                     .unwrap()
                     .convert_to_current();
@@ -590,10 +590,10 @@ mod test {
                 let mut signers = HashSet::new();
                 signers.insert(*nonce_keyed.signer_key().unwrap());
                 let recent_blockhashes = create_test_recent_blockhashes(0);
-                let withdraw_lamports = nonce_keyed.account.borrow().lamports;
+                let withdraw_lamports = nonce_keyed.account.borrow().lamports();
                 let expect_nonce_lamports =
-                    nonce_keyed.account.borrow().lamports - withdraw_lamports;
-                let expect_to_lamports = to_keyed.account.borrow().lamports + withdraw_lamports;
+                    nonce_keyed.account.borrow().lamports() - withdraw_lamports;
+                let expect_to_lamports = to_keyed.account.borrow().lamports() + withdraw_lamports;
                 nonce_keyed
                     .withdraw_nonce_account(
                         withdraw_lamports,
@@ -636,7 +636,7 @@ mod test {
             with_test_keyed_account(42, false, |to_keyed| {
                 let signers = HashSet::new();
                 let recent_blockhashes = create_test_recent_blockhashes(0);
-                let lamports = nonce_keyed.account.borrow().lamports;
+                let lamports = nonce_keyed.account.borrow().lamports();
                 let result = nonce_keyed.withdraw_nonce_account(
                     lamports,
                     &to_keyed,
@@ -666,7 +666,7 @@ mod test {
                 let mut signers = HashSet::new();
                 signers.insert(*nonce_keyed.signer_key().unwrap());
                 let recent_blockhashes = create_test_recent_blockhashes(0);
-                let lamports = nonce_keyed.account.borrow().lamports + 1;
+                let lamports = nonce_keyed.account.borrow().lamports() + 1;
                 let result = nonce_keyed.withdraw_nonce_account(
                     lamports,
                     &to_keyed,
@@ -692,10 +692,10 @@ mod test {
                 let mut signers = HashSet::new();
                 signers.insert(*nonce_keyed.signer_key().unwrap());
                 let recent_blockhashes = create_test_recent_blockhashes(0);
-                let withdraw_lamports = nonce_keyed.account.borrow().lamports / 2;
+                let withdraw_lamports = nonce_keyed.account.borrow().lamports() / 2;
                 let nonce_expect_lamports =
-                    nonce_keyed.account.borrow().lamports - withdraw_lamports;
-                let to_expect_lamports = to_keyed.account.borrow().lamports + withdraw_lamports;
+                    nonce_keyed.account.borrow().lamports() - withdraw_lamports;
+                let to_expect_lamports = to_keyed.account.borrow().lamports() + withdraw_lamports;
                 nonce_keyed
                     .withdraw_nonce_account(
                         withdraw_lamports,
@@ -710,12 +710,15 @@ mod test {
                     .unwrap()
                     .convert_to_current();
                 assert_eq!(state, State::Uninitialized);
-                assert_eq!(nonce_keyed.account.borrow().lamports, nonce_expect_lamports);
-                assert_eq!(to_keyed.account.borrow().lamports, to_expect_lamports);
-                let withdraw_lamports = nonce_keyed.account.borrow().lamports;
+                assert_eq!(
+                    nonce_keyed.account.borrow().lamports(),
+                    nonce_expect_lamports
+                );
+                assert_eq!(to_keyed.account.borrow().lamports(), to_expect_lamports);
+                let withdraw_lamports = nonce_keyed.account.borrow().lamports();
                 let nonce_expect_lamports =
-                    nonce_keyed.account.borrow().lamports - withdraw_lamports;
-                let to_expect_lamports = to_keyed.account.borrow().lamports + withdraw_lamports;
+                    nonce_keyed.account.borrow().lamports() - withdraw_lamports;
+                let to_expect_lamports = to_keyed.account.borrow().lamports() + withdraw_lamports;
                 nonce_keyed
                     .withdraw_nonce_account(
                         withdraw_lamports,
@@ -730,8 +733,11 @@ mod test {
                     .unwrap()
                     .convert_to_current();
                 assert_eq!(state, State::Uninitialized);
-                assert_eq!(nonce_keyed.account.borrow().lamports, nonce_expect_lamports);
-                assert_eq!(to_keyed.account.borrow().lamports, to_expect_lamports);
+                assert_eq!(
+                    nonce_keyed.account.borrow().lamports(),
+                    nonce_expect_lamports
+                );
+                assert_eq!(to_keyed.account.borrow().lamports(), to_expect_lamports);
             })
         })
     }
@@ -766,10 +772,10 @@ mod test {
             };
             assert_eq!(state, State::Initialized(data.clone()));
             with_test_keyed_account(42, false, |to_keyed| {
-                let withdraw_lamports = nonce_keyed.account.borrow().lamports - min_lamports;
+                let withdraw_lamports = nonce_keyed.account.borrow().lamports() - min_lamports;
                 let nonce_expect_lamports =
-                    nonce_keyed.account.borrow().lamports - withdraw_lamports;
-                let to_expect_lamports = to_keyed.account.borrow().lamports + withdraw_lamports;
+                    nonce_keyed.account.borrow().lamports() - withdraw_lamports;
+                let to_expect_lamports = to_keyed.account.borrow().lamports() + withdraw_lamports;
                 nonce_keyed
                     .withdraw_nonce_account(
                         withdraw_lamports,
@@ -789,13 +795,16 @@ mod test {
                     ..data.clone()
                 };
                 assert_eq!(state, State::Initialized(data));
-                assert_eq!(nonce_keyed.account.borrow().lamports, nonce_expect_lamports);
-                assert_eq!(to_keyed.account.borrow().lamports, to_expect_lamports);
+                assert_eq!(
+                    nonce_keyed.account.borrow().lamports(),
+                    nonce_expect_lamports
+                );
+                assert_eq!(to_keyed.account.borrow().lamports(), to_expect_lamports);
                 let recent_blockhashes = create_test_recent_blockhashes(0);
-                let withdraw_lamports = nonce_keyed.account.borrow().lamports;
+                let withdraw_lamports = nonce_keyed.account.borrow().lamports();
                 let nonce_expect_lamports =
-                    nonce_keyed.account.borrow().lamports - withdraw_lamports;
-                let to_expect_lamports = to_keyed.account.borrow().lamports + withdraw_lamports;
+                    nonce_keyed.account.borrow().lamports() - withdraw_lamports;
+                let to_expect_lamports = to_keyed.account.borrow().lamports() + withdraw_lamports;
                 nonce_keyed
                     .withdraw_nonce_account(
                         withdraw_lamports,
@@ -810,8 +819,11 @@ mod test {
                     .unwrap()
                     .convert_to_current();
                 assert_eq!(state, State::Uninitialized);
-                assert_eq!(nonce_keyed.account.borrow().lamports, nonce_expect_lamports);
-                assert_eq!(to_keyed.account.borrow().lamports, to_expect_lamports);
+                assert_eq!(
+                    nonce_keyed.account.borrow().lamports(),
+                    nonce_expect_lamports
+                );
+                assert_eq!(to_keyed.account.borrow().lamports(), to_expect_lamports);
             })
         })
     }
@@ -837,7 +849,7 @@ mod test {
             with_test_keyed_account(42, false, |to_keyed| {
                 let mut signers = HashSet::new();
                 signers.insert(*nonce_keyed.signer_key().unwrap());
-                let withdraw_lamports = nonce_keyed.account.borrow().lamports;
+                let withdraw_lamports = nonce_keyed.account.borrow().lamports();
                 let result = nonce_keyed.withdraw_nonce_account(
                     withdraw_lamports,
                     &to_keyed,
@@ -873,7 +885,7 @@ mod test {
                 let recent_blockhashes = create_test_recent_blockhashes(63);
                 let mut signers = HashSet::new();
                 signers.insert(*nonce_keyed.signer_key().unwrap());
-                let withdraw_lamports = nonce_keyed.account.borrow().lamports + 1;
+                let withdraw_lamports = nonce_keyed.account.borrow().lamports() + 1;
                 let result = nonce_keyed.withdraw_nonce_account(
                     withdraw_lamports,
                     &to_keyed,
@@ -909,7 +921,7 @@ mod test {
                 let recent_blockhashes = create_test_recent_blockhashes(63);
                 let mut signers = HashSet::new();
                 signers.insert(*nonce_keyed.signer_key().unwrap());
-                let withdraw_lamports = nonce_keyed.account.borrow().lamports - min_lamports + 1;
+                let withdraw_lamports = nonce_keyed.account.borrow().lamports() - min_lamports + 1;
                 let result = nonce_keyed.withdraw_nonce_account(
                     withdraw_lamports,
                     &to_keyed,
