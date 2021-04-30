@@ -1227,7 +1227,6 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         newest_root_in_slot_list: Slot,
         slot: Slot,
     ) -> bool {
-        assert!(newest_root_in_slot_list < max_clean_root);
         slot < max_clean_root && slot != newest_root_in_slot_list
     }
 
