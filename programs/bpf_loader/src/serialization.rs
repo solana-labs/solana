@@ -421,7 +421,7 @@ mod tests {
         for ((account, account_info), key) in accounts.iter().zip(de_accounts).zip(keys.clone()) {
             assert_eq!(key, *account_info.key);
             let account = account.borrow();
-            assert_eq!(account.lamports, account_info.lamports());
+            assert_eq!(account.lamports(), account_info.lamports());
             assert_eq!(account.data(), &account_info.data.borrow()[..]);
             assert_eq!(account.owner(), account_info.owner);
             assert_eq!(account.executable(), account_info.executable);
@@ -466,7 +466,7 @@ mod tests {
         {
             assert_eq!(key, *de_keyed_account.unsigned_key());
             let account = account.borrow();
-            assert_eq!(account.lamports, de_keyed_account.lamports().unwrap());
+            assert_eq!(account.lamports(), de_keyed_account.lamports().unwrap());
             assert_eq!(
                 account.data(),
                 de_keyed_account.try_account_ref().unwrap().data()
@@ -493,7 +493,7 @@ mod tests {
         for ((account, account_info), key) in accounts.iter().zip(de_accounts).zip(keys.clone()) {
             assert_eq!(key, *account_info.key);
             let account = account.borrow();
-            assert_eq!(account.lamports, account_info.lamports());
+            assert_eq!(account.lamports(), account_info.lamports());
             assert_eq!(account.data(), &account_info.data.borrow()[..]);
             assert_eq!(account.owner(), account_info.owner);
             assert_eq!(account.executable(), account_info.executable);
@@ -525,7 +525,7 @@ mod tests {
         {
             assert_eq!(key, *de_keyed_account.unsigned_key());
             let account = account.borrow();
-            assert_eq!(account.lamports, de_keyed_account.lamports().unwrap());
+            assert_eq!(account.lamports(), de_keyed_account.lamports().unwrap());
             assert_eq!(
                 account.data(),
                 de_keyed_account.try_account_ref().unwrap().data()
