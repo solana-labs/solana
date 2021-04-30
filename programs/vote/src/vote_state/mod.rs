@@ -1696,7 +1696,7 @@ mod tests {
         assert!(post_state.is_uninitialized());
 
         // reset balance and restore state, verify that authorized_withdrawer works
-        vote_account.borrow_mut().lamports = lamports;
+        vote_account.borrow_mut().set_lamports(lamports);
         vote_account.borrow_mut().set_state(&pre_state).unwrap();
 
         // authorize authorized_withdrawer

@@ -3118,7 +3118,7 @@ mod tests {
         assert_eq!(stake_keyed_account.state(), Ok(StakeState::Uninitialized));
 
         // reset balance
-        stake_account.borrow_mut().lamports = stake_lamports;
+        stake_account.borrow_mut().set_lamports(stake_lamports);
 
         // lockup
         let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);

@@ -1322,7 +1322,7 @@ mod tests {
         assert_eq!(loaded_transaction.accounts[0].lamports, min_balance);
 
         // Fee leaves zero balance fails
-        accounts[0].1.lamports = min_balance;
+        accounts[0].1.set_lamports(min_balance);
         let loaded_accounts = load_accounts_with_fee_and_rent(
             tx.clone(),
             &accounts,
@@ -1335,7 +1335,7 @@ mod tests {
         assert_eq!(*load_res, Err(TransactionError::InsufficientFundsForFee));
 
         // Fee leaves non-zero, but sub-min_balance balance fails
-        accounts[0].1.lamports = 3 * min_balance / 2;
+        accounts[0].1.set_lamports(3 * min_balance / 2);
         let loaded_accounts = load_accounts_with_fee_and_rent(
             tx,
             &accounts,
