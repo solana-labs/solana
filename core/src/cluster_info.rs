@@ -211,7 +211,7 @@ pub struct ClusterInfo {
     entrypoints: RwLock<Vec<ContactInfo>>,
     outbound_budget: DataBudget,
     my_contact_info: RwLock<ContactInfo>,
-    ping_cache: RwLock<PingCache>,
+    ping_cache: Mutex<PingCache>,
     id: Pubkey,
     stats: GossipStats,
     socket: UdpSocket,
@@ -478,7 +478,7 @@ impl ClusterInfo {
             entrypoints: RwLock::new(vec![]),
             outbound_budget: DataBudget::default(),
             my_contact_info: RwLock::new(contact_info),
-            ping_cache: RwLock::new(PingCache::new(
+            ping_cache: Mutex::new(PingCache::new(
                 GOSSIP_PING_CACHE_TTL,
                 GOSSIP_PING_CACHE_CAPACITY,
             )),
@@ -513,7 +513,7 @@ impl ClusterInfo {
             entrypoints: RwLock::new(self.entrypoints.read().unwrap().clone()),
             outbound_budget: self.outbound_budget.clone_non_atomic(),
             my_contact_info: RwLock::new(my_contact_info),
-            ping_cache: RwLock::new(self.ping_cache.read().unwrap().mock_clone()),
+            ping_cache: Mutex::new(self.ping_cache.lock().unwrap().mock_clone()),
             id: *new_id,
             stats: GossipStats::default(),
             socket: UdpSocket::bind("0.0.0.0:0").unwrap(),
@@ -2047,7 +2047,7 @@ impl ClusterInfo {
     {
         let mut cache = HashMap::<(Pubkey, SocketAddr), bool>::new();
         let mut pingf = move || Ping::new_rand(&mut rng, &self.keypair).ok();
-        let mut ping_cache = self.ping_cache.write().unwrap();
+        let mut ping_cache = self.ping_cache.lock().unwrap();
         let mut hard_check = move |node| {
             let (check, ping) = ping_cache.check(now, node, &mut pingf);
             if let Some(ping) = ping {
@@ -2388,7 +2388,7 @@ impl ClusterInfo {
         let _st = ScopedTimer::from(&self.stats.handle_batch_pong_messages_time);
         let mut pongs = pongs.into_iter().peekable();
         if pongs.peek().is_some() {
-            let mut ping_cache = self.ping_cache.write().unwrap();
+            let mut ping_cache = self.ping_cache.lock().unwrap();
             for (addr, pong) in pongs {
                 ping_cache.add(&pong, addr, now);
             }
@@ -3199,7 +3199,7 @@ mod tests {
                 .take(128)
                 .collect();
         let pings: Vec<_> = {
-            let mut ping_cache = cluster_info.ping_cache.write().unwrap();
+            let mut ping_cache = cluster_info.ping_cache.lock().unwrap();
             let mut pingf = || Ping::new_rand(&mut rng, &this_node).ok();
             remote_nodes
                 .iter()
@@ -3222,7 +3222,7 @@ mod tests {
         cluster_info.handle_batch_pong_messages(pongs, now);
         // Assert that remote nodes now pass the ping/pong check.
         {
-            let mut ping_cache = cluster_info.ping_cache.write().unwrap();
+            let mut ping_cache = cluster_info.ping_cache.lock().unwrap();
             for (keypair, socket) in &remote_nodes {
                 let node = (keypair.pubkey(), *socket);
                 let (check, _) = ping_cache.check(now, node, || -> Option<Ping> { None });
@@ -3231,7 +3231,7 @@ mod tests {
         }
         // Assert that a new random remote node still will not pass the check.
         {
-            let mut ping_cache = cluster_info.ping_cache.write().unwrap();
+            let mut ping_cache = cluster_info.ping_cache.lock().unwrap();
             let (keypair, socket) = new_rand_remote_node(&mut rng);
             let node = (keypair.pubkey(), socket);
             let (check, _) = ping_cache.check(now, node, || -> Option<Ping> { None });
