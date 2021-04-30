@@ -285,7 +285,7 @@ impl CrdsGossip {
         now: u64,
         process_pull_stats: &mut ProcessPullStats,
     ) {
-        let success = self.pull.process_pull_responses(
+        self.pull.process_pull_responses(
             &mut self.crds,
             from,
             responses,
@@ -294,7 +294,6 @@ impl CrdsGossip {
             now,
             process_pull_stats,
         );
-        self.push.push_pull_responses(success, now);
     }
 
     pub fn make_timeouts_test(&self) -> HashMap<Pubkey, u64> {
@@ -316,10 +315,6 @@ impl CrdsGossip {
         timeouts: &HashMap<Pubkey, u64>,
     ) -> usize {
         let mut rv = 0;
-        if now > self.push.msg_timeout {
-            let min = now - self.push.msg_timeout;
-            self.push.purge_old_pending_push_messages(&self.crds, min);
-        }
         if now > 5 * self.push.msg_timeout {
             let min = now - 5 * self.push.msg_timeout;
             self.push.purge_old_received_cache(min);
