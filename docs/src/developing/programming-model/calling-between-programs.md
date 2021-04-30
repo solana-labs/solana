@@ -5,8 +5,8 @@ title: Calling Between Programs
 ## Cross-Program Invocations
 
 The Solana runtime allows programs to call each other via a mechanism called
-cross-program invocation.  Calling between programs is achieved by one program
-invoking an instruction of the other.  The invoking program is halted until the
+cross-program invocation. Calling between programs is achieved by one program
+invoking an instruction of the other. The invoking program is halted until the
 invoked program finishes processing the instruction.
 
 For example, a client could create a transaction that modifies two accounts,
@@ -57,7 +57,7 @@ given instruction to the `token` program via the instruction's `program_id`
 field.
 
 Note that `invoke` requires the caller to pass all the accounts required by the
-instruction being invoked.  This means that both the executable account (the
+instruction being invoked. This means that both the executable account (the
 ones that matches the instruction's program id) and the accounts passed to the
 instruction procesor.
 
@@ -166,17 +166,17 @@ authority elsewhere at its discretion.
 
 A Program address does not lie on the ed25519 curve and therefore has no valid
 private key associated with it, and thus generating a signature for it is
-impossible.  While it has no private key of its own, it can be used by a program
+impossible. While it has no private key of its own, it can be used by a program
 to issue an instruction that includes the Program address as a signer.
 
 ### Hash-based generated program addresses
 
 Program addresses are deterministically derived from a collection of seeds and a
-program id using a 256-bit pre-image resistant hash function.  Program address
+program id using a 256-bit pre-image resistant hash function. Program address
 must not lie on the ed25519 curve to ensure there is no associated private key.
 During generation an error will be returned if the address is found to lie on
-the curve.  There is about a 50/50 change of this happening for a given
-collection of seeds and program id.  If this occurs a different set of seeds or
+the curve. There is about a 50/50 change of this happening for a given
+collection of seeds and program id. If this occurs a different set of seeds or
 a seed bump (additional 8 bit seed) can be used to find a valid program address
 off the curve.
 

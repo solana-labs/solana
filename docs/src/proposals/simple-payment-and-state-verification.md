@@ -94,6 +94,7 @@ in the block. Ideally this Block-Merkle would be implmented, as the alternative
 is very inefficient.
 
 #### Block Headers
+
 In order to verify transaction inclusion proofs, light clients need to be able
 to infer the topology of the forks in the network
 

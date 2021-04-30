@@ -19,7 +19,7 @@ and so this document attempts to clarify and codify the process for new releases
 
 1. In any `PATCH` or `MINOR` release, a feature, API, endpoint, etc. could be marked as deprecated.
 2. According to code upgrade difficulty, some features will be remain deprecated for a few release
-  cycles.
+   cycles.
 3. In a future `MAJOR` release, deprecated features will be removed in an incompatible way.
 
 ### Release Cadence
@@ -57,46 +57,55 @@ release channels.
 ### RPC API
 
 Patch releases:
+
 - Bug fixes
 - Security fixes
 - Endpoint / feature deprecation
 
 Minor releases:
+
 - New RPC endpoints and features
 
 Major releases:
+
 - Removal of deprecated features
 
 ### Rust Crates
 
-* [`solana-sdk`](https://docs.rs/solana-sdk/) - Rust SDK for creating transactions and parsing account state
-* [`solana-program`](https://docs.rs/solana-program/) - Rust SDK for writing programs
-* [`solana-client`](https://docs.rs/solana-client/) - Rust client for connecting to RPC API
-* [`solana-cli-config`](https://docs.rs/solana-cli-config/) - Rust client for managing Solana CLI config files
+- [`solana-sdk`](https://docs.rs/solana-sdk/) - Rust SDK for creating transactions and parsing account state
+- [`solana-program`](https://docs.rs/solana-program/) - Rust SDK for writing programs
+- [`solana-client`](https://docs.rs/solana-client/) - Rust client for connecting to RPC API
+- [`solana-cli-config`](https://docs.rs/solana-cli-config/) - Rust client for managing Solana CLI config files
 
 Patch releases:
+
 - Bug fixes
 - Security fixes
 - Performance improvements
 
 Minor releases:
+
 - New APIs
 
 Major releases
+
 - Removal of deprecated APIs
 - Backwards incompatible behavior changes
 
 ### CLI Tools
 
 Patch releases:
+
 - Bug and security fixes
 - Performance improvements
 - Subcommand / argument deprecation
 
 Minor releases:
+
 - New subcommands
 
 Major releases:
+
 - Switch to new RPC API endpoints / configuration introduced in the previous major version.
 - Removal of deprecated features
 
@@ -111,7 +120,7 @@ The release process is as follows:
 
 1. New runtime feature is included in a new release, deactivated by default
 2. Once sufficient staked validators upgrade to the new release, the runtime feature switch
-  is activated manually with an instruction
+   is activated manually with an instruction
 3. The feature takes effect at the beginning of the next epoch
 
 ### Infrastructure Changes

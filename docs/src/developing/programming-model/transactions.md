@@ -134,11 +134,10 @@ which loader should be used to load and execute the program and the data
 contains information about how the runtime should execute the program.
 
 In the case of [on-chain BPF programs](developing/on-chain-programs/overview.md),
-the owner is the BPF Loader and the account data holds the BPF bytecode.  Program
+the owner is the BPF Loader and the account data holds the BPF bytecode. Program
 accounts are permanently marked as executable by the loader once they are
 successfully deployed. The runtime will reject transactions that specify programs
 that are not executable.
-
 
 Unlike on-chain programs, [Native Programs](/developing/runtime-facilities/programs)
 are handled differently in that they are built directly into the Solana runtime.
@@ -173,21 +172,21 @@ token account states.
 
 ### Multiple instructions in a single transaction
 
-A transaction can contain instructions in any order.   This means a malicious
+A transaction can contain instructions in any order. This means a malicious
 user could craft transactions that may pose instructions in an order that the
-program has not been protected against.  Programs should be hardened to properly
+program has not been protected against. Programs should be hardened to properly
 and safely handle any possible instruction sequence.
 
-One not so obvious example is account deinitialization.  Some programs may
+One not so obvious example is account deinitialization. Some programs may
 attempt to deinitialize an account by setting its lamports to zero, with the
-assumption that the runtime will delete the account.  This assumption may be
+assumption that the runtime will delete the account. This assumption may be
 valid between transactions, but it is not between instructions or cross-program
-invocations.  To harden against this, the program should also explicitly zero out the
+invocations. To harden against this, the program should also explicitly zero out the
 account's data.
 
 An example of where this could be a problem is if a token program, upon
 transferring the token out of an account, sets the account's lamports to zero,
-assuming it will be deleted by the runtime.  If the program does not zero out the
+assuming it will be deleted by the runtime. If the program does not zero out the
 account's data, a malicious user could trail this instruction with another that
 transfers the tokens a second time.
 
@@ -200,7 +199,6 @@ account holder has authorized the transaction. Typically, the program uses the
 authorization to permit debiting the account or modifying its data. More
 information about how the authorization is communicated to a program can be
 found in [Accounts](accounts.md#signers)
-
 
 ## Recent Blockhash
 
