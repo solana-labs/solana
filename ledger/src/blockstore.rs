@@ -1292,9 +1292,37 @@ impl Blockstore {
         };
 
         if shred.data_header.size == 0 {
+            let leader_pubkey = leader_schedule
+                .and_then(|leader_schedule| leader_schedule.slot_leader_at(slot, None));
+
+            datapoint_error!(
+                "blockstore_error",
+                (
+                    "error",
+                    format!(
+                        "Leader {:?}, slot {}: received index {} is empty",
+                        leader_pubkey, slot, shred_index,
+                    ),
+                    String
+                )
+            );
             return false;
         }
         if shred.payload.len() > SHRED_PAYLOAD_SIZE {
+            let leader_pubkey = leader_schedule
+                .and_then(|leader_schedule| leader_schedule.slot_leader_at(slot, None));
+
+            datapoint_error!(
+                "blockstore_error",
+                (
+                    "error",
+                    format!(
+                        "Leader {:?}, slot {}: received index {} shred.payload.len() > SHRED_PAYLOAD_SIZE",
+                        leader_pubkey, slot, shred_index,
+                    ),
+                    String
+                )
+            );
             return false;
         }
 
@@ -1303,8 +1331,7 @@ impl Blockstore {
         let last_index = slot_meta.last_index;
         if shred_index >= last_index {
             let leader_pubkey = leader_schedule
-                .map(|leader_schedule| leader_schedule.slot_leader_at(slot, None))
-                .unwrap_or(None);
+                .and_then(|leader_schedule| leader_schedule.slot_leader_at(slot, None));
 
             let ending_shred: Cow<Vec<u8>> = self.get_data_shred_from_just_inserted_or_db(
                 just_inserted_data_shreds,
@@ -1324,24 +1351,23 @@ impl Blockstore {
             }
 
             datapoint_error!(
-                    "blockstore_error",
-                    (
-                        "error",
-                        format!(
-                            "Leader {:?}, slot {}: received index {} >= slot.last_index {}, is_recovered: {}",
-                            leader_pubkey, slot, shred_index, last_index, is_recovered
-                        ),
-                        String
-                    )
-                );
+                "blockstore_error",
+                (
+                    "error",
+                    format!(
+                        "Leader {:?}, slot {}: received index {} >= slot.last_index {}, is_recovered: {}",
+                        leader_pubkey, slot, shred_index, last_index, is_recovered
+                    ),
+                    String
+                )
+            );
             return false;
         }
         // Check that we do not receive a shred with "last_index" true, but shred_index
         // less than our current received
         if last_in_slot && shred_index < slot_meta.received {
             let leader_pubkey = leader_schedule
-                .map(|leader_schedule| leader_schedule.slot_leader_at(slot, None))
-                .unwrap_or(None);
+                .and_then(|leader_schedule| leader_schedule.slot_leader_at(slot, None));
 
             let ending_shred: Cow<Vec<u8>> = self.get_data_shred_from_just_inserted_or_db(
                 just_inserted_data_shreds,
@@ -1361,16 +1387,16 @@ impl Blockstore {
             }
 
             datapoint_error!(
-                    "blockstore_error",
-                    (
-                        "error",
-                        format!(
-                            "Leader {:?}, slot {}: received shred_index {} < slot.received {}, is_recovered: {}",
-                            leader_pubkey, slot, shred_index, slot_meta.received, is_recovered
-                        ),
-                        String
-                    )
-                );
+                "blockstore_error",
+                (
+                    "error",
+                    format!(
+                        "Leader {:?}, slot {}: received shred_index {} < slot.received {}, is_recovered: {}",
+                        leader_pubkey, slot, shred_index, slot_meta.received, is_recovered
+                    ),
+                    String
+                )
+            );
             return false;
         }
 
@@ -5303,17 +5329,46 @@ pub mod tests {
             let mut shred5 = shreds[5].clone();
             shred5.payload.push(10);
             shred5.data_header.size = shred5.payload.len() as u16;
-            assert_eq!(
-                blockstore.should_insert_data_shred(
-                    &shred5,
-                    &slot_meta,
-                    &HashMap::new(),
-                    &last_root,
-                    None,
-                    false
-                ),
+            assert!(!blockstore.should_insert_data_shred(
+                &shred5,
+                &slot_meta,
+                &HashMap::new(),
+                &last_root,
+                None,
                 false
+            ));
+
+            // Ensure that an empty shred (one with no data) would get inserted. Such shreds
+            // may be used as signals (broadcast does so to indicate a slot was interrupted)
+            // Reuse shred5's header values to avoid a false negative result
+            let mut empty_shred = Shred::new_from_data(
+                shred5.common_header.slot,
+                shred5.common_header.index,
+                shred5.data_header.parent_offset,
+                None, // data
+                true, // is_last_data
+                true, // is_last_in_slot
+                0,    // reference_tick
+                shred5.common_header.version,
+                shred5.common_header.fec_set_index,
             );
+            assert!(blockstore.should_insert_data_shred(
+                &empty_shred,
+                &slot_meta,
+                &HashMap::new(),
+                &last_root,
+                None,
+                false
+            ));
+            empty_shred.data_header.size = 0;
+            assert!(!blockstore.should_insert_data_shred(
+                &empty_shred,
+                &slot_meta,
+                &HashMap::new(),
+                &last_root,
+                None,
+                false
+            ));
 
             // Trying to insert another "is_last" shred with index < the received index should fail
             // skip over shred 7
