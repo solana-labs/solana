@@ -192,6 +192,10 @@ pub fn is_upgrade_instruction(instruction_data: &[u8]) -> bool {
     3 == instruction_data[0]
 }
 
+pub fn is_set_authority_instruction(instruction_data: &[u8]) -> bool {
+    4 == instruction_data[0]
+}
+
 /// Returns the instructions required to set a buffers's authority.
 pub fn set_buffer_authority(
     buffer_address: &Pubkey,
@@ -262,44 +266,82 @@ mod tests {
         );
     }
 
+    fn assert_is_instruction<F>(
+        is_instruction_fn: F,
+        expected_instruction: UpgradeableLoaderInstruction,
+    ) where
+        F: Fn(&[u8]) -> bool,
+    {
+        let result = is_instruction_fn(
+            &bincode::serialize(&UpgradeableLoaderInstruction::InitializeBuffer).unwrap(),
+        );
+        let expected_result = matches!(
+            expected_instruction,
+            UpgradeableLoaderInstruction::InitializeBuffer
+        );
+        assert_eq!(expected_result, result);
+
+        let result = is_instruction_fn(
+            &bincode::serialize(&UpgradeableLoaderInstruction::Write {
+                offset: 0,
+                bytes: vec![],
+            })
+            .unwrap(),
+        );
+        let expected_result = matches!(
+            expected_instruction,
+            UpgradeableLoaderInstruction::Write {
+                offset: _,
+                bytes: _,
+            }
+        );
+        assert_eq!(expected_result, result);
+
+        let result = is_instruction_fn(
+            &bincode::serialize(&UpgradeableLoaderInstruction::DeployWithMaxDataLen {
+                max_data_len: 0,
+            })
+            .unwrap(),
+        );
+        let expected_result = matches!(
+            expected_instruction,
+            UpgradeableLoaderInstruction::DeployWithMaxDataLen { max_data_len: _ }
+        );
+        assert_eq!(expected_result, result);
+
+        let result =
+            is_instruction_fn(&bincode::serialize(&UpgradeableLoaderInstruction::Upgrade).unwrap());
+        let expected_result = matches!(expected_instruction, UpgradeableLoaderInstruction::Upgrade);
+        assert_eq!(expected_result, result);
+
+        let result = is_instruction_fn(
+            &bincode::serialize(&UpgradeableLoaderInstruction::SetAuthority).unwrap(),
+        );
+        let expected_result = matches!(
+            expected_instruction,
+            UpgradeableLoaderInstruction::SetAuthority
+        );
+        assert_eq!(expected_result, result);
+
+        let result =
+            is_instruction_fn(&bincode::serialize(&UpgradeableLoaderInstruction::Close).unwrap());
+        let expected_result = matches!(expected_instruction, UpgradeableLoaderInstruction::Close);
+        assert_eq!(expected_result, result);
+    }
+
+    #[test]
+    fn test_is_set_authority_instruction() {
+        assert_is_instruction(
+            is_set_authority_instruction,
+            UpgradeableLoaderInstruction::SetAuthority {},
+        );
+    }
+
     #[test]
     fn test_is_upgrade_instruction() {
-        assert_eq!(
-            false,
-            is_upgrade_instruction(
-                &bincode::serialize(&UpgradeableLoaderInstruction::InitializeBuffer).unwrap()
-            )
-        );
-        assert_eq!(
-            false,
-            is_upgrade_instruction(
-                &bincode::serialize(&UpgradeableLoaderInstruction::Write {
-                    offset: 0,
-                    bytes: vec![],
-                })
-                .unwrap()
-            )
-        );
-        assert_eq!(
-            false,
-            is_upgrade_instruction(
-                &bincode::serialize(&UpgradeableLoaderInstruction::DeployWithMaxDataLen {
-                    max_data_len: 0,
-                })
-                .unwrap()
-            )
-        );
-        assert_eq!(
-            true,
-            is_upgrade_instruction(
-                &bincode::serialize(&UpgradeableLoaderInstruction::Upgrade).unwrap()
-            )
-        );
-        assert_eq!(
-            false,
-            is_upgrade_instruction(
-                &bincode::serialize(&UpgradeableLoaderInstruction::SetAuthority).unwrap()
-            )
+        assert_is_instruction(
+            is_upgrade_instruction,
+            UpgradeableLoaderInstruction::Upgrade {},
         );
     }
 }
