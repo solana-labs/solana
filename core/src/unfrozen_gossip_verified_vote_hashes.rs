@@ -21,8 +21,8 @@ impl UnfrozenGossipVerifiedVoteHashes {
     ) {
         // If this is a frozen bank, then we need to update the `latest_validator_votes_for_frozen_banks`
         let frozen_hash = if is_frozen { Some(hash) } else { None };
-        let (was_added, latest_frozen_vote_slot) =
-            latest_validator_votes_for_frozen_banks.check_add_vote(pubkey, vote_slot, frozen_hash);
+        let (was_added, latest_frozen_vote_slot) = latest_validator_votes_for_frozen_banks
+            .check_add_vote(pubkey, vote_slot, frozen_hash, false);
 
         if !was_added
             && latest_frozen_vote_slot
