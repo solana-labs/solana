@@ -1212,7 +1212,21 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         }
     }
 
+    /// When can an entry be purged?
+    ///
+    /// If we get a slot update where slot != max_cleanable_root for an account where slot <
+    /// max_clean_root, then we know it's safe to delete because:
+    ///
+    /// a) If s < max_cleanable_root_in_slot_list, then we know the update is outdated by a later
+    /// rooted update, namely the one in max_cleanable_root_in_slot_list
+    ///
+    /// b) If s > max_cleanable_root_in_slot_list, then because s < max_clean_root and we know
+    /// there are no roots in the slot list between max_cleanable_root_in_slot_list and
+    /// max_clean_root, (otherwise there would be a bigger max_cleanable_root_in_slot_list, which
+    /// is a contradiction), then we know s must be an unrooted slot less than max_clean_root and
+    /// thus safe to clean as well.
     fn can_purge_older_entries(max_clean_root: Slot, max_cleanable_root: Slot, slot: Slot) -> bool {
+        assert!(max_cleanable_root < max_clean_root);
         slot < max_clean_root && slot != max_cleanable_root
     }
 
