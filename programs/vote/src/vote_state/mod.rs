@@ -1678,7 +1678,7 @@ mod tests {
 
         // all good
         let to_account = RefCell::new(AccountSharedData::default());
-        let lamports = vote_account.borrow().lamports;
+        let lamports = vote_account.borrow().lamports();
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
         let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         let pre_state: VoteStateVersions = vote_account.borrow().state().unwrap();
@@ -1689,8 +1689,8 @@ mod tests {
             &signers,
         );
         assert_eq!(res, Ok(()));
-        assert_eq!(vote_account.borrow().lamports, 0);
-        assert_eq!(to_account.borrow().lamports, lamports);
+        assert_eq!(vote_account.borrow().lamports(), 0);
+        assert_eq!(to_account.borrow().lamports(), lamports);
         let post_state: VoteStateVersions = vote_account.borrow().state().unwrap();
         // State has been deinitialized since balance is zero
         assert!(post_state.is_uninitialized());
@@ -1728,8 +1728,8 @@ mod tests {
             &signers,
         );
         assert_eq!(res, Ok(()));
-        assert_eq!(vote_account.borrow().lamports, 0);
-        assert_eq!(withdrawer_account.borrow().lamports, lamports);
+        assert_eq!(vote_account.borrow().lamports(), 0);
+        assert_eq!(withdrawer_account.borrow().lamports(), lamports);
         let post_state: VoteStateVersions = vote_account.borrow().state().unwrap();
         // State has been deinitialized since balance is zero
         assert!(post_state.is_uninitialized());

@@ -3240,7 +3240,7 @@ mod tests {
             ),
             Ok(())
         );
-        assert_eq!(stake_account.borrow().lamports, 0);
+        assert_eq!(stake_account.borrow().lamports(), 0);
         assert_eq!(stake_keyed_account.state(), Ok(StakeState::Uninitialized));
 
         // overflow
@@ -4219,8 +4219,8 @@ mod tests {
             Ok(())
         );
         assert_eq!(
-            stake_keyed_account.account.borrow().lamports,
-            split_stake_keyed_account.account.borrow().lamports
+            stake_keyed_account.account.borrow().lamports(),
+            split_stake_keyed_account.account.borrow().lamports()
         );
     }
 
