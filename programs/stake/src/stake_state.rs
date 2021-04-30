@@ -4364,7 +4364,10 @@ mod tests {
             );
 
             // split account already has way enough lamports
-            split_stake_keyed_account.account.borrow_mut().lamports = 10_000_000;
+            split_stake_keyed_account
+                .account
+                .borrow_mut()
+                .set_lamports(10_000_000);
             assert_eq!(
                 stake_keyed_account.split(
                     stake_lamports - (rent_exempt_reserve + 1), // leave rent_exempt_reserve + 1 in original account
@@ -4489,7 +4492,10 @@ mod tests {
             }
 
             // reset
-            stake_keyed_account.account.borrow_mut().lamports = stake_lamports;
+            stake_keyed_account
+                .account
+                .borrow_mut()
+                .set_lamports(stake_lamports);
         }
     }
 
@@ -4899,7 +4905,10 @@ mod tests {
             }
 
             // reset
-            stake_keyed_account.account.borrow_mut().lamports = stake_lamports;
+            stake_keyed_account
+                .account
+                .borrow_mut()
+                .set_lamports(stake_lamports);
         }
     }
 

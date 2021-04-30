@@ -7308,7 +7308,7 @@ pub mod tests {
                         let mut i = 0;
                         loop {
                             let account_bal = thread_rng().gen_range(1, 99);
-                            account.lamports = account_bal;
+                            account.set_lamports(account_bal);
                             db.store_uncached(slot, &[(&pubkey, &account)]);
 
                             let (account, slot) = db
