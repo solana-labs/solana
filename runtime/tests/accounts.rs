@@ -7,7 +7,7 @@ use solana_runtime::{
 };
 use solana_sdk::genesis_config::ClusterType;
 use solana_sdk::{
-    account::{AccountSharedData, WritableAccount},
+    account::{AccountSharedData, ReadableAccount, WritableAccount},
     clock::Slot,
     pubkey::Pubkey,
 };
@@ -48,7 +48,7 @@ fn test_shrink_and_clean() {
                 ));
             }
 
-            alive_accounts.retain(|(_pubkey, account)| account.lamports >= 1);
+            alive_accounts.retain(|(_pubkey, account)| account.lamports() >= 1);
 
             for (pubkey, account) in alive_accounts.iter_mut() {
                 account.checked_sub_lamports(1).unwrap();

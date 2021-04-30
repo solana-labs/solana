@@ -1602,7 +1602,7 @@ mod tests {
         assert_eq!(bank.get_balance(&buffer_address), 0);
         assert_eq!(None, bank.get_account(&buffer_address));
         let post_program_account = bank.get_account(&program_keypair.pubkey()).unwrap();
-        assert_eq!(post_program_account.lamports, min_program_balance);
+        assert_eq!(post_program_account.lamports(), min_program_balance);
         assert_eq!(post_program_account.owner(), &bpf_loader_upgradeable::id());
         assert_eq!(
             post_program_account.data().len(),
@@ -1616,7 +1616,7 @@ mod tests {
             }
         );
         let post_programdata_account = bank.get_account(&programdata_address).unwrap();
-        assert_eq!(post_programdata_account.lamports, min_programdata_balance);
+        assert_eq!(post_programdata_account.lamports(), min_programdata_balance);
         assert_eq!(
             post_programdata_account.owner(),
             &bpf_loader_upgradeable::id()
