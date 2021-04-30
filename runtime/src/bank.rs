@@ -5428,8 +5428,9 @@ pub(crate) mod tests {
         // Make native instruction loader rent exempt
         let system_program_id = system_program::id();
         let mut system_program_account = bank.get_account(&system_program_id).unwrap();
-        system_program_account.lamports =
-            bank.get_minimum_balance_for_rent_exemption(system_program_account.data().len());
+        system_program_account.set_lamports(
+            bank.get_minimum_balance_for_rent_exemption(system_program_account.data().len()),
+        );
         bank.store_account(&system_program_id, &system_program_account);
         bank_with_success_txs.store_account(&system_program_id, &system_program_account);
 
@@ -5484,7 +5485,10 @@ pub(crate) mod tests {
                         .account
                         .borrow_mut()
                         .checked_add_lamports(1)?;
-                    keyed_accounts[2].account.borrow_mut().lamports -= 1;
+                    keyed_accounts[2]
+                        .account
+                        .borrow_mut()
+                        .checked_sub_lamports(1)?;
                     Ok(())
                 }
             }
@@ -9904,8 +9908,8 @@ pub(crate) mod tests {
             {
                 let mut to_account = keyed_accounts[1].try_account_ref_mut()?;
                 let mut dup_account = keyed_accounts[2].try_account_ref_mut()?;
-                dup_account.lamports -= lamports;
-                to_account.checked_add_lamports(lamports).unwrap();
+                dup_account.checked_sub_lamports(lamports)?;
+                to_account.checked_add_lamports(lamports)?;
             }
             keyed_accounts[0]
                 .try_account_ref_mut()?
