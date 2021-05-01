@@ -25,7 +25,13 @@ pub enum ArchiveFormat {
     Tar,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+impl Default for ArchiveFormat {
+    fn default() -> Self {
+        Self::TarZstd
+    }
+}
+
+#[derive(Default, Clone, Debug, Eq, PartialEq)]
 pub struct SnapshotConfig {
     // Generate a new snapshot every this many slots
     pub snapshot_interval_slots: u64,
