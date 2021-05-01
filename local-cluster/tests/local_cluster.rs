@@ -615,6 +615,69 @@ fn run_kill_partition_switch_threshold<C>(
     )
 }
 
+fn find_latest_replayed_slot_from_ledger(
+    ledger_path: &Path,
+    mut latest_slot: Slot,
+) -> (Slot, HashSet<Slot>) {
+    loop {
+        let mut blockstore = open_blockstore(&ledger_path);
+        // This is kind of a hack because we can't query for new frozen blocks over RPC
+        // since the validator is not voting.
+        let new_latest_slots: Vec<Slot> = blockstore
+            .slot_meta_iterator(latest_slot)
+            .unwrap()
+            .filter_map(|(s, _)| if s > latest_slot { Some(s) } else { None })
+            .collect();
+
+        for new_latest_slot in new_latest_slots {
+            latest_slot = new_latest_slot;
+            info!("Checking latest_slot {}", latest_slot);
+            // Wait for the slot to be fully received by the validator
+            let entries;
+            loop {
+                info!("Waiting for slot {} to be full", latest_slot);
+                if blockstore.is_full(latest_slot) {
+                    entries = blockstore.get_slot_entries(latest_slot, 0).unwrap();
+                    assert!(!entries.is_empty());
+                    break;
+                } else {
+                    sleep(Duration::from_millis(50));
+                    blockstore = open_blockstore(&ledger_path);
+                }
+            }
+            // Check the slot has been replayed
+            let non_tick_entry = entries.into_iter().find(|e| !e.transactions.is_empty());
+            if let Some(non_tick_entry) = non_tick_entry {
+                // Wait for the slot to be replayed
+                loop {
+                    info!("Waiting for slot {} to be replayed", latest_slot);
+                    if !blockstore
+                        .map_transactions_to_statuses(
+                            latest_slot,
+                            non_tick_entry.transactions.clone().into_iter(),
+                        )
+                        .is_empty()
+                    {
+                        return (
+                            latest_slot,
+                            AncestorIterator::new(latest_slot, &blockstore).collect(),
+                        );
+                    } else {
+                        sleep(Duration::from_millis(50));
+                        blockstore = open_blockstore(&ledger_path);
+                    }
+                }
+            } else {
+                info!(
+                    "No transactions in slot {}, can't tell if it was replayed",
+                    latest_slot
+                );
+            }
+        }
+        sleep(Duration::from_millis(50));
+    }
+}
+
 #[test]
 #[serial]
 fn test_switch_threshold_uses_gossip_votes() {
@@ -717,38 +780,47 @@ fn test_switch_threshold_uses_gossip_votes() {
         }
 
         info!("Checking to make sure lighter validator doesn't switch");
-        let lighter_blockstore = open_blockstore(&lighter_validator_ledger_path);
-        let start_slot = lighter_blockstore
-            .slot_meta_iterator(0)
-            .unwrap()
-            .last()
-            .unwrap()
-            .0;
-        loop {
-            let (new_lighter_validator_latest_vote, _) = last_vote_in_tower(
-                &lighter_validator_ledger_path,
-                &context.lighter_validator_key,
-            )
-            .unwrap();
+        let mut latest_slot = lighter_validator_latest_vote;
 
-            // Ensure the lighter blockstore has not voted again
-            assert_eq!(
-                new_lighter_validator_latest_vote,
-                lighter_validator_latest_vote
-            );
-            let lighter_blockstore = open_blockstore(&lighter_validator_ledger_path);
-            let new_latest_slot = lighter_blockstore
-                .slot_meta_iterator(start_slot)
-                .unwrap()
-                .last()
-                .unwrap()
-                .0;
-            // Give enough time for all the lockouts to expire, still shouldn't switch
-            if new_latest_slot > start_slot + 256 {
-                break;
+        // Number of chances the validator had to switch votes but didn't
+        let mut total_voting_opportunities = 0;
+        while total_voting_opportunities <= 5 {
+            let (new_latest_slot, latest_slot_ancestors) =
+                find_latest_replayed_slot_from_ledger(&lighter_validator_ledger_path, latest_slot);
+            latest_slot = new_latest_slot;
+            // Ensure `latest_slot` is on the other fork
+            if latest_slot_ancestors.contains(&heavier_validator_latest_vote) {
+                let tower = restore_tower(
+                    &lighter_validator_ledger_path,
+                    &context.lighter_validator_key,
+                )
+                .unwrap();
+                // Check that there was an opportunity to vote
+                if !tower.is_locked_out(latest_slot, &latest_slot_ancestors) {
+                    // Ensure the lighter blockstore has not voted again
+                    let new_lighter_validator_latest_vote = tower.last_voted_slot().unwrap();
+                    assert_eq!(
+                        new_lighter_validator_latest_vote,
+                        lighter_validator_latest_vote
+                    );
+                    info!(
+                        "Incrementing voting opportunities: {}",
+                        total_voting_opportunities
+                    );
+                    total_voting_opportunities += 1;
+                } else {
+                    info!(
+                        "Tower still locked out, can't vote for slot: {}",
+                        latest_slot
+                    );
+                }
+            } else if latest_slot > heavier_validator_latest_vote {
+                warn!(
+                    "validator is still generating blocks on its own fork, last processed slot: {}",
+                    latest_slot
+                );
             }
             sleep(Duration::from_millis(50));
-            info!("latest slot was {}", new_latest_slot);
         }
 
         // Make a vote from the killed validator for slot `heavier_validator_latest_vote` in gossip
@@ -852,20 +924,6 @@ fn test_switch_threshold_uses_gossip_votes() {
                 sleep(Duration::from_millis(50));
             }
         }
-
-        // Restart the paused validator to get back to supermajority to make new roots
-        info!("restarting dead validator");
-        cluster.restart_node(
-            &context
-                .dead_validator_info
-                .as_ref()
-                .unwrap()
-                .info
-                .keypair
-                .pubkey(),
-            context.dead_validator_info.take().unwrap(),
-        );
-        cluster.check_for_new_roots(8, &"PARTITION_TEST");
     };
 
     let ticks_per_slot = 8;

@@ -527,9 +527,7 @@ impl Tower {
         false
     }
 
-    pub fn is_locked_out(&self, slot: Slot, ancestors: &HashMap<Slot, HashSet<Slot>>) -> bool {
-        assert!(ancestors.contains_key(&slot));
-
+    pub fn is_locked_out(&self, slot: Slot, ancestors: &HashSet<Slot>) -> bool {
         if !self.is_recent(slot) {
             return true;
         }
@@ -541,7 +539,7 @@ impl Tower {
         let mut lockouts = self.lockouts.clone();
         lockouts.process_slot_vote_unchecked(slot);
         for vote in &lockouts.votes {
-            if slot != vote.slot && !ancestors[&slot].contains(&vote.slot) {
+            if slot != vote.slot && !ancestors.contains(&vote.slot) {
                 return true;
             }
         }
@@ -551,9 +549,9 @@ impl Tower {
                 // This case should never happen because bank forks purges all
                 // non-descendants of the root every time root is set
                 assert!(
-                    ancestors[&slot].contains(&root_slot),
+                    ancestors.contains(&root_slot),
                     "ancestors: {:?}, slot: {} root: {}",
-                    ancestors[&slot],
+                    ancestors,
                     slot,
                     root_slot
                 );
@@ -2426,16 +2424,14 @@ pub mod test {
     #[test]
     fn test_is_locked_out_empty() {
         let tower = Tower::new_for_tests(0, 0.67);
-        let ancestors = vec![(0, HashSet::new())].into_iter().collect();
+        let ancestors = HashSet::new();
         assert!(!tower.is_locked_out(0, &ancestors));
     }
 
     #[test]
     fn test_is_locked_out_root_slot_child_pass() {
         let mut tower = Tower::new_for_tests(0, 0.67);
-        let ancestors = vec![(1, vec![0].into_iter().collect())]
-            .into_iter()
-            .collect();
+        let ancestors: HashSet<Slot> = vec![0].into_iter().collect();
         tower.lockouts.root_slot = Some(0);
         assert!(!tower.is_locked_out(1, &ancestors));
     }
@@ -2443,9 +2439,7 @@ pub mod test {
     #[test]
     fn test_is_locked_out_root_slot_sibling_fail() {
         let mut tower = Tower::new_for_tests(0, 0.67);
-        let ancestors = vec![(2, vec![0].into_iter().collect())]
-            .into_iter()
-            .collect();
+        let ancestors: HashSet<Slot> = vec![0].into_iter().collect();
         tower.lockouts.root_slot = Some(0);
         tower.record_vote(1, Hash::default());
         assert!(tower.is_locked_out(2, &ancestors));
@@ -2476,9 +2470,7 @@ pub mod test {
     #[test]
     fn test_is_locked_out_double_vote() {
         let mut tower = Tower::new_for_tests(0, 0.67);
-        let ancestors = vec![(1, vec![0].into_iter().collect()), (0, HashSet::new())]
-            .into_iter()
-            .collect();
+        let ancestors: HashSet<Slot> = vec![0].into_iter().collect();
         tower.record_vote(0, Hash::default());
         tower.record_vote(1, Hash::default());
         assert!(tower.is_locked_out(0, &ancestors));
@@ -2487,9 +2479,7 @@ pub mod test {
     #[test]
     fn test_is_locked_out_child() {
         let mut tower = Tower::new_for_tests(0, 0.67);
-        let ancestors = vec![(1, vec![0].into_iter().collect())]
-            .into_iter()
-            .collect();
+        let ancestors: HashSet<Slot> = vec![0].into_iter().collect();
         tower.record_vote(0, Hash::default());
         assert!(!tower.is_locked_out(1, &ancestors));
     }
@@ -2497,13 +2487,7 @@ pub mod test {
     #[test]
     fn test_is_locked_out_sibling() {
         let mut tower = Tower::new_for_tests(0, 0.67);
-        let ancestors = vec![
-            (0, HashSet::new()),
-            (1, vec![0].into_iter().collect()),
-            (2, vec![0].into_iter().collect()),
-        ]
-        .into_iter()
-        .collect();
+        let ancestors: HashSet<Slot> = vec![0].into_iter().collect();
         tower.record_vote(0, Hash::default());
         tower.record_vote(1, Hash::default());
         assert!(tower.is_locked_out(2, &ancestors));
@@ -2512,13 +2496,7 @@ pub mod test {
     #[test]
     fn test_is_locked_out_last_vote_expired() {
         let mut tower = Tower::new_for_tests(0, 0.67);
-        let ancestors = vec![
-            (0, HashSet::new()),
-            (1, vec![0].into_iter().collect()),
-            (4, vec![0].into_iter().collect()),
-        ]
-        .into_iter()
-        .collect();
+        let ancestors: HashSet<Slot> = vec![0].into_iter().collect();
         tower.record_vote(0, Hash::default());
         tower.record_vote(1, Hash::default());
         assert!(!tower.is_locked_out(4, &ancestors));

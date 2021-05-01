@@ -1873,7 +1873,12 @@ impl ReplayStage {
 
             stats.vote_threshold =
                 tower.check_vote_stake_threshold(bank_slot, &stats.voted_stakes, stats.total_stake);
-            stats.is_locked_out = tower.is_locked_out(bank_slot, &ancestors);
+            stats.is_locked_out = tower.is_locked_out(
+                bank_slot,
+                ancestors
+                    .get(&bank_slot)
+                    .expect("Ancestors map should contain slot for is_locked_out() check"),
+            );
             stats.has_voted = tower.has_voted(bank_slot);
             stats.is_recent = tower.is_recent(bank_slot);
         }
