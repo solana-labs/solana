@@ -2,7 +2,7 @@ use crate::{
     cluster_info::MAX_SNAPSHOT_HASHES,
     contact_info::ContactInfo,
     deprecated,
-    duplicate_shred::{DuplicateShred, DuplicateShredIndex},
+    duplicate_shred::{DuplicateShred, DuplicateShredIndex, MAX_DUPLICATE_SHREDS},
     epoch_slots::EpochSlots,
 };
 use bincode::{serialize, serialized_size};
@@ -87,7 +87,7 @@ pub enum CrdsData {
     LegacyVersion(LegacyVersion),
     Version(Version),
     NodeInstance(NodeInstance),
-    DuplicateShred(DuplicateShred),
+    DuplicateShred(DuplicateShredIndex, DuplicateShred),
 }
 
 impl Sanitize for CrdsData {
@@ -117,7 +117,13 @@ impl Sanitize for CrdsData {
             CrdsData::LegacyVersion(version) => version.sanitize(),
             CrdsData::Version(version) => version.sanitize(),
             CrdsData::NodeInstance(node) => node.sanitize(),
-            CrdsData::DuplicateShred(shred) => shred.sanitize(),
+            CrdsData::DuplicateShred(ix, shred) => {
+                if *ix >= MAX_DUPLICATE_SHREDS {
+                    Err(SanitizeError::ValueOutOfBounds)
+                } else {
+                    shred.sanitize()
+                }
+            }
         }
     }
 }
@@ -451,7 +457,7 @@ impl fmt::Display for CrdsValueLabel {
             CrdsValueLabel::LegacyVersion(_) => write!(f, "LegacyVersion({})", self.pubkey()),
             CrdsValueLabel::Version(_) => write!(f, "Version({})", self.pubkey()),
             CrdsValueLabel::NodeInstance(pk, token) => write!(f, "NodeInstance({}, {})", pk, token),
-            CrdsValueLabel::DuplicateShred(ix, pk) => write!(f, "DuplicateShred({:?}, {})", ix, pk),
+            CrdsValueLabel::DuplicateShred(ix, pk) => write!(f, "DuplicateShred({}, {})", ix, pk),
         }
     }
 }
@@ -485,7 +491,7 @@ impl CrdsValueLabel {
             CrdsValueLabel::LegacyVersion(_) => Some(1),
             CrdsValueLabel::Version(_) => Some(1),
             CrdsValueLabel::NodeInstance(_, _) => None,
-            CrdsValueLabel::DuplicateShred(_, _) => None,
+            CrdsValueLabel::DuplicateShred(_, _) => Some(MAX_DUPLICATE_SHREDS as usize),
         }
     }
 }
@@ -533,7 +539,7 @@ impl CrdsValue {
             CrdsData::LegacyVersion(version) => version.wallclock,
             CrdsData::Version(version) => version.wallclock,
             CrdsData::NodeInstance(node) => node.wallclock,
-            CrdsData::DuplicateShred(shred) => shred.wallclock,
+            CrdsData::DuplicateShred(_, shred) => shred.wallclock,
         }
     }
     pub fn pubkey(&self) -> Pubkey {
@@ -547,7 +553,7 @@ impl CrdsValue {
             CrdsData::LegacyVersion(version) => version.from,
             CrdsData::Version(version) => version.from,
             CrdsData::NodeInstance(node) => node.from,
-            CrdsData::DuplicateShred(shred) => shred.from,
+            CrdsData::DuplicateShred(_, shred) => shred.from,
         }
     }
     pub fn label(&self) -> CrdsValueLabel {
@@ -561,9 +567,7 @@ impl CrdsValue {
             CrdsData::LegacyVersion(_) => CrdsValueLabel::LegacyVersion(self.pubkey()),
             CrdsData::Version(_) => CrdsValueLabel::Version(self.pubkey()),
             CrdsData::NodeInstance(node) => CrdsValueLabel::NodeInstance(node.from, node.token),
-            CrdsData::DuplicateShred(shred) => {
-                CrdsValueLabel::DuplicateShred(DuplicateShredIndex::from(shred), shred.from)
-            }
+            CrdsData::DuplicateShred(ix, shred) => CrdsValueLabel::DuplicateShred(*ix, shred.from),
         }
     }
     pub fn contact_info(&self) -> Option<&ContactInfo> {
