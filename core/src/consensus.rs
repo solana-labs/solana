@@ -541,10 +541,8 @@ impl Tower {
         let mut lockouts = self.lockouts.clone();
         lockouts.process_slot_vote_unchecked(slot);
         for vote in &lockouts.votes {
-            if slot != vote.slot {
-                if !ancestors[&slot].contains(&vote.slot) {
-                    return true;
-                }
+            if slot != vote.slot && !ancestors[&slot].contains(&vote.slot) {
+                return true;
             }
         }
 
