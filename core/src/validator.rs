@@ -100,7 +100,8 @@ pub struct ValidatorConfig {
     pub fixed_leader_schedule: Option<FixedSchedule>,
     pub wait_for_supermajority: Option<Slot>,
     pub new_hard_forks: Option<Vec<Slot>>,
-    pub trusted_validators: Option<HashSet<Pubkey>>, // None = trust all
+    pub trusted_validators: Option<HashSet<Pubkey>>, // None = trust all, priority included
+    pub priority_trusted_validators: Option<HashSet<Pubkey>>, // None = all - common trusted
     pub repair_validators: Option<HashSet<Pubkey>>,  // None = repair from all
     pub gossip_validators: Option<HashSet<Pubkey>>,  // None = gossip with all
     pub halt_on_trusted_validators_accounts_hash_mismatch: bool,
@@ -156,6 +157,7 @@ impl Default for ValidatorConfig {
             wait_for_supermajority: None,
             new_hard_forks: None,
             trusted_validators: None,
+            priority_trusted_validators: None,
             repair_validators: None,
             gossip_validators: None,
             halt_on_trusted_validators_accounts_hash_mismatch: false,

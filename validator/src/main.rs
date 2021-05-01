@@ -382,6 +382,7 @@ fn get_rpc_node(
     let mut blacklist_timeout = Instant::now();
     let mut newer_cluster_snapshot_timeout = None;
     let mut retry_reason = None;
+    let mut waiting_for_priority_trusted_validator_countdown = 100;
     loop {
         sleep(Duration::from_secs(1));
         info!("\n{}", cluster_info.rpc_info_trace());
@@ -415,6 +416,29 @@ fn get_rpc_node(
                 .unwrap_or_default()
         );
 
+        let (trusted_validators, trusted_prefix) =
+            if waiting_for_priority_trusted_validator_countdown > 0
+                && validator_config
+                    .priority_trusted_validators
+                    .clone()
+                    .map_or(0, |validators| validators.len())
+                    > 0
+            {
+                waiting_for_priority_trusted_validator_countdown -= 1;
+                info!(
+                    "Waiting for priority trusted validators: {} attempt{} left.",
+                    waiting_for_priority_trusted_validator_countdown,
+                    if waiting_for_priority_trusted_validator_countdown > 1 {
+                        "s"
+                    } else {
+                        ""
+                    }
+                );
+                (&validator_config.priority_trusted_validators, "priority ")
+            } else {
+                (&validator_config.trusted_validators, "")
+            };
+
         let rpc_peers = cluster_info
             .all_rpc_peers()
             .into_iter()
@@ -430,14 +454,12 @@ fn get_rpc_node(
         let rpc_peers_blacklisted = rpc_peers_total - rpc_peers.len();
         let rpc_peers_trusted = rpc_peers
             .iter()
-            .filter(|rpc_peer| {
-                is_trusted_validator(&rpc_peer.id, &validator_config.trusted_validators)
-            })
+            .filter(|rpc_peer| is_trusted_validator(&rpc_peer.id, trusted_validators))
             .count();
 
         info!(
-            "Total {} RPC nodes found. {} trusted, {} blacklisted ",
-            rpc_peers_total, rpc_peers_trusted, rpc_peers_blacklisted
+            "Total {} RPC nodes found. {} {}trusted, {} blacklisted ",
+            rpc_peers_total, rpc_peers_trusted, trusted_prefix, rpc_peers_blacklisted
         );
 
         if rpc_peers_blacklisted == rpc_peers_total {
@@ -449,7 +471,7 @@ fn get_rpc_node(
                 blacklisted_rpc_nodes.clear();
                 Some("Blacklist timeout expired".to_owned())
             } else {
-                Some("Wait for trusted rpc peers".to_owned())
+                Some(format!("Wait for {}trusted rpc peers", trusted_prefix).to_owned())
             };
             continue;
         }
@@ -462,14 +484,12 @@ fn get_rpc_node(
             rpc_peers
         } else {
             let trusted_snapshot_hashes =
-                get_trusted_snapshot_hashes(&cluster_info, &validator_config.trusted_validators);
+                get_trusted_snapshot_hashes(&cluster_info, trusted_validators);
 
             let mut eligible_rpc_peers = vec![];
 
             for rpc_peer in rpc_peers.iter() {
-                if no_untrusted_rpc
-                    && !is_trusted_validator(&rpc_peer.id, &validator_config.trusted_validators)
-                {
+                if no_untrusted_rpc && !is_trusted_validator(&rpc_peer.id, trusted_validators) {
                     continue;
                 }
                 cluster_info.get_snapshot_hash_for_node(&rpc_peer.id, |snapshot_hashes| {
@@ -1440,6 +1460,16 @@ pub fn main() {
                        May be specified multiple times. If unspecified any snapshot hash will be accepted"),
         )
         .arg(
+            Arg::with_name("priority_trusted_validators")
+                .long("priority-trusted-validator")
+                .validator(is_pubkey)
+                .value_name("VALIDATOR IDENTITY")
+                .multiple(true)
+                .takes_value(true)
+                .help("This validator will be check first of common trusted validators for snapshot downloading. \
+                       Will be add to trusted validators for other cases. May be specified multiple times. "),
+        )
+        .arg(
             Arg::with_name("debug_key")
                 .long("debug-key")
                 .validator(is_pubkey)
@@ -1996,12 +2026,27 @@ pub fn main() {
         None
     };
 
-    let trusted_validators = validators_set(
+    let priority_trusted_validators = validators_set(
+        &identity_keypair.pubkey(),
+        &matches,
+        "priority_trusted_validators",
+        "--priority-trusted-validator",
+    );
+    let trusted_validators = match validators_set(
         &identity_keypair.pubkey(),
         &matches,
         "trusted_validators",
         "--trusted-validator",
-    );
+    ) {
+        Some(mut validators_set) => Some(match priority_trusted_validators.clone() {
+            Some(trusted_validators_set) => {
+                validators_set.extend(trusted_validators_set);
+                validators_set
+            }
+            None => validators_set,
+        }),
+        None => priority_trusted_validators.clone(),
+    };
     let repair_validators = validators_set(
         &identity_keypair.pubkey(),
         &matches,
@@ -2105,6 +2150,7 @@ pub fn main() {
         voting_disabled: matches.is_present("no_voting") || restricted_repair_only_mode,
         wait_for_supermajority: value_t!(matches, "wait_for_supermajority", Slot).ok(),
         trusted_validators,
+        priority_trusted_validators,
         repair_validators,
         gossip_validators,
         frozen_accounts: values_t!(matches, "frozen_accounts", Pubkey).unwrap_or_default(),
