@@ -695,7 +695,7 @@ impl Tower {
 
 
 
-                info!(
+                trace!(
                     "switch_fork_threshold: SWITCH_FORK_THRESHOLD: {}, locked_out_stake: {} total_stake: {}",
                     SWITCH_FORK_THRESHOLD, locked_out_stake, total_stake
                 );
