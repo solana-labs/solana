@@ -70,6 +70,15 @@ Staking operations are supported by the following wallet solutions:
   Ledger Nano.
   [Staking commands using the Solana Command Line Tools](cli/delegate-stake.md).
 
+ - [Exodus](https://www.exodus.com/) wallet. They make the process very simple,
+ but you cannot choose a validator: they assign you to their partner validator.
+ See their [FAQ](https://support.exodus.com/article/1551-solana-staking-faq)
+ for details.
+
+ - [Binance](https://www.binance.com/) and [FTX](https://ftx.com/) exchanges.
+ Note that you cannot choose a validator with these services: they assign you
+ to their partner validator.
+
 #### Create a Stake Account
 
 A stake account is a different type of account from a wallet address
