@@ -628,16 +628,11 @@ fn test_switch_threshold_uses_gossip_votes() {
     // cannot switch without seeing a vote from the dead/failure_stake validator.
     let heavier_stake = minimum_switch_stake;
     let lighter_stake = heavier_stake - 1;
-
-    // Create another validator such that once everyone switches to the heaviest fork,
-    // there will be supermajority stake to allow creation of new roots.
-    let lighter_stake2 = 67_u64.saturating_sub(heavier_stake + lighter_stake);
-    let failures_stake = total_stake - heavier_stake - lighter_stake - lighter_stake2;
+    let failures_stake = total_stake - heavier_stake - lighter_stake;
 
     let partitions: &[&[(usize, usize)]] = &[
         &[(heavier_stake as usize, 8)],
         &[(lighter_stake as usize, 8)],
-        &[(lighter_stake2 as usize, 8)],
     ];
 
     #[derive(Default)]
@@ -645,10 +640,9 @@ fn test_switch_threshold_uses_gossip_votes() {
         heaviest_validator_key: Pubkey,
         lighter_validator_key: Pubkey,
         dead_validator_info: Option<ClusterValidatorInfo>,
-        paused_validator_info: Option<ClusterValidatorInfo>,
     }
 
-    let on_partition_start = |cluster: &mut LocalCluster,
+    let on_partition_start = |_cluster: &mut LocalCluster,
                               validator_keys: &[Pubkey],
                               mut dead_validator_infos: Vec<ClusterValidatorInfo>,
                               context: &mut PartitionContext| {
@@ -658,10 +652,6 @@ fn test_switch_threshold_uses_gossip_votes() {
         // stake == `failures_stake`
         context.heaviest_validator_key = validator_keys[1];
         context.lighter_validator_key = validator_keys[2];
-
-        // Before the validator starts, pause one of the validators to prevent switching
-        let paused_validator_info = cluster.exit_node(&validator_keys[3]);
-        context.paused_validator_info = Some(paused_validator_info);
     };
 
     let on_before_partition_resolved = |_: &mut LocalCluster, _: &mut PartitionContext| {};
@@ -735,7 +725,6 @@ fn test_switch_threshold_uses_gossip_votes() {
             .unwrap()
             .0;
         loop {
-            // Wait for the lighter validator to switch to the heavier fork
             let (new_lighter_validator_latest_vote, _) = last_vote_in_tower(
                 &lighter_validator_ledger_path,
                 &context.lighter_validator_key,
@@ -754,7 +743,8 @@ fn test_switch_threshold_uses_gossip_votes() {
                 .last()
                 .unwrap()
                 .0;
-            if new_latest_slot > start_slot + 200 {
+            // Give enough time for all the lockouts to expire, still shouldn't switch
+            if new_latest_slot > start_slot + 256 {
                 break;
             }
             sleep(Duration::from_millis(50));
@@ -864,26 +854,28 @@ fn test_switch_threshold_uses_gossip_votes() {
         }
 
         // Restart the paused validator to get back to supermajority to make new roots
+        info!("restarting dead validator");
         cluster.restart_node(
             &context
-                .paused_validator_info
+                .dead_validator_info
                 .as_ref()
                 .unwrap()
                 .info
                 .keypair
                 .pubkey(),
-            context.paused_validator_info.take().unwrap(),
+            context.dead_validator_info.take().unwrap(),
         );
-        cluster.check_for_new_roots(16, &"PARTITION_TEST");
+        cluster.check_for_new_roots(8, &"PARTITION_TEST");
     };
 
+    let ticks_per_slot = 8;
     run_kill_partition_switch_threshold(
         &[&[(failures_stake as usize, 0)]],
         partitions,
         // Partition long enough such that the first vote made by validator with
         // `alive_stake_3` won't be ingested due to BlockhashTooOld,
         None,
-        None,
+        Some(ticks_per_slot),
         PartitionContext::default(),
         on_partition_start,
         on_before_partition_resolved,
