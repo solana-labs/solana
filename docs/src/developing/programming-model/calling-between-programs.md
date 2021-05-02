@@ -155,7 +155,7 @@ Program derived address:
    such a way that no external user can generate valid transactions with
    signatures for those addresses.
 
-2. Allow programs to programmatically sign for programa addresses that are
+2. Allow programs to programmatically sign for program addresses that are
    present in instructions invoked via [Cross-Program Invocations](#cross-program-invocations).
 
 Given the two conditions, users can securely transfer or assign the authority of
