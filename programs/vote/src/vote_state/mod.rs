@@ -91,9 +91,8 @@ impl Lockout {
         self.slot + self.lockout()
     }
 
-    // Check if a lockout has expired before checked slot.
-    pub fn has_expired_by_slot(&self, slot: Slot) -> bool {
-        self.last_locked_out_slot() < slot
+    pub fn is_locked_out_at_slot(&self, slot: Slot) -> bool {
+        self.last_locked_out_slot() >= slot
     }
 }
 
@@ -545,12 +544,13 @@ impl VoteState {
         Ok(pubkey)
     }
 
+    // Pop all recent votes that are not locked out at the next vote slot.  This
+    // allows validators to switch forks once their votes for another fork have
+    // expired. This also allows validators continue voting on recent blocks in
+    // the same fork without increasing lockouts.
     fn pop_expired_votes(&mut self, next_vote_slot: Slot) {
-        loop {
-            if self
-                .last_lockout()
-                .map_or(false, |v| v.has_expired_by_slot(next_vote_slot))
-            {
+        while let Some(vote) = self.last_lockout() {
+            if !vote.is_locked_out_at_slot(next_vote_slot) {
                 self.votes.pop_back();
             } else {
                 break;
