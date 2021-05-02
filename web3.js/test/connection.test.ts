@@ -735,6 +735,18 @@ describe('Connection', () => {
     }
   });
 
+  it('get slot leaders', async () => {
+    await mockRpcResponse({
+      method: 'getSlotLeaders',
+      params: [0, 1],
+      value: ['11111111111111111111111111111111'],
+    });
+
+    const slotLeaders = await connection.getSlotLeaders(0, 1);
+    expect(slotLeaders).to.have.length(1);
+    expect(slotLeaders[0]).to.be.instanceOf(PublicKey);
+  });
+
   it('get cluster nodes', async () => {
     await mockRpcResponse({
       method: 'getClusterNodes',

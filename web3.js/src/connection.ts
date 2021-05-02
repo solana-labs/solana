@@ -2470,6 +2470,25 @@ export class Connection {
   }
 
   /**
+   * Fetch `limit` number of slot leaders starting from `startSlot`
+   *
+   * @param startSlot fetch slot leaders starting from this slot
+   * @param limit number of slot leaders to return
+   */
+  async getSlotLeaders(
+    startSlot: number,
+    limit: number,
+  ): Promise<Array<PublicKey>> {
+    const args = [startSlot, limit];
+    const unsafeRes = await this._rpcRequest('getSlotLeaders', args);
+    const res = create(unsafeRes, jsonRpcResult(array(PublicKeyFromString)));
+    if ('error' in res) {
+      throw new Error('failed to get slot leaders: ' + res.error.message);
+    }
+    return res.result;
+  }
+
+  /**
    * Fetch the current status of a signature
    */
   async getSignatureStatus(
