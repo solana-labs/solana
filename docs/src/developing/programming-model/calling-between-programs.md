@@ -155,7 +155,7 @@ Program derived address:
    such a way that no external user can generate valid transactions with
    signatures for those addresses.
 
-2. Allow programs to programmatically sign for programa addresses that are
+2. Allow programs to programmatically sign for program addresses that are
    present in instructions invoked via [Cross-Program Invocations](#cross-program-invocations).
 
 Given the two conditions, users can securely transfer or assign the authority of
@@ -175,7 +175,7 @@ Program addresses are deterministically derived from a collection of seeds and a
 program id using a 256-bit pre-image resistant hash function. Program address
 must not lie on the ed25519 curve to ensure there is no associated private key.
 During generation an error will be returned if the address is found to lie on
-the curve. There is about a 50/50 change of this happening for a given
+the curve. There is about a 50/50 chance of this happening for a given
 collection of seeds and program id. If this occurs a different set of seeds or
 a seed bump (additional 8 bit seed) can be used to find a valid program address
 off the curve.
