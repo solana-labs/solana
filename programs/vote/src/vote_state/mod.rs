@@ -84,13 +84,15 @@ impl Lockout {
         (INITIAL_LOCKOUT as u64).pow(self.confirmation_count)
     }
 
-    // The slot height at which this vote expires (cannot vote for any slot
-    // less than this)
-    pub fn expiration_slot(&self) -> Slot {
+    // The last slot at which a vote is still locked out. Validators should not
+    // vote on a slot in another fork which is less than or equal to this slot
+    // to avoid having their stake slashed.
+    pub fn last_locked_out_slot(&self) -> Slot {
         self.slot + self.lockout()
     }
-    pub fn is_expired(&self, slot: Slot) -> bool {
-        self.expiration_slot() < slot
+
+    pub fn is_locked_out_at_slot(&self, slot: Slot) -> bool {
+        self.last_locked_out_slot() >= slot
     }
 }
 
@@ -354,22 +356,24 @@ impl VoteState {
         }
         self.check_slots_are_valid(vote, slot_hashes)?;
 
-        vote.slots.iter().for_each(|s| self.process_slot(*s, epoch));
+        vote.slots
+            .iter()
+            .for_each(|s| self.process_next_vote_slot(*s, epoch));
         Ok(())
     }
 
-    pub fn process_slot(&mut self, slot: Slot, epoch: Epoch) {
+    pub fn process_next_vote_slot(&mut self, next_vote_slot: Slot, epoch: Epoch) {
         // Ignore votes for slots earlier than we already have votes for
         if self
             .last_voted_slot()
-            .map_or(false, |last_voted_slot| slot <= last_voted_slot)
+            .map_or(false, |last_voted_slot| next_vote_slot <= last_voted_slot)
         {
             return;
         }
 
-        let vote = Lockout::new(slot);
+        let vote = Lockout::new(next_vote_slot);
 
-        self.pop_expired_votes(slot);
+        self.pop_expired_votes(next_vote_slot);
 
         // Once the stack is full, pop the oldest lockout and distribute rewards
         if self.votes.len() == MAX_LOCKOUT_HISTORY {
@@ -540,9 +544,13 @@ impl VoteState {
         Ok(pubkey)
     }
 
-    fn pop_expired_votes(&mut self, slot: Slot) {
-        loop {
-            if self.last_lockout().map_or(false, |v| v.is_expired(slot)) {
+    // Pop all recent votes that are not locked out at the next vote slot.  This
+    // allows validators to switch forks once their votes for another fork have
+    // expired. This also allows validators continue voting on recent blocks in
+    // the same fork without increasing lockouts.
+    fn pop_expired_votes(&mut self, next_vote_slot: Slot) {
+        while let Some(vote) = self.last_lockout() {
+            if !vote.is_locked_out_at_slot(next_vote_slot) {
                 self.votes.pop_back();
             } else {
                 break;
@@ -1350,11 +1358,12 @@ mod tests {
         // second vote
         let top_vote = vote_state.votes.front().unwrap().slot;
         vote_state
-            .process_slot_vote_unchecked(vote_state.last_lockout().unwrap().expiration_slot());
+            .process_slot_vote_unchecked(vote_state.last_lockout().unwrap().last_locked_out_slot());
         assert_eq!(Some(top_vote), vote_state.root_slot);
 
         // Expire everything except the first vote
-        vote_state.process_slot_vote_unchecked(vote_state.votes.front().unwrap().expiration_slot());
+        vote_state
+            .process_slot_vote_unchecked(vote_state.votes.front().unwrap().last_locked_out_slot());
         // First vote and new vote are both stored for a total of 2 votes
         assert_eq!(vote_state.votes.len(), 2);
     }

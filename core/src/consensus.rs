@@ -264,7 +264,7 @@ impl Tower {
             };
             for vote in &vote_state.votes {
                 lockout_intervals
-                    .entry(vote.expiration_slot())
+                    .entry(vote.last_locked_out_slot())
                     .or_insert_with(Vec::new)
                     .push((vote.slot, key));
             }
@@ -534,20 +534,22 @@ impl Tower {
             return true;
         }
 
+        // Check if a slot is locked out by simulating adding a vote for that
+        // slot to the current lockouts to pop any expired votes. If any of the
+        // remaining voted slots are on a different fork from the checked slot,
+        // it's still locked out.
         let mut lockouts = self.lockouts.clone();
         lockouts.process_slot_vote_unchecked(slot);
         for vote in &lockouts.votes {
-            if vote.slot == slot {
-                continue;
-            }
-            if !ancestors[&slot].contains(&vote.slot) {
+            if slot != vote.slot && !ancestors[&slot].contains(&vote.slot) {
                 return true;
             }
         }
+
         if let Some(root_slot) = lockouts.root_slot {
-            // This case should never happen because bank forks purges all
-            // non-descendants of the root every time root is set
             if slot != root_slot {
+                // This case should never happen because bank forks purges all
+                // non-descendants of the root every time root is set
                 assert!(
                     ancestors[&slot].contains(&root_slot),
                     "ancestors: {:?}, slot: {} root: {}",
@@ -728,8 +730,9 @@ impl Tower {
                         .unwrap()
                         .fork_stats
                         .lockout_intervals;
-                    // Find any locked out intervals in this bank with endpoint >= last_vote,
-                    // implies they are locked out at last_vote
+                    // Find any locked out intervals for vote accounts in this bank with
+                    // `lockout_interval_end` >= `last_vote`, which implies they are locked out at
+                    // `last_vote` on another fork.
                     for (_lockout_interval_end, intervals_keyed_by_end) in lockout_intervals.range((Included(last_voted_slot), Unbounded)) {
                         for (lockout_interval_start, vote_account_pubkey) in intervals_keyed_by_end {
                             if locked_out_vote_accounts.contains(vote_account_pubkey) {
