@@ -1957,10 +1957,16 @@ impl Blockstore {
             Ok(None)
         } else {
             let result = if index0.frozen && to_slot > index0.max_slot {
-                debug!("Pruning transaction index 0 at slot {}", index0.max_slot);
+                info!(
+                    "Pruning expired primary index 0 at slot {} (requested: {})",
+                    index0.max_slot, to_slot
+                );
                 Some(0)
             } else if index1.frozen && to_slot > index1.max_slot {
-                debug!("Pruning transaction index 1 at slot {}", index1.max_slot);
+                info!(
+                    "Pruning expired primary index 1 at slot {} (requested: {})",
+                    index1.max_slot, to_slot
+                );
                 Some(1)
             } else {
                 None
