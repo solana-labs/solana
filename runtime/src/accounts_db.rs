@@ -4280,7 +4280,6 @@ impl AccountsDb {
         self.scan_account_storage(
             slot,
             |loaded_account: LoadedAccount| {
-                // Cache only has one version per key, don't need to worry about versioning
                 Some(*loaded_account.pubkey())
             },
             |accum: &DashSet<Pubkey>, loaded_account: LoadedAccount| {
