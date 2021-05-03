@@ -28,8 +28,8 @@ pub struct Account {
 /// An Account with data that is stored on chain
 /// This will be the in-memory representation of the 'Account' struct data.
 /// The existing 'Account' structure cannot easily change due to downstream projects.
-#[derive(PartialEq, Eq, Clone, Default, AbiExample)]
-pub struct AccountSharedData {
+#[derive(PartialEq, Eq, Clone, Default)]
+pub struct AccountSharedDataInternal {
     /// lamports in the account
     lamports: u64,
     /// data held in this account
@@ -40,6 +40,14 @@ pub struct AccountSharedData {
     executable: bool,
     /// the epoch at which this account will next owe rent
     rent_epoch: Epoch,
+}
+
+/// An Account with data that is stored on chain
+/// This will be the in-memory representation of the 'Account' struct data.
+/// The existing 'Account' structure cannot easily change due to downstream projects.
+#[derive(PartialEq, Eq, Clone, Default)]
+pub struct AccountSharedData {
+    inner: Arc<AccountSharedDataInternal>,
 }
 
 /// Compares two ReadableAccounts
@@ -55,25 +63,29 @@ pub fn accounts_equal<T: ReadableAccount, U: ReadableAccount>(me: &T, other: &U)
 
 impl From<AccountSharedData> for Account {
     fn from(mut other: AccountSharedData) -> Self {
-        let account_data = Arc::make_mut(&mut other.data);
+        let other_inner = Arc::make_mut(&mut other.inner);
+        let account_data = Arc::make_mut(&mut other_inner.data);
         Self {
-            lamports: other.lamports,
+            lamports: other_inner.lamports,
             data: std::mem::take(account_data),
-            owner: other.owner,
-            executable: other.executable,
-            rent_epoch: other.rent_epoch,
+            owner: other_inner.owner,
+            executable: other_inner.executable,
+            rent_epoch: other_inner.rent_epoch,
         }
     }
 }
 
 impl From<Account> for AccountSharedData {
     fn from(other: Account) -> Self {
-        Self {
+        let inner = AccountSharedDataInternal {
             lamports: other.lamports,
             data: Arc::new(other.data),
             owner: other.owner,
             executable: other.executable,
             rent_epoch: other.rent_epoch,
+        };
+        Self {
+            inner: Arc::new(inner),
         }
     }
 }
@@ -183,23 +195,37 @@ impl WritableAccount for Account {
 
 impl WritableAccount for AccountSharedData {
     fn set_lamports(&mut self, lamports: u64) {
-        self.lamports = lamports;
+        if lamports != self.inner.lamports {
+            let mut change = Arc::make_mut(&mut self.inner);
+            change.lamports = lamports;
+        }
     }
     fn data_as_mut_slice(&mut self) -> &mut [u8] {
-        let data = Arc::make_mut(&mut self.data);
+        let change = Arc::make_mut(&mut self.inner);
+        let data = Arc::make_mut(&mut change.data);
         &mut data[..]
     }
     fn set_owner(&mut self, owner: Pubkey) {
-        self.owner = owner;
+        if owner != self.inner.owner {
+            let mut change = Arc::make_mut(&mut self.inner);
+            change.owner = owner;
+        }
     }
     fn copy_into_owner_from_slice(&mut self, source: &[u8]) {
-        self.owner.as_mut().copy_from_slice(source);
+        let change = Arc::make_mut(&mut self.inner);
+        change.owner.as_mut().copy_from_slice(source);
     }
     fn set_executable(&mut self, executable: bool) {
-        self.executable = executable;
+        if executable != self.inner.executable {
+            let mut change = Arc::make_mut(&mut self.inner);
+            change.executable = executable;
+        }
     }
     fn set_rent_epoch(&mut self, epoch: Epoch) {
-        self.rent_epoch = epoch;
+        if epoch != self.inner.rent_epoch {
+            let mut change = Arc::make_mut(&mut self.inner);
+            change.rent_epoch = epoch;
+        }
     }
     fn create(
         lamports: u64,
@@ -208,49 +234,52 @@ impl WritableAccount for AccountSharedData {
         executable: bool,
         rent_epoch: Epoch,
     ) -> Self {
-        AccountSharedData {
+        let inner = AccountSharedDataInternal {
             lamports,
             data: Arc::new(data),
             owner,
             executable,
             rent_epoch,
+        };
+        Self {
+            inner: Arc::new(inner),
         }
     }
 }
 
 impl ReadableAccount for AccountSharedData {
     fn lamports(&self) -> u64 {
-        self.lamports
+        self.inner.lamports
     }
     fn data(&self) -> &[u8] {
-        &self.data
+        &self.inner.data
     }
     fn owner(&self) -> &Pubkey {
-        &self.owner
+        &self.inner.owner
     }
     fn executable(&self) -> bool {
-        self.executable
+        self.inner.executable
     }
     fn rent_epoch(&self) -> Epoch {
-        self.rent_epoch
+        self.inner.rent_epoch
     }
 }
 
 impl ReadableAccount for Ref<'_, AccountSharedData> {
     fn lamports(&self) -> u64 {
-        self.lamports
+        self.inner.lamports
     }
     fn data(&self) -> &[u8] {
-        &self.data
+        &self.inner.data
     }
     fn owner(&self) -> &Pubkey {
-        &self.owner
+        &self.inner.owner
     }
     fn executable(&self) -> bool {
-        self.executable
+        self.inner.executable
     }
     fn rent_epoch(&self) -> Epoch {
-        self.rent_epoch
+        self.inner.rent_epoch
     }
 }
 
@@ -431,15 +460,17 @@ impl Account {
 
 impl AccountSharedData {
     pub fn set_data_from_slice(&mut self, data: &[u8]) {
-        let len = self.data.len();
+        let len = self.inner.data.len();
         let len_different = len != data.len();
-        let different = len_different || data != &self.data[..];
+        let different = len_different || data != &self.inner.data[..];
         if different {
-            self.data = Arc::new(data.to_vec());
+            let change = Arc::make_mut(&mut self.inner);
+            change.data = Arc::new(data.to_vec());
         }
     }
     pub fn set_data(&mut self, data: Vec<u8>) {
-        self.data = Arc::new(data);
+        let change = Arc::make_mut(&mut self.inner);
+        change.data = Arc::new(data);
     }
     pub fn new(lamports: u64, space: usize, owner: &Pubkey) -> Self {
         shared_new(lamports, space, owner)
