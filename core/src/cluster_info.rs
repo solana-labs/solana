@@ -1616,7 +1616,7 @@ impl ClusterInfo {
     pub fn flush_push_queue(&self) {
         let pending_push_messages = self.drain_push_queue();
         let mut gossip = self.gossip.write().unwrap();
-        gossip.process_push_messages(pending_push_messages, timestamp());
+        gossip.process_push_message(&self.id, pending_push_messages, timestamp());
     }
     fn new_push_requests(
         &self,
@@ -1667,20 +1667,22 @@ impl ClusterInfo {
         require_stake_for_gossip: bool,
     ) -> Vec<(SocketAddr, Protocol)> {
         self.trim_crds_table(CRDS_UNIQUE_PUBKEY_CAPACITY, &stakes);
-        let mut pulls: Vec<_> = if generate_pull_requests {
-            self.new_pull_requests(&thread_pool, gossip_validators, stakes)
-        } else {
-            vec![]
-        };
-        let mut pushes: Vec<_> = self.new_push_requests(stakes, require_stake_for_gossip);
-        self.stats
-            .packets_sent_pull_requests_count
-            .add_relaxed(pulls.len() as u64);
+        // This will flush local pending push messages before generating
+        // pull-request bloom filters, preventing pull responses to return the
+        // same values back to the node itself. Note that packets will arrive
+        // and are processed out of order.
+        let mut out: Vec<_> = self.new_push_requests(stakes, require_stake_for_gossip);
         self.stats
             .packets_sent_push_messages_count
-            .add_relaxed(pushes.len() as u64);
-        pulls.append(&mut pushes);
-        pulls
+            .add_relaxed(out.len() as u64);
+        if generate_pull_requests {
+            let pull_requests = self.new_pull_requests(&thread_pool, gossip_validators, stakes);
+            self.stats
+                .packets_sent_pull_requests_count
+                .add_relaxed(pull_requests.len() as u64);
+            out.extend(pull_requests);
+        }
+        out
     }
 
     /// At random pick a node and try to get updated changes from them

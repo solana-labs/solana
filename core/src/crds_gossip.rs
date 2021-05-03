@@ -91,24 +91,13 @@ impl CrdsGossip {
         prune_map
     }
 
-    pub(crate) fn process_push_messages(
-        &mut self,
-        pending_push_messages: Vec<CrdsValue>,
-        timestamp: u64,
-    ) {
-        for push_message in pending_push_messages {
-            let _ =
-                self.push
-                    .process_push_message(&mut self.crds, &self.id, push_message, timestamp);
-        }
-    }
-
     pub fn new_push_messages(
         &mut self,
         pending_push_messages: Vec<CrdsValue>,
         now: u64,
     ) -> HashMap<Pubkey, Vec<CrdsValue>> {
-        self.process_push_messages(pending_push_messages, now);
+        let self_pubkey = self.id;
+        self.process_push_message(&self_pubkey, pending_push_messages, now);
         self.push.new_push_messages(&self.crds, now)
     }
 
