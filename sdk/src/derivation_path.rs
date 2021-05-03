@@ -144,7 +144,7 @@ impl DerivationPath {
                     "invalid query string, extra fields not supported".to_string(),
                 ));
             }
-            let key = query.get(&QueryKey::Key.to_string());
+            let key = query.get(QueryKey::Key.as_ref());
             if let Some(key) = key {
                 // Use from_key_str instead of TryInto here to make it more explicit that this
                 // generates a Solana bip44 DerivationPath
@@ -156,7 +156,7 @@ impl DerivationPath {
                     query_str,
                 )));
             }
-            let full_path = query.get(&QueryKey::FullPath.to_string());
+            let full_path = query.get(QueryKey::FullPath.as_ref());
             if let Some(full_path) = full_path {
                 return Self::from_absolute_path_str(full_path).map(Some);
             }
