@@ -475,9 +475,11 @@ impl Tower {
     }
 
     pub fn is_locked_out(&self, slot: Slot, ancestors: &HashMap<Slot, HashSet<Slot>>) -> bool {
+    info!("is_locked_out: Ancestors_contains_key: {}",ancestors.contains_key(&slot));
         assert!(ancestors.contains_key(&slot));
 
         if !self.is_recent(slot) {
+	info!("is_locked_out: Is Not Recent");
             return true;
         }
 
@@ -488,6 +490,7 @@ impl Tower {
                 continue;
             }
             if !ancestors[&slot].contains(&vote.slot) {
+	      info!("is_locked_out: Ancestors doesn't contain vote slot");
                 return true;
             }
         }
