@@ -60,8 +60,12 @@ impl DerivationPath {
     }
 
     fn from_key_str_with_coin<T: Bip44>(path: &str, coin: T) -> Result<Self, DerivationPathError> {
-        let path = format!("m/{}", path);
-        let extend = DerivationPathInner::from_str(&path)
+        let master_path = if path == "m" {
+            path.to_string()
+        } else {
+            format!("m/{}", path)
+        };
+        let extend = DerivationPathInner::from_str(&master_path)
             .map_err(|err| DerivationPathError::InvalidDerivationPath(err.to_string()))?;
         let mut extend = extend.into_iter();
         let account = extend.next().map(|index| index.to_u32());
@@ -415,6 +419,23 @@ mod tests {
             Some(derivation_path)
         );
 
+        // test://path?key=m
+        let mut builder = URIReferenceBuilder::new();
+        builder
+            .try_scheme(Some("test"))
+            .unwrap()
+            .try_authority(Some("path"))
+            .unwrap()
+            .try_path("")
+            .unwrap()
+            .try_query(Some("key=m"))
+            .unwrap();
+        let uri = builder.build().unwrap();
+        assert_eq!(
+            DerivationPath::from_uri(&uri, true).unwrap(),
+            Some(DerivationPath::new_bip44(None, None))
+        );
+
         // test://path
         let mut builder = URIReferenceBuilder::new();
         builder
@@ -597,6 +618,23 @@ mod tests {
         assert_eq!(
             DerivationPath::from_uri(&uri, false).unwrap(),
             Some(derivation_path)
+        );
+
+        // test://path?full-path=m
+        let mut builder = URIReferenceBuilder::new();
+        builder
+            .try_scheme(Some("test"))
+            .unwrap()
+            .try_authority(Some("path"))
+            .unwrap()
+            .try_path("")
+            .unwrap()
+            .try_query(Some("full-path=m"))
+            .unwrap();
+        let uri = builder.build().unwrap();
+        assert_eq!(
+            DerivationPath::from_uri(&uri, false).unwrap(),
+            Some(DerivationPath(DerivationPathInner::from_str("m").unwrap()))
         );
 
         // test://path?full-path=m/44/999/1, only `key` supported
