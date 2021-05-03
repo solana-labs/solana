@@ -1188,14 +1188,18 @@ impl<'a> WriteBatch<'a> {
     }
 }
 
-struct PurgedSlotFilter<C: Column + ColumnName>(Slot, CString, PhantomData<C>);
+struct PurgedSlotFilter<C: Column + ColumnName> {
+    oldest_slot: Slot,
+    name: CString,
+    _phantom: PhantomData<C>,
+}
 
 impl<C: Column + ColumnName> CompactionFilter for PurgedSlotFilter<C> {
     fn filter(&mut self, _level: u32, key: &[u8], _value: &[u8]) -> CompactionDecision {
         use rocksdb::CompactionDecision::*;
 
         let slot_in_key = C::slot(C::index(key));
-        if slot_in_key >= self.0 {
+        if slot_in_key >= self.oldest_slot {
             Keep
         } else {
             Remove
@@ -1203,31 +1207,35 @@ impl<C: Column + ColumnName> CompactionFilter for PurgedSlotFilter<C> {
     }
 
     fn name(&self) -> &CStr {
-        &self.1
+        &self.name
     }
 }
 
-struct PurgedSlotFilterFactory<C: Column + ColumnName>(OldestSlot, CString, PhantomData<C>);
+struct PurgedSlotFilterFactory<C: Column + ColumnName> {
+    oldest_slot: OldestSlot,
+    name: CString,
+    _phantom: PhantomData<C>,
+}
 
 impl<C: Column + ColumnName> CompactionFilterFactory for PurgedSlotFilterFactory<C> {
     type Filter = PurgedSlotFilter<C>;
 
     fn create(&mut self, _context: CompactionFilterContext) -> Self::Filter {
-        let copied_oldest_slot = self.0.get();
-        PurgedSlotFilter::<C>(
-            copied_oldest_slot,
-            CString::new(format!(
+        let copied_oldest_slot = self.oldest_slot.get();
+        PurgedSlotFilter::<C> {
+            oldest_slot: copied_oldest_slot,
+            name: CString::new(format!(
                 "purged_slot_filter({}, {:?})",
                 C::NAME,
                 copied_oldest_slot
             ))
             .unwrap(),
-            PhantomData::default(),
-        )
+            _phantom: PhantomData::default(),
+        }
     }
 
     fn name(&self) -> &CStr {
-        &self.1
+        &self.name
     }
 }
 
@@ -1254,11 +1262,11 @@ fn get_cf_options<C: 'static + Column + ColumnName>(
     if matches!(access_type, AccessType::PrimaryOnly)
         && C::NAME != columns::TransactionStatusIndex::NAME
     {
-        options.set_compaction_filter_factory(PurgedSlotFilterFactory::<C>(
-            oldest_slot.clone(),
-            CString::new(format!("purged_slot_filter_factory({})", C::NAME)).unwrap(),
-            PhantomData::default(),
-        ));
+        options.set_compaction_filter_factory(PurgedSlotFilterFactory::<C> {
+            oldest_slot: oldest_slot.clone(),
+            name: CString::new(format!("purged_slot_filter_factory({})", C::NAME)).unwrap(),
+            _phantom: PhantomData::default(),
+        });
     }
 
     if matches!(access_type, AccessType::PrimaryOnlyForMaintenance) {
