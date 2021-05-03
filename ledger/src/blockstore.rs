@@ -1959,13 +1959,13 @@ impl Blockstore {
         } else {
             let purge_target_primary_index = if index0.frozen && to_slot > index0.max_slot {
                 info!(
-                    "Pruning expired primary index 0 at slot {} (requested: {})",
+                    "Pruning expired primary index 0 up to slot {} (max requested: {})",
                     index0.max_slot, to_slot
                 );
                 Some(0)
             } else if index1.frozen && to_slot > index1.max_slot {
                 info!(
-                    "Pruning expired primary index 1 at slot {} (requested: {})",
+                    "Pruning expired primary index 1 up to slot {} (max requested: {})",
                     index1.max_slot, to_slot
                 );
                 Some(1)
@@ -2063,7 +2063,7 @@ impl Blockstore {
         signature: Signature,
         confirmed_unrooted_slots: &[Slot],
     ) -> Result<(Option<(Slot, TransactionStatusMeta)>, u64)> {
-        // transaction_status_cf doesn't employ strong read consystency with slot-based
+        // transaction_status_cf doesn't employ strong read consistency with slot-based
         // delete_range via LedgerCleanupService, because of inefficiency.
         // so, ensure consistent result by using lowest_cleanup_slot as the lower bound
         // for reading
@@ -2217,7 +2217,7 @@ impl Blockstore {
         start_slot: Slot,
         end_slot: Slot,
     ) -> Result<Vec<(Slot, Signature)>> {
-        // adress_signatures_cf doesn't employ strong read consystency with slot-based
+        // address_signatures_cf doesn't employ strong read consistency with slot-based
         // delete_range via LedgerCleanupService, because of inefficiency.
         // so, ensure consistent result by using lowest_cleanup_slot as the lower bound
         // for reading
@@ -2255,7 +2255,7 @@ impl Blockstore {
         pubkey: Pubkey,
         slot: Slot,
     ) -> Result<Vec<(Slot, Signature)>> {
-        // address_signatures_cf doesn't employ strong read consystency with slot-based
+        // address_signatures_cf doesn't employ strong read consistency with slot-based
         // delete_range via LedgerCleanupService, because of inefficiency.
         // so, ensure consistent result by using lowest_cleanup_slot as the lower bound
         // for reading

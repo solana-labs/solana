@@ -231,7 +231,7 @@ struct OldestSlot(Arc<AtomicU64>);
 impl OldestSlot {
     pub fn set(&self, oldest_slot: Slot) {
         // this is independently used for compaction_filter without any data dependency.
-        // also, compaction_fileters are created via its factories, creating short-lived copies of
+        // also, compaction_filters are created via its factories, creating short-lived copies of
         // this atomic value for the single job of compaction. So, Relaxed store can be justified
         // in total
         self.0.store(oldest_slot, Ordering::Relaxed);

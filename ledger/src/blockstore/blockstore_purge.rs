@@ -33,8 +33,8 @@ impl Blockstore {
     }
 
     pub fn set_last_purged_slot(&self, to_slot: Slot) {
-        // convert here from inclusive puraged range end to inclusive alive range start to align
-        // with Slot::defualt() for initial compaction filter behavior consistency
+        // convert here from inclusive purged range end to inclusive alive range start to align
+        // with Slot::default() for initial compaction filter behavior consistency
         let to_slot = to_slot.checked_add(1).unwrap();
         self.db.set_oldest_slot(to_slot);
     }
@@ -188,9 +188,10 @@ impl Blockstore {
                 )?;
             }
             PurgeType::CompactionFilter => {
-                // this purge type completely and indefinitely relies on the proper working of compaction
-                // filter for those speical column families, never toggling the primary index from the
-                // current one. Overall, this enables well uniformly distributed writes, resulting
+                // No explicit action is required here because this purge type completely and
+                // indefinitely relies on the proper working of compaction filter for those
+                // special column families, never toggling the primary index from the current
+                // one. Overall, this enables well uniformly distributed writes, resulting
                 // in no spiky periodic huge delete_range for them.
             }
         }
