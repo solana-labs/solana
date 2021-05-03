@@ -12,7 +12,7 @@ use crate::{
     erasure::ErasureConfig,
     leader_schedule_cache::LeaderScheduleCache,
     next_slots_iterator::NextSlotsIterator,
-    shred::{Result as ShredResult, Shred, Shredder},
+    shred::{Result as ShredResult, Shred, Shredder, MAX_DATA_SHREDS_PER_FEC_BLOCK},
 };
 pub use crate::{blockstore_db::BlockstoreError, blockstore_meta::SlotMeta};
 use bincode::deserialize;
@@ -1213,21 +1213,16 @@ impl Blockstore {
     }
 
     fn should_insert_coding_shred(shred: &Shred, last_root: &RwLock<u64>) -> bool {
-        let slot = shred.slot();
         let shred_index = shred.index();
-
-        if shred.is_data() || shred_index < u32::from(shred.coding_header.position) {
-            return false;
-        }
-
-        let set_index = shred.common_header.fec_set_index;
-
-        !(shred.coding_header.num_coding_shreds == 0
-            || shred.coding_header.position >= shred.coding_header.num_coding_shreds
-            || std::u32::MAX - set_index < u32::from(shred.coding_header.num_coding_shreds) - 1
-            || slot <= *last_root.read().unwrap()
-            || shred.coding_header.num_coding_shreds as u32
-                > (8 * crate::shred::MAX_DATA_SHREDS_PER_FEC_BLOCK))
+        let fec_set_index = shred.common_header.fec_set_index;
+        let num_coding_shreds = shred.coding_header.num_coding_shreds as u32;
+        shred.is_code()
+            && shred_index >= fec_set_index
+            && shred_index - fec_set_index < num_coding_shreds
+            && num_coding_shreds != 0
+            && num_coding_shreds <= 8 * MAX_DATA_SHREDS_PER_FEC_BLOCK
+            && num_coding_shreds - 1 <= u32::MAX - fec_set_index
+            && shred.slot() > *last_root.read().unwrap()
     }
 
     fn insert_coding_shred(
@@ -1241,7 +1236,7 @@ impl Blockstore {
 
         // Assert guaranteed by integrity checks on the shred that happen before
         // `insert_coding_shred` is called
-        assert!(shred.is_code() && shred_index >= u64::from(shred.coding_header.position));
+        assert!(shred.is_code() && shred_index >= shred.common_header.fec_set_index as u64);
 
         // Commit step: commit all changes to the mutable structures at once, or none at all.
         // We don't want only a subset of these changes going through.
@@ -5468,7 +5463,7 @@ pub mod tests {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
 
             let slot = 1;
-            let (shred, coding) = Shredder::new_coding_shred_header(slot, 11, 11, 11, 11, 10, 0);
+            let (shred, coding) = Shredder::new_coding_shred_header(slot, 11, 11, 11, 11, 0);
             let coding_shred =
                 Shred::new_empty_from_header(shred, DataShredHeader::default(), coding);
 
@@ -5514,8 +5509,7 @@ pub mod tests {
             let last_root = RwLock::new(0);
 
             let slot = 1;
-            let (mut shred, coding) =
-                Shredder::new_coding_shred_header(slot, 11, 11, 11, 11, 10, 0);
+            let (mut shred, coding) = Shredder::new_coding_shred_header(slot, 11, 11, 11, 11, 0);
             let coding_shred = Shred::new_empty_from_header(
                 shred.clone(),
                 DataShredHeader::default(),
@@ -5564,7 +5558,7 @@ pub mod tests {
                     DataShredHeader::default(),
                     coding.clone(),
                 );
-                let index = coding_shred.coding_header.position - 1;
+                let index = coding_shred.index() - coding_shred.common_header.fec_set_index - 1;
                 coding_shred.set_index(index as u32);
 
                 assert!(!Blockstore::should_insert_coding_shred(
@@ -5594,7 +5588,9 @@ pub mod tests {
                     DataShredHeader::default(),
                     coding.clone(),
                 );
-                coding_shred.coding_header.num_coding_shreds = coding_shred.coding_header.position;
+                let num_coding_shreds =
+                    coding_shred.common_header.index - coding_shred.common_header.fec_set_index;
+                coding_shred.coding_header.num_coding_shreds = num_coding_shreds as u16;
                 assert!(!Blockstore::should_insert_coding_shred(
                     &coding_shred,
                     &last_root
@@ -5612,7 +5608,6 @@ pub mod tests {
                 coding_shred.common_header.fec_set_index = std::u32::MAX - 1;
                 coding_shred.coding_header.num_coding_shreds = 3;
                 coding_shred.common_header.index = std::u32::MAX - 1;
-                coding_shred.coding_header.position = 0;
                 assert!(!Blockstore::should_insert_coding_shred(
                     &coding_shred,
                     &last_root

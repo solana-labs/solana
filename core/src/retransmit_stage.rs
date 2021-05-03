@@ -787,7 +787,7 @@ mod tests {
         assert_eq!(check_if_already_received(&packet, &shreds_received), None);
         assert_eq!(check_if_already_received(&packet, &shreds_received), None);
 
-        let shred = Shred::new_empty_coding(slot, index, 0, 1, 1, 0, version);
+        let shred = Shred::new_empty_coding(slot, index, 0, 1, 1, version);
         shred.copy_to_packet(&mut packet);
         // Coding at (1, 5) passes
         assert_eq!(
@@ -797,7 +797,7 @@ mod tests {
         // then blocked
         assert_eq!(check_if_already_received(&packet, &shreds_received), None);
 
-        let shred = Shred::new_empty_coding(slot, index, 2, 1, 1, 0, version);
+        let shred = Shred::new_empty_coding(slot, index, 2, 1, 1, version);
         shred.copy_to_packet(&mut packet);
         // 2nd unique coding at (1, 5) passes
         assert_eq!(
@@ -807,7 +807,7 @@ mod tests {
         // same again is blocked
         assert_eq!(check_if_already_received(&packet, &shreds_received), None);
 
-        let shred = Shred::new_empty_coding(slot, index, 3, 1, 1, 0, version);
+        let shred = Shred::new_empty_coding(slot, index, 3, 1, 1, version);
         shred.copy_to_packet(&mut packet);
         // Another unique coding at (1, 5) always blocked
         assert_eq!(check_if_already_received(&packet, &shreds_received), None);

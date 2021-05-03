@@ -200,7 +200,8 @@ pub struct DataShredHeader {
 pub struct CodingShredHeader {
     pub num_data_shreds: u16,
     pub num_coding_shreds: u16,
-    pub position: u16,
+    #[serde(rename = "position")]
+    __unused: u16,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -360,7 +361,6 @@ impl Shred {
         fec_set_index: u32,
         num_data: usize,
         num_code: usize,
-        position: usize,
         version: u16,
     ) -> Self {
         let (header, coding_header) = Shredder::new_coding_shred_header(
@@ -369,7 +369,6 @@ impl Shred {
             fec_set_index,
             num_data,
             num_code,
-            position,
             version,
         );
         Shred::new_empty_from_header(header, DataShredHeader::default(), coding_header)
@@ -735,7 +734,6 @@ impl Shredder {
         fec_set_index: u32,
         num_data: usize,
         num_code: usize,
-        position: usize,
         version: u16,
     ) -> (ShredCommonHeader, CodingShredHeader) {
         let header = ShredCommonHeader {
@@ -751,7 +749,7 @@ impl Shredder {
             CodingShredHeader {
                 num_data_shreds: num_data as u16,
                 num_coding_shreds: num_code as u16,
-                position: position as u16,
+                ..CodingShredHeader::default()
             },
         )
     }
@@ -797,7 +795,6 @@ impl Shredder {
                     fec_set_index,
                     num_data,
                     num_coding,
-                    i, // position
                     version,
                 );
                 shred.payload[SIZE_OF_CODING_SHRED_HEADERS..].copy_from_slice(parity);
@@ -1923,7 +1920,7 @@ pub mod tests {
         );
         assert_eq!(stats.index_overrun, 4);
 
-        let shred = Shred::new_empty_coding(8, 2, 10, 30, 4, 7, 200);
+        let shred = Shred::new_empty_coding(8, 2, 10, 30, 4, 200);
         shred.copy_to_packet(&mut packet);
         assert_eq!(
             Some((8, 2, false)),
@@ -1935,8 +1932,7 @@ pub mod tests {
         assert_eq!(None, get_shred_slot_index_type(&packet, &mut stats));
         assert_eq!(1, stats.index_out_of_bounds);
 
-        let (mut header, coding_header) =
-            Shredder::new_coding_shred_header(8, 2, 10, 30, 4, 7, 200);
+        let (mut header, coding_header) = Shredder::new_coding_shred_header(8, 2, 10, 30, 4, 200);
         header.shred_type = ShredType(u8::MAX);
         let shred = Shred::new_empty_from_header(header, DataShredHeader::default(), coding_header);
         shred.copy_to_packet(&mut packet);
