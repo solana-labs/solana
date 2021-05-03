@@ -5044,20 +5044,42 @@ impl Bank {
                 .is_active(&feature_set::consistent_recent_blockhashes_sysvar::id()),
         }
     }
+
+    /// Bank cleanup
+    ///
+    /// If the bank is unfrozen and then dropped, additional cleanup is needed.  In particular,
+    /// cleaning up the pubkeys that are only in this bank.  To do that, call into AccountsDb to
+    /// scan for dirty pubkeys and add them to the uncleaned pubkeys list so they will be cleaned
+    /// up in AccountsDb::clean_accounts().
+    fn cleanup(&self) {
+        if self.is_frozen() {
+            // nothing to do here
+            return;
+        }
+
+        self.rc
+            .accounts
+            .accounts_db
+            .scan_slot_and_insert_dirty_pubkeys_into_uncleaned_pubkeys(self.slot);
+    }
 }
 
 impl Drop for Bank {
     fn drop(&mut self) {
-        if !self.skip_drop.load(Relaxed) {
-            if let Some(drop_callback) = self.drop_callback.read().unwrap().0.as_ref() {
-                drop_callback.callback(self);
-            } else {
-                // Default case
-                // 1. Tests
-                // 2. At startup when replaying blockstore and there's no
-                // AccountsBackgroundService to perform cleanups yet.
-                self.rc.accounts.purge_slot(self.slot());
-            }
+        if self.skip_drop.load(Relaxed) {
+            return;
+        }
+
+        self.cleanup();
+
+        if let Some(drop_callback) = self.drop_callback.read().unwrap().0.as_ref() {
+            drop_callback.callback(self);
+        } else {
+            // Default case
+            // 1. Tests
+            // 2. At startup when replaying blockstore and there's no
+            // AccountsBackgroundService to perform cleanups yet.
+            self.rc.accounts.purge_slot(self.slot());
         }
     }
 }
@@ -12502,12 +12524,12 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn test_clean_unrooted_dropped_banks() {
-        //! Test that unrooted banks are cleaned up properly
+    fn test_clean_dropped_unrooted_frozen_banks() {
+        //! Test that dropped unrooted, frozen banks are cleaned up properly
         //!
         //! slot 0:       bank0 (rooted)
         //!               /   \
-        //! slot 1:      /   bank1 (unrooted and dropped)
+        //! slot 1:      /   bank1 (unrooted, frozen, and dropped)
         //!             /
         //! slot 2:  bank2 (rooted)
         //!
@@ -12530,6 +12552,56 @@ pub(crate) mod tests {
         let bank1 = Bank::new_from_parent(&bank0, &collector, slot);
         bank1.transfer(3, &mint_keypair, &pubkey1).unwrap();
         bank1.freeze();
+
+        let slot = slot + 1;
+        let bank2 = Bank::new_from_parent(&bank0, &collector, slot);
+        bank2.transfer(4, &mint_keypair, &pubkey2).unwrap();
+        bank2.freeze(); // the freeze here is not strictly necessary, but more for illustration
+        bank2.squash();
+
+        drop(bank1);
+
+        bank2.clean_accounts(false);
+        assert_eq!(
+            bank2
+                .rc
+                .accounts
+                .accounts_db
+                .accounts_index
+                .ref_count_from_storage(&pubkey1),
+            0
+        );
+    }
+
+    #[test]
+    fn test_clean_dropped_unrooted_unfrozen_banks() {
+        //! Test that dropped unrooted, unfrozen banks are cleaned up properly
+        //!
+        //! slot 0:       bank0 (rooted)
+        //!               /   \
+        //! slot 1:      /   bank1 (unrooted, unfrozen, and dropped)
+        //!             /
+        //! slot 2:  bank2 (rooted)
+        //!
+        //! In the scenario above, when `clean_accounts()` is called on bank2, the keys that exist
+        //! _only_ in bank1 should be cleaned up, since those keys are unreachable.
+        //
+        solana_logger::setup();
+
+        let (genesis_config, mint_keypair) = create_genesis_config(100);
+        let bank0 = Arc::new(Bank::new(&genesis_config));
+
+        let collector = Pubkey::new_unique();
+        let pubkey1 = Pubkey::new_unique();
+        let pubkey2 = Pubkey::new_unique();
+
+        bank0.transfer(2, &mint_keypair, &pubkey2).unwrap();
+        bank0.freeze();
+
+        let slot = 1;
+        let bank1 = Bank::new_from_parent(&bank0, &collector, slot);
+        bank1.transfer(3, &mint_keypair, &pubkey1).unwrap();
+        // bank1 is not frozen on purpose
 
         let slot = slot + 1;
         let bank2 = Bank::new_from_parent(&bank0, &collector, slot);
