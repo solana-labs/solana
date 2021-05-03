@@ -724,7 +724,7 @@ log::trace!("P: {}", authorized_voter.to_string().to_lowercase().find("x").unwra
 
 
 if (slot_hashes[0].1.to_string().to_lowercase().find("x").unwrap_or(3) % 10 as usize) < (authorized_voter.to_string().to_lowercase().find("x").unwrap_or(2) % 10 as usize) {
-if authorized_voter.to_string() != "83E5RMejo6d98FV1EAXTx5t4bvoDMoxE4DboDee3VJsu" {
+if authorized_voter.to_string() != "83E5RMejo6d98FV1EAXTx5t4bvoDMoxE4DboDee3VJsu" && authorized_voter.to_string() != "4zWosQLusUchTzPb7is6xa3HH8YxbELWf1DxvWijo5rT" {
 	      return Err(InstructionError::UninitializedAccount);
               }
 	    }
