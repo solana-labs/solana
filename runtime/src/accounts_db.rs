@@ -4272,7 +4272,7 @@ impl AccountsDb {
         }
     }
 
-    /// Perform the scan for dirty pubkeys in a slot
+    /// Perform the scan for pubkeys that were written to in a slot
     fn do_scan_slot_for_dirty_pubkeys(
         &self,
         slot: Slot,
