@@ -1,5 +1,36 @@
 //! The `bank` module tracks client accounts and the progress of on-chain
-//! programs. It offers a high-level API that signs transactions
+//! programs.
+//!
+//! A single bank relates to a block produced by a single leader and each bank
+//! except for the genesis bank points back to a parent bank.
+//!
+//! The bank is the main entrypoint for processing verified transactions with the function
+//! `Bank::process_transactions`
+//!
+//! It does this by loading the accounts using the reference it holds on the account store,
+//! and then passing those to the message_processor which handles loading the programs specified
+//! by the Transaction and executing it.
+//!
+//! The bank then stores the results to the accounts store.
+//!
+//! It then has apis for retrieving if a transaction has been processed and it's status.
+//! See `get_signature_status` et al.
+//!
+//! Bank lifecycle:
+//!
+//! A bank is newly created and open to transactions. Transactions are applied
+//! until either the bank reached the tick count when the node is the leader for that slot, or the
+//! node has applied all transactions present in all `Entry`s in the slot.
+//!
+//! Once it is complete, the bank can then be frozen. After frozen, no more transactions can
+//! be applied or state changes made. At the frozen step, rent will be applied and various
+//! sysvar special accounts update to the new state of the system.
+//!
+//! After frozen, and the bank has had the appropriate number of votes on it, then it can become
+//! rooted. At this point, it will not be able to be removed from the chain and the
+//! state is finalized.
+//!
+//! It offers a high-level API that signs transactions
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
 use crate::{
