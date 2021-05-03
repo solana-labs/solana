@@ -1500,14 +1500,7 @@ pub fn main() {
             Arg::with_name("no_rocksdb_compaction")
                 .long("no-rocksdb-compaction")
                 .takes_value(false)
-                .help("Disable manual compaction of the ledger database.")
-        )
-        .arg(
-            Arg::with_name("rocksdb_compaction")
-                .long("rocksdb-compaction")
-                .takes_value(false)
-                .conflicts_with("no_rocksdb_compaction")
-                .help("Enable manual compaction of the ledger database.")
+                .help("Disable manual compaction of the ledger database (this is ignored).")
         )
         .arg(
             Arg::with_name("rocksdb_compaction_interval")
@@ -2023,17 +2016,7 @@ pub fn main() {
 
     let private_rpc = matches.is_present("private_rpc");
     let no_port_check = matches.is_present("no_port_check");
-    let rocksdb_compaction = match (
-        matches.is_present("rocksdb_compaction"),
-        matches.is_present("no_rocksdb_compaction"),
-    ) {
-        (true, true) => unreachable!(),
-        (true, false) => true,
-        (false, true) => false,
-        (false, false) => false, // no MANUAL compaction as default behavior
-    };
-    let no_rocksdb_compaction = !rocksdb_compaction;
-
+    let no_rocksdb_compaction = false;
     let rocksdb_compaction_interval = value_t!(matches, "rocksdb_compaction_interval", u64).ok();
     let rocksdb_max_compaction_jitter =
         value_t!(matches, "rocksdb_max_compaction_jitter", u64).ok();

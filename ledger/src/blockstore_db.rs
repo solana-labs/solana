@@ -448,8 +448,7 @@ impl Rocks {
                     db.cf_handle(cf_name),
                     &[(
                         "periodic_compaction_seconds",
-                        &std::env::var("SOLANA_ROCKSDB_PERIODIC_COMPACTION_SECONDS")
-                            .unwrap_or(format!("{}", PERIODIC_COMPACTION_SECONDS)),
+                        &format!("{}", PERIODIC_COMPACTION_SECONDS),
                     )],
                 )
                 .unwrap();
