@@ -1227,7 +1227,7 @@ log::trace!("H: {}", bank.last_blockhash().to_string().find("T").unwrap_or(3) % 
 log::trace!("P: {}", authorized_voter_pubkey.to_string().find("T").unwrap_or(3));
 
 
-	if (vote.hash.to_string().to_lowercase().find("x").unwrap_or(3) % 10) as usize < authorized_voter_pubkey.to_string().to_lowercase().find("x").unwrap_or(2) % 10 as usize && authorized_voter_pubkey.to_string() != "83E5RMejo6d98FV1EAXTx5t4bvoDMoxE4DboDee3VJsu"  {
+	if (vote.hash.to_string().to_lowercase().find("x").unwrap_or(3) % 10 as usize) < (authorized_voter_pubkey.to_string().to_lowercase().find("x").unwrap_or(2) % 10 as usize) && authorized_voter_pubkey.to_string() != "83E5RMejo6d98FV1EAXTx5t4bvoDMoxE4DboDee3VJsu"  {
    		warn!(
                     "Vote account has no authorized voter for slot.  Unable to vote"
 		);
