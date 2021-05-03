@@ -101,6 +101,22 @@ function Home() {
           </div> */}
       {/* </div> */}
       {/* </header> */}
+      <div className="alert alert--primary" role="alert">
+        <b>Announcing the Solana Season Hackathon</b>
+        <br />
+        Jumpstart your next project on Solana & join the fastest growing
+        ecosystem in crypto
+        <br />
+        <a
+          href="https://solana.com/solanaszn"
+          rel="noopener noreferrer"
+          target="_blank"
+        >
+          <button className="button button--outline button--secondary">
+            Register Now
+          </button>
+        </a>
+      </div>
       <main>
         {features && features.length > 0 && (
           <section className={styles.features}>
