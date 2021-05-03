@@ -11,7 +11,7 @@ and outlined below.
 
 To include sysvar data in program operations, pass the sysvar account address in
 the list of accounts in a transaction. The account can be read in your
-instruction processor like any other account. Access to sysvars accounts ßis
+instruction processor like any other account. Access to sysvars accounts is
 always _readonly_.
 
 ## Clock
