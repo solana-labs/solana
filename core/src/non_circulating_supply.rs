@@ -119,6 +119,8 @@ solana_sdk::pubkeys!(
         "CUageMFi49kzoDqtdU8NvQ4Bq3sbtJygjKDAXJ45nmAi",
         "5smrYwb1Hr2T8XMnvsqccTgXxuqQs14iuE8RbHFYf2Cf",
         "xQadXQiUTCCFhfHjvQx1hyJK6KVWr1w2fD6DT3cdwj7",
+        "8DE8fqPfv1fp9DHyGyDFFaMjpopMgDeXspzoi9jpBJjC",
+        "3itU5ME8L6FDqtMiRoUiT1F7PwbkTtHBbW51YWD5jtjm",
     ]
 );
 
@@ -130,6 +132,7 @@ solana_sdk::pubkeys!(
         "3FFaheyqtyAXZSYxDzsr5CVKvJuvZD1WE1VEsBtDbRqB",
         "FdGYQdiRky8NZzN9wZtczTBcWLYYRXrJ3LMDhqDPn5rM",
         "4e6KwQpyzGQPfgVr5Jn3g5jLjbXB4pKPa2jRLohEb1QA",
+        "FjiEiVKyMGzSLpqoB27QypukUfyWHrwzPcGNtopzZVdh",
     ]
 );
 
