@@ -28,11 +28,11 @@ pub mod vote_state_versions;
 pub use vote_state_versions::*;
 
 // Maximum number of votes to keep around, tightly coupled with epoch_schedule::MIN_SLOTS_PER_EPOCH
-pub const MAX_LOCKOUT_HISTORY: usize = 310;
+pub const MAX_LOCKOUT_HISTORY: usize = 31;
 pub const INITIAL_LOCKOUT: usize = 2;
 
 // Maximum number of credits history to keep around
-const MAX_EPOCH_CREDITS_HISTORY: usize = 64;
+const MAX_EPOCH_CREDITS_HISTORY: usize = 16;
 
 #[frozen_abi(digest = "Ch2vVEwos2EjAVqSHCyJjnN2MNX1yrpapZTGhMSCjWUH")]
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample)]
