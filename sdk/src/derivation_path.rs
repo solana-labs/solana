@@ -129,7 +129,15 @@ impl DerivationPath {
         }
     }
 
-    pub fn from_uri(
+    pub fn from_uri_key_query(uri: &URIReference<'_>) -> Result<Option<Self>, DerivationPathError> {
+        Self::from_uri(uri, true)
+    }
+
+    pub fn from_uri_any_query(uri: &URIReference<'_>) -> Result<Option<Self>, DerivationPathError> {
+        Self::from_uri(uri, false)
+    }
+
+    fn from_uri(
         uri: &URIReference<'_>,
         key_only: bool,
     ) -> Result<Option<Self>, DerivationPathError> {
