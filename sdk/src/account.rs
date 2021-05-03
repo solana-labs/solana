@@ -623,8 +623,8 @@ pub mod tests {
         account1.executable = true;
         account1.rent_epoch = 4;
         let mut account2 = AccountSharedData::new(1, 2, key);
-        account2.executable = true;
-        account2.rent_epoch = 4;
+        account2.set_executable(true);
+        account2.set_rent_epoch(4);
         assert!(accounts_equal(&account1, &account2));
         (account1, account2)
     }
@@ -736,15 +736,15 @@ pub mod tests {
         assert_eq!(account.rent_epoch, 4);
         assert_eq!(account.rent_epoch(), 4);
         let account = account2;
-        assert_eq!(account.lamports, 1);
+        assert_eq!(account.inner.lamports, 1);
         assert_eq!(account.lamports(), 1);
-        assert_eq!(account.data.len(), 2);
+        assert_eq!(account.inner.data.len(), 2);
         assert_eq!(account.data().len(), 2);
-        assert_eq!(account.owner, key);
+        assert_eq!(account.inner.owner, key);
         assert_eq!(account.owner(), &key);
-        assert_eq!(account.executable, true);
+        assert_eq!(account.inner.executable, true);
         assert_eq!(account.executable(), true);
-        assert_eq!(account.rent_epoch, 4);
+        assert_eq!(account.inner.rent_epoch, 4);
         assert_eq!(account.rent_epoch(), 4);
     }
 
@@ -844,7 +844,7 @@ pub mod tests {
                         account1.checked_add_lamports(1).unwrap();
                     } else if pass == 1 {
                         account_expected.checked_add_lamports(1).unwrap();
-                        account2.set_lamports(account2.lamports + 1);
+                        account2.set_lamports(account2.inner.lamports + 1);
                     } else if pass == 2 {
                         account1.set_lamports(account1.lamports + 1);
                     } else if pass == 3 {
@@ -856,7 +856,7 @@ pub mod tests {
                         account1.data[0] += 1;
                     } else if pass == 1 {
                         account_expected.data[0] += 1;
-                        account2.data_as_mut_slice()[0] = account2.data[0] + 1;
+                        account2.data_as_mut_slice()[0] = account2.inner.data[0] + 1;
                     } else if pass == 2 {
                         account1.data_as_mut_slice()[0] = account1.data[0] + 1;
                     } else if pass == 3 {
@@ -873,31 +873,31 @@ pub mod tests {
                         account1.set_owner(key3);
                     } else if pass == 3 {
                         account_expected.owner = key3;
-                        account2.owner = key3;
+                        account2.set_owner(key3);
                     }
                 } else if field_index == 3 {
                     if pass == 0 {
                         account1.executable = !account1.executable;
                     } else if pass == 1 {
                         account_expected.executable = !account_expected.executable;
-                        account2.set_executable(!account2.executable);
+                        account2.set_executable(!account2.inner.executable);
                     } else if pass == 2 {
                         account1.set_executable(!account1.executable);
                     } else if pass == 3 {
                         account_expected.executable = !account_expected.executable;
-                        account2.executable = !account2.executable;
+                        account2.set_executable(!account2.inner.executable);
                     }
                 } else if field_index == 4 {
                     if pass == 0 {
                         account1.rent_epoch += 1;
                     } else if pass == 1 {
                         account_expected.rent_epoch += 1;
-                        account2.set_rent_epoch(account2.rent_epoch + 1);
+                        account2.set_rent_epoch(account2.inner.rent_epoch + 1);
                     } else if pass == 2 {
                         account1.set_rent_epoch(account1.rent_epoch + 1);
                     } else if pass == 3 {
                         account_expected.rent_epoch += 1;
-                        account2.rent_epoch += 1;
+                        account2.set_rent_epoch(account2.inner.rent_epoch + 1);
                     }
                 }
 
