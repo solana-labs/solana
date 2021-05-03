@@ -148,19 +148,19 @@ mod tests {
         // collect rent on a newly-created account
         let collected = rent_collector
             .collect_from_created_account(&solana_sdk::pubkey::new_rand(), &mut created_account);
-        assert!(created_account.lamports < old_lamports);
-        assert_eq!(created_account.lamports + collected, old_lamports);
+        assert!(created_account.lamports() < old_lamports);
+        assert_eq!(created_account.lamports() + collected, old_lamports);
         assert_ne!(created_account.rent_epoch(), old_epoch);
 
         // collect rent on a already-existing account
         let collected = rent_collector
             .collect_from_existing_account(&solana_sdk::pubkey::new_rand(), &mut existing_account);
-        assert!(existing_account.lamports < old_lamports);
-        assert_eq!(existing_account.lamports + collected, old_lamports);
+        assert!(existing_account.lamports() < old_lamports);
+        assert_eq!(existing_account.lamports() + collected, old_lamports);
         assert_ne!(existing_account.rent_epoch(), old_epoch);
 
         // newly created account should be collected for less rent; thus more remaining balance
-        assert!(created_account.lamports() > existing_account.lamports);
+        assert!(created_account.lamports() > existing_account.lamports());
         assert_eq!(created_account.rent_epoch(), existing_account.rent_epoch());
     }
 
@@ -181,7 +181,7 @@ mod tests {
 
         // first mark account as being collected while being rent-exempt
         collected = rent_collector.collect_from_existing_account(&pubkey, &mut account);
-        assert_eq!(account.lamports, huge_lamports);
+        assert_eq!(account.lamports(), huge_lamports);
         assert_eq!(collected, 0);
 
         // decrease the balance not to be rent-exempt
@@ -189,7 +189,7 @@ mod tests {
 
         // ... and trigger another rent collection on the same epoch and check that rent is working
         collected = rent_collector.collect_from_existing_account(&pubkey, &mut account);
-        assert_eq!(account.lamports, tiny_lamports - collected);
+        assert_eq!(account.lamports(), tiny_lamports - collected);
         assert_ne!(collected, 0);
     }
 }

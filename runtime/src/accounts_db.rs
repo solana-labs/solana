@@ -6263,14 +6263,14 @@ pub mod tests {
             {
                 account.checked_add_lamports(1).unwrap();
                 accounts.store_uncached(slot, &[(&pubkeys[idx], &account)]);
-                if account.lamports == 0 {
+                if account.lamports() == 0 {
                     let ancestors = vec![(slot, 0)].into_iter().collect();
                     assert!(accounts
                         .load_without_fixed_root(&ancestors, &pubkeys[idx])
                         .is_none());
                 } else {
                     let default_account = AccountSharedData::from(Account {
-                        lamports: account.lamports,
+                        lamports: account.lamports(),
                         ..Account::default()
                     });
                     assert_eq!(default_account, account);
@@ -6405,7 +6405,7 @@ pub mod tests {
                     .load_without_fixed_root(&ancestors, &key)
                     .unwrap()
                     .0
-                    .lamports,
+                    .lamports(),
                 (i as u64) + 1
             );
         }
@@ -7002,7 +7002,7 @@ pub mod tests {
         let (account, slot) = accounts
             .load_without_fixed_root(&ancestors, &pubkey)
             .unwrap();
-        assert_eq!((account.lamports, slot), (expected_lamports, slot));
+        assert_eq!((account.lamports(), slot), (expected_lamports, slot));
     }
 
     fn assert_not_load_account(accounts: &AccountsDb, slot: Slot, pubkey: Pubkey) {
@@ -7335,7 +7335,7 @@ pub mod tests {
                                     panic!("Could not fetch stored account {}, iter {}", pubkey, i)
                                 });
                             assert_eq!(slot, slot);
-                            assert_eq!(account.lamports, account_bal);
+                            assert_eq!(account.lamports(), account_bal);
                             i += 1;
                         }
                     })
@@ -7413,7 +7413,7 @@ pub mod tests {
             db.load_without_fixed_root(&ancestors, &key1)
                 .unwrap()
                 .0
-                .lamports,
+                .lamports(),
             3
         );
     }
@@ -8643,14 +8643,14 @@ pub mod tests {
         let normal_sysvar = solana_sdk::account::create_account_for_test(
             &solana_sdk::slot_history::SlotHistory::default(),
         );
-        assert_eq!(normal_sysvar.lamports, 1);
+        assert_eq!(normal_sysvar.lamports(), 1);
     }
 
     #[test]
     fn test_account_balance_for_capitalization_native_program() {
         let normal_native_program =
             solana_sdk::native_loader::create_loadable_account_for_test("foo");
-        assert_eq!(normal_native_program.lamports, 1);
+        assert_eq!(normal_native_program.lamports(), 1);
     }
 
     #[test]
@@ -8973,13 +8973,13 @@ pub mod tests {
             .load_with_fixed_root(&Ancestors::default(), &account_key)
             .map(|(account, _)| account)
             .unwrap();
-        assert_eq!(account.lamports, 1);
+        assert_eq!(account.lamports(), 1);
         assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
         let account = db
             .load_with_fixed_root(&Ancestors::default(), &account_key)
             .map(|(account, _)| account)
             .unwrap();
-        assert_eq!(account.lamports, 1);
+        assert_eq!(account.lamports(), 1);
         assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
         db.store_cached(2, &[(&account_key, &zero_lamport_account)]);
         assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
@@ -8987,7 +8987,7 @@ pub mod tests {
             .load_with_fixed_root(&Ancestors::default(), &account_key)
             .map(|(account, _)| account)
             .unwrap();
-        assert_eq!(account.lamports, 0);
+        assert_eq!(account.lamports(), 0);
         assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
     }
 
@@ -9021,7 +9021,7 @@ pub mod tests {
                 LoadHint::Unspecified,
             )
             .unwrap();
-        assert_eq!(account.0.lamports, 0);
+        assert_eq!(account.0.lamports(), 0);
         // since this item is in the cache, it should not be in the read only cache
         assert_eq!(db.read_only_accounts_cache.cache_len(), 0);
 
@@ -9112,7 +9112,7 @@ pub mod tests {
             )
             .unwrap()
             .0
-            .lamports,
+            .lamports(),
             0
         );
     }
@@ -9233,7 +9233,7 @@ pub mod tests {
                 LoadHint::Unspecified,
             )
             .unwrap();
-        assert_eq!(account.0.lamports, zero_lamport_account.lamports);
+        assert_eq!(account.0.lamports(), zero_lamport_account.lamports());
 
         // Run clean, unrooted slot 1 should not be purged, and still readable from the cache,
         // because we're still doing a scan on it.
@@ -9246,7 +9246,7 @@ pub mod tests {
                 LoadHint::Unspecified,
             )
             .unwrap();
-        assert_eq!(account.0.lamports, slot1_account.lamports);
+        assert_eq!(account.0.lamports(), slot1_account.lamports());
 
         // When the scan is over, clean should not panic and should not purge something
         // still in the cache.
@@ -9260,7 +9260,7 @@ pub mod tests {
                 LoadHint::Unspecified,
             )
             .unwrap();
-        assert_eq!(account.0.lamports, slot1_account.lamports);
+        assert_eq!(account.0.lamports(), slot1_account.lamports());
 
         // Simulate dropping the bank, which finally removes the slot from the cache
         db.purge_slot(1);
@@ -9979,7 +9979,7 @@ pub mod tests {
                     let loaded_account = db.do_load(&ancestors, &pubkey, None, load_hint).unwrap();
                     // slot + 1 == account.lamports because of the account-cache-flush thread
                     assert_eq!(
-                        loaded_account.0.lamports,
+                        loaded_account.0.lamports(),
                         expected_lamports(&loaded_account)
                     );
                 }

@@ -1319,7 +1319,7 @@ mod tests {
         assert_eq!(loaded_accounts.len(), 1);
         let (load_res, _nonce_rollback) = &loaded_accounts[0];
         let loaded_transaction = load_res.as_ref().unwrap();
-        assert_eq!(loaded_transaction.accounts[0].lamports, min_balance);
+        assert_eq!(loaded_transaction.accounts[0].lamports(), min_balance);
 
         // Fee leaves zero balance fails
         accounts[0].1.set_lamports(min_balance);
@@ -2345,7 +2345,10 @@ mod tests {
             .map(|(_pubkey, account)| *account)
             .cloned()
             .unwrap();
-        assert_eq!(collected_nonce_account.lamports, nonce_account_pre.lamports,);
+        assert_eq!(
+            collected_nonce_account.lamports(),
+            nonce_account_pre.lamports(),
+        );
         assert!(nonce_account::verify_nonce_account(
             &collected_nonce_account,
             &next_blockhash
@@ -2447,7 +2450,10 @@ mod tests {
             .map(|(_pubkey, account)| *account)
             .cloned()
             .unwrap();
-        assert_eq!(collected_nonce_account.lamports, nonce_account_pre.lamports);
+        assert_eq!(
+            collected_nonce_account.lamports(),
+            nonce_account_pre.lamports()
+        );
         assert!(nonce_account::verify_nonce_account(
             &collected_nonce_account,
             &next_blockhash

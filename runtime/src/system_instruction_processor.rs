@@ -535,8 +535,8 @@ mod tests {
             ),
             Ok(())
         );
-        assert_eq!(from_account.borrow().lamports, 50);
-        assert_eq!(to_account.borrow().lamports, 50);
+        assert_eq!(from_account.borrow().lamports(), 50);
+        assert_eq!(to_account.borrow().lamports(), 50);
         assert_eq!(to_account.borrow().owner(), &new_owner);
         assert_eq!(to_account.borrow().data(), &[0, 0]);
     }
@@ -569,8 +569,8 @@ mod tests {
             ),
             Ok(())
         );
-        assert_eq!(from_account.borrow().lamports, 50);
-        assert_eq!(to_account.borrow().lamports, 50);
+        assert_eq!(from_account.borrow().lamports(), 50);
+        assert_eq!(to_account.borrow().lamports(), 50);
         assert_eq!(to_account.borrow().owner(), &new_owner);
         assert_eq!(to_account.borrow().data(), &[0, 0]);
     }
@@ -606,8 +606,8 @@ mod tests {
             ),
             Ok(())
         );
-        assert_eq!(from_account.borrow().lamports, 50);
-        assert_eq!(to_account.borrow().lamports, 50);
+        assert_eq!(from_account.borrow().lamports(), 50);
+        assert_eq!(to_account.borrow().lamports(), 50);
         assert_eq!(to_account.borrow().owner(), &new_owner);
         assert_eq!(to_account.borrow().data(), &[0, 0]);
     }
@@ -658,7 +658,7 @@ mod tests {
             ),
             Err(InstructionError::MissingRequiredSignature)
         );
-        assert_eq!(from_account.borrow().lamports, 100);
+        assert_eq!(from_account.borrow().lamports(), 100);
         assert_eq!(*to_account.borrow(), AccountSharedData::default());
     }
 
@@ -686,8 +686,8 @@ mod tests {
             Ok(())
         );
 
-        let from_lamports = from_account.borrow().lamports;
-        let to_lamports = to_account.borrow().lamports;
+        let from_lamports = from_account.borrow().lamports();
+        let to_lamports = to_account.borrow().lamports();
         let to_owner = *to_account.borrow().owner();
         assert_eq!(from_lamports, 100);
         assert_eq!(to_lamports, 0);
@@ -757,7 +757,7 @@ mod tests {
             &MockInvokeContext::new(vec![]),
         );
         assert!(result.is_ok());
-        assert_eq!(to_account.borrow().lamports, 50);
+        assert_eq!(to_account.borrow().lamports(), 50);
         assert_eq!(
             to_account.borrow().data().len() as u64,
             MAX_PERMITTED_DATA_LENGTH
@@ -791,7 +791,7 @@ mod tests {
         );
         assert_eq!(result, Err(SystemError::AccountAlreadyInUse.into()));
 
-        let from_lamports = from_account.borrow().lamports;
+        let from_lamports = from_account.borrow().lamports();
         assert_eq!(from_lamports, 100);
         assert_eq!(owned_account, unchanged_account);
 
@@ -809,7 +809,7 @@ mod tests {
             &MockInvokeContext::new(vec![]),
         );
         assert_eq!(result, Err(SystemError::AccountAlreadyInUse.into()));
-        let from_lamports = from_account.borrow().lamports;
+        let from_lamports = from_account.borrow().lamports();
         assert_eq!(from_lamports, 100);
         assert_eq!(*owned_account.borrow(), unchanged_account);
 
@@ -1077,8 +1077,8 @@ mod tests {
             &MockInvokeContext::new(vec![]),
         )
         .unwrap();
-        let from_lamports = from_keyed_account.account.borrow().lamports;
-        let to_lamports = to_keyed_account.account.borrow().lamports;
+        let from_lamports = from_keyed_account.account.borrow().lamports();
+        let to_lamports = to_keyed_account.account.borrow().lamports();
         assert_eq!(from_lamports, 50);
         assert_eq!(to_lamports, 51);
 
@@ -1091,8 +1091,8 @@ mod tests {
             &MockInvokeContext::new(vec![]),
         );
         assert_eq!(result, Err(SystemError::ResultWithNegativeLamports.into()));
-        assert_eq!(from_keyed_account.account.borrow().lamports, 50);
-        assert_eq!(to_keyed_account.account.borrow().lamports, 51);
+        assert_eq!(from_keyed_account.account.borrow().lamports(), 50);
+        assert_eq!(to_keyed_account.account.borrow().lamports(), 51);
 
         // test unsigned transfer of zero
         let from_keyed_account = KeyedAccount::new(&from, false, &from_account);
@@ -1104,8 +1104,8 @@ mod tests {
             &MockInvokeContext::new(vec![]),
         )
         .is_ok(),);
-        assert_eq!(from_keyed_account.account.borrow().lamports, 50);
-        assert_eq!(to_keyed_account.account.borrow().lamports, 51);
+        assert_eq!(from_keyed_account.account.borrow().lamports(), 50);
+        assert_eq!(to_keyed_account.account.borrow().lamports(), 51);
     }
 
     #[test]
@@ -1131,8 +1131,8 @@ mod tests {
             &MockInvokeContext::new(vec![]),
         )
         .unwrap();
-        let from_lamports = from_keyed_account.account.borrow().lamports;
-        let to_lamports = to_keyed_account.account.borrow().lamports;
+        let from_lamports = from_keyed_account.account.borrow().lamports();
+        let to_lamports = to_keyed_account.account.borrow().lamports();
         assert_eq!(from_lamports, 50);
         assert_eq!(to_lamports, 51);
 
@@ -1148,8 +1148,8 @@ mod tests {
             &MockInvokeContext::new(vec![]),
         );
         assert_eq!(result, Err(SystemError::ResultWithNegativeLamports.into()));
-        assert_eq!(from_keyed_account.account.borrow().lamports, 50);
-        assert_eq!(to_keyed_account.account.borrow().lamports, 51);
+        assert_eq!(from_keyed_account.account.borrow().lamports(), 50);
+        assert_eq!(to_keyed_account.account.borrow().lamports(), 51);
 
         // test unsigned transfer of zero
         let from_keyed_account = KeyedAccount::new(&from, false, &from_account);
@@ -1163,8 +1163,8 @@ mod tests {
             &MockInvokeContext::new(vec![]),
         )
         .is_ok(),);
-        assert_eq!(from_keyed_account.account.borrow().lamports, 50);
-        assert_eq!(to_keyed_account.account.borrow().lamports, 51);
+        assert_eq!(from_keyed_account.account.borrow().lamports(), 50);
+        assert_eq!(to_keyed_account.account.borrow().lamports(), 51);
     }
 
     #[test]

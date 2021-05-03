@@ -2157,7 +2157,7 @@ impl Bank {
                 panic!("{} repeated in genesis config", pubkey);
             }
             self.store_account(pubkey, &AccountSharedData::from(account.clone()));
-            self.capitalization.fetch_add(account.lamports, Relaxed);
+            self.capitalization.fetch_add(account.lamports(), Relaxed);
         }
         // updating sysvars (the fees sysvar in this case) now depends on feature activations in
         // genesis_config.accounts above
@@ -6199,7 +6199,7 @@ pub(crate) mod tests {
         // account data is blank now
         assert_eq!(account10.data().len(), 0);
         // 10 - 10(Rent) + 929(Transfer) - magic_rent_number(Rent)
-        assert_eq!(account10.lamports, 929 - magic_rent_number);
+        assert_eq!(account10.lamports(), 929 - magic_rent_number);
         rent_collected += magic_rent_number + 10;
 
         // 48993 - generic_rent_due_for_system_account(Rent)
@@ -6884,7 +6884,7 @@ pub(crate) mod tests {
 
         assert_eq!(bank.collected_rent.load(Relaxed), 0);
         assert_eq!(
-            bank.get_account(&rent_due_pubkey).unwrap().lamports,
+            bank.get_account(&rent_due_pubkey).unwrap().lamports(),
             little_lamports
         );
         assert_eq!(bank.get_account(&rent_due_pubkey).unwrap().rent_epoch(), 0);
@@ -6906,12 +6906,12 @@ pub(crate) mod tests {
         // unrelated 1-lamport account exists
         assert_eq!(bank.collected_rent.load(Relaxed), rent_collected + 1);
         assert_eq!(
-            bank.get_account(&rent_due_pubkey).unwrap().lamports,
+            bank.get_account(&rent_due_pubkey).unwrap().lamports(),
             little_lamports - rent_collected
         );
         assert_eq!(bank.get_account(&rent_due_pubkey).unwrap().rent_epoch(), 6);
         assert_eq!(
-            bank.get_account(&rent_exempt_pubkey).unwrap().lamports,
+            bank.get_account(&rent_exempt_pubkey).unwrap().lamports(),
             large_lamports
         );
         assert_eq!(
@@ -7090,8 +7090,8 @@ pub(crate) mod tests {
 
         // verify the stake and vote accounts are the right size
         assert!(
-            ((bank1.get_balance(&stake_id) - stake_account.lamports + bank1.get_balance(&vote_id)
-                - vote_account.lamports) as f64
+            ((bank1.get_balance(&stake_id) - stake_account.lamports() + bank1.get_balance(&vote_id)
+                - vote_account.lamports()) as f64
                 - rewards.validator_point_value * validator_points as f64)
                 .abs()
                 < 1.0
@@ -7258,7 +7258,7 @@ pub(crate) mod tests {
         let tx = system_transaction::transfer(&keypair, &pubkey, 10, blockhash);
         bank1.process_transaction(&tx).unwrap();
 
-        assert_eq!(bank0.get_account(&keypair.pubkey()).unwrap().lamports, 10);
+        assert_eq!(bank0.get_account(&keypair.pubkey()).unwrap().lamports(), 10);
         assert_eq!(bank1.get_account(&keypair.pubkey()), None);
 
         info!("bank0 purge");
@@ -7266,13 +7266,13 @@ pub(crate) mod tests {
         bank0.clean_accounts(false);
         assert_eq!(bank0.update_accounts_hash(), hash);
 
-        assert_eq!(bank0.get_account(&keypair.pubkey()).unwrap().lamports, 10);
+        assert_eq!(bank0.get_account(&keypair.pubkey()).unwrap().lamports(), 10);
         assert_eq!(bank1.get_account(&keypair.pubkey()), None);
 
         info!("bank1 purge");
         bank1.clean_accounts(false);
 
-        assert_eq!(bank0.get_account(&keypair.pubkey()).unwrap().lamports, 10);
+        assert_eq!(bank0.get_account(&keypair.pubkey()).unwrap().lamports(), 10);
         assert_eq!(bank1.get_account(&keypair.pubkey()), None);
 
         assert!(bank0.verify_bank_hash());
@@ -8381,7 +8381,7 @@ pub(crate) mod tests {
         let result = bank1.get_account_modified_since_parent_with_fixed_root(&pubkey);
         assert!(result.is_some());
         let (account, slot) = result.unwrap();
-        assert_eq!(account.lamports, 1);
+        assert_eq!(account.lamports(), 1);
         assert_eq!(slot, 0);
 
         let bank2 = Arc::new(Bank::new_from_parent(&bank1, &Pubkey::default(), 1));
@@ -8392,12 +8392,12 @@ pub(crate) mod tests {
         let result = bank1.get_account_modified_since_parent_with_fixed_root(&pubkey);
         assert!(result.is_some());
         let (account, slot) = result.unwrap();
-        assert_eq!(account.lamports, 1);
+        assert_eq!(account.lamports(), 1);
         assert_eq!(slot, 0);
         let result = bank2.get_account_modified_since_parent_with_fixed_root(&pubkey);
         assert!(result.is_some());
         let (account, slot) = result.unwrap();
-        assert_eq!(account.lamports, 101);
+        assert_eq!(account.lamports(), 101);
         assert_eq!(slot, 1);
 
         bank1.squash();
@@ -9181,7 +9181,7 @@ pub(crate) mod tests {
         let ((vote_id, vote_account), (stake_id, stake_account)) =
             crate::stakes::tests::create_staked_node_accounts(1_0000);
         bank.capitalization
-            .fetch_add(vote_account.lamports + stake_account.lamports, Relaxed);
+            .fetch_add(vote_account.lamports() + stake_account.lamports(), Relaxed);
         bank.store_account(&vote_id, &vote_account);
         bank.store_account(&stake_id, &stake_account);
         assert!(!bank.stakes.read().unwrap().vote_accounts().is_empty());
@@ -11701,7 +11701,7 @@ pub(crate) mod tests {
                     let mut expected_lamports = None;
                     let mut target_accounts_found = HashSet::new();
                     for (pubkey, account) in accounts {
-                        let account_balance = account.lamports;
+                        let account_balance = account.lamports();
                         if pubkeys_to_modify_.contains(&pubkey) {
                             target_accounts_found.insert(pubkey);
                             if let Some(expected_lamports) = expected_lamports {
@@ -12158,7 +12158,7 @@ pub(crate) mod tests {
         let mut vote_account = bank
             .get_account(&validator_vote_keypairs0.vote_keypair.pubkey())
             .unwrap_or_default();
-        let original_lamports = vote_account.lamports;
+        let original_lamports = vote_account.lamports();
         vote_account.set_lamports(0);
         // Simulate vote account removal via full withdrawal
         bank.store_account(
@@ -12471,7 +12471,7 @@ pub(crate) mod tests {
         let orig_lamports = bank
             .get_account(&sysvar::recent_blockhashes::id())
             .unwrap()
-            .lamports;
+            .lamports();
         info!("{:?}", bank.get_account(&sysvar::recent_blockhashes::id()));
         let tx = system_transaction::transfer(&mint_keypair, &blockhash_sysvar, 10, blockhash);
         assert_eq!(
@@ -12484,7 +12484,7 @@ pub(crate) mod tests {
         assert_eq!(
             bank.get_account(&sysvar::recent_blockhashes::id())
                 .unwrap()
-                .lamports,
+                .lamports(),
             orig_lamports
         );
         info!("{:?}", bank.get_account(&sysvar::recent_blockhashes::id()));

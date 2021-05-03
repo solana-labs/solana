@@ -1901,8 +1901,8 @@ mod tests {
             &ancestors,
         );
         assert_eq!(result, Ok(()));
-        assert_eq!(accounts[0].borrow().lamports, 100);
-        assert_eq!(accounts[1].borrow().lamports, 0);
+        assert_eq!(accounts[0].borrow().lamports(), 100);
+        assert_eq!(accounts[1].borrow().lamports(), 0);
 
         let message = Message::new(
             &[Instruction::new_with_bincode(
@@ -1997,11 +1997,11 @@ mod tests {
                     MockSystemInstruction::MultiBorrowMut => {
                         let from_lamports = {
                             let from_account = keyed_accounts[0].try_account_ref_mut()?;
-                            from_account.lamports
+                            from_account.lamports()
                         };
                         let dup_lamports = {
                             let dup_account = keyed_accounts[2].try_account_ref_mut()?;
-                            dup_account.lamports
+                            dup_account.lamports()
                         };
                         if from_lamports != dup_lamports {
                             return Err(InstructionError::InvalidArgument);
@@ -2146,8 +2146,8 @@ mod tests {
             &ancestors,
         );
         assert_eq!(result, Ok(()));
-        assert_eq!(accounts[0].borrow().lamports, 80);
-        assert_eq!(accounts[1].borrow().lamports, 20);
+        assert_eq!(accounts[0].borrow().lamports(), 80);
+        assert_eq!(accounts[1].borrow().lamports(), 20);
         assert_eq!(accounts[0].borrow().data(), &vec![42]);
     }
 

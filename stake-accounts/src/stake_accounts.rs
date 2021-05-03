@@ -280,7 +280,7 @@ mod tests {
     use super::*;
     use solana_runtime::{bank::Bank, bank_client::BankClient};
     use solana_sdk::{
-        account::AccountSharedData,
+        account::{AccountSharedData, ReadableAccount},
         client::SyncClient,
         genesis_config::create_genesis_config,
         signature::{Keypair, Signer},
@@ -374,7 +374,7 @@ mod tests {
             .unwrap();
 
         let account = get_account_at(&bank_client, &base_pubkey, 0);
-        assert_eq!(account.lamports, lamports);
+        assert_eq!(account.lamports(), lamports);
         let authorized = StakeState::authorized_from(&account).unwrap();
         assert_eq!(authorized.staker, stake_authority_pubkey);
         assert_eq!(authorized.withdrawer, withdraw_authority_pubkey);
