@@ -63,6 +63,15 @@ since the number of compute units will be based on the number of units already
 consumed by earlier instructions in the message.  This will provide some
 additional tuning and composability challenges for developers.
 
+### Builtin program compute costs
+
+Builtin programs do not incur any compute cost at the moment and are therefore
+not accounted for even when a bpf program invokes a builtin program via cpi
+(except the direct overhead cost of the cpi call itself).  Builtin programs
+should incur a program compute cost like any other program.  The challenge is
+how to quantify that compute cost.  One approach would be to measure the cost of
+each builtin program's instructions.
+
 ## Proposed steps to implement
 
 - Apply the compute budget cap across the entire transaction rather than
