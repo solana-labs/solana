@@ -25,14 +25,16 @@ A new fee structure could include:
 1. flat fee per signature
 2. flat fee for each write lock
 3. per-byte fee for the amount of data in each loaded account
-4. per-compute-unit fee for the number of compute units used to process an
-   instruction
+4. pre-calculated fee for builtin-in program instructions
+5. per-compute-unit fee based on the measured number of compute units used to
+   process an instruction
 
-Fees 1-3 can be determined upfront before the message is processed.  #4 would
-need to be finally accounted for after the message is processed, but the payer's
-balance could be pre-deducted against a compute budget cap to ensure they have
-enough lamports to cover a max fee, and then any unused compute budget could be
-credited back after the message is fully processed.
+Fees 1-3 can be determined upfront before the message is processed.  #4 could be
+measured and applied, probably by the program itself.  #5 would need to be
+finally accounted for after the message is processed, but the payer's balance
+could be pre-deducted against a compute budget cap for #4 and #5 to ensure they
+have enough lamports to cover a max fee, and then any unused compute budget
+could be credited back after the message is fully processed.
 
 The goal of the fees is to cover the computation cost of processing a
 transaction.  Each of the above fee categories could be represented as a compute
@@ -85,13 +87,15 @@ each builtin program's instructions.
 - Rework how the bank decides which transactions to process and when based on
   the compute budget expectations
 - Add a built-in instruction that requests the amount of compute budget up front
+- Transaction simulation where the results include the compute costs of the
+  transaction.  This could be granular so that each instruction's cost is
+  reported.
 
-  ## Things to ponder
+## Things to ponder
 
-  - Can things like write locks be meaningfully converted into a compute
-    cost/cap?
-  - Should account data size be accounted for in the compute cost/cap
-  - Calculating a transaction's fee upfront becomes more difficult, would
-    probably have to be reworded to be max fee based on the compute cap.  Actual
-    fee would be equal to or less than that.
-  - "Compute cost" is a lame name, ideas for something better?
+- Can things like write locks be meaningfully converted into a compute cost/cap?
+- Should account data size be accounted for in the compute cost/cap
+- Calculating a transaction's fee upfront becomes more difficult, would probably
+  have to be reworded to be max fee based on the compute cap.  Actual fee would
+  be equal to or less than that.
+- "Compute cost" is a lame name, ideas for something better?
