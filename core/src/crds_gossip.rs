@@ -4,6 +4,7 @@
 //! packet::PACKET_DATA_SIZE size.
 
 use crate::{
+    cluster_info::Ping,
     contact_info::ContactInfo,
     crds::{Crds, VersionedCrdsValue},
     crds_gossip_error::CrdsGossipError,
@@ -11,6 +12,7 @@ use crate::{
     crds_gossip_push::{CrdsGossipPush, CRDS_GOSSIP_NUM_ACTIVE},
     crds_value::{CrdsData, CrdsValue, CrdsValueLabel},
     duplicate_shred::{self, DuplicateShredIndex, LeaderScheduleFn, MAX_DUPLICATE_SHREDS},
+    ping_pong::PingCache,
 };
 use rayon::ThreadPool;
 use solana_ledger::shred::Shred;
@@ -20,7 +22,11 @@ use solana_sdk::{
     signature::{Keypair, Signer},
     timing::timestamp,
 };
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    net::SocketAddr,
+    sync::Mutex,
+};
 
 ///The min size for bloom filters
 pub const CRDS_GOSSIP_DEFAULT_BLOOM_ITEMS: usize = 500;
@@ -206,20 +212,25 @@ impl CrdsGossip {
     pub fn new_pull_request(
         &self,
         thread_pool: &ThreadPool,
+        self_keypair: &Keypair,
         now: u64,
         gossip_validators: Option<&HashSet<Pubkey>>,
         stakes: &HashMap<Pubkey, u64>,
         bloom_size: usize,
+        ping_cache: &Mutex<PingCache>,
+        pings: &mut Vec<(SocketAddr, Ping)>,
     ) -> Result<(ContactInfo, Vec<CrdsFilter>), CrdsGossipError> {
         self.pull.new_pull_request(
             thread_pool,
             &self.crds,
-            &self.id,
+            self_keypair,
             self.shred_version,
             now,
             gossip_validators,
             stakes,
             bloom_size,
+            ping_cache,
+            pings,
         )
     }
 
