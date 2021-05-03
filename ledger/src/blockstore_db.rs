@@ -1199,7 +1199,7 @@ impl<C: Column + ColumnName> CompactionFilter for PurgedSlotFilter<C> {
         use rocksdb::CompactionDecision::*;
 
         let slot_in_key = C::slot(C::index(key));
-        // Refer to a comment about periodic_compaction_seconds, especially regarding implict
+        // Refer to a comment about periodic_compaction_seconds, especially regarding implicit
         // periodic execution of compaction_filters
         if slot_in_key >= self.oldest_slot {
             Keep
