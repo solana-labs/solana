@@ -88,6 +88,7 @@ struct Secp256k1SignatureOffsets {
 ```
 
 Pseudo code of the operation:
+
 ```
 process_instruction() {
   for i in 0..count {

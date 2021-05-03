@@ -12,13 +12,14 @@ instances, upgrading to newer versions promptly, and keeping an eye on service
 operations with a bundled monitoring tool.
 
 This setup enables you:
+
 - to have a trusted gateway to the Solana mainnet-beta cluster to get data and
   submit withdrawal transactions
 - to have full control over how much historical block data is retained
 - to maintain your service availability even if one node fails
 
 Solana nodes demand relatively high computing power to handle our fast blocks
-and high TPS.  For specific requirements, please see
+and high TPS. For specific requirements, please see
 [hardware recommendations](../running-validator/validator-reqs.md).
 
 To run an api node:
@@ -47,10 +48,10 @@ The `--entrypoint` and `--expected-genesis-hash` parameters are all specific to 
 The `--limit-ledger-size` parameter allows you to specify how many ledger
 [shreds](../terminology.md#shred) your node retains on disk. If you do not
 include this parameter, the validator will keep the entire ledger until it runs
-out of disk space.  The default value attempts to keep the ledger disk usage
-under 500GB.  More or less disk usage may be requested by adding an argument to
+out of disk space. The default value attempts to keep the ledger disk usage
+under 500GB. More or less disk usage may be requested by adding an argument to
 `--limit-ledger-size` if desired. Check `solana-validator --help` for the
-default limit value used by `--limit-ledger-size`.  More information about
+default limit value used by `--limit-ledger-size`. More information about
 selecting a custom limit value is [available
 here](https://github.com/solana-labs/solana/blob/583cec922b6107e0f85c7e14cb5e642bc7dfb340/core/src/ledger_cleanup_service.rs#L15-L26).
 
@@ -103,46 +104,45 @@ order to prevent this issue, add the `--no-snapshot-fetch` parameter to your
 snapshot.
 
 Do not pass the `--no-snapshot-fetch` parameter on your initial boot as it's not
-possible to boot the node all the way from the genesis block.  Instead boot from
+possible to boot the node all the way from the genesis block. Instead boot from
 a snapshot first and then add the `--no-snapshot-fetch` parameter for reboots.
 
 It is important to note that the amount of historical ledger available to your
-nodes from the rest of the network is limited at any point in time.  Once
+nodes from the rest of the network is limited at any point in time. Once
 operational if your validators experience significant downtime they may not be
 able to catch up to the network and will need to download a new snapshot from a
-trusted validator.  In doing so your validators will now have a gap in its
+trusted validator. In doing so your validators will now have a gap in its
 historical ledger data that cannot be filled.
-
 
 ### Minimizing Validator Port Exposure
 
 The validator requires that various UDP and TCP ports be open for inbound
-traffic from all other Solana validators.   While this is the most efficient mode of
+traffic from all other Solana validators. While this is the most efficient mode of
 operation, and is strongly recommended, it is possible to restrict the
 validator to only require inbound traffic from one other Solana validator.
 
-First add the `--restricted-repair-only-mode` argument.  This will cause the
+First add the `--restricted-repair-only-mode` argument. This will cause the
 validator to operate in a restricted mode where it will not receive pushes from
 the rest of the validators, and instead will need to continually poll other
-validators for blocks.  The validator will only transmit UDP packets to other
-validators using the *Gossip* and *ServeR* ("serve repair") ports, and only
-receive UDP packets on its *Gossip* and *Repair* ports.
+validators for blocks. The validator will only transmit UDP packets to other
+validators using the _Gossip_ and _ServeR_ ("serve repair") ports, and only
+receive UDP packets on its _Gossip_ and _Repair_ ports.
 
-The *Gossip* port is bi-directional and allows your validator to remain in
-contact with the rest of the cluster.  Your validator transmits on the *ServeR*
+The _Gossip_ port is bi-directional and allows your validator to remain in
+contact with the rest of the cluster. Your validator transmits on the _ServeR_
 to make repair requests to obtaining new blocks from the rest of the network,
-since Turbine is now disabled.  Your validator will then receive repair
-responses on the *Repair* port from other validators.
+since Turbine is now disabled. Your validator will then receive repair
+responses on the _Repair_ port from other validators.
 
 To further restrict the validator to only requesting blocks from one or more
 validators, first determine the identity pubkey for that validator and add the
 `--gossip-pull-validator PUBKEY --repair-validator PUBKEY` arguments for each
-PUBKEY.  This will cause your validator to be a resource drain on each validator
+PUBKEY. This will cause your validator to be a resource drain on each validator
 that you add, so please do this sparingly and only after consulting with the
 target validator.
 
 Your validator should now only be communicating with the explicitly listed
-validators and only on the *Gossip*, *Repair* and *ServeR* ports.
+validators and only on the _Gossip_, _Repair_ and _ServeR_ ports.
 
 ## Setting up Deposit Accounts
 
@@ -274,7 +274,7 @@ can request the block from RPC in binary format, and parse it using either our
 ### Address History
 
 You can also query the transaction history of a specific address. This is
-generally *not* a viable method for tracking all your deposit addresses over all
+generally _not_ a viable method for tracking all your deposit addresses over all
 slots, but may be useful for examining a few accounts for a specific period of
 time.
 
@@ -484,9 +484,11 @@ prevent accidental loss of user funds.
 
 Solana addresses a 32-byte array, encoded with the bitcoin base58 alphabet. This
 results in an ASCII text string matching the following regular expression:
+
 ```
 [1-9A-HJ-NP-Za-km-z]{32,44}
 ```
+
 This check is insufficient on its own as Solana addresses are not checksummed, so
 typos cannot be detected. To further validate the user's input, the string can be
 decoded and the resulting byte array's length confirmed to be 32. However, there
@@ -574,9 +576,9 @@ few differences which will be discussed in this section.
 
 ### Token Mints
 
-Each *type* of SPL Token is declared by creating a *mint* account.  This account
+Each _type_ of SPL Token is declared by creating a _mint_ account. This account
 stores metadata describing token features like the supply, number of decimals, and
-various authorities with control over the mint.  Each SPL Token account references
+various authorities with control over the mint. Each SPL Token account references
 its associated mint and may only interact with SPL Tokens of that type.
 
 ### Installing the `spl-token` CLI Tool
@@ -612,16 +614,18 @@ SPL Token accounts carry additional requirements that native System Program
 accounts do not:
 
 1. SPL Token accounts must be created before an amount of tokens can be
-deposited.   Token accounts can be created explicitly with the
-`spl-token create-account` command, or implicitly by the
-`spl-token transfer --fund-recipient ...` command.
+   deposited. Token accounts can be created explicitly with the
+   `spl-token create-account` command, or implicitly by the
+   `spl-token transfer --fund-recipient ...` command.
 1. SPL Token accounts must remain [rent-exempt](developing/programming-model/accounts.md#rent-exemption)
-for the duration of their existence and therefore require a small amount of
-native SOL tokens be deposited at account creation. For SPL Token v2 accounts,
-this amount is 0.00203928 SOL (2,039,280 lamports).
+   for the duration of their existence and therefore require a small amount of
+   native SOL tokens be deposited at account creation. For SPL Token v2 accounts,
+   this amount is 0.00203928 SOL (2,039,280 lamports).
 
 #### Command Line
+
 To create an SPL Token account with the following properties:
+
 1. Associated with the given mint
 1. Owned by the funding account's keypair
 
@@ -630,6 +634,7 @@ spl-token create-account <TOKEN_MINT_ADDRESS>
 ```
 
 #### Example
+
 ```
 $ spl-token create-account AkUFCWTXb3w9nY2n6SFJvBV6VwvFUCe4KBMCcgLsa2ir
 Creating account 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
@@ -637,6 +642,7 @@ Signature: 4JsqZEPra2eDTHtHpB4FMWSfk3UgcCVmkKkP7zESZeMrKmFFkDkNd91pKP3vPVVZZPiu5
 ```
 
 Or to create an SPL Token account with a specific keypair:
+
 ```
 $ solana-keygen new -o token-account.json
 $ spl-token create-account AkUFCWTXb3w9nY2n6SFJvBV6VwvFUCe4KBMCcgLsa2ir token-account.json
@@ -647,11 +653,13 @@ Signature: 4JsqZEPra2eDTHtHpB4FMWSfk3UgcCVmkKkP7zESZeMrKmFFkDkNd91pKP3vPVVZZPiu5
 ### Checking an Account's Balance
 
 #### Command Line
+
 ```
 spl-token balance <TOKEN_ACCOUNT_ADDRESS>
 ```
 
 #### Example
+
 ```
 $ solana balance 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
 0
@@ -662,17 +670,19 @@ $ solana balance 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
 The source account for a transfer is the actual token account that contains the
 amount.
 
-The recipient address however can be a normal wallet account.  If an associated
+The recipient address however can be a normal wallet account. If an associated
 token account for the given mint does not yet exist for that wallet, the
 transfer will create it provided that the `--fund-recipient` argument as
 provided.
 
 #### Command Line
+
 ```
 spl-token transfer <SENDER_ACCOUNT_ADDRESS> <AMOUNT> <RECIPIENT_WALLET_ADDRESS> --fund-recipient
 ```
 
 #### Example
+
 ```
 $ spl-token transfer 6B199xxzw3PkAm25hGJpjj3Wj3WNYNHzDAnt1tEqg5BN 1 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
 Transfer 1 tokens
@@ -682,6 +692,7 @@ Signature: 3R6tsog17QM8KfzbcbdP4aoMfwgo6hBggJDVy7dZPVmH2xbCWjEj31JKD53NzMrf25ChF
 ```
 
 ### Depositing
+
 Since each `(user, mint)` pair requires a separate account on chain, it is
 recommended that an exchange create batches of token accounts in advance and assign them
 to users on request. These accounts should all be owned by exchange-controlled
@@ -700,6 +711,7 @@ made to exend the `preBalance` and `postBalance` transaction status metadata
 fields to include SPL Token balance transfers.
 
 ### Withdrawing
+
 The withdrawal address a user provides should be the same address used for
 regular SOL withdrawal.
 
@@ -708,13 +720,14 @@ the exchange should check the address as
 [described above](#validating-user-supplied-account-addresses-for-withdrawals).
 
 From the withdrawal address, the associated token account for the correct mint
-determined and the transfer issued to that account.  Note that it's possible
+determined and the transfer issued to that account. Note that it's possible
 that the associated token account does not yet exist, at which point the
-exchange should fund the account on behalf of the user.  For SPL Token v2
+exchange should fund the account on behalf of the user. For SPL Token v2
 accounts, funding the withdrawal account will require 0.00203928 SOL (2,039,280
 lamports).
 
 Template `spl-token transfer` command for a withdrawal:
+
 ```
 $ spl-token transfer --fund-recipient <exchange token account> <withdrawal amount> <withdrawal address>
 ```
@@ -722,9 +735,10 @@ $ spl-token transfer --fund-recipient <exchange token account> <withdrawal amoun
 ### Other Considerations
 
 #### Freeze Authority
+
 For regulatory compliance reasons, an SPL Token issuing entity may optionally
 choose to hold "Freeze Authority" over all accounts created in association with
- its mint.  This allows them to [freeze](https://spl.solana.com/token#freezing-accounts)
+its mint. This allows them to [freeze](https://spl.solana.com/token#freezing-accounts)
 the assets in a given account at will, rendering the account unusable until thawed.
 If this feature is in use, the freeze authority's pubkey will be registered in
 the SPL Token's mint account.

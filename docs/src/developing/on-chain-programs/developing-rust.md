@@ -17,10 +17,13 @@ layout](https://doc.rust-lang.org/cargo/guide/project-layout.html):
 ```
 
 But must also include:
+
 ```
 /Xargo.toml
 ```
+
 Which must contain:
+
 ```
 [target.bpfel-unknown-unknown.dependencies.std]
 features = []
@@ -30,7 +33,7 @@ Solana Rust programs may depend directly on each other in order to gain access
 to instruction helpers when making [cross-program
 invocations](developing/../../programming-model/calling-between-programs.md#cross-program-invocations).
 When doing so it's important to not pull in the dependent program's entrypoint
-symbols because they may conflict with the program's own.  To avoid this,
+symbols because they may conflict with the program's own. To avoid this,
 programs should define an `exclude_entrypoint` feature in `Cargo.toml` and use
 to exclude the entrypoint.
 
@@ -41,6 +44,7 @@ to exclude the entrypoint.
 
 Then when other programs include this program as a dependency, they should do so
 using the `exclude_entrypoint` feature.
+
 - [Include without
   entrypoint](https://github.com/solana-labs/solana-program-library/blob/a5babd6cbea0d3f29d8c57d2ecbbd2a2bd59c8a9/token-swap/program/Cargo.toml#L19)
 
@@ -53,19 +57,21 @@ Solana BPF programs have some [restrictions](#restrictions) that may prevent the
 inclusion of some crates as dependencies or require special handling.
 
 For example:
+
 - Crates that require the architecture be a subset of the ones supported by the
-  official toolchain.  There is no workaround for this unless that crate is
+  official toolchain. There is no workaround for this unless that crate is
   forked and BPF added to that those architecture checks.
 - Crates may depend on `rand` which is not supported in Solana's deterministic
-  program environment.  To include a `rand` dependent crate refer to [Depending
+  program environment. To include a `rand` dependent crate refer to [Depending
   on Rand](#depending-on-rand).
 - Crates may overflow the stack even if the stack overflowing code isn't
-  included in the program itself.  For more information refer to
+  included in the program itself. For more information refer to
   [Stack](overview.md#stack).
 
 ## How to Build
 
 First setup the environment:
+
 - Install the latest Rust stable from https://rustup.rs/
 - Install the latest Solana command-line tools from
   https://docs.solana.com/cli/install-solana-cli-tools
@@ -92,7 +98,7 @@ exercising program functions directly.
 
 To help facilitate testing in an environment that more closely matches a live
 cluster, developers can use the
-[`program-test`](https://crates.io/crates/solana-program-test) crate.  The
+[`program-test`](https://crates.io/crates/solana-program-test) crate. The
 `program-test` crate starts up a local instance of the runtime and allows tests
 to send multiple transactions while keeping state for the duration of the test.
 
@@ -104,9 +110,9 @@ program.
 ## Program Entrypoint
 
 Programs export a known entrypoint symbol which the Solana runtime looks up and
-calls when invoking a program.  Solana supports multiple [versions of the BPF
+calls when invoking a program. Solana supports multiple [versions of the BPF
 loader](overview.md#versions) and the entrypoints may vary between them.
-Programs must be written for and deployed to the same loader.  For more details
+Programs must be written for and deployed to the same loader. For more details
 see the [overview](overview#loaders).
 
 Currently there are two supported loaders [BPF
@@ -123,12 +129,13 @@ pub unsafe extern "C" fn entrypoint(input: *mut u8) -> u64;
 ```
 
 This entrypoint takes a generic byte array which contains the serialized program
-parameters (program id, accounts, instruction data, etc...).  To deserialize the
+parameters (program id, accounts, instruction data, etc...). To deserialize the
 parameters each loader contains its own wrapper macro that exports the raw
 entrypoint, deserializes the parameters, calls a user defined instruction
 processing function, and returns the results.
 
 You can find the entrypoint macros here:
+
 - [BPF Loader's entrypoint
   macro](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/entrypoint.rs#L46)
 - [BPF Loader deprecated's entrypoint
@@ -149,8 +156,9 @@ as an example of how things fit together.
 ### Parameter Deserialization
 
 Each loader provides a helper function that deserializes the program's input
-parameters into Rust types.  The entrypoint macros automatically calls the
+parameters into Rust types. The entrypoint macros automatically calls the
 deserialization helper:
+
 - [BPF Loader
   deserialization](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/entrypoint.rs#L104)
 - [BPF Loader deprecated
@@ -160,8 +168,8 @@ Some programs may want to perform deserialization themselves and they can by
 providing their own implementation of the [raw entrypoint](#program-entrypoint).
 Take note that the provided deserialization functions retain references back to
 the serialized byte array for variables that the program is allowed to modify
-(lamports, account data).  The reason for this is that upon return the loader
-will read those modifications so they may be committed.  If a program implements
+(lamports, account data). The reason for this is that upon return the loader
+will read those modifications so they may be committed. If a program implements
 their own deserialization function they need to ensure that any modifications
 the program wishes to commit be written back into the input byte array.
 
@@ -184,19 +192,19 @@ The program id is the public key of the currently executing program.
 The accounts is an ordered slice of the accounts referenced by the instruction
 and represented as an
 [AccountInfo](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/account_info.rs#L10)
-structures.  An account's place in the array signifies its meaning, for example,
+structures. An account's place in the array signifies its meaning, for example,
 when transferring lamports an instruction may define the first account as the
 source and the second as the destination.
 
 The members of the `AccountInfo` structure are read-only except for `lamports`
-and `data`.  Both may be modified by the program in accordance with the [runtime
-enforcement policy](developing/programming-model/accounts.md#policy).  Both of
+and `data`. Both may be modified by the program in accordance with the [runtime
+enforcement policy](developing/programming-model/accounts.md#policy). Both of
 these members are protected by the Rust `RefCell` construct, so they must be
-borrowed to read or write to them.  The reason for this is they both point back
+borrowed to read or write to them. The reason for this is they both point back
 to the original input byte array, but there may be multiple entries in the
-accounts slice that point to the same account.  Using `RefCell` ensures that the
+accounts slice that point to the same account. Using `RefCell` ensures that the
 program does not accidentally perform overlapping read/writes to the same
-underlying data via multiple `AccountInfo` structures.  If a program implements
+underlying data via multiple `AccountInfo` structures. If a program implements
 their own deserialization function care should be taken to handle duplicate
 accounts appropriately.
 
@@ -242,7 +250,7 @@ single-threaded environment, and must be deterministic:
 - No support for `println!`, `print!`, the Solana [logging helpers](#logging)
   should be used instead.
 - The runtime enforces a limit on the number of instructions a program can
-  execute during the processing of one instruction.  See [computation
+  execute during the processing of one instruction. See [computation
   budget](developing/programming-model/runtime.md#compute-budget) for more
   information.
 
@@ -274,7 +282,7 @@ getrandom = { version = "0.1.14", features = ["dummy"] }
 
 ## Logging
 
-Rust's `println!` macro is computationally expensive and not supported.  Instead
+Rust's `println!` macro is computationally expensive and not supported. Instead
 the helper macro
 [`msg!`](https://github.com/solana-labs/solana/blob/6705b5a98c076ac08f3991bb8a6f9fcb280bf51e/sdk/program/src/log.rs#L33)
 is provided.
@@ -284,12 +292,14 @@ is provided.
 ```rust
 msg!("A string");
 ```
+
 or
+
 ```rust
 msg!(0_64, 1_64, 2_64, 3_64, 4_64);
 ```
 
-Both forms output the results to the program logs.  If a program so wishes they
+Both forms output the results to the program logs. If a program so wishes they
 can emulate `println!` by using `format!`:
 
 ```rust
@@ -343,10 +353,10 @@ replace that with something that better suits their needs.
 
 One of the side effects of supporting full panic messages by default is that
 programs incur the cost of pulling in more of Rust's `libstd` implementation
-into program's shared object.  Typical programs will already be pulling in a
+into program's shared object. Typical programs will already be pulling in a
 fair amount of `libstd` and may not notice much of an increase in the shared
-object size.  But programs that explicitly attempt to be very small by avoiding
-`libstd` may take a significant impact (~25kb).  To eliminate that impact,
+object size. But programs that explicitly attempt to be very small by avoiding
+`libstd` may take a significant impact (~25kb). To eliminate that impact,
 programs can provide their own custom panic handler with an empty
 implementation.
 
@@ -372,9 +382,9 @@ for more information.
 ## ELF Dump
 
 The BPF shared object internals can be dumped to a text file to gain more
-insight into a program's composition and what it may be doing at runtime.  The
+insight into a program's composition and what it may be doing at runtime. The
 dump will contain both the ELF information as well as a list of all the symbols
-and the instructions that implement them.  Some of the BPF loader's error log
+and the instructions that implement them. Some of the BPF loader's error log
 messages will reference specific instruction numbers where the error occurred.
 These references can be looked up in the ELF dump to identify the offending
 instruction and its context.

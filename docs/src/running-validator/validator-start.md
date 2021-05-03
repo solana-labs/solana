@@ -47,12 +47,14 @@ that CUDA is enabled: `"[<timestamp> solana::validator] CUDA is enabled"`
 ## System Tuning
 
 ### Linux
+
 #### Automatic
+
 The solana repo includes a daemon to adjust system settings to optimize performance
 (namely by increasing the OS UDP buffer and file mapping limits).
 
 The daemon (`solana-sys-tuner`) is included in the solana binary release. Restart
-it, *before* restarting your validator, after each software upgrade to ensure that
+it, _before_ restarting your validator, after each software upgrade to ensure that
 the latest recommended settings are applied.
 
 To run it:
@@ -62,10 +64,12 @@ sudo solana-sys-tuner --user $(whoami) > sys-tuner.log 2>&1 &
 ```
 
 #### Manual
+
 If you would prefer to manage system settings on your own, you may do so with
 the following commands.
 
 ##### **Increase UDP buffers**
+
 ```bash
 sudo bash -c "cat >/etc/sysctl.d/20-solana-udp-buffers.conf <<EOF
 # Increase UDP buffer size
@@ -75,39 +79,50 @@ net.core.wmem_default = 134217728
 net.core.wmem_max = 134217728
 EOF"
 ```
+
 ```bash
 sudo sysctl -p /etc/sysctl.d/20-solana-udp-buffers.conf
 ```
 
 ##### **Increased memory mapped files limit**
+
 ```bash
 sudo bash -c "cat >/etc/sysctl.d/20-solana-mmaps.conf <<EOF
 # Increase memory mapped files limit
 vm.max_map_count = 700000
 EOF"
 ```
+
 ```bash
 sudo sysctl -p /etc/sysctl.d/20-solana-mmaps.conf
 ```
+
 Add
+
 ```
 LimitNOFILE=700000
 ```
+
 to the `[Service]` section of your systemd service file, if you use one,
 otherwise add
+
 ```
 DefaultLimitNOFILE=700000
 ```
+
 to the `[Manager]` section of `/etc/systemd/system.conf`.
+
 ```bash
 sudo systemctl daemon-reload
 ```
+
 ```bash
 sudo bash -c "cat >/etc/security/limits.d/90-solana-nofiles.conf <<EOF
 # Increase process file descriptor count limit
 * - nofile 700000
 EOF"
 ```
+
 ```bash
 ### Close all open sessions (log out then, in again) ###
 ```
@@ -299,24 +314,27 @@ example, `solana-validator --dynamic-port-range 11000-11010 ...` will restrict
 the validator to ports 11000-11010.
 
 ### Limiting ledger size to conserve disk space
+
 The `--limit-ledger-size` parameter allows you to specify how many ledger
 [shreds](../terminology.md#shred) your node retains on disk. If you do not
 include this parameter, the validator will keep the entire ledger until it runs
 out of disk space.
 
-The default value attempts to keep the ledger disk usage under 500GB.  More or
+The default value attempts to keep the ledger disk usage under 500GB. More or
 less disk usage may be requested by adding an argument to `--limit-ledger-size`
 if desired. Check `solana-validator --help` for the default limit value used by
-`--limit-ledger-size`.  More information about
+`--limit-ledger-size`. More information about
 selecting a custom limit value is [available
 here](https://github.com/solana-labs/solana/blob/583cec922b6107e0f85c7e14cb5e642bc7dfb340/core/src/ledger_cleanup_service.rs#L15-L26).
 
 ### Systemd Unit
+
 Running the validator as a systemd unit is one easy way to manage running in the
 background.
 
 Assuming you have a user called `sol` on your machine, create the file `/etc/systemd/system/sol.service` with
 the following:
+
 ```
 [Unit]
 Description=Solana Validator
@@ -339,15 +357,17 @@ WantedBy=multi-user.target
 ```
 
 Now create `/home/sol/bin/validator.sh` to include the desired `solana-validator`
-command-line.  Ensure that running `/home/sol/bin/validator.sh` manually starts
+command-line. Ensure that running `/home/sol/bin/validator.sh` manually starts
 the validator as expected. Don't forget to mark it executable with `chmod +x /home/sol/bin/validator.sh`
 
 Start the service with:
+
 ```bash
 $ sudo systemctl enable --now sol
 ```
 
 ### Logging
+
 #### Log output tuning
 
 The messages that a validator emits to the log can be controlled by the `RUST_LOG`
@@ -376,6 +396,7 @@ instead of the validator's, which will kill them both.
 An example setup for the `logrotate`, which assumes that the validator is
 running as a systemd service called `sol.service` and writes a log file at
 /home/sol/solana-validator.log:
+
 ```bash
 # Setup log rotation
 
@@ -394,11 +415,13 @@ systemctl restart logrotate.service
 ```
 
 ### Disable port checks to speed up restarts
+
 Once your validator is operating normally, you can reduce the time it takes to
 restart your validator by adding the `--no-port-check` flag to your
 `solana-validator` command-line.
 
 ### Disable snapshot compression to reduce CPU usage
+
 If you are not serving snapshots to other validators, snapshot compression can
 be disabled to reduce CPU load at the expense of slightly more disk usage for
 local snapshot storage.
@@ -407,6 +430,7 @@ Add the `--snapshot-compression none` argument to your `solana-validator`
 command-line arguments and restart the validator.
 
 ### Using a ramdisk with spill-over into swap for the accounts database to reduce SSD wear
+
 If your machine has plenty of RAM, a tmpfs ramdisk
 ([tmpfs](https://man7.org/linux/man-pages/man5/tmpfs.5.html)) may be used to hold
 the accounts database
@@ -418,18 +442,20 @@ A 300GB tmpfs partition is recommended, with an accompanying 250GB swap
 partition.
 
 Example configuration:
+
 1. `sudo mkdir /mnt/solana-accounts`
-2. Add a 300GB tmpfs parition by adding a new line containing `tmpfs
-   /mnt/solana-accounts tmpfs rw,size=300G,user=sol 0 0` to `/etc/fstab`
-   (assuming your validator is running under the user "sol").  **CAREFUL: If you
+2. Add a 300GB tmpfs parition by adding a new line containing `tmpfs /mnt/solana-accounts tmpfs rw,size=300G,user=sol 0 0` to `/etc/fstab`
+   (assuming your validator is running under the user "sol"). **CAREFUL: If you
    incorrectly edit /etc/fstab your machine may no longer boot**
 3. Create at least 250GB of swap space
-  - Choose a device to use in place of `SWAPDEV` for the remainder of these instructions.
-    Ideally select a free disk partition of 250GB or greater on a fast disk. If one is not
-    available, create a swap file with `sudo dd if=/dev/zero of=/swapfile bs=1MiB count=250KiB`,
-    set its permissions with `sudo chmod 0600 /swapfile` and use `/swapfile` as `SWAPDEV` for
-    the remainder of these instructions
-  - Format the device for usage as swap with `sudo mkswap SWAPDEV`
+
+- Choose a device to use in place of `SWAPDEV` for the remainder of these instructions.
+  Ideally select a free disk partition of 250GB or greater on a fast disk. If one is not
+  available, create a swap file with `sudo dd if=/dev/zero of=/swapfile bs=1MiB count=250KiB`,
+  set its permissions with `sudo chmod 0600 /swapfile` and use `/swapfile` as `SWAPDEV` for
+  the remainder of these instructions
+- Format the device for usage as swap with `sudo mkswap SWAPDEV`
+
 4. Add the swap file to `/etc/fstab` with a new line containing `SWAPDEV swap swap defaults 0 0`
 5. Enable swap with `sudo swapon -a` and mount the tmpfs with `sudo mount /mnt/solana-accounts/`
 6. Confirm swap is active with `free -g` and the tmpfs is mounted with `mount`
@@ -440,7 +466,7 @@ command-line arguments and restart the validator.
 ### Account indexing
 
 As the number of populated accounts on the cluster grows, account-data RPC
-requests that scan the entire account set  -- like
+requests that scan the entire account set -- like
 [`getProgramAccounts`](developing/clients/jsonrpc-api.md#getprogramaccounts) and
 [SPL-token-specific requests](developing/clients/jsonrpc-api.md#gettokenaccountsbydelegate) --
 may perform poorly. If your validator needs to support any of these requests,
