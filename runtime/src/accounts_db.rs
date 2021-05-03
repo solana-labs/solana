@@ -4279,9 +4279,7 @@ impl AccountsDb {
     ) -> ScanStorageResult<Pubkey, DashSet<Pubkey>> {
         self.scan_account_storage(
             slot,
-            |loaded_account: LoadedAccount| {
-                Some(*loaded_account.pubkey())
-            },
+            |loaded_account: LoadedAccount| Some(*loaded_account.pubkey()),
             |accum: &DashSet<Pubkey>, loaded_account: LoadedAccount| {
                 accum.insert(*loaded_account.pubkey());
             },
