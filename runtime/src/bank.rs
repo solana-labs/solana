@@ -12525,101 +12525,133 @@ pub(crate) mod tests {
 
     #[test]
     fn test_clean_dropped_unrooted_frozen_banks() {
-        //! Test that dropped unrooted, frozen banks are cleaned up properly
-        //!
-        //! slot 0:       bank0 (rooted)
-        //!               /   \
-        //! slot 1:      /   bank1 (unrooted, frozen, and dropped)
-        //!             /
-        //! slot 2:  bank2 (rooted)
-        //!
-        //! In the scenario above, when `clean_accounts()` is called on bank2, the keys that exist
-        //! _only_ in bank1 should be cleaned up, since those keys are unreachable.
-        //
         solana_logger::setup();
-
-        let (genesis_config, mint_keypair) = create_genesis_config(100);
-        let bank0 = Arc::new(Bank::new(&genesis_config));
-
-        let collector = Pubkey::new_unique();
-        let pubkey1 = Pubkey::new_unique();
-        let pubkey2 = Pubkey::new_unique();
-
-        bank0.transfer(2, &mint_keypair, &pubkey2).unwrap();
-        bank0.freeze();
-
-        let slot = 1;
-        let bank1 = Bank::new_from_parent(&bank0, &collector, slot);
-        bank1.transfer(3, &mint_keypair, &pubkey1).unwrap();
-        bank1.freeze();
-
-        let slot = slot + 1;
-        let bank2 = Bank::new_from_parent(&bank0, &collector, slot);
-        bank2.transfer(4, &mint_keypair, &pubkey2).unwrap();
-        bank2.freeze(); // the freeze here is not strictly necessary, but more for illustration
-        bank2.squash();
-
-        drop(bank1);
-
-        bank2.clean_accounts(false);
-        assert_eq!(
-            bank2
-                .rc
-                .accounts
-                .accounts_db
-                .accounts_index
-                .ref_count_from_storage(&pubkey1),
-            0
-        );
+        do_test_clean_dropped_unrooted_banks(FreezeBank1::Yes);
     }
 
     #[test]
     fn test_clean_dropped_unrooted_unfrozen_banks() {
-        //! Test that dropped unrooted, unfrozen banks are cleaned up properly
+        solana_logger::setup();
+        do_test_clean_dropped_unrooted_banks(FreezeBank1::No);
+    }
+
+    /// A simple enum to toggle freezing Bank1 or not.  Used in the clean_dropped_unrooted tests.
+    enum FreezeBank1 {
+        No,
+        Yes,
+    }
+
+    fn do_test_clean_dropped_unrooted_banks(freeze_bank1: FreezeBank1) {
+        //! Test that dropped unrooted banks are cleaned up properly
         //!
         //! slot 0:       bank0 (rooted)
         //!               /   \
-        //! slot 1:      /   bank1 (unrooted, unfrozen, and dropped)
+        //! slot 1:      /   bank1 (unrooted and dropped)
         //!             /
         //! slot 2:  bank2 (rooted)
         //!
         //! In the scenario above, when `clean_accounts()` is called on bank2, the keys that exist
         //! _only_ in bank1 should be cleaned up, since those keys are unreachable.
-        //
-        solana_logger::setup();
+        //!
+        //! The following scenarios are tested:
+        //!
+        //! 1. A key is written _only_ in an unrooted bank (key1)
+        //!     - In this case, key1 should be cleaned up
+        //! 2. A key is written in both an unrooted _and_ rooted bank (key3)
+        //!     - In this case, key3's ref-count should be decremented correctly
+        //! 3. A key with zero lamports is _only_ in an unrooted bank (key4)
+        //!     - In this case, key4 should be cleaned up
+        //! 4. A key with zero lamports is in both an unrooted _and_ rooted bank (key5)
+        //!     - In this case, key5's ref-count should be decremented correctly
 
         let (genesis_config, mint_keypair) = create_genesis_config(100);
         let bank0 = Arc::new(Bank::new(&genesis_config));
 
         let collector = Pubkey::new_unique();
-        let pubkey1 = Pubkey::new_unique();
-        let pubkey2 = Pubkey::new_unique();
 
-        bank0.transfer(2, &mint_keypair, &pubkey2).unwrap();
+        let key1 = Keypair::new(); // only touched in bank1
+        let key2 = Keypair::new(); // only touched in bank2
+        let key3 = Keypair::new(); // touched in both bank1 and bank2
+        let key4 = Keypair::new(); // in only bank1, and has zero lamports
+        let key5 = Keypair::new(); // in both bank1 and bank2, and has zero lamports
+
+        bank0.transfer(2, &mint_keypair, &key2.pubkey()).unwrap();
         bank0.freeze();
 
         let slot = 1;
         let bank1 = Bank::new_from_parent(&bank0, &collector, slot);
-        bank1.transfer(3, &mint_keypair, &pubkey1).unwrap();
-        // bank1 is not frozen on purpose
+        bank1.transfer(3, &mint_keypair, &key1.pubkey()).unwrap();
+
+        // make key4 have zero lamports
+        bank1.transfer(8, &mint_keypair, &key4.pubkey()).unwrap();
+        bank1.transfer(8, &key4, &key3.pubkey()).unwrap();
+
+        // make key5 have zero lamports
+        bank1.transfer(9, &mint_keypair, &key5.pubkey()).unwrap();
+        bank1.transfer(9, &key5, &key3.pubkey()).unwrap();
+
+        if let FreezeBank1::Yes = freeze_bank1 {
+            bank1.freeze();
+        }
 
         let slot = slot + 1;
         let bank2 = Bank::new_from_parent(&bank0, &collector, slot);
-        bank2.transfer(4, &mint_keypair, &pubkey2).unwrap();
+        bank2.transfer(4, &mint_keypair, &key2.pubkey()).unwrap();
+        bank2.transfer(6, &mint_keypair, &key3.pubkey()).unwrap();
+
+        // make key5 have zero lamports
+        bank2.transfer(9, &mint_keypair, &key5.pubkey()).unwrap();
+        bank2.transfer(9, &key5, &key3.pubkey()).unwrap();
+
         bank2.freeze(); // the freeze here is not strictly necessary, but more for illustration
         bank2.squash();
 
         drop(bank1);
-
         bank2.clean_accounts(false);
+
+        let expected_ref_count_for_cleaned_up_keys = 0;
+        let expected_ref_count_for_keys_only_in_slot_2 = bank2
+            .rc
+            .accounts
+            .accounts_db
+            .accounts_index
+            .ref_count_from_storage(&key2.pubkey());
+
         assert_eq!(
             bank2
                 .rc
                 .accounts
                 .accounts_db
                 .accounts_index
-                .ref_count_from_storage(&pubkey1),
-            0
+                .ref_count_from_storage(&key1.pubkey()),
+            expected_ref_count_for_cleaned_up_keys
+        );
+        assert_eq!(
+            bank2
+                .rc
+                .accounts
+                .accounts_db
+                .accounts_index
+                .ref_count_from_storage(&key3.pubkey()),
+            expected_ref_count_for_keys_only_in_slot_2
+        );
+        assert_eq!(
+            bank2
+                .rc
+                .accounts
+                .accounts_db
+                .accounts_index
+                .ref_count_from_storage(&key4.pubkey()),
+            expected_ref_count_for_cleaned_up_keys
+        );
+        assert_eq!(
+            bank2
+                .rc
+                .accounts
+                .accounts_db
+                .accounts_index
+                .ref_count_from_storage(&key5.pubkey()),
+            expected_ref_count_for_keys_only_in_slot_2
         );
     }
 }
