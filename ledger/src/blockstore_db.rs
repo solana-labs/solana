@@ -410,27 +410,27 @@ impl Rocks {
                 // This is the crux of our write-stall-free storage cleaning strategy with consistent
                 // state view for higher-layers
                 //
-                // For the consistent view, we commit delete_range on older slot range by LedgerCleanupService.
+                // For the consistent view, we commit delete_range on pruned slot range by LedgerCleanupService.
                 // simple story here.
                 //
-                // For storage cleaning, we employ RocksDB compaction. But default RocksDB compaction settings
-                // don't work well for us. That's because we're using it rather like a really big (100 GBs)
-                // ring-buffer. RocksDB is basically assuming uniform data write over the key space for
+                // For actual storage cleaning, we employ RocksDB compaction. But default RocksDB compaction
+                // settings don't work well for us. That's because we're using it rather like a really big
+                // (100 GBs) ring-buffer. RocksDB is basically assuming uniform data write over the key space for
                 // efficient compaction, which isn't true for our use as a ring buffer.
                 //
                 // So, we customize the compaction strategy with 2 combined tweaks:
                 // (1) compaction_filter and (2) shortening its periodic cycles.
                 //
                 // Via the compaction_filter, we finally reclaim previously delete_range()-ed storage occupied
-                // by older slots. When compaction_filter is set, each SST files are re-compacted periodically
+                // by pruned slots. When compaction_filter is set, each SST files are re-compacted periodically
                 // to hunt for keys newly expired by the compaction_filter re-evaluation. But RocksDb's default
                 // `periodic_compaction_seconds` is 30 days, which is too long for our case. So, we
                 // shorten it to a day (24 hours).
                 //
                 // As we write newer SST files over time at rather consistent rate of speed, this
-                // effectively makes individual ssts be re-compacted for the filter at well
-                // dispersed different timings.
-                // Overall, we rewrite the whole dataset at every PERIODIC_COMPACTION_SECONDS,
+                // effectively makes each newly-created ssts be re-compacted for the filter at
+                // well-dispersed different timings.
+                // As a whole, we rewrite the whole dataset at every PERIODIC_COMPACTION_SECONDS,
                 // slowly over the duration of PERIODIC_COMPACTION_SECONDS. So, this results in
                 // amortization.
                 // So, there is a bit inefficiency here because we'll rewrite not-so-old SST files
@@ -1199,6 +1199,8 @@ impl<C: Column + ColumnName> CompactionFilter for PurgedSlotFilter<C> {
         use rocksdb::CompactionDecision::*;
 
         let slot_in_key = C::slot(C::index(key));
+        // Refer to a comment about periodic_compaction_seconds, especially regarding implict
+        // periodic execution of compaction_filters
         if slot_in_key >= self.oldest_slot {
             Keep
         } else {
@@ -1299,4 +1301,58 @@ fn get_db_options(access_type: &AccessType) -> Options {
     }
 
     options
+}
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+    use crate::blockstore_db::columns::ShredData;
+
+    #[test]
+    fn test_compaction_filter() {
+        // this doesn't implement Clone...
+        let dummy_compaction_filter_context = || CompactionFilterContext {
+            is_full_compaction: true,
+            is_manual_compaction: true,
+        };
+        let oldest_slot = OldestSlot::default();
+
+        let mut factory = PurgedSlotFilterFactory::<ShredData> {
+            oldest_slot: oldest_slot.clone(),
+            name: CString::new("test compaction filter").unwrap(),
+            _phantom: PhantomData::default(),
+        };
+        let mut compaction_filter = factory.create(dummy_compaction_filter_context());
+
+        let dummy_level = 0;
+        let key = ShredData::key(ShredData::as_index(0));
+        let dummy_value = vec![];
+
+        // we can't use assert_matches! because CompactionDecision doesn't implement Debug
+        assert!(matches!(
+            compaction_filter.filter(dummy_level, &key, &dummy_value),
+            CompactionDecision::Keep
+        ));
+
+        // mutating oledst_slot doen't affect existing compaction filters...
+        oldest_slot.set(1);
+        assert!(matches!(
+            compaction_filter.filter(dummy_level, &key, &dummy_value),
+            CompactionDecision::Keep
+        ));
+
+        // recreating compaction filter starts to expire the key
+        let mut compaction_filter = factory.create(dummy_compaction_filter_context());
+        assert!(matches!(
+            compaction_filter.filter(dummy_level, &key, &dummy_value),
+            CompactionDecision::Remove
+        ));
+
+        // newer key shouldn't be removed
+        let key = ShredData::key(ShredData::as_index(1));
+        matches!(
+            compaction_filter.filter(dummy_level, &key, &dummy_value),
+            CompactionDecision::Keep
+        );
+    }
 }
