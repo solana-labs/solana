@@ -35,7 +35,7 @@ as follows
 - Program input parameters start at 0x400000000
 
 The above virtual addresses are start addresses but programs are given access to
-a subset of the memory map.  The program will panic if it attempts to read or
+a subset of the memory map. The program will panic if it attempts to read or
 write to a virtual address that it was not granted access to, and an
 `AccessViolation` error will be returned that contains the address and size of
 the attempted violation.
@@ -48,14 +48,11 @@ BPF uses stack frames instead of a variable stack pointer. Each stack frame is
 If a program violates that stack frame size, the compiler will report the
 overrun as a warning.
 
-For example: `Error: Function
-_ZN16curve25519_dalek7edwards21EdwardsBasepointTable6create17h178b3d2411f7f082E
-Stack offset of -30728 exceeded max offset of -4096 by 26632 bytes, please
-minimize large stack variables`
+For example: `Error: Function _ZN16curve25519_dalek7edwards21EdwardsBasepointTable6create17h178b3d2411f7f082E Stack offset of -30728 exceeded max offset of -4096 by 26632 bytes, please minimize large stack variables`
 
 The message identifies which symbol is exceeding its stack frame but the name
-might be mangled if it is a Rust or C++ symbol.  To demangle a Rust symbol use
-[rustfilt](https://github.com/luser/rustfilt).  The above warning came from a
+might be mangled if it is a Rust or C++ symbol. To demangle a Rust symbol use
+[rustfilt](https://github.com/luser/rustfilt). The above warning came from a
 Rust program, so the demangled symbol name is:
 
 ```bash
@@ -97,8 +94,8 @@ attempts to use a float operation that is not supported, the runtime will report
 an unresolved symbol error.
 
 Float operations are performed via software libraries, specifically LLVM's float
-builtins.  Due to be software emulated they consume more compute units than
-integer operations.  In general, fixed point operations are recommended where
+builtins. Due to be software emulated they consume more compute units than
+integer operations. In general, fixed point operations are recommended where
 possible.
 
 The Solana Program Library math tests will report the performance of some math
@@ -110,7 +107,7 @@ To run the test, sync the repo, and run:
 `$ cargo test-bpf -- --nocapture --test-threads=1`
 
 Recent results show the float operations take more instructions compared to
-integers equivalents.  Fixed point implementations may vary but will also be
+integers equivalents. Fixed point implementations may vary but will also be
 less then the float equivalents:
 
 ```
@@ -121,7 +118,7 @@ Divide     9   219
 
 ## Static Writable Data
 
-Program shared objects do not support writable shared data.  Programs are shared
+Program shared objects do not support writable shared data. Programs are shared
 between multiple parallel executions using the same shared read-only code and
 data. This means that developers should not include any static writable or
 global variables in programs. In the future a copy-on-write mechanism could be
@@ -142,7 +139,7 @@ and [BPF loader
 deprecated](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/bpf_loader_deprecated.rs#L14)
 
 Loaders may support different application binary interfaces so developers must
-write their programs for and deploy them to the same loader.  If a program
+write their programs for and deploy them to the same loader. If a program
 written for one loader is deployed to a different one the result is usually a
 `AccessViolation` error due to mismatched deserialization of the program's input
 parameters.
@@ -153,20 +150,21 @@ and the javascript APIs.
 
 For language specific information about implementing a program for a particular
 loader see:
+
 - [Rust program entrypoints](developing-rust.md#program-entrypoint)
 - [C program entrypoints](developing-c.md#program-entrypoint)
 
 ### Deployment
 
 BPF program deployment is the process of uploading a BPF shared object into a
-program account's data and marking the account executable.  A client breaks the
+program account's data and marking the account executable. A client breaks the
 BPF shared object into smaller pieces and sends them as the instruction data of
 [`Write`](https://github.com/solana-labs/solana/blob/bc7133d7526a041d1aaee807b80922baa89b6f90/sdk/program/src/loader_instruction.rs#L13)
 instructions to the loader where loader writes that data into the program's
-account data.  Once all the pieces are received the client sends a
+account data. Once all the pieces are received the client sends a
 [`Finalize`](https://github.com/solana-labs/solana/blob/bc7133d7526a041d1aaee807b80922baa89b6f90/sdk/program/src/loader_instruction.rs#L30)
 instruction to the loader, the loader then validates that the BPF data is valid
-and marks the program account as _executable_.  Once the program account is
+and marks the program account as _executable_. Once the program account is
 marked executable, subsequent transactions may issue instructions for that
 program to process.
 
@@ -180,13 +178,14 @@ For further information see [deploying](deploying.md)
 
 BPF loaders serialize the program input parameters into a byte array that is
 then passed to the program's entrypoint, where the program is responsible for
-deserializing it on-chain.  One of the changes between the deprecated loader and
+deserializing it on-chain. One of the changes between the deprecated loader and
 the current loader is that the input parameters are serialized in a way that
 results in various parameters falling on aligned offsets within the aligned byte
-array.  This allows deserialization implementations to directly reference the
+array. This allows deserialization implementations to directly reference the
 byte array and provide aligned pointers to the program.
 
 For language specific information about serialization see:
+
 - [Rust program parameter
   deserialization](developing-rust.md#parameter-deserialization)
 - [C program parameter

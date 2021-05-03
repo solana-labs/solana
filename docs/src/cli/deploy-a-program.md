@@ -83,13 +83,13 @@ Data Length: 5216 (0x1460) bytes
   holds the program's data (shared object).
 - `Authority` is the program's upgrade authority.
 - `Last Deployed In Slot` is the slot in which the program was last deployed.
-- `Data Length` is the size of the space reserved for deployments.  The actual
+- `Data Length` is the size of the space reserved for deployments. The actual
   space used by the currently deployed program may be less.
 
 ### Redeploy a program
 
 A program can be redeployed to the same address to facilitate rapid development,
-bug fixes, or upgrades.  Matching keypair files are generated once so that
+bug fixes, or upgrades. Matching keypair files are generated once so that
 redeployments will be to the same program address.
 
 The command looks the same as the deployment command:
@@ -99,10 +99,10 @@ solana program deploy <PROGRAM_FILEPATH>
 ```
 
 By default, programs are deployed to accounts that are twice the size of the
-original deployment.  Doing so leaves room for program growth in future
-redeployments.  But, if the initially deployed program is very small (like a
+original deployment. Doing so leaves room for program growth in future
+redeployments. But, if the initially deployed program is very small (like a
 simple helloworld program) and then later grows substantially, the redeployment
-may fail.  To avoid this, specify a `max_len` that is at least the size (in
+may fail. To avoid this, specify a `max_len` that is at least the size (in
 bytes) that the program is expected to become (plus some wiggle room).
 
 ```bash
@@ -117,7 +117,7 @@ is locked up permanently.
 ### Resuming a failed deploy
 
 If program deployment fails, there will be a hanging intermediate buffer account
-that contains a non-zero balance.  In order to recoup that balance you may
+that contains a non-zero balance. In order to recoup that balance you may
 resume a failed deployment by providing the same intermediate buffer to a new
 call to `deploy`.
 
@@ -156,8 +156,8 @@ solana program deploy --buffer <KEYPAIR_PATH> <PROGRAM_FILEPATH>
 ### Closing buffer accounts and reclaiming their lamports
 
 If deployment fails there will be a left over buffer account that holds
-lamports.  The buffer account can either be used to [resume a
-deploy](#resuming-a-failed-deploy) or closed.  When closed, the full balance of
+lamports. The buffer account can either be used to [resume a
+deploy](#resuming-a-failed-deploy) or closed. When closed, the full balance of
 the buffer account will be transferred to the recipient's account.
 
 The buffer account's authority must be present to close a buffer account, to
@@ -205,9 +205,9 @@ solana program show --buffers --all
 
 ### Set a program's upgrade authority
 
-The program's upgrade authority must to be present to deploy a program.  If no
+The program's upgrade authority must to be present to deploy a program. If no
 authority is specified during program deployment, the default keypair is used as
-the authority.  This is why redeploying a program in the steps above didn't
+the authority. This is why redeploying a program in the steps above didn't
 require an authority to be explicitly specified.
 
 The authority can be specified during deployment:
@@ -262,11 +262,11 @@ solana program dump <ACCOUNT_ADDRESS> <OUTPUT_FILEPATH>
 ```
 
 The dumped file will be in the same as what was deployed, so in the case of a
-shared object, the dumped file will be a fully functional shared object.  Note
+shared object, the dumped file will be a fully functional shared object. Note
 that the `dump` command dumps the entire data space, which means the output file
 will have trailing zeros after the shared object's data up to `max_len`.
 Sometimes it is useful to dump and compare a program to ensure it matches a
-known program binary.  The original program file can be zero-extended, hashed,
+known program binary. The original program file can be zero-extended, hashed,
 and compared to the hash of the dumped file.
 
 ```bash
@@ -279,7 +279,7 @@ $ sha256sum extended.so dump.so
 ### Using an intermediary Buffer account
 
 Instead of deploying directly to the program account, the program can be written
-to an intermediary buffer account.  Intermediary accounts can useful for things
+to an intermediary buffer account. Intermediary accounts can useful for things
 like multi-entity governed programs where the governing members fist verify the
 intermediary buffer contents and then vote to allow an upgrade using it.
 

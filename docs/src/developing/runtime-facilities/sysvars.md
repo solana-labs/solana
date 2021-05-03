@@ -12,7 +12,7 @@ and outlined below.
 To include sysvar data in program operations, pass the sysvar account address in
 the list of accounts in a transaction. The account can be read in your
 instruction processor like any other account. Access to sysvars accounts ßis
-always *readonly*.
+always _readonly_.
 
 ## Clock
 
@@ -22,6 +22,7 @@ epoch, and estimated wall-clock Unix timestamp. It is updated every slot.
 - Address: `SysvarC1ock11111111111111111111111111111111`
 - Layout: [Clock](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/clock/struct.Clock.html)
 - Fields:
+
   - `slot`: the current slot
   - `epoch_start_timestamp`: the Unix timestamp of the first slot in this epoch. In the first slot of an epoch, this timestamp is identical to the `unix_timestamp` (below).
   - `epoch`: the current epoch
@@ -48,8 +49,7 @@ epoch, and estimated wall-clock Unix timestamp. It is updated every slot.
 
 The EpochSchedule sysvar contains epoch scheduling constants that are set in
 genesis, and enables calculating the number of slots in a given epoch, the epoch
-for a given slot, etc. (Note: the epoch schedule is distinct from the [`leader
-schedule`](terminology.md#leader-schedule))
+for a given slot, etc. (Note: the epoch schedule is distinct from the [`leader schedule`](terminology.md#leader-schedule))
 
 - Address: `SysvarEpochSchedu1e111111111111111111111111`
 - Layout:

@@ -3,7 +3,7 @@
 ## Problem
 
 Currently, inspecting an on-chain transaction requires depending on a
-client-side, language-specific decoding library to parse the instruction.  If
+client-side, language-specific decoding library to parse the instruction. If
 rpc methods could return decoded instruction details, these custom solutions
 would be unnecessary.
 
@@ -56,6 +56,7 @@ pub enum TestInstruction {
 ```
 
 An example of the generated TestInstruction with docs:
+
 ```rust,ignore
 pub enum TestInstruction {
     /// Transfer lamports
@@ -85,6 +86,7 @@ pub enum TestInstruction {
 ```
 
 Generated constructors:
+
 ```rust,ignore
 /// Transfer lamports
 ///
@@ -203,22 +205,22 @@ impl TestInstructionVerbose {
 ## Considerations
 
 1. **Named fields** - Since the resulting Verbose enum constructs variants with
-named fields, any unnamed fields in the original Instruction variant will need
-to have names generated. As such, it would be considerably more straightforward
-if all Instruction enum fields are converted to named types, instead of unnamed
-tuples. This seems worth doing anyway, adding more precision to the variants and
-enabling real documentation (so developers don't have to do
-[this](https://github.com/solana-labs/solana/blob/3aab13a1679ba2b7846d9ba39b04a52f2017d3e0/sdk/src/system_instruction.rs#L140)
-This will cause a little churn in our current code base, but not a lot.
+   named fields, any unnamed fields in the original Instruction variant will need
+   to have names generated. As such, it would be considerably more straightforward
+   if all Instruction enum fields are converted to named types, instead of unnamed
+   tuples. This seems worth doing anyway, adding more precision to the variants and
+   enabling real documentation (so developers don't have to do
+   [this](https://github.com/solana-labs/solana/blob/3aab13a1679ba2b7846d9ba39b04a52f2017d3e0/sdk/src/system_instruction.rs#L140)
+   This will cause a little churn in our current code base, but not a lot.
 2. **Variable account lists** - This approach offers a couple options for
-variable account lists. First, optional accounts may be added and tagged with
-the `optional` keyword. However, currently only one optional account is
-supported per instruction. Additional data will need to be added to the
-instruction to support multiples, enabling identification of which accounts are
-present when some but not all are included. Second, accounts that share the same
-features may be added as a set, tagged with the `multiple` keyword. Like
-optional accounts, only one multiple account set is supported per instruction
-(and optional and multiple may not coexist). More complex instructions that
-cannot be accommodated by `optional` or `multiple`, requiring logic to figure
-out account order/representation, should probably be made into separate
-instructions.
+   variable account lists. First, optional accounts may be added and tagged with
+   the `optional` keyword. However, currently only one optional account is
+   supported per instruction. Additional data will need to be added to the
+   instruction to support multiples, enabling identification of which accounts are
+   present when some but not all are included. Second, accounts that share the same
+   features may be added as a set, tagged with the `multiple` keyword. Like
+   optional accounts, only one multiple account set is supported per instruction
+   (and optional and multiple may not coexist). More complex instructions that
+   cannot be accommodated by `optional` or `multiple`, requiring logic to figure
+   out account order/representation, should probably be made into separate
+   instructions.

@@ -14,7 +14,7 @@ Unlike a file, the account includes metadata for the lifetime of the file. That
 lifetime is expressed in "tokens", which is a number of fractional native
 tokens, called _lamports_. Accounts are held in validator memory and pay
 ["rent"](#rent) to stay there. Each validator periodically scans all accounts
-and collects rent. Any account that drops to zero lamports is purged.  Accounts
+and collects rent. Any account that drops to zero lamports is purged. Accounts
 can also be marked [rent-exempt](#rent-exemption) if they contain a sufficient
 number of lamports.
 
@@ -45,9 +45,9 @@ If an account is marked "executable" in its metadata then it is considered a
 program which can be executed by including the account's public key an
 instruction's [program id](transactions.md#program-id). Accounts are marked as
 executable during a successful program deployment process by the loader that
-owns the account.  For example, during BPF program deployment, once the loader
+owns the account. For example, during BPF program deployment, once the loader
 has determined that the BPF bytecode in the account's data is valid, the loader
-permanently marks the program account as executable.  Once executable, the
+permanently marks the program account as executable. Once executable, the
 runtime enforces that the account's data (the program) is immutable.
 
 ## Creating
@@ -90,23 +90,23 @@ For security purposes, it is recommended that programs check the validity of any
 account it reads but does not modify.
 
 The security model enforces that an account's data can only be modified by the
-account's `Owner` program.  Doing so allows the program to trust that the data
-passed to them via accounts they own will be in a known and valid state.  The
+account's `Owner` program. Doing so allows the program to trust that the data
+passed to them via accounts they own will be in a known and valid state. The
 runtime enforces this by rejecting any transaction containing a program that
-attempts to write to an account it does not own.  But, there are also cases
+attempts to write to an account it does not own. But, there are also cases
 where a program may merely read an account they think they own and assume the
-data has only been written by themselves and thus is valid.  But anyone can
+data has only been written by themselves and thus is valid. But anyone can
 issues instructions to a program, and the runtime does not know that those
-accounts are expected to be owned by the program.  Therefore a malicious user
+accounts are expected to be owned by the program. Therefore a malicious user
 could create accounts with arbitrary data and then pass these accounts to the
-program in the place of a valid account.  The arbitrary data could be crafted in
+program in the place of a valid account. The arbitrary data could be crafted in
 a way that leads to unexpected or harmful program behavior.
 
 To check an account's validity, the program should either check the account's
 address against a known value or check that the account is indeed owned
 correctly (usually owned by the program itself).
 
-One example is when programs read a sysvar.  Unless the program checks the
+One example is when programs read a sysvar. Unless the program checks the
 address or owner, it's impossible to be sure whether it's a real and valid
 sysvar merely by successful deserialization. Accordingly, the Solana SDK [checks
 the sysvar's validity during
@@ -168,7 +168,6 @@ calculations is 128 bytes.
 For example, an account is created with the initial transfer of 10,000 lamports
 and no additional data. Rent is immediately debited from it on creation,
 resulting in a balance of 7,561 lamports:
-
 
 ```text
 Rent: 2,439 = 19.055441478439427 (rent rate) * 128 bytes (minimum account size) * 1 (epoch)
