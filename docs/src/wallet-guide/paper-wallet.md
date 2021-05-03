@@ -85,12 +85,13 @@ solana-keygen new --help
 ### Public Key Derivation
 
 Public keys can be derived from a seed phrase and a passphrase if you choose to
-use one. This is useful for using an offline-generated seed phrase to
-derive a valid public key. The `solana-keygen pubkey` command will walk you
-through entering your seed phrase and a passphrase if you chose to use one.
+use one. This is useful for using an offline-generated seed phrase to derive a
+valid public key. The `solana-keygen pubkey` command will walk you through how
+to use your seed phrase (and a passphrase if you chose to use one) as a signer
+with the solana command-line tools using the `ask` uri scheme.
 
 ```bash
-solana-keygen pubkey ASK
+solana-keygen pubkey ask://
 ```
 
 > Note that you could potentially use different passphrases for the same seed phrase. Each unique passphrase will yield a different keypair.
@@ -102,11 +103,11 @@ will need to pass the `--skip-seed-phrase-validation` argument and forego this
 validation.
 
 ```bash
-solana-keygen pubkey ASK --skip-seed-phrase-validation
+solana-keygen pubkey ask:// --skip-seed-phrase-validation
 ```
 
-After entering your seed phrase with `solana-keygen pubkey ASK` the console
-will display a string of base-58 character. This is the _wallet address_
+After entering your seed phrase with `solana-keygen pubkey ask://` the console
+will display a string of base-58 character. This is the base _wallet address_
 associated with your seed phrase.
 
 > Copy the derived address to a USB stick for easy usage on networked computers
@@ -119,20 +120,48 @@ For full usage details run:
 solana-keygen pubkey --help
 ```
 
+### Hierarchical Derivation
+
+The solana-cli supports
+[BIP32](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki) and
+[BIP44](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki)
+hierarchical derivation of private keys from your seed phrase and passphrase by
+adding either the `?key=` query string or the `?full-path=` query string.
+
+To use solana's BIP44 derivation path `m/44'/501'`, supply the `?key=m` query
+string, or `?key=<ACCOUNT>/<CHANGE>`.
+
+```bash
+solana-keygen pubkey ask://?key=0/1
+```
+
+To use a derivation path other than solana's standard BIP44, you can supply `?full-path=m/<PURPOSE>/<COIN_TYPE>/<ACCOUNT>/<CHANGE>`.
+
+```bash
+solana-keygen pubkey ask://?full-path=m/44/2017/0/1
+```
+
+Because Solana uses Ed25519 keypairs, as per
+[SLIP-0010](https://github.com/satoshilabs/slips/blob/master/slip-0010.md) all
+derivation-path indexes will be promoted to hardened indexes -- eg.
+`?key=0'/0'`, `?full-path=m/44'/2017'/0'/1'` -- regardless of whether ticks are
+included in the query-string input.
+
 ## Verifying the Keypair
 
 To verify you control the private key of a paper wallet address, use
 `solana-keygen verify`:
 
 ```bash
-solana-keygen verify <PUBKEY> ASK
+solana-keygen verify <PUBKEY> ask://
 ```
 
-where `<PUBKEY>` is replaced with the wallet address and they keyword `ASK` tells the
-command to prompt you for the keypair's seed phrase. Note that for security
-reasons, your seed phrase will not be displayed as you type. After entering your
-seed phrase, the command will output "Success" if the given public key matches the
-keypair generated from your seed phrase, and "Failed" otherwise.
+where `<PUBKEY>` is replaced with the wallet address and they keyword `ask://`
+tells the command to prompt you for the keypair's seed phrase; `key` and
+`full-path` query-strings accepted. Note that for security reasons, your seed
+phrase will not be displayed as you type. After entering your seed phrase, the
+command will output "Success" if the given public key matches the keypair
+generated from your seed phrase, and "Failed" otherwise.
 
 ## Checking Account Balance
 
