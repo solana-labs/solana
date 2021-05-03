@@ -491,7 +491,7 @@ impl Tower {
             }
             if !ancestors[&slot].contains(&vote.slot) {
 	      info!("is_locked_out: Ancestors doesn't contain vote slot");
-//                return true;
+                return true;
             }
         }
         if let Some(root_slot) = lockouts.root_slot {
