@@ -682,7 +682,7 @@ mod test {
         );
 
         // If it's a coding shred, test that slot >= root
-        let (common, coding) = Shredder::new_coding_shred_header(5, 5, 5, 6, 6, 0, 0);
+        let (common, coding) = Shredder::new_coding_shred_header(5, 5, 5, 6, 6, 0);
         let mut coding_shred =
             Shred::new_empty_from_header(common, DataShredHeader::default(), coding);
         Shredder::sign_shred(&leader_keypair, &mut coding_shred);
@@ -767,7 +767,7 @@ mod test {
         use crate::serve_repair::RepairType;
         use std::net::{IpAddr, Ipv4Addr};
         solana_logger::setup();
-        let (common, coding) = Shredder::new_coding_shred_header(5, 5, 5, 6, 6, 0, 0);
+        let (common, coding) = Shredder::new_coding_shred_header(5, 5, 5, 6, 6, 0);
         let shred = Shred::new_empty_from_header(common, DataShredHeader::default(), coding);
         let mut shreds = vec![shred.clone(), shred.clone(), shred];
         let _from_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
