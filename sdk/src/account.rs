@@ -31,7 +31,7 @@ pub struct Account {
 #[derive(PartialEq, Eq, Clone, Default, AbiExample)]
 pub struct AccountSharedData {
     /// lamports in the account
-    pub lamports: u64,
+    lamports: u64,
     /// data held in this account
     data: Arc<Vec<u8>>,
     /// the program that owns this account. If executable, the program that loads this account.
