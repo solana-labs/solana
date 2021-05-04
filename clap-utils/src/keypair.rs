@@ -18,8 +18,8 @@ use {
         message::Message,
         pubkey::Pubkey,
         signature::{
-            keypair_from_seed, keypair_from_seed_phrase_and_passphrase, read_keypair,
-            read_keypair_file, Keypair, NullSigner, Presigner, Signature, Signer,
+            generate_seed_from_seed_phrase_and_passphrase, keypair_from_seed_and_derivation_path,
+            read_keypair, read_keypair_file, Keypair, NullSigner, Presigner, Signature, Signer,
         },
     },
     std::{
@@ -181,14 +181,17 @@ pub(crate) fn parse_signer_source<S: AsRef<str>>(
             if let Some(scheme) = uri.scheme() {
                 let scheme = scheme.as_str().to_ascii_lowercase();
                 match scheme.as_str() {
-                    "ask" => Ok(SignerSource::new(SignerSourceKind::Ask)),
+                    "ask" => Ok(SignerSource {
+                        kind: SignerSourceKind::Ask,
+                        derivation_path: DerivationPath::from_uri_any_query(&uri)?,
+                    }),
                     "file" => Ok(SignerSource::new(SignerSourceKind::Filepath(
                         uri.path().to_string(),
                     ))),
                     "stdin" => Ok(SignerSource::new(SignerSourceKind::Stdin)),
                     "usb" => Ok(SignerSource {
                         kind: SignerSourceKind::Usb(RemoteWalletLocator::new_from_uri(&uri)?),
-                        derivation_path: DerivationPath::from_uri(&uri)?,
+                        derivation_path: DerivationPath::from_uri_key_query(&uri)?,
                     }),
                     _ => Err(SignerSourceError::UnrecognizedSource),
                 }
@@ -264,6 +267,7 @@ pub fn signer_from_path_with_config(
                 keypair_name,
                 skip_validation,
                 false,
+                derivation_path,
             )?))
         }
         SignerSourceKind::Filepath(path) => match read_keypair_file(&path) {
@@ -341,7 +345,7 @@ pub fn resolve_signer_from_path(
             let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
             // This method validates the seed phrase, but returns `None` because there is no path
             // on disk or to a device
-            keypair_from_seed_phrase(keypair_name, skip_validation, false).map(|_| None)
+            keypair_from_seed_phrase(keypair_name, skip_validation, false, derivation_path).map(|_| None)
         }
         SignerSourceKind::Filepath(path) => match read_keypair_file(&path) {
             Err(e) => Err(std::io::Error::new(
@@ -407,6 +411,7 @@ pub fn keypair_from_seed_phrase(
     keypair_name: &str,
     skip_validation: bool,
     confirm_pubkey: bool,
+    derivation_path: Option<DerivationPath>,
 ) -> Result<Keypair, Box<dyn error::Error>> {
     let seed_phrase = prompt_password_stderr(&format!("[{}] seed phrase: ", keypair_name))?;
     let seed_phrase = seed_phrase.trim();
@@ -417,7 +422,8 @@ pub fn keypair_from_seed_phrase(
 
     let keypair = if skip_validation {
         let passphrase = prompt_passphrase(&passphrase_prompt)?;
-        keypair_from_seed_phrase_and_passphrase(&seed_phrase, &passphrase)?
+        let seed = generate_seed_from_seed_phrase_and_passphrase(&seed_phrase, &passphrase);
+        keypair_from_seed_and_derivation_path(&seed, derivation_path)?
     } else {
         let sanitized = sanitize_seed_phrase(seed_phrase);
         let parse_language_fn = || {
@@ -440,7 +446,7 @@ pub fn keypair_from_seed_phrase(
         let mnemonic = parse_language_fn()?;
         let passphrase = prompt_passphrase(&passphrase_prompt)?;
         let seed = Seed::new(&mnemonic, &passphrase);
-        keypair_from_seed(seed.as_bytes())?
+        keypair_from_seed_and_derivation_path(&seed.as_bytes(), derivation_path)?
     };
 
     if confirm_pubkey {
