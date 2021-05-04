@@ -1337,6 +1337,25 @@ fn main() {
             )
         )
         .subcommand(
+            SubCommand::with_name("repair-roots")
+                .about("Traverses the AncestorIterator backward from a last known root \
+                        to restore missing roots to the Root column")
+                .arg(
+                    Arg::with_name("start_root")
+                        .long("before")
+                        .value_name("NUM")
+                        .takes_value(true)
+                        .help("First good root after the range to repair")
+                )
+                .arg(
+                    Arg::with_name("end_root")
+                        .long("until")
+                        .value_name("NUM")
+                        .takes_value(true)
+                        .help("Last slot to check for root repair")
+                )
+        )
+        .subcommand(
             SubCommand::with_name("analyze-storage")
                 .about("Output statistics in JSON format about \
                         all column families in the ledger rocksdb")
@@ -2795,6 +2814,41 @@ fn main() {
                             .expect("failed to write");
                     }
                 });
+        }
+        ("repair-roots", Some(arg_matches)) => {
+            let blockstore = open_blockstore(
+                &ledger_path,
+                AccessType::TryPrimaryThenSecondary,
+                wal_recovery_mode,
+            );
+            let start_root = if let Some(height) = arg_matches.value_of("start_root") {
+                Slot::from_str(height).expect("Before root must be a number")
+            } else {
+                blockstore.max_root()
+            };
+            let end_root = if let Some(height) = arg_matches.value_of("end_root") {
+                Slot::from_str(height).expect("Until root must be a number")
+            } else {
+                blockstore.lowest_slot()
+            };
+            assert!(start_root > end_root);
+            assert!(blockstore.is_root(start_root));
+            let ancestor_iterator =
+                AncestorIterator::new(start_root, &blockstore).take_while(|&slot| slot >= end_root);
+            let roots_to_fix: Vec<_> = ancestor_iterator
+                .filter(|slot| !blockstore.is_root(*slot))
+                .collect();
+            if !roots_to_fix.is_empty() {
+                blockstore.set_roots(&roots_to_fix).unwrap_or_else(|err| {
+                    eprintln!("Unable to set roots {:?}: {}", roots_to_fix, err);
+                    exit(1);
+                });
+            } else {
+                println!(
+                    "No missing roots found in range {} to {}",
+                    end_root, start_root
+                );
+            }
         }
         ("bounds", Some(arg_matches)) => {
             let blockstore = open_blockstore(
