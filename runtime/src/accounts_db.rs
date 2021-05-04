@@ -6695,6 +6695,44 @@ pub mod tests {
     }
 
     #[test]
+    fn test_clean_multiple_zero_lamport_store_matches_index() {
+        solana_logger::setup();
+
+        let accounts = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let pubkey1 = solana_sdk::pubkey::new_rand();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
+        let zero_lamport_account =
+            AccountSharedData::new(0, 0, AccountSharedData::default().owner());
+
+        // Store account 1 & 2 in slot 0, then update account 1 in several more slots
+        accounts.store_uncached(0, &[(&pubkey1, &zero_lamport_account)]);
+        accounts.store_uncached(0, &[(&pubkey2, &zero_lamport_account)]);
+        accounts.store_uncached(1, &[(&pubkey1, &zero_lamport_account)]);
+        accounts.store_uncached(2, &[(&pubkey1, &zero_lamport_account)]);
+
+        accounts.add_root(0);
+        accounts.add_root(1);
+        accounts.add_root(2);
+
+        // Account 1 ref'd from all 3 slots, account 2 from only 1 slot
+        assert_eq!(accounts.accounts_index.ref_count_from_storage(&pubkey1), 3);
+        assert_eq!(accounts.accounts_index.ref_count_from_storage(&pubkey2), 1);
+
+        accounts.clean_accounts(None);
+        // Slots 0 and 1 should each have been cleaned because all of their
+        // accounts are zero lamports
+        assert!(accounts.storage.get_slot_stores(0).is_none());
+        assert!(accounts.storage.get_slot_stores(1).is_none());
+        // Slot 2 is still around because ...
+        assert!(accounts.storage.get_slot_stores(2).is_some());
+        // Check that the index has also been updated to unreference accounts
+        // and is in-sync with the store. Account 1 should be ref'd from slot 2,
+        // account 1 should have no remaining refs in the index
+        assert_eq!(accounts.accounts_index.ref_count_from_storage(&pubkey1), 1);
+        assert_eq!(accounts.accounts_index.ref_count_from_storage(&pubkey2), 0);
+    }
+
+    #[test]
     fn test_clean_zero_lamport_and_old_roots() {
         solana_logger::setup();
 
