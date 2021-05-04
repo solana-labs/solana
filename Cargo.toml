@@ -51,7 +51,6 @@ members = [
     "programs/stake",
     "programs/vote",
     "remote-wallet",
-    "ramp-tps",
     "runtime",
     "runtime/store-tool",
     "sdk",
