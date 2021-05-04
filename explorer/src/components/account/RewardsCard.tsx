@@ -72,7 +72,7 @@ export function RewardsCard({ pubkey }: { pubkey: PublicKey }) {
 
   const { foundOldest } = rewards.data;
   const fetching = rewards.status === FetchStatus.Fetching;
-  
+
   return (
     <>
       <div className="card">

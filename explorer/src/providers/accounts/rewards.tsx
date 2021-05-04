@@ -103,7 +103,13 @@ async function fetchRewards(
       if (cluster !== Cluster.Custom) {
         reportError(error, { url });
       }
-      return;
+
+      return dispatch({
+        type: ActionType.Update,
+        status: FetchStatus.FetchFailed,
+        key: pubkey.toBase58(),
+        url,
+      });
     }
   }
 
