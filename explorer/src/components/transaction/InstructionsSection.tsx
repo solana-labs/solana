@@ -39,6 +39,7 @@ import { Cluster, useCluster } from "providers/cluster";
 import { BpfUpgradeableLoaderDetailsCard } from "components/instruction/bpf-upgradeable-loader/BpfUpgradeableLoaderDetailsCard";
 import { VoteDetailsCard } from "components/instruction/vote/VoteDetailsCard";
 import { isWormholeInstruction } from "components/instruction/wormhole/types";
+import { AssociatedTokenDetailsCard } from "components/instruction/AssociatedTokenDetailsCard";
 
 export type InstructionDetailsProps = {
   tx: ParsedTransaction;
@@ -183,6 +184,8 @@ function renderInstructionCard({
         return <StakeDetailsCard {...props} />;
       case "spl-memo":
         return <MemoDetailsCard {...props} />;
+      case "spl-associated-token-account":
+        return <AssociatedTokenDetailsCard {...props} />;
       case "vote":
         return <VoteDetailsCard {...props} />;
       default:
