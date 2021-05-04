@@ -1804,7 +1804,7 @@ pub fn make_cli_reward(
         let rate_change = reward.amount as f64 / (reward.post_balance - reward.amount) as f64;
 
         let wallclock_epochs_per_year =
-            (SECONDS_PER_DAY * 356) as f64 / wallclock_epoch_duration as f64;
+            (SECONDS_PER_DAY * 365) as f64 / wallclock_epoch_duration as f64;
         let apr = rate_change * wallclock_epochs_per_year;
 
         Some(CliEpochReward {
