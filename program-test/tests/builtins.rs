@@ -1,12 +1,10 @@
 use solana_sdk::{
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-    signature::Keypair,
+    signature::{Keypair, Signer},
+    transaction::Transaction,
 };
 
-use {
-    solana_program_test::ProgramTest,
-    solana_sdk::{signature::Signer, transaction::Transaction},
-};
+use solana_program_test::ProgramTest;
 
 #[tokio::test]
 async fn test_bpf_loader_upgradable_present() {
