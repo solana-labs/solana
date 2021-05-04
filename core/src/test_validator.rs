@@ -82,6 +82,7 @@ pub struct TestValidatorGenesis {
     pub validator_exit: Arc<RwLock<ValidatorExit>>,
     pub start_progress: Arc<RwLock<ValidatorStartProgress>>,
     pub authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
+    pub max_ledger_shreds: Option<u64>,
 }
 
 impl TestValidatorGenesis {
@@ -497,9 +498,7 @@ impl TestValidator {
             bpf_jit: !config.no_bpf_jit,
             validator_exit: config.validator_exit.clone(),
             rocksdb_compaction_interval: Some(100), // Compact every 100 slots
-            max_ledger_shreds: Some(10_000), /* 10,000 was derived empirically by watching the size
-                                             of the rocksdb/ directory self-limit itself to the
-                                             40MB-150MB range when running `solana-test-validator` */
+            max_ledger_shreds: config.max_ledger_shreds,
             no_wait_for_vote_to_start_leader: true,
             ..ValidatorConfig::default()
         };

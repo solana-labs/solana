@@ -2,7 +2,7 @@ use {
     clap::{value_t, value_t_or_exit, App, Arg},
     fd_lock::FdLock,
     solana_clap_utils::{
-        input_parsers::{pubkey_of, pubkeys_of},
+        input_parsers::{pubkey_of, pubkeys_of, value_of},
         input_validators::{
             is_pubkey, is_pubkey_or_keypair, is_slot, is_url_or_moniker,
             normalize_to_url_if_moniker,
@@ -35,6 +35,12 @@ use {
     },
 };
 
+/* 10,000 was derived empirically by watching the size
+ * of the rocksdb/ directory self-limit itself to the
+ * 40MB-150MB range when running `solana-test-validator`
+ */
+const DEFAULT_MAX_LEDGER_SHREDS: u64 = 10_000;
+
 #[derive(PartialEq)]
 enum Output {
     None,
@@ -45,6 +51,7 @@ enum Output {
 fn main() {
     let default_rpc_port = rpc_port::DEFAULT_RPC_PORT.to_string();
     let default_faucet_port = FAUCET_PORT.to_string();
+    let default_limit_ledger_size = DEFAULT_MAX_LEDGER_SHREDS.to_string();
 
     let matches = App::new("solana-test-validator")
         .about("Test Validator")
@@ -247,6 +254,14 @@ fn main() {
                         If no slot is provided then the current slot of the cluster \
                         referenced by the --url argument will be used",
                 ),
+        )
+        .arg(
+            Arg::with_name("limit_ledger_size")
+                .long("limit-ledger-size")
+                .value_name("SHRED_COUNT")
+                .takes_value(true)
+                .default_value(default_limit_ledger_size.as_str())
+                .help("Keep this amount of shreds in root slots."),
         )
         .get_matches();
 
@@ -460,6 +475,7 @@ fn main() {
     }
 
     let mut genesis = TestValidatorGenesis::default();
+    genesis.max_ledger_shreds = value_of(&matches, "limit_ledger_size");
 
     admin_rpc_service::run(
         &ledger_path,
