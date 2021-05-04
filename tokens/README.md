@@ -20,7 +20,18 @@ CYRJWqiSjLitBAcRxPvWpgX3s5TvmN2SuRY3eEYypFvT,43.0,
 ```bash
 solana-tokens distribute-tokens --from <KEYPAIR> --input-csv <RECIPIENTS_CSV> --fee-payer <KEYPAIR>
 ```
+Example of command: 
+```
+solana-tokens distribute-spl-tokens --from <ENTER ADDRESS HERE> --owner /Users/<COMPUTERS NAME>/new-keypair.json --input-csv spl-token.csv --fee-payer /Users/<COMPUTERS NAME>/new-keypair.json --db-path airdrop2
 
+Retrieve --from by typing spl-token accounts -v it will be the address under Account
+Retrieve --owner by entering the filepath to your new-keypair.json file (mine was in my home folder called "COMPUTERS NAME")
+For --input-csv I would recommend you putting the airdrop csv file (NOT .xlsx change from .xlsx to .csv) in your home folder 
+--fee-payer is going to be the same filepath as your --owner 
+--db-path can be named anything, I named it airdrop2
+
+Note: Make sure your mint authority address is funded with enough SOL if not then it will not intiate the airdrop at all.
+```
 Example transaction log before:
 
 ```text
