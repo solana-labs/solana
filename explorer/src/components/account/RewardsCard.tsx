@@ -6,17 +6,38 @@ import { FetchStatus } from "providers/cache";
 import { ErrorCard } from "components/common/ErrorCard";
 import { Slot } from "components/common/Slot";
 import { lamportsToSolString } from "utils";
+import { useAccountInfo } from "providers/accounts";
+import BN from "bn.js";
+
+const MAX_EPOCH = new BN(2).pow(new BN(64)).sub(new BN(1));
 
 export function RewardsCard({ pubkey }: { pubkey: PublicKey }) {
   const address = React.useMemo(() => pubkey.toBase58(), [pubkey]);
+  const info = useAccountInfo(address);
+  const account = info?.data;
+  const data = account?.details?.data?.parsed.info;
+
+  const { highestEpoch, lowestEpoch } = React.useMemo(() => {
+    let highestEpoch;
+    let lowestEpoch;
+
+    if (data.stake && !data.stake.delegation.deactivationEpoch.eq(MAX_EPOCH)) {
+      highestEpoch = data.stake.delegation.deactivationEpoch.toNumber();
+    }
+
+    if (data.stake && !data.stake.delegation.activationEpoch.eq(MAX_EPOCH)) {
+      lowestEpoch = data.stake.delegation.activationEpoch.toNumber();
+    }
+    return { highestEpoch, lowestEpoch };
+  }, [data]);
+
   const rewards = useRewards(address);
   const fetchRewards = useFetchRewards();
-  const loadMore = () => fetchRewards(pubkey);
-  const refresh = () => fetchRewards(pubkey);
+  const loadMore = () => fetchRewards(pubkey, highestEpoch, lowestEpoch);
 
   React.useEffect(() => {
     if (!rewards) {
-      fetchRewards(pubkey);
+      fetchRewards(pubkey, highestEpoch, lowestEpoch);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -29,7 +50,7 @@ export function RewardsCard({ pubkey }: { pubkey: PublicKey }) {
       return <LoadingCard message="Loading rewards" />;
     }
 
-    return <ErrorCard retry={refresh} text="Failed to fetch rewards" />;
+    return <ErrorCard retry={loadMore} text="Failed to fetch rewards" />;
   }
 
   const rewardsList = rewards.data.rewards.map((reward) => {
@@ -51,6 +72,7 @@ export function RewardsCard({ pubkey }: { pubkey: PublicKey }) {
 
   const { foundOldest } = rewards.data;
   const fetching = rewards.status === FetchStatus.Fetching;
+  
   return (
     <>
       <div className="card">

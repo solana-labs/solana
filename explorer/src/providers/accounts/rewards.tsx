@@ -17,6 +17,7 @@ export type Rewards = {
 
 export type RewardsUpdate = {
   rewards: (InflationReward | null)[];
+  foundOldest?: boolean;
 };
 
 type State = Cache.State<Rewards>;
@@ -35,10 +36,10 @@ function reconcile(
     .filter((value) => value !== null);
 
   const foundOldest =
+    update.foundOldest ||
     update.rewards.length < 1 ||
     update.rewards[update.rewards.length - 1]?.epoch ===
-      combined[combined.length]?.epoch ||
-    update.rewards[update.rewards.length - 1]?.epoch === 0;
+      combined[combined.length]?.epoch;
 
   return {
     rewards: combined,
@@ -77,7 +78,9 @@ async function fetchRewards(
   pubkey: PublicKey,
   cluster: Cluster,
   url: string,
-  fromEpoch?: number
+  fromEpoch?: number,
+  highestEpoch?: number,
+  lowestEpoch?: number
 ) {
   dispatch({
     type: ActionType.Update,
@@ -88,10 +91,14 @@ async function fetchRewards(
 
   const connection = new Connection(url);
 
+  if (!fromEpoch && highestEpoch) {
+    fromEpoch = highestEpoch;
+  }
+
   if (!fromEpoch) {
     try {
       const epochInfo = await connection.getEpochInfo();
-      fromEpoch = epochInfo.epoch;
+      fromEpoch = epochInfo.epoch - 1;
     } catch (error) {
       if (cluster !== Cluster.Custom) {
         reportError(error, { url });
@@ -99,8 +106,6 @@ async function fetchRewards(
       return;
     }
   }
-
-  fromEpoch--;
 
   const getInflationReward = async (epoch: number) => {
     try {
@@ -114,14 +119,16 @@ async function fetchRewards(
     return null;
   };
 
+  lowestEpoch = lowestEpoch || 0;
   const requests = [];
   for (let i = fromEpoch; i > fromEpoch - PAGE_SIZE; i--) {
-    if (i > -1) {
+    if (i >= lowestEpoch) {
       requests.push(getInflationReward(i));
     }
   }
 
   const results = await Promise.all(requests);
+  const foundOldest = results[results.length - 1]?.epoch === lowestEpoch;
 
   dispatch({
     type: ActionType.Update,
@@ -130,6 +137,7 @@ async function fetchRewards(
     status: FetchStatus.Fetched,
     data: {
       rewards: results,
+      foundOldest,
     },
   });
 }
@@ -156,7 +164,7 @@ export function useFetchRewards() {
   }
 
   return React.useCallback(
-    (pubkey: PublicKey) => {
+    (pubkey: PublicKey, highestEpoch?: number, lowestEpoch?: number) => {
       const before = state.entries[pubkey.toBase58()];
       if (before?.data) {
         fetchRewards(
@@ -165,9 +173,21 @@ export function useFetchRewards() {
           cluster,
           url,
           before.data.lowestFetchedEpoch
+            ? before.data.lowestFetchedEpoch - 1
+            : undefined,
+          highestEpoch,
+          lowestEpoch
         );
       } else {
-        fetchRewards(dispatch, pubkey, cluster, url);
+        fetchRewards(
+          dispatch,
+          pubkey,
+          cluster,
+          url,
+          undefined,
+          highestEpoch,
+          lowestEpoch
+        );
       }
     },
     [state, dispatch, cluster, url]
