@@ -1760,10 +1760,13 @@ impl Blockstore {
     }
 
     pub fn cache_block_time(&self, slot: Slot, timestamp: UnixTimestamp) -> Result<()> {
-        if !self.is_root(slot) {
-            return Err(BlockstoreError::SlotNotRooted);
+        let slot_meta_cf = self.db.column::<cf::SlotMeta>();
+        if slot_meta_cf.get(slot)?.is_none() {
+            info!("SlotMeta not found for slot {}", slot);
+            Err(BlockstoreError::SlotUnavailable)
+        } else {
+            self.blocktime_cf.put(slot, &timestamp)
         }
-        self.blocktime_cf.put(slot, &timestamp)
     }
 
     pub fn get_first_available_block(&self) -> Result<Slot> {
