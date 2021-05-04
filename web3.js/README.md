@@ -69,7 +69,7 @@ console.log(solanaWeb3);
 
 ### ES6
 ```js
-import solanaWeb3 from '@solana/web3.js';
+import * as solanaWeb3 from '@solana/web3.js';
 console.log(solanaWeb3);
 ```
 
