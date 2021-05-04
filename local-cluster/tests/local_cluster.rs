@@ -13,8 +13,9 @@ use solana_client::{
 };
 use solana_core::{
     broadcast_stage::BroadcastStageType,
-    cluster_info::VALIDATOR_PORT_RANGE,
+    cluster_info::{self, VALIDATOR_PORT_RANGE},
     consensus::{Tower, SWITCH_FORK_THRESHOLD, VOTE_THRESHOLD_DEPTH},
+    crds_value::{self, CrdsData, CrdsValue},
     gossip_service::discover_cluster,
     optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
     validator::ValidatorConfig,
@@ -49,8 +50,13 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signer},
     system_program, system_transaction,
+    timing::timestamp,
+    transaction::Transaction,
 };
-use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
+use solana_vote_program::{
+    vote_instruction,
+    vote_state::{Vote, MAX_LOCKOUT_HISTORY},
+};
 use std::{
     collections::{BTreeSet, HashMap, HashSet},
     fs,
@@ -539,7 +545,7 @@ fn run_kill_partition_switch_threshold<C>(
     partition_duration: Option<u64>,
     ticks_per_slot: Option<u64>,
     partition_context: C,
-    on_partition_start: impl Fn(&mut LocalCluster, &[Pubkey], &mut C),
+    on_partition_start: impl Fn(&mut LocalCluster, &[Pubkey], Vec<ClusterValidatorInfo>, &mut C),
     on_before_partition_resolved: impl Fn(&mut LocalCluster, &mut C),
     on_partition_resolved: impl Fn(&mut LocalCluster, &mut C),
 ) {
@@ -581,11 +587,20 @@ fn run_kill_partition_switch_threshold<C>(
     );
     let validator_pubkeys: Vec<Pubkey> = validator_keys.iter().map(|k| k.pubkey()).collect();
     let on_partition_start = |cluster: &mut LocalCluster, partition_context: &mut C| {
-        for validator_to_kill in &validator_pubkeys[0..stakes_to_kill.len()] {
-            info!("Killing validator with id: {}", validator_to_kill);
-            cluster.exit_node(&validator_to_kill);
-        }
-        on_partition_start(cluster, &validator_pubkeys, partition_context);
+        let dead_validator_infos: Vec<ClusterValidatorInfo> = validator_pubkeys
+            [0..stakes_to_kill.len()]
+            .iter()
+            .map(|validator_to_kill| {
+                info!("Killing validator with id: {}", validator_to_kill);
+                cluster.exit_node(&validator_to_kill)
+            })
+            .collect();
+        on_partition_start(
+            cluster,
+            &validator_pubkeys,
+            dead_validator_infos,
+            partition_context,
+        );
     };
     run_cluster_partition(
         &stake_partitions,
@@ -598,6 +613,332 @@ fn run_kill_partition_switch_threshold<C>(
         ticks_per_slot,
         vec![],
     )
+}
+
+fn find_latest_replayed_slot_from_ledger(
+    ledger_path: &Path,
+    mut latest_slot: Slot,
+) -> (Slot, HashSet<Slot>) {
+    loop {
+        let mut blockstore = open_blockstore(&ledger_path);
+        // This is kind of a hack because we can't query for new frozen blocks over RPC
+        // since the validator is not voting.
+        let new_latest_slots: Vec<Slot> = blockstore
+            .slot_meta_iterator(latest_slot)
+            .unwrap()
+            .filter_map(|(s, _)| if s > latest_slot { Some(s) } else { None })
+            .collect();
+
+        for new_latest_slot in new_latest_slots {
+            latest_slot = new_latest_slot;
+            info!("Checking latest_slot {}", latest_slot);
+            // Wait for the slot to be fully received by the validator
+            let entries;
+            loop {
+                info!("Waiting for slot {} to be full", latest_slot);
+                if blockstore.is_full(latest_slot) {
+                    entries = blockstore.get_slot_entries(latest_slot, 0).unwrap();
+                    assert!(!entries.is_empty());
+                    break;
+                } else {
+                    sleep(Duration::from_millis(50));
+                    blockstore = open_blockstore(&ledger_path);
+                }
+            }
+            // Check the slot has been replayed
+            let non_tick_entry = entries.into_iter().find(|e| !e.transactions.is_empty());
+            if let Some(non_tick_entry) = non_tick_entry {
+                // Wait for the slot to be replayed
+                loop {
+                    info!("Waiting for slot {} to be replayed", latest_slot);
+                    if !blockstore
+                        .map_transactions_to_statuses(
+                            latest_slot,
+                            non_tick_entry.transactions.clone().into_iter(),
+                        )
+                        .is_empty()
+                    {
+                        return (
+                            latest_slot,
+                            AncestorIterator::new(latest_slot, &blockstore).collect(),
+                        );
+                    } else {
+                        sleep(Duration::from_millis(50));
+                        blockstore = open_blockstore(&ledger_path);
+                    }
+                }
+            } else {
+                info!(
+                    "No transactions in slot {}, can't tell if it was replayed",
+                    latest_slot
+                );
+            }
+        }
+        sleep(Duration::from_millis(50));
+    }
+}
+
+#[test]
+#[serial]
+fn test_switch_threshold_uses_gossip_votes() {
+    solana_logger::setup_with_default(RUST_LOG_FILTER);
+    let total_stake = 100;
+
+    // Minimum stake needed to generate a switching proof
+    let minimum_switch_stake = (SWITCH_FORK_THRESHOLD as f64 * total_stake as f64) as u64;
+
+    // Make the heavier stake insufficient for switching so tha the lighter validator
+    // cannot switch without seeing a vote from the dead/failure_stake validator.
+    let heavier_stake = minimum_switch_stake;
+    let lighter_stake = heavier_stake - 1;
+    let failures_stake = total_stake - heavier_stake - lighter_stake;
+
+    let partitions: &[&[(usize, usize)]] = &[
+        &[(heavier_stake as usize, 8)],
+        &[(lighter_stake as usize, 8)],
+    ];
+
+    #[derive(Default)]
+    struct PartitionContext {
+        heaviest_validator_key: Pubkey,
+        lighter_validator_key: Pubkey,
+        dead_validator_info: Option<ClusterValidatorInfo>,
+    }
+
+    let on_partition_start = |_cluster: &mut LocalCluster,
+                              validator_keys: &[Pubkey],
+                              mut dead_validator_infos: Vec<ClusterValidatorInfo>,
+                              context: &mut PartitionContext| {
+        assert_eq!(dead_validator_infos.len(), 1);
+        context.dead_validator_info = Some(dead_validator_infos.pop().unwrap());
+        // validator_keys[0] is the validator that will be killed, i.e. the validator with
+        // stake == `failures_stake`
+        context.heaviest_validator_key = validator_keys[1];
+        context.lighter_validator_key = validator_keys[2];
+    };
+
+    let on_before_partition_resolved = |_: &mut LocalCluster, _: &mut PartitionContext| {};
+
+    // Check that new roots were set after the partition resolves (gives time
+    // for lockouts built during partition to resolve and gives validators an opportunity
+    // to try and switch forks)
+    let on_partition_resolved = |cluster: &mut LocalCluster, context: &mut PartitionContext| {
+        let lighter_validator_ledger_path = cluster.ledger_path(&context.lighter_validator_key);
+        let heavier_validator_ledger_path = cluster.ledger_path(&context.heaviest_validator_key);
+
+        let (lighter_validator_latest_vote, _) = last_vote_in_tower(
+            &lighter_validator_ledger_path,
+            &context.lighter_validator_key,
+        )
+        .unwrap();
+
+        info!(
+            "Lighter validator's latest vote is for slot {}",
+            lighter_validator_latest_vote
+        );
+
+        // Lighter partition should stop voting after detecting the heavier partition and try
+        // to switch. Loop until we see a greater vote by the heavier validator than the last
+        // vote made by the lighter validator on the lighter fork.
+        let mut heavier_validator_latest_vote;
+        let mut heavier_validator_latest_vote_hash;
+        let heavier_blockstore = open_blockstore(&heavier_validator_ledger_path);
+        loop {
+            let (sanity_check_lighter_validator_latest_vote, _) = last_vote_in_tower(
+                &lighter_validator_ledger_path,
+                &context.lighter_validator_key,
+            )
+            .unwrap();
+
+            // Lighter validator should stop voting, because `on_partition_resolved` is only
+            // called after a propagation time where blocks from the other fork should have
+            // finished propagating
+            assert_eq!(
+                sanity_check_lighter_validator_latest_vote,
+                lighter_validator_latest_vote
+            );
+
+            let (new_heavier_validator_latest_vote, new_heavier_validator_latest_vote_hash) =
+                last_vote_in_tower(
+                    &heavier_validator_ledger_path,
+                    &context.heaviest_validator_key,
+                )
+                .unwrap();
+
+            heavier_validator_latest_vote = new_heavier_validator_latest_vote;
+            heavier_validator_latest_vote_hash = new_heavier_validator_latest_vote_hash;
+
+            // Latest vote for each validator should be on different forks
+            assert_ne!(lighter_validator_latest_vote, heavier_validator_latest_vote);
+            if heavier_validator_latest_vote > lighter_validator_latest_vote {
+                let heavier_ancestors: HashSet<Slot> =
+                    AncestorIterator::new(heavier_validator_latest_vote, &heavier_blockstore)
+                        .collect();
+                assert!(!heavier_ancestors.contains(&lighter_validator_latest_vote));
+                break;
+            }
+        }
+
+        info!("Checking to make sure lighter validator doesn't switch");
+        let mut latest_slot = lighter_validator_latest_vote;
+
+        // Number of chances the validator had to switch votes but didn't
+        let mut total_voting_opportunities = 0;
+        while total_voting_opportunities <= 5 {
+            let (new_latest_slot, latest_slot_ancestors) =
+                find_latest_replayed_slot_from_ledger(&lighter_validator_ledger_path, latest_slot);
+            latest_slot = new_latest_slot;
+            // Ensure `latest_slot` is on the other fork
+            if latest_slot_ancestors.contains(&heavier_validator_latest_vote) {
+                let tower = restore_tower(
+                    &lighter_validator_ledger_path,
+                    &context.lighter_validator_key,
+                )
+                .unwrap();
+                // Check that there was an opportunity to vote
+                if !tower.is_locked_out(latest_slot, &latest_slot_ancestors) {
+                    // Ensure the lighter blockstore has not voted again
+                    let new_lighter_validator_latest_vote = tower.last_voted_slot().unwrap();
+                    assert_eq!(
+                        new_lighter_validator_latest_vote,
+                        lighter_validator_latest_vote
+                    );
+                    info!(
+                        "Incrementing voting opportunities: {}",
+                        total_voting_opportunities
+                    );
+                    total_voting_opportunities += 1;
+                } else {
+                    info!(
+                        "Tower still locked out, can't vote for slot: {}",
+                        latest_slot
+                    );
+                }
+            } else if latest_slot > heavier_validator_latest_vote {
+                warn!(
+                    "validator is still generating blocks on its own fork, last processed slot: {}",
+                    latest_slot
+                );
+            }
+            sleep(Duration::from_millis(50));
+        }
+
+        // Make a vote from the killed validator for slot `heavier_validator_latest_vote` in gossip
+        info!(
+            "Simulate vote for slot: {} from dead validator",
+            heavier_validator_latest_vote
+        );
+        let vote_keypair = &context
+            .dead_validator_info
+            .as_ref()
+            .unwrap()
+            .info
+            .voting_keypair
+            .clone();
+        let node_keypair = &context
+            .dead_validator_info
+            .as_ref()
+            .unwrap()
+            .info
+            .keypair
+            .clone();
+        let vote_ix = vote_instruction::vote(
+            &vote_keypair.pubkey(),
+            &vote_keypair.pubkey(),
+            Vote::new(
+                vec![heavier_validator_latest_vote],
+                heavier_validator_latest_vote_hash,
+            ),
+        );
+
+        let mut vote_tx = Transaction::new_with_payer(&[vote_ix], Some(&node_keypair.pubkey()));
+
+        // Make the vote transaction with a random blockhash. Thus, the vote only lives in gossip but
+        // never makes it into a block
+        let blockhash = Hash::new_unique();
+        vote_tx.partial_sign(&[node_keypair.as_ref()], blockhash);
+        vote_tx.partial_sign(&[vote_keypair.as_ref()], blockhash);
+        let heavier_node_gossip = cluster
+            .get_contact_info(&context.heaviest_validator_key)
+            .unwrap()
+            .gossip;
+        cluster_info::push_messages_to_peer(
+            vec![CrdsValue::new_signed(
+                CrdsData::Vote(
+                    0,
+                    crds_value::Vote::new(node_keypair.pubkey(), vote_tx, timestamp()),
+                ),
+                &node_keypair,
+            )],
+            context
+                .dead_validator_info
+                .as_ref()
+                .unwrap()
+                .info
+                .keypair
+                .pubkey(),
+            heavier_node_gossip,
+        )
+        .unwrap();
+
+        loop {
+            // Wait for the lighter validator to switch to the heavier fork
+            let (new_lighter_validator_latest_vote, _) = last_vote_in_tower(
+                &lighter_validator_ledger_path,
+                &context.lighter_validator_key,
+            )
+            .unwrap();
+
+            if new_lighter_validator_latest_vote != lighter_validator_latest_vote {
+                info!(
+                    "Lighter validator switched forks at slot: {}",
+                    new_lighter_validator_latest_vote
+                );
+                let (heavier_validator_latest_vote, _) = last_vote_in_tower(
+                    &heavier_validator_ledger_path,
+                    &context.heaviest_validator_key,
+                )
+                .unwrap();
+                let (smaller, larger) =
+                    if new_lighter_validator_latest_vote > heavier_validator_latest_vote {
+                        (
+                            heavier_validator_latest_vote,
+                            new_lighter_validator_latest_vote,
+                        )
+                    } else {
+                        (
+                            new_lighter_validator_latest_vote,
+                            heavier_validator_latest_vote,
+                        )
+                    };
+
+                // Check the new vote is on the same fork as the heaviest fork
+                let heavier_blockstore = open_blockstore(&heavier_validator_ledger_path);
+                let larger_slot_ancestors: HashSet<Slot> =
+                    AncestorIterator::new(larger, &heavier_blockstore)
+                        .chain(std::iter::once(larger))
+                        .collect();
+                assert!(larger_slot_ancestors.contains(&smaller));
+                break;
+            } else {
+                sleep(Duration::from_millis(50));
+            }
+        }
+    };
+
+    let ticks_per_slot = 8;
+    run_kill_partition_switch_threshold(
+        &[&[(failures_stake as usize, 0)]],
+        partitions,
+        // Partition long enough such that the first vote made by validator with
+        // `alive_stake_3` won't be ingested due to BlockhashTooOld,
+        None,
+        Some(ticks_per_slot),
+        PartitionContext::default(),
+        on_partition_start,
+        on_before_partition_resolved,
+        on_partition_resolved,
+    );
 }
 
 #[test]
@@ -615,7 +956,8 @@ fn test_kill_partition_switch_threshold_no_progress() {
     // Check that no new roots were set 400 slots after partition resolves (gives time
     // for lockouts built during partition to resolve and gives validators an opportunity
     // to try and switch forks)
-    let on_partition_start = |_: &mut LocalCluster, _: &[Pubkey], _: &mut ()| {};
+    let on_partition_start =
+        |_: &mut LocalCluster, _: &[Pubkey], _: Vec<ClusterValidatorInfo>, _: &mut ()| {};
     let on_before_partition_resolved = |_: &mut LocalCluster, _: &mut ()| {};
     let on_partition_resolved = |cluster: &mut LocalCluster, _: &mut ()| {
         cluster.check_no_new_roots(400, &"PARTITION_TEST");
@@ -667,7 +1009,8 @@ fn test_kill_partition_switch_threshold_progress() {
             && smaller as f64 / total_stake as f64 <= SWITCH_FORK_THRESHOLD
     );
 
-    let on_partition_start = |_: &mut LocalCluster, _: &[Pubkey], _: &mut ()| {};
+    let on_partition_start =
+        |_: &mut LocalCluster, _: &[Pubkey], _: Vec<ClusterValidatorInfo>, _: &mut ()| {};
     let on_before_partition_resolved = |_: &mut LocalCluster, _: &mut ()| {};
     let on_partition_resolved = |cluster: &mut LocalCluster, _: &mut ()| {
         cluster.check_for_new_roots(16, &"PARTITION_TEST");
@@ -746,17 +1089,21 @@ fn test_fork_choice_refresh_old_votes() {
         lighter_fork_validator_key: Pubkey,
         heaviest_validator_key: Pubkey,
     }
-    let on_partition_start =
-        |cluster: &mut LocalCluster, validator_keys: &[Pubkey], context: &mut PartitionContext| {
-            // Kill validator with alive_stake_3, second in `partitions` slice
-            let smallest_validator_key = &validator_keys[3];
-            let info = cluster.exit_node(smallest_validator_key);
-            context.alive_stake3_info = Some(info);
-            context.smallest_validator_key = *smallest_validator_key;
-            context.lighter_fork_validator_key = validator_keys[1];
-            // Third in `partitions` slice
-            context.heaviest_validator_key = validator_keys[2];
-        };
+    let on_partition_start = |cluster: &mut LocalCluster,
+                              validator_keys: &[Pubkey],
+                              _: Vec<ClusterValidatorInfo>,
+                              context: &mut PartitionContext| {
+        // Kill validator with alive_stake_3, second in `partitions` slice
+        let smallest_validator_key = &validator_keys[3];
+        let info = cluster.exit_node(smallest_validator_key);
+        context.alive_stake3_info = Some(info);
+        context.smallest_validator_key = *smallest_validator_key;
+        // validator_keys[0] is the validator that will be killed, i.e. the validator with
+        // stake == `failures_stake`
+        context.lighter_fork_validator_key = validator_keys[1];
+        // Third in `partitions` slice
+        context.heaviest_validator_key = validator_keys[2];
+    };
 
     let ticks_per_slot = 8;
     let on_before_partition_resolved =
@@ -790,12 +1137,12 @@ fn test_fork_choice_refresh_old_votes() {
             info!("Opened blockstores");
 
             // Get latest votes
-            let lighter_fork_latest_vote = last_vote_in_tower(
+            let (lighter_fork_latest_vote, _) = last_vote_in_tower(
                 &lighter_fork_ledger_path,
                 &context.lighter_fork_validator_key,
             )
             .unwrap();
-            let heaviest_fork_latest_vote =
+            let (heaviest_fork_latest_vote, _) =
                 last_vote_in_tower(&heaviest_ledger_path, &context.heaviest_validator_key).unwrap();
 
             // Find the first slot on the smaller fork
@@ -824,8 +1171,6 @@ fn test_fork_choice_refresh_old_votes() {
                 "First slot in lighter partition is {}",
                 first_slot_in_lighter_partition
             );
-
-            assert!(first_slot_in_lighter_partition != 0);
 
             // Copy all the blocks from the smaller partition up to `first_slot_in_lighter_partition`
             // into the smallest validator's blockstore
@@ -869,12 +1214,12 @@ fn test_fork_choice_refresh_old_votes() {
                     0
                     \-------- 4 (38%, heavier fork)
                 */
-                if let Some(last_vote) =
+                if let Some((last_vote_slot, _last_vote_hash)) =
                     last_vote_in_tower(&smallest_ledger_path, &context.smallest_validator_key)
                 {
                     // Check that the heaviest validator on the other fork doesn't have this slot,
                     // this must mean we voted on a unique slot on this fork
-                    if last_vote == first_slot_in_lighter_partition {
+                    if last_vote_slot == first_slot_in_lighter_partition {
                         info!(
                             "Saw vote on first slot in lighter partition {}",
                             first_slot_in_lighter_partition
@@ -883,7 +1228,7 @@ fn test_fork_choice_refresh_old_votes() {
                     } else {
                         info!(
                             "Haven't seen vote on first slot in lighter partition, latest vote is: {}",
-                            last_vote
+                            last_vote_slot
                         );
                     }
                 }
@@ -1992,8 +2337,8 @@ fn restore_tower(ledger_path: &Path, node_pubkey: &Pubkey) -> Option<Tower> {
     Tower::restore(&ledger_path, &node_pubkey).ok()
 }
 
-fn last_vote_in_tower(ledger_path: &Path, node_pubkey: &Pubkey) -> Option<Slot> {
-    restore_tower(ledger_path, node_pubkey).map(|tower| tower.last_voted_slot().unwrap())
+fn last_vote_in_tower(ledger_path: &Path, node_pubkey: &Pubkey) -> Option<(Slot, Hash)> {
+    restore_tower(ledger_path, node_pubkey).map(|tower| tower.last_voted_slot_hash().unwrap())
 }
 
 fn root_in_tower(ledger_path: &Path, node_pubkey: &Pubkey) -> Option<Slot> {
@@ -2112,12 +2457,12 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
         }
         sleep(Duration::from_millis(100));
 
-        if let Some(last_vote) = last_vote_in_tower(&val_a_ledger_path, &validator_a_pubkey) {
+        if let Some((last_vote, _)) = last_vote_in_tower(&val_a_ledger_path, &validator_a_pubkey) {
             if !validator_a_finished && last_vote >= next_slot_on_a {
                 validator_a_finished = true;
             }
         }
-        if let Some(last_vote) = last_vote_in_tower(&val_b_ledger_path, &validator_b_pubkey) {
+        if let Some((last_vote, _)) = last_vote_in_tower(&val_b_ledger_path, &validator_b_pubkey) {
             if !validator_b_finished && last_vote >= next_slot_on_a {
                 validator_b_finished = true;
             }
@@ -2172,7 +2517,7 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     for _ in 0..100 {
         sleep(Duration::from_millis(100));
 
-        if let Some(last_vote) = last_vote_in_tower(&val_c_ledger_path, &validator_c_pubkey) {
+        if let Some((last_vote, _)) = last_vote_in_tower(&val_c_ledger_path, &validator_c_pubkey) {
             if last_vote != base_slot {
                 votes_on_c_fork.insert(last_vote);
                 // Collect 4 votes
@@ -2196,7 +2541,7 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     for _ in 0..100 {
         sleep(Duration::from_millis(100));
 
-        if let Some(last_vote) = last_vote_in_tower(&val_a_ledger_path, &validator_a_pubkey) {
+        if let Some((last_vote, _)) = last_vote_in_tower(&val_a_ledger_path, &validator_a_pubkey) {
             a_votes.push(last_vote);
             let blockstore = Blockstore::open_with_access_type(
                 &val_a_ledger_path,
@@ -2317,7 +2662,7 @@ fn do_test_future_tower(cluster_mode: ClusterMode) {
     let _validator_a_info = cluster.exit_node(&validator_a_pubkey);
     if newly_rooted {
         // there should be no forks; i.e. monotonically increasing ancestor chain
-        let last_vote = last_vote_in_tower(&val_a_ledger_path, &validator_a_pubkey).unwrap();
+        let (last_vote, _) = last_vote_in_tower(&val_a_ledger_path, &validator_a_pubkey).unwrap();
         let blockstore = open_blockstore(&val_a_ledger_path);
         let actual_block_ancestors = AncestorIterator::new_inclusive(last_vote, &blockstore)
             .take_while(|a| *a >= some_root_after_restart)
@@ -2440,7 +2785,8 @@ fn test_hard_fork_invalidates_tower() {
     for _ in 0..10 {
         sleep(Duration::from_millis(1000));
 
-        let new_last_vote = last_vote_in_tower(&val_a_ledger_path, &validator_a_pubkey).unwrap();
+        let (new_last_vote, _) =
+            last_vote_in_tower(&val_a_ledger_path, &validator_a_pubkey).unwrap();
         if let Some(last_vote) = last_vote {
             assert_eq!(last_vote, new_last_vote);
         } else {

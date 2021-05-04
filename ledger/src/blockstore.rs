@@ -1860,7 +1860,7 @@ impl Blockstore {
         Err(BlockstoreError::SlotUnavailable)
     }
 
-    fn map_transactions_to_statuses<'a>(
+    pub fn map_transactions_to_statuses<'a>(
         &self,
         slot: Slot,
         iterator: impl Iterator<Item = Transaction> + 'a,
