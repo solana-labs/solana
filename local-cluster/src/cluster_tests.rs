@@ -289,7 +289,10 @@ pub fn check_for_new_roots(num_new_roots: usize, contact_infos: &[ContactInfo], 
             let min_node = roots.iter().map(|r| r.len()).min().unwrap_or(0);
             done = min_node >= num_new_roots;
             if done || last_print.elapsed().as_secs() > 3 {
-                info!("{} min observed roots {}/16", test_name, min_node);
+                info!(
+                    "{} {} min observed roots {}/16",
+                    test_name, ingress_node.id, min_node
+                );
                 last_print = Instant::now();
             }
         }
