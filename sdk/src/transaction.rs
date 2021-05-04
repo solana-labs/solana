@@ -234,6 +234,10 @@ impl Transaction {
     }
 
     /// Check keys and keypair lengths, then sign this transaction.
+    ///
+    /// # Panics
+    ///
+    /// Panics when signing fails, use [`Transaction::try_sign`] to handle the error.
     pub fn sign<T: Signers>(&mut self, keypairs: &T, recent_blockhash: Hash) {
         if let Err(e) = self.try_sign(keypairs, recent_blockhash) {
             panic!("Transaction::sign failed with error {:?}", e);
@@ -243,6 +247,10 @@ impl Transaction {
     /// Sign using some subset of required keys
     ///  if recent_blockhash is not the same as currently in the transaction,
     ///  clear any prior signatures and update recent_blockhash
+    ///
+    /// # Panics
+    ///
+    /// Panics when signing fails, use [`Transaction::try_partial_sign`] to handle the error.
     pub fn partial_sign<T: Signers>(&mut self, keypairs: &T, recent_blockhash: Hash) {
         if let Err(e) = self.try_partial_sign(keypairs, recent_blockhash) {
             panic!("Transaction::partial_sign failed with error {:?}", e);
@@ -251,6 +259,10 @@ impl Transaction {
 
     /// Sign the transaction and place the signatures in their associated positions in `signatures`
     /// without checking that the positions are correct.
+    ///
+    /// # Panics
+    ///
+    /// Panics when signing fails, use [`Transaction::try_partial_sign_unchecked`] to handle the error.
     pub fn partial_sign_unchecked<T: Signers>(
         &mut self,
         keypairs: &T,
