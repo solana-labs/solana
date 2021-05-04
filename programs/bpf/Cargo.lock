@@ -778,8 +778,6 @@ dependencies = [
 ]
 
 [[package]]
-<<<<<<< HEAD
-=======
 name = "ed25519-dalek-bip32"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -793,19 +791,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "educe"
-version = "0.4.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "54ed56329d95e524ef98177ad672881bdfe7f22f254eb6ae80deb6fdd2ab20c4"
-dependencies = [
- "enum-ordinalize",
- "proc-macro2 1.0.24",
- "quote 1.0.6",
- "syn 1.0.67",
-]
-
-[[package]]
->>>>>>> 694c674aa... Implement Bip32 for seed-phrase/passphrase signing (#16942)
 name = "either"
 version = "1.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
