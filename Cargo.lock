@@ -5004,28 +5004,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-ramp-tps"
-version = "1.7.0"
-dependencies = [
- "bzip2",
- "clap",
- "log 0.4.11",
- "reqwest",
- "serde",
- "serde_json",
- "serde_yaml",
- "solana-client",
- "solana-core",
- "solana-logger 1.7.0",
- "solana-metrics",
- "solana-net-utils",
- "solana-notifier",
- "solana-sdk",
- "solana-stake-program",
- "tar",
-]
-
-[[package]]
 name = "solana-rayon-threadlimit"
 version = "1.7.0"
 dependencies = [
