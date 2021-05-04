@@ -689,6 +689,7 @@ impl ProgramTest {
         for loader in &[
             solana_bpf_loader_deprecated_program!(),
             solana_bpf_loader_program!(),
+            solana_bpf_loader_upgradeable_program!(),
         ] {
             bank.add_builtin(&loader.0, loader.1, loader.2);
         }
