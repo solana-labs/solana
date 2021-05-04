@@ -155,7 +155,7 @@ solana-keygen new --no-outfile
 The corresponding identity public key can now be viewed by running:
 
 ```bash
-solana-keygen pubkey ASK
+solana-keygen pubkey ask://
 ```
 
 and then entering your seed phrase.
@@ -294,8 +294,8 @@ The ledger will be placed in the `ledger/` directory by default, use the
 > [paper wallet seed phrase](../wallet-guide/paper-wallet.md)
 > for your `--identity` and/or
 > `--authorized-voter` keypairs. To use these, pass the respective argument as
-> `solana-validator --identity ASK ... --authorized-voter ASK ...` and you will be
-> prompted to enter your seed phrases and optional passphrase.
+> `solana-validator --identity ask:// ... --authorized-voter ask:// ...`
+> and you will be prompted to enter your seed phrases and optional passphrase.
 
 Confirm your validator connected to the network by opening a new terminal and
 running:
