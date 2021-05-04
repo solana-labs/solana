@@ -147,6 +147,11 @@ impl Transaction {
         Self::new_unsigned(message)
     }
 
+    /// Create a signed transaction with the given payer.
+    ///
+    /// # Panics
+    ///
+    /// Panics when signing fails.
     pub fn new_signed_with_payer<T: Signers>(
         instructions: &[Instruction],
         payer: Option<&Pubkey>,
@@ -157,6 +162,11 @@ impl Transaction {
         Self::new(signing_keypairs, message, recent_blockhash)
     }
 
+    /// Create a signed transaction.
+    ///
+    /// # Panics
+    ///
+    /// Panics when signing fails.
     pub fn new<T: Signers>(
         from_keypairs: &T,
         message: Message,
@@ -174,6 +184,10 @@ impl Transaction {
     /// * `recent_blockhash` - The PoH hash.
     /// * `program_ids` - The keys that identify programs used in the `instruction` vector.
     /// * `instructions` - Instructions that will be executed atomically.
+    ///
+    /// # Panics
+    ///
+    /// Panics when signing fails.
     pub fn new_with_compiled_instructions<T: Signers>(
         from_keypairs: &T,
         keys: &[Pubkey],
