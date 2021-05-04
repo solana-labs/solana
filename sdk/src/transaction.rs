@@ -147,6 +147,11 @@ impl Transaction {
         Self::new_unsigned(message)
     }
 
+    /// Create a signed transaction with the given payer.
+    ///
+    /// # Panics
+    ///
+    /// Panics when signing fails.
     pub fn new_signed_with_payer<T: Signers>(
         instructions: &[Instruction],
         payer: Option<&Pubkey>,
@@ -157,6 +162,11 @@ impl Transaction {
         Self::new(signing_keypairs, message, recent_blockhash)
     }
 
+    /// Create a signed transaction.
+    ///
+    /// # Panics
+    ///
+    /// Panics when signing fails.
     pub fn new<T: Signers>(
         from_keypairs: &T,
         message: Message,
@@ -174,6 +184,10 @@ impl Transaction {
     /// * `recent_blockhash` - The PoH hash.
     /// * `program_ids` - The keys that identify programs used in the `instruction` vector.
     /// * `instructions` - Instructions that will be executed atomically.
+    ///
+    /// # Panics
+    ///
+    /// Panics when signing fails.
     pub fn new_with_compiled_instructions<T: Signers>(
         from_keypairs: &T,
         keys: &[Pubkey],
@@ -234,6 +248,10 @@ impl Transaction {
     }
 
     /// Check keys and keypair lengths, then sign this transaction.
+    ///
+    /// # Panics
+    ///
+    /// Panics when signing fails, use [`Transaction::try_sign`] to handle the error.
     pub fn sign<T: Signers>(&mut self, keypairs: &T, recent_blockhash: Hash) {
         if let Err(e) = self.try_sign(keypairs, recent_blockhash) {
             panic!("Transaction::sign failed with error {:?}", e);
@@ -243,6 +261,10 @@ impl Transaction {
     /// Sign using some subset of required keys
     ///  if recent_blockhash is not the same as currently in the transaction,
     ///  clear any prior signatures and update recent_blockhash
+    ///
+    /// # Panics
+    ///
+    /// Panics when signing fails, use [`Transaction::try_partial_sign`] to handle the error.
     pub fn partial_sign<T: Signers>(&mut self, keypairs: &T, recent_blockhash: Hash) {
         if let Err(e) = self.try_partial_sign(keypairs, recent_blockhash) {
             panic!("Transaction::partial_sign failed with error {:?}", e);
@@ -251,6 +273,10 @@ impl Transaction {
 
     /// Sign the transaction and place the signatures in their associated positions in `signatures`
     /// without checking that the positions are correct.
+    ///
+    /// # Panics
+    ///
+    /// Panics when signing fails, use [`Transaction::try_partial_sign_unchecked`] to handle the error.
     pub fn partial_sign_unchecked<T: Signers>(
         &mut self,
         keypairs: &T,
