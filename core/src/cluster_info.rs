@@ -2423,8 +2423,9 @@ impl ClusterInfo {
         self.stats
             .skip_push_message_shred_version
             .add_relaxed(num_crds_values - num_filtered_crds_values);
-        // Update crds values and obtain updated keys.
-        let updated_labels: Vec<_> = {
+        // Origins' pubkeys of updated crds values.
+        // TODO: Should this also include origins of new crds values?
+        let origins: HashSet<_> = {
             let mut gossip =
                 self.time_gossip_write_lock("process_push", &self.stats.process_push_message);
             let now = timestamp();
@@ -2433,13 +2434,13 @@ impl ClusterInfo {
                 .flat_map(|(from, crds_values)| {
                     gossip.process_push_message(&from, crds_values, now)
                 })
-                .map(|v| v.value.label())
+                .map(|v| v.value.pubkey())
                 .collect()
         };
         // Generate prune messages.
         let prunes = self
             .time_gossip_write_lock("prune_received_cache", &self.stats.prune_received_cache)
-            .prune_received_cache(updated_labels, stakes);
+            .prune_received_cache(origins, stakes);
         let prunes: Vec<(Pubkey /*from*/, Vec<Pubkey> /*origins*/)> = prunes
             .into_iter()
             .flat_map(|(from, prunes)| {
