@@ -1,8 +1,9 @@
 //! The `signature` module provides functionality for public, and private keys.
 #![cfg(feature = "full")]
 
-use crate::{pubkey::Pubkey, transaction::TransactionError};
+use crate::{derivation_path::DerivationPath, pubkey::Pubkey, transaction::TransactionError};
 use ed25519_dalek::Signer as DalekSigner;
+use ed25519_dalek_bip32::Error as Bip32Error;
 use generic_array::{typenum::U64, GenericArray};
 use hmac::Hmac;
 use itertools::Itertools;
@@ -396,10 +397,37 @@ pub fn keypair_from_seed(seed: &[u8]) -> Result<Keypair, Box<dyn error::Error>> 
     Ok(Keypair(dalek_keypair))
 }
 
-pub fn keypair_from_seed_phrase_and_passphrase(
+/// Generates a Keypair using Bip32 Hierarchical Derivation if derivation-path is provided;
+/// otherwise builds standard Keypair using the seed as SecretKey
+pub fn keypair_from_seed_and_derivation_path(
+    seed: &[u8],
+    derivation_path: Option<DerivationPath>,
+) -> Result<Keypair, Box<dyn error::Error>> {
+    if let Some(derivation_path) = derivation_path {
+        bip32_derived_keypair(seed, derivation_path).map_err(|err| err.to_string().into())
+    } else {
+        keypair_from_seed(seed)
+    }
+}
+
+/// Generates a Keypair using Bip32 Hierarchical Derivation
+fn bip32_derived_keypair(
+    seed: &[u8],
+    derivation_path: DerivationPath,
+) -> Result<Keypair, Bip32Error> {
+    let extended = ed25519_dalek_bip32::ExtendedSecretKey::from_seed(seed)
+        .and_then(|extended| extended.derive(&derivation_path))?;
+    let extended_public_key = extended.public_key();
+    Ok(Keypair(ed25519_dalek::Keypair {
+        secret: extended.secret_key,
+        public: extended_public_key,
+    }))
+}
+
+pub fn generate_seed_from_seed_phrase_and_passphrase(
     seed_phrase: &str,
     passphrase: &str,
-) -> Result<Keypair, Box<dyn error::Error>> {
+) -> Vec<u8> {
     const PBKDF2_ROUNDS: u32 = 2048;
     const PBKDF2_BYTES: usize = 64;
 
@@ -412,7 +440,17 @@ pub fn keypair_from_seed_phrase_and_passphrase(
         PBKDF2_ROUNDS,
         &mut seed,
     );
-    keypair_from_seed(&seed[..])
+    seed
+}
+
+pub fn keypair_from_seed_phrase_and_passphrase(
+    seed_phrase: &str,
+    passphrase: &str,
+) -> Result<Keypair, Box<dyn error::Error>> {
+    keypair_from_seed(&generate_seed_from_seed_phrase_and_passphrase(
+        seed_phrase,
+        passphrase,
+    ))
 }
 
 #[cfg(test)]
