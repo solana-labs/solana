@@ -528,10 +528,10 @@ impl AccountsHash {
             }
 
             if pass == 0 {
-                data_by_pubkey = Vec::with_capacity(lens.len());
-                for (i, len) in lens.iter().enumerate() {
-                    data_by_pubkey.insert(i, Vec::with_capacity(*len));
-                }
+                data_by_pubkey = lens
+                    .iter()
+                    .map(|len| Vec::with_capacity(*len))
+                    .collect::<Vec<_>>();
                 lens = vec![]; // we don't need this anymore
             }
         }
