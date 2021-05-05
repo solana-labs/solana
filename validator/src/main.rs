@@ -1253,7 +1253,14 @@ pub fn main() {
                 .long("snapshots")
                 .value_name("DIR")
                 .takes_value(true)
-                .help("Use DIR as persistent snapshot [default: --ledger value]"),
+                .help("Use DIR as snapshot location [default: --ledger value]"),
+        )
+        .arg(
+            Arg::with_name("tower")
+                .long("tower")
+                .value_name("DIR")
+                .takes_value(true)
+                .help("Use DIR as tower location [default: --ledger value]"),
         )
         .arg(
             Arg::with_name("gossip_port")
@@ -2040,6 +2047,7 @@ pub fn main() {
     let restricted_repair_only_mode = matches.is_present("restricted_repair_only_mode");
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
+        tower_path: value_t!(matches, "tower", PathBuf).ok(),
         dev_halt_at_slot: value_t!(matches, "dev_halt_at_slot", Slot).ok(),
         cuda: matches.is_present("cuda"),
         expected_genesis_hash: matches
