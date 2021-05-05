@@ -1313,30 +1313,28 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
     /// Remove the slot when the storage for the slot is freed
     /// Accounts no longer reference this slot.
     pub fn clean_dead_slot(&self, slot: Slot) -> Option<AccountsIndexRootsStats> {
-        if self.is_root(slot) {
-            let (roots_len, uncleaned_roots_len, previous_uncleaned_roots_len, roots_range) = {
-                let mut w_roots_tracker = self.roots_tracker.write().unwrap();
-                w_roots_tracker.roots.remove(&slot);
-                w_roots_tracker.uncleaned_roots.remove(&slot);
-                w_roots_tracker.previous_uncleaned_roots.remove(&slot);
-                (
-                    w_roots_tracker.roots.len(),
-                    w_roots_tracker.uncleaned_roots.len(),
-                    w_roots_tracker.previous_uncleaned_roots.len(),
-                    w_roots_tracker.roots.range_width(),
-                )
-            };
-            Some(AccountsIndexRootsStats {
-                roots_len,
-                uncleaned_roots_len,
-                previous_uncleaned_roots_len,
-                roots_range,
-                rooted_cleaned_count: 0,
-                unrooted_cleaned_count: 0,
-            })
-        } else {
-            None
-        }
+        let (roots_len, uncleaned_roots_len, previous_uncleaned_roots_len, roots_range) = {
+            let mut w_roots_tracker = self.roots_tracker.write().unwrap();
+            if !w_roots_tracker.roots.remove(&slot) {
+                return None;
+            }
+            w_roots_tracker.uncleaned_roots.remove(&slot);
+            w_roots_tracker.previous_uncleaned_roots.remove(&slot);
+            (
+                w_roots_tracker.roots.len(),
+                w_roots_tracker.uncleaned_roots.len(),
+                w_roots_tracker.previous_uncleaned_roots.len(),
+                w_roots_tracker.roots.range_width(),
+            )
+        };
+        Some(AccountsIndexRootsStats {
+            roots_len,
+            uncleaned_roots_len,
+            previous_uncleaned_roots_len,
+            roots_range,
+            rooted_cleaned_count: 0,
+            unrooted_cleaned_count: 0,
+        })
     }
 
     pub fn reset_uncleaned_roots(&self, max_clean_root: Option<Slot>) -> HashSet<Slot> {
