@@ -30,8 +30,11 @@ function generateConfig(configType, format) {
         plugins: bundle ? [] : ['@babel/plugin-transform-runtime'],
       }),
       replace({
-        'process.env.NODE_ENV': JSON.stringify(env),
-        'process.env.BROWSER': JSON.stringify(browser),
+        preventAssignment: true,
+        values: {
+          'process.env.NODE_ENV': JSON.stringify(env),
+          'process.env.BROWSER': JSON.stringify(browser),
+        },
       }),
     ],
     onwarn: function (warning, rollupWarn) {

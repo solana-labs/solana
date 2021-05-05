@@ -1594,10 +1594,12 @@ export type GetProgramAccountsConfig = {
 /**
  * Configuration object for getParsedProgramAccounts
  */
-export type GetParsedProgramAccountsConfig = Exclude<
-  GetProgramAccountsConfig,
-  'encoding' | 'dataSlice'
->;
+export type GetParsedProgramAccountsConfig = {
+  /** Optional commitment level */
+  commitment?: Commitment;
+  /** Optional array of filters to apply to accounts */
+  filters?: GetProgramAccountsFilter[];
+};
 
 /**
  * Information describing an account
