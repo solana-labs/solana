@@ -484,7 +484,7 @@ impl AccountsHash {
     }
 
     fn flatten_hash_intermediate<T>(
-        data_sections_by_pubkey: Vec<Vec<Vec<T>>>,
+        mut data_sections_by_pubkey: Vec<Vec<Vec<T>>>,
         stats: &mut HashStats,
     ) -> Vec<Vec<T>>
     where
@@ -500,22 +500,39 @@ impl AccountsHash {
         let mut flatten_time = Measure::start("flatten");
         let mut data_by_pubkey: Vec<Vec<T>> = vec![];
         let mut raw_len = 0;
-        for mut outer in data_sections_by_pubkey {
-            let outer_len = outer.len();
-            for pubkey_index in 0..outer_len {
-                let this_len = outer[pubkey_index].len();
-                if this_len == 0 {
-                    continue;
-                }
-                raw_len += this_len;
-                let mut data = vec![];
-                std::mem::swap(&mut data, &mut outer[pubkey_index]);
+        let mut lens = vec![];
+        // pass=0: calculate final lens, then allocate vecs with capacity
+        // pass=1: copy data into vecs with correct capacity
+        for pass in 0..2 {
+            for outer in &mut data_sections_by_pubkey {
+                let outer_len = outer.len();
+                for pubkey_index in 0..outer_len {
+                    let this_len = outer[pubkey_index].len();
+                    if this_len == 0 {
+                        continue;
+                    }
+                    if pass == 0 {
+                        raw_len += this_len;
+                        if lens.len() <= pubkey_index {
+                            lens.extend(vec![0; pubkey_index - lens.len() + 1]);
+                        }
 
-                if data_by_pubkey.len() <= pubkey_index {
-                    data_by_pubkey.extend(vec![vec![]; pubkey_index - data_by_pubkey.len() + 1]);
-                }
+                        lens[pubkey_index] += outer[pubkey_index].len();
+                    } else {
+                        let mut data = vec![];
+                        std::mem::swap(&mut data, &mut outer[pubkey_index]);
 
-                data_by_pubkey[pubkey_index].extend(data);
+                        data_by_pubkey[pubkey_index].extend(data);
+                    }
+                }
+            }
+
+            if pass == 0 {
+                data_by_pubkey = lens
+                    .iter()
+                    .map(|len| Vec::with_capacity(*len))
+                    .collect::<Vec<_>>();
+                lens = vec![]; // we don't need this anymore
             }
         }
         flatten_time.stop();
