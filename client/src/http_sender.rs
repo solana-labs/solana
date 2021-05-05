@@ -7,7 +7,11 @@ use {
         rpc_sender::RpcSender,
     },
     log::*,
-    reqwest::{self, header::CONTENT_TYPE, StatusCode},
+    reqwest::{
+        self,
+        header::{CONTENT_TYPE, RETRY_AFTER},
+        StatusCode,
+    },
     std::{
         sync::{
             atomic::{AtomicU64, Ordering},
@@ -83,14 +87,24 @@ impl RpcSender for HttpSender {
                         if response.status() == StatusCode::TOO_MANY_REQUESTS
                             && too_many_requests_retries > 0
                         {
+                            let mut duration = Duration::from_millis(500);
+                            if let Some(retry_after) = response.headers().get(RETRY_AFTER) {
+                                if let Ok(retry_after) = retry_after.to_str() {
+                                    if let Ok(retry_after) = retry_after.parse::<u64>() {
+                                        if retry_after < 120 {
+                                            duration = Duration::from_secs(retry_after);
+                                        }
+                                    }
+                                }
+                            }
+
                             too_many_requests_retries -= 1;
                             debug!(
-                                "Server responded with {:?}, {} retries left",
-                                response, too_many_requests_retries
+                                "Too many requests: server responded with {:?}, {} retries left, pausing for {:?}",
+                                response, too_many_requests_retries, duration
                             );
 
-                            // Sleep for 500ms to give the server a break
-                            sleep(Duration::from_millis(500));
+                            sleep(duration);
                             continue;
                         }
                         return Err(response.error_for_status().unwrap_err().into());
