@@ -346,16 +346,18 @@ impl CachedExecutors {
     fn put(&mut self, pubkey: &Pubkey, executor: Arc<dyn Executor>) {
         // Every time we try to put a new executor in, we first check
         // if we should discount the access counts
-        let mut acc = self.access_count.load(Relaxed);
-        if acc >= self.params.max_access {
-            let num_discount = acc / self.params.max_access; // >= 1
-            acc -= num_discount * self.params.max_access;
-            // Although the write semantics implied that fetch_sub would have been safe
-            // we update with the local data for defensive programming.
+        if self.access_count.load(Relaxed) >= self.params.max_access {
+            // If so, we atomically update the `access_count`.
 
-            // We consider the marginal `access_count` error introduced immaterial.
-            self.access_count = AtomicU64::new(acc);
-            self.apply_discount(num_discount);
+            // This is defensive even though put cannot be invoked concurrently
+            let acc = self.access_count.get_mut();
+            let discount_epochs = *acc / self.params.max_access; // >= 1
+            *acc -= discount_epochs * self.params.max_access;
+            drop(acc);
+
+            if discount_epochs > 0 {
+                self.apply_discount(discount_epochs);
+            }
         }
         if !self.executors.contains_key(pubkey) && self.executors.len() >= self.params.max {
             let mut least = u64::MAX;
