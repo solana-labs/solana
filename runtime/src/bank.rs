@@ -11148,6 +11148,91 @@ pub(crate) mod tests {
         assert!(cache.get(&key2).is_none());
         assert!(cache.get(&key3).is_some());
         assert!(cache.get(&key4).is_some());
+
+        let mut cache = CachedExecutors::new(DiscountedLFUParams {
+            max: 3,
+            discount_numerator: 3,
+            discount_denominator: 4,
+            max_access: 4,
+        });
+
+        cache.put(&key1, executor.clone());
+        cache.put(&key2, executor.clone());
+        cache.put(&key3, executor.clone());
+
+        cache.get(&key1);
+        cache.get(&key1);
+        cache.get(&key1);
+        assert_eq!(cache.access_count.load(Relaxed), 3);
+        cache.get(&key1);
+        // key1 count = 3
+
+        cache.put(&key1, executor.clone());
+        assert_eq!(cache.access_count.load(Relaxed), 0);
+
+        cache.get(&key1);
+        cache.get(&key1);
+        cache.get(&key1);
+        assert_eq!(cache.access_count.load(Relaxed), 3);
+        cache.get(&key1);
+        // key1 count = 5
+
+        cache.put(&key1, executor.clone());
+        assert_eq!(cache.access_count.load(Relaxed), 0);
+
+        cache.get(&key1);
+        cache.get(&key1);
+        cache.get(&key1);
+        assert_eq!(cache.access_count.load(Relaxed), 3);
+        cache.get(&key1);
+        // key1 count = 6
+
+        cache.put(&key1, executor.clone());
+        assert_eq!(cache.access_count.load(Relaxed), 0);
+
+        cache.get(&key2);
+        cache.get(&key2);
+        cache.get(&key2);
+        assert_eq!(cache.access_count.load(Relaxed), 3);
+        cache.get(&key3);
+
+        // key1 count = 4. total count: 12.
+        // key2 count = 2. total count: 3.
+        // key3 count = 0. total count: 1.
+
+        cache.put(&key1, executor.clone());
+        assert_eq!(cache.access_count.load(Relaxed), 0);
+
+        cache.get(&key2);
+        cache.get(&key3);
+        cache.get(&key3);
+        assert_eq!(cache.access_count.load(Relaxed), 3);
+        cache.get(&key3);
+
+        // key1 count = 3. total count: 12.
+        // key2 count = 2. total count: 4.
+        // key3 count = 2. total count: 4.
+
+        cache.put(&key1, executor.clone());
+        assert_eq!(cache.access_count.load(Relaxed), 0);
+
+        cache.get(&key2);
+        cache.get(&key3);
+        cache.get(&key2);
+        assert_eq!(cache.access_count.load(Relaxed), 3);
+        cache.get(&key3);
+
+        // key1 count = 2. total count: 12.
+        // key2 count = 3. total count: 6.
+        // key3 count = 3. total count: 6.
+
+        cache.put(&key4, executor.clone());
+        assert_eq!(cache.access_count.load(Relaxed), 0);
+
+        assert!(cache.get(&key1).is_none());
+        assert!(cache.get(&key2).is_some());
+        assert!(cache.get(&key3).is_some());
+        assert!(cache.get(&key4).is_some());
     }
 
     #[test]
