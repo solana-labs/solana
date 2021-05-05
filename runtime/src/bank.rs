@@ -353,7 +353,6 @@ impl CachedExecutors {
             let acc = self.access_count.get_mut();
             let discount_epochs = *acc / self.params.max_access; // >= 1
             *acc -= discount_epochs * self.params.max_access;
-            drop(acc);
 
             if discount_epochs > 0 {
                 self.apply_discount(discount_epochs);
