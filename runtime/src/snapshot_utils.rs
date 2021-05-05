@@ -661,7 +661,7 @@ fn archive_format_from_str(archive_format: &str) -> Option<ArchiveFormat> {
 
 fn snapshot_hash_of(archive_filename: &str) -> Option<(Slot, Hash, ArchiveFormat)> {
     let snapshot_filename_regex =
-        Regex::new(r"snapshot-(\d+)-([[:alnum:]]+)\.(tar|tar\.bz2|tar\.zst|tar\.gz)$").unwrap();
+        Regex::new(r"^snapshot-(\d+)-([[:alnum:]]+)\.(tar|tar\.bz2|tar\.zst|tar\.gz)$").unwrap();
 
     if let Some(captures) = snapshot_filename_regex.captures(archive_filename) {
         let slot_str = captures.get(1).unwrap().as_str();
@@ -1137,6 +1137,12 @@ mod tests {
             snapshot_hash_of(&format!("snapshot-42-{}.tar", Hash::default())),
             Some((42, Hash::default(), ArchiveFormat::Tar))
         );
+        assert!(snapshot_hash_of(&format!(
+            "{}snapshot-42-{}.tar",
+            TMP_SNAPSHOT_PREFIX,
+            Hash::default()
+        ))
+        .is_none());
 
         assert!(snapshot_hash_of("invalid").is_none());
     }
