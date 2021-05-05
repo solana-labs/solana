@@ -4908,7 +4908,7 @@ impl AccountsDb {
         let mut slots = self.storage.all_slots();
         #[allow(clippy::stable_sort_primitive)]
         slots.sort();
-        let progress = AtomicU64::new(0);
+        let total_processed_slots_across_all_threads = AtomicU64::new(0);
         let outer_slots_len = slots.len();
         let chunk_size = (outer_slots_len / 7) + 1; // approximately 400k slots in a snapshot
         slots.par_chunks(chunk_size).for_each(|slots| {
@@ -4921,10 +4921,11 @@ impl AccountsDb {
                     let my_total_newly_processed_slots_since_last_report =
                         (index as u64) - my_last_reported_number_of_processed_slots;
                     my_last_reported_number_of_processed_slots = index as u64;
-                    let previous_total_processed_slots_across_all_threads = progress.fetch_add(
-                        my_total_newly_processed_slots_since_last_report,
-                        Ordering::Relaxed,
-                    );
+                    let previous_total_processed_slots_across_all_threads =
+                        total_processed_slots_across_all_threads.fetch_add(
+                            my_total_newly_processed_slots_since_last_report,
+                            Ordering::Relaxed,
+                        );
                     was_first = was_first || 0 == previous_total_processed_slots_across_all_threads;
                     if was_first {
                         info!(
