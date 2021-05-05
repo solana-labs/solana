@@ -115,6 +115,7 @@ pub struct ValidatorConfig {
     pub poh_verify: bool, // Perform PoH verification during blockstore processing at boo
     pub cuda: bool,
     pub require_tower: bool,
+    pub tower_path: Option<PathBuf>,
     pub debug_keys: Option<Arc<HashSet<Pubkey>>>,
     pub contact_debug_interval: u64,
     pub contact_save_interval: u64,
@@ -170,6 +171,7 @@ impl Default for ValidatorConfig {
             poh_verify: true,
             cuda: false,
             require_tower: false,
+            tower_path: None,
             debug_keys: None,
             contact_debug_interval: DEFAULT_CONTACT_DEBUG_INTERVAL_MILLIS,
             contact_save_interval: DEFAULT_CONTACT_SAVE_INTERVAL_MILLIS,
@@ -932,7 +934,7 @@ fn post_process_restored_tower(
     validator_identity: &Pubkey,
     vote_account: &Pubkey,
     config: &ValidatorConfig,
-    ledger_path: &Path,
+    tower_path: &Path,
     bank_forks: &BankForks,
 ) -> Tower {
     let mut should_require_tower = config.require_tower;
@@ -1011,7 +1013,7 @@ fn post_process_restored_tower(
 
             Tower::new_from_bankforks(
                 &bank_forks,
-                &ledger_path,
+                tower_path,
                 &validator_identity,
                 &vote_account,
             )
@@ -1074,7 +1076,9 @@ fn new_banks_from_ledger(
     .expect("Failed to open ledger database");
     blockstore.set_no_compaction(config.no_rocksdb_compaction);
 
-    let restored_tower = Tower::restore(ledger_path, &validator_identity);
+    let tower_path = config.tower_path.as_deref().unwrap_or(ledger_path);
+
+    let restored_tower = Tower::restore(tower_path, &validator_identity);
     if let Ok(tower) = &restored_tower {
         reconcile_blockstore_roots_with_tower(&tower, &blockstore).unwrap_or_else(|err| {
             error!("Failed to reconcile blockstore with tower: {:?}", err);
@@ -1172,7 +1176,7 @@ fn new_banks_from_ledger(
         &validator_identity,
         &vote_account,
         &config,
-        &ledger_path,
+        tower_path,
         &bank_forks,
     );
 
