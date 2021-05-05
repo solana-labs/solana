@@ -19,68 +19,63 @@ pub trait SecondaryIndexEntry: Debug {
 
 #[derive(Debug, Default)]
 pub struct DashMapSecondaryIndexEntry {
-    pubkey_to_slot_set: DashMap<Pubkey, ()>,
+    account_keys: DashMap<Pubkey, ()>,
 }
 
 impl SecondaryIndexEntry for DashMapSecondaryIndexEntry {
     fn insert_if_not_exists(&self, key: &Pubkey) {
-        self.pubkey_to_slot_set
+        self.account_keys
             .get(key)
-            .unwrap_or_else(|| self.pubkey_to_slot_set.entry(*key).or_default().downgrade());
+            .unwrap_or_else(|| self.account_keys.entry(*key).or_default().downgrade());
     }
 
     fn remove_inner_key(&self, key: &Pubkey) -> bool {
-        self.pubkey_to_slot_set.remove(key).is_some()
+        self.account_keys.remove(key).is_some()
     }
 
     fn is_empty(&self) -> bool {
-        self.pubkey_to_slot_set.is_empty()
+        self.account_keys.is_empty()
     }
 
     fn keys(&self) -> Vec<Pubkey> {
-        self.pubkey_to_slot_set
+        self.account_keys
             .iter()
             .map(|entry_ref| *entry_ref.key())
             .collect()
     }
 
     fn len(&self) -> usize {
-        self.pubkey_to_slot_set.len()
+        self.account_keys.len()
     }
 }
 
 #[derive(Debug, Default)]
 pub struct RwLockSecondaryIndexEntry {
-    pubkey_to_slot_set: RwLock<HashSet<Pubkey>>,
+    account_keys: RwLock<HashSet<Pubkey>>,
 }
 
 impl SecondaryIndexEntry for RwLockSecondaryIndexEntry {
     fn insert_if_not_exists(&self, key: &Pubkey) {
-        let exists = self.pubkey_to_slot_set.read().unwrap().contains(key);
+        let exists = self.account_keys.read().unwrap().contains(key);
         if !exists {
-            self.pubkey_to_slot_set.write().unwrap().insert(*key);
+            self.account_keys.write().unwrap().insert(*key);
         };
     }
 
     fn remove_inner_key(&self, key: &Pubkey) -> bool {
-        self.pubkey_to_slot_set.write().unwrap().remove(key)
+        self.account_keys.write().unwrap().remove(key)
     }
 
     fn is_empty(&self) -> bool {
-        self.pubkey_to_slot_set.read().unwrap().is_empty()
+        self.account_keys.read().unwrap().is_empty()
     }
 
     fn keys(&self) -> Vec<Pubkey> {
-        self.pubkey_to_slot_set
-            .read()
-            .unwrap()
-            .iter()
-            .cloned()
-            .collect()
+        self.account_keys.read().unwrap().iter().cloned().collect()
     }
 
     fn len(&self) -> usize {
-        self.pubkey_to_slot_set.read().unwrap().len()
+        self.account_keys.read().unwrap().len()
     }
 }
 

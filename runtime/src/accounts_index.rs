@@ -2728,6 +2728,7 @@ pub mod tests {
         secondary_index: &SecondaryIndex<SecondaryIndexEntryType>,
         key_start: usize,
         key_end: usize,
+        secondary_indexes: &AccountSecondaryIndexes,
     ) {
         // No roots, should be no reclaims
         let slots = vec![1, 2, 5, 9];
@@ -2745,7 +2746,7 @@ pub mod tests {
                 // Make sure these accounts are added to secondary index
                 &inline_spl_token_v2_0::id(),
                 &account_data,
-                account_index,
+                secondary_indexes,
                 true,
                 &mut vec![],
             );
@@ -2765,7 +2766,7 @@ pub mod tests {
                 .read()
                 .unwrap()
                 .len(),
-            slots.len()
+            1
         );
 
         index.purge_exact(
@@ -2774,31 +2775,34 @@ pub mod tests {
             &mut vec![],
         );
 
+        index.handle_dead_keys(&[&account_key], secondary_indexes);
         assert!(secondary_index.index.is_empty());
         assert!(secondary_index.reverse_index.is_empty());
     }
 
     #[test]
     fn test_purge_exact_dashmap_secondary_index() {
-        let (key_start, key_end, _account_index) = create_dashmap_secondary_index_state();
+        let (key_start, key_end, secondary_indexes) = create_dashmap_secondary_index_state();
         let index = AccountsIndex::<bool>::default();
         run_test_purge_exact_secondary_index(
             &index,
             &index.spl_token_mint_index,
             key_start,
             key_end,
+            &secondary_indexes,
         );
     }
 
     #[test]
     fn test_purge_exact_rwlock_secondary_index() {
-        let (key_start, key_end, _account_index) = create_rwlock_secondary_index_state();
+        let (key_start, key_end, secondary_indexes) = create_rwlock_secondary_index_state();
         let index = AccountsIndex::<bool>::default();
         run_test_purge_exact_secondary_index(
             &index,
             &index.spl_token_owner_index,
             key_start,
             key_end,
+            &secondary_indexes,
         );
     }
 
@@ -2870,30 +2874,27 @@ pub mod tests {
         assert_eq!(slot_list, vec![(5, true), (9, true)]);
     }
 
-    fn check_secondary_index_unique<SecondaryIndexEntryType>(
+    fn check_secondary_index_mapping_correct<SecondaryIndexEntryType>(
         secondary_index: &SecondaryIndex<SecondaryIndexEntryType>,
-        slot: Slot,
-        key: &Pubkey,
+        secondary_index_keys: &[Pubkey],
         account_key: &Pubkey,
     ) where
         SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send,
     {
         // Check secondary index has unique mapping from secondary index key
         // to the account key and slot
-        assert_eq!(secondary_index.index.len(), 1);
-        let inner_key_map = secondary_index.index.get(key).unwrap();
-        assert_eq!(inner_key_map.len(), 1);
-        inner_key_map
-            .value()
-            .get(account_key, &|slots_map: Option<&RwLock<HashSet<Slot>>>| {
-                let slots_map = slots_map.unwrap();
-                assert_eq!(slots_map.read().unwrap().len(), 1);
-                assert!(slots_map.read().unwrap().contains(&slot));
-            });
-
-        // Check reverse index is unique
-        let slots_map = secondary_index.reverse_index.get(account_key).unwrap();
-        assert_eq!(slots_map.value().read().unwrap().get(&slot).unwrap(), key);
+        for secondary_index_key in secondary_index_keys {
+            assert_eq!(secondary_index.index.len(), secondary_index_keys.len());
+            let account_key_map = secondary_index.get(secondary_index_key);
+            assert_eq!(account_key_map.len(), 1);
+            assert_eq!(account_key_map, vec![*account_key]);
+        }
+        // Check reverse index contains all of the `secondary_index_keys`
+        let secondary_index_key_map = secondary_index.reverse_index.get(account_key).unwrap();
+        assert_eq!(
+            &*secondary_index_key_map.value().read().unwrap(),
+            secondary_index_keys
+        );
     }
 
     fn run_test_secondary_indexes<
@@ -2903,12 +2904,11 @@ pub mod tests {
         secondary_index: &SecondaryIndex<SecondaryIndexEntryType>,
         key_start: usize,
         key_end: usize,
-        account_index: &AccountSecondaryIndexes,
+        secondary_indexes: &AccountSecondaryIndexes,
     ) {
-        let mut account_index = account_index.clone();
+        let mut secondary_indexes = secondary_indexes.clone();
         let account_key = Pubkey::new_unique();
         let index_key = Pubkey::new_unique();
-        let slot = 1;
         let mut account_data = vec![0; inline_spl_token_v2_0::state::Account::get_packed_len()];
         account_data[key_start..key_end].clone_from_slice(&(index_key.to_bytes()));
 
@@ -2918,7 +2918,7 @@ pub mod tests {
             &account_key,
             &Pubkey::default(),
             &account_data,
-            &account_index,
+            &secondary_indexes,
             true,
             &mut vec![],
         );
@@ -2931,66 +2931,31 @@ pub mod tests {
             &account_key,
             &inline_spl_token_v2_0::id(),
             &account_data[1..],
-            &account_index,
+            &secondary_indexes,
             true,
             &mut vec![],
         );
         assert!(secondary_index.index.is_empty());
         assert!(secondary_index.reverse_index.is_empty());
 
-        // excluded key
-        account_index.keys = Some(AccountSecondaryIndexesIncludeExclude {
-            keys: [index_key].iter().cloned().collect::<HashSet<_>>(),
-            exclude: true,
-        });
-        index.upsert(
-            0,
-            &account_key,
-            &inline_spl_token_v2_0::id(),
-            &account_data[1..],
-            &account_index,
-            true,
-            &mut vec![],
-        );
-        assert!(secondary_index.index.is_empty());
-        assert!(secondary_index.reverse_index.is_empty());
-
-        // not-included key
-        account_index.keys = Some(AccountSecondaryIndexesIncludeExclude {
-            keys: [account_key].iter().cloned().collect::<HashSet<_>>(),
-            exclude: false,
-        });
-        index.upsert(
-            0,
-            &account_key,
-            &inline_spl_token_v2_0::id(),
-            &account_data[1..],
-            &account_index,
-            true,
-            &mut vec![],
-        );
-        assert!(secondary_index.index.is_empty());
-        assert!(secondary_index.reverse_index.is_empty());
-
-        account_index.keys = None;
+        secondary_indexes.keys = None;
 
         // Just right. Inserting the same index multiple times should be ok
         for _ in 0..2 {
             index.update_secondary_indexes(
                 &account_key,
-                slot,
                 &inline_spl_token_v2_0::id(),
                 &account_data,
-                &account_index,
+                &secondary_indexes,
             );
-            check_secondary_index_unique(secondary_index, slot, &index_key, &account_key);
+            check_secondary_index_mapping_correct(secondary_index, &[index_key], &account_key);
         }
 
         // included
         assert!(!secondary_index.index.is_empty());
         assert!(!secondary_index.reverse_index.is_empty());
 
-        account_index.keys = Some(AccountSecondaryIndexesIncludeExclude {
+        secondary_indexes.keys = Some(AccountSecondaryIndexesIncludeExclude {
             keys: [index_key].iter().cloned().collect::<HashSet<_>>(),
             exclude: false,
         });
@@ -2998,17 +2963,16 @@ pub mod tests {
         secondary_index.reverse_index.clear();
         index.update_secondary_indexes(
             &account_key,
-            slot,
             &inline_spl_token_v2_0::id(),
             &account_data,
-            &account_index,
+            &secondary_indexes,
         );
         assert!(!secondary_index.index.is_empty());
         assert!(!secondary_index.reverse_index.is_empty());
-        check_secondary_index_unique(secondary_index, slot, &index_key, &account_key);
+        check_secondary_index_mapping_correct(secondary_index, &[index_key], &account_key);
 
         // not-excluded
-        account_index.keys = Some(AccountSecondaryIndexesIncludeExclude {
+        secondary_indexes.keys = Some(AccountSecondaryIndexesIncludeExclude {
             keys: [].iter().cloned().collect::<HashSet<_>>(),
             exclude: true,
         });
@@ -3016,16 +2980,15 @@ pub mod tests {
         secondary_index.reverse_index.clear();
         index.update_secondary_indexes(
             &account_key,
-            slot,
             &inline_spl_token_v2_0::id(),
             &account_data,
-            &account_index,
+            &secondary_indexes,
         );
         assert!(!secondary_index.index.is_empty());
         assert!(!secondary_index.reverse_index.is_empty());
-        check_secondary_index_unique(secondary_index, slot, &index_key, &account_key);
+        check_secondary_index_mapping_correct(secondary_index, &[index_key], &account_key);
 
-        account_index.keys = None;
+        secondary_indexes.keys = None;
 
         index
             .get_account_write_entry(&account_key)
@@ -3033,34 +2996,34 @@ pub mod tests {
             .slot_list_mut(|slot_list| slot_list.clear());
 
         // Everything should be deleted
-        index.handle_dead_keys(&[&account_key], &account_index);
+        index.handle_dead_keys(&[&account_key], &secondary_indexes);
         assert!(secondary_index.index.is_empty());
         assert!(secondary_index.reverse_index.is_empty());
     }
 
     #[test]
     fn test_dashmap_secondary_index() {
-        let (key_start, key_end, account_index) = create_dashmap_secondary_index_state();
+        let (key_start, key_end, secondary_indexes) = create_dashmap_secondary_index_state();
         let index = AccountsIndex::<bool>::default();
         run_test_secondary_indexes(
             &index,
             &index.spl_token_mint_index,
             key_start,
             key_end,
-            &account_index,
+            &secondary_indexes,
         );
     }
 
     #[test]
     fn test_rwlock_secondary_index() {
-        let (key_start, key_end, account_index) = create_rwlock_secondary_index_state();
+        let (key_start, key_end, secondary_indexes) = create_rwlock_secondary_index_state();
         let index = AccountsIndex::<bool>::default();
         run_test_secondary_indexes(
             &index,
             &index.spl_token_owner_index,
             key_start,
             key_end,
-            &account_index,
+            &secondary_indexes,
         );
     }
 
@@ -3071,7 +3034,7 @@ pub mod tests {
         secondary_index: &SecondaryIndex<SecondaryIndexEntryType>,
         index_key_start: usize,
         index_key_end: usize,
-        account_index: &AccountSecondaryIndexes,
+        secondary_indexes: &AccountSecondaryIndexes,
     ) {
         let account_key = Pubkey::new_unique();
         let secondary_key1 = Pubkey::new_unique();
@@ -3090,55 +3053,66 @@ pub mod tests {
             &account_key,
             &inline_spl_token_v2_0::id(),
             &account_data1,
-            account_index,
+            secondary_indexes,
             true,
             &mut vec![],
         );
 
-        // Now write a different mint index
+        // Now write a different mint index for the same account
         index.upsert(
             slot,
             &account_key,
             &inline_spl_token_v2_0::id(),
             &account_data2,
-            account_index,
+            secondary_indexes,
             true,
             &mut vec![],
         );
 
-        // Check correctness
-        check_secondary_index_unique(&secondary_index, slot, &secondary_key2, &account_key);
-        assert!(secondary_index.get(&secondary_key1).is_empty());
-        assert_eq!(secondary_index.get(&secondary_key2), vec![account_key]);
+        // Both pubkeys will now be present in the index
+        check_secondary_index_mapping_correct(
+            &secondary_index,
+            &[secondary_key1, secondary_key2],
+            &account_key,
+        );
 
-        // If another fork reintroduces secondary_key1, then it should be re-added to the
-        // index
-        let fork = slot + 1;
+        // If a later slot also introduces secondary_key1, then it should still exist in the index
+        let later_slot = slot + 1;
         index.upsert(
-            fork,
+            later_slot,
             &account_key,
             &inline_spl_token_v2_0::id(),
             &account_data1,
-            account_index,
+            secondary_indexes,
             true,
             &mut vec![],
         );
         assert_eq!(secondary_index.get(&secondary_key1), vec![account_key]);
 
-        // If we set a root at fork, and clean, then the secondary_key1 should no longer
-        // be findable
-        index.add_root(fork, false);
+        // If we set a root at `later_slot`, and clean, then even though the account with secondary_key1
+        // was outdated by the update in the later slot, the primary account key is still alive,
+        // so both secondary keys will still be kept alive.
+        index.add_root(later_slot, false);
         index
             .get_account_write_entry(&account_key)
             .unwrap()
             .slot_list_mut(|slot_list| {
-                index.purge_older_root_entries(&account_key, slot_list, &mut vec![], None)
+                index.purge_older_root_entries(slot_list, &mut vec![], None)
             });
-        assert!(secondary_index.get(&secondary_key2).is_empty());
-        assert_eq!(secondary_index.get(&secondary_key1), vec![account_key]);
 
-        // Check correctness
-        check_secondary_index_unique(secondary_index, fork, &secondary_key1, &account_key);
+        check_secondary_index_mapping_correct(
+            secondary_index,
+            &[secondary_key1, secondary_key2],
+            &account_key,
+        );
+
+        // Removing the remaining entry for this pubkey in the index should mark the
+        // pubkey as dead and finally remove all the secondary indexes
+        let mut reclaims = vec![];
+        index.purge_exact(&account_key, &later_slot, &mut reclaims);
+        index.handle_dead_keys(&[&account_key], secondary_indexes);
+        assert!(secondary_index.index.is_empty());
+        assert!(secondary_index.reverse_index.is_empty());
     }
 
     #[test]
