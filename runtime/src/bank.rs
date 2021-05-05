@@ -11120,7 +11120,7 @@ pub(crate) mod tests {
             max: 3,
             discount_numerator: 1,
             discount_denominator: 1,
-            max_access: 4000,
+            max_access: 4,
         });
 
         cache.put(&key1, executor.clone());
