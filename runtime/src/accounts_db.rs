@@ -4913,13 +4913,13 @@ impl AccountsDb {
         let chunk_size = (outer_slots_len / 7) + 1; // approximately 400k slots in a snapshot
         slots.par_chunks(chunk_size).for_each(|slots| {
             let mut last_log_update = Instant::now();
-            let mut last = 0;
+            let mut my_last_reported_number_of_processed_slots = 0;
             let mut was_first = false;
             for (index, slot) in slots.iter().enumerate() {
                 let now = Instant::now();
                 if now.duration_since(last_log_update).as_secs() >= 2 {
-                    let added = (index as u64) - last;
-                    last = index as u64;
+                    let added = (index as u64) - my_last_reported_number_of_processed_slots;
+                    my_last_reported_number_of_processed_slots = index as u64;
                     let add = progress.fetch_add(added, Ordering::Relaxed);
                     was_first = was_first || 0 == add;
                     if was_first {
