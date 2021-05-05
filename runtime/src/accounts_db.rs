@@ -4921,15 +4921,16 @@ impl AccountsDb {
                     let my_total_newly_processed_slots_since_last_report =
                         (index as u64) - my_last_reported_number_of_processed_slots;
                     my_last_reported_number_of_processed_slots = index as u64;
-                    let add = progress.fetch_add(
+                    let previous_total_processed_slots_across_all_threads = progress.fetch_add(
                         my_total_newly_processed_slots_since_last_report,
                         Ordering::Relaxed,
                     );
-                    was_first = was_first || 0 == add;
+                    was_first = was_first || 0 == previous_total_processed_slots_across_all_threads;
                     if was_first {
                         info!(
                             "generating index: {}/{} slots...",
-                            add + my_total_newly_processed_slots_since_last_report,
+                            previous_total_processed_slots_across_all_threads
+                                + my_total_newly_processed_slots_since_last_report,
                             outer_slots_len
                         );
                     }
