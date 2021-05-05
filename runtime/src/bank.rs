@@ -11091,7 +11091,7 @@ pub(crate) mod tests {
         let key3 = solana_sdk::pubkey::new_rand();
         let key4 = solana_sdk::pubkey::new_rand();
         let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
-        let mut cache = CachedExecutors::new(3);
+        let mut cache = CachedExecutors::new(3, 1, 1);
 
         cache.put(&key1, executor.clone());
         cache.put(&key2, executor.clone());
