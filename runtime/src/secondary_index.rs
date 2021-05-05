@@ -168,7 +168,7 @@ impl<SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send>
             });
         }
 
-        let prev_key = {
+        /*let prev_key = {
             let slots_map = self.reverse_index.get(inner_key).unwrap_or_else(|| {
                 self.reverse_index
                     .entry(*inner_key)
@@ -204,7 +204,7 @@ impl<SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send>
             if prev_key != *key {
                 self.remove_index_entries(&prev_key, inner_key, &[slot]);
             }
-        }
+        }*/
     }
 
     pub fn remove_index_entries(&self, key: &Pubkey, inner_key: &Pubkey, slots: &[Slot]) {
@@ -269,7 +269,7 @@ impl<SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send>
 
         // Check if the entry for `inner_key` in the reverse index is empty
         // and can be removed
-        let needs_remove = {
+        /*let needs_remove = {
             if let Some(slots_to_remove) = slots_to_remove {
                 self.reverse_index
                     .get(inner_key)
@@ -316,7 +316,7 @@ impl<SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send>
         // Remove this value from those keys
         for (key, slots) in key_to_removed_slots {
             self.remove_index_entries(&key, inner_key, &slots);
-        }
+        }*/
     }
 
     pub fn get(&self, key: &Pubkey) -> Vec<Pubkey> {
