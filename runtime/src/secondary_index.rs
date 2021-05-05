@@ -2,7 +2,11 @@ use dashmap::{mapref::entry::Entry::Occupied, DashMap};
 use solana_sdk::pubkey::Pubkey;
 use std::{collections::HashSet, fmt::Debug, sync::RwLock};
 
-pub type SecondaryReverseIndexEntry = RwLock<HashSet<Pubkey>>;
+// The only cases where an inner key should map to a different outer key is
+// if the key had different account data for the indexed key across different
+// slots. As this is rare, it should be ok to use a Vec here over a HashSet, even
+// though we are running some key existence checks.
+pub type SecondaryReverseIndexEntry = RwLock<Vec<Pubkey>>;
 
 pub trait SecondaryIndexEntry: Debug {
     fn insert_if_not_exists(&self, key: &Pubkey);
@@ -105,12 +109,16 @@ impl<SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send>
         let outer_keys = self.reverse_index.get(inner_key).unwrap_or_else(|| {
             self.reverse_index
                 .entry(*inner_key)
-                .or_insert(RwLock::new(HashSet::new()))
+                .or_insert(RwLock::new(Vec::with_capacity(1)))
                 .downgrade()
         });
+
         let should_insert = !outer_keys.read().unwrap().contains(&key);
         if should_insert {
-            outer_keys.write().unwrap().insert(*key);
+            let mut w_outer_keys = outer_keys.write().unwrap();
+            if !w_outer_keys.contains(&key) {
+                w_outer_keys.push(*key);
+            }
         }
     }
 
