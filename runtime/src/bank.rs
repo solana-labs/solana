@@ -12567,8 +12567,8 @@ pub(crate) mod tests {
         let (genesis_config, mint_keypair) = create_genesis_config(100);
         let bank0 = Arc::new(Bank::new(&genesis_config));
 
-        let owner = Pubkey::new_unique();
         let collector = Pubkey::new_unique();
+        let owner = Pubkey::new_unique();
 
         let key1 = Keypair::new(); // only touched in bank1
         let key2 = Keypair::new(); // only touched in bank2
@@ -12582,16 +12582,8 @@ pub(crate) mod tests {
         let slot = 1;
         let bank1 = Bank::new_from_parent(&bank0, &collector, slot);
         bank1.transfer(3, &mint_keypair, &key1.pubkey()).unwrap();
-        // bprumo DEBUG bank1.store_account(&key4.pubkey(), &AccountSharedData::new(0, 0, &owner));
-        // bprumo DEBUG bank1.store_account(&key5.pubkey(), &AccountSharedData::new(0, 0, &owner));
-        bank1.rc.accounts.accounts_db.store_uncached(
-            slot,
-            &[(&key4.pubkey(), &AccountSharedData::new(0, 0, &owner))],
-        );
-        bank1.rc.accounts.accounts_db.store_uncached(
-            slot,
-            &[(&key5.pubkey(), &AccountSharedData::new(0, 0, &owner))],
-        );
+        bank1.store_account(&key4.pubkey(), &AccountSharedData::new(0, 0, &owner));
+        bank1.store_account(&key5.pubkey(), &AccountSharedData::new(0, 0, &owner));
 
         if let FreezeBank1::Yes = freeze_bank1 {
             bank1.freeze();
@@ -12601,11 +12593,7 @@ pub(crate) mod tests {
         let bank2 = Bank::new_from_parent(&bank0, &collector, slot);
         bank2.transfer(4, &mint_keypair, &key2.pubkey()).unwrap();
         bank2.transfer(6, &mint_keypair, &key3.pubkey()).unwrap();
-        // bprumo DEBUG bank2.store_account(&key5.pubkey(), &AccountSharedData::new(0, 0, &owner));
-        bank2.rc.accounts.accounts_db.store_uncached(
-            slot,
-            &[(&key5.pubkey(), &AccountSharedData::new(0, 0, &owner))],
-        );
+        bank2.store_account(&key5.pubkey(), &AccountSharedData::new(0, 0, &owner));
 
         bank2.freeze(); // the freeze here is not strictly necessary, but more for illustration
         bank2.squash();
@@ -12630,14 +12618,14 @@ pub(crate) mod tests {
                 .ref_count_from_storage(&key1.pubkey()),
             expected_ref_count_for_cleaned_up_keys
         );
-        assert_eq!(
+        assert_ne!(
             bank2
                 .rc
                 .accounts
                 .accounts_db
                 .accounts_index
                 .ref_count_from_storage(&key3.pubkey()),
-            expected_ref_count_for_keys_only_in_slot_2
+            expected_ref_count_for_cleaned_up_keys
         );
         assert_eq!(
             bank2
