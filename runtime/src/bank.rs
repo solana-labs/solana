@@ -12645,5 +12645,10 @@ pub(crate) mod tests {
                 .ref_count_from_storage(&key5.pubkey()),
             expected_ref_count_for_keys_only_in_slot_2
         );
+
+        assert_eq!(
+            bank2.rc.accounts.accounts_db.alive_account_count_in_slot(1),
+            0
+        );
     }
 }
