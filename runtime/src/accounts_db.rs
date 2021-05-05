@@ -4918,14 +4918,18 @@ impl AccountsDb {
             for (index, slot) in slots.iter().enumerate() {
                 let now = Instant::now();
                 if now.duration_since(last_log_update).as_secs() >= 2 {
-                    let added = (index as u64) - my_last_reported_number_of_processed_slots;
+                    let my_total_newly_processed_slots_since_last_report =
+                        (index as u64) - my_last_reported_number_of_processed_slots;
                     my_last_reported_number_of_processed_slots = index as u64;
-                    let add = progress.fetch_add(added, Ordering::Relaxed);
+                    let add = progress.fetch_add(
+                        my_total_newly_processed_slots_since_last_report,
+                        Ordering::Relaxed,
+                    );
                     was_first = was_first || 0 == add;
                     if was_first {
                         info!(
                             "generating index: {}/{} slots...",
-                            add + added,
+                            add + my_total_newly_processed_slots_since_last_report,
                             outer_slots_len
                         );
                     }
