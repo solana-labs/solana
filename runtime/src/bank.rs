@@ -256,26 +256,47 @@ pub struct Builtins {
 
 const MAX_CACHED_EXECUTORS: usize = 100; // 10 MB assuming programs are around 100k
 
-// We set the per-epoch discount factor to be ~0.95
+// We set the per 1/10 epoch discount factor to be ~0.995
 // This results in a executor usage count half life of about
-// 15 epochs ~ 30 days.
-const DEFAULT_DISCOUNT_NUMERATOR: u64 = 19;
-const DEFAULT_DISCOUNT_DENOMINATOR: u64 = 20;
+// 150 1/10 epochs ~ 30 days.
+const DEFAULT_DISCOUNT_NUMERATOR: u64 = 199;
+const DEFAULT_DISCOUNT_DENOMINATOR: u64 = 200;
 
-/// Discounted LFU Cache of executors
-#[derive(Debug)]
-struct CachedExecutors {
+// Assuming executors are invoked 1000 times/slot.
+// This sets the access count/epoch at 40,000 slots/1/10-epoch to be
+// 40,000,000
+const ACCESS_COUNT_PER_DISCOUNT_EPOCH: u64 = 40_000_000;
+
+#[derive(Debug, Clone, Copy)]
+struct DiscountedLFUParams {
     max: usize,
     discount_numerator: u64,
     discount_denominator: u64,
-    executors: HashMap<Pubkey, (AtomicU64, Arc<dyn Executor>)>,
+    max_access: u64,
 }
-impl Default for CachedExecutors {
+
+impl Default for DiscountedLFUParams {
     fn default() -> Self {
         Self {
             max: MAX_CACHED_EXECUTORS,
             discount_numerator: DEFAULT_DISCOUNT_NUMERATOR,
             discount_denominator: DEFAULT_DISCOUNT_DENOMINATOR,
+            max_access: ACCESS_COUNT_PER_DISCOUNT_EPOCH,
+        }
+    }
+}
+/// Discounted LFU Cache of executors
+#[derive(Debug)]
+struct CachedExecutors {
+    params: DiscountedLFUParams,
+    access_count: AtomicU64,
+    executors: HashMap<Pubkey, (AtomicU64, Arc<dyn Executor>)>,
+}
+impl Default for CachedExecutors {
+    fn default() -> Self {
+        Self {
+            params: DiscountedLFUParams::default(),
+            access_count: AtomicU64::new(0),
             executors: HashMap::new(),
         }
     }
@@ -301,30 +322,38 @@ impl Clone for CachedExecutors {
             );
         }
         Self {
-            max: self.max,
-            discount_numerator: self.discount_numerator,
-            discount_denominator: self.discount_numerator,
+            params: self.params,
+            access_count: AtomicU64::new(self.access_count.load(Relaxed)),
             executors,
         }
     }
 }
 impl CachedExecutors {
-    fn new(max: usize, discount_numerator: u64, discount_denominator: u64) -> Self {
+    fn new(params: DiscountedLFUParams) -> Self {
         Self {
-            max,
-            discount_numerator,
-            discount_denominator,
+            params,
+            access_count: AtomicU64::new(0),
             executors: HashMap::new(),
         }
     }
     fn get(&self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
+        self.access_count.fetch_add(1, Relaxed);
         self.executors.get(pubkey).map(|(count, executor)| {
             count.fetch_add(1, Relaxed);
             executor.clone()
         })
     }
     fn put(&mut self, pubkey: &Pubkey, executor: Arc<dyn Executor>) {
-        if !self.executors.contains_key(pubkey) && self.executors.len() >= self.max {
+        // Every time we try to put a new executor in, we first check
+        // if we should discount the access counts
+        let acc = self.access_count.load(Relaxed);
+        if acc >= self.params.max_access {
+            let num_discount = acc / self.params.max_access; // >= 1
+            self.access_count
+                .fetch_sub(num_discount * self.params.max_access, Relaxed);
+            self.apply_discount(num_discount);
+        }
+        if !self.executors.contains_key(pubkey) && self.executors.len() >= self.params.max {
             let mut least = u64::MAX;
             let default_key = Pubkey::default();
             let mut least_key = &default_key;
@@ -345,11 +374,13 @@ impl CachedExecutors {
     fn remove(&mut self, pubkey: &Pubkey) {
         let _ = self.executors.remove(pubkey);
     }
-    fn apply_discount(&mut self) {
+    fn apply_discount(&mut self, num_discount: u64) {
         for (_, (counter, _)) in self.executors.iter_mut() {
             let c = counter.get_mut();
-            *c *= self.discount_numerator;
-            *c /= self.discount_denominator;
+            for _ in 0..num_discount {
+                *c *= self.params.discount_numerator;
+                *c /= self.params.discount_denominator;
+            }
         }
     }
 }
@@ -1281,11 +1312,7 @@ impl Bank {
             no_stake_rewrite: new(),
             rewards_pool_pubkeys: new(),
             cached_executors: RwLock::new(CowCachedExecutors::new(Arc::new(RwLock::new(
-                CachedExecutors::new(
-                    MAX_CACHED_EXECUTORS,
-                    DEFAULT_DISCOUNT_NUMERATOR,
-                    DEFAULT_DISCOUNT_DENOMINATOR,
-                ),
+                CachedExecutors::new(DiscountedLFUParams::default()),
             )))),
             transaction_debug_keys: debug_keys,
             transaction_log_collector_config: new(),
@@ -2951,12 +2978,6 @@ impl Bank {
         let mut cow_cache = self.cached_executors.write().unwrap();
         let mut cache = cow_cache.write().unwrap();
         cache.remove(pubkey);
-    }
-
-    pub fn apply_lfu_discount(&self) {
-        let mut cow_cache = self.cached_executors.write().unwrap();
-        let mut cache = cow_cache.write().unwrap();
-        cache.apply_discount()
     }
 
     #[allow(clippy::type_complexity)]
@@ -11091,7 +11112,12 @@ pub(crate) mod tests {
         let key3 = solana_sdk::pubkey::new_rand();
         let key4 = solana_sdk::pubkey::new_rand();
         let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
-        let mut cache = CachedExecutors::new(3, 1, 1);
+        let mut cache = CachedExecutors::new(DiscountedLFUParams {
+            max: 3,
+            discount_numerator: 1,
+            discount_denominator: 1,
+            max_access: 4000,
+        });
 
         cache.put(&key1, executor.clone());
         cache.put(&key2, executor.clone());
