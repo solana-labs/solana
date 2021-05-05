@@ -256,16 +256,26 @@ pub struct Builtins {
 
 const MAX_CACHED_EXECUTORS: usize = 100; // 10 MB assuming programs are around 100k
 
-/// LFU Cache of executors
+// We set the per-epoch discount factor to be ~0.95
+// This results in a executor usage count half life of about
+// 15 epochs ~ 30 days.
+const DEFAULT_DISCOUNT_NUMERATOR: u64 = 19;
+const DEFAULT_DISCOUNT_DENOMINATOR: u64 = 20;
+
+/// Discounted LFU Cache of executors
 #[derive(Debug)]
 struct CachedExecutors {
     max: usize,
+    discount_numerator: u64,
+    discount_denominator: u64,
     executors: HashMap<Pubkey, (AtomicU64, Arc<dyn Executor>)>,
 }
 impl Default for CachedExecutors {
     fn default() -> Self {
         Self {
             max: MAX_CACHED_EXECUTORS,
+            discount_numerator: DEFAULT_DISCOUNT_NUMERATOR,
+            discount_denominator: DEFAULT_DISCOUNT_DENOMINATOR,
             executors: HashMap::new(),
         }
     }
@@ -292,14 +302,18 @@ impl Clone for CachedExecutors {
         }
         Self {
             max: self.max,
+            discount_numerator: self.discount_numerator,
+            discount_denominator: self.discount_numerator,
             executors,
         }
     }
 }
 impl CachedExecutors {
-    fn new(max: usize) -> Self {
+    fn new(max: usize, discount_numerator: u64, discount_denominator: u64) -> Self {
         Self {
             max,
+            discount_numerator,
+            discount_denominator,
             executors: HashMap::new(),
         }
     }
@@ -330,6 +344,13 @@ impl CachedExecutors {
     }
     fn remove(&mut self, pubkey: &Pubkey) {
         let _ = self.executors.remove(pubkey);
+    }
+    fn apply_discount(&mut self) {
+        for (_, (counter, _)) in self.executors.iter_mut() {
+            let c = counter.get_mut();
+            *c *= self.discount_numerator;
+            *c /= self.discount_denominator;
+        }
     }
 }
 
@@ -1260,7 +1281,11 @@ impl Bank {
             no_stake_rewrite: new(),
             rewards_pool_pubkeys: new(),
             cached_executors: RwLock::new(CowCachedExecutors::new(Arc::new(RwLock::new(
-                CachedExecutors::new(MAX_CACHED_EXECUTORS),
+                CachedExecutors::new(
+                    MAX_CACHED_EXECUTORS,
+                    DEFAULT_DISCOUNT_NUMERATOR,
+                    DEFAULT_DISCOUNT_DENOMINATOR,
+                ),
             )))),
             transaction_debug_keys: debug_keys,
             transaction_log_collector_config: new(),
@@ -2926,6 +2951,12 @@ impl Bank {
         let mut cow_cache = self.cached_executors.write().unwrap();
         let mut cache = cow_cache.write().unwrap();
         cache.remove(pubkey);
+    }
+
+    pub fn apply_lfu_discount(&self) {
+        let mut cow_cache = self.cached_executors.write().unwrap();
+        let mut cache = cow_cache.write().unwrap();
+        cache.apply_discount()
     }
 
     #[allow(clippy::type_complexity)]
