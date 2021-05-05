@@ -2821,13 +2821,13 @@ fn main() {
                 AccessType::TryPrimaryThenSecondary,
                 wal_recovery_mode,
             );
-            let start_root = if let Some(height) = arg_matches.value_of("start_root") {
-                Slot::from_str(height).expect("Before root must be a number")
+            let start_root = if let Some(root) = arg_matches.value_of("start_root") {
+                Slot::from_str(root).expect("Before root must be a number")
             } else {
                 blockstore.max_root()
             };
-            let end_root = if let Some(height) = arg_matches.value_of("end_root") {
-                Slot::from_str(height).expect("Until root must be a number")
+            let end_root = if let Some(root) = arg_matches.value_of("end_root") {
+                Slot::from_str(root).expect("Until root must be a number")
             } else {
                 blockstore.lowest_slot()
             };
@@ -2839,10 +2839,14 @@ fn main() {
                 .filter(|slot| !blockstore.is_root(*slot))
                 .collect();
             if !roots_to_fix.is_empty() {
-                blockstore.set_roots(&roots_to_fix).unwrap_or_else(|err| {
-                    eprintln!("Unable to set roots {:?}: {}", roots_to_fix, err);
-                    exit(1);
-                });
+                eprintln!("{} slots to be rooted", roots_to_fix.len());
+                for chunk in roots_to_fix.chunks(100) {
+                    eprintln!("{:?}", chunk);
+                    blockstore.set_roots(&roots_to_fix).unwrap_or_else(|err| {
+                        eprintln!("Unable to set roots {:?}: {}", roots_to_fix, err);
+                        exit(1);
+                    });
+                }
             } else {
                 println!(
                     "No missing roots found in range {} to {}",
