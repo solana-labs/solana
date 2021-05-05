@@ -37,19 +37,18 @@
     "/src"
   ],
   "scripts": {
-    "build": "npm run clean; cross-env NODE_ENV=production rollup -c; npm run generate:dts; npm run generate:flow",
+    "build": "npm run clean; cross-env NODE_ENV=production rollup -c; npm run type:gen; npm run flow:gen; npm run flow:check",
     "build:browser-test": "rollup -c test/rollup.config.js",
     "build:fixtures": "set -ex; ./test/fixtures/noop-program/build.sh",
     "clean": "rimraf ./coverage ./lib",
     "codecov": "set -ex; npm run test:cover; cat ./coverage/lcov.info | codecov",
     "dev": "cross-env NODE_ENV=development rollup -c",
     "doc": "set -ex; typedoc",
-    "doc:watch": "watch 'npm run doc' . --wait=1 --ignoreDirectoryPattern=/doc/",
-    "generate:dts": "./scripts/typegen.sh",
-    "generate:flow": "flowgen lib/index.d.ts -o module.flow.js",
+    "flow:check": "flow check-contents < module.flow.js",
+    "flow:gen": "flowgen lib/index.d.ts -o module.flow.js",
+    "type:gen": "./scripts/typegen.sh",
     "lint": "set -ex; npm run pretty; eslint . --ext .js,.ts",
     "lint:fix": "npm run pretty:fix && eslint . --fix",
-    "lint:watch": "watch 'npm run lint:fix' . --wait=1 --ignoreDirectoryPattern=/doc/",
     "ok": "run-s lint test doc",
     "pretty": "prettier --check '{,{src,test}/**/}*.{j,t}s'",
     "pretty:fix": "prettier --write '{,{src,test}/**/}*.{j,t}s'",
@@ -116,6 +115,7 @@
     "eslint-plugin-mocha": "^8.0.0",
     "eslint-plugin-prettier": "^3.0.0",
     "esm": "^3.2.25",
+    "flow-bin": "^0.150.0",
     "flowgen": "^1.13.0",
     "http-server": "^0.12.3",
     "mocha": "^8.2.1",
@@ -136,7 +136,6 @@
     "ts-node": "^9.1.1",
     "tslib": "^2.1.0",
     "typedoc": "^0.20.31",
-    "typescript": "^4.1.5",
-    "watch": "^1.0.2"
+    "typescript": "^4.1.5"
   }
 }
