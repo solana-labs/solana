@@ -34,7 +34,7 @@ function generateConfig(configType, format) {
         values: {
           'process.env.NODE_ENV': JSON.stringify(env),
           'process.env.BROWSER': JSON.stringify(browser),
-        }
+        },
       }),
     ],
     onwarn: function (warning, rollupWarn) {
