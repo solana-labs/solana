@@ -729,6 +729,7 @@ fn main() {
     }
 
     const DEFAULT_ROOT_COUNT: &str = "1";
+    const DEFAULT_MAX_SLOTS_ROOT_REPAIR: &str = "2000";
     solana_logger::setup_with_default("solana=info");
 
     let starting_slot_arg = Arg::with_name("starting_slot")
@@ -1335,6 +1336,34 @@ fn main() {
                     .required(false)
                     .help("Number of roots in the output"),
             )
+        )
+        .subcommand(
+            SubCommand::with_name("repair-roots")
+                .about("Traverses the AncestorIterator backward from a last known root \
+                        to restore missing roots to the Root column")
+                .arg(
+                    Arg::with_name("start_root")
+                        .long("before")
+                        .value_name("NUM")
+                        .takes_value(true)
+                        .help("First good root after the range to repair")
+                )
+                .arg(
+                    Arg::with_name("end_root")
+                        .long("until")
+                        .value_name("NUM")
+                        .takes_value(true)
+                        .help("Last slot to check for root repair")
+                )
+                .arg(
+                    Arg::with_name("max_slots")
+                        .long("repair-limit")
+                        .value_name("NUM")
+                        .takes_value(true)
+                        .default_value(DEFAULT_MAX_SLOTS_ROOT_REPAIR)
+                        .required(true)
+                        .help("Override the maximum number of slots to check for root repair")
+                )
         )
         .subcommand(
             SubCommand::with_name("analyze-storage")
@@ -2797,6 +2826,56 @@ fn main() {
                             .expect("failed to write");
                     }
                 });
+        }
+        ("repair-roots", Some(arg_matches)) => {
+            let blockstore = open_blockstore(
+                &ledger_path,
+                AccessType::TryPrimaryThenSecondary,
+                wal_recovery_mode,
+            );
+            let start_root = if let Some(root) = arg_matches.value_of("start_root") {
+                Slot::from_str(root).expect("Before root must be a number")
+            } else {
+                blockstore.max_root()
+            };
+            let max_slots = value_t_or_exit!(arg_matches, "max_slots", u64);
+            let end_root = if let Some(root) = arg_matches.value_of("end_root") {
+                Slot::from_str(root).expect("Until root must be a number")
+            } else {
+                start_root.saturating_sub(max_slots)
+            };
+            assert!(start_root > end_root);
+            assert!(blockstore.is_root(start_root));
+            let num_slots = start_root - end_root - 1; // Adjust by one since start_root need not be checked
+            if arg_matches.is_present("end_root") && num_slots > max_slots {
+                eprintln!(
+                    "Requested range {} too large, max {}. \
+                    Either adjust `--until` value, or pass a larger `--repair-limit` \
+                    to override the limit",
+                    num_slots, max_slots,
+                );
+                exit(1);
+            }
+            let ancestor_iterator =
+                AncestorIterator::new(start_root, &blockstore).take_while(|&slot| slot >= end_root);
+            let roots_to_fix: Vec<_> = ancestor_iterator
+                .filter(|slot| !blockstore.is_root(*slot))
+                .collect();
+            if !roots_to_fix.is_empty() {
+                eprintln!("{} slots to be rooted", roots_to_fix.len());
+                for chunk in roots_to_fix.chunks(100) {
+                    eprintln!("{:?}", chunk);
+                    blockstore.set_roots(&roots_to_fix).unwrap_or_else(|err| {
+                        eprintln!("Unable to set roots {:?}: {}", roots_to_fix, err);
+                        exit(1);
+                    });
+                }
+            } else {
+                println!(
+                    "No missing roots found in range {} to {}",
+                    end_root, start_root
+                );
+            }
         }
         ("bounds", Some(arg_matches)) => {
             let blockstore = open_blockstore(
