@@ -40,6 +40,9 @@ pub struct SnapshotConfig {
 
     // Snapshot version to generate
     pub snapshot_version: SnapshotVersion,
+
+    // Maximum number of snapshots to retain
+    pub maximum_snapshots_to_retain: usize,
 }
 
 pub struct BankForks {

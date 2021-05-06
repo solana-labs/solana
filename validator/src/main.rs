@@ -940,11 +940,18 @@ fn rpc_bootstrap(
                                 gossip.take().unwrap();
                             cluster_info.save_contact_info();
                             gossip_exit_flag.store(true, Ordering::Relaxed);
+                            let maximum_snapshots_to_retain =
+                                if let Some(snapshot_config) = validator_config.snapshot_config.as_ref() {
+                                    snapshot_config.maximum_snapshots_to_retain
+                                } else {
+                                    2
+                                };
                             let ret = download_snapshot(
                                 &rpc_contact_info.rpc,
                                 &snapshot_output_dir,
                                 snapshot_hash,
                                 use_progress_bar,
+                                maximum_snapshots_to_retain,
                             );
                             gossip_service.join().unwrap();
                             ret
@@ -1317,6 +1324,14 @@ pub fn main() {
                 .default_value("100")
                 .help("Number of slots between generating snapshots, \
                       0 to disable snapshots"),
+        )
+        .arg(
+            Arg::with_name("maximum_snapshots_to_retain")
+                .long("maximum-snapshots-to-retain")
+                .value_name("MAXIMUM_SNAPSHOTS_TO_RETAIN")
+                .takes_value(true)
+                .default_value("2")
+                .help("The maximum number of snapshots to hold on to when purging older snapshots.")
         )
         .arg(
             Arg::with_name("contact_debug_interval")
@@ -2210,6 +2225,7 @@ pub fn main() {
 
     let snapshot_interval_slots = value_t_or_exit!(matches, "snapshot_interval_slots", u64);
     let maximum_local_snapshot_age = value_t_or_exit!(matches, "maximum_local_snapshot_age", u64);
+    let maximum_snapshots_to_retain = value_t_or_exit!(matches, "maximum_snapshots_to_retain", usize);
     let snapshot_output_dir = if matches.is_present("snapshots") {
         PathBuf::from(matches.value_of("snapshots").unwrap())
     } else {
@@ -2254,6 +2270,7 @@ pub fn main() {
         snapshot_package_output_path: snapshot_output_dir.clone(),
         archive_format,
         snapshot_version,
+        maximum_snapshots_to_retain,
     });
 
     validator_config.accounts_hash_interval_slots =

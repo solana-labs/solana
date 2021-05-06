@@ -226,7 +226,7 @@ pub fn remove_tmp_snapshot_archives(snapshot_path: &Path) {
     }
 }
 
-pub fn archive_snapshot_package(snapshot_package: &AccountsPackage) -> Result<()> {
+pub fn archive_snapshot_package(snapshot_package: &AccountsPackage, maximum_snapshots_to_retain: usize) -> Result<()> {
     info!(
         "Generating snapshot archive for slot {}",
         snapshot_package.slot
@@ -362,7 +362,7 @@ pub fn archive_snapshot_package(snapshot_package: &AccountsPackage) -> Result<()
     let metadata = fs::metadata(&archive_path)?;
     fs::rename(&archive_path, &snapshot_package.tar_output_file)?;
 
-    purge_old_snapshot_archives(snapshot_package.tar_output_file.parent().unwrap());
+    purge_old_snapshot_archives(snapshot_package.tar_output_file.parent().unwrap(), maximum_snapshots_to_retain);
 
     timer.stop();
     info!(
@@ -661,7 +661,7 @@ fn archive_format_from_str(archive_format: &str) -> Option<ArchiveFormat> {
 
 fn snapshot_hash_of(archive_filename: &str) -> Option<(Slot, Hash, ArchiveFormat)> {
     let snapshot_filename_regex =
-        Regex::new(r"^snapshot-(\d+)-([[:alnum:]]+)\.(tar|tar\.bz2|tar\.zst|tar\.gz)$").unwrap();
+        Regex::new(r"snapshot-(\d+)-([[:alnum:]]+)\.(tar|tar\.bz2|tar\.zst|tar\.gz)$").unwrap();
 
     if let Some(captures) = snapshot_filename_regex.captures(archive_filename) {
         let slot_str = captures.get(1).unwrap().as_str();
@@ -717,11 +717,11 @@ pub fn get_highest_snapshot_archive_path<P: AsRef<Path>>(
     archives.into_iter().next()
 }
 
-pub fn purge_old_snapshot_archives<P: AsRef<Path>>(snapshot_output_dir: P) {
+pub fn purge_old_snapshot_archives<P: AsRef<Path>>(snapshot_output_dir: P, maximum_snapshots_to_retain: usize) {
     let mut archives = get_snapshot_archives(snapshot_output_dir);
     // Keep the oldest snapshot so we can always play the ledger from it.
     archives.pop();
-    for old_archive in archives.into_iter().skip(2) {
+    for old_archive in archives.into_iter().skip(maximum_snapshots_to_retain) {
         fs::remove_file(old_archive.0)
             .unwrap_or_else(|err| info!("Failed to remove old snapshot: {:}", err));
     }
@@ -936,6 +936,7 @@ pub fn bank_to_snapshot_archive<P: AsRef<Path>, Q: AsRef<Path>>(
     snapshot_package_output_path: Q,
     archive_format: ArchiveFormat,
     thread_pool: Option<&ThreadPool>,
+    maximum_snapshots_to_retain: usize,
 ) -> Result<PathBuf> {
     let snapshot_version = snapshot_version.unwrap_or_default();
 
@@ -964,7 +965,7 @@ pub fn bank_to_snapshot_archive<P: AsRef<Path>, Q: AsRef<Path>>(
 
     let package = process_accounts_package_pre(package, thread_pool);
 
-    archive_snapshot_package(&package)?;
+    archive_snapshot_package(&package, maximum_snapshots_to_retain)?;
     Ok(package.tar_output_file)
 }
 
@@ -1137,12 +1138,6 @@ mod tests {
             snapshot_hash_of(&format!("snapshot-42-{}.tar", Hash::default())),
             Some((42, Hash::default(), ArchiveFormat::Tar))
         );
-        assert!(snapshot_hash_of(&format!(
-            "{}snapshot-42-{}.tar",
-            TMP_SNAPSHOT_PREFIX,
-            Hash::default()
-        ))
-        .is_none());
 
         assert!(snapshot_hash_of("invalid").is_none());
     }

@@ -442,6 +442,7 @@ mod tests {
             None,
             &exit,
             &cluster_info,
+            2,
         );
 
         let thread_pool = accounts_db::make_min_priority_thread_pool();

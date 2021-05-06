@@ -492,6 +492,7 @@ impl TestValidator {
                 snapshot_package_output_path: ledger_path.to_path_buf(),
                 archive_format: ArchiveFormat::Tar,
                 snapshot_version: SnapshotVersion::default(),
+                maximum_snapshots_to_retain: 2,
             }),
             enforce_ulimit_nofile: false,
             warp_slot: config.warp_slot,
