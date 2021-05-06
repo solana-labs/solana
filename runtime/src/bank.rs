@@ -8777,15 +8777,15 @@ pub(crate) mod tests {
         let tx_transfer_mint_to_1 =
             system_transaction::transfer(&mint_keypair, &key1.pubkey(), 1, genesis_config.hash());
         assert_eq!(bank.process_transaction(&tx_transfer_mint_to_1), Ok(()));
-        assert_eq!(bank.is_delta.load(Relaxed), true);
+        assert!(bank.is_delta.load(Relaxed));
 
         let bank1 = new_from_parent(&bank);
         let hash1 = bank1.hash_internal_state();
-        assert_eq!(bank1.is_delta.load(Relaxed), false);
+        assert!(!bank1.is_delta.load(Relaxed));
         assert_ne!(hash1, bank.hash());
         // ticks don't make a bank into a delta or change its state unless a block boundary is crossed
         bank1.register_tick(&Hash::default());
-        assert_eq!(bank1.is_delta.load(Relaxed), false);
+        assert!(!bank1.is_delta.load(Relaxed));
         assert_eq!(bank1.hash_internal_state(), hash1);
     }
 
@@ -8796,13 +8796,13 @@ pub(crate) mod tests {
         let key1 = Keypair::new();
 
         // The zeroth bank is empty becasue there are no transactions
-        assert_eq!(bank0.is_empty(), true);
+        assert!(bank0.is_empty());
 
         // Set is_delta to true, bank is no longer empty
         let tx_transfer_mint_to_1 =
             system_transaction::transfer(&mint_keypair, &key1.pubkey(), 1, genesis_config.hash());
         assert_eq!(bank0.process_transaction(&tx_transfer_mint_to_1), Ok(()));
-        assert_eq!(bank0.is_empty(), false);
+        assert!(!bank0.is_empty());
     }
 
     #[test]

@@ -1413,7 +1413,7 @@ mod tests {
 
             let bootstrap_validator_id = leader_schedule_cache.slot_leader_at(0, None).unwrap();
 
-            assert_eq!(poh_recorder.reached_leader_tick(0), true);
+            assert!(poh_recorder.reached_leader_tick(0));
 
             let grace_ticks = bank.ticks_per_slot() * MAX_GRACE_SLOTS;
             let new_tick_height = NUM_CONSECUTIVE_LEADER_SLOTS * bank.ticks_per_slot();
@@ -1475,11 +1475,11 @@ mod tests {
             );
 
             // Test that with no next leader slot, we don't reach the leader slot
-            assert_eq!(poh_recorder.reached_leader_slot().0, false);
+            assert!(!poh_recorder.reached_leader_slot().0);
 
             // Test that with no next leader slot in reset(), we don't reach the leader slot
             poh_recorder.reset(bank.last_blockhash(), 0, None);
-            assert_eq!(poh_recorder.reached_leader_slot().0, false);
+            assert!(!poh_recorder.reached_leader_slot().0);
 
             // Provide a leader slot one slot down
             poh_recorder.reset(bank.last_blockhash(), 0, Some((2, 2)));
@@ -1507,13 +1507,13 @@ mod tests {
                 .unwrap();
 
             // Test that we don't reach the leader slot because of grace ticks
-            assert_eq!(poh_recorder.reached_leader_slot().0, false);
+            assert!(!poh_recorder.reached_leader_slot().0);
 
             // reset poh now. we should immediately be leader
             poh_recorder.reset(bank.last_blockhash(), 1, Some((2, 2)));
             let (reached_leader_slot, grace_ticks, leader_slot, ..) =
                 poh_recorder.reached_leader_slot();
-            assert_eq!(reached_leader_slot, true);
+            assert!(reached_leader_slot);
             assert_eq!(grace_ticks, 0);
             assert_eq!(leader_slot, 2);
 
@@ -1527,7 +1527,7 @@ mod tests {
             }
 
             // We are not the leader yet, as expected
-            assert_eq!(poh_recorder.reached_leader_slot().0, false);
+            assert!(!poh_recorder.reached_leader_slot().0);
 
             // Send the grace ticks
             for _ in 0..bank.ticks_per_slot() / GRACE_TICKS_FACTOR {
@@ -1537,7 +1537,7 @@ mod tests {
             // We should be the leader now
             let (reached_leader_slot, grace_ticks, leader_slot, ..) =
                 poh_recorder.reached_leader_slot();
-            assert_eq!(reached_leader_slot, true);
+            assert!(reached_leader_slot);
             assert_eq!(grace_ticks, bank.ticks_per_slot() / GRACE_TICKS_FACTOR);
             assert_eq!(leader_slot, 3);
 
@@ -1551,13 +1551,13 @@ mod tests {
             }
 
             // We are not the leader yet, as expected
-            assert_eq!(poh_recorder.reached_leader_slot().0, false);
+            assert!(!poh_recorder.reached_leader_slot().0);
             poh_recorder.reset(bank.last_blockhash(), 3, Some((4, 4)));
 
             // without sending more ticks, we should be leader now
             let (reached_leader_slot, grace_ticks, leader_slot, ..) =
                 poh_recorder.reached_leader_slot();
-            assert_eq!(reached_leader_slot, true);
+            assert!(reached_leader_slot);
             assert_eq!(grace_ticks, 0);
             assert_eq!(leader_slot, 4);
 
@@ -1575,7 +1575,7 @@ mod tests {
             // We are overdue to lead
             let (reached_leader_slot, grace_ticks, leader_slot, ..) =
                 poh_recorder.reached_leader_slot();
-            assert_eq!(reached_leader_slot, true);
+            assert!(reached_leader_slot);
             assert_eq!(grace_ticks, overshoot_factor * bank.ticks_per_slot());
             assert_eq!(leader_slot, 9);
         }
@@ -1605,47 +1605,29 @@ mod tests {
             );
 
             // Test that with no leader slot, we don't reach the leader tick
-            assert_eq!(
-                poh_recorder.would_be_leader(2 * bank.ticks_per_slot()),
-                false
-            );
+            assert!(!poh_recorder.would_be_leader(2 * bank.ticks_per_slot()));
 
             poh_recorder.reset(bank.last_blockhash(), 0, None);
 
-            assert_eq!(
-                poh_recorder.would_be_leader(2 * bank.ticks_per_slot()),
-                false
-            );
+            assert!(!poh_recorder.would_be_leader(2 * bank.ticks_per_slot()));
 
             // We reset with leader slot after 3 slots
             let bank_slot = bank.slot() + 3;
             poh_recorder.reset(bank.last_blockhash(), 0, Some((bank_slot, bank_slot)));
 
             // Test that the node won't be leader in next 2 slots
-            assert_eq!(
-                poh_recorder.would_be_leader(2 * bank.ticks_per_slot()),
-                false
-            );
+            assert!(!poh_recorder.would_be_leader(2 * bank.ticks_per_slot()));
 
             // Test that the node will be leader in next 3 slots
-            assert_eq!(
-                poh_recorder.would_be_leader(3 * bank.ticks_per_slot()),
-                true
-            );
+            assert!(poh_recorder.would_be_leader(3 * bank.ticks_per_slot()));
 
-            assert_eq!(
-                poh_recorder.would_be_leader(2 * bank.ticks_per_slot()),
-                false
-            );
+            assert!(!poh_recorder.would_be_leader(2 * bank.ticks_per_slot()));
 
             // Move the bank up a slot (so that max_tick_height > slot 0's tick_height)
             let bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), 1));
             // If we set the working bank, the node should be leader within next 2 slots
             poh_recorder.set_bank(&bank);
-            assert_eq!(
-                poh_recorder.would_be_leader(2 * bank.ticks_per_slot()),
-                true
-            );
+            assert!(poh_recorder.would_be_leader(2 * bank.ticks_per_slot()));
         }
     }
 

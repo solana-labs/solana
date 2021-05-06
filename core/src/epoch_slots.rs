@@ -382,7 +382,7 @@ mod tests {
         assert_eq!(slots.to_slots(1), vec![1, 2, 10]);
         assert_eq!(slots.to_slots(2), vec![2, 10]);
         assert_eq!(slots.to_slots(3), vec![10]);
-        assert_eq!(slots.to_slots(11).is_empty(), true);
+        assert!(slots.to_slots(11).is_empty());
     }
     #[test]
     fn test_epoch_slots_compressed() {
@@ -452,7 +452,7 @@ mod tests {
         assert_eq!(slots.wallclock, 1);
         assert_eq!(slots.to_slots(0), range);
         assert_eq!(slots.to_slots(4999), vec![4999]);
-        assert_eq!(slots.to_slots(5000).is_empty(), true);
+        assert!(slots.to_slots(5000).is_empty());
     }
     #[test]
     fn test_epoch_slots_fill_sparce_range() {

@@ -833,6 +833,7 @@ impl Accounts {
     /// This function will prevent multiple threads from modifying the same account state at the
     /// same time
     #[must_use]
+    #[allow(clippy::needless_collect)]
     pub fn lock_accounts<'a>(
         &self,
         txs: impl Iterator<Item = &'a Transaction>,

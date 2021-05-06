@@ -72,7 +72,7 @@ fn test_cli_program_deploy_non_upgradeable() {
     let account0 = rpc_client.get_account(&program_id).unwrap();
     assert_eq!(account0.lamports, minimum_balance_for_rent_exemption);
     assert_eq!(account0.owner, bpf_loader::id());
-    assert_eq!(account0.executable, true);
+    assert!(account0.executable);
     let mut file = File::open(pathbuf.to_str().unwrap().to_string()).unwrap();
     let mut elf = Vec::new();
     file.read_to_end(&mut elf).unwrap();
@@ -93,7 +93,7 @@ fn test_cli_program_deploy_non_upgradeable() {
         .unwrap();
     assert_eq!(account1.lamports, minimum_balance_for_rent_exemption);
     assert_eq!(account1.owner, bpf_loader::id());
-    assert_eq!(account1.executable, true);
+    assert!(account1.executable);
     assert_eq!(account1.data, account0.data);
 
     // Attempt to redeploy to the same address
@@ -129,7 +129,7 @@ fn test_cli_program_deploy_non_upgradeable() {
         .unwrap();
     assert_eq!(account2.lamports, 2 * minimum_balance_for_rent_exemption);
     assert_eq!(account2.owner, bpf_loader::id());
-    assert_eq!(account2.executable, true);
+    assert!(account2.executable);
     assert_eq!(account2.data, account0.data);
 }
 
@@ -289,7 +289,7 @@ fn test_cli_program_deploy_with_authority() {
     let program_account = rpc_client.get_account(&program_keypair.pubkey()).unwrap();
     assert_eq!(program_account.lamports, minimum_balance_for_program);
     assert_eq!(program_account.owner, bpf_loader_upgradeable::id());
-    assert_eq!(program_account.executable, true);
+    assert!(program_account.executable);
     let (programdata_pubkey, _) = Pubkey::find_program_address(
         &[program_keypair.pubkey().as_ref()],
         &bpf_loader_upgradeable::id(),
@@ -300,7 +300,7 @@ fn test_cli_program_deploy_with_authority() {
         minimum_balance_for_programdata
     );
     assert_eq!(programdata_account.owner, bpf_loader_upgradeable::id());
-    assert_eq!(programdata_account.executable, false);
+    assert!(!programdata_account.executable);
     assert_eq!(
         programdata_account.data[UpgradeableLoaderState::programdata_data_offset().unwrap()..],
         program_data[..]
@@ -332,7 +332,7 @@ fn test_cli_program_deploy_with_authority() {
     let program_account = rpc_client.get_account(&program_pubkey).unwrap();
     assert_eq!(program_account.lamports, minimum_balance_for_program);
     assert_eq!(program_account.owner, bpf_loader_upgradeable::id());
-    assert_eq!(program_account.executable, true);
+    assert!(program_account.executable);
     let (programdata_pubkey, _) =
         Pubkey::find_program_address(&[program_pubkey.as_ref()], &bpf_loader_upgradeable::id());
     let programdata_account = rpc_client.get_account(&programdata_pubkey).unwrap();
@@ -341,7 +341,7 @@ fn test_cli_program_deploy_with_authority() {
         minimum_balance_for_programdata
     );
     assert_eq!(programdata_account.owner, bpf_loader_upgradeable::id());
-    assert_eq!(programdata_account.executable, false);
+    assert!(!programdata_account.executable);
     assert_eq!(
         programdata_account.data[UpgradeableLoaderState::programdata_data_offset().unwrap()..],
         program_data[..]
@@ -364,7 +364,7 @@ fn test_cli_program_deploy_with_authority() {
     let program_account = rpc_client.get_account(&program_pubkey).unwrap();
     assert_eq!(program_account.lamports, minimum_balance_for_program);
     assert_eq!(program_account.owner, bpf_loader_upgradeable::id());
-    assert_eq!(program_account.executable, true);
+    assert!(program_account.executable);
     let (programdata_pubkey, _) =
         Pubkey::find_program_address(&[program_pubkey.as_ref()], &bpf_loader_upgradeable::id());
     let programdata_account = rpc_client.get_account(&programdata_pubkey).unwrap();
@@ -373,7 +373,7 @@ fn test_cli_program_deploy_with_authority() {
         minimum_balance_for_programdata
     );
     assert_eq!(programdata_account.owner, bpf_loader_upgradeable::id());
-    assert_eq!(programdata_account.executable, false);
+    assert!(!programdata_account.executable);
     assert_eq!(
         programdata_account.data[UpgradeableLoaderState::programdata_data_offset().unwrap()..],
         program_data[..]
@@ -418,7 +418,7 @@ fn test_cli_program_deploy_with_authority() {
     let program_account = rpc_client.get_account(&program_pubkey).unwrap();
     assert_eq!(program_account.lamports, minimum_balance_for_program);
     assert_eq!(program_account.owner, bpf_loader_upgradeable::id());
-    assert_eq!(program_account.executable, true);
+    assert!(program_account.executable);
     let (programdata_pubkey, _) =
         Pubkey::find_program_address(&[program_pubkey.as_ref()], &bpf_loader_upgradeable::id());
     let programdata_account = rpc_client.get_account(&programdata_pubkey).unwrap();
@@ -427,7 +427,7 @@ fn test_cli_program_deploy_with_authority() {
         minimum_balance_for_programdata
     );
     assert_eq!(programdata_account.owner, bpf_loader_upgradeable::id());
-    assert_eq!(programdata_account.executable, false);
+    assert!(!programdata_account.executable);
     assert_eq!(
         programdata_account.data[UpgradeableLoaderState::programdata_data_offset().unwrap()..],
         program_data[..]

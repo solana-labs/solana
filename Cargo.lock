@@ -4519,7 +4519,6 @@ dependencies = [
 name = "solana-frozen-abi-macro"
 version = "1.7.0"
 dependencies = [
- "lazy_static",
  "proc-macro2 1.0.24",
  "quote 1.0.6",
  "rustc_version",
