@@ -61,7 +61,6 @@ use solana_vote_program::vote_state::VoteState;
 use std::{
     collections::{BTreeMap, HashMap, VecDeque},
     fmt,
-    net::SocketAddr,
     str::FromStr,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -1655,40 +1654,14 @@ pub fn process_live_slots(config: &CliConfig) -> ProcessResult {
 pub fn process_show_gossip(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
     let cluster_nodes = rpc_client.get_cluster_nodes()?;
 
-    fn format_port(addr: Option<SocketAddr>) -> String {
-        addr.map(|addr| addr.port().to_string())
-            .unwrap_or_else(|| "none".to_string())
-    }
-
-    let s: Vec<_> = cluster_nodes
+    let nodes: Vec<_> = cluster_nodes
         .into_iter()
-        .map(|node| {
-            format!(
-                "{:15} | {:44} | {:6} | {:5} | {:21} | {}",
-                node.gossip
-                    .map(|addr| addr.ip().to_string())
-                    .unwrap_or_else(|| "none".to_string()),
-                format_labeled_address(&node.pubkey, &config.address_labels),
-                format_port(node.gossip),
-                format_port(node.tpu),
-                node.rpc
-                    .map(|addr| addr.to_string())
-                    .unwrap_or_else(|| "none".to_string()),
-                node.version.unwrap_or_else(|| "unknown".to_string()),
-            )
-        })
+        .map(|node| CliGossipNode::new(node, &config.address_labels))
         .collect();
 
-    Ok(format!(
-        "IP Address      | Node identifier                              \
-         | Gossip | TPU   | RPC Address           | Version\n\
-         ----------------+----------------------------------------------+\
-         --------+-------+-----------------------+----------------\n\
-         {}\n\
-         Nodes: {}",
-        s.join("\n"),
-        s.len(),
-    ))
+    Ok(config
+        .output_format
+        .formatted_string(&CliGossipNodes(nodes)))
 }
 
 pub fn process_show_stakes(
