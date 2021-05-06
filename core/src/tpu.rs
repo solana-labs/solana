@@ -23,7 +23,6 @@ use solana_runtime::{
     vote_sender_types::{ReplayVoteReceiver, ReplayVoteSender},
 };
 use std::{
-    net::UdpSocket,
     sync::{
         atomic::AtomicBool,
         mpsc::{channel, Receiver},
@@ -31,6 +30,7 @@ use std::{
     },
     thread,
 };
+use solana_net_utils::DatagramSocket;
 
 pub const DEFAULT_TPU_COALESCE_MS: u64 = 5;
 
@@ -49,9 +49,9 @@ impl Tpu {
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         entry_receiver: Receiver<WorkingBankEntry>,
         retransmit_slots_receiver: RetransmitSlotsReceiver,
-        transactions_sockets: Vec<UdpSocket>,
-        tpu_forwards_sockets: Vec<UdpSocket>,
-        broadcast_sockets: Vec<UdpSocket>,
+        transactions_sockets: Vec<DatagramSocket>,
+        tpu_forwards_sockets: Vec<DatagramSocket>,
+        broadcast_sockets: Vec<DatagramSocket>,
         subscriptions: &Arc<RpcSubscriptions>,
         transaction_status_sender: Option<TransactionStatusSender>,
         blockstore: &Arc<Blockstore>,

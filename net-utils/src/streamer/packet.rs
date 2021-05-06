@@ -1,15 +1,17 @@
 //! The `packet` module defines data structures and methods to pull data from the network.
-use crate::recvmmsg::{recv_mmsg, NUM_RCVMMSGS};
+use crate::streamer::recvmmsg::NUM_RCVMMSGS;
+use crate::{SocketLike, DatagramSocket};
 pub use solana_perf::packet::{
     limited_deserialize, to_packets_chunked, Packets, PacketsRecycler, NUM_PACKETS,
     PACKETS_PER_BATCH,
 };
 
-use solana_metrics::inc_new_counter_debug;
+use log::*;
+use solana_metrics::*;
 pub use solana_sdk::packet::{Meta, Packet, PACKET_DATA_SIZE};
-use std::{io::Result, net::UdpSocket, time::Instant};
+use std::{io::Result, time::Instant};
 
-pub fn recv_from(obj: &mut Packets, socket: &UdpSocket, max_wait_ms: u64) -> Result<usize> {
+pub fn recv_from(obj: &mut Packets, socket: &DatagramSocket, max_wait_ms: u64) -> Result<usize> {
     let mut i = 0;
     //DOCUMENTED SIDE-EFFECT
     //Performance out of the IO without poll
@@ -25,7 +27,7 @@ pub fn recv_from(obj: &mut Packets, socket: &UdpSocket, max_wait_ms: u64) -> Res
             std::cmp::min(i + NUM_RCVMMSGS, PACKETS_PER_BATCH),
             Packet::default(),
         );
-        match recv_mmsg(socket, &mut obj.packets[i..]) {
+        match socket.recv_mmsg(&mut obj.packets[i..]) {
             Err(_) if i > 0 => {
                 if start.elapsed().as_millis() as u64 > max_wait_ms {
                     break;
@@ -54,7 +56,7 @@ pub fn recv_from(obj: &mut Packets, socket: &UdpSocket, max_wait_ms: u64) -> Res
     Ok(i)
 }
 
-pub fn send_to(obj: &Packets, socket: &UdpSocket) -> Result<()> {
+pub fn send_to(obj: &Packets, socket: &DatagramSocket) -> Result<()> {
     for p in &obj.packets {
         let a = p.meta.addr();
         socket.send_to(&p.data[..p.meta.size], &a)?;
@@ -67,7 +69,8 @@ mod tests {
     use super::*;
     use std::io;
     use std::io::Write;
-    use std::net::{SocketAddr, UdpSocket};
+    use std::net::SocketAddr;
+    use crate::{Network,NetworkLike};
 
     #[test]
     fn test_packets_set_addr() {
@@ -81,10 +84,11 @@ mod tests {
 
     #[test]
     pub fn packet_send_recv() {
+        let network = Network::default();
         solana_logger::setup();
-        let recv_socket = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        let recv_socket = network.bind("127.0.0.1:0").expect("bind");
         let addr = recv_socket.local_addr().unwrap();
-        let send_socket = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        let send_socket = network.bind("127.0.0.1:0").expect("bind");
         let saddr = send_socket.local_addr().unwrap();
         let mut p = Packets::default();
 
@@ -132,9 +136,10 @@ mod tests {
     #[test]
     fn test_packet_resize() {
         solana_logger::setup();
-        let recv_socket = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        let network = Network::default();
+        let recv_socket = network.bind("127.0.0.1:0").expect("bind");
         let addr = recv_socket.local_addr().unwrap();
-        let send_socket = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        let send_socket = network.bind("127.0.0.1:0").expect("bind");
         let mut p = Packets::default();
         p.packets.resize(PACKETS_PER_BATCH, Packet::default());
 

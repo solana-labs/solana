@@ -1,6 +1,6 @@
 //! The `recvmmsg` module provides recvmmsg() API implementation
 
-use crate::packet::Packet;
+use super::packet::Packet;
 pub use solana_perf::packet::NUM_RCVMMSGS;
 use std::cmp;
 use std::io;
@@ -87,8 +87,8 @@ pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<(usize,
 
 #[cfg(test)]
 mod tests {
-    use crate::packet::PACKET_DATA_SIZE;
-    use crate::recvmmsg::*;
+    use crate::streamer::packet::PACKET_DATA_SIZE;
+    use crate::streamer::recvmmsg::*;
     use std::time::{Duration, Instant};
 
     const TEST_NUM_MSGS: usize = 32;

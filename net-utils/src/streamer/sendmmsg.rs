@@ -150,9 +150,9 @@ pub fn multicast(sock: &UdpSocket, packet: &[u8], dests: &[&SocketAddr]) -> io::
 
 #[cfg(test)]
 mod tests {
-    use crate::packet::Packet;
-    use crate::recvmmsg::recv_mmsg;
-    use crate::sendmmsg::{multicast, send_mmsg};
+    use crate::streamer::packet::Packet;
+    use crate::streamer::recvmmsg::recv_mmsg;
+    use crate::streamer::sendmmsg::{multicast, send_mmsg};
     use solana_sdk::packet::PACKET_DATA_SIZE;
     use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
 

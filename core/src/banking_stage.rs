@@ -55,7 +55,6 @@ use std::{
     collections::{HashMap, VecDeque},
     env,
     mem::size_of,
-    net::UdpSocket,
     ops::DerefMut,
     sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
     sync::mpsc::Receiver,
@@ -64,6 +63,7 @@ use std::{
     time::Duration,
     time::Instant,
 };
+use solana_net_utils::{DatagramSocket, SocketLike, Network, NetworkLike};
 
 /// (packets, valid_indexes, forwarded)
 /// Set of packets with a list of which are valid and if this batch has been forwarded.
@@ -311,7 +311,7 @@ impl BankingStage {
     }
 
     fn forward_buffered_packets(
-        socket: &std::net::UdpSocket,
+        socket: &DatagramSocket,
         tpu_forwards: &std::net::SocketAddr,
         unprocessed_packets: &UnprocessedPackets,
     ) -> std::io::Result<()> {
@@ -476,7 +476,7 @@ impl BankingStage {
     #[allow(clippy::too_many_arguments)]
     fn process_buffered_packets(
         my_pubkey: &Pubkey,
-        socket: &std::net::UdpSocket,
+        socket: &DatagramSocket,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         cluster_info: &ClusterInfo,
         buffered_packets: &mut UnprocessedPackets,
@@ -557,7 +557,7 @@ impl BankingStage {
         cluster_info: &ClusterInfo,
         buffered_packets: &mut UnprocessedPackets,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
-        socket: &UdpSocket,
+        socket: &DatagramSocket,
         hold: bool,
     ) {
         if !enable_forwarding {
@@ -596,8 +596,9 @@ impl BankingStage {
         gossip_vote_sender: ReplayVoteSender,
         duplicates: &Arc<Mutex<(LruCache<u64, ()>, PacketHasher)>>,
     ) {
+        let network = Network::default();
         let recorder = poh_recorder.lock().unwrap().recorder();
-        let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let socket = network.bind("0.0.0.0:0").unwrap();
         let mut buffered_packets = VecDeque::with_capacity(batch_limit);
         let banking_stage_stats = BankingStageStats::new(id);
         loop {

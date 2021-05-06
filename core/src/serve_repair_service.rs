@@ -1,8 +1,7 @@
 use crate::serve_repair::ServeRepair;
 use solana_ledger::blockstore::Blockstore;
 use solana_perf::recycler::Recycler;
-use solana_streamer::streamer;
-use std::net::UdpSocket;
+use solana_net_utils::{streamer, DatagramSocket,SocketLike};
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
@@ -16,7 +15,7 @@ impl ServeRepairService {
     pub fn new(
         serve_repair: &Arc<RwLock<ServeRepair>>,
         blockstore: Option<Arc<Blockstore>>,
-        serve_repair_socket: UdpSocket,
+        serve_repair_socket: DatagramSocket,
         exit: &Arc<AtomicBool>,
     ) -> Self {
         let (request_sender, request_receiver) = channel();

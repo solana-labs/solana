@@ -10,10 +10,10 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signer},
 };
-use solana_streamer::streamer;
+use solana_net_utils::{streamer, DatagramSocket, SocketLike, Network, NetworkLike};
 use std::{
     collections::HashSet,
-    net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, UdpSocket},
+    net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener},
     sync::{
         atomic::{AtomicBool, Ordering},
         mpsc::channel,
@@ -31,7 +31,7 @@ impl GossipService {
     pub fn new(
         cluster_info: &Arc<ClusterInfo>,
         bank_forks: Option<Arc<RwLock<BankForks>>>,
-        gossip_socket: UdpSocket,
+        gossip_socket: DatagramSocket,
         gossip_validators: Option<HashSet<Pubkey>>,
         should_check_duplicate_instance: bool,
         exit: &Arc<AtomicBool>,
@@ -184,13 +184,14 @@ pub fn get_client(nodes: &[ContactInfo]) -> ThinClient {
 }
 
 pub fn get_multi_client(nodes: &[ContactInfo]) -> (ThinClient, usize) {
+    let network = Network::default();
     let addrs: Vec<_> = nodes
         .iter()
         .filter_map(ContactInfo::valid_client_facing_addr)
         .collect();
     let rpc_addrs: Vec<_> = addrs.iter().map(|addr| addr.0).collect();
     let tpu_addrs: Vec<_> = addrs.iter().map(|addr| addr.1).collect();
-    let (_, transactions_socket) = solana_net_utils::bind_in_range(
+    let (_, transactions_socket) = network.bind_in_range(
         IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
         VALIDATOR_PORT_RANGE,
     )

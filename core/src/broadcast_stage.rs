@@ -20,14 +20,13 @@ use crossbeam_channel::{
 use solana_ledger::{blockstore::Blockstore, shred::Shred};
 use solana_measure::measure::Measure;
 use solana_metrics::{inc_new_counter_error, inc_new_counter_info};
+use solana_net_utils::{DatagramSocket, SocketLike};
 use solana_runtime::bank::Bank;
 use solana_sdk::timing::timestamp;
 use solana_sdk::{clock::Slot, pubkey::Pubkey};
-use solana_streamer::sendmmsg::send_mmsg;
 use std::sync::atomic::AtomicU64;
 use std::{
     collections::HashMap,
-    net::UdpSocket,
     sync::atomic::{AtomicBool, Ordering},
     sync::mpsc::{channel, Receiver, RecvError, RecvTimeoutError, Sender},
     sync::{Arc, Mutex},
@@ -62,7 +61,7 @@ pub enum BroadcastStageType {
 impl BroadcastStageType {
     pub fn new_broadcast_stage(
         &self,
-        sock: Vec<UdpSocket>,
+        sock: Vec<DatagramSocket>,
         cluster_info: Arc<ClusterInfo>,
         receiver: Receiver<WorkingBankEntry>,
         retransmit_slots_receiver: RetransmitSlotsReceiver,
@@ -118,7 +117,7 @@ trait BroadcastRun {
         &mut self,
         receiver: &Arc<Mutex<TransmitReceiver>>,
         cluster_info: &ClusterInfo,
-        sock: &UdpSocket,
+        sock: &DatagramSocket,
     ) -> Result<()>;
     fn record(
         &mut self,
@@ -206,7 +205,7 @@ impl BroadcastStage {
     #[allow(clippy::too_many_arguments)]
     #[allow(clippy::same_item_push)]
     fn new(
-        socks: Vec<UdpSocket>,
+        socks: Vec<DatagramSocket>,
         cluster_info: Arc<ClusterInfo>,
         receiver: Receiver<WorkingBankEntry>,
         retransmit_slots_receiver: RetransmitSlotsReceiver,
@@ -372,7 +371,7 @@ pub fn get_broadcast_peers(
 /// broadcast messages from the leader to layer 1 nodes
 /// # Remarks
 pub fn broadcast_shreds(
-    s: &UdpSocket,
+    s: &DatagramSocket,
     shreds: &[Shred],
     peers_and_stakes: &[(u64, usize)],
     peers: &[ContactInfo],
@@ -399,7 +398,7 @@ pub fn broadcast_shreds(
     let mut sent = 0;
     let mut send_mmsg_time = Measure::start("send_mmsg");
     while sent < packets.len() {
-        match send_mmsg(s, &packets[sent..]) {
+        match s.send_mmsg(&packets[sent..]) {
             Ok(n) => sent += n,
             Err(e) => {
                 return Err(Error::Io(e));

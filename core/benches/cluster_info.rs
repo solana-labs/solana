@@ -12,18 +12,19 @@ use solana_sdk::pubkey;
 use solana_sdk::timing::timestamp;
 use std::{
     collections::HashMap,
-    net::UdpSocket,
     sync::{atomic::AtomicU64, Arc},
 };
 use test::Bencher;
+use solana_net_utils::Network;
 
 #[bench]
 fn broadcast_shreds_bench(bencher: &mut Bencher) {
     solana_logger::setup();
+    let network = Network::default();
     let leader_pubkey = pubkey::new_rand();
     let leader_info = Node::new_localhost_with_pubkey(&leader_pubkey);
     let cluster_info = ClusterInfo::new_with_invalid_keypair(leader_info.info);
-    let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+    let socket = network.bind("0.0.0.0:0").unwrap();
 
     const NUM_SHREDS: usize = 32;
     let shreds = vec![Shred::new_empty_data_shred(); NUM_SHREDS];

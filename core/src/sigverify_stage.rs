@@ -12,7 +12,7 @@ use solana_metrics::datapoint_debug;
 use solana_perf::packet::Packets;
 use solana_perf::perf_libs;
 use solana_sdk::timing;
-use solana_streamer::streamer::{self, PacketReceiver, StreamerError};
+use solana_net_utils::streamer::{self, PacketReceiver, StreamerError};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, Builder, JoinHandle};

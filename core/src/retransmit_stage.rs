@@ -29,12 +29,11 @@ use solana_metrics::inc_new_counter_error;
 use solana_perf::packet::{Packet, Packets};
 use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use solana_sdk::{clock::Slot, epoch_schedule::EpochSchedule, pubkey::Pubkey, timing::timestamp};
-use solana_streamer::streamer::PacketReceiver;
+use solana_net_utils::streamer::PacketReceiver;
 use std::{
     cmp,
     collections::hash_set::HashSet,
     collections::{BTreeMap, BTreeSet, HashMap},
-    net::UdpSocket,
     ops::{Deref, DerefMut},
     sync::atomic::{AtomicBool, AtomicU64, Ordering},
     sync::mpsc::channel,
@@ -212,6 +211,8 @@ struct EpochStakesCache {
 }
 
 use crate::packet_hasher::PacketHasher;
+use solana_net_utils::DatagramSocket;
+
 // Map of shred (slot, index, is_data) => list of hash values seen for that key.
 pub type ShredFilter = LruCache<(Slot, u32, bool), Vec<u64>>;
 
@@ -304,7 +305,7 @@ fn retransmit(
     leader_schedule_cache: &LeaderScheduleCache,
     cluster_info: &ClusterInfo,
     r: &Mutex<PacketReceiver>,
-    sock: &UdpSocket,
+    sock: &DatagramSocket,
     id: u32,
     stats: &RetransmitStats,
     epoch_stakes_cache: &RwLock<EpochStakesCache>,
@@ -489,7 +490,7 @@ fn retransmit(
 /// * `cluster_info` - This structure needs to be updated and populated by the bank and via gossip.
 /// * `r` - Receive channel for shreds to be retransmitted to all the layer 1 nodes.
 pub fn retransmitter(
-    sockets: Arc<Vec<UdpSocket>>,
+    sockets: Arc<Vec<DatagramSocket>>,
     bank_forks: Arc<RwLock<BankForks>>,
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
     cluster_info: Arc<ClusterInfo>,
@@ -568,8 +569,8 @@ impl RetransmitStage {
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         blockstore: Arc<Blockstore>,
         cluster_info: &Arc<ClusterInfo>,
-        retransmit_sockets: Arc<Vec<UdpSocket>>,
-        repair_socket: Arc<UdpSocket>,
+        retransmit_sockets: Arc<Vec<DatagramSocket>>,
+        repair_socket: Arc<DatagramSocket>,
         verified_receiver: Receiver<Vec<Packets>>,
         exit: &Arc<AtomicBool>,
         completed_slots_receivers: [CompletedSlotsReceiver; 2],
@@ -678,13 +679,14 @@ mod tests {
     use solana_ledger::create_new_tmp_ledger;
     use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use solana_ledger::shred::Shred;
-    use solana_net_utils::find_available_port_in_range;
+    use solana_net_utils::{SocketLike, Network, NetworkLike};
     use solana_perf::packet::{Packet, Packets};
     use std::net::{IpAddr, Ipv4Addr};
 
     #[test]
     fn test_skip_repair() {
         solana_logger::setup();
+        let network = Network::default();
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(123);
         let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
         let blockstore = Blockstore::open(&ledger_path).unwrap();
@@ -699,12 +701,12 @@ mod tests {
 
         let mut me = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0);
         let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
-        let port = find_available_port_in_range(ip_addr, (8000, 10000)).unwrap();
-        let me_retransmit = UdpSocket::bind(format!("127.0.0.1:{}", port)).unwrap();
+        let port = network.find_available_port_in_range(ip_addr, (8000, 10000)).unwrap();
+        let me_retransmit = network.bind(format!("127.0.0.1:{}", port)).unwrap();
         // need to make sure tvu and tpu are valid addresses
         me.tvu_forwards = me_retransmit.local_addr().unwrap();
-        let port = find_available_port_in_range(ip_addr, (8000, 10000)).unwrap();
-        me.tvu = UdpSocket::bind(format!("127.0.0.1:{}", port))
+        let port = network.find_available_port_in_range(ip_addr, (8000, 10000)).unwrap();
+        me.tvu = network.bind(format!("127.0.0.1:{}", port))
             .unwrap()
             .local_addr()
             .unwrap();
@@ -713,7 +715,7 @@ mod tests {
         let cluster_info = ClusterInfo::new_with_invalid_keypair(other);
         cluster_info.insert_info(me);
 
-        let retransmit_socket = Arc::new(vec![UdpSocket::bind("0.0.0.0:0").unwrap()]);
+        let retransmit_socket = Arc::new(vec![network.bind("0.0.0.0:0").unwrap()]);
         let cluster_info = Arc::new(cluster_info);
 
         let (retransmit_sender, retransmit_receiver) = channel();
@@ -736,7 +738,7 @@ mod tests {
         // it should send this over the sockets.
         retransmit_sender.send(packets).unwrap();
         let mut packets = Packets::new(vec![]);
-        solana_streamer::packet::recv_from(&mut packets, &me_retransmit, 1).unwrap();
+        solana_net_utils::streamer::recv_from(&mut packets, &me_retransmit, 1).unwrap();
         assert_eq!(packets.packets.len(), 1);
         assert_eq!(packets.packets[0].meta.repair, false);
 
@@ -749,7 +751,7 @@ mod tests {
         let packets = Packets::new(vec![repair, packet]);
         retransmit_sender.send(packets).unwrap();
         let mut packets = Packets::new(vec![]);
-        solana_streamer::packet::recv_from(&mut packets, &me_retransmit, 1).unwrap();
+        solana_net_utils::streamer::recv_from(&mut packets, &me_retransmit, 1).unwrap();
         assert_eq!(packets.packets.len(), 1);
         assert_eq!(packets.packets[0].meta.repair, false);
     }

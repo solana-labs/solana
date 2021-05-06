@@ -27,10 +27,11 @@ use solana_perf::packet::Packets;
 use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use solana_sdk::{clock::Slot, packet::PACKET_DATA_SIZE, pubkey::Pubkey, timing::duration_as_ms};
-use solana_streamer::streamer::PacketSender;
+use solana_net_utils::streamer::PacketSender;
+use solana_net_utils::DatagramSocket;
 use std::collections::HashSet;
 use std::{
-    net::{SocketAddr, UdpSocket},
+    net::SocketAddr,
     sync::atomic::{AtomicBool, Ordering},
     sync::{Arc, RwLock},
     thread::{self, Builder, JoinHandle},
@@ -353,7 +354,7 @@ impl WindowService {
         cluster_info: Arc<ClusterInfo>,
         verified_receiver: CrossbeamReceiver<Vec<Packets>>,
         retransmit: PacketSender,
-        repair_socket: Arc<UdpSocket>,
+        repair_socket: Arc<DatagramSocket>,
         exit: &Arc<AtomicBool>,
         repair_info: RepairInfo,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,

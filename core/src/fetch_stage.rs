@@ -7,12 +7,12 @@ use solana_metrics::{inc_new_counter_debug, inc_new_counter_info};
 use solana_perf::packet::PacketsRecycler;
 use solana_perf::recycler::Recycler;
 use solana_sdk::clock::DEFAULT_TICKS_PER_SLOT;
-use solana_streamer::streamer::{self, PacketReceiver, PacketSender};
-use std::net::UdpSocket;
+use solana_net_utils::streamer::{self, PacketReceiver, PacketSender};
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::{channel, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, Builder, JoinHandle};
+use solana_net_utils::DatagramSocket;
 
 pub struct FetchStage {
     thread_hdls: Vec<JoinHandle<()>>,
@@ -21,8 +21,8 @@ pub struct FetchStage {
 impl FetchStage {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
-        sockets: Vec<UdpSocket>,
-        tpu_forwards_sockets: Vec<UdpSocket>,
+        sockets: Vec<DatagramSocket>,
+        tpu_forwards_sockets: Vec<DatagramSocket>,
         exit: &Arc<AtomicBool>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         coalesce_ms: u64,
@@ -41,8 +41,8 @@ impl FetchStage {
         )
     }
     pub fn new_with_sender(
-        sockets: Vec<UdpSocket>,
-        tpu_forwards_sockets: Vec<UdpSocket>,
+        sockets: Vec<DatagramSocket>,
+        tpu_forwards_sockets: Vec<DatagramSocket>,
         exit: &Arc<AtomicBool>,
         sender: &PacketSender,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
@@ -96,8 +96,8 @@ impl FetchStage {
     }
 
     fn new_multi_socket(
-        sockets: Vec<Arc<UdpSocket>>,
-        tpu_forwards_sockets: Vec<Arc<UdpSocket>>,
+        sockets: Vec<Arc<DatagramSocket>>,
+        tpu_forwards_sockets: Vec<Arc<DatagramSocket>>,
         exit: &Arc<AtomicBool>,
         sender: &PacketSender,
         poh_recorder: &Arc<Mutex<PohRecorder>>,

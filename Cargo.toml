@@ -33,7 +33,6 @@ members = [
     "merkle-tree",
     "storage-bigtable",
     "storage-proto",
-    "streamer",
     "measure",
     "metrics",
     "net-shaper",

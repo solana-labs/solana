@@ -23,12 +23,12 @@ use solana_sdk::{
 use solana_transaction_status::TransactionStatus;
 use std::{
     collections::HashSet,
-    net::UdpSocket,
     sync::{mpsc::channel, Arc},
     thread::sleep,
     time::{Duration, Instant},
 };
 use tokio_02::runtime::Runtime;
+use solana_net_utils::{Network, NetworkLike, SocketLike};
 
 macro_rules! json_req {
     ($method: expr, $params: expr) => {{
@@ -216,10 +216,11 @@ fn test_rpc_slot_updates() {
 fn test_rpc_subscriptions() {
     solana_logger::setup();
 
+    let network = Network::default();
     let alice = Keypair::new();
     let test_validator = TestValidator::with_no_fees(alice.pubkey(), None);
 
-    let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+    let mut transactions_socket = network.bind("0.0.0.0:0").unwrap();
     transactions_socket.connect(test_validator.tpu()).unwrap();
 
     let rpc_client = RpcClient::new(test_validator.rpc_url());

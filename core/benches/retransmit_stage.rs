@@ -21,7 +21,6 @@ use solana_sdk::pubkey;
 use solana_sdk::signature::{Keypair, Signer};
 use solana_sdk::system_transaction;
 use solana_sdk::timing::timestamp;
-use std::net::UdpSocket;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::Mutex;
@@ -30,17 +29,19 @@ use std::thread::sleep;
 use std::thread::Builder;
 use std::time::Duration;
 use test::Bencher;
+use solana_net_utils::Network;
 
 #[bench]
 #[allow(clippy::same_item_push)]
 fn bench_retransmitter(bencher: &mut Bencher) {
     solana_logger::setup();
+    let network = Network::default();
     let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
     const NUM_PEERS: usize = 4;
     let mut peer_sockets = Vec::new();
     for _ in 0..NUM_PEERS {
         let id = pubkey::new_rand();
-        let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let socket = network.bind("0.0.0.0:0").unwrap();
         let mut contact_info = ContactInfo::new_localhost(&id, timestamp());
         contact_info.tvu = socket.local_addr().unwrap();
         contact_info.tvu.set_ip("127.0.0.1".parse().unwrap());
@@ -62,7 +63,7 @@ fn bench_retransmitter(bencher: &mut Bencher) {
     let packet_receiver = Arc::new(Mutex::new(packet_receiver));
     const NUM_THREADS: usize = 2;
     let sockets = (0..NUM_THREADS)
-        .map(|_| UdpSocket::bind("0.0.0.0:0").unwrap())
+        .map(|_| network.bind("0.0.0.0:0").unwrap())
         .collect();
 
     let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));

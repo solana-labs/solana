@@ -1,8 +1,8 @@
 #![cfg(target_os = "linux")]
 
-use solana_streamer::packet::Packet;
-use solana_streamer::packet::PACKET_DATA_SIZE;
-use solana_streamer::recvmmsg::*;
+use solana_net_utils::streamer::packet::Packet;
+use solana_net_utils::streamer::packet::PACKET_DATA_SIZE;
+use solana_net_utils::streamer::recvmmsg::*;
 use std::net::UdpSocket;
 use std::time::Instant;
 

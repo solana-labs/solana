@@ -16,6 +16,7 @@ use std::{
     process::exit,
     sync::Arc,
 };
+use solana_net_utils::{Network, NetworkLike};
 
 fn parse_matches() -> ArgMatches<'static> {
     let shred_version_arg = Arg::with_name("shred_version")
@@ -228,10 +229,11 @@ fn process_spy(matches: &ArgMatches) -> std::io::Result<()> {
 
     let gossip_host = parse_gossip_host(matches, entrypoint_addr);
 
+    let network = Network::default();
     let gossip_addr = SocketAddr::new(
         gossip_host,
         value_t!(matches, "gossip_port", u16).unwrap_or_else(|_| {
-            solana_net_utils::find_available_port_in_range(
+            network.find_available_port_in_range(
                 IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
                 (0, 1),
             )

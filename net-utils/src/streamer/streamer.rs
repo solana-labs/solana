@@ -1,16 +1,18 @@
 //! The `streamer` module defines a set of services for efficiently pulling data from UDP sockets.
 //!
 
-use crate::packet::{self, send_to, Packets, PacketsRecycler, PACKETS_PER_BATCH};
-use crate::recvmmsg::NUM_RCVMMSGS;
+use crate::streamer::packet::{self, send_to, Packets, PacketsRecycler, PACKETS_PER_BATCH};
+use crate::streamer::recvmmsg::NUM_RCVMMSGS;
+use crate::{SocketLike, DatagramSocket};
 use solana_sdk::timing::{duration_as_ms, timestamp};
-use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, SendError, Sender};
 use std::sync::Arc;
 use std::thread::{Builder, JoinHandle};
 use std::time::{Duration, Instant};
 use thiserror::Error;
+use log::*;
+use solana_metrics::*;
 
 pub type PacketReceiver = Receiver<Packets>;
 pub type PacketSender = Sender<Packets>;
@@ -30,7 +32,7 @@ pub enum StreamerError {
 pub type Result<T> = std::result::Result<T, StreamerError>;
 
 fn recv_loop(
-    sock: &UdpSocket,
+    sock: &DatagramSocket,
     exit: Arc<AtomicBool>,
     channel: &PacketSender,
     recycler: &PacketsRecycler,
@@ -78,7 +80,7 @@ fn recv_loop(
 }
 
 pub fn receiver(
-    sock: Arc<UdpSocket>,
+    sock: Arc<DatagramSocket>,
     exit: &Arc<AtomicBool>,
     packet_sender: PacketSender,
     recycler: PacketsRecycler,
@@ -105,7 +107,7 @@ pub fn receiver(
         .unwrap()
 }
 
-fn recv_send(sock: &UdpSocket, r: &PacketReceiver) -> Result<()> {
+fn recv_send(sock: &DatagramSocket, r: &PacketReceiver) -> Result<()> {
     let timer = Duration::new(1, 0);
     let msgs = r.recv_timeout(timer)?;
     send_to(&msgs, sock)?;
@@ -131,7 +133,7 @@ pub fn recv_batch(recvr: &PacketReceiver, max_batch: usize) -> Result<(Vec<Packe
     Ok((batch, len, duration_as_ms(&recv_start.elapsed())))
 }
 
-pub fn responder(name: &'static str, sock: Arc<UdpSocket>, r: PacketReceiver) -> JoinHandle<()> {
+pub fn responder(name: &'static str, sock: Arc<DatagramSocket>, r: PacketReceiver) -> JoinHandle<()> {
     Builder::new()
         .name(format!("solana-responder-{}", name))
         .spawn(move || {
@@ -164,16 +166,16 @@ pub fn responder(name: &'static str, sock: Arc<UdpSocket>, r: PacketReceiver) ->
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::packet::{Packet, Packets, PACKET_DATA_SIZE};
-    use crate::streamer::{receiver, responder};
+    use crate::streamer::packet::{Packet, Packets, PACKET_DATA_SIZE};
+    use crate::streamer::streamer::{receiver, responder};
     use solana_perf::recycler::Recycler;
     use std::io;
     use std::io::Write;
-    use std::net::UdpSocket;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
     use std::sync::Arc;
     use std::time::Duration;
+    use crate::{Network, NetworkLike, SocketLike};
 
     fn get_msgs(r: PacketReceiver, num: &mut usize) {
         for _ in 0..10 {
@@ -197,11 +199,12 @@ mod test {
     }
     #[test]
     fn streamer_send_test() {
-        let read = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        let network = Network::default();
+        let read = network.bind("127.0.0.1:0").expect("bind");
         read.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
 
         let addr = read.local_addr().unwrap();
-        let send = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        let send = network.bind("127.0.0.1:0").expect("bind");
         let exit = Arc::new(AtomicBool::new(false));
         let (s_reader, r_reader) = channel();
         let t_receiver = receiver(

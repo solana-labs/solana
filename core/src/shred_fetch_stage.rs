@@ -8,14 +8,14 @@ use solana_perf::packet::{Packet, PacketsRecycler};
 use solana_perf::recycler::Recycler;
 use solana_runtime::bank_forks::BankForks;
 use solana_sdk::clock::{Slot, DEFAULT_MS_PER_SLOT};
-use solana_streamer::streamer::{self, PacketReceiver, PacketSender};
-use std::net::UdpSocket;
+use solana_net_utils::streamer::{self, PacketReceiver, PacketSender};
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::channel;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Instant;
+use solana_net_utils::DatagramSocket;
 
 const DEFAULT_LRU_SIZE: usize = 10_000;
 pub type ShredsReceived = LruCache<u64, ()>;
@@ -128,7 +128,7 @@ impl ShredFetchStage {
     }
 
     fn packet_modifier<F>(
-        sockets: Vec<Arc<UdpSocket>>,
+        sockets: Vec<Arc<DatagramSocket>>,
         exit: &Arc<AtomicBool>,
         sender: PacketSender,
         recycler: Recycler<PinnedVec<Packet>>,
@@ -162,9 +162,9 @@ impl ShredFetchStage {
     }
 
     pub fn new(
-        sockets: Vec<Arc<UdpSocket>>,
-        forward_sockets: Vec<Arc<UdpSocket>>,
-        repair_socket: Arc<UdpSocket>,
+        sockets: Vec<Arc<DatagramSocket>>,
+        forward_sockets: Vec<Arc<DatagramSocket>>,
+        repair_socket: Arc<DatagramSocket>,
         sender: &PacketSender,
         bank_forks: Option<Arc<RwLock<BankForks>>>,
         exit: &Arc<AtomicBool>,

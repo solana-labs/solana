@@ -23,7 +23,7 @@ use solana_sdk::{
     signature::{Keypair, Signer},
     timing::duration_as_ms,
 };
-use solana_streamer::streamer::{PacketReceiver, PacketSender};
+use solana_net_utils::streamer::{PacketReceiver, PacketSender};
 use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
     net::SocketAddr,

@@ -60,7 +60,7 @@ use {
         collections::{HashSet, VecDeque},
         env,
         fs::{self, File},
-        net::{IpAddr, SocketAddr, TcpListener, UdpSocket},
+        net::{IpAddr, SocketAddr, TcpListener},
         path::{Path, PathBuf},
         process::exit,
         str::FromStr,
@@ -72,6 +72,7 @@ use {
         time::{Duration, Instant, SystemTime},
     },
 };
+use solana_net_utils::{DatagramSocket, SocketLike, Network, NetworkLike};
 
 #[derive(Debug, PartialEq)]
 enum Operation {
@@ -341,7 +342,7 @@ fn start_gossip_node(
     cluster_entrypoints: &[ContactInfo],
     ledger_path: &Path,
     gossip_addr: &SocketAddr,
-    gossip_socket: UdpSocket,
+    gossip_socket: DatagramSocket,
     expected_shred_version: Option<u16>,
     gossip_validators: Option<HashSet<Pubkey>>,
     should_check_duplicate_instance: bool,
@@ -2392,10 +2393,11 @@ pub fn main() {
             }
         });
 
+    let network = Network::default();
     let gossip_addr = SocketAddr::new(
         gossip_host,
         value_t!(matches, "gossip_port", u16).unwrap_or_else(|_| {
-            solana_net_utils::find_available_port_in_range(bind_address, (0, 1)).unwrap_or_else(
+            network.find_available_port_in_range(bind_address, (0, 1)).unwrap_or_else(
                 |err| {
                     eprintln!("Unable to find an available gossip port: {}", err);
                     exit(1);

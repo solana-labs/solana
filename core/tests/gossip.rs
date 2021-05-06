@@ -19,13 +19,13 @@ use solana_sdk::{
     transaction::Transaction,
 };
 use solana_vote_program::{vote_instruction, vote_state::Vote};
-use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::sleep;
 use std::time::Duration;
+use solana_net_utils::{DatagramSocket,SocketLike};
 
-fn test_node(exit: &Arc<AtomicBool>) -> (Arc<ClusterInfo>, GossipService, UdpSocket) {
+fn test_node(exit: &Arc<AtomicBool>) -> (Arc<ClusterInfo>, GossipService, DatagramSocket) {
     let keypair = Arc::new(Keypair::new());
     let mut test_node = Node::new_localhost_with_pubkey(&keypair.pubkey());
     let cluster_info = Arc::new(ClusterInfo::new(test_node.info.clone(), keypair));
@@ -49,7 +49,7 @@ fn test_node_with_bank(
     node_keypair: Arc<Keypair>,
     exit: &Arc<AtomicBool>,
     bank_forks: Arc<RwLock<BankForks>>,
-) -> (Arc<ClusterInfo>, GossipService, UdpSocket) {
+) -> (Arc<ClusterInfo>, GossipService, DatagramSocket) {
     let mut test_node = Node::new_localhost_with_pubkey(&node_keypair.pubkey());
     let cluster_info = Arc::new(ClusterInfo::new(test_node.info.clone(), node_keypair));
     let gossip_service = GossipService::new(
@@ -74,7 +74,7 @@ fn test_node_with_bank(
 /// tests that actually use this function are below
 fn run_gossip_topo<F>(num: usize, topo: F)
 where
-    F: Fn(&Vec<(Arc<ClusterInfo>, GossipService, UdpSocket)>),
+    F: Fn(&Vec<(Arc<ClusterInfo>, GossipService, DatagramSocket)>),
 {
     let exit = Arc::new(AtomicBool::new(false));
     let listen: Vec<_> = (0..num).map(|_| test_node(&exit)).collect();

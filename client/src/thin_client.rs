@@ -26,9 +26,10 @@ use {
         transaction::{self, Transaction},
         transport::Result as TransportResult,
     },
+    solana_net_utils::{DatagramSocket, Network, NetworkLike, SocketLike},
     std::{
         io,
-        net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
+        net::{IpAddr, Ipv4Addr, SocketAddr},
         sync::{
             atomic::{AtomicBool, AtomicUsize, Ordering},
             RwLock,
@@ -118,7 +119,7 @@ impl ClientOptimizer {
 
 /// An object for querying and sending transactions to the network.
 pub struct ThinClient {
-    transactions_socket: UdpSocket,
+    transactions_socket: DatagramSocket,
     tpu_addrs: Vec<SocketAddr>,
     rpc_clients: Vec<RpcClient>,
     optimizer: ClientOptimizer,
@@ -127,7 +128,7 @@ pub struct ThinClient {
 impl ThinClient {
     /// Create a new ThinClient that will interface with the Rpc at `rpc_addr` using TCP
     /// and the Tpu at `tpu_addr` over `transactions_socket` using UDP.
-    pub fn new(rpc_addr: SocketAddr, tpu_addr: SocketAddr, transactions_socket: UdpSocket) -> Self {
+    pub fn new(rpc_addr: SocketAddr, tpu_addr: SocketAddr, transactions_socket: DatagramSocket) -> Self {
         Self::new_from_client(
             tpu_addr,
             transactions_socket,
@@ -138,7 +139,7 @@ impl ThinClient {
     pub fn new_socket_with_timeout(
         rpc_addr: SocketAddr,
         tpu_addr: SocketAddr,
-        transactions_socket: UdpSocket,
+        transactions_socket: DatagramSocket,
         timeout: Duration,
     ) -> Self {
         let rpc_client = RpcClient::new_socket_with_timeout(rpc_addr, timeout);
@@ -147,7 +148,7 @@ impl ThinClient {
 
     fn new_from_client(
         tpu_addr: SocketAddr,
-        transactions_socket: UdpSocket,
+        transactions_socket: DatagramSocket,
         rpc_client: RpcClient,
     ) -> Self {
         Self {
@@ -161,7 +162,7 @@ impl ThinClient {
     pub fn new_from_addrs(
         rpc_addrs: Vec<SocketAddr>,
         tpu_addrs: Vec<SocketAddr>,
-        transactions_socket: UdpSocket,
+        transactions_socket: DatagramSocket,
     ) -> Self {
         assert!(!rpc_addrs.is_empty());
         assert_eq!(rpc_addrs.len(), tpu_addrs.len());
@@ -605,8 +606,9 @@ impl AsyncClient for ThinClient {
 }
 
 pub fn create_client((rpc, tpu): (SocketAddr, SocketAddr), range: (u16, u16)) -> ThinClient {
+    let network = Network::default();
     let (_, transactions_socket) =
-        solana_net_utils::bind_in_range(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), range).unwrap();
+        network.bind_in_range(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), range).unwrap();
     ThinClient::new(rpc, tpu, transactions_socket)
 }
 
@@ -615,8 +617,9 @@ pub fn create_client_with_timeout(
     range: (u16, u16),
     timeout: Duration,
 ) -> ThinClient {
+    let network = Network::default();
     let (_, transactions_socket) =
-        solana_net_utils::bind_in_range(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), range).unwrap();
+        network.bind_in_range(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), range).unwrap();
     ThinClient::new_socket_with_timeout(rpc, tpu, transactions_socket, timeout)
 }
 

@@ -130,7 +130,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         &mut self,
         receiver: &Arc<Mutex<TransmitReceiver>>,
         cluster_info: &ClusterInfo,
-        sock: &UdpSocket,
+        sock: &DatagramSocket,
     ) -> Result<()> {
         let ((stakes, shreds), _) = receiver.lock().unwrap().recv()?;
         // Broadcast data

@@ -71,7 +71,6 @@ solana-frozen-abi = { path = "../frozen-abi", version = "=1.7.0" }
 solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.7.0" }
 solana-stake-program = { path = "../programs/stake", version = "=1.7.0" }
 solana-storage-bigtable = { path = "../storage-bigtable", version = "=1.7.0" }
-solana-streamer = { path = "../streamer", version = "=1.7.0" }
 solana-sys-tuner = { path = "../sys-tuner", version = "=1.7.0" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.7.0" }
 solana-version = { path = "../version", version = "=1.7.0" }

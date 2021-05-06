@@ -1,9 +1,9 @@
 #![allow(clippy::integer_arithmetic)]
 use clap::{crate_description, crate_name, App, Arg};
-use solana_streamer::packet::{Packet, Packets, PacketsRecycler, PACKET_DATA_SIZE};
-use solana_streamer::streamer::{receiver, PacketReceiver};
+use solana_net_utils::streamer::packet::{Packet, Packets, PacketsRecycler, PACKET_DATA_SIZE};
+use solana_net_utils::streamer::streamer::{receiver, PacketReceiver};
 use std::cmp::max;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::Arc;
@@ -11,9 +11,11 @@ use std::thread::sleep;
 use std::thread::{spawn, JoinHandle, Result};
 use std::time::Duration;
 use std::time::SystemTime;
+use solana_net_utils::{Network, NetworkLike, SocketLike};
 
 fn producer(addr: &SocketAddr, exit: Arc<AtomicBool>) -> JoinHandle<()> {
-    let send = UdpSocket::bind("0.0.0.0:0").unwrap();
+    let network = Network::default();
+    let send = network.bind("0.0.0.0:0").unwrap();
     let mut msgs = Packets::default();
     msgs.packets.resize(10, Packet::default());
     for w in msgs.packets.iter_mut() {
@@ -76,8 +78,9 @@ fn main() -> Result<()> {
     let mut read_channels = Vec::new();
     let mut read_threads = Vec::new();
     let recycler = PacketsRecycler::default();
+    let network = Network::default();
     for _ in 0..num_sockets {
-        let read = solana_net_utils::bind_to(ip_addr, port, false).unwrap();
+        let read = network.bind_to(ip_addr, port, false).unwrap();
         read.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
 
         addr = read.local_addr().unwrap();

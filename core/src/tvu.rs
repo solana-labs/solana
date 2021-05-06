@@ -48,7 +48,6 @@ use solana_sdk::{
 use std::{
     boxed::Box,
     collections::HashSet,
-    net::UdpSocket,
     sync::{
         atomic::AtomicBool,
         mpsc::{channel, Receiver},
@@ -56,6 +55,7 @@ use std::{
     },
     thread,
 };
+use solana_net_utils::DatagramSocket;
 
 pub struct Tvu {
     fetch_stage: ShredFetchStage,
@@ -68,10 +68,10 @@ pub struct Tvu {
 }
 
 pub struct Sockets {
-    pub fetch: Vec<UdpSocket>,
-    pub repair: UdpSocket,
-    pub retransmit: Vec<UdpSocket>,
-    pub forwards: Vec<UdpSocket>,
+    pub fetch: Vec<DatagramSocket>,
+    pub repair: DatagramSocket,
+    pub retransmit: Vec<DatagramSocket>,
+    pub forwards: Vec<DatagramSocket>,
 }
 
 #[derive(Default)]
@@ -141,8 +141,8 @@ impl Tvu {
         let (fetch_sender, fetch_receiver) = channel();
 
         let repair_socket = Arc::new(repair_socket);
-        let fetch_sockets: Vec<Arc<UdpSocket>> = fetch_sockets.into_iter().map(Arc::new).collect();
-        let forward_sockets: Vec<Arc<UdpSocket>> =
+        let fetch_sockets: Vec<Arc<DatagramSocket>> = fetch_sockets.into_iter().map(Arc::new).collect();
+        let forward_sockets: Vec<Arc<DatagramSocket>> =
             tvu_forward_sockets.into_iter().map(Arc::new).collect();
         let fetch_stage = ShredFetchStage::new(
             fetch_sockets,

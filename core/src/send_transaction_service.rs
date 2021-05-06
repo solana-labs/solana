@@ -14,7 +14,7 @@ use solana_sdk::{
 use std::sync::Mutex;
 use std::{
     collections::HashMap,
-    net::{SocketAddr, UdpSocket},
+    net::SocketAddr,
     sync::{
         mpsc::{Receiver, RecvTimeoutError},
         Arc, RwLock,
@@ -22,6 +22,7 @@ use std::{
     thread::{self, Builder, JoinHandle},
     time::{Duration, Instant},
 };
+use solana_net_utils::{DatagramSocket, SocketLike, Network, NetworkLike};
 
 /// Maximum size of the transaction queue
 const MAX_TRANSACTION_QUEUE_SIZE: usize = 10_000; // This seems like a lot but maybe it needs to be bigger one day
@@ -135,7 +136,8 @@ impl SendTransactionService {
         let mut last_status_check = Instant::now();
         let mut last_leader_refresh = Instant::now();
         let mut transactions = HashMap::new();
-        let send_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let network = Network::default();
+        let send_socket = network.bind("0.0.0.0:0").unwrap();
 
         if let Some(leader_info) = leader_info.as_mut() {
             leader_info.refresh_recent_peers();
@@ -214,7 +216,7 @@ impl SendTransactionService {
     fn process_transactions(
         working_bank: &Arc<Bank>,
         root_bank: &Arc<Bank>,
-        send_socket: &UdpSocket,
+        send_socket: &DatagramSocket,
         tpu_address: &SocketAddr,
         transactions: &mut HashMap<Signature, TransactionInfo>,
         leader_info: &Option<LeaderInfo>,
@@ -296,7 +298,7 @@ impl SendTransactionService {
     }
 
     fn send_transaction(
-        send_socket: &UdpSocket,
+        send_socket: &DatagramSocket,
         tpu_address: &SocketAddr,
         wire_transaction: &[u8],
     ) {
@@ -354,7 +356,8 @@ mod test {
         let (genesis_config, mint_keypair) = create_genesis_config(4);
         let bank = Bank::new(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-        let send_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let network = Network::default();
+        let send_socket = network.bind("0.0.0.0:0").unwrap();
         let tpu_address = "127.0.0.1:0".parse().unwrap();
         let leader_forward_count = 1;
 
@@ -508,7 +511,8 @@ mod test {
         let (genesis_config, mint_keypair) = create_genesis_config(4);
         let bank = Bank::new(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-        let send_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let network = Network::default();
+        let send_socket = network.bind("0.0.0.0:0").unwrap();
         let tpu_address = "127.0.0.1:0".parse().unwrap();
         let leader_forward_count = 1;
 

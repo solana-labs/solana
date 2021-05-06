@@ -155,7 +155,7 @@ impl StandardBroadcastRun {
     fn test_process_receive_results(
         &mut self,
         cluster_info: &ClusterInfo,
-        sock: &UdpSocket,
+        sock: &DatagramSocket,
         blockstore: &Arc<Blockstore>,
         receive_results: ReceiveResults,
     ) -> Result<()> {
@@ -335,7 +335,7 @@ impl StandardBroadcastRun {
 
     fn broadcast(
         &mut self,
-        sock: &UdpSocket,
+        sock: &DatagramSocket,
         cluster_info: &ClusterInfo,
         stakes: Option<&HashMap<Pubkey, u64>>,
         shreds: Arc<Vec<Shred>>,
@@ -475,7 +475,7 @@ impl BroadcastRun for StandardBroadcastRun {
         &mut self,
         receiver: &Arc<Mutex<TransmitReceiver>>,
         cluster_info: &ClusterInfo,
-        sock: &UdpSocket,
+        sock: &DatagramSocket,
     ) -> Result<()> {
         let ((stakes, shreds), slot_start_ts) = receiver.lock().unwrap().recv()?;
         self.broadcast(sock, cluster_info, stakes.as_deref(), shreds, slot_start_ts)
@@ -507,6 +507,7 @@ mod test {
     };
     use std::sync::Arc;
     use std::time::Duration;
+    use solana_net_utils::{Network, NetworkLike};
 
     fn setup(
         num_shreds_per_slot: Slot,
@@ -516,7 +517,7 @@ mod test {
         Arc<ClusterInfo>,
         Arc<Bank>,
         Arc<Keypair>,
-        UdpSocket,
+        DatagramSocket,
     ) {
         // Setup
         let ledger_path = get_tmp_ledger_path!();
@@ -527,7 +528,8 @@ mod test {
         let leader_pubkey = leader_keypair.pubkey();
         let leader_info = Node::new_localhost_with_pubkey(&leader_pubkey);
         let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(leader_info.info));
-        let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let network = Network::default();
+        let socket = network.bind("0.0.0.0:0").unwrap();
         let mut genesis_config = create_genesis_config(10_000).genesis_config;
         genesis_config.ticks_per_slot = max_ticks_per_n_shreds(num_shreds_per_slot, None) + 1;
         let bank0 = Arc::new(Bank::new(&genesis_config));

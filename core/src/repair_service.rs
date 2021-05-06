@@ -23,13 +23,13 @@ use std::{
     collections::{HashMap, HashSet},
     iter::Iterator,
     net::SocketAddr,
-    net::UdpSocket,
     sync::atomic::{AtomicBool, Ordering},
     sync::{Arc, RwLock},
     thread::sleep,
     thread::{self, Builder, JoinHandle},
     time::{Duration, Instant},
 };
+use solana_net_utils::{DatagramSocket, SocketLike};
 
 pub type DuplicateSlotsResetSender = CrossbeamSender<Slot>;
 pub type DuplicateSlotsResetReceiver = CrossbeamReceiver<Slot>;
@@ -143,7 +143,7 @@ impl RepairService {
     pub fn new(
         blockstore: Arc<Blockstore>,
         exit: Arc<AtomicBool>,
-        repair_socket: Arc<UdpSocket>,
+        repair_socket: Arc<DatagramSocket>,
         cluster_info: Arc<ClusterInfo>,
         repair_info: RepairInfo,
         cluster_slots: Arc<ClusterSlots>,
@@ -172,7 +172,7 @@ impl RepairService {
     fn run(
         blockstore: &Blockstore,
         exit: &AtomicBool,
-        repair_socket: &UdpSocket,
+        repair_socket: &DatagramSocket,
         cluster_info: Arc<ClusterInfo>,
         repair_info: RepairInfo,
         cluster_slots: &ClusterSlots,
@@ -474,7 +474,7 @@ impl RepairService {
         blockstore: &Blockstore,
         serve_repair: &ServeRepair,
         repair_stats: &mut RepairStats,
-        repair_socket: &UdpSocket,
+        repair_socket: &DatagramSocket,
         repair_validators: &Option<HashSet<Pubkey>>,
         outstanding_requests: &RwLock<OutstandingRepairs>,
     ) {
@@ -521,7 +521,7 @@ impl RepairService {
     #[allow(dead_code)]
     fn serialize_and_send_request(
         repair_type: &RepairType,
-        repair_socket: &UdpSocket,
+        repair_socket: &DatagramSocket,
         repair_pubkey: &Pubkey,
         to: &SocketAddr,
         serve_repair: &ServeRepair,
@@ -679,6 +679,7 @@ mod test {
     use solana_sdk::signature::Signer;
     use solana_vote_program::vote_transaction;
     use std::collections::HashSet;
+    use solana_net_utils::{Network, NetworkLike};
 
     #[test]
     pub fn test_repair_orphan() {
@@ -974,7 +975,8 @@ mod test {
         let serve_repair = ServeRepair::new_with_invalid_keypair(Node::new_localhost().info);
         let mut duplicate_slot_repair_statuses = HashMap::new();
         let dead_slot = 9;
-        let receive_socket = &UdpSocket::bind("0.0.0.0:0").unwrap();
+        let network = Network::default();
+        let receive_socket = &network.bind("0.0.0.0:0").unwrap();
         let duplicate_status = DuplicateSlotRepairStatus {
             start: std::u64::MAX,
             repair_pubkey_and_addr: None,
@@ -997,7 +999,7 @@ mod test {
             &blockstore,
             &serve_repair,
             &mut RepairStats::default(),
-            &UdpSocket::bind("0.0.0.0:0").unwrap(),
+            &network.bind("0.0.0.0:0").unwrap(),
             &None,
             &RwLock::new(OutstandingRequests::default()),
         );
@@ -1022,7 +1024,7 @@ mod test {
             &blockstore,
             &serve_repair,
             &mut RepairStats::default(),
-            &UdpSocket::bind("0.0.0.0:0").unwrap(),
+            &network.bind("0.0.0.0:0").unwrap(),
             &None,
             &RwLock::new(OutstandingRequests::default()),
         );
@@ -1040,7 +1042,7 @@ mod test {
             &blockstore,
             &serve_repair,
             &mut RepairStats::default(),
-            &UdpSocket::bind("0.0.0.0:0").unwrap(),
+            &network.bind("0.0.0.0:0").unwrap(),
             &None,
             &RwLock::new(OutstandingRequests::default()),
         );
@@ -1049,9 +1051,10 @@ mod test {
 
     #[test]
     pub fn test_update_duplicate_slot_repair_addr() {
+        let network = Network::default();
         let dummy_addr = Some((
             Pubkey::default(),
-            UdpSocket::bind("0.0.0.0:0").unwrap().local_addr().unwrap(),
+            network.bind("0.0.0.0:0").unwrap().local_addr().unwrap(),
         ));
         let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(
             Node::new_localhost().info,

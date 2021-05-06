@@ -1,11 +1,12 @@
 // TODO: Merge this implementation with the one at `core/src/send_transaction_service.rs`
 use log::*;
 use solana_metrics::{datapoint_warn, inc_new_counter_info};
+use solana_net_utils::{Network, NetworkLike, DatagramSocket, SocketLike};
 use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use solana_sdk::{clock::Slot, signature::Signature};
 use std::{
     collections::HashMap,
-    net::{SocketAddr, UdpSocket},
+    net::{SocketAddr},
     sync::{
         mpsc::{Receiver, RecvTimeoutError},
         Arc, RwLock,
@@ -61,9 +62,10 @@ impl SendTransactionService {
         bank_forks: Arc<RwLock<BankForks>>,
         tpu_address: SocketAddr,
     ) -> JoinHandle<()> {
+        let network = Network::default();
         let mut last_status_check = Instant::now();
         let mut transactions = HashMap::new();
-        let send_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let send_socket = network.bind("0.0.0.0:0").unwrap();
 
         Builder::new()
             .name("send-tx-svc".to_string())
@@ -112,7 +114,7 @@ impl SendTransactionService {
     fn process_transactions(
         working_bank: &Arc<Bank>,
         root_bank: &Arc<Bank>,
-        send_socket: &UdpSocket,
+        send_socket: &DatagramSocket,
         tpu_address: &SocketAddr,
         transactions: &mut HashMap<Signature, TransactionInfo>,
     ) -> ProcessTransactionsResult {
@@ -163,7 +165,7 @@ impl SendTransactionService {
     }
 
     fn send_transaction(
-        send_socket: &UdpSocket,
+        send_socket: &DatagramSocket,
         tpu_address: &SocketAddr,
         wire_transaction: &[u8],
     ) {
@@ -202,10 +204,11 @@ mod test {
 
     #[test]
     fn process_transactions() {
+        let network = Network::default();
         let (genesis_config, mint_keypair) = create_genesis_config(4);
         let bank = Bank::new(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-        let send_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let send_socket = network.bind("0.0.0.0:0").unwrap();
         let tpu_address = "127.0.0.1:0".parse().unwrap();
 
         let root_bank = Arc::new(Bank::new_from_parent(
