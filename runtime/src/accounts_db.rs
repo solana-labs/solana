@@ -1190,8 +1190,9 @@ impl Default for AccountsDb {
 
         let mut bank_hashes = HashMap::new();
         bank_hashes.insert(0, BankHashInfo::default());
+        let account_indexes = AccountSecondaryIndexes::default();
         AccountsDb {
-            accounts_index: AccountsIndex::default(),
+            accounts_index: AccountsIndex::new(account_indexes.clone()),
             storage: AccountStorage::default(),
             accounts_cache: AccountsCache::default(),
             sender_bg_hasher: None,
@@ -1220,7 +1221,7 @@ impl Default for AccountsDb {
             shrink_stats: ShrinkStats::default(),
             stats: AccountsStats::default(),
             cluster_type: None,
-            account_indexes: AccountSecondaryIndexes::default(),
+            account_indexes,
             caching_enabled: false,
             #[cfg(test)]
             load_delay: u64::default(),
@@ -1251,6 +1252,7 @@ impl AccountsDb {
                 paths,
                 temp_paths: None,
                 cluster_type: Some(*cluster_type),
+                accounts_index: AccountsIndex::new(account_indexes.clone()),
                 account_indexes,
                 caching_enabled,
                 ..Self::default()
@@ -1263,6 +1265,7 @@ impl AccountsDb {
                 paths,
                 temp_paths: Some(temp_dirs),
                 cluster_type: Some(*cluster_type),
+                accounts_index: AccountsIndex::new(account_indexes.clone()),
                 account_indexes,
                 caching_enabled,
                 ..Self::default()
@@ -1483,8 +1486,7 @@ impl AccountsDb {
             }
         }
 
-        self.accounts_index
-            .handle_dead_keys(&dead_keys, &self.account_indexes);
+        self.accounts_index.handle_dead_keys(&dead_keys);
         reclaims
     }
 

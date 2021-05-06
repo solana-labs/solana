@@ -4,6 +4,7 @@ use crate::{
     secondary_index::*,
 };
 use bv::BitVec;
+use crossbeam_channel::{unbounded, Receiver, Sender};
 use dashmap::DashSet;
 use log::*;
 use ouroboros::self_referencing;
@@ -26,6 +27,7 @@ use std::{
         atomic::{AtomicU64, Ordering},
         Arc, RwLock, RwLockReadGuard, RwLockWriteGuard,
     },
+    thread::Builder,
 };
 
 pub const ITER_BATCH_SIZE: usize = 1000;
@@ -67,7 +69,7 @@ pub enum IndexKey {
     SplTokenOwner(Pubkey),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
 pub enum AccountIndex {
     ProgramId,
     SplTokenMint,
@@ -99,6 +101,31 @@ impl AccountSecondaryIndexes {
             None => true, // include all keys
         }
     }
+}
+
+#[derive(Debug)]
+pub struct AccountIndexData {
+    pub pubkey: Pubkey,
+    pub owner: Pubkey,
+    pub spl_owner: Pubkey,
+    pub mint: Pubkey,
+}
+
+#[derive(Debug)]
+pub enum AccountIndexAction {
+    Update(AccountIndexData),
+    Lookup((AccountIndex, Pubkey, Sender<Pubkey>)),
+    // for testing
+    LookupReverse((AccountIndex, Pubkey, Sender<Pubkey>)),
+    Remove(Pubkey),
+    // for testing
+    Len((AccountIndex, Sender<(usize, usize)>)),
+}
+
+#[derive(Debug)]
+pub struct AccountIndexItem {
+    pub action: AccountIndexAction,
+    pub data: AccountIndexData,
 }
 
 #[derive(Debug)]
@@ -495,18 +522,23 @@ pub trait ZeroLamport {
 #[derive(Debug)]
 pub struct AccountsIndex<T> {
     pub account_maps: RwLock<AccountMap<Pubkey, AccountMapEntry<T>>>,
-    program_id_index: SecondaryIndex<DashMapSecondaryIndexEntry>,
-    spl_token_mint_index: SecondaryIndex<DashMapSecondaryIndexEntry>,
-    spl_token_owner_index: SecondaryIndex<RwLockSecondaryIndexEntry>,
     roots_tracker: RwLock<RootsTracker>,
     ongoing_scan_roots: RwLock<BTreeMap<Slot, u64>>,
     zero_lamport_pubkeys: DashSet<Pubkey>,
+    secondary_index_sender: Option<Sender<AccountIndexAction>>,
 }
 
-impl<T> Default for AccountsIndex<T> {
+#[derive(Debug)]
+struct AccountsIndexSecondary {
+    program_id_index: SecondaryIndex<DashMapSecondaryIndexEntry>,
+    spl_token_mint_index: SecondaryIndex<DashMapSecondaryIndexEntry>,
+    spl_token_owner_index: SecondaryIndex<RwLockSecondaryIndexEntry>,
+    accounts_indexes: AccountSecondaryIndexes,
+}
+
+impl Default for AccountsIndexSecondary {
     fn default() -> Self {
         Self {
-            account_maps: RwLock::<AccountMap<Pubkey, AccountMapEntry<T>>>::default(),
             program_id_index: SecondaryIndex::<DashMapSecondaryIndexEntry>::new(
                 "program_id_index_stats",
             ),
@@ -516,19 +548,213 @@ impl<T> Default for AccountsIndex<T> {
             spl_token_owner_index: SecondaryIndex::<RwLockSecondaryIndexEntry>::new(
                 "spl_token_owner_index_stats",
             ),
-            roots_tracker: RwLock::<RootsTracker>::default(),
-            ongoing_scan_roots: RwLock::<BTreeMap<Slot, u64>>::default(),
-            zero_lamport_pubkeys: DashSet::<Pubkey>::default(),
+            accounts_indexes: AccountSecondaryIndexes::default(),
         }
     }
 }
 
-impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
+impl AccountsIndexSecondary {
+    fn lens<SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send>(
+        secondary_index: &SecondaryIndex<SecondaryIndexEntryType>,
+    ) -> (usize, usize) {
+        (
+            secondary_index.index.len(),
+            secondary_index.reverse_index.len(),
+        )
+    }
+
+    fn len(&self, index: AccountIndex, sender: Sender<(usize, usize)>) {
+        let lens = match index {
+            AccountIndex::ProgramId => Self::lens(&self.program_id_index),
+            AccountIndex::SplTokenOwner => Self::lens(&self.spl_token_owner_index),
+            AccountIndex::SplTokenMint => Self::lens(&self.spl_token_mint_index),
+        };
+        let _ = sender.send(lens);
+    }
+    fn remove(&mut self, inner_key: Pubkey) {
+        let inner_key = &inner_key;
+        if self.accounts_indexes.contains(&AccountIndex::ProgramId) {
+            self.program_id_index.remove_by_inner_key(inner_key);
+        }
+
+        if self.accounts_indexes.contains(&AccountIndex::SplTokenOwner) {
+            self.spl_token_owner_index.remove_by_inner_key(inner_key);
+        }
+
+        if self.accounts_indexes.contains(&AccountIndex::SplTokenMint) {
+            self.spl_token_mint_index.remove_by_inner_key(inner_key);
+        }
+    }
+    fn lookup(&self, index: AccountIndex, index_key: Pubkey, sender: Sender<Pubkey>) {
+        match index {
+            AccountIndex::ProgramId => {
+                for pubkey in self.program_id_index.get(&index_key) {
+                    let _ = sender.send(pubkey);
+                }
+            }
+            AccountIndex::SplTokenOwner => {
+                for pubkey in self.spl_token_owner_index.get(&index_key) {
+                    let _ = sender.send(pubkey);
+                }
+            }
+            AccountIndex::SplTokenMint => {
+                for pubkey in self.spl_token_mint_index.get(&index_key) {
+                    let _ = sender.send(pubkey);
+                }
+            }
+        };
+    }
+
+    fn lookup_reverse(&self, index: AccountIndex, index_key: Pubkey, sender: Sender<Pubkey>) {
+        match index {
+            AccountIndex::ProgramId => {
+                for pubkey in &*self
+                    .program_id_index
+                    .reverse_index
+                    .get(&index_key)
+                    .unwrap()
+                    .value()
+                    .read()
+                    .unwrap()
+                {
+                    let _ = sender.send(*pubkey);
+                }
+            }
+            AccountIndex::SplTokenOwner => {
+                for pubkey in &*self
+                    .spl_token_owner_index
+                    .reverse_index
+                    .get(&index_key)
+                    .unwrap()
+                    .value()
+                    .read()
+                    .unwrap()
+                {
+                    let _ = sender.send(*pubkey);
+                }
+            }
+            AccountIndex::SplTokenMint => {
+                for pubkey in &*self
+                    .spl_token_mint_index
+                    .reverse_index
+                    .get(&index_key)
+                    .unwrap()
+                    .value()
+                    .read()
+                    .unwrap()
+                {
+                    let _ = sender.send(*pubkey);
+                }
+            }
+        };
+    }
+
+    fn update(&mut self, data: AccountIndexData) {
+        if self.accounts_indexes.contains(&AccountIndex::ProgramId) {
+            if self.accounts_indexes.include_key(&data.owner) {
+                self.program_id_index.insert(&data.owner, &data.pubkey);
+            }
+        }
+        // Note because of the below check below on the account data length, when an
+        // account hits zero lamports and is reset to AccountSharedData::Default, then we skip
+        // the below updates to the secondary indexes.
+        //
+        // Skipping means not updating secondary index to mark the account as missing.
+        // This doesn't introduce false positives during a scan because the caller to scan
+        // provides the ancestors to check. So even if a zero-lamport account is not yet
+        // removed from the secondary index, the scan function will:
+        // 1) consult the primary index via `get(&pubkey, Some(ancestors), max_root)`
+        // and find the zero-lamport version
+        // 2) When the fetch from storage occurs, it will return AccountSharedData::Default
+        // (as persisted tombstone for snapshots). This will then ultimately be
+        // filtered out by post-scan filters, like in `get_filtered_spl_token_accounts_by_owner()`.
+        if self.accounts_indexes.contains(&AccountIndex::SplTokenOwner) {
+            if self.accounts_indexes.include_key(&data.spl_owner) {
+                self.spl_token_owner_index
+                    .insert(&data.spl_owner, &data.pubkey);
+            }
+        }
+
+        if self.accounts_indexes.contains(&AccountIndex::SplTokenMint) {
+            if self.accounts_indexes.include_key(&data.mint) {
+                self.spl_token_mint_index.insert(&data.mint, &data.pubkey);
+            }
+        }
+    }
+}
+
+impl<T> Default for AccountsIndex<T> {
+    fn default() -> Self {
+        Self {
+            account_maps: RwLock::<AccountMap<Pubkey, AccountMapEntry<T>>>::default(),
+            roots_tracker: RwLock::<RootsTracker>::default(),
+            ongoing_scan_roots: RwLock::<BTreeMap<Slot, u64>>::default(),
+            zero_lamport_pubkeys: DashSet::<Pubkey>::default(),
+            secondary_index_sender: None,
+        }
+    }
+}
+
+impl<T: 'static + Clone + IsCached + ZeroLamport + Default> AccountsIndex<T> {
     fn iter<R>(&self, range: Option<R>) -> AccountsIndexIterator<T>
     where
         R: RangeBounds<Pubkey>,
     {
         AccountsIndexIterator::new(&self.account_maps, range)
+    }
+
+    pub fn new(accounts_index: AccountSecondaryIndexes) -> Self {
+        let mut result = Self::default();
+
+        result.start_background_secondary_indexer(accounts_index);
+
+        result
+    }
+
+    fn start_background_secondary_indexer(&mut self, accounts_index: AccountSecondaryIndexes) {
+        if !accounts_index.is_empty() {
+            let (sender, receiver) = unbounded();
+            Builder::new()
+                .name("solana-db-secondary-index".to_string())
+                .spawn(move || {
+                    Self::background_secondary_indexer(receiver, accounts_index);
+                })
+                .unwrap();
+            self.secondary_index_sender = Some(sender);
+        }
+    }
+
+    fn background_secondary_indexer(
+        receiver: Receiver<AccountIndexAction>,
+        accounts_index: AccountSecondaryIndexes,
+    ) {
+        let mut index = AccountsIndexSecondary {
+            accounts_indexes: accounts_index,
+            ..AccountsIndexSecondary::default()
+        };
+        loop {
+            let result = receiver.recv();
+            match result {
+                Ok(item) => match item {
+                    AccountIndexAction::Update(data) => {
+                        index.update(data);
+                    }
+                    AccountIndexAction::Lookup((index_type, key, sender)) => {
+                        index.lookup(index_type, key, sender);
+                    }
+                    AccountIndexAction::LookupReverse((index_type, key, sender)) => {
+                        index.lookup_reverse(index_type, key, sender);
+                    }
+                    AccountIndexAction::Remove(key) => {
+                        index.remove(key);
+                    }
+                    AccountIndexAction::Len((index_type, sender)) => index.len(index_type, sender),
+                },
+                Err(_) => {
+                    break;
+                }
+            }
+        }
     }
 
     fn do_checked_scan_accounts<F, R>(
@@ -684,7 +910,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
                 self.do_scan_secondary_index(
                     ancestors,
                     func,
-                    &self.program_id_index,
+                    AccountIndex::ProgramId,
                     &program_id,
                     Some(max_root),
                 );
@@ -693,7 +919,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
                 self.do_scan_secondary_index(
                     ancestors,
                     func,
-                    &self.spl_token_mint_index,
+                    AccountIndex::SplTokenMint,
                     &mint_key,
                     Some(max_root),
                 );
@@ -702,7 +928,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
                 self.do_scan_secondary_index(
                     ancestors,
                     func,
-                    &self.spl_token_owner_index,
+                    AccountIndex::SplTokenOwner,
                     &owner_key,
                     Some(max_root),
                 );
@@ -791,20 +1017,28 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         }
     }
 
-    fn do_scan_secondary_index<
-        F,
-        SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send,
-    >(
+    fn do_scan_secondary_index<F>(
         &self,
         ancestors: &Ancestors,
         mut func: F,
-        index: &SecondaryIndex<SecondaryIndexEntryType>,
+        index: AccountIndex,
         index_key: &Pubkey,
         max_root: Option<Slot>,
     ) where
         F: FnMut(&Pubkey, (&T, Slot)),
     {
-        for pubkey in index.get(index_key) {
+        let (sender, receiver) = unbounded();
+
+        let send_result = self
+            .secondary_index_sender
+            .as_ref()
+            .unwrap()
+            .send(AccountIndexAction::Lookup((index, *index_key, sender)));
+        if send_result.is_err() {
+            // this should only happen if receiver is shut down, which should only happen on sender shut down
+            return;
+        }
+        while let Ok(pubkey) = receiver.recv() {
             // Maybe these reads from the AccountsIndex can be batched every time it
             // grabs the read lock as well...
             if let AccountIndexGetResult::Found(list_r, index) =
@@ -866,11 +1100,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         (w_account_entry.unwrap(), is_newly_inserted)
     }
 
-    pub fn handle_dead_keys(
-        &self,
-        dead_keys: &[&Pubkey],
-        account_indexes: &AccountSecondaryIndexes,
-    ) {
+    pub fn handle_dead_keys(&self, dead_keys: &[&Pubkey]) {
         if !dead_keys.is_empty() {
             for key in dead_keys.iter() {
                 let mut w_index = self.account_maps.write().unwrap();
@@ -881,7 +1111,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
                         // Note it's only safe to remove all the entries for this key
                         // because we have the lock for this key's entry in the AccountsIndex,
                         // so no other thread is also updating the index
-                        self.purge_secondary_indexes_by_inner_key(key, account_indexes);
+                        self.purge_secondary_indexes_by_inner_key(key);
                     }
                 }
             }
@@ -1097,11 +1327,8 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
             return;
         }
 
-        if account_indexes.contains(&AccountIndex::ProgramId)
-            && account_indexes.include_key(account_owner)
-        {
-            self.program_id_index.insert(account_owner, pubkey);
-        }
+        let program_id = account_indexes.contains(&AccountIndex::ProgramId)
+            && account_indexes.include_key(account_owner);
         // Note because of the below check below on the account data length, when an
         // account hits zero lamports and is reset to AccountSharedData::Default, then we skip
         // the below updates to the secondary indexes.
@@ -1115,27 +1342,49 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         // 2) When the fetch from storage occurs, it will return AccountSharedData::Default
         // (as persisted tombstone for snapshots). This will then ultimately be
         // filtered out by post-scan filters, like in `get_filtered_spl_token_accounts_by_owner()`.
+        let mut spl_token_owner = false;
+        let mut spl_token_mint = false;
         if *account_owner == inline_spl_token_v2_0::id()
             && account_data.len() == inline_spl_token_v2_0::state::Account::get_packed_len()
         {
-            if account_indexes.contains(&AccountIndex::SplTokenOwner) {
-                let owner_key = Pubkey::new(
-                    &account_data[SPL_TOKEN_ACCOUNT_OWNER_OFFSET
-                        ..SPL_TOKEN_ACCOUNT_OWNER_OFFSET + PUBKEY_BYTES],
-                );
-                if account_indexes.include_key(&owner_key) {
-                    self.spl_token_owner_index.insert(&owner_key, pubkey);
-                }
-            }
+            spl_token_owner = account_indexes.contains(&AccountIndex::SplTokenOwner);
+            spl_token_mint = account_indexes.contains(&AccountIndex::SplTokenMint);
+        }
 
-            if account_indexes.contains(&AccountIndex::SplTokenMint) {
-                let mint_key = Pubkey::new(
-                    &account_data[SPL_TOKEN_ACCOUNT_MINT_OFFSET
-                        ..SPL_TOKEN_ACCOUNT_MINT_OFFSET + PUBKEY_BYTES],
-                );
-                if account_indexes.include_key(&mint_key) {
-                    self.spl_token_mint_index.insert(&mint_key, pubkey);
-                }
+        if program_id || spl_token_owner || spl_token_mint {
+            let data = AccountIndexData {
+                pubkey: *pubkey,
+                owner: *account_owner,
+                spl_owner: if spl_token_owner {
+                    let key = Pubkey::new(
+                        &account_data[SPL_TOKEN_ACCOUNT_OWNER_OFFSET
+                            ..SPL_TOKEN_ACCOUNT_OWNER_OFFSET + PUBKEY_BYTES],
+                    );
+                    if !account_indexes.include_key(&key) {
+                        // Ok to use the key we already extracted. It will be ignored.
+                        spl_token_owner = false;
+                    }
+                    key
+                } else {
+                    Pubkey::default()
+                },
+                mint: if spl_token_mint {
+                    let key = Pubkey::new(
+                        &account_data[SPL_TOKEN_ACCOUNT_MINT_OFFSET
+                            ..SPL_TOKEN_ACCOUNT_MINT_OFFSET + PUBKEY_BYTES],
+                    );
+                    if !account_indexes.include_key(&key) {
+                        // Ok to use the key we already extracted. It will be ignored.
+                        spl_token_mint = false;
+                    }
+                    key
+                } else {
+                    Pubkey::default()
+                },
+            };
+            if program_id || spl_token_owner || spl_token_mint {
+                let action = AccountIndexAction::Update(data);
+                let _ = self.secondary_index_sender.as_ref().unwrap().send(action);
             }
         }
     }
@@ -1222,21 +1471,13 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         }
     }
 
-    fn purge_secondary_indexes_by_inner_key<'a>(
-        &'a self,
-        inner_key: &Pubkey,
-        account_indexes: &AccountSecondaryIndexes,
-    ) {
-        if account_indexes.contains(&AccountIndex::ProgramId) {
-            self.program_id_index.remove_by_inner_key(inner_key);
-        }
-
-        if account_indexes.contains(&AccountIndex::SplTokenOwner) {
-            self.spl_token_owner_index.remove_by_inner_key(inner_key);
-        }
-
-        if account_indexes.contains(&AccountIndex::SplTokenMint) {
-            self.spl_token_mint_index.remove_by_inner_key(inner_key);
+    fn purge_secondary_indexes_by_inner_key(&self, inner_key: &Pubkey) {
+        if self.secondary_index_sender.is_some() {
+            let _send_result = self
+                .secondary_index_sender
+                .as_ref()
+                .unwrap()
+                .send(AccountIndexAction::Remove(*inner_key));
         }
     }
 
@@ -1514,7 +1755,7 @@ pub mod tests {
     fn create_dashmap_secondary_index_state() -> (usize, usize, AccountSecondaryIndexes) {
         {
             // Check that we're actually testing the correct variant
-            let index = AccountsIndex::<bool>::default();
+            let index = AccountsIndexSecondary::default();
             let _type_check = SecondaryIndexTypes::DashMap(&index.spl_token_mint_index);
         }
 
@@ -1524,7 +1765,7 @@ pub mod tests {
     fn create_rwlock_secondary_index_state() -> (usize, usize, AccountSecondaryIndexes) {
         {
             // Check that we're actually testing the correct variant
-            let index = AccountsIndex::<bool>::default();
+            let index = AccountsIndexSecondary::default();
             let _type_check = SecondaryIndexTypes::RwLock(&index.spl_token_owner_index);
         }
 
@@ -2740,11 +2981,9 @@ pub mod tests {
         );
     }
 
-    fn run_test_purge_exact_secondary_index<
-        SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send,
-    >(
+    fn run_test_purge_exact_secondary_index(
         index: &AccountsIndex<bool>,
-        secondary_index: &SecondaryIndex<SecondaryIndexEntryType>,
+        index_type: &AccountIndex,
         key_start: usize,
         key_end: usize,
         secondary_indexes: &AccountSecondaryIndexes,
@@ -2772,21 +3011,11 @@ pub mod tests {
         }
 
         // Only one top level index entry exists
-        assert_eq!(secondary_index.index.get(&index_key).unwrap().len(), 1);
+        assert_eq!(index.get_secondary(index_type, &index_key).len(), 1);
 
         // In the reverse index, one account maps across multiple slots
         // to the same top level key
-        assert_eq!(
-            secondary_index
-                .reverse_index
-                .get(&account_key)
-                .unwrap()
-                .value()
-                .read()
-                .unwrap()
-                .len(),
-            1
-        );
+        assert_eq!(index.get_reverse(index_type, &account_key).len(), 1);
 
         index.purge_exact(
             &account_key,
@@ -2794,18 +3023,18 @@ pub mod tests {
             &mut vec![],
         );
 
-        index.handle_dead_keys(&[&account_key], secondary_indexes);
-        assert!(secondary_index.index.is_empty());
-        assert!(secondary_index.reverse_index.is_empty());
+        index.handle_dead_keys(&[&account_key]);
+        assert_eq!(index.get_secondary_index_len(index_type), (0, 0));
     }
 
     #[test]
     fn test_purge_exact_dashmap_secondary_index() {
         let (key_start, key_end, secondary_indexes) = create_dashmap_secondary_index_state();
-        let index = AccountsIndex::<bool>::default();
+        let index_type = AccountIndex::SplTokenMint;
+        let index = AccountsIndex::<bool>::new([index_type].iter().cloned().collect());
         run_test_purge_exact_secondary_index(
             &index,
-            &index.spl_token_mint_index,
+            &index_type,
             key_start,
             key_end,
             &secondary_indexes,
@@ -2815,10 +3044,11 @@ pub mod tests {
     #[test]
     fn test_purge_exact_rwlock_secondary_index() {
         let (key_start, key_end, secondary_indexes) = create_rwlock_secondary_index_state();
-        let index = AccountsIndex::<bool>::default();
+        let index_type = AccountIndex::SplTokenOwner;
+        let index = AccountsIndex::<bool>::new([index_type].iter().cloned().collect());
         run_test_purge_exact_secondary_index(
             &index,
-            &index.spl_token_owner_index,
+            &index_type,
             key_start,
             key_end,
             &secondary_indexes,
@@ -2893,34 +3123,83 @@ pub mod tests {
         assert_eq!(slot_list, vec![(5, true), (9, true)]);
     }
 
-    fn check_secondary_index_mapping_correct<SecondaryIndexEntryType>(
-        secondary_index: &SecondaryIndex<SecondaryIndexEntryType>,
+    impl<T> AccountsIndex<T> {
+        fn get_secondary_index_len(&self, index: &AccountIndex) -> (usize, usize) {
+            let (sender, receiver) = unbounded();
+            let send_result = self
+                .secondary_index_sender
+                .as_ref()
+                .unwrap()
+                .send(AccountIndexAction::Len((*index, sender)));
+            if send_result.is_err() {
+                // this should only happen if receiver is shut down, which should only happen on sender shut down
+                return (0, 0);
+            }
+            receiver.recv().unwrap()
+        }
+
+        fn get_secondary(&self, index: &AccountIndex, key: &Pubkey) -> Vec<Pubkey> {
+            let (sender, receiver) = unbounded();
+            let mut result = Vec::new();
+            let send_result = self
+                .secondary_index_sender
+                .as_ref()
+                .unwrap()
+                .send(AccountIndexAction::Lookup((*index, *key, sender)));
+            if send_result.is_err() {
+                // this should only happen if receiver is shut down, which should only happen on sender shut down
+                panic!("send failed");
+            }
+            while let Ok(pubkey) = receiver.recv() {
+                result.push(pubkey);
+            }
+            result
+        }
+
+        fn get_reverse(&self, index: &AccountIndex, key: &Pubkey) -> Vec<Pubkey> {
+            let (sender, receiver) = unbounded();
+            let mut result = Vec::new();
+            let send_result = self
+                .secondary_index_sender
+                .as_ref()
+                .unwrap()
+                .send(AccountIndexAction::LookupReverse((*index, *key, sender)));
+            if send_result.is_err() {
+                // this should only happen if receiver is shut down, which should only happen on sender shut down
+                panic!("send failed");
+            }
+            while let Ok(pubkey) = receiver.recv() {
+                result.push(pubkey);
+            }
+            result
+        }
+    }
+
+    fn check_secondary_index_mapping_correct<T>(
+        index: &AccountsIndex<T>,
+        index_type: &AccountIndex,
         secondary_index_keys: &[Pubkey],
         account_key: &Pubkey,
-    ) where
-        SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send,
-    {
+    ) {
         // Check secondary index has unique mapping from secondary index key
         // to the account key and slot
         for secondary_index_key in secondary_index_keys {
-            assert_eq!(secondary_index.index.len(), secondary_index_keys.len());
-            let account_key_map = secondary_index.get(secondary_index_key);
+            assert_eq!(
+                index.get_secondary_index_len(index_type).0,
+                secondary_index_keys.len()
+            );
+            let account_key_map = index.get_secondary(index_type, secondary_index_key);
             assert_eq!(account_key_map.len(), 1);
             assert_eq!(account_key_map, vec![*account_key]);
         }
         // Check reverse index contains all of the `secondary_index_keys`
-        let secondary_index_key_map = secondary_index.reverse_index.get(account_key).unwrap();
-        assert_eq!(
-            &*secondary_index_key_map.value().read().unwrap(),
-            secondary_index_keys
-        );
+        let secondary_index_key_map = index.get_reverse(index_type, account_key);
+        assert_eq!(secondary_index_key_map, secondary_index_keys);
     }
 
-    fn run_test_secondary_indexes<
-        SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send,
-    >(
+    fn run_test_secondary_indexes(
         index: &AccountsIndex<bool>,
-        secondary_index: &SecondaryIndex<SecondaryIndexEntryType>,
+        index_type: &AccountIndex,
         key_start: usize,
         key_end: usize,
         secondary_indexes: &AccountSecondaryIndexes,
@@ -2941,8 +3220,7 @@ pub mod tests {
             true,
             &mut vec![],
         );
-        assert!(secondary_index.index.is_empty());
-        assert!(secondary_index.reverse_index.is_empty());
+        assert_eq!(index.get_secondary_index_len(&index_type), (0, 0));
 
         // Wrong account data size
         index.upsert(
@@ -2954,9 +3232,7 @@ pub mod tests {
             true,
             &mut vec![],
         );
-        assert!(secondary_index.index.is_empty());
-        assert!(secondary_index.reverse_index.is_empty());
-
+        assert_eq!(index.get_secondary_index_len(&index_type), (0, 0));
         secondary_indexes.keys = None;
 
         // Just right. Inserting the same index multiple times should be ok
@@ -2967,7 +3243,7 @@ pub mod tests {
                 &account_data,
                 &secondary_indexes,
             );
-            check_secondary_index_mapping_correct(secondary_index, &[index_key], &account_key);
+            check_secondary_index_mapping_correct(&index, &index_type, &[index_key], &account_key);
         }
 
         // included
@@ -3015,42 +3291,29 @@ pub mod tests {
             .slot_list_mut(|slot_list| slot_list.clear());
 
         // Everything should be deleted
-        index.handle_dead_keys(&[&account_key], &secondary_indexes);
-        assert!(secondary_index.index.is_empty());
-        assert!(secondary_index.reverse_index.is_empty());
+        index.handle_dead_keys(&[&account_key]);
+        assert_eq!(index.get_secondary_index_len(&index_type), (0, 0));
     }
 
     #[test]
     fn test_dashmap_secondary_index() {
         let (key_start, key_end, secondary_indexes) = create_dashmap_secondary_index_state();
-        let index = AccountsIndex::<bool>::default();
-        run_test_secondary_indexes(
-            &index,
-            &index.spl_token_mint_index,
-            key_start,
-            key_end,
-            &secondary_indexes,
-        );
+        let index_type = AccountIndex::SplTokenMint;
+        let index = AccountsIndex::<bool>::new([index_type].iter().cloned().collect());
+        run_test_secondary_indexes(&index, &index_type, key_start, key_end, &secondary_indexes);
     }
 
     #[test]
     fn test_rwlock_secondary_index() {
         let (key_start, key_end, secondary_indexes) = create_rwlock_secondary_index_state();
-        let index = AccountsIndex::<bool>::default();
-        run_test_secondary_indexes(
-            &index,
-            &index.spl_token_owner_index,
-            key_start,
-            key_end,
-            &secondary_indexes,
-        );
+        let index_type = AccountIndex::SplTokenOwner;
+        let index = AccountsIndex::<bool>::new([index_type].iter().cloned().collect());
+        run_test_secondary_indexes(&index, &index_type, key_start, key_end, &secondary_indexes);
     }
 
-    fn run_test_secondary_indexes_same_slot_and_forks<
-        SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send,
-    >(
+    fn run_test_secondary_indexes_same_slot_and_forks(
         index: &AccountsIndex<bool>,
-        secondary_index: &SecondaryIndex<SecondaryIndexEntryType>,
+        index_type: &AccountIndex,
         index_key_start: usize,
         index_key_end: usize,
         secondary_indexes: &AccountSecondaryIndexes,
@@ -3090,7 +3353,8 @@ pub mod tests {
 
         // Both pubkeys will now be present in the index
         check_secondary_index_mapping_correct(
-            &secondary_index,
+            &index,
+            &index_type,
             &[secondary_key1, secondary_key2],
             &account_key,
         );
@@ -3106,7 +3370,10 @@ pub mod tests {
             true,
             &mut vec![],
         );
-        assert_eq!(secondary_index.get(&secondary_key1), vec![account_key]);
+        assert_eq!(
+            index.get_secondary(index_type, &secondary_key1),
+            vec![account_key]
+        );
 
         // If we set a root at `later_slot`, and clean, then even though the account with secondary_key1
         // was outdated by the update in the later slot, the primary account key is still alive,
@@ -3120,7 +3387,8 @@ pub mod tests {
             });
 
         check_secondary_index_mapping_correct(
-            secondary_index,
+            &index,
+            &index_type,
             &[secondary_key1, secondary_key2],
             &account_key,
         );
@@ -3129,18 +3397,18 @@ pub mod tests {
         // pubkey as dead and finally remove all the secondary indexes
         let mut reclaims = vec![];
         index.purge_exact(&account_key, &later_slot, &mut reclaims);
-        index.handle_dead_keys(&[&account_key], secondary_indexes);
-        assert!(secondary_index.index.is_empty());
-        assert!(secondary_index.reverse_index.is_empty());
+        index.handle_dead_keys(&[&account_key]);
+        assert_eq!(index.get_secondary_index_len(index_type), (0, 0));
     }
 
     #[test]
     fn test_dashmap_secondary_index_same_slot_and_forks() {
         let (key_start, key_end, account_index) = create_dashmap_secondary_index_state();
-        let index = AccountsIndex::<bool>::default();
+        let index_type = AccountIndex::SplTokenMint;
+        let index = AccountsIndex::<bool>::new([index_type].iter().cloned().collect());
         run_test_secondary_indexes_same_slot_and_forks(
             &index,
-            &index.spl_token_mint_index,
+            &index_type,
             key_start,
             key_end,
             &account_index,
@@ -3150,10 +3418,11 @@ pub mod tests {
     #[test]
     fn test_rwlock_secondary_index_same_slot_and_forks() {
         let (key_start, key_end, account_index) = create_rwlock_secondary_index_state();
-        let index = AccountsIndex::<bool>::default();
+        let index_type = AccountIndex::SplTokenOwner;
+        let index = AccountsIndex::<bool>::new([index_type].iter().cloned().collect());
         run_test_secondary_indexes_same_slot_and_forks(
             &index,
-            &index.spl_token_owner_index,
+            &index_type,
             key_start,
             key_end,
             &account_index,
