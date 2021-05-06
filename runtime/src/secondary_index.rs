@@ -24,9 +24,9 @@ pub struct DashMapSecondaryIndexEntry {
 
 impl SecondaryIndexEntry for DashMapSecondaryIndexEntry {
     fn insert_if_not_exists(&self, key: &Pubkey) {
-        self.account_keys
-            .get(key)
-            .unwrap_or_else(|| self.account_keys.entry(*key).or_default().downgrade());
+        if self.account_keys.get(key).is_none() {
+            self.account_keys.entry(*key).or_default();
+        }
     }
 
     fn remove_inner_key(&self, key: &Pubkey) -> bool {
