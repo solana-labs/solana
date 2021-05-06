@@ -1,5 +1,6 @@
 use crate::{
     cluster_info::{ClusterInfo, GOSSIP_SLEEP_MILLIS},
+    crds::Cursor,
     crds_value::CrdsValueLabel,
     optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
     optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSender},
@@ -326,23 +327,18 @@ impl ClusterInfoVoteListener {
         verified_vote_label_packets_sender: VerifiedLabelVotePacketsSender,
         verified_vote_transactions_sender: VerifiedVoteTransactionsSender,
     ) -> Result<()> {
-        let mut last_ts = 0;
-        loop {
-            if exit.load(Ordering::Relaxed) {
-                return Ok(());
-            }
-            let (labels, votes, new_ts) = cluster_info.get_votes(last_ts);
+        let mut cursor = Cursor::default();
+        while !exit.load(Ordering::Relaxed) {
+            let (labels, votes) = cluster_info.get_votes(&mut cursor);
             inc_new_counter_debug!("cluster_info_vote_listener-recv_count", votes.len());
-
-            last_ts = new_ts;
             if !votes.is_empty() {
                 let (vote_txs, packets) = Self::verify_votes(votes, labels);
                 verified_vote_transactions_sender.send(vote_txs)?;
                 verified_vote_label_packets_sender.send(packets)?;
             }
-
             sleep(Duration::from_millis(GOSSIP_SLEEP_MILLIS));
         }
+        Ok(())
     }
 
     #[allow(clippy::type_complexity)]

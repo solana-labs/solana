@@ -1244,13 +1244,6 @@ mod test {
             dest_crds
                 .lookup_versioned(&caller.label())
                 .unwrap()
-                .insert_timestamp,
-            1
-        );
-        assert_eq!(
-            dest_crds
-                .lookup_versioned(&caller.label())
-                .unwrap()
                 .local_timestamp,
             1
         );
