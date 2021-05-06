@@ -15,6 +15,9 @@ use solana_sdk::{
 use super::Bank;
 use crate::message_processor::Executors;
 
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+use solana_frozen_abi::abi_example::AbiExample;
+
 /// Copy-on-write holder of CachedExecutors
 #[derive(AbiExample, Debug, Default)]
 pub(super) struct CowCachedExecutors {
