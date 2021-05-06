@@ -6695,7 +6695,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_clean_multiple_zero_lamport_store_matches_index() {
+    fn test_clean_multiple_zero_lamport_decrements_index_ref_count() {
         solana_logger::setup();
 
         let accounts = AccountsDb::new(Vec::new(), &ClusterType::Development);
