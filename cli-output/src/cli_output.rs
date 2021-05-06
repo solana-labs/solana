@@ -15,8 +15,8 @@ use {
     solana_account_decoder::parse_token::UiTokenAccount,
     solana_clap_utils::keypair::SignOnly,
     solana_client::rpc_response::{
-        RpcAccountBalance, RpcInflationGovernor, RpcInflationRate, RpcKeyedAccount, RpcSupply,
-        RpcVoteAccountInfo,
+        RpcAccountBalance, RpcContactInfo, RpcInflationGovernor, RpcInflationRate, RpcKeyedAccount,
+        RpcSupply, RpcVoteAccountInfo,
     },
     solana_sdk::{
         clock::{Epoch, Slot, UnixTimestamp},
@@ -2282,6 +2282,97 @@ impl fmt::Display for CliTransactionConfirmation {
         }
     }
 }
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliGossipNode {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ip_address: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub identity_label: Option<String>,
+    pub identity_pubkey: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gossip_port: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tpu_port: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rpc_host: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+}
+
+impl CliGossipNode {
+    pub fn new(info: RpcContactInfo, labels: &HashMap<String, String>) -> Self {
+        Self {
+            ip_address: info.gossip.map(|addr| addr.ip().to_string()),
+            identity_label: labels.get(&info.pubkey).cloned(),
+            identity_pubkey: info.pubkey,
+            gossip_port: info.gossip.map(|addr| addr.port()),
+            tpu_port: info.tpu.map(|addr| addr.port()),
+            rpc_host: info.rpc.map(|addr| addr.to_string()),
+            version: info.version,
+        }
+    }
+}
+
+fn unwrap_to_string_or_none<T>(option: Option<T>) -> String
+where
+    T: std::string::ToString,
+{
+    unwrap_to_string_or_default(option, "none")
+}
+
+fn unwrap_to_string_or_default<T>(option: Option<T>, default: &str) -> String
+where
+    T: std::string::ToString,
+{
+    option
+        .as_ref()
+        .map(|v| v.to_string())
+        .unwrap_or_else(|| default.to_string())
+}
+
+impl fmt::Display for CliGossipNode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{:15} | {:44} | {:6} | {:5} | {:21} | {}",
+            unwrap_to_string_or_none(self.ip_address.as_ref()),
+            self.identity_label
+                .as_ref()
+                .unwrap_or(&self.identity_pubkey),
+            unwrap_to_string_or_none(self.gossip_port.as_ref()),
+            unwrap_to_string_or_none(self.tpu_port.as_ref()),
+            unwrap_to_string_or_none(self.rpc_host.as_ref()),
+            unwrap_to_string_or_default(self.version.as_ref(), "unknown"),
+        )
+    }
+}
+
+impl QuietDisplay for CliGossipNode {}
+impl VerboseDisplay for CliGossipNode {}
+
+#[derive(Serialize, Deserialize)]
+pub struct CliGossipNodes(pub Vec<CliGossipNode>);
+
+impl fmt::Display for CliGossipNodes {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(
+            f,
+            "IP Address      | Node identifier                              \
+             | Gossip | TPU   | RPC Address           | Version\n\
+             ----------------+----------------------------------------------+\
+             --------+-------+-----------------------+----------------",
+        )?;
+        for node in self.0.iter() {
+            writeln!(f, "{}", node)?;
+        }
+        writeln!(f, "Nodes: {}", self.0.len())
+    }
+}
+
+impl QuietDisplay for CliGossipNodes {}
+impl VerboseDisplay for CliGossipNodes {}
 
 #[cfg(test)]
 mod tests {
