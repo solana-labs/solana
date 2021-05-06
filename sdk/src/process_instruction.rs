@@ -165,6 +165,44 @@ pub struct BpfComputeBudget {
     pub cpi_bytes_per_unit: u64,
     /// Base number of compute units consumed to get a sysvar
     pub sysvar_base_cost: u64,
+    /// Base number of compute units consumed to call BIGNUM NEW
+    pub bignum_new_base_cost: u64,
+    /// Base number of compute units consumed to call BigNum new from u32 value
+    pub bignum_from_u32_base_cost: u64,
+    /// Base number of compute units consumed to call BigNum new from big endian byte array
+    pub bignum_from_bytes_base_cost: u64,
+    /// Base number of compute units consumed to extract big endian byte array from BigNumb
+    pub bignum_to_bytes_base_cost: u64,
+    /// Base number of compute units consumed to drop/dealloc BigNum
+    pub bignum_drop_base_cost: u64,
+    /// Incremental number of units consumed to drop/dealloc BigNum (based on bytes)
+    pub bignum_mod_exp_base_cost: u64,
+    /// Number of compute units consumed by logging a `BigNum`
+    pub log_bignum_cost: u64,
+    /// Number of compute units consumed by BigNum add
+    pub bignum_add_cost: u64,
+    /// Number of compute units consumed by BigNum subtract
+    pub bignum_sub_cost: u64,
+    /// Number of compute units consumed by BigNum mutliply
+    pub bignum_mul_cost: u64,
+    /// Number of compute units consumed by BigNum divide
+    pub bignum_div_cost: u64,
+    /// Number of compute units consumed by BigNum exp
+    pub bignum_exp_cost: u64,
+    /// Number of compute units consumed by BigNum sqr
+    pub bignum_sqr_cost: u64,
+    /// Number of compute units consumed by BigNum mod_sqr
+    pub bignum_mod_sqr_cost: u64,
+    /// Number of compute units consumed by BigNum mod_mul
+    pub bignum_mod_mul_cost: u64,
+    /// Number of compute units consumed by BigNum mod_inv
+    pub bignum_mod_inv_cost: u64,
+    /// Number of compute units consumed by BigNum hashed_generator
+    pub bignum_hashed_generator_cost: u64,
+    /// Number of compute units consumed by Blake3 digest
+    pub blake3_digest_base_cost: u64,
+    /// Number of compute units consumed by BigNum hash_to_prime
+    pub bignum_hash_to_prime_cost: u64,    
 }
 impl Default for BpfComputeBudget {
     fn default() -> Self {
@@ -188,6 +226,25 @@ impl BpfComputeBudget {
             max_cpi_instruction_size: 1280, // IPv6 Min MTU size
             cpi_bytes_per_unit: 250,        // ~50MB at 200,000 units
             sysvar_base_cost: 100,
+            bignum_new_base_cost: 100,
+            bignum_drop_base_cost: 100,
+            bignum_from_u32_base_cost: 100,
+            bignum_from_bytes_base_cost: 100,
+            bignum_to_bytes_base_cost: 100,
+            bignum_mod_exp_base_cost: 100,            
+            log_bignum_cost: 100,
+            bignum_add_cost: 15,
+            bignum_sub_cost: 15,
+            bignum_mul_cost: 30,
+            bignum_div_cost: 30,
+            bignum_exp_cost: 30,
+            bignum_sqr_cost: 15,
+            bignum_mod_sqr_cost: 30,
+            bignum_mod_mul_cost: 45,
+            bignum_mod_inv_cost: 45,
+            bignum_hashed_generator_cost: 100,
+            blake3_digest_base_cost: 85,
+            bignum_hash_to_prime_cost: 20000,
         }
     }
 }

@@ -438,6 +438,223 @@ static uint64_t sol_sha256(
 );
 
 /**
+ * BigNum sol_bignum_new
+ *
+ * @param ptr location where new object address dropped
+ */
+static uint64_t sol_bignum_new(
+    const uint64_t *ptr
+);
+
+/**
+ * BigNum sol_bignum_from_u32
+ *
+ * @param ptr location where new object address dropped
+ * @param val_u32 unsigned 32 bit value to assign to the new object
+ */
+static uint64_t sol_bignum_from_u32(
+    const uint64_t *ptr,
+    const uint32_t val_u32
+);
+/**
+ * BigNum sol_bignum_from_bytes
+ *
+ * @param ptr location where new object address dropped
+ * @param bytes pointer to unsigned byte array
+ * @param byte_len size of bytes array
+ */
+static uint64_t sol_bignum_from_bytes(
+    const uint64_t *ptr,
+    const SolBytes *bytes,
+    const uint64_t byte_len
+);
+/**
+ * BigNum sol_bignum_to_bytes
+ *
+ * @param ptr object address created with sol_bignum_new (read/write)
+ * @param bytes pointer to unsigned byte array
+ * @param byte_len maximum size of bytes array
+ */
+/**
+ * Size of Public key in bytes
+ */
+#define SIZE_BIGNUMBYTES 256
+
+/**
+ * Public key
+ */
+typedef struct {
+  uint8_t x[SIZE_BIGNUMBYTES];
+} SolBigNumBuf;
+
+static uint64_t sol_bignum_to_bytes(
+    const uint64_t     *ptr,
+    const SolBigNumBuf *bytes,
+    const uint64_t     *byte_len
+);
+
+/**
+ * @param u_ptr bignum address
+ * @param a_ptr bignum address
+ * @param n_ptr bignum address
+ * @param nonce_ptr 
+ * @param hg_ptr hashed generated return bignum address
+ */ 
+
+static uint64_t sol_bignum_hashed_generator (
+  const uint64_t *u_ptr,
+  const uint64_t *a_ptr,
+  const uint64_t *n_ptr,
+  const uint64_t *nonce_ptr,
+  const uint64_t *hg_ptr
+);
+
+/**
+ * @param u_ptr bignum address
+ * @param a_ptr bignum address
+ * @param z_ptr bignum address
+ * @param nonce_ptr 
+ * @param htp_ptr prime generated return bignum address
+ */ 
+
+static uint64_t sol_bignum_hash_to_prime (
+  const uint64_t *u_ptr,
+  const uint64_t *a_ptr,
+  const uint64_t *z_ptr,
+  const uint64_t *nonce_ptr,
+  const uint64_t *htp_ptr
+);
+
+/**
+ * BigNum sol_bignum_add
+ *  Performs add and returns bignum for sum
+ * @param self_ptr self bignum address
+ * @param rhs_ptr bignum address to add with self
+ * @param sum_ptr object address of resulting sum
+ 
+ */
+static uint64_t sol_bignum_add(
+    const uint64_t *self_ptr,
+    const uint64_t *rhs_ptr,
+    const uint64_t *sum_ptr
+);
+/**
+ * BigNum sol_bignum_sub
+ *  Performs subtraction and returns bignum for difference
+ * @param self_ptr self bignum address
+ * @param rhs_ptr bignum address number to sub from self
+ * @param diff_ptr object address of resulting difference
+ 
+ */
+static uint64_t sol_bignum_sub(
+    const uint64_t *self_ptr,
+    const uint64_t *rhs_ptr,
+    const uint64_t *diff_ptr
+);
+/**
+ * BigNum sol_bignum_mul
+ *  Performs multiplication and returns bignum for product
+ * @param self_ptr self bignum address
+ * @param rhs_ptr bignum address number to multiple self by
+ * @param product_ptr object address of resulting product
+ 
+ */
+static uint64_t sol_bignum_mul(
+    const uint64_t *self_ptr,
+    const uint64_t *rhs_ptr,
+    const uint64_t *product_ptr
+);
+/**
+ * BigNum sol_bignum_div
+ *  Performs division and returns bignum for product
+ * @param self_ptr self bignum address
+ * @param rhs_ptr bignum address number to divide self by
+ * @param quotient_ptr object address of resulting quotient
+ */
+static uint64_t sol_bignum_div(
+    const uint64_t *self_ptr,
+    const uint64_t *rhs_ptr,
+    const uint64_t *quotient_ptr
+);
+
+/**
+ * BigNum sol_bignum_exp
+ * @param self_ptr self bignum address
+ * @param exponent_ptr  exponent bignum address
+ * @param exp_res_ptr object address of resulting self^exp
+ */
+static uint64_t sol_bignum_exp(
+  const uint64_t  *self_ptr,
+  const uint64_t  *self_exponent_ptr,
+  const uint64_t  *exp_res_ptr
+);
+
+/**
+ * BigNum sol_bignum_sqr
+ * @param self_ptr self bignum address
+ c
+ */
+static uint64_t sol_bignum_sqr(
+  const uint64_t  *self_ptr,  
+  const uint64_t  *sqr_res_ptr
+);
+
+/**
+ * BigNum sol_bignum_mod_mul
+ * Performs (base * multiplier) % modulus and updates self_ptr BigNum
+ * @param self_ptr base bignum address (i.e. self -- read)
+ * @param multiplier_ptr - The number that self_ptr is multiplied by
+ * @param modulus_ptr the modulus applied to the product of self*multiplier
+ * @param mod_exp_ptr object address of resulting BigNum  
+ */
+static uint64_t sol_bignum_mod_mul(    
+    const uint64_t *self_ptr,    
+    const uint64_t *multiplier_ptr,
+    const uint64_t *modulus_ptr,
+    const uint64_t *mod_mul_ptr
+);
+
+/**
+ * BigNum sol_bignum_mod_inverse
+ *  Performs (base * multiplier) % modulus and updates self_ptr BigNum
+ * @param self_ptr base bignum address (i.e. self -- read)
+ * @param modulus_ptr the modulus applied to the product of self*multiplier
+ * @param mod_exp_ptr object address of resulting BigNum  
+ */
+static uint64_t sol_bignum_mod_inverse(    
+    const uint64_t *self_ptr,        
+    const uint64_t *modulus_ptr,
+    const uint64_t *mod_mul_ptr
+);
+
+
+/**
+ * BigNum sol_bignum_mod_exp
+ *  Performs base^exponent % modulus and updates self_ptr BigNum
+ * @param mod_exp_ptr object address of resulting BigNum
+ * @param self_ptr base bignum address (i.e. self -- read)
+ * @param exponent_ptr exponent bignum address (read)
+ * @param modulus_ptr modulus bignum address (read)
+ */
+static uint64_t sol_bignum_mod_exp(
+    const uint64_t *mod_exp_ptr,
+    const uint64_t *self_ptr,
+    const uint64_t *base_ptr,
+    const uint64_t *exponent_ptr,
+    const uint64_t *modulus_ptr
+);
+
+/**
+ * BigNum drop
+ *
+ * @param ptr object address created with sol_bignum_new
+ */
+static uint64_t sol_bignum_drop(
+    const uint64_t *ptr
+);
+
+
+/**
  * Account Meta
  */
 typedef struct {
