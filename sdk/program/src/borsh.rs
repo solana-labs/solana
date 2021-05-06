@@ -2,9 +2,9 @@
 //! Borsh utils
 use {
     borsh::{
-        maybestd::io::Error,
+        maybestd::io::{Error, Write},
         schema::{BorshSchema, Declaration, Definition, Fields},
-        BorshDeserialize,
+        BorshDeserialize, BorshSerialize,
     },
     std::collections::HashMap,
 };
@@ -74,6 +74,36 @@ pub fn try_from_slice_unchecked<T: BorshDeserialize>(data: &[u8]) -> Result<T, E
     let mut data_mut = data;
     let result = T::deserialize(&mut data_mut)?;
     Ok(result)
+}
+
+/// Helper struct which to count how much data would be written during serialization
+#[derive(Default)]
+struct WriteCounter {
+    count: usize,
+}
+
+impl Write for WriteCounter {
+    fn write(&mut self, data: &[u8]) -> Result<usize, Error> {
+        let amount = data.len();
+        self.count += amount;
+        Ok(amount)
+    }
+
+    fn flush(&mut self) -> Result<(), Error> {
+        Ok(())
+    }
+}
+
+/// Get the packed length for the serialized form of this object instance.
+///
+/// Useful when working with instances of types that contain a variable-length
+/// sequence, such as a Vec or HashMap.  Since it is impossible to know the packed
+/// length only from the type's schema, this can be used when an instance already
+/// exists, to figure out how much space to allocate in an account.
+pub fn get_instance_packed_len<T: BorshSerialize>(instance: &T) -> Result<usize, Error> {
+    let mut counter = WriteCounter::default();
+    instance.serialize(&mut counter)?;
+    Ok(counter.count)
 }
 
 #[cfg(test)]
@@ -157,6 +187,23 @@ mod tests {
                 + size_of::<u8>()
                 + size_of::<u16>()
                 + get_packed_len::<TestEnum>()
+        );
+    }
+
+    #[test]
+    fn instance_packed_len() {
+        let data = vec![
+            Child { data: [0u8; 64] },
+            Child { data: [1u8; 64] },
+            Child { data: [2u8; 64] },
+            Child { data: [3u8; 64] },
+            Child { data: [4u8; 64] },
+            Child { data: [5u8; 64] },
+        ];
+        let parent = Parent { data };
+        assert_eq!(
+            get_instance_packed_len(&parent).unwrap(),
+            4 + parent.data.len() * get_packed_len::<Child>()
         );
     }
 }
