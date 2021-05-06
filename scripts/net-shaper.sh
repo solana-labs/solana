@@ -15,7 +15,7 @@ fi
 
 set -x
 
-iface="$(ifconfig | grep mtu | grep -iv loopback | grep -i running | awk 'BEGIN { FS = ":" } ; {print $1}')"
+iface="$(ip link show | grep mtu | grep -iv loopback | grep "state UP" | awk 'BEGIN { FS = ": " } ; {print $2}')"
 
 if [[ "$1" = cleanup ]]; then
   $sudo ~solana/.cargo/bin/solana-net-shaper cleanup -f "$2" -s "$3" -p "$4" -i "$iface"
