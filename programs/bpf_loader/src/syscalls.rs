@@ -4996,7 +4996,7 @@ mod tests {
         syscall.call(2048, 4096, 8192, 1024, 96, &memory_mapping, &mut result);
         result.unwrap();
         let braw: &BigNum = unsafe { &*(hg_addr as *mut BigNum) };
-        assert_eq!(*braw, BigNum::from_u32(0).unwrap());        
+        assert_eq!(*braw, BigNum::from_u32(0).unwrap());
     }
     #[test]
     fn test_syscall_bignum_drop() {

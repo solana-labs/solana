@@ -497,9 +497,9 @@ static uint64_t sol_bignum_to_bytes(
  * @param u_ptr bignum address
  * @param a_ptr bignum address
  * @param n_ptr bignum address
- * @param nonce_ptr 
+ * @param nonce_ptr
  * @param hg_ptr hashed generated return bignum address
- */ 
+ */
 
 static uint64_t sol_bignum_hashed_generator (
   const uint64_t *u_ptr,
@@ -513,9 +513,9 @@ static uint64_t sol_bignum_hashed_generator (
  * @param u_ptr bignum address
  * @param a_ptr bignum address
  * @param z_ptr bignum address
- * @param nonce_ptr 
+ * @param nonce_ptr
  * @param htp_ptr prime generated return bignum address
- */ 
+ */
 
 static uint64_t sol_bignum_hash_to_prime (
   const uint64_t *u_ptr,
@@ -531,7 +531,7 @@ static uint64_t sol_bignum_hash_to_prime (
  * @param self_ptr self bignum address
  * @param rhs_ptr bignum address to add with self
  * @param sum_ptr object address of resulting sum
- 
+
  */
 static uint64_t sol_bignum_add(
     const uint64_t *self_ptr,
@@ -544,7 +544,7 @@ static uint64_t sol_bignum_add(
  * @param self_ptr self bignum address
  * @param rhs_ptr bignum address number to sub from self
  * @param diff_ptr object address of resulting difference
- 
+
  */
 static uint64_t sol_bignum_sub(
     const uint64_t *self_ptr,
@@ -557,7 +557,7 @@ static uint64_t sol_bignum_sub(
  * @param self_ptr self bignum address
  * @param rhs_ptr bignum address number to multiple self by
  * @param product_ptr object address of resulting product
- 
+
  */
 static uint64_t sol_bignum_mul(
     const uint64_t *self_ptr,
@@ -595,7 +595,7 @@ static uint64_t sol_bignum_exp(
  c
  */
 static uint64_t sol_bignum_sqr(
-  const uint64_t  *self_ptr,  
+  const uint64_t  *self_ptr,
   const uint64_t  *sqr_res_ptr
 );
 
@@ -605,10 +605,10 @@ static uint64_t sol_bignum_sqr(
  * @param self_ptr base bignum address (i.e. self -- read)
  * @param multiplier_ptr - The number that self_ptr is multiplied by
  * @param modulus_ptr the modulus applied to the product of self*multiplier
- * @param mod_exp_ptr object address of resulting BigNum  
+ * @param mod_exp_ptr object address of resulting BigNum
  */
-static uint64_t sol_bignum_mod_mul(    
-    const uint64_t *self_ptr,    
+static uint64_t sol_bignum_mod_mul(
+    const uint64_t *self_ptr,
     const uint64_t *multiplier_ptr,
     const uint64_t *modulus_ptr,
     const uint64_t *mod_mul_ptr
@@ -619,10 +619,10 @@ static uint64_t sol_bignum_mod_mul(
  *  Performs (base * multiplier) % modulus and updates self_ptr BigNum
  * @param self_ptr base bignum address (i.e. self -- read)
  * @param modulus_ptr the modulus applied to the product of self*multiplier
- * @param mod_exp_ptr object address of resulting BigNum  
+ * @param mod_exp_ptr object address of resulting BigNum
  */
-static uint64_t sol_bignum_mod_inverse(    
-    const uint64_t *self_ptr,        
+static uint64_t sol_bignum_mod_inverse(
+    const uint64_t *self_ptr,
     const uint64_t *modulus_ptr,
     const uint64_t *mod_mul_ptr
 );
