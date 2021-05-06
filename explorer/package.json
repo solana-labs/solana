@@ -35,7 +35,7 @@
     "coingecko-api": "^1.0.10",
     "cross-fetch": "^3.1.4",
     "humanize-duration-ts": "^2.1.1",
-    "node-sass": "^4.14.1",
+    "node-sass": "^5.0.0",
     "prettier": "^2.2.1",
     "react": "^17.0.2",
     "react-chartjs-2": "^2.11.2",
