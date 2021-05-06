@@ -11,8 +11,8 @@ use {
         net::SocketAddr,
         path::Path,
         sync::{Arc, RwLock},
-        thread::Builder,
-        time::SystemTime,
+        thread::{self, Builder},
+        time::{Duration, SystemTime},
     },
 };
 
@@ -58,10 +58,22 @@ impl AdminRpc for AdminRpcImpl {
 
     fn exit(&self, meta: Self::Metadata) -> Result<()> {
         debug!("exit admin rpc request received");
-        // Delay exit signal until this RPC request completes, otherwise the caller of `exit` might
-        // receive a confusing error as the validator shuts down before a response is sent back.
-        tokio::spawn(async move {
+
+        thread::spawn(move || {
+            // Delay exit signal until this RPC request completes, otherwise the caller of `exit` might
+            // receive a confusing error as the validator shuts down before a response is sent back.
+            thread::sleep(Duration::from_millis(100));
+
+            warn!("validator exit requested");
             meta.validator_exit.write().unwrap().exit();
+
+            // TODO: Debug why ValidatorExit doesn't always cause the validator to fully exit
+            // (rocksdb background processing or some other stuck thread perhaps?).
+            //
+            // If the process is still alive after five seconds, exit harder
+            thread::sleep(Duration::from_secs(5));
+            warn!("validator exit timeout");
+            std::process::exit(0);
         });
         Ok(())
     }
