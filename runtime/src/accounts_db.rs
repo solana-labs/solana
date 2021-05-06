@@ -4947,6 +4947,9 @@ impl AccountsDb {
     }
 
     pub fn generate_index(&self) {
+        // BTreeMap because we want in-order traversal of oldest write_version to newest.
+        // Thus, all instances of an account in a store are added to the index in oldest to newest
+        // order and we update refcounts and track reclaims correctly.
         type AccountsMap<'a> = HashMap<Pubkey, BTreeMap<u64, (AppendVecId, StoredAccountMeta<'a>)>>;
         let mut slots = self.storage.all_slots();
         #[allow(clippy::stable_sort_primitive)]
