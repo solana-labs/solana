@@ -16,7 +16,7 @@ use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_error, inc_new_counter_debug};
 use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::{
-    accounts_index::AccountIndex,
+    accounts_index::AccountSecondaryIndexes,
     bank::{
         Bank, ExecuteTimings, InnerInstructionsList, TransactionBalancesSet,
         TransactionExecutionResult, TransactionLogMessages, TransactionResults,
@@ -366,7 +366,7 @@ pub struct ProcessOptions {
     pub new_hard_forks: Option<Vec<Slot>>,
     pub frozen_accounts: Vec<Pubkey>,
     pub debug_keys: Option<Arc<HashSet<Pubkey>>>,
-    pub account_indexes: HashSet<AccountIndex>,
+    pub account_indexes: AccountSecondaryIndexes,
     pub accounts_db_caching_enabled: bool,
     pub allow_dead_slots: bool,
 }
@@ -2990,7 +2990,7 @@ pub mod tests {
             &[],
             None,
             None,
-            HashSet::new(),
+            AccountSecondaryIndexes::default(),
             false,
         );
         *bank.epoch_schedule()

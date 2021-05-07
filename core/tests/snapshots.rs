@@ -47,6 +47,7 @@ mod tests {
     use solana_runtime::{
         accounts_background_service::{AbsRequestSender, SnapshotRequestHandler},
         accounts_db,
+        accounts_index::AccountSecondaryIndexes,
         bank::{Bank, BankSlotDelta},
         bank_forks::{ArchiveFormat, BankForks, SnapshotConfig},
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
@@ -106,7 +107,7 @@ mod tests {
                 &[],
                 None,
                 None,
-                HashSet::new(),
+                AccountSecondaryIndexes::default(),
                 false,
             );
             bank0.freeze();
@@ -163,7 +164,7 @@ mod tests {
             old_genesis_config,
             None,
             None,
-            HashSet::new(),
+            AccountSecondaryIndexes::default(),
             false,
         )
         .unwrap();
