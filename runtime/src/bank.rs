@@ -126,8 +126,8 @@ use std::{
     time::Instant,
 };
 
-mod executors;
-use executors::{CachedExecutors, CowCachedExecutors, MAX_CACHED_EXECUTORS};
+mod executor_cache;
+use executor_cache::{CachedExecutors, CowCachedExecutors, MAX_CACHED_EXECUTORS};
 
 pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
 
