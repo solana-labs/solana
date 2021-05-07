@@ -595,7 +595,7 @@ The result will be an RpcResponse JSON object with `value` equal to:
   - `byIdentity: <object>` - a dictionary of validator identities,
     as base-58 encoded strings.  Value is a two element array containing the
     number of leader slots and the number of blocks produced.
-  - `range: <object>` - Slot range to return block production for. If parameter not provided, defaults to current epoch.
+  - `range: <object>` - Block production slot range
     - `firstSlot: <u64>` - first slot of the block production information (inclusive)
     - `lastSlot: <u64>` - last slot of block production information (inclusive)
 
