@@ -4,6 +4,7 @@ use crate::{
     signature::{Signature, Signer, SignerError},
 };
 
+/// Convenience trait for working with mixed collections of `Signer`s
 pub trait Signers {
     fn pubkeys(&self) -> Vec<Pubkey>;
     fn try_pubkeys(&self) -> Result<Vec<Pubkey>, SignerError>;
