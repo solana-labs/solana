@@ -35,10 +35,10 @@ import {Message} from './message';
 import {sleep} from './util/sleep';
 import {promiseTimeout} from './util/promise-timeout';
 import {toBuffer} from './util/to-buffer';
+import type {Account} from './account';
 import type {Blockhash} from './blockhash';
 import type {FeeCalculator} from './fee-calculator';
-import type {Account} from './account';
-import type {TransactionSignature} from './transaction';
+import type {TransactionSignature, TransactionSigner} from './transaction';
 import type {CompiledInstruction} from './message';
 
 const PublicKeyFromString = coerce(
@@ -3213,7 +3213,7 @@ export class Connection {
    */
   async simulateTransaction(
     transaction: Transaction,
-    signers?: Array<Account>,
+    signers?: Array<TransactionSigner>,
   ): Promise<RpcResponseAndContext<SimulatedTransactionResponse>> {
     if (transaction.nonceInfo && signers) {
       transaction.sign(...signers);
@@ -3274,7 +3274,7 @@ export class Connection {
    */
   async sendTransaction(
     transaction: Transaction,
-    signers: Array<Account>,
+    signers: Array<TransactionSigner>,
     options?: SendOptions,
   ): Promise<TransactionSignature> {
     if (transaction.nonceInfo) {

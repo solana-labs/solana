@@ -3,10 +3,10 @@ import nacl from 'tweetnacl';
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
 
+import type {Account} from './account';
 import type {CompiledInstruction} from './message';
 import {Message} from './message';
 import {PublicKey} from './publickey';
-import {Account} from './account';
 import * as shortvec from './util/shortvec-encoding';
 import type {Blockhash} from './blockhash';
 import {toBuffer} from './util/to-buffer';
@@ -15,6 +15,14 @@ import {toBuffer} from './util/to-buffer';
  * Transaction signature as base-58 encoded string
  */
 export type TransactionSignature = string;
+
+/**
+ * Transaction signer
+ */
+export interface TransactionSigner {
+  publicKey: PublicKey;
+  secretKey: Uint8Array;
+}
 
 /**
  * Default (empty) signature
@@ -432,7 +440,7 @@ export class Transaction {
   }
 
   /**
-   * Sign the Transaction with the specified accounts. Multiple signatures may
+   * Sign the Transaction with the specified signers. Multiple signatures may
    * be applied to a Transaction. The first signature is considered "primary"
    * and is used identify and confirm transactions.
    *
@@ -445,7 +453,7 @@ export class Transaction {
    *
    * The Transaction must be assigned a valid `recentBlockhash` before invoking this method
    */
-  sign(...signers: Array<Account>) {
+  sign(...signers: Array<TransactionSigner>) {
     if (signers.length === 0) {
       throw new Error('No signers');
     }
@@ -480,7 +488,7 @@ export class Transaction {
    *
    * All the caveats from the `sign` method apply to `partialSign`
    */
-  partialSign(...signers: Array<Account>) {
+  partialSign(...signers: Array<TransactionSigner>) {
     if (signers.length === 0) {
       throw new Error('No signers');
     }
@@ -505,7 +513,7 @@ export class Transaction {
   /**
    * @internal
    */
-  _partialSign(message: Message, ...signers: Array<Account>) {
+  _partialSign(message: Message, ...signers: Array<TransactionSigner>) {
     const signData = message.serialize();
     signers.forEach(signer => {
       const signature = nacl.sign.detached(signData, signer.secretKey);

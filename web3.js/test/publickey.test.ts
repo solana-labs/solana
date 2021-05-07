@@ -3,7 +3,7 @@ import {Buffer} from 'buffer';
 import {expect, use} from 'chai';
 import chaiAsPromised from 'chai-as-promised';
 
-import {Account} from '../src/account';
+import {Keypair} from '../src/keypair';
 import {PublicKey, MAX_SEED_LENGTH} from '../src/publickey';
 
 use(chaiAsPromised);
@@ -331,7 +331,7 @@ describe('PublicKey', function () {
   });
 
   it('isOnCurve', () => {
-    let onCurve = new Account().publicKey;
+    let onCurve = Keypair.generate().publicKey;
     expect(PublicKey.isOnCurve(onCurve.toBuffer())).to.be.true;
     // A program address, yanked from one of the above tests. This is a pretty
     // poor test vector since it was created by the same code it is testing.

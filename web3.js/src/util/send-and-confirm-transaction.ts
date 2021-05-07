@@ -1,8 +1,7 @@
 import {Connection} from '../connection';
 import {Transaction} from '../transaction';
-import type {Account} from '../account';
 import type {ConfirmOptions} from '../connection';
-import type {TransactionSignature} from '../transaction';
+import type {TransactionSignature, TransactionSigner} from '../transaction';
 
 /**
  * Sign, send and confirm a transaction.
@@ -11,14 +10,14 @@ import type {TransactionSignature} from '../transaction';
  *
  * @param {Connection} connection
  * @param {Transaction} transaction
- * @param {Array<Account>} signers
+ * @param {Array<TransactionSigner>} signers
  * @param {ConfirmOptions} [options]
  * @returns {Promise<TransactionSignature>}
  */
 export async function sendAndConfirmTransaction(
   connection: Connection,
   transaction: Transaction,
-  signers: Array<Account>,
+  signers: Array<TransactionSigner>,
   options?: ConfirmOptions,
 ): Promise<TransactionSignature> {
   const sendOptions = options && {

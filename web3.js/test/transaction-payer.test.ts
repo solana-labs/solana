@@ -3,7 +3,7 @@ import invariant from 'assert';
 import {expect} from 'chai';
 
 import {
-  Account,
+  Keypair,
   Connection,
   Transaction,
   SystemProgram,
@@ -33,9 +33,9 @@ describe('Transaction Payer', () => {
   }
 
   it('transaction-payer', async () => {
-    const accountPayer = new Account();
-    const accountFrom = new Account();
-    const accountTo = new Account();
+    const accountPayer = Keypair.generate();
+    const accountFrom = Keypair.generate();
+    const accountTo = Keypair.generate();
 
     await helpers.airdrop({
       connection,

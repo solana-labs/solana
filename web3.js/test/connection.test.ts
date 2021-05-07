@@ -16,6 +16,7 @@ import {
   PublicKey,
   StakeProgram,
   sendAndConfirmTransaction,
+  Keypair,
 } from '../src';
 import {DEFAULT_TICKS_PER_SLOT, NUM_TICKS_PER_SECOND} from '../src/timing';
 import {MOCK_PORT, url} from './url';
@@ -132,7 +133,7 @@ describe('Connection', () => {
   }
 
   it('get account info - not found', async () => {
-    const account = new Account();
+    const account = Keypair.generate();
 
     await mockRpcResponse({
       method: 'getAccountInfo',
@@ -155,9 +156,9 @@ describe('Connection', () => {
   });
 
   it('get program accounts', async () => {
-    const account0 = new Account();
-    const account1 = new Account();
-    const programId = new Account();
+    const account0 = Keypair.generate();
+    const account1 = Keypair.generate();
+    const programId = Keypair.generate();
 
     {
       await helpers.airdrop({
@@ -543,7 +544,7 @@ describe('Connection', () => {
   });
 
   it('get balance', async () => {
-    const account = new Account();
+    const account = Keypair.generate();
 
     await mockRpcResponse({
       method: 'getBalance',
@@ -821,7 +822,7 @@ describe('Connection', () => {
         total: 1000000,
         circulating: 100000,
         nonCirculating: 900000,
-        nonCirculatingAccounts: [new Account().publicKey.toBase58()],
+        nonCirculatingAccounts: [Keypair.generate().publicKey.toBase58()],
       },
       withContext: true,
     });
@@ -1429,7 +1430,7 @@ describe('Connection', () => {
     const resultSignature = bs58.encode(result.transaction.signature);
     expect(resultSignature).to.eq(confirmedTransaction);
 
-    const newAddress = new Account().publicKey;
+    const newAddress = Keypair.generate().publicKey;
     const recentSignature = await helpers.airdrop({
       connection,
       address: newAddress,
@@ -1826,7 +1827,7 @@ describe('Connection', () => {
         total: 1000,
         circulating: 100,
         nonCirculating: 900,
-        nonCirculatingAccounts: [new Account().publicKey.toBase58()],
+        nonCirculatingAccounts: [Keypair.generate().publicKey.toBase58()],
       },
       withContext: true,
     });
@@ -1880,7 +1881,7 @@ describe('Connection', () => {
   if (process.env.TEST_LIVE) {
     describe('token methods', () => {
       const connection = new Connection(url, 'confirmed');
-      const newAccount = new Account().publicKey;
+      const newAccount = Keypair.generate().publicKey;
 
       let testToken: Token;
       let testTokenPubkey: PublicKey;
@@ -1900,7 +1901,7 @@ describe('Connection', () => {
         const mintOwner = new Account();
         const accountOwner = new Account();
         const token = await Token.createMint(
-          connection,
+          connection as any,
           payerAccount,
           mintOwner.publicKey,
           null,
@@ -1912,7 +1913,7 @@ describe('Connection', () => {
         await token.mintTo(tokenAccount, mintOwner, [], 11111);
 
         const token2 = await Token.createMint(
-          connection,
+          connection as any,
           payerAccount,
           mintOwner.publicKey,
           null,
@@ -2095,8 +2096,8 @@ describe('Connection', () => {
 
     it('consistent preflightCommitment', async () => {
       const connection = new Connection(url, 'singleGossip');
-      const sender = new Account();
-      const recipient = new Account();
+      const sender = Keypair.generate();
+      const recipient = Keypair.generate();
       let signature = await connection.requestAirdrop(
         sender.publicKey,
         2 * LAMPORTS_PER_SOL,
@@ -2118,7 +2119,7 @@ describe('Connection', () => {
       method: 'getLargestAccounts',
       params: [],
       value: new Array(20).fill(0).map(() => ({
-        address: new Account().publicKey.toBase58(),
+        address: Keypair.generate().publicKey.toBase58(),
         lamports: 1000,
       })),
       withContext: true,
@@ -2129,7 +2130,7 @@ describe('Connection', () => {
   });
 
   it('stake activation should throw when called for not delegated account', async () => {
-    const publicKey = new Account().publicKey;
+    const publicKey = Keypair.generate().publicKey;
     await mockRpcResponse({
       method: 'getStakeActivation',
       params: [publicKey.toBase58(), {}],
@@ -2147,7 +2148,7 @@ describe('Connection', () => {
       )[0];
       const votePubkey = new PublicKey(voteAccount.votePubkey);
 
-      const authorized = new Account();
+      const authorized = Keypair.generate();
       let signature = await connection.requestAirdrop(
         authorized.publicKey,
         2 * LAMPORTS_PER_SOL,
@@ -2158,7 +2159,7 @@ describe('Connection', () => {
         StakeProgram.space,
       );
 
-      const newStakeAccount = new Account();
+      const newStakeAccount = Keypair.generate();
       let createAndInitialize = StakeProgram.createAccount({
         fromPubkey: authorized.publicKey,
         stakePubkey: newStakeAccount.publicKey,
@@ -2209,7 +2210,7 @@ describe('Connection', () => {
 
   if (mockServer) {
     it('stake activation should only accept state with valid string literals', async () => {
-      const publicKey = new Account().publicKey;
+      const publicKey = Keypair.generate().publicKey;
 
       const addStakeActivationMock = async (state: any) => {
         await mockRpcResponse({
@@ -2250,7 +2251,7 @@ describe('Connection', () => {
   });
 
   it('request airdrop', async () => {
-    const account = new Account();
+    const account = Keypair.generate();
 
     await helpers.airdrop({
       connection,
@@ -2328,7 +2329,7 @@ describe('Connection', () => {
   });
 
   it('transaction failure', async () => {
-    const payer = new Account();
+    const payer = Keypair.generate();
 
     await helpers.airdrop({
       connection,
@@ -2336,7 +2337,7 @@ describe('Connection', () => {
       amount: LAMPORTS_PER_SOL,
     });
 
-    const newAccount = new Account();
+    const newAccount = Keypair.generate();
     let transaction = new Transaction().add(
       SystemProgram.createAccount({
         fromPubkey: payer.publicKey,
@@ -2391,8 +2392,8 @@ describe('Connection', () => {
     it('transaction', async () => {
       connection._commitment = 'confirmed';
 
-      const accountFrom = new Account();
-      const accountTo = new Account();
+      const accountFrom = Keypair.generate();
+      const accountTo = Keypair.generate();
       const minimumAmount = await connection.getMinimumBalanceForRentExemption(
         0,
       );
@@ -2494,8 +2495,8 @@ describe('Connection', () => {
     it('multi-instruction transaction', async () => {
       connection._commitment = 'confirmed';
 
-      const accountFrom = new Account();
-      const accountTo = new Account();
+      const accountFrom = Keypair.generate();
+      const accountTo = Keypair.generate();
 
       let signature = await connection.requestAirdrop(
         accountFrom.publicKey,
@@ -2572,8 +2573,8 @@ describe('Connection', () => {
     //   }
 
     //   const connection = new Connection(url, 'confirmed');
-    //   const owner = new Account();
-    //   const programAccount = new Account();
+    //   const owner = Keypair.generate();
+    //   const programAccount = Keypair.generate();
 
     //   const mockCallback = jest.fn();
 
@@ -2633,8 +2634,8 @@ describe('Connection', () => {
     it('program account change notification', async () => {
       connection._commitment = 'confirmed';
 
-      const owner = new Account();
-      const programAccount = new Account();
+      const owner = Keypair.generate();
+      const programAccount = Keypair.generate();
       const balanceNeeded = await connection.getMinimumBalanceForRentExemption(
         0,
       );
@@ -2737,7 +2738,7 @@ describe('Connection', () => {
 
     it('logs notification', async () => {
       let listener: number | undefined;
-      const owner = new Account();
+      const owner = Keypair.generate();
       const [logsRes, ctx] = await new Promise(resolve => {
         let received = false;
         listener = connection.onLogs(
