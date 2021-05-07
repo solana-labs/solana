@@ -1,7 +1,7 @@
 import {PublicKey} from './publickey';
 import {Loader} from './loader';
 import type {Connection} from './connection';
-import type {TransactionSigner} from './transaction';
+import type {Signer} from './keypair';
 
 export const BPF_LOADER_PROGRAM_ID = new PublicKey(
   'BPFLoader2111111111111111111111111111111111',
@@ -33,8 +33,8 @@ export class BpfLoader {
    */
   static load(
     connection: Connection,
-    payer: TransactionSigner,
-    program: TransactionSigner,
+    payer: Signer,
+    program: Signer,
     elf: Buffer | Uint8Array | Array<number>,
     loaderProgramId: PublicKey,
   ): Promise<boolean> {

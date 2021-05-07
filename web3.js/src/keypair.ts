@@ -4,6 +4,14 @@ import type {SignKeyPair} from 'tweetnacl';
 import {PublicKey} from './publickey';
 
 /**
+ * Keypair signer interface
+ */
+export interface Signer {
+  publicKey: PublicKey;
+  secretKey: Uint8Array;
+}
+
+/**
  * An account keypair used for signing transactions.
  */
 export class Keypair {

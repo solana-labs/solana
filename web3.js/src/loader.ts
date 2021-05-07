@@ -7,7 +7,7 @@ import {SYSVAR_RENT_PUBKEY} from './sysvar';
 import {sendAndConfirmTransaction} from './util/send-and-confirm-transaction';
 import {sleep} from './util/sleep';
 import type {Connection} from './connection';
-import type {TransactionSigner} from './transaction';
+import type {Signer} from './keypair';
 import {SystemProgram} from './system-program';
 
 // Keep program chunks under PACKET_DATA_SIZE, leaving enough room for the
@@ -58,8 +58,8 @@ export class Loader {
    */
   static async load(
     connection: Connection,
-    payer: TransactionSigner,
-    program: TransactionSigner,
+    payer: Signer,
+    program: Signer,
     programId: PublicKey,
     data: Buffer | Uint8Array | Array<number>,
   ): Promise<boolean> {
