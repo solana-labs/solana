@@ -11,6 +11,7 @@ use {
 };
 
 pub mod keypair;
+pub mod null_signer;
 pub mod presigner;
 
 #[derive(Debug, Error, PartialEq)]
