@@ -7,6 +7,7 @@ import { FetchStatus } from "providers/cache";
 import { reportError } from "utils/sentry";
 
 const PAGE_SIZE = 15;
+const timeout = (ms: number | undefined) => new Promise(resolve => setTimeout(resolve, ms));
 
 export type Rewards = {
   highestFetchedEpoch?: number;
@@ -35,11 +36,7 @@ function reconcile(
     .concat(update.rewards)
     .filter((value) => value !== null);
 
-  const foundOldest =
-    update.foundOldest ||
-    update.rewards.length < 1 ||
-    update.rewards[update.rewards.length - 1]?.epoch ===
-      combined[combined.length]?.epoch;
+  const foundOldest = update.foundOldest;
 
   return {
     rewards: combined,
@@ -80,7 +77,6 @@ async function fetchRewards(
   url: string,
   fromEpoch?: number,
   highestEpoch?: number,
-  lowestEpoch?: number
 ) {
   dispatch({
     type: ActionType.Update,
@@ -125,16 +121,22 @@ async function fetchRewards(
     return null;
   };
 
-  lowestEpoch = lowestEpoch || 0;
-  const requests = [];
-  for (let i = fromEpoch; i > fromEpoch - PAGE_SIZE; i--) {
-    if (i >= lowestEpoch) {
-      requests.push(getInflationReward(i));
+  let foundSome = false;
+  let results;
+  while(!foundSome && fromEpoch >= 0) {
+    const requests = [];
+    for (let i: number = fromEpoch; i > fromEpoch - PAGE_SIZE; i--) {
+      if (i >= 0) {
+        requests.push(getInflationReward(i));
+      }
+    }
+    results = await Promise.all(requests);
+    fromEpoch = fromEpoch - requests.length;
+    foundSome = results.some(v => v !== null);
+    if (!foundSome) { // avoid rate limit
+      await timeout(500);
     }
   }
-
-  const results = await Promise.all(requests);
-  const foundOldest = results[results.length - 1]?.epoch === lowestEpoch;
 
   dispatch({
     type: ActionType.Update,
@@ -142,8 +144,8 @@ async function fetchRewards(
     key: pubkey.toBase58(),
     status: FetchStatus.Fetched,
     data: {
-      rewards: results,
-      foundOldest,
+      rewards: results || [],
+      foundOldest: fromEpoch <= 0
     },
   });
 }
@@ -170,7 +172,7 @@ export function useFetchRewards() {
   }
 
   return React.useCallback(
-    (pubkey: PublicKey, highestEpoch?: number, lowestEpoch?: number) => {
+    (pubkey: PublicKey, highestEpoch?: number) => {
       const before = state.entries[pubkey.toBase58()];
       if (before?.data) {
         fetchRewards(
@@ -181,8 +183,7 @@ export function useFetchRewards() {
           before.data.lowestFetchedEpoch
             ? before.data.lowestFetchedEpoch - 1
             : undefined,
-          highestEpoch,
-          lowestEpoch
+          highestEpoch
         );
       } else {
         fetchRewards(
@@ -191,8 +192,7 @@ export function useFetchRewards() {
           cluster,
           url,
           undefined,
-          highestEpoch,
-          lowestEpoch
+          highestEpoch
         );
       }
     },

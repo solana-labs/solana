@@ -17,27 +17,19 @@ export function RewardsCard({ pubkey }: { pubkey: PublicKey }) {
   const account = info?.data;
   const data = account?.details?.data?.parsed.info;
 
-  const { highestEpoch, lowestEpoch } = React.useMemo(() => {
-    let highestEpoch;
-    let lowestEpoch;
-
+  const highestEpoch = React.useMemo(() => {
     if (data.stake && !data.stake.delegation.deactivationEpoch.eq(MAX_EPOCH)) {
-      highestEpoch = data.stake.delegation.deactivationEpoch.toNumber();
+      return data.stake.delegation.deactivationEpoch.toNumber();
     }
-
-    if (data.stake && !data.stake.delegation.activationEpoch.eq(MAX_EPOCH)) {
-      lowestEpoch = data.stake.delegation.activationEpoch.toNumber();
-    }
-    return { highestEpoch, lowestEpoch };
   }, [data]);
 
   const rewards = useRewards(address);
   const fetchRewards = useFetchRewards();
-  const loadMore = () => fetchRewards(pubkey, highestEpoch, lowestEpoch);
+  const loadMore = () => fetchRewards(pubkey, highestEpoch);
 
   React.useEffect(() => {
     if (!rewards) {
-      fetchRewards(pubkey, highestEpoch, lowestEpoch);
+      fetchRewards(pubkey, highestEpoch);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
