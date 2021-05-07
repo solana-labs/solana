@@ -29,7 +29,7 @@ function reconcile(
   rewards: Rewards | undefined,
   update: RewardsUpdate | undefined
 ): Rewards | undefined {
-  if (update?.rewards === undefined) {
+  if (update === undefined) {
     return rewards;
   }
 
