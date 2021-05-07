@@ -36,7 +36,7 @@ pub fn load(
     shrink_paths: Option<Vec<PathBuf>>,
     snapshot_config: Option<&SnapshotConfig>,
     process_options: ProcessOptions,
-    transaction_status_sender: Option<TransactionStatusSender>,
+    transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_time_sender: Option<&CacheBlockTimeSender>,
 ) -> LoadResult {
     if let Some(snapshot_config) = snapshot_config.as_ref() {

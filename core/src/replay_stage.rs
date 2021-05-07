@@ -372,7 +372,7 @@ impl ReplayStage {
                         &my_pubkey,
                         &vote_account,
                         &mut progress,
-                        transaction_status_sender.clone(),
+                        transaction_status_sender.as_ref(),
                         cache_block_time_sender.as_ref(),
                         &verify_recyclers,
                         &mut heaviest_subtree_fork_choice,
@@ -1187,7 +1187,7 @@ impl ReplayStage {
         bank: &Arc<Bank>,
         blockstore: &Blockstore,
         bank_progress: &mut ForkProgress,
-        transaction_status_sender: Option<TransactionStatusSender>,
+        transaction_status_sender: Option<&TransactionStatusSender>,
         replay_vote_sender: &ReplayVoteSender,
         verify_recyclers: &VerifyRecyclers,
     ) -> result::Result<usize, BlockstoreProcessorError> {
@@ -1623,7 +1623,7 @@ impl ReplayStage {
         my_pubkey: &Pubkey,
         vote_account: &Pubkey,
         progress: &mut ProgressMap,
-        transaction_status_sender: Option<TransactionStatusSender>,
+        transaction_status_sender: Option<&TransactionStatusSender>,
         cache_block_time_sender: Option<&CacheBlockTimeSender>,
         verify_recyclers: &VerifyRecyclers,
         heaviest_subtree_fork_choice: &mut HeaviestSubtreeForkChoice,
@@ -1688,7 +1688,7 @@ impl ReplayStage {
                     &bank,
                     &blockstore,
                     bank_progress,
-                    transaction_status_sender.clone(),
+                    transaction_status_sender,
                     replay_vote_sender,
                     verify_recyclers,
                 );
@@ -1723,7 +1723,7 @@ impl ReplayStage {
                 );
                 did_complete_bank = true;
                 info!("bank frozen: {}", bank.slot());
-                if let Some(transaction_status_sender) = transaction_status_sender.clone() {
+                if let Some(transaction_status_sender) = transaction_status_sender {
                     transaction_status_sender.send_transaction_status_freeze_message(&bank);
                 }
                 bank.freeze();
@@ -3346,7 +3346,7 @@ pub(crate) mod tests {
             &bank,
             &mut entries,
             true,
-            Some(TransactionStatusSender {
+            Some(&TransactionStatusSender {
                 sender: transaction_status_sender,
                 enable_cpi_and_log_storage: false,
             }),

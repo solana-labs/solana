@@ -101,7 +101,7 @@ fn get_first_error(
 fn execute_batch(
     batch: &TransactionBatch,
     bank: &Arc<Bank>,
-    transaction_status_sender: Option<TransactionStatusSender>,
+    transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     timings: &mut ExecuteTimings,
 ) -> Result<()> {
@@ -163,7 +163,7 @@ fn execute_batches(
     bank: &Arc<Bank>,
     batches: &[TransactionBatch],
     entry_callback: Option<&ProcessCallback>,
-    transaction_status_sender: Option<TransactionStatusSender>,
+    transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     timings: &mut ExecuteTimings,
 ) -> Result<()> {
@@ -173,12 +173,12 @@ fn execute_batches(
             thread_pool.borrow().install(|| {
                 batches
                     .into_par_iter()
-                    .map_with(transaction_status_sender, |sender, batch| {
+                    .map(|batch| {
                         let mut timings = ExecuteTimings::default();
                         let result = execute_batch(
                             batch,
                             bank,
-                            sender.clone(),
+                            transaction_status_sender,
                             replay_vote_sender,
                             &mut timings,
                         );
@@ -207,7 +207,7 @@ pub fn process_entries(
     bank: &Arc<Bank>,
     entries: &mut [Entry],
     randomize: bool,
-    transaction_status_sender: Option<TransactionStatusSender>,
+    transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
 ) -> Result<()> {
     let mut timings = ExecuteTimings::default();
@@ -232,7 +232,7 @@ fn process_entries_with_callback(
     entries: &mut [EntryType],
     randomize: bool,
     entry_callback: Option<&ProcessCallback>,
-    transaction_status_sender: Option<TransactionStatusSender>,
+    transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     timings: &mut ExecuteTimings,
 ) -> Result<()> {
@@ -253,7 +253,7 @@ fn process_entries_with_callback(
                         bank,
                         &batches,
                         entry_callback,
-                        transaction_status_sender.clone(),
+                        transaction_status_sender,
                         replay_vote_sender,
                         timings,
                     )?;
@@ -304,7 +304,7 @@ fn process_entries_with_callback(
                             bank,
                             &batches,
                             entry_callback,
-                            transaction_status_sender.clone(),
+                            transaction_status_sender,
                             replay_vote_sender,
                             timings,
                         )?;
@@ -423,7 +423,7 @@ pub(crate) fn process_blockstore_from_root(
     bank: Bank,
     opts: &ProcessOptions,
     recyclers: &VerifyRecyclers,
-    transaction_status_sender: Option<TransactionStatusSender>,
+    transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_time_sender: Option<&CacheBlockTimeSender>,
 ) -> BlockstoreProcessorResult {
     do_process_blockstore_from_root(
@@ -441,7 +441,7 @@ fn do_process_blockstore_from_root(
     bank: Arc<Bank>,
     opts: &ProcessOptions,
     recyclers: &VerifyRecyclers,
-    transaction_status_sender: Option<TransactionStatusSender>,
+    transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_time_sender: Option<&CacheBlockTimeSender>,
 ) -> BlockstoreProcessorResult {
     info!("processing ledger from slot {}...", bank.slot());
@@ -604,7 +604,7 @@ fn confirm_full_slot(
     opts: &ProcessOptions,
     recyclers: &VerifyRecyclers,
     progress: &mut ConfirmationProgress,
-    transaction_status_sender: Option<TransactionStatusSender>,
+    transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     timing: &mut ExecuteTimings,
 ) -> result::Result<(), BlockstoreProcessorError> {
@@ -683,7 +683,7 @@ pub fn confirm_slot(
     timing: &mut ConfirmationTiming,
     progress: &mut ConfirmationProgress,
     skip_verification: bool,
-    transaction_status_sender: Option<TransactionStatusSender>,
+    transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     entry_callback: Option<&ProcessCallback>,
     recyclers: &VerifyRecyclers,
@@ -886,7 +886,7 @@ fn load_frozen_forks(
     root: &mut Slot,
     opts: &ProcessOptions,
     recyclers: &VerifyRecyclers,
-    transaction_status_sender: Option<TransactionStatusSender>,
+    transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_time_sender: Option<&CacheBlockTimeSender>,
     timing: &mut ExecuteTimings,
 ) -> result::Result<Vec<Arc<Bank>>, BlockstoreProcessorError> {
@@ -941,7 +941,7 @@ fn load_frozen_forks(
                 opts,
                 recyclers,
                 &mut progress,
-                transaction_status_sender.clone(),
+                transaction_status_sender,
                 cache_block_time_sender,
                 None,
                 timing,
@@ -1100,7 +1100,7 @@ fn process_single_slot(
     opts: &ProcessOptions,
     recyclers: &VerifyRecyclers,
     progress: &mut ConfirmationProgress,
-    transaction_status_sender: Option<TransactionStatusSender>,
+    transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_time_sender: Option<&CacheBlockTimeSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     timing: &mut ExecuteTimings,
