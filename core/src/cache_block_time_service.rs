@@ -1,5 +1,6 @@
-use crossbeam_channel::{Receiver, RecvTimeoutError, Sender};
+use crossbeam_channel::{Receiver, RecvTimeoutError};
 use solana_ledger::blockstore::Blockstore;
+pub use solana_ledger::blockstore_processor::CacheBlockTimeSender;
 use solana_measure::measure::Measure;
 use solana_runtime::bank::Bank;
 use std::{
@@ -12,7 +13,6 @@ use std::{
 };
 
 pub type CacheBlockTimeReceiver = Receiver<Arc<Bank>>;
-pub type CacheBlockTimeSender = Sender<Arc<Bank>>;
 
 pub struct CacheBlockTimeService {
     thread_hdl: JoinHandle<()>,

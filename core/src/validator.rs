@@ -1120,6 +1120,9 @@ fn new_banks_from_ledger(
         transaction_history_services
             .transaction_status_sender
             .clone(),
+        transaction_history_services
+            .cache_block_time_sender
+            .as_ref(),
     )
     .unwrap_or_else(|err| {
         error!("Failed to load ledger: {:?}", err);
