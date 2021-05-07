@@ -1,12 +1,11 @@
 //! The `signature` module provides functionality for public, and private keys.
 #![cfg(feature = "full")]
 
-use crate::{derivation_path::DerivationPath, pubkey::Pubkey, transaction::TransactionError};
+use crate::{derivation_path::DerivationPath, pubkey::Pubkey};
 use ed25519_dalek::Signer as DalekSigner;
 use ed25519_dalek_bip32::Error as Bip32Error;
 use generic_array::{typenum::U64, GenericArray};
 use hmac::Hmac;
-use itertools::Itertools;
 use rand::{rngs::OsRng, CryptoRng, RngCore};
 use std::{
     borrow::{Borrow, Cow},
@@ -19,6 +18,9 @@ use std::{
     str::FromStr,
 };
 use thiserror::Error;
+
+// legacy module paths
+pub use crate::signer::*;
 
 #[derive(Debug)]
 pub struct Keypair(ed25519_dalek::Keypair);
@@ -158,34 +160,6 @@ impl FromStr for Signature {
     }
 }
 
-pub trait Signer {
-    fn pubkey(&self) -> Pubkey {
-        self.try_pubkey().unwrap_or_default()
-    }
-    fn try_pubkey(&self) -> Result<Pubkey, SignerError>;
-    fn sign_message(&self, message: &[u8]) -> Signature {
-        self.try_sign_message(message).unwrap_or_default()
-    }
-    fn try_sign_message(&self, message: &[u8]) -> Result<Signature, SignerError>;
-}
-
-impl PartialEq for dyn Signer {
-    fn eq(&self, other: &dyn Signer) -> bool {
-        self.pubkey() == other.pubkey()
-    }
-}
-
-impl std::fmt::Debug for dyn Signer {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(fmt, "Signer: {:?}", self.pubkey())
-    }
-}
-
-/// Remove duplicates signers while preserving order. O(n²)
-pub fn unique_signers(signers: Vec<&dyn Signer>) -> Vec<&dyn Signer> {
-    signers.into_iter().unique_by(|s| s.pubkey()).collect()
-}
-
 impl Signer for Keypair {
     /// Return the public key for the given keypair
     fn pubkey(&self) -> Pubkey {
@@ -212,50 +186,6 @@ where
     fn eq(&self, other: &T) -> bool {
         self.pubkey() == other.pubkey()
     }
-}
-
-impl<T> From<T> for Box<dyn Signer>
-where
-    T: Signer + 'static,
-{
-    fn from(signer: T) -> Self {
-        Box::new(signer)
-    }
-}
-
-#[derive(Debug, Error, PartialEq)]
-pub enum SignerError {
-    #[error("keypair-pubkey mismatch")]
-    KeypairPubkeyMismatch,
-
-    #[error("not enough signers")]
-    NotEnoughSigners,
-
-    #[error("transaction error")]
-    TransactionError(#[from] TransactionError),
-
-    #[error("custom error: {0}")]
-    Custom(String),
-
-    // Presigner-specific Errors
-    #[error("presigner error")]
-    PresignerError(#[from] PresignerError),
-
-    // Remote Keypair-specific Errors
-    #[error("connection error: {0}")]
-    Connection(String),
-
-    #[error("invalid input: {0}")]
-    InvalidInput(String),
-
-    #[error("no device found")]
-    NoDeviceFound,
-
-    #[error("{0}")]
-    Protocol(String),
-
-    #[error("{0}")]
-    UserCancel(String),
 }
 
 #[derive(Clone, Debug, Default)]
@@ -627,20 +557,6 @@ mod tests {
         assert_eq!(keypair, presigner);
         let presigner2 = Presigner::new(&pubkey, &sig);
         assert_eq!(presigner, presigner2);
-    }
-
-    fn pubkeys(signers: &[&dyn Signer]) -> Vec<Pubkey> {
-        signers.iter().map(|x| x.pubkey()).collect()
-    }
-
-    #[test]
-    fn test_unique_signers() {
-        let alice = Keypair::new();
-        let bob = Keypair::new();
-        assert_eq!(
-            pubkeys(&unique_signers(vec![&alice, &bob, &alice])),
-            pubkeys(&[&alice, &bob])
-        );
     }
 
     #[test]
