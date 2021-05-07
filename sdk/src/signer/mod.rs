@@ -13,6 +13,7 @@ use {
 pub mod keypair;
 pub mod null_signer;
 pub mod presigner;
+pub mod signers;
 
 #[derive(Debug, Error, PartialEq)]
 pub enum SignerError {
