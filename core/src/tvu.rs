@@ -32,6 +32,7 @@ use solana_ledger::{
     blockstore_processor::TransactionStatusSender,
     leader_schedule_cache::LeaderScheduleCache,
 };
+use solana_net_utils::DatagramSocket;
 use solana_runtime::{
     accounts_background_service::{
         AbsRequestHandler, AbsRequestSender, AccountsBackgroundService, SendDroppedBankCallback,
@@ -55,7 +56,6 @@ use std::{
     },
     thread,
 };
-use solana_net_utils::DatagramSocket;
 
 pub struct Tvu {
     fetch_stage: ShredFetchStage,
@@ -141,7 +141,8 @@ impl Tvu {
         let (fetch_sender, fetch_receiver) = channel();
 
         let repair_socket = Arc::new(repair_socket);
-        let fetch_sockets: Vec<Arc<DatagramSocket>> = fetch_sockets.into_iter().map(Arc::new).collect();
+        let fetch_sockets: Vec<Arc<DatagramSocket>> =
+            fetch_sockets.into_iter().map(Arc::new).collect();
         let forward_sockets: Vec<Arc<DatagramSocket>> =
             tvu_forward_sockets.into_iter().map(Arc::new).collect();
         let fetch_stage = ShredFetchStage::new(

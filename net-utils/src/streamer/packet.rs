@@ -1,6 +1,6 @@
 //! The `packet` module defines data structures and methods to pull data from the network.
 use crate::streamer::recvmmsg::NUM_RCVMMSGS;
-use crate::{SocketLike, DatagramSocket};
+use crate::{DatagramSocket, SocketLike};
 pub use solana_perf::packet::{
     limited_deserialize, to_packets_chunked, Packets, PacketsRecycler, NUM_PACKETS,
     PACKETS_PER_BATCH,
@@ -67,10 +67,10 @@ pub fn send_to(obj: &Packets, socket: &DatagramSocket) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{Network, NetworkLike};
     use std::io;
     use std::io::Write;
     use std::net::SocketAddr;
-    use crate::{Network,NetworkLike};
 
     #[test]
     fn test_packets_set_addr() {

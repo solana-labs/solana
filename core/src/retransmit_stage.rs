@@ -26,10 +26,10 @@ use solana_ledger::{
 };
 use solana_measure::measure::Measure;
 use solana_metrics::inc_new_counter_error;
+use solana_net_utils::streamer::PacketReceiver;
 use solana_perf::packet::{Packet, Packets};
 use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use solana_sdk::{clock::Slot, epoch_schedule::EpochSchedule, pubkey::Pubkey, timing::timestamp};
-use solana_net_utils::streamer::PacketReceiver;
 use std::{
     cmp,
     collections::hash_set::HashSet,
@@ -679,7 +679,7 @@ mod tests {
     use solana_ledger::create_new_tmp_ledger;
     use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use solana_ledger::shred::Shred;
-    use solana_net_utils::{SocketLike, Network, NetworkLike};
+    use solana_net_utils::{Network, NetworkLike, SocketLike};
     use solana_perf::packet::{Packet, Packets};
     use std::net::{IpAddr, Ipv4Addr};
 
@@ -701,12 +701,17 @@ mod tests {
 
         let mut me = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0);
         let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
-        let port = network.find_available_port_in_range(ip_addr, (8000, 10000)).unwrap();
+        let port = network
+            .find_available_port_in_range(ip_addr, (8000, 10000))
+            .unwrap();
         let me_retransmit = network.bind(format!("127.0.0.1:{}", port)).unwrap();
         // need to make sure tvu and tpu are valid addresses
         me.tvu_forwards = me_retransmit.local_addr().unwrap();
-        let port = network.find_available_port_in_range(ip_addr, (8000, 10000)).unwrap();
-        me.tvu = network.bind(format!("127.0.0.1:{}", port))
+        let port = network
+            .find_available_port_in_range(ip_addr, (8000, 10000))
+            .unwrap();
+        me.tvu = network
+            .bind(format!("127.0.0.1:{}", port))
             .unwrap()
             .local_addr()
             .unwrap();

@@ -3,7 +3,9 @@
 
 use crate::streamer::packet::{self, send_to, Packets, PacketsRecycler, PACKETS_PER_BATCH};
 use crate::streamer::recvmmsg::NUM_RCVMMSGS;
-use crate::{SocketLike, DatagramSocket};
+use crate::{DatagramSocket, SocketLike};
+use log::*;
+use solana_metrics::*;
 use solana_sdk::timing::{duration_as_ms, timestamp};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, SendError, Sender};
@@ -11,8 +13,6 @@ use std::sync::Arc;
 use std::thread::{Builder, JoinHandle};
 use std::time::{Duration, Instant};
 use thiserror::Error;
-use log::*;
-use solana_metrics::*;
 
 pub type PacketReceiver = Receiver<Packets>;
 pub type PacketSender = Sender<Packets>;
@@ -133,7 +133,11 @@ pub fn recv_batch(recvr: &PacketReceiver, max_batch: usize) -> Result<(Vec<Packe
     Ok((batch, len, duration_as_ms(&recv_start.elapsed())))
 }
 
-pub fn responder(name: &'static str, sock: Arc<DatagramSocket>, r: PacketReceiver) -> JoinHandle<()> {
+pub fn responder(
+    name: &'static str,
+    sock: Arc<DatagramSocket>,
+    r: PacketReceiver,
+) -> JoinHandle<()> {
     Builder::new()
         .name(format!("solana-responder-{}", name))
         .spawn(move || {
@@ -168,6 +172,7 @@ mod test {
     use super::*;
     use crate::streamer::packet::{Packet, Packets, PACKET_DATA_SIZE};
     use crate::streamer::streamer::{receiver, responder};
+    use crate::{Network, NetworkLike, SocketLike};
     use solana_perf::recycler::Recycler;
     use std::io;
     use std::io::Write;
@@ -175,7 +180,6 @@ mod test {
     use std::sync::mpsc::channel;
     use std::sync::Arc;
     use std::time::Duration;
-    use crate::{Network, NetworkLike, SocketLike};
 
     fn get_msgs(r: PacketReceiver, num: &mut usize) {
         for _ in 0..10 {

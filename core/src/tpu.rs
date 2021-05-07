@@ -18,6 +18,7 @@ use crate::{
 };
 use crossbeam_channel::unbounded;
 use solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionStatusSender};
+use solana_net_utils::DatagramSocket;
 use solana_runtime::{
     bank_forks::BankForks,
     vote_sender_types::{ReplayVoteReceiver, ReplayVoteSender},
@@ -30,7 +31,6 @@ use std::{
     },
     thread,
 };
-use solana_net_utils::DatagramSocket;
 
 pub const DEFAULT_TPU_COALESCE_MS: u64 = 5;
 

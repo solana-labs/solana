@@ -7,6 +7,7 @@ use {
     crate::{rpc_client::RpcClient, rpc_config::RpcProgramAccountsConfig, rpc_response::Response},
     bincode::{serialize_into, serialized_size},
     log::*,
+    solana_net_utils::{DatagramSocket, Network, NetworkLike, SocketLike},
     solana_sdk::{
         account::Account,
         client::{AsyncClient, Client, SyncClient},
@@ -26,7 +27,6 @@ use {
         transaction::{self, Transaction},
         transport::Result as TransportResult,
     },
-    solana_net_utils::{DatagramSocket, Network, NetworkLike, SocketLike},
     std::{
         io,
         net::{IpAddr, Ipv4Addr, SocketAddr},
@@ -128,7 +128,11 @@ pub struct ThinClient {
 impl ThinClient {
     /// Create a new ThinClient that will interface with the Rpc at `rpc_addr` using TCP
     /// and the Tpu at `tpu_addr` over `transactions_socket` using UDP.
-    pub fn new(rpc_addr: SocketAddr, tpu_addr: SocketAddr, transactions_socket: DatagramSocket) -> Self {
+    pub fn new(
+        rpc_addr: SocketAddr,
+        tpu_addr: SocketAddr,
+        transactions_socket: DatagramSocket,
+    ) -> Self {
         Self::new_from_client(
             tpu_addr,
             transactions_socket,
@@ -607,8 +611,9 @@ impl AsyncClient for ThinClient {
 
 pub fn create_client((rpc, tpu): (SocketAddr, SocketAddr), range: (u16, u16)) -> ThinClient {
     let network = Network::default();
-    let (_, transactions_socket) =
-        network.bind_in_range(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), range).unwrap();
+    let (_, transactions_socket) = network
+        .bind_in_range(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), range)
+        .unwrap();
     ThinClient::new(rpc, tpu, transactions_socket)
 }
 
@@ -618,8 +623,9 @@ pub fn create_client_with_timeout(
     timeout: Duration,
 ) -> ThinClient {
     let network = Network::default();
-    let (_, transactions_socket) =
-        network.bind_in_range(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), range).unwrap();
+    let (_, transactions_socket) = network
+        .bind_in_range(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), range)
+        .unwrap();
     ThinClient::new_socket_with_timeout(rpc, tpu, transactions_socket, timeout)
 }
 

@@ -500,6 +500,7 @@ mod test {
         blockstore::Blockstore, entry::create_ticks, get_tmp_ledger_path,
         shred::max_ticks_per_n_shreds,
     };
+    use solana_net_utils::{Network, NetworkLike};
     use solana_runtime::bank::Bank;
     use solana_sdk::{
         genesis_config::GenesisConfig,
@@ -507,7 +508,6 @@ mod test {
     };
     use std::sync::Arc;
     use std::time::Duration;
-    use solana_net_utils::{Network, NetworkLike};
 
     fn setup(
         num_shreds_per_slot: Slot,

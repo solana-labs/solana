@@ -15,6 +15,7 @@ use solana_ledger::{
     shred::Nonce,
 };
 use solana_measure::measure::Measure;
+use solana_net_utils::{DatagramSocket, SocketLike};
 use solana_runtime::{
     bank::Bank, bank_forks::BankForks, commitment::VOTE_THRESHOLD_SIZE, contains::Contains,
 };
@@ -29,7 +30,6 @@ use std::{
     thread::{self, Builder, JoinHandle},
     time::{Duration, Instant},
 };
-use solana_net_utils::{DatagramSocket, SocketLike};
 
 pub type DuplicateSlotsResetSender = CrossbeamSender<Slot>;
 pub type DuplicateSlotsResetReceiver = CrossbeamReceiver<Slot>;
@@ -675,11 +675,11 @@ mod test {
     };
     use solana_ledger::shred::max_ticks_per_n_shreds;
     use solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path};
+    use solana_net_utils::{Network, NetworkLike};
     use solana_runtime::genesis_utils::{self, GenesisConfigInfo, ValidatorVoteKeypairs};
     use solana_sdk::signature::Signer;
     use solana_vote_program::vote_transaction;
     use std::collections::HashSet;
-    use solana_net_utils::{Network, NetworkLike};
 
     #[test]
     pub fn test_repair_orphan() {

@@ -10,11 +10,11 @@ use {
 };
 
 use crate::socket_like::*;
-use crate::{PortRange, NetworkLike};
+use crate::{NetworkLike, PortRange};
 
 /// StdNetwork provides a means to get std::net::UdpSocket's wrapped in DatagramSocket.
-#[derive(Clone,Debug)]
-pub struct StdNetwork{}
+#[derive(Clone, Debug)]
+pub struct StdNetwork {}
 
 impl StdNetwork {
     #[cfg(windows)]
@@ -61,7 +61,11 @@ impl NetworkLike for StdNetwork {
         ))
     }
 
-    fn bind_in_range(&self, ip_addr: IpAddr, range: PortRange) -> io::Result<(u16, DatagramSocket)> {
+    fn bind_in_range(
+        &self,
+        ip_addr: IpAddr,
+        range: PortRange,
+    ) -> io::Result<(u16, DatagramSocket)> {
         let sock = self.udp_socket(false)?;
 
         for port in range.0..range.1 {
@@ -131,8 +135,7 @@ impl NetworkLike for StdNetwork {
 
         let addr = SocketAddr::new(ip_addr, port);
 
-        sock.bind(&SockAddr::from(addr))
-            .map(|_| sock.into())
+        sock.bind(&SockAddr::from(addr)).map(|_| sock.into())
     }
 
     // binds both a DatagramSocket and a TcpListener
@@ -182,9 +185,12 @@ mod tests {
 
     #[test]
     fn test_bind() {
-        let network = StdNetwork{};
+        let network = StdNetwork {};
         let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
-        assert_eq!(network.bind_in_range(ip_addr, (2000, 2001)).unwrap().0, 2000);
+        assert_eq!(
+            network.bind_in_range(ip_addr, (2000, 2001)).unwrap().0,
+            2000
+        );
         let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
         let x = network.bind_to(ip_addr, 2002, true).unwrap();
         let y = network.bind_to(ip_addr, 2002, true).unwrap();
@@ -195,7 +201,9 @@ mod tests {
         network.bind_to(ip_addr, 2002, false).unwrap_err();
         network.bind_in_range(ip_addr, (2002, 2003)).unwrap_err();
 
-        let (port, v) = network.multi_bind_in_range(ip_addr, (2010, 2110), 10).unwrap();
+        let (port, v) = network
+            .multi_bind_in_range(ip_addr, (2010, 2110), 10)
+            .unwrap();
         for sock in &v {
             assert_eq!(port, sock.local_addr().unwrap().port());
         }
@@ -203,7 +211,7 @@ mod tests {
 
     #[test]
     fn test_bind_in_range_nil() {
-        let network = StdNetwork{};
+        let network = StdNetwork {};
         let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
         network.bind_in_range(ip_addr, (2000, 2000)).unwrap_err();
         network.bind_in_range(ip_addr, (2000, 1999)).unwrap_err();
@@ -211,32 +219,40 @@ mod tests {
 
     #[test]
     fn test_find_available_port_in_range() {
-        let network = StdNetwork{};
+        let network = StdNetwork {};
         let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
         assert_eq!(
-            network.find_available_port_in_range(ip_addr, (3000, 3001)).unwrap(),
+            network
+                .find_available_port_in_range(ip_addr, (3000, 3001))
+                .unwrap(),
             3000
         );
-        let port = network.find_available_port_in_range(ip_addr, (3000, 3050)).unwrap();
+        let port = network
+            .find_available_port_in_range(ip_addr, (3000, 3050))
+            .unwrap();
         assert!((3000..3050).contains(&port));
 
         let _socket = network.bind_to(ip_addr, port, false).unwrap();
-        network.find_available_port_in_range(ip_addr, (port, port + 1)).unwrap_err();
+        network
+            .find_available_port_in_range(ip_addr, (port, port + 1))
+            .unwrap_err();
     }
 
     #[test]
     fn test_bind_common_in_range() {
-        let network = StdNetwork{};
+        let network = StdNetwork {};
         let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
         let (port, _sockets) = network.bind_common_in_range(ip_addr, (3100, 3150)).unwrap();
         assert!((3100..3150).contains(&port));
 
-        network.bind_common_in_range(ip_addr, (port, port + 1)).unwrap_err();
+        network
+            .bind_common_in_range(ip_addr, (port, port + 1))
+            .unwrap_err();
     }
 
     #[test]
     fn test_get_public_ip_addr_none() {
-        let network = StdNetwork{};
+        let network = StdNetwork {};
         solana_logger::setup();
         let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
         let (_server_port, (server_udp_socket, server_tcp_listener)) =
@@ -255,7 +271,7 @@ mod tests {
 
     #[test]
     fn test_get_public_ip_addr_reachable() {
-        let network = StdNetwork{};
+        let network = StdNetwork {};
         solana_logger::setup();
         let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
         let (_server_port, (server_udp_socket, server_tcp_listener)) =
@@ -280,7 +296,7 @@ mod tests {
 
     #[test]
     fn test_get_public_ip_addr_tcp_unreachable() {
-        let network = StdNetwork{};
+        let network = StdNetwork {};
         solana_logger::setup();
         let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
         let (_server_port, (server_udp_socket, _server_tcp_listener)) =
@@ -304,7 +320,7 @@ mod tests {
 
     #[test]
     fn test_get_public_ip_addr_udp_unreachable() {
-        let network = StdNetwork{};
+        let network = StdNetwork {};
         solana_logger::setup();
         let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
         let (_server_port, (server_udp_socket, _server_tcp_listener)) =

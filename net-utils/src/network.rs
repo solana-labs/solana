@@ -1,8 +1,8 @@
-use std::io::Result;
-use std::net::{IpAddr, TcpListener, SocketAddr, ToSocketAddrs};
-use std::default::Default;
-use crate::{PortRange, DatagramSocket, std_network::StdNetwork};
+use crate::{std_network::StdNetwork, DatagramSocket, PortRange};
 use enum_dispatch::enum_dispatch;
+use std::default::Default;
+use std::io::Result;
+use std::net::{IpAddr, SocketAddr, TcpListener, ToSocketAddrs};
 
 /// NetworkLike abstracts the source of SocketLike things.
 #[enum_dispatch(Network)]
@@ -40,15 +40,18 @@ pub trait NetworkLike {
 }
 
 fn each_addr<A: ToSocketAddrs, F, T>(addr: A, mut f: F) -> Result<T>
-    where
-        F: FnMut(&SocketAddr) -> Result<T>,
+where
+    F: FnMut(&SocketAddr) -> Result<T>,
 {
     for addr in addr.to_socket_addrs()? {
         if let Ok(s) = f(&addr) {
             return Ok(s);
         }
     }
-    Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "could not resolve to any addresses"))
+    Err(std::io::Error::new(
+        std::io::ErrorKind::InvalidInput,
+        "could not resolve to any addresses",
+    ))
 }
 
 /// Network wraps NetworkLike implementations, using enum_dispatch to delegate the trait
@@ -62,6 +65,6 @@ pub enum Network {
 
 impl Default for Network {
     fn default() -> Self {
-        StdNetwork{}.into()
+        StdNetwork {}.into()
     }
 }

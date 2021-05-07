@@ -9,6 +9,7 @@ use solana_clap_utils::{
     input_validators::{is_keypair_or_ask_keyword, is_port, is_pubkey},
 };
 use solana_core::{contact_info::ContactInfo, gossip_service::discover};
+use solana_net_utils::{Network, NetworkLike};
 use solana_sdk::pubkey::Pubkey;
 use std::{
     error,
@@ -16,7 +17,6 @@ use std::{
     process::exit,
     sync::Arc,
 };
-use solana_net_utils::{Network, NetworkLike};
 
 fn parse_matches() -> ArgMatches<'static> {
     let shred_version_arg = Arg::with_name("shred_version")
@@ -233,11 +233,9 @@ fn process_spy(matches: &ArgMatches) -> std::io::Result<()> {
     let gossip_addr = SocketAddr::new(
         gossip_host,
         value_t!(matches, "gossip_port", u16).unwrap_or_else(|_| {
-            network.find_available_port_in_range(
-                IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-                (0, 1),
-            )
-            .expect("unable to find an available gossip port")
+            network
+                .find_available_port_in_range(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), (0, 1))
+                .expect("unable to find an available gossip port")
         }),
     );
 

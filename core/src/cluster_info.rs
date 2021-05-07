@@ -41,7 +41,9 @@ use rayon::{ThreadPool, ThreadPoolBuilder};
 use serde::ser::Serialize;
 use solana_measure::measure::Measure;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};
-use solana_net_utils::{PortRange, Network, NetworkLike};
+use solana_net_utils::streamer::{PacketReceiver, PacketSender};
+use solana_net_utils::{DatagramSocket, SocketLike};
+use solana_net_utils::{Network, NetworkLike, PortRange};
 use solana_perf::packet::{
     limited_deserialize, to_packets_with_destination, Packet, Packets, PacketsRecycler,
     PACKET_DATA_SIZE,
@@ -57,8 +59,6 @@ use solana_sdk::{
     timing::timestamp,
     transaction::Transaction,
 };
-use solana_net_utils::streamer::{PacketReceiver, PacketSender};
-use solana_net_utils::{DatagramSocket, SocketLike};
 use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::{
     borrow::Cow,
@@ -2810,7 +2810,9 @@ impl ClusterInfo {
     ) -> (ContactInfo, DatagramSocket, Option<TcpListener>) {
         let network = Network::default();
         let bind_ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
-        let (_, gossip_socket) = network.bind_in_range(bind_ip_addr, VALIDATOR_PORT_RANGE).unwrap();
+        let (_, gossip_socket) = network
+            .bind_in_range(bind_ip_addr, VALIDATOR_PORT_RANGE)
+            .unwrap();
         let contact_info = Self::gossip_contact_info(id, socketaddr_any!(), shred_version);
 
         (contact_info, gossip_socket, None)
@@ -2880,16 +2882,21 @@ impl Node {
         let network = Network::default();
         let bind_ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
         let tpu = network.bind("127.0.0.1:0").unwrap();
-        let (gossip_port, (gossip, ip_echo)) =
-            network.bind_common_in_range(bind_ip_addr, (1024, 65535)).unwrap();
+        let (gossip_port, (gossip, ip_echo)) = network
+            .bind_common_in_range(bind_ip_addr, (1024, 65535))
+            .unwrap();
         let gossip_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), gossip_port);
         let tvu = network.bind("127.0.0.1:0").unwrap();
         let tvu_forwards = network.bind("127.0.0.1:0").unwrap();
         let tpu_forwards = network.bind("127.0.0.1:0").unwrap();
         let repair = network.bind("127.0.0.1:0").unwrap();
-        let rpc_port = network.find_available_port_in_range(bind_ip_addr, (1024, 65535)).unwrap();
+        let rpc_port = network
+            .find_available_port_in_range(bind_ip_addr, (1024, 65535))
+            .unwrap();
         let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), rpc_port);
-        let rpc_pubsub_port = network.find_available_port_in_range(bind_ip_addr, (1024, 65535)).unwrap();
+        let rpc_pubsub_port = network
+            .find_available_port_in_range(bind_ip_addr, (1024, 65535))
+            .unwrap();
         let rpc_pubsub_addr =
             SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), rpc_pubsub_port);
 
@@ -2938,17 +2945,23 @@ impl Node {
         if gossip_addr.port() != 0 {
             (
                 gossip_addr.port(),
-                network.bind_common(bind_ip_addr, gossip_addr.port(), false).unwrap_or_else(|e| {
-                    panic!("gossip_addr bind_to port {}: {}", gossip_addr.port(), e)
-                }),
+                network
+                    .bind_common(bind_ip_addr, gossip_addr.port(), false)
+                    .unwrap_or_else(|e| {
+                        panic!("gossip_addr bind_to port {}: {}", gossip_addr.port(), e)
+                    }),
             )
         } else {
-            network.bind_common_in_range(bind_ip_addr, port_range).expect("Failed to bind")
+            network
+                .bind_common_in_range(bind_ip_addr, port_range)
+                .expect("Failed to bind")
         }
     }
     fn bind(bind_ip_addr: IpAddr, port_range: PortRange) -> (u16, DatagramSocket) {
         let network = Network::default();
-        network.bind_in_range(bind_ip_addr, port_range).expect("Failed to bind")
+        network
+            .bind_in_range(bind_ip_addr, port_range)
+            .expect("Failed to bind")
     }
 
     pub fn new_single_bind(
@@ -2969,8 +2982,12 @@ impl Node {
         let (serve_repair_port, serve_repair) = Self::bind(bind_ip_addr, port_range);
         let (_, broadcast) = Self::bind(bind_ip_addr, port_range);
 
-        let rpc_port = network.find_available_port_in_range(bind_ip_addr, port_range).unwrap();
-        let rpc_pubsub_port = network.find_available_port_in_range(bind_ip_addr, port_range).unwrap();
+        let rpc_port = network
+            .find_available_port_in_range(bind_ip_addr, port_range)
+            .unwrap();
+        let rpc_pubsub_port = network
+            .find_available_port_in_range(bind_ip_addr, port_range)
+            .unwrap();
 
         let info = ContactInfo {
             id: *pubkey,
@@ -3016,26 +3033,32 @@ impl Node {
         let (gossip_port, (gossip, ip_echo)) =
             Self::get_gossip_port(gossip_addr, port_range, bind_ip_addr);
 
-        let (tvu_port, tvu_sockets) =
-            network.multi_bind_in_range(bind_ip_addr, port_range, 8).expect("tvu multi_bind");
+        let (tvu_port, tvu_sockets) = network
+            .multi_bind_in_range(bind_ip_addr, port_range, 8)
+            .expect("tvu multi_bind");
 
-        let (tvu_forwards_port, tvu_forwards_sockets) =
-            network.multi_bind_in_range(bind_ip_addr, port_range, 8).expect("tvu_forwards multi_bind");
+        let (tvu_forwards_port, tvu_forwards_sockets) = network
+            .multi_bind_in_range(bind_ip_addr, port_range, 8)
+            .expect("tvu_forwards multi_bind");
 
-        let (tpu_port, tpu_sockets) =
-            network.multi_bind_in_range(bind_ip_addr, port_range, 32).expect("tpu multi_bind");
+        let (tpu_port, tpu_sockets) = network
+            .multi_bind_in_range(bind_ip_addr, port_range, 32)
+            .expect("tpu multi_bind");
 
-        let (tpu_forwards_port, tpu_forwards_sockets) =
-            network.multi_bind_in_range(bind_ip_addr, port_range, 8).expect("tpu_forwards multi_bind");
+        let (tpu_forwards_port, tpu_forwards_sockets) = network
+            .multi_bind_in_range(bind_ip_addr, port_range, 8)
+            .expect("tpu_forwards multi_bind");
 
-        let (_, retransmit_sockets) =
-            network.multi_bind_in_range(bind_ip_addr, port_range, 8).expect("retransmit multi_bind");
+        let (_, retransmit_sockets) = network
+            .multi_bind_in_range(bind_ip_addr, port_range, 8)
+            .expect("retransmit multi_bind");
 
         let (repair_port, repair) = Self::bind(bind_ip_addr, port_range);
         let (serve_repair_port, serve_repair) = Self::bind(bind_ip_addr, port_range);
 
-        let (_, broadcast) =
-            network.multi_bind_in_range(bind_ip_addr, port_range, 4).expect("broadcast multi_bind");
+        let (_, broadcast) = network
+            .multi_bind_in_range(bind_ip_addr, port_range, 4)
+            .expect("broadcast multi_bind");
 
         let info = ContactInfo {
             id: *pubkey,
@@ -3546,7 +3569,10 @@ mod tests {
         let port_range = (VALIDATOR_PORT_RANGE.1 + 10, VALIDATOR_PORT_RANGE.1 + 20);
 
         let ip = IpAddr::V4(Ipv4Addr::from(0));
-        let port = network.bind_in_range(ip, port_range).expect("Failed to bind").0;
+        let port = network
+            .bind_in_range(ip, port_range)
+            .expect("Failed to bind")
+            .0;
         let node = Node::new_with_external_ip(
             &solana_sdk::pubkey::new_rand(),
             &socketaddr!(0, port),

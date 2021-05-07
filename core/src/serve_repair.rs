@@ -16,6 +16,7 @@ use solana_ledger::{
 };
 use solana_measure::measure::Measure;
 use solana_metrics::inc_new_counter_debug;
+use solana_net_utils::streamer::{PacketReceiver, PacketSender};
 use solana_perf::packet::{limited_deserialize, Packets, PacketsRecycler};
 use solana_sdk::{
     clock::Slot,
@@ -23,7 +24,6 @@ use solana_sdk::{
     signature::{Keypair, Signer},
     timing::duration_as_ms,
 };
-use solana_net_utils::streamer::{PacketReceiver, PacketSender};
 use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
     net::SocketAddr,

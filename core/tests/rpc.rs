@@ -12,6 +12,7 @@ use solana_client::{
     tpu_client::{TpuClient, TpuClientConfig},
 };
 use solana_core::{rpc_pubsub::gen_client::Client as PubsubClient, test_validator::TestValidator};
+use solana_net_utils::{Network, NetworkLike, SocketLike};
 use solana_sdk::{
     commitment_config::CommitmentConfig,
     hash::Hash,
@@ -28,7 +29,6 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio_02::runtime::Runtime;
-use solana_net_utils::{Network, NetworkLike, SocketLike};
 
 macro_rules! json_req {
     ($method: expr, $params: expr) => {{

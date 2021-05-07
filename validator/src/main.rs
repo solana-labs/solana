@@ -1,4 +1,5 @@
 #![allow(clippy::integer_arithmetic)]
+use solana_net_utils::{DatagramSocket, Network, NetworkLike, SocketLike};
 use {
     clap::{
         crate_description, crate_name, value_t, value_t_or_exit, values_t, values_t_or_exit, App,
@@ -72,7 +73,6 @@ use {
         time::{Duration, Instant, SystemTime},
     },
 };
-use solana_net_utils::{DatagramSocket, SocketLike, Network, NetworkLike};
 
 #[derive(Debug, PartialEq)]
 enum Operation {
@@ -2397,12 +2397,12 @@ pub fn main() {
     let gossip_addr = SocketAddr::new(
         gossip_host,
         value_t!(matches, "gossip_port", u16).unwrap_or_else(|_| {
-            network.find_available_port_in_range(bind_address, (0, 1)).unwrap_or_else(
-                |err| {
+            network
+                .find_available_port_in_range(bind_address, (0, 1))
+                .unwrap_or_else(|err| {
                     eprintln!("Unable to find an available gossip port: {}", err);
                     exit(1);
-                },
-            )
+                })
         }),
     );
 

@@ -482,11 +482,11 @@ mod tests {
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         get_tmp_ledger_path,
     };
+    use solana_net_utils::{Network, NetworkLike};
     use solana_runtime::{bank::Bank, bank_forks::ArchiveFormat, snapshot_utils::SnapshotVersion};
     use solana_sdk::{genesis_config::ClusterType, signature::Signer};
     use std::io::Write;
     use std::net::{IpAddr, Ipv4Addr};
-    use solana_net_utils::{Network, NetworkLike};
 
     #[test]
     fn test_rpc_new() {
@@ -503,7 +503,9 @@ mod tests {
         let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
         let rpc_addr = SocketAddr::new(
             ip_addr,
-            network.find_available_port_in_range(ip_addr, (10000, 65535)).unwrap(),
+            network
+                .find_available_port_in_range(ip_addr, (10000, 65535))
+                .unwrap(),
         );
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let ledger_path = get_tmp_ledger_path!();

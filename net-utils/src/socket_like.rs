@@ -1,7 +1,7 @@
+use crate::streamer::{packet::Packet, recvmmsg, sendmmsg};
+use enum_dispatch::enum_dispatch;
 use std::io::Result;
 use std::net::{SocketAddr, ToSocketAddrs};
-use enum_dispatch::enum_dispatch;
-use crate::streamer::{recvmmsg, sendmmsg, packet::Packet};
 
 /// SocketLike describes things that act like UdpSockets, but also incorporates methods from
 /// streamer.

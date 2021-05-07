@@ -1,8 +1,8 @@
 #![allow(clippy::integer_arithmetic)]
-pub mod streamer;
+pub mod packet;
 pub mod recvmmsg;
 pub mod sendmmsg;
-pub mod packet;
+pub mod streamer;
 
-pub use streamer::*;
 pub use packet::*;
+pub use streamer::*;

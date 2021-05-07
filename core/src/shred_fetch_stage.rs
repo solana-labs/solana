@@ -3,19 +3,19 @@
 use crate::packet_hasher::PacketHasher;
 use lru::LruCache;
 use solana_ledger::shred::{get_shred_slot_index_type, ShredFetchStats};
+use solana_net_utils::streamer::{self, PacketReceiver, PacketSender};
+use solana_net_utils::DatagramSocket;
 use solana_perf::cuda_runtime::PinnedVec;
 use solana_perf::packet::{Packet, PacketsRecycler};
 use solana_perf::recycler::Recycler;
 use solana_runtime::bank_forks::BankForks;
 use solana_sdk::clock::{Slot, DEFAULT_MS_PER_SLOT};
-use solana_net_utils::streamer::{self, PacketReceiver, PacketSender};
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::channel;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Instant;
-use solana_net_utils::DatagramSocket;
 
 const DEFAULT_LRU_SIZE: usize = 10_000;
 pub type ShredsReceived = LruCache<u64, ()>;

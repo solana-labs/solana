@@ -1,7 +1,7 @@
 use crate::serve_repair::ServeRepair;
 use solana_ledger::blockstore::Blockstore;
+use solana_net_utils::{streamer, DatagramSocket, SocketLike};
 use solana_perf::recycler::Recycler;
-use solana_net_utils::{streamer, DatagramSocket,SocketLike};
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};

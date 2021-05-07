@@ -13,6 +13,7 @@ use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
 use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
 use solana_ledger::shred::Shredder;
 use solana_measure::measure::Measure;
+use solana_net_utils::Network;
 use solana_perf::packet::{Packet, Packets};
 use solana_runtime::bank::Bank;
 use solana_runtime::bank_forks::BankForks;
@@ -29,7 +30,6 @@ use std::thread::sleep;
 use std::thread::Builder;
 use std::time::Duration;
 use test::Bencher;
-use solana_net_utils::Network;
 
 #[bench]
 #[allow(clippy::same_item_push)]

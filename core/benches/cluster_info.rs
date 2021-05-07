@@ -8,6 +8,7 @@ use solana_core::broadcast_stage::{broadcast_shreds, get_broadcast_peers};
 use solana_core::cluster_info::{ClusterInfo, Node};
 use solana_core::contact_info::ContactInfo;
 use solana_ledger::shred::Shred;
+use solana_net_utils::Network;
 use solana_sdk::pubkey;
 use solana_sdk::timing::timestamp;
 use std::{
@@ -15,7 +16,6 @@ use std::{
     sync::{atomic::AtomicU64, Arc},
 };
 use test::Bencher;
-use solana_net_utils::Network;
 
 #[bench]
 fn broadcast_shreds_bench(bencher: &mut Bencher) {

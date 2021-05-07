@@ -4,15 +4,15 @@ use crate::banking_stage::HOLD_TRANSACTIONS_SLOT_OFFSET;
 use crate::poh_recorder::PohRecorder;
 use crate::result::{Error, Result};
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_info};
+use solana_net_utils::streamer::{self, PacketReceiver, PacketSender};
+use solana_net_utils::DatagramSocket;
 use solana_perf::packet::PacketsRecycler;
 use solana_perf::recycler::Recycler;
 use solana_sdk::clock::DEFAULT_TICKS_PER_SLOT;
-use solana_net_utils::streamer::{self, PacketReceiver, PacketSender};
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::{channel, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, Builder, JoinHandle};
-use solana_net_utils::DatagramSocket;
 
 pub struct FetchStage {
     thread_hdls: Vec<JoinHandle<()>>,

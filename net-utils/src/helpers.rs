@@ -1,4 +1,7 @@
 #![allow(clippy::integer_arithmetic)]
+use crate::ip_echo_server::IpEchoServerMessage;
+use crate::socket_like::*;
+use crate::{DatagramSocket, MAX_PORT_COUNT_PER_MESSAGE};
 use {
     log::*,
     std::{
@@ -10,9 +13,6 @@ use {
     },
     url::Url,
 };
-use crate::ip_echo_server::IpEchoServerMessage;
-use crate::{DatagramSocket, MAX_PORT_COUNT_PER_MESSAGE};
-use crate::socket_like::*;
 
 pub fn parse_port_or_addr(optstr: Option<&str>, default_addr: SocketAddr) -> SocketAddr {
     if let Some(addrstr) = optstr {
@@ -90,7 +90,6 @@ pub fn parse_host_port(host_port: &str) -> Result<SocketAddr, String> {
 pub fn is_host_port(string: String) -> Result<(), String> {
     parse_host_port(&string).map(|_| ())
 }
-
 
 pub(crate) const HEADER_LENGTH: usize = 4;
 pub(crate) fn ip_echo_server_reply_length() -> usize {
@@ -192,7 +191,7 @@ pub(crate) fn do_verify_reachable_ports(
         ip_echo_server_addr,
         IpEchoServerMessage::new(&tcp_ports, &[]),
     )
-        .map_err(|err| warn!("ip_echo_server request failed: {}", err));
+    .map_err(|err| warn!("ip_echo_server request failed: {}", err));
 
     let mut ok = true;
     let timeout = Duration::from_secs(timeout);
@@ -270,7 +269,7 @@ pub(crate) fn do_verify_reachable_ports(
                 ip_echo_server_addr,
                 IpEchoServerMessage::new(&[], &checked_ports),
             )
-                .map_err(|err| warn!("ip_echo_server request failed: {}", err));
+            .map_err(|err| warn!("ip_echo_server request failed: {}", err));
 
             // Spawn threads at once!
             let reachable_ports = Arc::new(RwLock::new(HashSet::new()));
@@ -337,7 +336,7 @@ pub(crate) fn do_verify_reachable_ports(
                 break 'outer;
             }
         }
-    };
+    }
 
     ok
 }
@@ -355,7 +354,6 @@ pub fn verify_reachable_ports(
         DEFAULT_RETRY_COUNT,
     )
 }
-
 
 #[cfg(test)]
 mod tests {

@@ -2,6 +2,7 @@
 use clap::{crate_description, crate_name, App, Arg};
 use solana_net_utils::streamer::packet::{Packet, Packets, PacketsRecycler, PACKET_DATA_SIZE};
 use solana_net_utils::streamer::streamer::{receiver, PacketReceiver};
+use solana_net_utils::{Network, NetworkLike, SocketLike};
 use std::cmp::max;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -11,7 +12,6 @@ use std::thread::sleep;
 use std::thread::{spawn, JoinHandle, Result};
 use std::time::Duration;
 use std::time::SystemTime;
-use solana_net_utils::{Network, NetworkLike, SocketLike};
 
 fn producer(addr: &SocketAddr, exit: Arc<AtomicBool>) -> JoinHandle<()> {
     let network = Network::default();

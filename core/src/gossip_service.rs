@@ -4,13 +4,13 @@ use crate::cluster_info::{ClusterInfo, VALIDATOR_PORT_RANGE};
 use crate::contact_info::ContactInfo;
 use rand::{thread_rng, Rng};
 use solana_client::thin_client::{create_client, ThinClient};
+use solana_net_utils::{streamer, DatagramSocket, Network, NetworkLike, SocketLike};
 use solana_perf::recycler::Recycler;
 use solana_runtime::bank_forks::BankForks;
 use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signer},
 };
-use solana_net_utils::{streamer, DatagramSocket, SocketLike, Network, NetworkLike};
 use std::{
     collections::HashSet,
     net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener},
@@ -191,11 +191,9 @@ pub fn get_multi_client(nodes: &[ContactInfo]) -> (ThinClient, usize) {
         .collect();
     let rpc_addrs: Vec<_> = addrs.iter().map(|addr| addr.0).collect();
     let tpu_addrs: Vec<_> = addrs.iter().map(|addr| addr.1).collect();
-    let (_, transactions_socket) = network.bind_in_range(
-        IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-        VALIDATOR_PORT_RANGE,
-    )
-    .unwrap();
+    let (_, transactions_socket) = network
+        .bind_in_range(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), VALIDATOR_PORT_RANGE)
+        .unwrap();
     let num_nodes = tpu_addrs.len();
     (
         ThinClient::new_from_addrs(rpc_addrs, tpu_addrs, transactions_socket),

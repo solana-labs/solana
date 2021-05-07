@@ -3,6 +3,7 @@ use crate::cluster_info::ClusterInfo;
 use crate::poh_recorder::PohRecorder;
 use log::*;
 use solana_metrics::{datapoint_warn, inc_new_counter_info};
+use solana_net_utils::{DatagramSocket, Network, NetworkLike, SocketLike};
 use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use solana_sdk::{
     clock::{Slot, NUM_CONSECUTIVE_LEADER_SLOTS},
@@ -22,7 +23,6 @@ use std::{
     thread::{self, Builder, JoinHandle},
     time::{Duration, Instant},
 };
-use solana_net_utils::{DatagramSocket, SocketLike, Network, NetworkLike};
 
 /// Maximum size of the transaction queue
 const MAX_TRANSACTION_QUEUE_SIZE: usize = 10_000; // This seems like a lot but maybe it needs to be bigger one day

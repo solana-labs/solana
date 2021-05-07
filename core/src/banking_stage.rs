@@ -17,6 +17,7 @@ use solana_ledger::{
 };
 use solana_measure::measure::Measure;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_info};
+use solana_net_utils::{DatagramSocket, Network, NetworkLike, SocketLike};
 use solana_perf::{
     cuda_runtime::PinnedVec,
     packet::{limited_deserialize, Packet, Packets, PACKETS_PER_BATCH},
@@ -63,7 +64,6 @@ use std::{
     time::Duration,
     time::Instant,
 };
-use solana_net_utils::{DatagramSocket, SocketLike, Network, NetworkLike};
 
 /// (packets, valid_indexes, forwarded)
 /// Set of packets with a list of which are valid and if this batch has been forwarded.

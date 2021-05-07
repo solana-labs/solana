@@ -10,6 +10,7 @@ use solana_core::{
 };
 use solana_runtime::bank_forks::BankForks;
 
+use solana_net_utils::{DatagramSocket, SocketLike};
 use solana_perf::packet::Packet;
 use solana_sdk::{
     hash::Hash,
@@ -23,7 +24,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::sleep;
 use std::time::Duration;
-use solana_net_utils::{DatagramSocket,SocketLike};
 
 fn test_node(exit: &Arc<AtomicBool>) -> (Arc<ClusterInfo>, GossipService, DatagramSocket) {
     let keypair = Arc::new(Keypair::new());
