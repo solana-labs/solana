@@ -29,6 +29,7 @@ import {IWSRequestParams} from 'rpc-websockets/dist/lib/client';
 import {AgentManager} from './agent-manager';
 import {NonceAccount} from './nonce-account';
 import {PublicKey} from './publickey';
+import {Signer} from './keypair';
 import {MS_PER_SLOT} from './timing';
 import {Transaction} from './transaction';
 import {Message} from './message';
@@ -37,7 +38,6 @@ import {promiseTimeout} from './util/promise-timeout';
 import {toBuffer} from './util/to-buffer';
 import type {Blockhash} from './blockhash';
 import type {FeeCalculator} from './fee-calculator';
-import type {Account} from './account';
 import type {TransactionSignature} from './transaction';
 import type {CompiledInstruction} from './message';
 
@@ -3213,7 +3213,7 @@ export class Connection {
    */
   async simulateTransaction(
     transaction: Transaction,
-    signers?: Array<Account>,
+    signers?: Array<Signer>,
   ): Promise<RpcResponseAndContext<SimulatedTransactionResponse>> {
     if (transaction.nonceInfo && signers) {
       transaction.sign(...signers);
@@ -3274,7 +3274,7 @@ export class Connection {
    */
   async sendTransaction(
     transaction: Transaction,
-    signers: Array<Account>,
+    signers: Array<Signer>,
     options?: SendOptions,
   ): Promise<TransactionSignature> {
     if (transaction.nonceInfo) {

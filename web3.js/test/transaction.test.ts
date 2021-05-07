@@ -4,7 +4,7 @@ import {Buffer} from 'buffer';
 import nacl from 'tweetnacl';
 import {expect} from 'chai';
 
-import {Account} from '../src/account';
+import {Keypair} from '../src/keypair';
 import {PublicKey} from '../src/publickey';
 import {Transaction} from '../src/transaction';
 import {StakeProgram} from '../src/stake-program';
@@ -15,11 +15,11 @@ import {toBuffer} from '../src/util/to-buffer';
 describe('Transaction', () => {
   describe('compileMessage', () => {
     it('accountKeys are ordered', () => {
-      const payer = new Account();
-      const account2 = new Account();
-      const account3 = new Account();
-      const recentBlockhash = new Account().publicKey.toBase58();
-      const programId = new Account().publicKey;
+      const payer = Keypair.generate();
+      const account2 = Keypair.generate();
+      const account3 = Keypair.generate();
+      const recentBlockhash = Keypair.generate().publicKey.toBase58();
+      const programId = Keypair.generate().publicKey;
       const transaction = new Transaction({recentBlockhash}).add({
         keys: [
           {pubkey: account3.publicKey, isSigner: true, isWritable: false},
@@ -42,10 +42,10 @@ describe('Transaction', () => {
     });
 
     it('payer is first account meta', () => {
-      const payer = new Account();
-      const other = new Account();
-      const recentBlockhash = new Account().publicKey.toBase58();
-      const programId = new Account().publicKey;
+      const payer = Keypair.generate();
+      const other = Keypair.generate();
+      const recentBlockhash = Keypair.generate().publicKey.toBase58();
+      const programId = Keypair.generate().publicKey;
       const transaction = new Transaction({recentBlockhash}).add({
         keys: [
           {pubkey: other.publicKey, isSigner: true, isWritable: true},
@@ -64,10 +64,10 @@ describe('Transaction', () => {
     });
 
     it('validation', () => {
-      const payer = new Account();
-      const other = new Account();
-      const recentBlockhash = new Account().publicKey.toBase58();
-      const programId = new Account().publicKey;
+      const payer = Keypair.generate();
+      const other = Keypair.generate();
+      const recentBlockhash = Keypair.generate().publicKey.toBase58();
+      const programId = Keypair.generate().publicKey;
 
       const transaction = new Transaction();
       expect(() => {
@@ -92,7 +92,7 @@ describe('Transaction', () => {
         transaction.compileMessage();
       }).to.throw('Transaction fee payer required');
 
-      transaction.setSigners(payer.publicKey, new Account().publicKey);
+      transaction.setSigners(payer.publicKey, Keypair.generate().publicKey);
 
       expect(() => {
         transaction.compileMessage();
@@ -109,9 +109,9 @@ describe('Transaction', () => {
     });
 
     it('payer is writable', () => {
-      const payer = new Account();
-      const recentBlockhash = new Account().publicKey.toBase58();
-      const programId = new Account().publicKey;
+      const payer = Keypair.generate();
+      const recentBlockhash = Keypair.generate().publicKey.toBase58();
+      const programId = Keypair.generate().publicKey;
       const transaction = new Transaction({recentBlockhash}).add({
         keys: [{pubkey: payer.publicKey, isSigner: true, isWritable: false}],
         programId,
@@ -127,8 +127,8 @@ describe('Transaction', () => {
   });
 
   it('partialSign', () => {
-    const account1 = new Account();
-    const account2 = new Account();
+    const account1 = Keypair.generate();
+    const account2 = Keypair.generate();
     const recentBlockhash = account1.publicKey.toBase58(); // Fake recentBlockhash
     const transfer = SystemProgram.transfer({
       fromPubkey: account1.publicKey,
@@ -176,11 +176,11 @@ describe('Transaction', () => {
   });
 
   describe('dedupe', () => {
-    const payer = new Account();
+    const payer = Keypair.generate();
     const duplicate1 = payer;
     const duplicate2 = payer;
-    const recentBlockhash = new Account().publicKey.toBase58();
-    const programId = new Account().publicKey;
+    const recentBlockhash = Keypair.generate().publicKey.toBase58();
+    const programId = Keypair.generate().publicKey;
 
     it('setSigners', () => {
       const transaction = new Transaction({recentBlockhash}).add({
@@ -236,8 +236,8 @@ describe('Transaction', () => {
   });
 
   it('transfer signatures', () => {
-    const account1 = new Account();
-    const account2 = new Account();
+    const account1 = Keypair.generate();
+    const account2 = Keypair.generate();
     const recentBlockhash = account1.publicKey.toBase58(); // Fake recentBlockhash
     const transfer1 = SystemProgram.transfer({
       fromPubkey: account1.publicKey,
@@ -265,8 +265,8 @@ describe('Transaction', () => {
   });
 
   it('dedup signatures', () => {
-    const account1 = new Account();
-    const account2 = new Account();
+    const account1 = Keypair.generate();
+    const account2 = Keypair.generate();
     const recentBlockhash = account1.publicKey.toBase58(); // Fake recentBlockhash
     const transfer1 = SystemProgram.transfer({
       fromPubkey: account1.publicKey,
@@ -287,9 +287,9 @@ describe('Transaction', () => {
   });
 
   it('use nonce', () => {
-    const account1 = new Account();
-    const account2 = new Account();
-    const nonceAccount = new Account();
+    const account1 = Keypair.generate();
+    const account2 = Keypair.generate();
+    const nonceAccount = Keypair.generate();
     const nonce = account2.publicKey.toBase58(); // Fake Nonce hash
 
     const nonceInfo = {
@@ -319,8 +319,8 @@ describe('Transaction', () => {
     expect(transferTransaction.instructions[0].data).to.eql(expectedData);
     expect(transferTransaction.recentBlockhash).to.eq(nonce);
 
-    const stakeAccount = new Account();
-    const voteAccount = new Account();
+    const stakeAccount = Keypair.generate();
+    const voteAccount = Keypair.generate();
     const stakeTransaction = new Transaction({nonceInfo}).add(
       StakeProgram.delegate({
         stakePubkey: stakeAccount.publicKey,
@@ -339,10 +339,7 @@ describe('Transaction', () => {
   });
 
   it('parse wire format and serialize', () => {
-    const keypair = nacl.sign.keyPair.fromSeed(
-      Uint8Array.from(Array(32).fill(8)),
-    );
-    const sender = new Account(Buffer.from(keypair.secretKey)); // Arbitrary known account
+    const sender = Keypair.fromSeed(Uint8Array.from(Array(32).fill(8))); // Arbitrary known account
     const recentBlockhash = 'EETubP5AKHgjPAhzPAFcb8BAY1hMH639CWCFTqi3hq1k'; // Arbitrary known recentBlockhash
     const recipient = new PublicKey(
       'J3dxNj7nDRRqRRXuEMynDG57DkZK4jYRuv3Garmb1i99',
@@ -405,10 +402,7 @@ describe('Transaction', () => {
   });
 
   it('serialize unsigned transaction', () => {
-    const keypair = nacl.sign.keyPair.fromSeed(
-      Uint8Array.from(Array(32).fill(8)),
-    );
-    const sender = new Account(Buffer.from(keypair.secretKey)); // Arbitrary known account
+    const sender = Keypair.fromSeed(Uint8Array.from(Array(32).fill(8))); // Arbitrary known account
     const recentBlockhash = 'EETubP5AKHgjPAhzPAFcb8BAY1hMH639CWCFTqi3hq1k'; // Arbitrary known recentBlockhash
     const recipient = new PublicKey(
       'J3dxNj7nDRRqRRXuEMynDG57DkZK4jYRuv3Garmb1i99',
@@ -489,10 +483,7 @@ describe('Transaction', () => {
   });
 
   it('deprecated - externally signed stake delegate', () => {
-    const from_keypair = nacl.sign.keyPair.fromSeed(
-      Uint8Array.from(Array(32).fill(1)),
-    );
-    const authority = new Account(Buffer.from(from_keypair.secretKey));
+    const authority = Keypair.fromSeed(Uint8Array.from(Array(32).fill(1)));
     const stake = new PublicKey(2);
     const recentBlockhash = new PublicKey(3).toBuffer();
     const vote = new PublicKey(4);
@@ -511,10 +502,7 @@ describe('Transaction', () => {
   });
 
   it('externally signed stake delegate', () => {
-    const from_keypair = nacl.sign.keyPair.fromSeed(
-      Uint8Array.from(Array(32).fill(1)),
-    );
-    const authority = new Account(Buffer.from(from_keypair.secretKey));
+    const authority = Keypair.fromSeed(Uint8Array.from(Array(32).fill(1)));
     const stake = new PublicKey(2);
     const recentBlockhash = new PublicKey(3).toBuffer();
     const vote = new PublicKey(4);

@@ -4,7 +4,7 @@ import {privateKeyVerify, ecdsaSign, publicKeyCreate} from 'secp256k1';
 
 import {
   Connection,
-  Account,
+  Keypair,
   sendAndConfirmTransaction,
   LAMPORTS_PER_SOL,
   Transaction,
@@ -15,7 +15,7 @@ import {url} from './url';
 const randomPrivateKey = () => {
   let privateKey;
   do {
-    privateKey = new Account().secretKey.slice(0, 32);
+    privateKey = Keypair.generate().secretKey.slice(0, 32);
   } while (!privateKeyVerify(privateKey));
   return privateKey;
 };
@@ -25,7 +25,7 @@ if (process.env.TEST_LIVE) {
     const privateKey = randomPrivateKey();
     const publicKey = publicKeyCreate(privateKey, false).slice(1);
     const ethAddress = Secp256k1Program.publicKeyToEthAddress(publicKey);
-    const from = new Account();
+    const from = Keypair.generate();
     const connection = new Connection(url, 'confirmed');
 
     before(async function () {

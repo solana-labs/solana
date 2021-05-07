@@ -4,7 +4,7 @@ import invariant from 'assert';
 import * as mockttp from 'mockttp';
 
 import {mockRpcMessage} from './rpc-websockets';
-import {Account, Connection, PublicKey, Transaction} from '../../src';
+import {Connection, PublicKey, Transaction, Signer} from '../../src';
 import type {Commitment, HttpHeaders, RpcParams} from '../../src/connection';
 
 export const mockServer: mockttp.Mockttp | undefined =
@@ -141,7 +141,7 @@ const processTransaction = async ({
 }: {
   connection: Connection;
   transaction: Transaction;
-  signers: Array<Account>;
+  signers: Array<Signer>;
   commitment: Commitment;
   err?: any;
 }) => {
