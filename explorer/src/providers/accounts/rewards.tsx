@@ -7,7 +7,8 @@ import { FetchStatus } from "providers/cache";
 import { reportError } from "utils/sentry";
 
 const PAGE_SIZE = 15;
-const timeout = (ms: number | undefined) => new Promise(resolve => setTimeout(resolve, ms));
+const timeout = (ms: number | undefined) =>
+  new Promise((resolve) => setTimeout(resolve, ms));
 
 export type Rewards = {
   highestFetchedEpoch?: number;
@@ -76,7 +77,7 @@ async function fetchRewards(
   cluster: Cluster,
   url: string,
   fromEpoch?: number,
-  highestEpoch?: number,
+  highestEpoch?: number
 ) {
   dispatch({
     type: ActionType.Update,
@@ -123,7 +124,7 @@ async function fetchRewards(
 
   let foundSome = false;
   let results;
-  while(!foundSome && fromEpoch >= 0) {
+  while (!foundSome && fromEpoch >= 0) {
     const requests = [];
     for (let i: number = fromEpoch; i > fromEpoch - PAGE_SIZE; i--) {
       if (i >= 0) {
@@ -132,8 +133,9 @@ async function fetchRewards(
     }
     results = await Promise.all(requests);
     fromEpoch = fromEpoch - requests.length;
-    foundSome = results.some(v => v !== null);
-    if (!foundSome) { // avoid rate limit
+    foundSome = results.some((v) => v !== null);
+    if (!foundSome) {
+      // avoid rate limit
       await timeout(500);
     }
   }
@@ -145,7 +147,7 @@ async function fetchRewards(
     status: FetchStatus.Fetched,
     data: {
       rewards: results || [],
-      foundOldest: fromEpoch <= 0
+      foundOldest: fromEpoch <= 0,
     },
   });
 }
@@ -186,14 +188,7 @@ export function useFetchRewards() {
           highestEpoch
         );
       } else {
-        fetchRewards(
-          dispatch,
-          pubkey,
-          cluster,
-          url,
-          undefined,
-          highestEpoch
-        );
+        fetchRewards(dispatch, pubkey, cluster, url, undefined, highestEpoch);
       }
     },
     [state, dispatch, cluster, url]
