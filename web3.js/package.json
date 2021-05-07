@@ -48,7 +48,7 @@
     "flow:gen": "flowgen lib/index.d.ts -o module.flow.js",
     "type:gen": "./scripts/typegen.sh",
     "lint": "set -ex; npm run pretty; eslint . --ext .js,.ts",
-    "lint:fix": "npm run pretty:fix && eslint . --fix",
+    "lint:fix": "npm run pretty:fix && eslint . --fix --ext .js,.ts",
     "ok": "run-s lint test doc",
     "pretty": "prettier --check '{,{src,test}/**/}*.{j,t}s'",
     "pretty:fix": "prettier --write '{,{src,test}/**/}*.{j,t}s'",

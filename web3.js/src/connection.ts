@@ -35,7 +35,6 @@ import {Message} from './message';
 import {sleep} from './util/sleep';
 import {promiseTimeout} from './util/promise-timeout';
 import {toBuffer} from './util/to-buffer';
-import type {Account} from './account';
 import type {Blockhash} from './blockhash';
 import type {FeeCalculator} from './fee-calculator';
 import type {TransactionSignature, TransactionSigner} from './transaction';

@@ -3,7 +3,6 @@ import nacl from 'tweetnacl';
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
 
-import type {Account} from './account';
 import type {CompiledInstruction} from './message';
 import {Message} from './message';
 import {PublicKey} from './publickey';

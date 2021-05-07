@@ -1,5 +1,6 @@
 import {expect} from 'chai';
 import {Buffer} from 'buffer';
+
 import {Keypair} from '../src';
 
 describe('Keypair', () => {
