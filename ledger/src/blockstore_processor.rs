@@ -819,7 +819,7 @@ fn process_bank_0(
     )
     .expect("processing for bank 0 must succeed");
     bank0.freeze();
-    cache_block_time(blockstore, bank0, cache_block_time_sender);
+    cache_block_time(bank0, cache_block_time_sender);
 }
 
 // Given a bank, add its children to the pending slots queue if those children slots are
@@ -1121,7 +1121,7 @@ fn process_single_slot(
     })?;
 
     bank.freeze(); // all banks handled by this routine are created from complete slots
-    cache_block_time(blockstore, bank, cache_block_time_sender);
+    cache_block_time(bank, cache_block_time_sender);
 
     Ok(())
 }
@@ -1198,21 +1198,11 @@ impl TransactionStatusSender {
 
 pub type CacheBlockTimeSender = Sender<Arc<Bank>>;
 
-pub fn cache_block_time(
-    blockstore: &Blockstore,
-    bank: &Arc<Bank>,
-    cache_block_time_sender: Option<&CacheBlockTimeSender>,
-) {
+pub fn cache_block_time(bank: &Arc<Bank>, cache_block_time_sender: Option<&CacheBlockTimeSender>) {
     if let Some(cache_block_time_sender) = cache_block_time_sender {
-        if blockstore
-            .get_block_time(bank.slot())
-            .unwrap_or_default()
-            .is_none()
-        {
-            cache_block_time_sender
-                .send(bank.clone())
-                .unwrap_or_else(|err| warn!("cache_block_time_sender failed: {:?}", err));
-        }
+        cache_block_time_sender
+            .send(bank.clone())
+            .unwrap_or_else(|err| warn!("cache_block_time_sender failed: {:?}", err));
     }
 }
 

@@ -1749,7 +1749,7 @@ impl ReplayStage {
                         .send(BankNotification::Frozen(bank.clone()))
                         .unwrap_or_else(|err| warn!("bank_notification_sender failed: {:?}", err));
                 }
-                blockstore_processor::cache_block_time(blockstore, &bank, cache_block_time_sender);
+                blockstore_processor::cache_block_time(&bank, cache_block_time_sender);
 
                 let bank_hash = bank.hash();
                 if let Some(new_frozen_voters) =

@@ -1760,7 +1760,11 @@ impl Blockstore {
     }
 
     pub fn cache_block_time(&self, slot: Slot, timestamp: UnixTimestamp) -> Result<()> {
-        self.blocktime_cf.put(slot, &timestamp)
+        if self.get_block_time(slot).unwrap_or_default().is_none() {
+            self.blocktime_cf.put(slot, &timestamp)
+        } else {
+            Ok(())
+        }
     }
 
     pub fn get_first_available_block(&self) -> Result<Slot> {
