@@ -581,6 +581,7 @@ mod tests {
                 snapshot_path: PathBuf::from("/"),
                 archive_format: ArchiveFormat::TarBzip2,
                 snapshot_version: SnapshotVersion::default(),
+                maximum_snapshots_to_retain: 2,
             }),
             bank_forks,
             RpcHealth::stub(),

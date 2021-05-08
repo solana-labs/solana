@@ -120,6 +120,7 @@ mod tests {
                 snapshot_path: PathBuf::from(snapshot_dir.path()),
                 archive_format: ArchiveFormat::TarBzip2,
                 snapshot_version,
+                maximum_snapshots_to_retain: 2,
             };
             bank_forks.set_snapshot_config(Some(snapshot_config.clone()));
             SnapshotTestConfig {
@@ -248,7 +249,7 @@ mod tests {
             snapshot_package,
             Some(&last_bank.get_thread_pool()),
         );
-        snapshot_utils::archive_snapshot_package(&snapshot_package).unwrap();
+        snapshot_utils::archive_snapshot_package(&snapshot_package, 2).unwrap();
 
         // Restore bank from snapshot
         let account_paths = &[snapshot_test_config.accounts_dir.path().to_path_buf()];
