@@ -35,11 +35,11 @@ $ solana-ledger-tool -l ledger create-snapshot SLOT_X ledger --硬分叉 SLOT_X
 在#announcements 频道发布如下内容(酌情调整文本)：
 
 > Hi @Validators,
-> 
+>
 > We've released v1.1.12 and are ready to get testnet back up again.
-> 
+>
 > Steps: 1. Install the v1.1.12 release: https://github.com/solana-labs/solana/releases/tag/v1.1.12 2. a. Preferred method, start from your local ledger with:
-> 
+>
 > ```bash
 solana-validator
   --wait-for-supermajority SLOT_X     # <-- NEW! IMPORTANT! REMOVE AFTER THIS RESTART
@@ -69,7 +69,6 @@ solana-validator
 ```
 
      You can check for which slots your ledger has with: `solana-ledger-tool -l path/to/ledger bounds`
-    
 
 3. 等待80%的质押在线
 

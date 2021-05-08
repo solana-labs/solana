@@ -70,7 +70,7 @@ solana balance <ACCOUNT_ADDRESS> --url http://devnet.solana.com
 $ solana-keygen new --outfile my_solana_wallet.json   # 创建第一个文件系统钱包
 产生新的密钥对
 为了增加安全性，输入一个密码(空白表示不设置密码)：
-将新密钥对写入 my_solana_wallet.json 
+将新密钥对写入 my_solana_wallet.json
 ==========================================================================
 pubkey: DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK                          # 第一个钱包的地址
 ==========================================================================
@@ -99,7 +99,7 @@ $ solana transfer --from my_solana_wallet.json 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBM
 3gmXvykAd1nCQQ7MjosaHLf69Xyaqyq1qw2eu1mgPyYXd5G4v1rihhg1CiRw35b9fHzcftGKKEu4mbUeXY2pEX2z  # 该笔交易的签名
 
 $ solana balance DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK --url https://devnet.solana.com
-4.999995 SOL  # 由于需要 0.000005 SOL 的交易费用，发送金额要稍微小于 5 SOL 
+4.999995 SOL  # 由于需要 0.000005 SOL 的交易费用，发送金额要稍微小于 5 SOL
 
 $ solana balance 7S3P4HxJpyyigGzodYwHtCxZyUQe9JiBMHyRWXArAaKv --url https://devnet.solana.com
 5 SOL  # 第二个钱包现在已经接收到第一个钱包发送的 5 SOL
