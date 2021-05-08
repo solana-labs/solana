@@ -16,7 +16,7 @@ import {
   Instruction,
   decodeInstruction,
   BONFIDABOT_PROGRAM_ID,
-} from "bonfida-bot";
+} from "@bonfida/bot";
 
 export const SERUM_DECODED_MAX = 6;
 
