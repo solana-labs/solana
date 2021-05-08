@@ -30,8 +30,7 @@ features = []
 ```
 
 Solana Rust programs may depend directly on each other in order to gain access
-to instruction helpers when making [cross-program
-invocations](developing/../../programming-model/calling-between-programs.md#cross-program-invocations).
+to instruction helpers when making [cross-program invocations](developing/programming-model/calling-between-programs.md#cross-program-invocations).
 When doing so it's important to not pull in the dependent program's entrypoint
 symbols because they may conflict with the program's own. To avoid this,
 programs should define an `exclude_entrypoint` feature in `Cargo.toml` and use
@@ -250,8 +249,8 @@ single-threaded environment, and must be deterministic:
 - No support for `println!`, `print!`, the Solana [logging helpers](#logging)
   should be used instead.
 - The runtime enforces a limit on the number of instructions a program can
-  execute during the processing of one instruction. See [computation
-  budget](developing/programming-model/runtime.md#compute-budget) for more
+  execute during the processing of one instruction. See
+  [computation budget](developing/programming-model/runtime.md#compute-budget) for more
   information.
 
 ## Depending on Rand
@@ -375,8 +374,7 @@ Use the system call
 to log a message containing the remaining number of compute units the program
 may consume before execution is halted
 
-See [compute
-budget](developing/programming-model/../../../programming-model/runtime.md#compute-budget)
+See [compute budget](developing/programming-model/runtime.md#compute-budget)
 for more information.
 
 ## ELF Dump
