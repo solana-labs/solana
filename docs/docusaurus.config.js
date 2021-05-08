@@ -19,6 +19,10 @@ module.exports = {
       crossorigin: "anonymous",
     },
   ],
+  i18n: {
+    defaultLocale: 'en',
+    locales: ['en', 'zh'],
+  },
   themeConfig: {
     navbar: {
       logo: {
@@ -51,6 +55,10 @@ module.exports = {
           to: "cluster/overview",
           label: "Learn",
           position: "left",
+        },
+        {
+          type: 'localeDropdown',
+          position: 'right',
         },
         {
           href: "https://discordapp.com/invite/pquxPsq",

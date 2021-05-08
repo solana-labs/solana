@@ -84,8 +84,7 @@ operations they wish to profile.
 - [Log the remaining compute units from a C
   program](developing-c.md#compute-budget)
 
-See [compute
-budget](developing/programming-model/../../../programming-model/runtime.md/#compute-budget)
+See [compute budget](developing/programming-model/runtime.md#compute-budget)
 for more information.
 
 ## ELF Dump
