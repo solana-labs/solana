@@ -177,8 +177,7 @@ Use the system call
 to log a message containing the remaining number of compute units the program
 may consume before execution is halted
 
-See [compute
-budget](developing/programming-model/../../../programming-model/runtime.md/#compute-budget)
+See [compute budget](developing/programming-model/runtime.md#compute-budget)
 for more information.
 
 ## ELF Dump
