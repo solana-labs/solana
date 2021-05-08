@@ -1,6 +1,13 @@
 use dashmap::{mapref::entry::Entry::Occupied, DashMap};
 use solana_sdk::pubkey::Pubkey;
-use std::{collections::HashSet, fmt::Debug, sync::RwLock};
+use std::{
+    collections::HashSet,
+    fmt::Debug,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        RwLock,
+    },
+};
 
 // The only cases where an inner key should map to a different outer key is
 // if the key had different account data for the indexed key across different
@@ -9,7 +16,7 @@ use std::{collections::HashSet, fmt::Debug, sync::RwLock};
 pub type SecondaryReverseIndexEntry = RwLock<Vec<Pubkey>>;
 
 pub trait SecondaryIndexEntry: Debug {
-    fn insert_if_not_exists(&self, key: &Pubkey);
+    fn insert_if_not_exists(&self, key: &Pubkey, inner_keys_count: &AtomicU64);
     // Removes a value from the set. Returns whether the value was present in the set.
     fn remove_inner_key(&self, key: &Pubkey) -> bool;
     fn is_empty(&self) -> bool;
@@ -18,14 +25,22 @@ pub trait SecondaryIndexEntry: Debug {
 }
 
 #[derive(Debug, Default)]
+pub struct SecondaryIndexStats {
+    last_report: AtomicU64,
+    num_inner_keys: AtomicU64,
+}
+
+#[derive(Debug, Default)]
 pub struct DashMapSecondaryIndexEntry {
     account_keys: DashMap<Pubkey, ()>,
 }
 
 impl SecondaryIndexEntry for DashMapSecondaryIndexEntry {
-    fn insert_if_not_exists(&self, key: &Pubkey) {
+    fn insert_if_not_exists(&self, key: &Pubkey, inner_keys_count: &AtomicU64) {
         if self.account_keys.get(key).is_none() {
-            self.account_keys.entry(*key).or_default();
+            self.account_keys.entry(*key).or_insert_with(|| {
+                inner_keys_count.fetch_add(1, Ordering::Relaxed);
+            });
         }
     }
 
@@ -55,10 +70,12 @@ pub struct RwLockSecondaryIndexEntry {
 }
 
 impl SecondaryIndexEntry for RwLockSecondaryIndexEntry {
-    fn insert_if_not_exists(&self, key: &Pubkey) {
+    fn insert_if_not_exists(&self, key: &Pubkey, inner_keys_count: &AtomicU64) {
         let exists = self.account_keys.read().unwrap().contains(key);
         if !exists {
-            self.account_keys.write().unwrap().insert(*key);
+            let mut w_account_keys = self.account_keys.write().unwrap();
+            w_account_keys.insert(*key);
+            inner_keys_count.fetch_add(1, Ordering::Relaxed);
         };
     }
 
@@ -81,14 +98,23 @@ impl SecondaryIndexEntry for RwLockSecondaryIndexEntry {
 
 #[derive(Debug, Default)]
 pub struct SecondaryIndex<SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send> {
+    metrics_name: &'static str,
     // Map from index keys to index values
     pub index: DashMap<Pubkey, SecondaryIndexEntryType>,
     pub reverse_index: DashMap<Pubkey, SecondaryReverseIndexEntry>,
+    stats: SecondaryIndexStats,
 }
 
 impl<SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send>
     SecondaryIndex<SecondaryIndexEntryType>
 {
+    pub fn new(metrics_name: &'static str) -> Self {
+        Self {
+            metrics_name,
+            ..Self::default()
+        }
+    }
+
     pub fn insert(&self, key: &Pubkey, inner_key: &Pubkey) {
         {
             let pubkeys_map = self.index.get(key).unwrap_or_else(|| {
@@ -98,7 +124,7 @@ impl<SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send>
                     .downgrade()
             });
 
-            pubkeys_map.insert_if_not_exists(inner_key);
+            pubkeys_map.insert_if_not_exists(inner_key, &self.stats.num_inner_keys);
         }
 
         let outer_keys = self.reverse_index.get(inner_key).unwrap_or_else(|| {
@@ -114,6 +140,33 @@ impl<SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send>
             if !w_outer_keys.contains(&key) {
                 w_outer_keys.push(*key);
             }
+        }
+
+        let now = solana_sdk::timing::timestamp();
+        let last = self.stats.last_report.load(Ordering::Relaxed);
+        let should_report = now.saturating_sub(last) > 1000
+            && self.stats.last_report.compare_exchange(
+                last,
+                now,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            ) == Ok(last);
+
+        if should_report {
+            datapoint_info!(
+                self.metrics_name,
+                ("num_secondary_keys", self.index.len() as i64, i64),
+                (
+                    "num_inner_keys",
+                    self.stats.num_inner_keys.load(Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "num_reverse_index_keys",
+                    self.reverse_index.len() as i64,
+                    i64
+                ),
+            );
         }
     }
 
@@ -156,9 +209,17 @@ impl<SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send>
         }
 
         // Remove this value from those keys
-        for outer_key in removed_outer_keys {
-            self.remove_index_entries(&outer_key, inner_key);
+        for outer_key in &removed_outer_keys {
+            self.remove_index_entries(outer_key, inner_key);
         }
+
+        // Safe to `fetch_sub()` here because a dead key cannot be removed more than once,
+        // and the `num_inner_keys` must have been incremented by exactly removed_outer_keys.len()
+        // in previous unique insertions of `inner_key` into `self.index` for each key
+        // in `removed_outer_keys`
+        self.stats
+            .num_inner_keys
+            .fetch_sub(removed_outer_keys.len() as u64, Ordering::Relaxed);
     }
 
     pub fn get(&self, key: &Pubkey) -> Vec<Pubkey> {

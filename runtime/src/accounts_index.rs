@@ -492,7 +492,7 @@ pub trait ZeroLamport {
     fn is_zero_lamport(&self) -> bool;
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct AccountsIndex<T> {
     pub account_maps: RwLock<AccountMap<Pubkey, AccountMapEntry<T>>>,
     program_id_index: SecondaryIndex<DashMapSecondaryIndexEntry>,
@@ -501,6 +501,26 @@ pub struct AccountsIndex<T> {
     roots_tracker: RwLock<RootsTracker>,
     ongoing_scan_roots: RwLock<BTreeMap<Slot, u64>>,
     zero_lamport_pubkeys: DashSet<Pubkey>,
+}
+
+impl<T> Default for AccountsIndex<T> {
+    fn default() -> Self {
+        Self {
+            account_maps: RwLock::<AccountMap<Pubkey, AccountMapEntry<T>>>::default(),
+            program_id_index: SecondaryIndex::<DashMapSecondaryIndexEntry>::new(
+                "program_id_index_stats",
+            ),
+            spl_token_mint_index: SecondaryIndex::<DashMapSecondaryIndexEntry>::new(
+                "spl_token_mint_index_stats",
+            ),
+            spl_token_owner_index: SecondaryIndex::<RwLockSecondaryIndexEntry>::new(
+                "spl_token_owner_index_stats",
+            ),
+            roots_tracker: RwLock::<RootsTracker>::default(),
+            ongoing_scan_roots: RwLock::<BTreeMap<Slot, u64>>::default(),
+            zero_lamport_pubkeys: DashSet::<Pubkey>::default(),
+        }
+    }
 }
 
 impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
