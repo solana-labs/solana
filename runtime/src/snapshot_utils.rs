@@ -22,6 +22,7 @@ use {
     solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash, pubkey::Pubkey},
     std::{
         cmp::Ordering,
+        cmp::min,
         collections::HashSet,
         fmt,
         fs::{self, File},
@@ -718,10 +719,12 @@ pub fn get_highest_snapshot_archive_path<P: AsRef<Path>>(
 }
 
 pub fn purge_old_snapshot_archives<P: AsRef<Path>>(snapshot_output_dir: P, maximum_snapshots_to_retain: usize) {
+    info!("Purging old snapshots in {:?}, retaining {}", snapshot_output_dir.as_ref(), maximum_snapshots_to_retain);
     let mut archives = get_snapshot_archives(snapshot_output_dir);
     // Keep the oldest snapshot so we can always play the ledger from it.
     archives.pop();
-    for old_archive in archives.into_iter().skip(maximum_snapshots_to_retain) {
+    let max_snaps = min(1, maximum_snapshots_to_retain);
+    for old_archive in archives.into_iter().skip(max_snaps) {
         fs::remove_file(old_archive.0)
             .unwrap_or_else(|err| info!("Failed to remove old snapshot: {:}", err));
     }
