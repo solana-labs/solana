@@ -4,12 +4,12 @@ title: "调试"
 
 Solana程序在链上运行，因此在链外调试可能会很困难。 为了使调试程序更容易，开发人员可以编写单元测试以通过Solana运行时直接测试其程序的执行情况，或者运行允许RPC客户端与其程序进行交互的本地集群。
 
-## 运行单元测试
+## 运行单元测试 {#running-unit-tests}
 
 - [用Rust进行测试](developing-rust.md#how-to-test)
 - [用C进行测试](developing-c.md#how-to-test)
 
-## 记录
+## 记录 {#logging}
 
 在程序执行期间，运行时，程序日志状态和错误消息均会出现。
 
@@ -26,7 +26,7 @@ RUST_LOG=solana_runtime::system_instruction_processor=trace,solana_runtime::mess
 
 `Program log: <user defined message>`
 
-## 错误处理
+## 错误处理 {#error-handling}
 
 可以通过事务错误传达的信息量是有限的，但是有很多可能的失败点。  以下是可能的故障点，有关预期发生哪些错误以及在何处获取更多信息的信息：
 - BPF加载程序可能无法解析程序，这应该不会发生，因为加载程序已经对程序的帐户数据进行了_最终处理_。
@@ -45,23 +45,23 @@ RUST_LOG=solana_runtime::system_instruction_processor=trace,solana_runtime::mess
 `BPF程序4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM失败：out of bounds
 memory store (insn #615), addr 0x200001e38/8`
 
-## 监控计算预算消耗
+## 监控计算预算消耗 {#monitoring-compute-budget-consumption}
 
 程序可以记录停止程序执行之前将允许的剩余计算单元数。  程序可以使用这些日志来包装希望分析的操作。
 
 - [从Rust程序记录剩余的计算单元](developing-rust.md#compute-budget)
 - [从C程序记录剩余的计算单元](developing-c.md#compute-budget)
 
-有关更多信息，请参见[计算预算](developing/programming-model/../../../programming-model/runtime.md/#compute-budget)。
+有关更多信息，请参见[计算预算](developing/programming-model/runtime.md#compute-budget)。
 
-## ELF转储
+## ELF转储 {#elf-dump}
 
 可以将BPF共享对象的内部信息转储到文本文件中，以更深入地了解程序的组成及其在运行时的工作方式。
 
 - [创建Rust程序的转储文件](developing-rust.md#elf-dump)
 - [创建C程序的转储文件](developing-c.md#elf-dump)
 
-## 指令追踪
+## 指令追踪 {#instruction-tracing}
 
 在执行期间，可以将运行时BPF解释器配置为记录每个执行的BPF指令的跟踪消息。  对于诸如精确指出导致内存访问冲突的运行时上下文之类的事情，这可能非常有用。
 

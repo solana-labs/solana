@@ -86,10 +86,10 @@ https://github.com/solana-labs/solana/blob/6606590b8132e56dab9e60b3f7d20ba7412a7
 
 指令的[程序ID](terminology.md#program-id)指定将处理该指令的程序。 程序帐户的所有者指定应使用哪个加载程序来加载和执行程序，并且数据包含有关运行时应如何执行程序的信息。
 
-对于[已部署的BPF程序](developing/deployed-programs/overview.md)，所有者是BPF加载程序，帐户数据包含BPF字节码。  一旦成功部署，程序帐户便会被加载程序永久标记为可执行文件。 运行时将拒绝指定不可执行程序的事务。
+对于[已部署的BPF程序](developing/on-chain-programs/overview.md)，所有者是BPF加载程序，帐户数据包含BPF字节码。  一旦成功部署，程序帐户便会被加载程序永久标记为可执行文件。 运行时将拒绝指定不可执行程序的事务。
 
 
-与已部署的程序不同，[builtins](developing/builtins/programs.md)的处理方式有所不同，因为它们直接内置在Solana运行时中。
+与已部署的程序不同，[runtime facilities](developing/runtime-facilities/programs.md)的处理方式有所不同，因为它们直接内置在Solana运行时中。
 
 ### 帐户
 

@@ -2,7 +2,7 @@
 title: 程序之间的调用
 ---
 
-## 跨程序调用
+## 跨程序调用 {#cross-program-invocations}
 
 Solana运行时允许程序通过称为跨程序调用的机制相互调用。  程序之间的调用是通过一个程序调用另一个程序的指令来实现的。  调用程序将暂停，直到被调用的程序完成对指令的处理为止。
 
@@ -195,4 +195,4 @@ let instruction = token_instruction::transfer(&escrow_pubkey, &alice_pubkey, 1);
 
 ## 示例
 
-请参阅 [使用Rust开发](developing/deployed-programs/../../../deployed-programs/developing-rust.md#examples)和 [使用C开发](developing/deployed-programs/../../../deployed-programs/developing-c.md#examples)以获取有关如何使用跨程序调用的示例。
+请参阅 [使用Rust开发](developing/on-chain-programs/developing-rust.md#examples) 和 [使用C开发](developing/on-chain-programs/developing-c.md#examples)以获取有关如何使用跨程序调用的示例。
