@@ -878,10 +878,9 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
                     if index_entry.get().slot_list.read().unwrap().is_empty() {
                         index_entry.remove();
 
-                        // Note passing `None` to remove all the entries for this key
-                        // is only safe because we have the lock for this key's entry
-                        // in the AccountsIndex, so no other thread is also updating
-                        // the index
+                        // Note it's only safe to remove all the entries for this key
+                        // because we have the lock for this key's entry in the AccountsIndex,
+                        // so no other thread is also updating the index
                         self.purge_secondary_indexes_by_inner_key(key, account_indexes);
                     }
                 }
