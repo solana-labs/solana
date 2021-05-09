@@ -22,6 +22,7 @@ CC := $(LLVM_DIR)/bin/clang
 CXX := $(LLVM_DIR)/bin/clang++
 LLD := $(LLVM_DIR)/bin/ld.lld
 OBJ_DUMP := $(LLVM_DIR)/bin/llvm-objdump
+READ_ELF := $(LLVM_DIR)/bin/llvm-readelf
 endif
 
 SYSTEM_INC_DIRS := \
@@ -62,9 +63,11 @@ BPF_LLD_FLAGS := \
   --entry entrypoint \
 
 OBJ_DUMP_FLAGS := \
-  -color \
-  -source \
-  -disassemble \
+  --source \
+  --disassemble \
+
+READ_ELF_FLAGS := \
+  --all \
 
 TESTFRAMEWORK_RPATH := $(abspath $(LOCAL_PATH)../dependencies/criterion/lib)
 TESTFRAMEWORK_FLAGS := \
@@ -120,7 +123,8 @@ help:
 	@echo '  - make all - Build all the programs and tests, run the tests'
 	@echo '  - make programs - Build all the programs'
 	@echo '  - make tests - Build and run all tests'
-	@echo '  - make dump_<program name> - Dumps the contents of the program to stdout'
+	@echo '  - make dump_<program name> - Dump the contents of the program to stdout'
+	@echo '  - make readelf_<program name> - Display information about the ELF binary'
 	@echo '  - make <program name> - Build a single program by name'
 	@echo '  - make <test name> - Build and run a single test by name'
 	@echo ''
@@ -131,7 +135,7 @@ help:
 	$(foreach name, $(TEST_NAMES), @echo '  - $(name)'$(\n))
 	@echo ''
 	@echo 'Example:'
-	@echo '  - Assuming a programed named foo (src/foo/foo.c)'
+	@echo '  - Assuming a program named foo (src/foo/foo.c)'
 	@echo '    - make foo'
 	@echo '    - make dump_foo'
 	@echo ''
@@ -244,6 +248,9 @@ tests: $(TEST_NAMES)
 
 dump_%: %
 	$(_@)$(OBJ_DUMP) $(OBJ_DUMP_FLAGS) $(addprefix $(OUT_DIR)/, $(addsuffix .so, $<))
+
+readelf_%: %
+	$(_@)$(READ_ELF) $(READ_ELF_FLAGS) $(addprefix $(OUT_DIR)/, $(addsuffix .so, $<))
 
 clean:
 	rm -rf $(OUT_DIR)
