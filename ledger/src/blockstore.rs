@@ -1438,7 +1438,16 @@ impl Blockstore {
     }
 
     pub fn get_data_shred(&self, slot: Slot, index: u64) -> Result<Option<Vec<u8>>> {
-        self.data_shred_cf.get_bytes((slot, index))
+        use crate::shred::SHRED_PAYLOAD_SIZE;
+        self.data_shred_cf.get_bytes((slot, index)).map(|data| {
+            data.map(|mut d| {
+                // For forward compatibility, pad the payload out to
+                // SHRED_PAYLOAD_SIZE incase the shred was inserted
+                // with any padding stripped off.
+                d.resize(cmp::max(d.len(), SHRED_PAYLOAD_SIZE), 0);
+                d
+            })
+        })
     }
 
     pub fn get_data_shreds_for_slot(
