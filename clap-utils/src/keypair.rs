@@ -152,7 +152,7 @@ impl SignerSource {
 }
 
 pub(crate) enum SignerSourceKind {
-    Ask,
+    Prompt,
     Filepath(String),
     Usb(RemoteWalletLocator),
     Stdin,
@@ -181,8 +181,8 @@ pub(crate) fn parse_signer_source<S: AsRef<str>>(
             if let Some(scheme) = uri.scheme() {
                 let scheme = scheme.as_str().to_ascii_lowercase();
                 match scheme.as_str() {
-                    "ask" => Ok(SignerSource {
-                        kind: SignerSourceKind::Ask,
+                    "prompt" => Ok(SignerSource {
+                        kind: SignerSourceKind::Prompt,
                         derivation_path: DerivationPath::from_uri_any_query(&uri)?,
                     }),
                     "file" => Ok(SignerSource::new(SignerSourceKind::Filepath(
@@ -198,7 +198,7 @@ pub(crate) fn parse_signer_source<S: AsRef<str>>(
             } else {
                 match source {
                     "-" => Ok(SignerSource::new(SignerSourceKind::Stdin)),
-                    ASK_KEYWORD => Ok(SignerSource::new(SignerSourceKind::Ask)),
+                    ASK_KEYWORD => Ok(SignerSource::new(SignerSourceKind::Prompt)),
                     _ => match Pubkey::from_str(source) {
                         Ok(pubkey) => Ok(SignerSource::new(SignerSourceKind::Pubkey(pubkey))),
                         Err(_) => std::fs::metadata(source)
@@ -261,7 +261,7 @@ pub fn signer_from_path_with_config(
         derivation_path,
     } = parse_signer_source(path)?;
     match kind {
-        SignerSourceKind::Ask => {
+        SignerSourceKind::Prompt => {
             let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
             Ok(Box::new(keypair_from_seed_phrase(
                 keypair_name,
@@ -341,7 +341,7 @@ pub fn resolve_signer_from_path(
         derivation_path,
     } = parse_signer_source(path)?;
     match kind {
-        SignerSourceKind::Ask => {
+        SignerSourceKind::Prompt => {
             let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
             // This method validates the seed phrase, but returns `None` because there is no path
             // on disk or to a device
@@ -383,7 +383,7 @@ pub fn resolve_signer_from_path(
     }
 }
 
-// Keyword used to indicate that the user should be asked for a keypair seed phrase
+// Keyword used to indicate that the user should be prompted for a keypair seed phrase
 pub const ASK_KEYWORD: &str = "ASK";
 
 pub const SKIP_SEED_PHRASE_VALIDATION_ARG: ArgConstant<'static> = ArgConstant {
@@ -527,9 +527,9 @@ mod tests {
                 derivation_path: None,
             }
         ));
-        let ask = "stdin:".to_string();
+        let stdin = "stdin:".to_string();
         assert!(matches!(
-            parse_signer_source(&ask).unwrap(),
+            parse_signer_source(&stdin).unwrap(),
             SignerSource {
                 kind: SignerSourceKind::Stdin,
                 derivation_path: None,
@@ -538,7 +538,7 @@ mod tests {
         assert!(matches!(
             parse_signer_source(ASK_KEYWORD).unwrap(),
             SignerSource {
-                kind: SignerSourceKind::Ask,
+                kind: SignerSourceKind::Prompt,
                 derivation_path: None,
             }
         ));
@@ -603,11 +603,11 @@ mod tests {
             Err(SignerSourceError::IoError(_))
         ));
 
-        let ask = "ask:".to_string();
+        let prompt = "prompt:".to_string();
         assert!(matches!(
-            parse_signer_source(&ask).unwrap(),
+            parse_signer_source(&prompt).unwrap(),
             SignerSource {
-                kind: SignerSourceKind::Ask,
+                kind: SignerSourceKind::Prompt,
                 derivation_path: None,
             }
         ));
