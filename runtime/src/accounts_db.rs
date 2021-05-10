@@ -22,8 +22,13 @@ use crate::{
     accounts_cache::{AccountsCache, CachedAccount, SlotCache},
     accounts_hash::{AccountsHash, CalculateHashIntermediate, HashStats},
     accounts_index::{
+<<<<<<< HEAD
         AccountIndex, AccountsIndex, AccountsIndexRootsStats, Ancestors, IndexKey, IsCached,
         SlotList, SlotSlice, ZeroLamport,
+=======
+        AccountIndexGetResult, AccountSecondaryIndexes, AccountsIndex, AccountsIndexRootsStats,
+        Ancestors, IndexKey, IsCached, SlotList, SlotSlice, ZeroLamport,
+>>>>>>> f39dda00e... type AccountSecondaryIndexes = HashSet (#17108)
     },
     append_vec::{AppendVec, StoredAccountMeta, StoredMeta},
     contains::Contains,
@@ -740,7 +745,7 @@ pub struct AccountsDb {
 
     pub cluster_type: Option<ClusterType>,
 
-    pub account_indexes: HashSet<AccountIndex>,
+    pub account_indexes: AccountSecondaryIndexes,
 
     pub caching_enabled: bool,
 
@@ -1092,7 +1097,7 @@ impl Default for AccountsDb {
             shrink_stats: ShrinkStats::default(),
             stats: AccountsStats::default(),
             cluster_type: None,
-            account_indexes: HashSet::new(),
+            account_indexes: AccountSecondaryIndexes::default(),
             caching_enabled: false,
         }
     }
@@ -1100,13 +1105,18 @@ impl Default for AccountsDb {
 
 impl AccountsDb {
     pub fn new(paths: Vec<PathBuf>, cluster_type: &ClusterType) -> Self {
-        AccountsDb::new_with_config(paths, cluster_type, HashSet::new(), false)
+        AccountsDb::new_with_config(
+            paths,
+            cluster_type,
+            AccountSecondaryIndexes::default(),
+            false,
+        )
     }
 
     pub fn new_with_config(
         paths: Vec<PathBuf>,
         cluster_type: &ClusterType,
-        account_indexes: HashSet<AccountIndex>,
+        account_indexes: AccountSecondaryIndexes,
         caching_enabled: bool,
     ) -> Self {
         let new = if !paths.is_empty() {
@@ -7774,7 +7784,7 @@ pub mod tests {
             &key0,
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             info0,
             &mut reclaims,
         );
@@ -7783,7 +7793,7 @@ pub mod tests {
             &key0,
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             info1.clone(),
             &mut reclaims,
         );
@@ -7792,7 +7802,7 @@ pub mod tests {
             &key1,
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             info1,
             &mut reclaims,
         );
@@ -7801,7 +7811,7 @@ pub mod tests {
             &key1,
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             info2.clone(),
             &mut reclaims,
         );
@@ -7810,7 +7820,7 @@ pub mod tests {
             &key2,
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             info2,
             &mut reclaims,
         );
@@ -7819,7 +7829,7 @@ pub mod tests {
             &key2,
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             info3,
             &mut reclaims,
         );
@@ -8203,12 +8213,62 @@ pub mod tests {
     }
 
     #[test]
+<<<<<<< HEAD
+=======
+    fn test_read_only_accounts_cache() {
+        let caching_enabled = true;
+        let db = Arc::new(AccountsDb::new_with_config(
+            Vec::new(),
+            &ClusterType::Development,
+            AccountSecondaryIndexes::default(),
+            caching_enabled,
+        ));
+
+        let account_key = Pubkey::new_unique();
+        let zero_lamport_account =
+            AccountSharedData::new(0, 0, AccountSharedData::default().owner());
+        let slot1_account = AccountSharedData::new(1, 1, AccountSharedData::default().owner());
+        db.store_cached(0, &[(&account_key, &zero_lamport_account)]);
+        db.store_cached(1, &[(&account_key, &slot1_account)]);
+
+        db.add_root(0);
+        db.add_root(1);
+        db.clean_accounts(None);
+        db.flush_accounts_cache(true, None);
+        db.clean_accounts(None);
+        db.add_root(2);
+
+        assert_eq!(db.read_only_accounts_cache.cache_len(), 0);
+        let account = db
+            .load_with_fixed_root(&Ancestors::default(), &account_key)
+            .map(|(account, _)| account)
+            .unwrap();
+        assert_eq!(account.lamports(), 1);
+        assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
+        let account = db
+            .load_with_fixed_root(&Ancestors::default(), &account_key)
+            .map(|(account, _)| account)
+            .unwrap();
+        assert_eq!(account.lamports(), 1);
+        assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
+        db.store_cached(2, &[(&account_key, &zero_lamport_account)]);
+        assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
+        let account = db
+            .load_with_fixed_root(&Ancestors::default(), &account_key)
+            .map(|(account, _)| account)
+            .unwrap();
+        assert_eq!(account.lamports(), 0);
+        assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
+    }
+
+    #[test]
+>>>>>>> f39dda00e... type AccountSecondaryIndexes = HashSet (#17108)
     fn test_flush_cache_clean() {
         let caching_enabled = true;
         let db = Arc::new(AccountsDb::new_with_config(
             Vec::new(),
             &ClusterType::Development,
-            HashSet::new(),
+            AccountSecondaryIndexes::default(),
             caching_enabled,
         ));
 
@@ -8244,7 +8304,7 @@ pub mod tests {
         let db = Arc::new(AccountsDb::new_with_config(
             Vec::new(),
             &ClusterType::Development,
-            HashSet::new(),
+            AccountSecondaryIndexes::default(),
             caching_enabled,
         ));
 
@@ -8367,7 +8427,7 @@ pub mod tests {
         let db = Arc::new(AccountsDb::new_with_config(
             Vec::new(),
             &ClusterType::Development,
-            HashSet::new(),
+            AccountSecondaryIndexes::default(),
             caching_enabled,
         ));
         let account_key = Pubkey::new_unique();
@@ -8451,7 +8511,7 @@ pub mod tests {
         let accounts_db = AccountsDb::new_with_config(
             Vec::new(),
             &ClusterType::Development,
-            HashSet::new(),
+            AccountSecondaryIndexes::default(),
             caching_enabled,
         );
         let slot: Slot = 0;
@@ -8505,7 +8565,7 @@ pub mod tests {
         let accounts_db = Arc::new(AccountsDb::new_with_config(
             Vec::new(),
             &ClusterType::Development,
-            HashSet::new(),
+            AccountSecondaryIndexes::default(),
             caching_enabled,
         ));
         let slots: Vec<_> = (0..num_slots as Slot).into_iter().collect();
@@ -8893,7 +8953,7 @@ pub mod tests {
         let db = AccountsDb::new_with_config(
             Vec::new(),
             &ClusterType::Development,
-            HashSet::default(),
+            AccountSecondaryIndexes::default(),
             caching_enabled,
         );
         let account_key1 = Pubkey::new_unique();
@@ -9103,4 +9163,396 @@ pub mod tests {
         assert_eq!(recycle_stores.entry_count(), 1);
         assert_eq!(recycle_stores.total_bytes(), dummy_size);
     }
+<<<<<<< HEAD
+=======
+
+    const RACY_SLEEP_MS: u64 = 10;
+    const RACE_TIME: u64 = 5;
+
+    fn start_load_thread(
+        with_retry: bool,
+        ancestors: Ancestors,
+        db: Arc<AccountsDb>,
+        exit: Arc<AtomicBool>,
+        pubkey: Arc<Pubkey>,
+        expected_lamports: impl Fn(&(AccountSharedData, Slot)) -> u64 + Send + 'static,
+    ) -> JoinHandle<()> {
+        let load_hint = if with_retry {
+            LoadHint::FixedMaxRoot
+        } else {
+            LoadHint::Unspecified
+        };
+
+        std::thread::Builder::new()
+            .name("account-do-load".to_string())
+            .spawn(move || {
+                loop {
+                    if exit.load(Ordering::Relaxed) {
+                        return;
+                    }
+                    // Meddle load_limit to cover all branches of implementation.
+                    // There should absolutely no behaviorial difference; the load_limit triggered
+                    // slow branch should only affect the performance.
+                    // Ordering::Relaxed is ok because of no data dependencies; the modified field is
+                    // completely free-standing cfg(test) control-flow knob.
+                    db.load_limit
+                        .store(thread_rng().gen_range(0, 10) as u64, Ordering::Relaxed);
+
+                    // Load should never be unable to find this key
+                    let loaded_account = db.do_load(&ancestors, &pubkey, None, load_hint).unwrap();
+                    // slot + 1 == account.lamports because of the account-cache-flush thread
+                    assert_eq!(
+                        loaded_account.0.lamports(),
+                        expected_lamports(&loaded_account)
+                    );
+                }
+            })
+            .unwrap()
+    }
+
+    fn do_test_load_account_and_cache_flush_race(with_retry: bool) {
+        solana_logger::setup();
+
+        let caching_enabled = true;
+        let mut db = AccountsDb::new_with_config(
+            Vec::new(),
+            &ClusterType::Development,
+            AccountSecondaryIndexes::default(),
+            caching_enabled,
+        );
+        db.load_delay = RACY_SLEEP_MS;
+        let db = Arc::new(db);
+        let pubkey = Arc::new(Pubkey::new_unique());
+        let exit = Arc::new(AtomicBool::new(false));
+        db.store_cached(
+            0,
+            &[(
+                &pubkey,
+                &AccountSharedData::new(1, 0, AccountSharedData::default().owner()),
+            )],
+        );
+        db.add_root(0);
+        db.flush_accounts_cache(true, None);
+
+        let t_flush_accounts_cache = {
+            let db = db.clone();
+            let exit = exit.clone();
+            let pubkey = pubkey.clone();
+            let mut account = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
+            std::thread::Builder::new()
+                .name("account-cache-flush".to_string())
+                .spawn(move || {
+                    let mut slot = 1;
+                    loop {
+                        if exit.load(Ordering::Relaxed) {
+                            return;
+                        }
+                        account.set_lamports(slot + 1);
+                        db.store_cached(slot, &[(&pubkey, &account)]);
+                        db.add_root(slot);
+                        sleep(Duration::from_millis(RACY_SLEEP_MS));
+                        db.flush_accounts_cache(true, None);
+                        slot += 1;
+                    }
+                })
+                .unwrap()
+        };
+
+        let t_do_load = start_load_thread(
+            with_retry,
+            Ancestors::default(),
+            db,
+            exit.clone(),
+            pubkey,
+            |(_, slot)| slot + 1,
+        );
+
+        sleep(Duration::from_secs(RACE_TIME));
+        exit.store(true, Ordering::Relaxed);
+        t_flush_accounts_cache.join().unwrap();
+        t_do_load.join().map_err(std::panic::resume_unwind).unwrap()
+    }
+
+    #[test]
+    fn test_load_account_and_cache_flush_race_with_retry() {
+        do_test_load_account_and_cache_flush_race(true);
+    }
+
+    #[test]
+    fn test_load_account_and_cache_flush_race_without_retry() {
+        do_test_load_account_and_cache_flush_race(false);
+    }
+
+    fn do_test_load_account_and_shrink_race(with_retry: bool) {
+        let caching_enabled = true;
+        let mut db = AccountsDb::new_with_config(
+            Vec::new(),
+            &ClusterType::Development,
+            AccountSecondaryIndexes::default(),
+            caching_enabled,
+        );
+        db.load_delay = RACY_SLEEP_MS;
+        let db = Arc::new(db);
+        let pubkey = Arc::new(Pubkey::new_unique());
+        let exit = Arc::new(AtomicBool::new(false));
+        let slot = 1;
+
+        // Store an account
+        let lamports = 42;
+        let mut account = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
+        account.set_lamports(lamports);
+        db.store_uncached(slot, &[(&pubkey, &account)]);
+
+        // Set the slot as a root so account loads will see the contents of this slot
+        db.add_root(slot);
+
+        let t_shrink_accounts = {
+            let db = db.clone();
+            let exit = exit.clone();
+
+            std::thread::Builder::new()
+                .name("account-shrink".to_string())
+                .spawn(move || loop {
+                    if exit.load(Ordering::Relaxed) {
+                        return;
+                    }
+                    // Simulate adding shrink candidates from clean_accounts()
+                    let stores = db.storage.get_slot_storage_entries(slot).unwrap();
+                    assert_eq!(stores.len(), 1);
+                    let store = &stores[0];
+                    let store_id = store.append_vec_id();
+                    db.shrink_candidate_slots
+                        .lock()
+                        .unwrap()
+                        .entry(slot)
+                        .or_default()
+                        .insert(store_id, store.clone());
+                    db.shrink_candidate_slots();
+                })
+                .unwrap()
+        };
+
+        let t_do_load = start_load_thread(
+            with_retry,
+            Ancestors::default(),
+            db,
+            exit.clone(),
+            pubkey,
+            move |_| lamports,
+        );
+
+        sleep(Duration::from_secs(RACE_TIME));
+        exit.store(true, Ordering::Relaxed);
+        t_shrink_accounts.join().unwrap();
+        t_do_load.join().map_err(std::panic::resume_unwind).unwrap()
+    }
+
+    #[test]
+    fn test_load_account_and_shrink_race_with_retry() {
+        do_test_load_account_and_shrink_race(true);
+    }
+
+    #[test]
+    fn test_load_account_and_shrink_race_without_retry() {
+        do_test_load_account_and_shrink_race(false);
+    }
+
+    fn do_test_load_account_and_purge_race(with_retry: bool) {
+        let caching_enabled = true;
+        let mut db = AccountsDb::new_with_config(
+            Vec::new(),
+            &ClusterType::Development,
+            AccountSecondaryIndexes::default(),
+            caching_enabled,
+        );
+        db.load_delay = RACY_SLEEP_MS;
+        let db = Arc::new(db);
+        let pubkey =
+            Arc::new(Pubkey::from_str("CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3").unwrap());
+        let exit = Arc::new(AtomicBool::new(false));
+        let slot = 1;
+
+        // Store an account
+        let lamports = 42;
+        let mut account = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
+        account.set_lamports(lamports);
+        db.store_uncached(slot, &[(&pubkey, &account)]);
+
+        let t_purge_slot = {
+            let db = db.clone();
+            let exit = exit.clone();
+
+            std::thread::Builder::new()
+                .name("account-purge".to_string())
+                .spawn(move || loop {
+                    if exit.load(Ordering::Relaxed) {
+                        return;
+                    }
+                    // Simulate purge_slots()
+                    db.purge_slot(slot);
+                    sleep(Duration::from_millis(RACY_SLEEP_MS));
+                })
+                .unwrap()
+        };
+
+        let ancestors: Ancestors = vec![(slot, 0)].into_iter().collect();
+        let t_do_load =
+            start_load_thread(with_retry, ancestors, db, exit.clone(), pubkey, move |_| {
+                lamports
+            });
+
+        sleep(Duration::from_secs(RACE_TIME));
+        exit.store(true, Ordering::Relaxed);
+        t_purge_slot.join().unwrap();
+        // Propagate expected panic! occurred in the do_load thread
+        t_do_load.join().map_err(std::panic::resume_unwind).unwrap()
+    }
+
+    #[test]
+    #[should_panic(expected = "assertion failed: load_hint == LoadHint::Unspecified")]
+    fn test_load_account_and_purge_race_with_retry() {
+        // this tests impossible situation in the wild, so panic is expected
+        // Conversely, we show that we're preventing this race condition from occurring
+        do_test_load_account_and_purge_race(true);
+    }
+
+    #[test]
+    #[ignore]
+    #[should_panic(
+        expected = "Bad index entry detected (CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3, 1, 0, 0, Unspecified)"
+    )]
+    fn test_load_account_and_purge_race_without_retry() {
+        // this tests impossible situation in the wild, so panic is expected
+        // Conversely, we show that we're preventing this race condition from occurring
+        do_test_load_account_and_purge_race(false);
+    }
+
+    #[test]
+    fn test_collect_uncleaned_slots_up_to_slot() {
+        solana_logger::setup();
+        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+
+        let slot1 = 11;
+        let slot2 = 222;
+        let slot3 = 3333;
+
+        let pubkey1 = Pubkey::new_unique();
+        let pubkey2 = Pubkey::new_unique();
+        let pubkey3 = Pubkey::new_unique();
+
+        db.uncleaned_pubkeys.insert(slot1, vec![pubkey1]);
+        db.uncleaned_pubkeys.insert(slot2, vec![pubkey2]);
+        db.uncleaned_pubkeys.insert(slot3, vec![pubkey3]);
+
+        let mut uncleaned_slots1 = db.collect_uncleaned_slots_up_to_slot(slot1);
+        let mut uncleaned_slots2 = db.collect_uncleaned_slots_up_to_slot(slot2);
+        let mut uncleaned_slots3 = db.collect_uncleaned_slots_up_to_slot(slot3);
+
+        uncleaned_slots1.sort_unstable();
+        uncleaned_slots2.sort_unstable();
+        uncleaned_slots3.sort_unstable();
+
+        assert_eq!(uncleaned_slots1, [slot1]);
+        assert_eq!(uncleaned_slots2, [slot1, slot2]);
+        assert_eq!(uncleaned_slots3, [slot1, slot2, slot3]);
+    }
+
+    #[test]
+    fn test_remove_uncleaned_slots_and_collect_pubkeys() {
+        solana_logger::setup();
+        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+
+        let slot1 = 11;
+        let slot2 = 222;
+        let slot3 = 3333;
+
+        let pubkey1 = Pubkey::new_unique();
+        let pubkey2 = Pubkey::new_unique();
+        let pubkey3 = Pubkey::new_unique();
+
+        let account1 = AccountSharedData::new(0, 0, &pubkey1);
+        let account2 = AccountSharedData::new(0, 0, &pubkey2);
+        let account3 = AccountSharedData::new(0, 0, &pubkey3);
+
+        db.store_uncached(slot1, &[(&pubkey1, &account1)]);
+        db.store_uncached(slot2, &[(&pubkey2, &account2)]);
+        db.store_uncached(slot3, &[(&pubkey3, &account3)]);
+
+        db.add_root(slot1);
+        // slot 2 is _not_ a root on purpose
+        db.add_root(slot3);
+
+        db.uncleaned_pubkeys.insert(slot1, vec![pubkey1]);
+        db.uncleaned_pubkeys.insert(slot2, vec![pubkey2]);
+        db.uncleaned_pubkeys.insert(slot3, vec![pubkey3]);
+
+        let uncleaned_pubkeys1 = db
+            .remove_uncleaned_slots_and_collect_pubkeys(vec![slot1])
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+        let uncleaned_pubkeys2 = db
+            .remove_uncleaned_slots_and_collect_pubkeys(vec![slot2])
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+        let uncleaned_pubkeys3 = db
+            .remove_uncleaned_slots_and_collect_pubkeys(vec![slot3])
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+
+        assert!(uncleaned_pubkeys1.contains(&pubkey1));
+        assert!(!uncleaned_pubkeys1.contains(&pubkey2));
+        assert!(!uncleaned_pubkeys1.contains(&pubkey3));
+
+        assert!(!uncleaned_pubkeys2.contains(&pubkey1));
+        assert!(uncleaned_pubkeys2.contains(&pubkey2));
+        assert!(!uncleaned_pubkeys2.contains(&pubkey3));
+
+        assert!(!uncleaned_pubkeys3.contains(&pubkey1));
+        assert!(!uncleaned_pubkeys3.contains(&pubkey2));
+        assert!(uncleaned_pubkeys3.contains(&pubkey3));
+    }
+
+    #[test]
+    fn test_remove_uncleaned_slots_and_collect_pubkeys_up_to_slot() {
+        solana_logger::setup();
+        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+
+        let slot1 = 11;
+        let slot2 = 222;
+        let slot3 = 3333;
+
+        let pubkey1 = Pubkey::new_unique();
+        let pubkey2 = Pubkey::new_unique();
+        let pubkey3 = Pubkey::new_unique();
+
+        let account1 = AccountSharedData::new(0, 0, &pubkey1);
+        let account2 = AccountSharedData::new(0, 0, &pubkey2);
+        let account3 = AccountSharedData::new(0, 0, &pubkey3);
+
+        db.store_uncached(slot1, &[(&pubkey1, &account1)]);
+        db.store_uncached(slot2, &[(&pubkey2, &account2)]);
+        db.store_uncached(slot3, &[(&pubkey3, &account3)]);
+
+        // slot 1 is _not_ a root on purpose
+        db.add_root(slot2);
+        db.add_root(slot3);
+
+        db.uncleaned_pubkeys.insert(slot1, vec![pubkey1]);
+        db.uncleaned_pubkeys.insert(slot2, vec![pubkey2]);
+        db.uncleaned_pubkeys.insert(slot3, vec![pubkey3]);
+
+        let uncleaned_pubkeys = db
+            .remove_uncleaned_slots_and_collect_pubkeys_up_to_slot(slot3)
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+
+        assert!(uncleaned_pubkeys.contains(&pubkey1));
+        assert!(uncleaned_pubkeys.contains(&pubkey2));
+        assert!(uncleaned_pubkeys.contains(&pubkey3));
+    }
+>>>>>>> f39dda00e... type AccountSecondaryIndexes = HashSet (#17108)
 }

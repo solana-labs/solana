@@ -8,6 +8,10 @@ use rand::Rng;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use solana_runtime::{
     accounts::{create_test_accounts, AccountAddressFilter, Accounts},
+<<<<<<< HEAD
+=======
+    accounts_index::{AccountSecondaryIndexes, Ancestors},
+>>>>>>> f39dda00e... type AccountSecondaryIndexes = HashSet (#17108)
     bank::*,
 };
 use solana_sdk::{
@@ -53,7 +57,7 @@ fn test_accounts_create(bencher: &mut Bencher) {
         &[],
         None,
         None,
-        HashSet::new(),
+        AccountSecondaryIndexes::default(),
         false,
     );
     bencher.iter(|| {
@@ -72,7 +76,7 @@ fn test_accounts_squash(bencher: &mut Bencher) {
         &[],
         None,
         None,
-        HashSet::new(),
+        AccountSecondaryIndexes::default(),
         false,
     ));
     let mut pubkeys: Vec<Pubkey> = vec![];
@@ -97,7 +101,7 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
     let accounts = Accounts::new_with_config(
         vec![PathBuf::from("bench_accounts_hash_internal")],
         &ClusterType::Development,
-        HashSet::new(),
+        AccountSecondaryIndexes::default(),
         false,
     );
     let mut pubkeys: Vec<Pubkey> = vec![];
@@ -115,7 +119,7 @@ fn test_update_accounts_hash(bencher: &mut Bencher) {
     let accounts = Accounts::new_with_config(
         vec![PathBuf::from("update_accounts_hash")],
         &ClusterType::Development,
-        HashSet::new(),
+        AccountSecondaryIndexes::default(),
         false,
     );
     let mut pubkeys: Vec<Pubkey> = vec![];
@@ -132,7 +136,7 @@ fn test_accounts_delta_hash(bencher: &mut Bencher) {
     let accounts = Accounts::new_with_config(
         vec![PathBuf::from("accounts_delta_hash")],
         &ClusterType::Development,
-        HashSet::new(),
+        AccountSecondaryIndexes::default(),
         false,
     );
     let mut pubkeys: Vec<Pubkey> = vec![];
@@ -148,7 +152,7 @@ fn bench_delete_dependencies(bencher: &mut Bencher) {
     let accounts = Accounts::new_with_config(
         vec![PathBuf::from("accounts_delete_deps")],
         &ClusterType::Development,
-        HashSet::new(),
+        AccountSecondaryIndexes::default(),
         false,
     );
     let mut old_pubkey = Pubkey::default();
@@ -181,7 +185,7 @@ fn store_accounts_with_possible_contention<F: 'static>(
                 .join(bench_name),
         ],
         &ClusterType::Development,
-        HashSet::new(),
+        AccountSecondaryIndexes::default(),
         false,
     ));
     let num_keys = 1000;
@@ -306,7 +310,7 @@ fn setup_bench_dashmap_iter() -> (Arc<Accounts>, DashMap<Pubkey, (AccountSharedD
                 .join("bench_dashmap_par_iter"),
         ],
         &ClusterType::Development,
-        HashSet::new(),
+        AccountSecondaryIndexes::default(),
         false,
     ));
 
@@ -357,8 +361,12 @@ fn bench_dashmap_iter(bencher: &mut Bencher) {
 
 #[bench]
 fn bench_load_largest_accounts(b: &mut Bencher) {
-    let accounts =
-        Accounts::new_with_config(Vec::new(), &ClusterType::Development, HashSet::new(), false);
+    let accounts = Accounts::new_with_config(
+        Vec::new(),
+        &ClusterType::Development,
+        AccountSecondaryIndexes::default(),
+        false,
+    );
     let mut rng = rand::thread_rng();
     for _ in 0..10_000 {
         let lamports = rng.gen();

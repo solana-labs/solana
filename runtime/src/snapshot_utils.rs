@@ -1,7 +1,7 @@
 use {
     crate::{
         accounts_db::AccountsDb,
-        accounts_index::AccountIndex,
+        accounts_index::AccountSecondaryIndexes,
         bank::{Bank, BankSlotDelta, Builtins},
         bank_forks::ArchiveFormat,
         hardened_unpack::{unpack_snapshot, UnpackError, UnpackedAppendVecMap},
@@ -592,7 +592,7 @@ pub fn bank_from_archive<P: AsRef<Path>>(
     genesis_config: &GenesisConfig,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
-    account_indexes: HashSet<AccountIndex>,
+    account_indexes: AccountSecondaryIndexes,
     accounts_db_caching_enabled: bool,
 ) -> Result<Bank> {
     let unpack_dir = tempfile::Builder::new()
@@ -771,7 +771,7 @@ fn rebuild_bank_from_snapshots(
     genesis_config: &GenesisConfig,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
-    account_indexes: HashSet<AccountIndex>,
+    account_indexes: AccountSecondaryIndexes,
     accounts_db_caching_enabled: bool,
 ) -> Result<Bank> {
     info!("snapshot version: {}", snapshot_version);
