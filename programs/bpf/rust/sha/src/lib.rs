@@ -12,11 +12,11 @@ fn test_sha256_hasher() {
 }
 
 fn test_keccak256_hasher() {
-    use solana_program::keccak::{hash, Hasher};
-    let vals = "Gaggablaghblagh!".as_ref();
+    use solana_program::keccak::{hashv, Hasher};
+    let vals = &["Gaggablaghblagh!".as_ref(), "flurbos".as_ref()];
     let mut hasher = Hasher::default();
-    hasher.hash(vals);
-    assert_eq!(hash(vals), hasher.result());
+    hasher.hashv(vals);
+    assert_eq!(hashv(vals), hasher.result());
 }
 
 #[no_mangle]

@@ -41,7 +41,6 @@ impl Hasher {
         }
     }
     pub fn result(self) -> Hash {
-        // TODO
         // At the time of this writing, the sha3 library is stuck on an old version
         // of generic_array (0.9.0). Decouple ourselves with a clone to our version.
         Hash(<[u8; HASH_BYTES]>::try_from(self.hasher.finalize().as_slice()).unwrap())

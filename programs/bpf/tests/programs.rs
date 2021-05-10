@@ -422,7 +422,7 @@ fn test_program_bpf_sanity() {
             ("relative_call", true),
             ("sanity", true),
             ("sanity++", true),
-            ("sha256", true),
+            ("sha", true),
             ("struct_pass", true),
             ("struct_ret", true),
         ]);
@@ -1239,7 +1239,7 @@ fn assert_instruction_count() {
             ("relative_call", 10),
             ("sanity", 175),
             ("sanity++", 177),
-            ("sha256", 348),
+            ("sha", 694),
             ("struct_pass", 8),
             ("struct_ret", 22),
         ]);
@@ -1251,15 +1251,15 @@ fn assert_instruction_count() {
             ("solana_bpf_rust_alloc", 8906),
             ("solana_bpf_rust_custom_heap", 516),
             ("solana_bpf_rust_dep_crate", 2),
-            ("solana_bpf_rust_external_spend", 521),
+            ("solana_bpf_rust_external_spend", 498),
             ("solana_bpf_rust_iter", 724),
             ("solana_bpf_rust_many_args", 237),
             ("solana_bpf_rust_mem", 2297),
             ("solana_bpf_rust_noop", 472),
             ("solana_bpf_rust_param_passing", 46),
             ("solana_bpf_rust_rand", 475),
-            ("solana_bpf_rust_sanity", 869),
-            ("solana_bpf_rust_sha256", 10830),
+            ("solana_bpf_rust_sanity", 894),
+            ("solana_bpf_rust_sha", 29099),
         ]);
     }
 

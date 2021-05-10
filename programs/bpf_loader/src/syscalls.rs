@@ -20,8 +20,8 @@ use solana_sdk::{
     epoch_schedule::EpochSchedule,
     feature_set::{
         cpi_data_cost, cpi_share_ro_and_exec_accounts, demote_sysvar_write_locks,
-        enforce_aligned_host_addrs, set_upgrade_authority_via_cpi_enabled, sysvar_via_syscall,
-        update_data_on_realloc, keccak256_syscall_enabled,
+        enforce_aligned_host_addrs, keccak256_syscall_enabled,
+        set_upgrade_authority_via_cpi_enabled, sysvar_via_syscall, update_data_on_realloc,
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
@@ -261,7 +261,6 @@ pub fn bind_syscall_context_objects<'a>(
         vm,
         invoke_context.is_feature_active(&keccak256_syscall_enabled::id()),
         Box::new(SyscallKeccak256 {
-            // TODO based on sha256 costs for now
             base_cost: bpf_compute_budget.sha256_base_cost,
             byte_cost: bpf_compute_budget.sha256_byte_cost,
             compute_meter: invoke_context.get_compute_meter(),
@@ -1110,14 +1109,15 @@ impl<'a> SyscallObject<BpfError> for SyscallKeccak256<'a> {
                 memory_mapping,
                 result_addr,
                 keccak::HASH_BYTES as u64,
-                self.loader_id
+                self.loader_id,
+                true,
             ),
             result
         );
         let mut hasher = keccak::Hasher::default();
         if vals_len > 0 {
             let vals = question_mark!(
-                translate_slice::<&[u8]>(memory_mapping, vals_addr, vals_len, self.loader_id),
+                translate_slice::<&[u8]>(memory_mapping, vals_addr, vals_len, self.loader_id, true),
                 result
             );
             for val in vals.iter() {
@@ -1126,7 +1126,8 @@ impl<'a> SyscallObject<BpfError> for SyscallKeccak256<'a> {
                         memory_mapping,
                         val.as_ptr() as u64,
                         val.len() as u64,
-                        self.loader_id
+                        self.loader_id,
+                        true,
                     ),
                     result
                 );
