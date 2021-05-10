@@ -3568,6 +3568,9 @@ impl Bank {
                 .collect_from_existing_account(&pubkey, &mut account);
             // Store all of them unconditionally to purge old AppendVec,
             // even if collected rent is 0 (= not updated).
+            // Also, there's another subtle side-effect from this: this
+            // ensures we verify the whole on-chain state (= all accounts)
+            // via the account delta hash slowly once per an epoch.
             self.store_account(&pubkey, &account);
         }
         self.collected_rent.fetch_add(rent, Relaxed);
