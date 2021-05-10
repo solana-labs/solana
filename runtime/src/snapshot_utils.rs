@@ -662,7 +662,7 @@ fn archive_format_from_str(archive_format: &str) -> Option<ArchiveFormat> {
 
 fn snapshot_hash_of(archive_filename: &str) -> Option<(Slot, Hash, ArchiveFormat)> {
     let snapshot_filename_regex =
-        Regex::new(r"snapshot-(\d+)-([[:alnum:]]+)\.(tar|tar\.bz2|tar\.zst|tar\.gz)$").unwrap();
+        Regex::new(r"^snapshot-(\d+)-([[:alnum:]]+)\.(tar|tar\.bz2|tar\.zst|tar\.gz)$").unwrap();
 
     if let Some(captures) = snapshot_filename_regex.captures(archive_filename) {
         let slot_str = captures.get(1).unwrap().as_str();
