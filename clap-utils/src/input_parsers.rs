@@ -57,7 +57,7 @@ pub fn keypair_of(matches: &ArgMatches<'_>, name: &str) -> Option<Keypair> {
     if let Some(value) = matches.value_of(name) {
         if value == ASK_KEYWORD {
             let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
-            keypair_from_seed_phrase(name, skip_validation, true, None).ok()
+            keypair_from_seed_phrase(name, skip_validation, true, None, true).ok()
         } else {
             read_keypair_file(value).ok()
         }
@@ -72,7 +72,7 @@ pub fn keypairs_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<Keypair>>
             .filter_map(|value| {
                 if value == ASK_KEYWORD {
                     let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
-                    keypair_from_seed_phrase(name, skip_validation, true, None).ok()
+                    keypair_from_seed_phrase(name, skip_validation, true, None, true).ok()
                 } else {
                     read_keypair_file(value).ok()
                 }
