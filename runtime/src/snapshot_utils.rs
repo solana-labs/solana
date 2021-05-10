@@ -1144,4 +1144,36 @@ mod tests {
 
         assert!(snapshot_hash_of("invalid").is_none());
     }
+
+    #[test]
+    fn test_purge_old_snapshot_archives() {
+        // Create 3 snapshots, retaining 1 during purge
+        // expect the oldest and the newest snapshots to be retained
+        // as the oldest is always retained
+
+        let temp_snap_dir = tempfile::TempDir::new().unwrap();
+        let snap1_name = format!("snapshot-1-{}.tar.zst", Hash::default());
+        let snap2_name = format!("snapshot-3-{}.tar.zst", Hash::default());
+        let snap3_name = format!("snapshot-50-{}.tar.zst", Hash::default());
+
+        let snap1_path = temp_snap_dir.path().join(&snap1_name);
+        let snap2_path = temp_snap_dir.path().join(&snap2_name);
+        let snap3_path = temp_snap_dir.path().join(&snap3_name);
+        let mut _snap1_file = File::create(snap1_path);
+        let mut _snap2_file = File::create(snap2_path);
+        let mut _snap3_file = File::create(snap3_path);
+        purge_old_snapshot_archives(temp_snap_dir.path(), 1);
+        let mut cnt = 0;
+        let mut retainted_snaps: HashSet<String> = HashSet::new();
+        for entry in fs::read_dir(temp_snap_dir.path()).unwrap() {
+            let entry_path_buf = entry.unwrap().path();
+            let entry_path = entry_path_buf.as_path();
+            let snapshot_name = entry_path.file_name().unwrap().to_str().unwrap().to_string();
+            retainted_snaps.insert(snapshot_name);
+            cnt += 1;
+        }
+        assert!(retainted_snaps.contains(&snap1_name));
+        assert!(retainted_snaps.contains(&snap3_name));
+        assert!(cnt == 2);
+    }
 }
