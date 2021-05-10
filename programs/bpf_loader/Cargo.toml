@@ -16,9 +16,16 @@ log = "0.4.11"
 num-derive = "0.3"
 num-traits = "0.2"
 rand_core = "0.6.2"
+<<<<<<< HEAD
 solana-measure = { path = "../../measure", version = "=1.6.9" }
 solana-runtime = { path = "../../runtime", version = "=1.6.9" }
 solana-sdk = { path = "../../sdk", version = "=1.6.9" }
+=======
+sha3 = "0.9.1"
+solana-measure = { path = "../../measure", version = "=1.7.0" }
+solana-runtime = { path = "../../runtime", version = "=1.7.0" }
+solana-sdk = { path = "../../sdk", version = "=1.7.0" }
+>>>>>>> 8eb05d6ed... Add Keccak256 syscall and sdk support (#16498)
 solana_rbpf = "=0.2.8"
 thiserror = "1.0"
 
