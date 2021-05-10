@@ -72,6 +72,8 @@ pub enum AccountIndex {
     SplTokenOwner,
 }
 
+pub type AccountSecondaryIndexes = HashSet<AccountIndex>;
+
 #[derive(Debug)]
 pub struct AccountMapEntryInner<T> {
     ref_count: AtomicU64,
@@ -607,7 +609,11 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         (w_account_entry.unwrap(), is_newly_inserted)
     }
 
-    pub fn handle_dead_keys(&self, dead_keys: &[&Pubkey], account_indexes: &HashSet<AccountIndex>) {
+    pub fn handle_dead_keys(
+        &self,
+        dead_keys: &[&Pubkey],
+        account_indexes: &AccountSecondaryIndexes,
+    ) {
         if !dead_keys.is_empty() {
             for key in dead_keys.iter() {
                 let mut w_index = self.account_maps.write().unwrap();
@@ -709,7 +715,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         pubkey: &Pubkey,
         slots_to_purge: &'a C,
         reclaims: &mut SlotList<T>,
-        account_indexes: &HashSet<AccountIndex>,
+        account_indexes: &AccountSecondaryIndexes,
     ) -> bool
     where
         C: Contains<'a, Slot>,
@@ -818,7 +824,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         slot: Slot,
         account_owner: &Pubkey,
         account_data: &[u8],
-        account_indexes: &HashSet<AccountIndex>,
+        account_indexes: &AccountSecondaryIndexes,
     ) {
         if account_indexes.is_empty() {
             return;
@@ -870,7 +876,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         pubkey: &Pubkey,
         account_owner: &Pubkey,
         account_data: &[u8],
-        account_indexes: &HashSet<AccountIndex>,
+        account_indexes: &AccountSecondaryIndexes,
         account_info: T,
         reclaims: &mut SlotList<T>,
     ) {
@@ -893,7 +899,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         pubkey: &Pubkey,
         account_owner: &Pubkey,
         account_data: &[u8],
-        account_indexes: &HashSet<AccountIndex>,
+        account_indexes: &AccountSecondaryIndexes,
         account_info: T,
         reclaims: &mut SlotList<T>,
     ) -> bool {
@@ -947,7 +953,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         &'a self,
         inner_key: &Pubkey,
         slots_to_remove: Option<&'a C>,
-        account_indexes: &HashSet<AccountIndex>,
+        account_indexes: &AccountSecondaryIndexes,
     ) where
         C: Contains<'a, Slot>,
     {
@@ -973,7 +979,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         list: &mut SlotList<T>,
         reclaims: &mut SlotList<T>,
         max_clean_root: Option<Slot>,
-        account_indexes: &HashSet<AccountIndex>,
+        account_indexes: &AccountSecondaryIndexes,
     ) {
         let roots_tracker = &self.roots_tracker.read().unwrap();
         let max_root = Self::get_max_root(&roots_tracker.roots, &list, max_clean_root);
@@ -997,7 +1003,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         pubkey: &Pubkey,
         reclaims: &mut SlotList<T>,
         max_clean_root: Option<Slot>,
-        account_indexes: &HashSet<AccountIndex>,
+        account_indexes: &AccountSecondaryIndexes,
     ) {
         if let Some(mut locked_entry) = self.get_account_write_entry(pubkey) {
             locked_entry.slot_list_mut(|slot_list| {
@@ -1158,19 +1164,19 @@ pub mod tests {
         DashMap(&'a SecondaryIndex<DashMapSecondaryIndexEntry>),
     }
 
-    pub fn spl_token_mint_index_enabled() -> HashSet<AccountIndex> {
+    pub fn spl_token_mint_index_enabled() -> AccountSecondaryIndexes {
         let mut account_indexes = HashSet::new();
         account_indexes.insert(AccountIndex::SplTokenMint);
         account_indexes
     }
 
-    pub fn spl_token_owner_index_enabled() -> HashSet<AccountIndex> {
+    pub fn spl_token_owner_index_enabled() -> AccountSecondaryIndexes {
         let mut account_indexes = HashSet::new();
         account_indexes.insert(AccountIndex::SplTokenOwner);
         account_indexes
     }
 
-    fn create_dashmap_secondary_index_state() -> (usize, usize, HashSet<AccountIndex>) {
+    fn create_dashmap_secondary_index_state() -> (usize, usize, AccountSecondaryIndexes) {
         {
             // Check that we're actually testing the correct variant
             let index = AccountsIndex::<bool>::default();
@@ -1180,7 +1186,7 @@ pub mod tests {
         (0, PUBKEY_BYTES, spl_token_mint_index_enabled())
     }
 
-    fn create_rwlock_secondary_index_state() -> (usize, usize, HashSet<AccountIndex>) {
+    fn create_rwlock_secondary_index_state() -> (usize, usize, AccountSecondaryIndexes) {
         {
             // Check that we're actually testing the correct variant
             let index = AccountsIndex::<bool>::default();
@@ -1217,7 +1223,7 @@ pub mod tests {
             &key.pubkey(),
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
         );
@@ -1242,7 +1248,7 @@ pub mod tests {
             &key.pubkey(),
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
         );
@@ -1266,7 +1272,7 @@ pub mod tests {
             &key.pubkey(),
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
         );
@@ -1299,7 +1305,7 @@ pub mod tests {
                 &new_pubkey,
                 &Pubkey::default(),
                 &[],
-                &HashSet::new(),
+                &AccountSecondaryIndexes::default(),
                 true,
                 &mut vec![],
             );
@@ -1315,7 +1321,7 @@ pub mod tests {
                 &Pubkey::default(),
                 &Pubkey::default(),
                 &[],
-                &HashSet::new(),
+                &AccountSecondaryIndexes::default(),
                 true,
                 &mut vec![],
             );
@@ -1446,7 +1452,7 @@ pub mod tests {
             &solana_sdk::pubkey::new_rand(),
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
         );
@@ -1471,7 +1477,7 @@ pub mod tests {
             &key.pubkey(),
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
         );
@@ -1585,7 +1591,7 @@ pub mod tests {
             &key.pubkey(),
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
         );
@@ -1600,7 +1606,7 @@ pub mod tests {
             &key.pubkey(),
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             false,
             &mut gc,
         );
@@ -1621,7 +1627,7 @@ pub mod tests {
             &key.pubkey(),
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
         );
@@ -1631,7 +1637,7 @@ pub mod tests {
             &key.pubkey(),
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             false,
             &mut gc,
         );
@@ -1653,7 +1659,7 @@ pub mod tests {
             &key.pubkey(),
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
         );
@@ -1663,7 +1669,7 @@ pub mod tests {
             &key.pubkey(),
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             false,
             &mut gc,
         );
@@ -1672,7 +1678,7 @@ pub mod tests {
             &key.pubkey(),
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
         );
@@ -1681,7 +1687,7 @@ pub mod tests {
             &key.pubkey(),
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
         );
@@ -1693,7 +1699,7 @@ pub mod tests {
             &key.pubkey(),
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
         );
@@ -1727,7 +1733,7 @@ pub mod tests {
             &key.pubkey(),
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             12,
             &mut gc
         ));
@@ -1737,7 +1743,7 @@ pub mod tests {
             &key.pubkey(),
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             10,
             &mut gc
         ));
@@ -1754,7 +1760,7 @@ pub mod tests {
             &key.pubkey(),
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             9,
             &mut gc
         ));
@@ -1810,7 +1816,7 @@ pub mod tests {
         secondary_index: &SecondaryIndex<SecondaryIndexEntryType>,
         key_start: usize,
         key_end: usize,
-        account_index: &HashSet<AccountIndex>,
+        account_index: &AccountSecondaryIndexes,
     ) {
         // No roots, should be no reclaims
         let slots = vec![1, 2, 5, 9];
@@ -1899,7 +1905,7 @@ pub mod tests {
             &mut slot_list,
             &mut reclaims,
             None,
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
         );
         assert!(reclaims.is_empty());
         assert_eq!(slot_list, vec![(1, true), (2, true), (5, true), (9, true)]);
@@ -1915,7 +1921,7 @@ pub mod tests {
             &mut slot_list,
             &mut reclaims,
             None,
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
         );
         assert_eq!(reclaims, vec![(1, true), (2, true)]);
         assert_eq!(slot_list, vec![(5, true), (9, true)]);
@@ -1929,7 +1935,7 @@ pub mod tests {
             &mut slot_list,
             &mut reclaims,
             None,
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
         );
         assert_eq!(reclaims, vec![(1, true), (2, true)]);
         assert_eq!(slot_list, vec![(5, true), (9, true)]);
@@ -1943,7 +1949,7 @@ pub mod tests {
             &mut slot_list,
             &mut reclaims,
             Some(6),
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
         );
         assert_eq!(reclaims, vec![(1, true), (2, true)]);
         assert_eq!(slot_list, vec![(5, true), (9, true)]);
@@ -1956,7 +1962,7 @@ pub mod tests {
             &mut slot_list,
             &mut reclaims,
             Some(5),
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
         );
         assert_eq!(reclaims, vec![(1, true), (2, true)]);
         assert_eq!(slot_list, vec![(5, true), (9, true)]);
@@ -1970,7 +1976,7 @@ pub mod tests {
             &mut slot_list,
             &mut reclaims,
             Some(2),
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
         );
         assert!(reclaims.is_empty());
         assert_eq!(slot_list, vec![(1, true), (2, true), (5, true), (9, true)]);
@@ -1984,7 +1990,7 @@ pub mod tests {
             &mut slot_list,
             &mut reclaims,
             Some(1),
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
         );
         assert!(reclaims.is_empty());
         assert_eq!(slot_list, vec![(1, true), (2, true), (5, true), (9, true)]);
@@ -1998,7 +2004,7 @@ pub mod tests {
             &mut slot_list,
             &mut reclaims,
             Some(7),
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
         );
         assert_eq!(reclaims, vec![(1, true), (2, true)]);
         assert_eq!(slot_list, vec![(5, true), (9, true)]);
@@ -2037,7 +2043,7 @@ pub mod tests {
         secondary_index: &SecondaryIndex<SecondaryIndexEntryType>,
         key_start: usize,
         key_end: usize,
-        account_index: &HashSet<AccountIndex>,
+        account_index: &AccountSecondaryIndexes,
     ) {
         let account_key = Pubkey::new_unique();
         let index_key = Pubkey::new_unique();
@@ -2127,7 +2133,7 @@ pub mod tests {
         secondary_index: &SecondaryIndex<SecondaryIndexEntryType>,
         index_key_start: usize,
         index_key_end: usize,
-        account_index: &HashSet<AccountIndex>,
+        account_index: &AccountSecondaryIndexes,
     ) {
         let account_key = Pubkey::new_unique();
         let secondary_key1 = Pubkey::new_unique();
