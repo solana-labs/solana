@@ -2912,8 +2912,8 @@ pub mod tests {
             true,
             &mut vec![],
         );
-        assert!(index.spl_token_mint_index.index.is_empty());
-        assert!(index.spl_token_mint_index.reverse_index.is_empty());
+        assert!(secondary_index.index.is_empty());
+        assert!(secondary_index.reverse_index.is_empty());
 
         // Wrong account data size
         index.upsert(
@@ -2925,8 +2925,8 @@ pub mod tests {
             true,
             &mut vec![],
         );
-        assert!(index.spl_token_mint_index.index.is_empty());
-        assert!(index.spl_token_mint_index.reverse_index.is_empty());
+        assert!(secondary_index.index.is_empty());
+        assert!(secondary_index.reverse_index.is_empty());
 
         // Just right. Inserting the same index multiple times should be ok
         for _ in 0..2 {
@@ -2940,15 +2940,19 @@ pub mod tests {
             check_secondary_index_unique(secondary_index, slot, &index_key, &account_key);
         }
 
+        // included
+        assert!(!secondary_index.index.is_empty());
+        assert!(!secondary_index.reverse_index.is_empty());
+
         index
             .get_account_write_entry(&account_key)
             .unwrap()
             .slot_list_mut(|slot_list| slot_list.clear());
 
         // Everything should be deleted
-        index.handle_dead_keys(&[&account_key], account_index);
-        assert!(index.spl_token_mint_index.index.is_empty());
-        assert!(index.spl_token_mint_index.reverse_index.is_empty());
+        index.handle_dead_keys(&[&account_key], &account_index);
+        assert!(secondary_index.index.is_empty());
+        assert!(secondary_index.reverse_index.is_empty());
     }
 
     #[test]
