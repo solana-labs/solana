@@ -1,13 +1,6 @@
 use crate::{
-<<<<<<< HEAD
     accounts_db::{AccountsDb, BankHashInfo, ErrorCounters, LoadedAccount, ScanStorageResult},
-    accounts_index::{AccountIndex, Ancestors, IndexKey},
-=======
-    accounts_db::{
-        AccountsDb, BankHashInfo, ErrorCounters, LoadHint, LoadedAccount, ScanStorageResult,
-    },
     accounts_index::{AccountSecondaryIndexes, Ancestors, IndexKey},
->>>>>>> f39dda00e... type AccountSecondaryIndexes = HashSet (#17108)
     bank::{
         NonceRollbackFull, NonceRollbackInfo, TransactionCheckResult, TransactionExecutionResult,
     },

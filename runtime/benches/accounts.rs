@@ -8,10 +8,7 @@ use rand::Rng;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use solana_runtime::{
     accounts::{create_test_accounts, AccountAddressFilter, Accounts},
-<<<<<<< HEAD
-=======
-    accounts_index::{AccountSecondaryIndexes, Ancestors},
->>>>>>> f39dda00e... type AccountSecondaryIndexes = HashSet (#17108)
+    accounts_index::AccountSecondaryIndexes,
     bank::*,
 };
 use solana_sdk::{

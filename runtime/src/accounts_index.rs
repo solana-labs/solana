@@ -1176,37 +1176,7 @@ pub mod tests {
         account_indexes
     }
 
-<<<<<<< HEAD
-    fn create_dashmap_secondary_index_state() -> (usize, usize, HashSet<AccountIndex>) {
-=======
-    impl<'a, T: 'static, U> AccountIndexGetResult<'a, T, U> {
-        pub fn unwrap(self) -> (ReadAccountMapEntry<T>, usize) {
-            match self {
-                AccountIndexGetResult::Found(lock, size) => (lock, size),
-                _ => {
-                    panic!("trying to unwrap AccountIndexGetResult with non-Success result");
-                }
-            }
-        }
-
-        pub fn is_none(&self) -> bool {
-            !self.is_some()
-        }
-
-        pub fn is_some(&self) -> bool {
-            matches!(self, AccountIndexGetResult::Found(_lock, _size))
-        }
-
-        pub fn map<V, F: FnOnce((ReadAccountMapEntry<T>, usize)) -> V>(self, f: F) -> Option<V> {
-            match self {
-                AccountIndexGetResult::Found(lock, size) => Some(f((lock, size))),
-                _ => None,
-            }
-        }
-    }
-
     fn create_dashmap_secondary_index_state() -> (usize, usize, AccountSecondaryIndexes) {
->>>>>>> f39dda00e... type AccountSecondaryIndexes = HashSet (#17108)
         {
             // Check that we're actually testing the correct variant
             let index = AccountsIndex::<bool>::default();
