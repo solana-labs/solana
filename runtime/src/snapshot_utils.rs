@@ -22,7 +22,7 @@ use {
     solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash, pubkey::Pubkey},
     std::{
         cmp::Ordering,
-        cmp::min,
+        cmp::max,
         collections::HashSet,
         fmt,
         fs::{self, File},
@@ -723,7 +723,7 @@ pub fn purge_old_snapshot_archives<P: AsRef<Path>>(snapshot_output_dir: P, maxim
     let mut archives = get_snapshot_archives(snapshot_output_dir);
     // Keep the oldest snapshot so we can always play the ledger from it.
     archives.pop();
-    let max_snaps = min(1, maximum_snapshots_to_retain);
+    let max_snaps = max(1, maximum_snapshots_to_retain);
     for old_archive in archives.into_iter().skip(max_snaps) {
         fs::remove_file(old_archive.0)
             .unwrap_or_else(|err| info!("Failed to remove old snapshot: {:}", err));
@@ -1145,35 +1145,46 @@ mod tests {
         assert!(snapshot_hash_of("invalid").is_none());
     }
 
-    #[test]
-    fn test_purge_old_snapshot_archives() {
-        // Create 3 snapshots, retaining 1 during purge
-        // expect the oldest and the newest snapshots to be retained
-        // as the oldest is always retained
-
+    fn common_test_urge_old_snapshot_archives(snapshot_names: &Vec<&String>, maximum_snapshots_to_retain: usize,
+        expected_snapshots: &Vec<&String>) {
         let temp_snap_dir = tempfile::TempDir::new().unwrap();
-        let snap1_name = format!("snapshot-1-{}.tar.zst", Hash::default());
-        let snap2_name = format!("snapshot-3-{}.tar.zst", Hash::default());
-        let snap3_name = format!("snapshot-50-{}.tar.zst", Hash::default());
 
-        let snap1_path = temp_snap_dir.path().join(&snap1_name);
-        let snap2_path = temp_snap_dir.path().join(&snap2_name);
-        let snap3_path = temp_snap_dir.path().join(&snap3_name);
-        let mut _snap1_file = File::create(snap1_path);
-        let mut _snap2_file = File::create(snap2_path);
-        let mut _snap3_file = File::create(snap3_path);
-        purge_old_snapshot_archives(temp_snap_dir.path(), 1);
-        let mut cnt = 0;
+        for snap_name in snapshot_names {
+            let snap_path = temp_snap_dir.path().join(&snap_name);
+            let mut _snap_file = File::create(snap_path);
+        }
+        purge_old_snapshot_archives(temp_snap_dir.path(), maximum_snapshots_to_retain);
+
         let mut retainted_snaps: HashSet<String> = HashSet::new();
         for entry in fs::read_dir(temp_snap_dir.path()).unwrap() {
             let entry_path_buf = entry.unwrap().path();
             let entry_path = entry_path_buf.as_path();
             let snapshot_name = entry_path.file_name().unwrap().to_str().unwrap().to_string();
             retainted_snaps.insert(snapshot_name);
-            cnt += 1;
         }
-        assert!(retainted_snaps.contains(&snap1_name));
-        assert!(retainted_snaps.contains(&snap3_name));
-        assert!(cnt == 2);
+
+        for snap_name in expected_snapshots {
+            assert!(retainted_snaps.contains(snap_name.as_str()));
+        }
+        assert!(retainted_snaps.len() == expected_snapshots.len());
+    }
+
+    #[test]
+    fn test_purge_old_snapshot_archives() {
+        // Create 3 snapshots, retaining 1,
+        // expecting the oldest 1 and the newest 1 are retained
+        let snap1_name = format!("snapshot-1-{}.tar.zst", Hash::default());
+        let snap2_name = format!("snapshot-3-{}.tar.zst", Hash::default());
+        let snap3_name = format!("snapshot-50-{}.tar.zst", Hash::default());
+        let snapshot_names = vec![&snap1_name, &snap2_name, &snap3_name];
+        let expected_snapshots = vec![&snap1_name, &snap3_name];
+        common_test_urge_old_snapshot_archives(&snapshot_names, 1, &expected_snapshots);
+
+        // retaining 0, the expectation is the same as for 1, as at least 1 newest is expected to be retainted
+        common_test_urge_old_snapshot_archives(&snapshot_names, 0, &expected_snapshots);
+
+        // retaining 2, all three should be retained
+        let expected_snapshots = vec![&snap1_name, &snap2_name, &snap3_name];
+        common_test_urge_old_snapshot_archives(&snapshot_names, 2, &expected_snapshots);
     }
 }
