@@ -20,12 +20,13 @@ use solana_sdk::{
     epoch_schedule::EpochSchedule,
     feature_set::{
         cpi_data_cost, cpi_share_ro_and_exec_accounts, demote_sysvar_write_locks,
-        enforce_aligned_host_addrs, set_upgrade_authority_via_cpi_enabled, sysvar_via_syscall,
-        update_data_on_realloc,
+        enforce_aligned_host_addrs, keccak256_syscall_enabled,
+        set_upgrade_authority_via_cpi_enabled, sysvar_via_syscall, update_data_on_realloc,
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
     instruction::{AccountMeta, Instruction, InstructionError},
+    keccak,
     keyed_account::KeyedAccount,
     native_loader,
     process_instruction::{stable_log, ComputeMeter, InvokeContext, Logger},
@@ -126,6 +127,10 @@ pub fn register_syscalls(
     )?;
 
     syscall_registry.register_syscall_by_name(b"sol_sha256", SyscallSha256::call)?;
+
+    if invoke_context.is_feature_active(&keccak256_syscall_enabled::id()) {
+        syscall_registry.register_syscall_by_name(b"sol_keccak256", SyscallKeccak256::call)?;
+    }
 
     if invoke_context.is_feature_active(&sysvar_via_syscall::id()) {
         syscall_registry
@@ -251,6 +256,17 @@ pub fn bind_syscall_context_objects<'a>(
         }),
         None,
     )?;
+
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        invoke_context.is_feature_active(&keccak256_syscall_enabled::id()),
+        Box::new(SyscallKeccak256 {
+            base_cost: bpf_compute_budget.sha256_base_cost,
+            byte_cost: bpf_compute_budget.sha256_byte_cost,
+            compute_meter: invoke_context.get_compute_meter(),
+            loader_id,
+        }),
+    );
 
     let is_sysvar_via_syscall_active = invoke_context.is_feature_active(&sysvar_via_syscall::id());
 
@@ -1066,6 +1082,65 @@ impl<'a> SyscallObject<BpfError> for SyscallGetRentSysvar<'a> {
             memory_mapping,
             self.invoke_context.clone(),
         );
+    }
+}
+
+// Keccak256
+pub struct SyscallKeccak256<'a> {
+    base_cost: u64,
+    byte_cost: u64,
+    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    loader_id: &'a Pubkey,
+}
+impl<'a> SyscallObject<BpfError> for SyscallKeccak256<'a> {
+    fn call(
+        &mut self,
+        vals_addr: u64,
+        vals_len: u64,
+        result_addr: u64,
+        _arg4: u64,
+        _arg5: u64,
+        memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        question_mark!(self.compute_meter.consume(self.base_cost), result);
+        let hash_result = question_mark!(
+            translate_slice_mut::<u8>(
+                memory_mapping,
+                result_addr,
+                keccak::HASH_BYTES as u64,
+                self.loader_id,
+                true,
+            ),
+            result
+        );
+        let mut hasher = keccak::Hasher::default();
+        if vals_len > 0 {
+            let vals = question_mark!(
+                translate_slice::<&[u8]>(memory_mapping, vals_addr, vals_len, self.loader_id, true),
+                result
+            );
+            for val in vals.iter() {
+                let bytes = question_mark!(
+                    translate_slice::<u8>(
+                        memory_mapping,
+                        val.as_ptr() as u64,
+                        val.len() as u64,
+                        self.loader_id,
+                        true,
+                    ),
+                    result
+                );
+                question_mark!(
+                    self.compute_meter
+                        .consume(self.byte_cost * (val.len() as u64 / 2)),
+                    result
+                );
+                hasher.hash(bytes);
+            }
+        }
+        hash_result.copy_from_slice(&hasher.result().to_bytes());
+        *result = Ok(0);
     }
 }
 

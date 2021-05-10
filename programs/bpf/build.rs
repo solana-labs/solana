@@ -84,7 +84,7 @@ fn main() {
             "rand",
             "ro_modify",
             "sanity",
-            "sha256",
+            "sha",
             "spoof1",
             "spoof1_system",
             "upgradeable",
