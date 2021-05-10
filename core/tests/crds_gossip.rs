@@ -415,7 +415,10 @@ fn network_run_push(
         }
         total = network_values
             .par_iter()
-            .map(|v| v.lock().unwrap().push.num_pending())
+            .map(|node| {
+                let gossip = node.gossip.lock().unwrap();
+                gossip.push.num_pending(&gossip.crds)
+            })
             .sum();
         trace!(
                 "network_run_push_{}: now: {} queue: {} bytes: {} num_msgs: {} prunes: {} stake_pruned: {} delivered: {}",
