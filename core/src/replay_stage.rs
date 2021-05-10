@@ -372,7 +372,8 @@ impl ReplayStage {
                         &my_pubkey,
                         &vote_account,
                         &mut progress,
-                        transaction_status_sender.clone(),
+                        transaction_status_sender.as_ref(),
+                        cache_block_time_sender.as_ref(),
                         &verify_recyclers,
                         &mut heaviest_subtree_fork_choice,
                         &replay_vote_sender,
@@ -565,7 +566,6 @@ impl ReplayStage {
                             &subscriptions,
                             &block_commitment_cache,
                             &mut heaviest_subtree_fork_choice,
-                            &cache_block_time_sender,
                             &bank_notification_sender,
                             &mut gossip_duplicate_confirmed_slots,
                             &mut unfrozen_gossip_verified_vote_hashes,
@@ -1187,7 +1187,7 @@ impl ReplayStage {
         bank: &Arc<Bank>,
         blockstore: &Blockstore,
         bank_progress: &mut ForkProgress,
-        transaction_status_sender: Option<TransactionStatusSender>,
+        transaction_status_sender: Option<&TransactionStatusSender>,
         replay_vote_sender: &ReplayVoteSender,
         verify_recyclers: &VerifyRecyclers,
     ) -> result::Result<usize, BlockstoreProcessorError> {
@@ -1294,7 +1294,6 @@ impl ReplayStage {
         subscriptions: &Arc<RpcSubscriptions>,
         block_commitment_cache: &Arc<RwLock<BlockCommitmentCache>>,
         heaviest_subtree_fork_choice: &mut HeaviestSubtreeForkChoice,
-        cache_block_time_sender: &Option<CacheBlockTimeSender>,
         bank_notification_sender: &Option<BankNotificationSender>,
         gossip_duplicate_confirmed_slots: &mut GossipDuplicateConfirmedSlots,
         unfrozen_gossip_verified_vote_hashes: &mut UnfrozenGossipVerifiedVoteHashes,
@@ -1331,12 +1330,6 @@ impl ReplayStage {
             blockstore
                 .set_roots(&rooted_slots)
                 .expect("Ledger set roots failed");
-            Self::cache_block_times(
-                blockstore,
-                bank_forks,
-                &rooted_slots,
-                cache_block_time_sender,
-            );
             let highest_confirmed_root = Some(
                 block_commitment_cache
                     .read()
@@ -1630,7 +1623,8 @@ impl ReplayStage {
         my_pubkey: &Pubkey,
         vote_account: &Pubkey,
         progress: &mut ProgressMap,
-        transaction_status_sender: Option<TransactionStatusSender>,
+        transaction_status_sender: Option<&TransactionStatusSender>,
+        cache_block_time_sender: Option<&CacheBlockTimeSender>,
         verify_recyclers: &VerifyRecyclers,
         heaviest_subtree_fork_choice: &mut HeaviestSubtreeForkChoice,
         replay_vote_sender: &ReplayVoteSender,
@@ -1694,7 +1688,7 @@ impl ReplayStage {
                     &bank,
                     &blockstore,
                     bank_progress,
-                    transaction_status_sender.clone(),
+                    transaction_status_sender,
                     replay_vote_sender,
                     verify_recyclers,
                 );
@@ -1729,7 +1723,7 @@ impl ReplayStage {
                 );
                 did_complete_bank = true;
                 info!("bank frozen: {}", bank.slot());
-                if let Some(transaction_status_sender) = transaction_status_sender.clone() {
+                if let Some(transaction_status_sender) = transaction_status_sender {
                     transaction_status_sender.send_transaction_status_freeze_message(&bank);
                 }
                 bank.freeze();
@@ -1755,6 +1749,7 @@ impl ReplayStage {
                         .send(BankNotification::Frozen(bank.clone()))
                         .unwrap_or_else(|err| warn!("bank_notification_sender failed: {:?}", err));
                 }
+                blockstore_processor::cache_block_time(&bank, cache_block_time_sender);
 
                 let bank_hash = bank.hash();
                 if let Some(new_frozen_voters) =
@@ -2451,36 +2446,6 @@ impl ReplayStage {
                 rewards_recorder_sender
                     .send((bank.slot(), rewards.clone()))
                     .unwrap_or_else(|err| warn!("rewards_recorder_sender failed: {:?}", err));
-            }
-        }
-    }
-
-    fn cache_block_times(
-        blockstore: &Arc<Blockstore>,
-        bank_forks: &Arc<RwLock<BankForks>>,
-        rooted_slots: &[Slot],
-        cache_block_time_sender: &Option<CacheBlockTimeSender>,
-    ) {
-        if let Some(cache_block_time_sender) = cache_block_time_sender {
-            for slot in rooted_slots {
-                if blockstore
-                    .get_block_time(*slot)
-                    .unwrap_or_default()
-                    .is_none()
-                {
-                    if let Some(rooted_bank) = bank_forks.read().unwrap().get(*slot) {
-                        cache_block_time_sender
-                            .send(rooted_bank.clone())
-                            .unwrap_or_else(|err| {
-                                warn!("cache_block_time_sender failed: {:?}", err)
-                            });
-                    } else {
-                        error!(
-                            "rooted_bank {:?} not available in BankForks; block time not cached",
-                            slot
-                        );
-                    }
-                }
             }
         }
     }
@@ -3381,7 +3346,7 @@ pub(crate) mod tests {
             &bank,
             &mut entries,
             true,
-            Some(TransactionStatusSender {
+            Some(&TransactionStatusSender {
                 sender: transaction_status_sender,
                 enable_cpi_and_log_storage: false,
             }),

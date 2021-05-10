@@ -1755,10 +1755,11 @@ impl Blockstore {
     }
 
     pub fn cache_block_time(&self, slot: Slot, timestamp: UnixTimestamp) -> Result<()> {
-        if !self.is_root(slot) {
-            return Err(BlockstoreError::SlotNotRooted);
+        if self.get_block_time(slot).unwrap_or_default().is_none() {
+            self.blocktime_cf.put(slot, &timestamp)
+        } else {
+            Ok(())
         }
-        self.blocktime_cf.put(slot, &timestamp)
     }
 
     pub fn get_first_available_block(&self) -> Result<Slot> {
