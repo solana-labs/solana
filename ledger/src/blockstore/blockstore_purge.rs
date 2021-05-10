@@ -33,12 +33,12 @@ impl Blockstore {
     }
 
     /// Usually this is paired with .purge_slots() but we can't internally call this in
-    /// that function unconditionally. That's because set_last_purged_slot expects to
-    /// purge older slots by the successive chronological order, while .purge_slots()
+    /// that function unconditionally. That's because expire_upto_slot_for_compaction_filter()
+    /// expects to purge older slots by the successive chronological order, while .purge_slots()
     /// can also be used to purge *future* slots for --hard-fork thing, preserving older
     /// slots. It'd be quite dangerous to purge older slots in that case.
     /// So, current legal user of this function is LedgerCleanupService.
-    pub fn set_last_purged_slot(&self, to_slot: Slot) {
+    pub fn expire_upto_slot_for_compaction_filter(&self, to_slot: Slot) {
         // convert here from inclusive purged range end to inclusive alive range start to align
         // with Slot::default() for initial compaction filter behavior consistency
         let to_slot = to_slot.checked_add(1).unwrap();

@@ -224,10 +224,10 @@ impl LedgerCleanupService {
                     // running iterators aren't affected; it grabs implicitly-created snapshot of
                     // live set of sst files at iterator's creation.
                     // Also, we passed the PurgeType::CompactionFilter, meaning no delete_range
-                    // for transaction_status and address_signatures CFs.  These are fine because
+                    // for transaction_status and address_signatures CFs. These are fine because
                     // they don't require strong consistent view for workings.
                     // so, with those enough bla bla, it can be said SAFU.
-                    blockstore.set_last_purged_slot(lowest_cleanup_slot);
+                    blockstore.expire_upto_slot_for_compaction_filter(lowest_cleanup_slot);
 
                     purge_time.stop();
                     info!("{}", purge_time);
