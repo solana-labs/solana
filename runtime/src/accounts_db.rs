@@ -22,8 +22,8 @@ use crate::{
     accounts_cache::{AccountsCache, CachedAccount, SlotCache},
     accounts_hash::{AccountsHash, CalculateHashIntermediate, HashStats, PreviousPass},
     accounts_index::{
-        AccountIndex, AccountIndexGetResult, AccountsIndex, AccountsIndexRootsStats, Ancestors,
-        IndexKey, IsCached, SlotList, SlotSlice, ZeroLamport,
+        AccountIndexGetResult, AccountSecondaryIndexes, AccountsIndex, AccountsIndexRootsStats,
+        Ancestors, IndexKey, IsCached, SlotList, SlotSlice, ZeroLamport,
     },
     append_vec::{AppendVec, StoredAccountMeta, StoredMeta},
     contains::Contains,
@@ -813,7 +813,7 @@ pub struct AccountsDb {
 
     pub cluster_type: Option<ClusterType>,
 
-    pub account_indexes: HashSet<AccountIndex>,
+    pub account_indexes: AccountSecondaryIndexes,
 
     pub caching_enabled: bool,
 
@@ -1220,7 +1220,7 @@ impl Default for AccountsDb {
             shrink_stats: ShrinkStats::default(),
             stats: AccountsStats::default(),
             cluster_type: None,
-            account_indexes: HashSet::new(),
+            account_indexes: AccountSecondaryIndexes::default(),
             caching_enabled: false,
             #[cfg(test)]
             load_delay: u64::default(),
@@ -1232,13 +1232,18 @@ impl Default for AccountsDb {
 
 impl AccountsDb {
     pub fn new(paths: Vec<PathBuf>, cluster_type: &ClusterType) -> Self {
-        AccountsDb::new_with_config(paths, cluster_type, HashSet::new(), false)
+        AccountsDb::new_with_config(
+            paths,
+            cluster_type,
+            AccountSecondaryIndexes::default(),
+            false,
+        )
     }
 
     pub fn new_with_config(
         paths: Vec<PathBuf>,
         cluster_type: &ClusterType,
-        account_indexes: HashSet<AccountIndex>,
+        account_indexes: AccountSecondaryIndexes,
         caching_enabled: bool,
     ) -> Self {
         let mut new = if !paths.is_empty() {
@@ -8664,7 +8669,7 @@ pub mod tests {
             &key0,
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             info0,
             &mut reclaims,
         );
@@ -8673,7 +8678,7 @@ pub mod tests {
             &key0,
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             info1.clone(),
             &mut reclaims,
         );
@@ -8682,7 +8687,7 @@ pub mod tests {
             &key1,
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             info1,
             &mut reclaims,
         );
@@ -8691,7 +8696,7 @@ pub mod tests {
             &key1,
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             info2.clone(),
             &mut reclaims,
         );
@@ -8700,7 +8705,7 @@ pub mod tests {
             &key2,
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             info2,
             &mut reclaims,
         );
@@ -8709,7 +8714,7 @@ pub mod tests {
             &key2,
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             info3,
             &mut reclaims,
         );
@@ -9063,7 +9068,7 @@ pub mod tests {
         let db = Arc::new(AccountsDb::new_with_config(
             Vec::new(),
             &ClusterType::Development,
-            HashSet::new(),
+            AccountSecondaryIndexes::default(),
             caching_enabled,
         ));
 
@@ -9110,7 +9115,7 @@ pub mod tests {
         let db = Arc::new(AccountsDb::new_with_config(
             Vec::new(),
             &ClusterType::Development,
-            HashSet::new(),
+            AccountSecondaryIndexes::default(),
             caching_enabled,
         ));
 
@@ -9158,7 +9163,7 @@ pub mod tests {
         let db = Arc::new(AccountsDb::new_with_config(
             Vec::new(),
             &ClusterType::Development,
-            HashSet::new(),
+            AccountSecondaryIndexes::default(),
             caching_enabled,
         ));
 
@@ -9289,7 +9294,7 @@ pub mod tests {
         let db = Arc::new(AccountsDb::new_with_config(
             Vec::new(),
             &ClusterType::Development,
-            HashSet::new(),
+            AccountSecondaryIndexes::default(),
             caching_enabled,
         ));
         let account_key = Pubkey::new_unique();
@@ -9393,7 +9398,7 @@ pub mod tests {
         let accounts_db = AccountsDb::new_with_config(
             Vec::new(),
             &ClusterType::Development,
-            HashSet::new(),
+            AccountSecondaryIndexes::default(),
             caching_enabled,
         );
         let slot: Slot = 0;
@@ -9447,7 +9452,7 @@ pub mod tests {
         let accounts_db = Arc::new(AccountsDb::new_with_config(
             Vec::new(),
             &ClusterType::Development,
-            HashSet::new(),
+            AccountSecondaryIndexes::default(),
             caching_enabled,
         ));
         let slots: Vec<_> = (0..num_slots as Slot).into_iter().collect();
@@ -9845,7 +9850,7 @@ pub mod tests {
         let db = AccountsDb::new_with_config(
             Vec::new(),
             &ClusterType::Development,
-            HashSet::default(),
+            AccountSecondaryIndexes::default(),
             caching_enabled,
         );
         let account_key1 = Pubkey::new_unique();
@@ -10107,7 +10112,7 @@ pub mod tests {
         let mut db = AccountsDb::new_with_config(
             Vec::new(),
             &ClusterType::Development,
-            HashSet::new(),
+            AccountSecondaryIndexes::default(),
             caching_enabled,
         );
         db.load_delay = RACY_SLEEP_MS;
@@ -10178,7 +10183,7 @@ pub mod tests {
         let mut db = AccountsDb::new_with_config(
             Vec::new(),
             &ClusterType::Development,
-            HashSet::new(),
+            AccountSecondaryIndexes::default(),
             caching_enabled,
         );
         db.load_delay = RACY_SLEEP_MS;
@@ -10252,7 +10257,7 @@ pub mod tests {
         let mut db = AccountsDb::new_with_config(
             Vec::new(),
             &ClusterType::Development,
-            HashSet::new(),
+            AccountSecondaryIndexes::default(),
             caching_enabled,
         );
         db.load_delay = RACY_SLEEP_MS;

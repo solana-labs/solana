@@ -71,7 +71,7 @@ where
         account_paths,
         unpacked_append_vec_map,
         &ClusterType::Development,
-        HashSet::new(),
+        AccountSecondaryIndexes::default(),
         false,
     )
 }
@@ -123,8 +123,12 @@ where
 fn test_accounts_serialize_style(serde_style: SerdeStyle) {
     solana_logger::setup();
     let (_accounts_dir, paths) = get_temp_accounts_paths(4).unwrap();
-    let accounts =
-        Accounts::new_with_config(paths, &ClusterType::Development, HashSet::new(), false);
+    let accounts = Accounts::new_with_config(
+        paths,
+        &ClusterType::Development,
+        AccountSecondaryIndexes::default(),
+        false,
+    );
 
     let mut pubkeys: Vec<Pubkey> = vec![];
     create_test_accounts(&accounts, &mut pubkeys, 100, 0);
@@ -220,7 +224,7 @@ fn test_bank_serialize_style(serde_style: SerdeStyle) {
         &[],
         None,
         None,
-        HashSet::new(),
+        AccountSecondaryIndexes::default(),
         false,
     )
     .unwrap();

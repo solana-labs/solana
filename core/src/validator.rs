@@ -46,7 +46,7 @@ use solana_ledger::{
 use solana_measure::measure::Measure;
 use solana_metrics::datapoint_info;
 use solana_runtime::{
-    accounts_index::AccountIndex,
+    accounts_index::AccountSecondaryIndexes,
     bank::Bank,
     bank_forks::{BankForks, SnapshotConfig},
     commitment::BlockCommitmentCache,
@@ -125,7 +125,7 @@ pub struct ValidatorConfig {
     pub no_poh_speed_test: bool,
     pub poh_pinned_cpu_core: usize,
     pub poh_hashes_per_batch: u64,
-    pub account_indexes: HashSet<AccountIndex>,
+    pub account_indexes: AccountSecondaryIndexes,
     pub accounts_db_caching_enabled: bool,
     pub warp_slot: Option<Slot>,
     pub accounts_db_test_hash_calculation: bool,
@@ -181,7 +181,7 @@ impl Default for ValidatorConfig {
             no_poh_speed_test: true,
             poh_pinned_cpu_core: poh_service::DEFAULT_PINNED_CPU_CORE,
             poh_hashes_per_batch: poh_service::DEFAULT_HASHES_PER_BATCH,
-            account_indexes: HashSet::new(),
+            account_indexes: AccountSecondaryIndexes::default(),
             accounts_db_caching_enabled: false,
             warp_slot: None,
             accounts_db_test_hash_calculation: false,
