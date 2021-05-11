@@ -2275,6 +2275,16 @@ impl AccountsDb {
         F: Fn(&mut A, Option<(&Pubkey, AccountSharedData, Slot)>),
         A: Default,
     {
+        let key = match &index_key {
+            IndexKey::ProgramId(key) => key,
+            IndexKey::SplTokenMint(key) => key,
+            IndexKey::SplTokenOwner(key) => key,
+        };
+        if !self.account_indexes.include_key(key) {
+            // the requested key was not indexed in the secondary index, so do a normal scan
+            return self.scan_accounts(ancestors, scan_func);
+        }
+
         let mut collector = A::default();
         self.accounts_index.index_scan_accounts(
             ancestors,
