@@ -134,6 +134,10 @@ pub mod update_data_on_realloc {
     solana_sdk::declare_id!("BkPcYCrwHXBoTsv9vMhiRF9gteZmDj3Uwisz9CDjoMKp");
 }
 
+pub mod keccak256_syscall_enabled {
+    solana_sdk::declare_id!("7Ua8mFtahVfA3WCY9LoXDAJJdvJRJHckvSSr1dD8FTWc");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -168,6 +172,7 @@ lazy_static! {
         (enforce_aligned_host_addrs::id(), "enforce aligned host addresses"),
         (update_data_on_realloc::id(), "Retain updated data values modified after realloc via CPI"),
         (set_upgrade_authority_via_cpi_enabled::id(), "set upgrade authority instruction via cpi calls for upgradable programs"),
+        (keccak256_syscall_enabled::id(), "keccak256 syscall"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
