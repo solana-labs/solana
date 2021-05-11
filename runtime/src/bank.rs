@@ -263,24 +263,20 @@ pub struct Builtins {
 
 const MAX_CACHED_EXECUTORS: usize = 100; // 10 MB assuming programs are around 100k
 
-// Executors that were last used at least 1 epoch ago are liable to be evicted
-// We only perform evictions at epoch boundaries when the cache is cloned
-const MAX_CACHE_LAST_USED_EPOCH: u64 = 1;
-
 /// LFU Cache of executors with
 /// max last-used-epoch staleness eviction
 #[derive(Debug)]
 struct CachedExecutors {
     max: usize,
-    max_epoch: Epoch,
     current_epoch: Epoch,
-    executors: HashMap<Pubkey, (AtomicU64, AtomicU64, Arc<dyn Executor>)>,
+    // the data stored in the tuple are:
+    // (prev epoch count, current epoch count, Executor)
+    executors: HashMap<Pubkey, (u64, AtomicU64, Arc<dyn Executor>)>,
 }
 impl Default for CachedExecutors {
     fn default() -> Self {
         Self {
             max: MAX_CACHED_EXECUTORS,
-            max_epoch: MAX_CACHE_LAST_USED_EPOCH,
             current_epoch: 0,
             executors: HashMap::new(),
         }
@@ -305,17 +301,19 @@ impl Clone for CachedExecutors {
 impl CachedExecutors {
     fn clone_with_epoch(&self, epoch: Epoch) -> Self {
         let mut executors = HashMap::new();
-        for (key, (count, last_epoch, executor)) in self.executors.iter() {
-            let last_used = last_epoch.load(Relaxed) as Epoch;
-
-            // If executor was used at least max_epoch Epochs ago
-            // we add it to the new cloned cache
-            if last_used + self.max_epoch >= epoch {
+        for (key, (last_epoch_count, count, executor)) in self.executors.iter() {
+            // If the epoch has changed, we store the old count and reset the counts
+            if epoch > self.current_epoch {
+                executors.insert(
+                    *key,
+                    (count.load(Relaxed), AtomicU64::new(0), executor.clone()),
+                );
+            } else {
                 executors.insert(
                     *key,
                     (
+                        *last_epoch_count,
                         AtomicU64::new(count.load(Relaxed)),
-                        AtomicU64::new(last_used),
                         executor.clone(),
                     ),
                 );
@@ -323,28 +321,23 @@ impl CachedExecutors {
         }
         Self {
             max: self.max,
-            max_epoch: self.max_epoch,
             current_epoch: epoch,
             executors,
         }
     }
 
-    fn new(max: usize, max_epoch: Epoch, current_epoch: Epoch) -> Self {
+    fn new(max: usize, current_epoch: Epoch) -> Self {
         Self {
             max,
-            max_epoch,
             current_epoch,
             executors: HashMap::new(),
         }
     }
     fn get(&self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
-        self.executors
-            .get(pubkey)
-            .map(|(count, last_epoch, executor)| {
-                count.fetch_add(1, Relaxed);
-                last_epoch.store(self.current_epoch as u64, Relaxed);
-                executor.clone()
-            })
+        self.executors.get(pubkey).map(|(_, count, executor)| {
+            count.fetch_add(1, Relaxed);
+            executor.clone()
+        })
     }
     fn put(&mut self, pubkey: &Pubkey, executor: Arc<dyn Executor>) {
         if !self.executors.contains_key(pubkey) && self.executors.len() >= self.max {
@@ -352,8 +345,8 @@ impl CachedExecutors {
             let default_key = Pubkey::default();
             let mut least_key = &default_key;
 
-            for (key, (count, _, _)) in self.executors.iter() {
-                let count = count.load(Relaxed);
+            for (key, (prev_epoch_count, count, _)) in self.executors.iter() {
+                let count = prev_epoch_count + count.load(Relaxed);
                 if count < least {
                     least = count;
                     least_key = key;
@@ -362,14 +355,9 @@ impl CachedExecutors {
             let least_key = *least_key;
             let _ = self.executors.remove(&least_key);
         }
-        let _ = self.executors.insert(
-            *pubkey,
-            (
-                AtomicU64::new(0),
-                AtomicU64::new(self.current_epoch),
-                executor,
-            ),
-        );
+        let _ = self
+            .executors
+            .insert(*pubkey, (0, AtomicU64::new(0), executor));
     }
     fn remove(&mut self, pubkey: &Pubkey) {
         let _ = self.executors.remove(pubkey);
@@ -1307,11 +1295,7 @@ impl Bank {
             no_stake_rewrite: new(),
             rewards_pool_pubkeys: new(),
             cached_executors: RwLock::new(CowCachedExecutors::new(Arc::new(RwLock::new(
-                CachedExecutors::new(
-                    MAX_CACHED_EXECUTORS,
-                    MAX_CACHE_LAST_USED_EPOCH,
-                    fields.epoch,
-                ),
+                CachedExecutors::new(MAX_CACHED_EXECUTORS, fields.epoch),
             )))),
             transaction_debug_keys: debug_keys,
             transaction_log_collector_config: new(),
@@ -11184,7 +11168,7 @@ pub(crate) mod tests {
         let key3 = solana_sdk::pubkey::new_rand();
         let key4 = solana_sdk::pubkey::new_rand();
         let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
-        let mut cache = CachedExecutors::new(3, 0, 0);
+        let mut cache = CachedExecutors::new(3, 0);
 
         cache.put(&key1, executor.clone());
         cache.put(&key2, executor.clone());
