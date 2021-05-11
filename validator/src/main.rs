@@ -1716,6 +1716,7 @@ pub fn main() {
             Arg::with_name("account_index_exclude_key")
                 .long(EXCLUDE_KEY)
                 .takes_value(true)
+                .validator(is_pubkey)
                 .multiple(true)
                 .value_name("KEY")
                 .help("When account indexes are enabled, exclude this key from the index."),
@@ -1724,6 +1725,8 @@ pub fn main() {
             Arg::with_name("account_index_include_key")
                 .long(INCLUDE_KEY)
                 .takes_value(true)
+                .validator(is_pubkey)
+                .conflicts_with("account_index_exclude_key")
                 .multiple(true)
                 .value_name("KEY")
                 .help("When account indexes are enabled, only include specific keys in the index. This overrides --account-index-exclude-key."),
@@ -2524,27 +2527,22 @@ fn process_account_indexes(matches: &ArgMatches) -> AccountSecondaryIndexes {
         })
         .collect();
 
-    let account_indexes_include_keys: HashSet<Pubkey> = matches
-        .values_of("account_index_include_key")
-        .unwrap_or_default()
-        .map(|value| Pubkey::from_str(value).expect("invalid pubkey"))
-        .collect();
+    let account_indexes_include_keys: HashSet<Pubkey> =
+        values_t!(matches, "account_index_include_key", Pubkey)
+            .unwrap_or_default()
+            .iter()
+            .cloned()
+            .collect();
 
-    let account_indexes_exclude_keys: HashSet<Pubkey> = matches
-        .values_of("account_index_exclude_key")
-        .unwrap_or_default()
-        .map(|value| Pubkey::from_str(value).expect("invalid pubkey"))
-        .collect();
+    let account_indexes_exclude_keys: HashSet<Pubkey> =
+        values_t!(matches, "account_index_exclude_key", Pubkey)
+            .unwrap_or_default()
+            .iter()
+            .cloned()
+            .collect();
 
     let exclude_keys = !account_indexes_exclude_keys.is_empty();
     let include_keys = !account_indexes_include_keys.is_empty();
-
-    if exclude_keys && include_keys {
-        panic!(
-            "Specify --{} or --{}, but not both.",
-            INCLUDE_KEY, EXCLUDE_KEY
-        );
-    }
 
     let keys = if !account_indexes.is_empty() && (exclude_keys || include_keys) {
         let account_indexes_keys = AccountSecondaryIndexesIncludeExclude {
