@@ -55,8 +55,7 @@ impl Keypair {
 
     /// Returns this `Keypair` as a base58-encoded string
     pub fn to_base58_string(&self) -> String {
-        // Remove .iter() once we're rust 1.47+
-        bs58::encode(&self.0.to_bytes().iter()).into_string()
+        bs58::encode(&self.0.to_bytes()).into_string()
     }
 
     /// Gets this `Keypair`'s SecretKey
