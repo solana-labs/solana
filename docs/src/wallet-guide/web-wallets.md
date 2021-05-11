@@ -2,6 +2,12 @@
 title: Web Wallets
 ---
 
+## Phantom
+
+[Phantom](https://phantom.app/download) is a non-custodial, chrome extension,
+Solana crypto wallet reimagined for DeFi & NFTs with a simple, clean and
+beautiful UX. Use invite code DEVDOCS to get access.
+
 ## SolFlare
 
 [SolFlare.com](https://solflare.com/) is a community-created non-custodial

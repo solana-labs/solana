@@ -3,11 +3,11 @@ import {Buffer} from 'buffer';
 import {expect} from 'chai';
 
 import {
-  Account,
   Connection,
   SystemProgram,
   Transaction,
   PublicKey,
+  Keypair,
 } from '../src';
 import {NONCE_ACCOUNT_LENGTH} from '../src/nonce-account';
 import {MOCK_PORT, url} from './url';
@@ -19,7 +19,7 @@ const expectedData = (authorizedPubkey: PublicKey): [string, string] => {
   expectedData.writeInt32LE(0, 0); // Version, 4 bytes
   expectedData.writeInt32LE(1, 4); // State, 4 bytes
   authorizedPubkey.toBuffer().copy(expectedData, 8); // authorizedPubkey, 32 bytes
-  const mockNonce = new Account();
+  const mockNonce = Keypair.generate();
   mockNonce.publicKey.toBuffer().copy(expectedData, 40); // Hash, 32 bytes
   expectedData.writeUInt16LE(5000, 72); // feeCalculator, 8 bytes
   return [expectedData.toString('base64'), 'base64'];
@@ -45,8 +45,8 @@ describe('Nonce', () => {
   }
 
   it('create and query nonce account', async () => {
-    const from = new Account();
-    const nonceAccount = new Account();
+    const from = Keypair.generate();
+    const nonceAccount = Keypair.generate();
 
     await mockRpcResponse({
       method: 'getMinimumBalanceForRentExemption',
@@ -109,7 +109,7 @@ describe('Nonce', () => {
   });
 
   it('create and query nonce account with seed', async () => {
-    const from = new Account();
+    const from = Keypair.generate();
     const seed = 'seed';
     const noncePubkey = await PublicKey.createWithSeed(
       from.publicKey,

@@ -1,18 +1,20 @@
-use crossbeam_channel::{Receiver, RecvTimeoutError, Sender};
-use solana_ledger::blockstore::Blockstore;
-use solana_measure::measure::Measure;
-use solana_runtime::bank::Bank;
-use std::{
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
+pub use solana_ledger::blockstore_processor::CacheBlockTimeSender;
+use {
+    crossbeam_channel::{Receiver, RecvTimeoutError},
+    solana_ledger::blockstore::Blockstore,
+    solana_measure::measure::Measure,
+    solana_runtime::bank::Bank,
+    std::{
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc,
+        },
+        thread::{self, Builder, JoinHandle},
+        time::Duration,
     },
-    thread::{self, Builder, JoinHandle},
-    time::Duration,
 };
 
 pub type CacheBlockTimeReceiver = Receiver<Arc<Bank>>;
-pub type CacheBlockTimeSender = Sender<Arc<Bank>>;
 
 pub struct CacheBlockTimeService {
     thread_hdl: JoinHandle<()>,

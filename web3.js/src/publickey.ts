@@ -113,7 +113,7 @@ export class PublicKey {
     let buffer = Buffer.alloc(0);
     seeds.forEach(function (seed) {
       if (seed.length > MAX_SEED_LENGTH) {
-        throw new Error(`Max seed length exceeded`);
+        throw new TypeError(`Max seed length exceeded`);
       }
       buffer = Buffer.concat([buffer, toBuffer(seed)]);
     });
@@ -148,6 +148,9 @@ export class PublicKey {
         const seedsWithNonce = seeds.concat(Buffer.from([nonce]));
         address = await this.createProgramAddress(seedsWithNonce, programId);
       } catch (err) {
+        if (err instanceof TypeError) {
+          throw err;
+        }
         nonce--;
         continue;
       }

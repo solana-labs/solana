@@ -22,8 +22,8 @@ use crate::{
     accounts_cache::{AccountsCache, CachedAccount, SlotCache},
     accounts_hash::{AccountsHash, CalculateHashIntermediate, HashStats, PreviousPass},
     accounts_index::{
-        AccountIndex, AccountIndexGetResult, AccountsIndex, AccountsIndexRootsStats, Ancestors,
-        IndexKey, IsCached, SlotList, SlotSlice, ZeroLamport,
+        AccountIndexGetResult, AccountSecondaryIndexes, AccountsIndex, AccountsIndexRootsStats,
+        Ancestors, IndexKey, IsCached, SlotList, SlotSlice, ZeroLamport,
     },
     append_vec::{AppendVec, StoredAccountMeta, StoredMeta},
     contains::Contains,
@@ -813,7 +813,7 @@ pub struct AccountsDb {
 
     pub cluster_type: Option<ClusterType>,
 
-    pub account_indexes: HashSet<AccountIndex>,
+    pub account_indexes: AccountSecondaryIndexes,
 
     pub caching_enabled: bool,
 
@@ -1220,7 +1220,7 @@ impl Default for AccountsDb {
             shrink_stats: ShrinkStats::default(),
             stats: AccountsStats::default(),
             cluster_type: None,
-            account_indexes: HashSet::new(),
+            account_indexes: AccountSecondaryIndexes::default(),
             caching_enabled: false,
             #[cfg(test)]
             load_delay: u64::default(),
@@ -1232,13 +1232,18 @@ impl Default for AccountsDb {
 
 impl AccountsDb {
     pub fn new(paths: Vec<PathBuf>, cluster_type: &ClusterType) -> Self {
-        AccountsDb::new_with_config(paths, cluster_type, HashSet::new(), false)
+        AccountsDb::new_with_config(
+            paths,
+            cluster_type,
+            AccountSecondaryIndexes::default(),
+            false,
+        )
     }
 
     pub fn new_with_config(
         paths: Vec<PathBuf>,
         cluster_type: &ClusterType,
-        account_indexes: HashSet<AccountIndex>,
+        account_indexes: AccountSecondaryIndexes,
         caching_enabled: bool,
     ) -> Self {
         let mut new = if !paths.is_empty() {
@@ -1314,7 +1319,7 @@ impl AccountsDb {
         max_clean_root: Option<Slot>,
     ) -> ReclaimResult {
         if purges.is_empty() {
-            return (HashMap::new(), HashMap::new());
+            return ReclaimResult::default();
         }
         // This number isn't carefully chosen; just guessed randomly such that
         // the hot loop will be the order of ~Xms.
@@ -1345,7 +1350,7 @@ impl AccountsDb {
         // and those stores may be used for background hashing.
         let reset_accounts = false;
 
-        let mut reclaim_result = (HashMap::new(), HashMap::new());
+        let mut reclaim_result = ReclaimResult::default();
         self.handle_reclaims(
             &reclaims,
             None,
@@ -4947,6 +4952,9 @@ impl AccountsDb {
     }
 
     pub fn generate_index(&self) {
+        // BTreeMap because we want in-order traversal of oldest write_version to newest.
+        // Thus, all instances of an account in a store are added to the index in oldest to newest
+        // order and we update refcounts and track reclaims correctly.
         type AccountsMap<'a> = HashMap<Pubkey, BTreeMap<u64, (AppendVecId, StoredAccountMeta<'a>)>>;
         let mut slots = self.storage.all_slots();
         #[allow(clippy::stable_sort_primitive)]
@@ -6692,6 +6700,51 @@ pub mod tests {
         // zero lamports, and are not present in any other slot's
         // storage entries
         assert_eq!(accounts.alive_account_count_in_slot(1), 0);
+    }
+
+    #[test]
+    fn test_clean_multiple_zero_lamport_decrements_index_ref_count() {
+        solana_logger::setup();
+
+        let accounts = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let pubkey1 = solana_sdk::pubkey::new_rand();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
+        let zero_lamport_account =
+            AccountSharedData::new(0, 0, AccountSharedData::default().owner());
+
+        // Store 2 accounts in slot 0, then update account 1 in two more slots
+        accounts.store_uncached(0, &[(&pubkey1, &zero_lamport_account)]);
+        accounts.store_uncached(0, &[(&pubkey2, &zero_lamport_account)]);
+        accounts.store_uncached(1, &[(&pubkey1, &zero_lamport_account)]);
+        accounts.store_uncached(2, &[(&pubkey1, &zero_lamport_account)]);
+        // Root all slots
+        accounts.add_root(0);
+        accounts.add_root(1);
+        accounts.add_root(2);
+
+        // Account ref counts should match how many slots they were stored in
+        // Account 1 = 3 slots; account 2 = 1 slot
+        assert_eq!(accounts.accounts_index.ref_count_from_storage(&pubkey1), 3);
+        assert_eq!(accounts.accounts_index.ref_count_from_storage(&pubkey2), 1);
+
+        accounts.clean_accounts(None);
+        // Slots 0 and 1 should each have been cleaned because all of their
+        // accounts are zero lamports
+        assert!(accounts.storage.get_slot_stores(0).is_none());
+        assert!(accounts.storage.get_slot_stores(1).is_none());
+        // Slot 2 only has a zero lamport account as well. But, calc_delete_dependencies()
+        // should exclude slot 2 from the clean due to changes in other slots
+        assert!(accounts.storage.get_slot_stores(2).is_some());
+        // Index ref counts should be consistent with the slot stores. Account 1 ref count
+        // should be 1 since slot 2 is the only alive slot; account 2 should have a ref
+        // count of 0 due to slot 0 being dead
+        assert_eq!(accounts.accounts_index.ref_count_from_storage(&pubkey1), 1);
+        assert_eq!(accounts.accounts_index.ref_count_from_storage(&pubkey2), 0);
+
+        accounts.clean_accounts(None);
+        // Slot 2 will now be cleaned, which will leave account 1 with a ref count of 0
+        assert!(accounts.storage.get_slot_stores(2).is_none());
+        assert_eq!(accounts.accounts_index.ref_count_from_storage(&pubkey1), 0);
     }
 
     #[test]
@@ -8616,7 +8669,7 @@ pub mod tests {
             &key0,
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             info0,
             &mut reclaims,
         );
@@ -8625,7 +8678,7 @@ pub mod tests {
             &key0,
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             info1.clone(),
             &mut reclaims,
         );
@@ -8634,7 +8687,7 @@ pub mod tests {
             &key1,
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             info1,
             &mut reclaims,
         );
@@ -8643,7 +8696,7 @@ pub mod tests {
             &key1,
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             info2.clone(),
             &mut reclaims,
         );
@@ -8652,7 +8705,7 @@ pub mod tests {
             &key2,
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             info2,
             &mut reclaims,
         );
@@ -8661,7 +8714,7 @@ pub mod tests {
             &key2,
             &Pubkey::default(),
             &[],
-            &HashSet::new(),
+            &AccountSecondaryIndexes::default(),
             info3,
             &mut reclaims,
         );
@@ -9015,7 +9068,7 @@ pub mod tests {
         let db = Arc::new(AccountsDb::new_with_config(
             Vec::new(),
             &ClusterType::Development,
-            HashSet::new(),
+            AccountSecondaryIndexes::default(),
             caching_enabled,
         ));
 
@@ -9062,7 +9115,7 @@ pub mod tests {
         let db = Arc::new(AccountsDb::new_with_config(
             Vec::new(),
             &ClusterType::Development,
-            HashSet::new(),
+            AccountSecondaryIndexes::default(),
             caching_enabled,
         ));
 
@@ -9110,7 +9163,7 @@ pub mod tests {
         let db = Arc::new(AccountsDb::new_with_config(
             Vec::new(),
             &ClusterType::Development,
-            HashSet::new(),
+            AccountSecondaryIndexes::default(),
             caching_enabled,
         ));
 
@@ -9241,7 +9294,7 @@ pub mod tests {
         let db = Arc::new(AccountsDb::new_with_config(
             Vec::new(),
             &ClusterType::Development,
-            HashSet::new(),
+            AccountSecondaryIndexes::default(),
             caching_enabled,
         ));
         let account_key = Pubkey::new_unique();
@@ -9345,7 +9398,7 @@ pub mod tests {
         let accounts_db = AccountsDb::new_with_config(
             Vec::new(),
             &ClusterType::Development,
-            HashSet::new(),
+            AccountSecondaryIndexes::default(),
             caching_enabled,
         );
         let slot: Slot = 0;
@@ -9399,7 +9452,7 @@ pub mod tests {
         let accounts_db = Arc::new(AccountsDb::new_with_config(
             Vec::new(),
             &ClusterType::Development,
-            HashSet::new(),
+            AccountSecondaryIndexes::default(),
             caching_enabled,
         ));
         let slots: Vec<_> = (0..num_slots as Slot).into_iter().collect();
@@ -9797,7 +9850,7 @@ pub mod tests {
         let db = AccountsDb::new_with_config(
             Vec::new(),
             &ClusterType::Development,
-            HashSet::default(),
+            AccountSecondaryIndexes::default(),
             caching_enabled,
         );
         let account_key1 = Pubkey::new_unique();
@@ -10059,7 +10112,7 @@ pub mod tests {
         let mut db = AccountsDb::new_with_config(
             Vec::new(),
             &ClusterType::Development,
-            HashSet::new(),
+            AccountSecondaryIndexes::default(),
             caching_enabled,
         );
         db.load_delay = RACY_SLEEP_MS;
@@ -10130,7 +10183,7 @@ pub mod tests {
         let mut db = AccountsDb::new_with_config(
             Vec::new(),
             &ClusterType::Development,
-            HashSet::new(),
+            AccountSecondaryIndexes::default(),
             caching_enabled,
         );
         db.load_delay = RACY_SLEEP_MS;
@@ -10204,7 +10257,7 @@ pub mod tests {
         let mut db = AccountsDb::new_with_config(
             Vec::new(),
             &ClusterType::Development,
-            HashSet::new(),
+            AccountSecondaryIndexes::default(),
             caching_enabled,
         );
         db.load_delay = RACY_SLEEP_MS;

@@ -4,6 +4,7 @@ export * from './bpf-loader-deprecated';
 export * from './bpf-loader';
 export * from './connection';
 export * from './fee-calculator';
+export * from './keypair';
 export * from './loader';
 export * from './message';
 export * from './nonce-account';

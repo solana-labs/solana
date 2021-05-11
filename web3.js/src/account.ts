@@ -6,6 +6,8 @@ import {PublicKey} from './publickey';
 
 /**
  * An account key pair (public and secret keys).
+ *
+ * @deprecated since v1.10.0, please use {@link Keypair} instead.
  */
 export class Account {
   /** @internal */

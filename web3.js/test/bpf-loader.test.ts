@@ -7,7 +7,7 @@ import {
   BpfLoader,
   Transaction,
   sendAndConfirmTransaction,
-  Account,
+  Keypair,
 } from '../src';
 import {url} from './url';
 import {BPF_LOADER_PROGRAM_ID} from '../src/bpf-loader';
@@ -20,8 +20,8 @@ if (process.env.TEST_LIVE) {
     describe('load BPF program', () => {
       const connection = new Connection(url, 'confirmed');
 
-      let program = new Account();
-      let payerAccount = new Account();
+      let program = Keypair.generate();
+      let payerAccount = Keypair.generate();
       let programData: Buffer;
 
       before(async function () {
@@ -55,7 +55,7 @@ if (process.env.TEST_LIVE) {
         });
 
         // First load will fail part way due to lack of funds
-        const insufficientPayerAccount = new Account();
+        const insufficientPayerAccount = Keypair.generate();
         await helpers.airdrop({
           connection,
           address: insufficientPayerAccount.publicKey,
@@ -208,7 +208,7 @@ if (process.env.TEST_LIVE) {
           keys: [
             {pubkey: payerAccount.publicKey, isSigner: true, isWritable: true},
           ],
-          programId: new Account().publicKey,
+          programId: Keypair.generate().publicKey,
         });
 
         simulatedTransaction.setSigners(payerAccount.publicKey);
