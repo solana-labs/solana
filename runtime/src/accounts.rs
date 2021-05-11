@@ -135,6 +135,7 @@ impl Accounts {
                 cluster_type,
                 account_indexes,
                 caching_enabled,
+                false,
             )),
             account_locks: Mutex::new(AccountLocks::default()),
         }

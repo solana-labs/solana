@@ -274,11 +274,13 @@ fn reconstruct_accountsdb_from_fields<E>(
 where
     E: SerializableStorage,
 {
+    let read_only_caching_enabled = false;
     let mut accounts_db = AccountsDb::new_with_config(
         account_paths.to_vec(),
         cluster_type,
         account_indexes,
         caching_enabled,
+        read_only_caching_enabled,
     );
     let AccountsDbFields(storage, version, slot, bank_hash_info) = accounts_db_fields;
 
