@@ -21,8 +21,8 @@ use {
     solana_measure::measure::Measure,
     solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash, pubkey::Pubkey},
     std::{
-        cmp::Ordering,
         cmp::max,
+        cmp::Ordering,
         collections::HashSet,
         fmt,
         fs::{self, File},
@@ -227,7 +227,10 @@ pub fn remove_tmp_snapshot_archives(snapshot_path: &Path) {
     }
 }
 
-pub fn archive_snapshot_package(snapshot_package: &AccountsPackage, maximum_snapshots_to_retain: usize) -> Result<()> {
+pub fn archive_snapshot_package(
+    snapshot_package: &AccountsPackage,
+    maximum_snapshots_to_retain: usize,
+) -> Result<()> {
     info!(
         "Generating snapshot archive for slot {}",
         snapshot_package.slot
@@ -363,7 +366,10 @@ pub fn archive_snapshot_package(snapshot_package: &AccountsPackage, maximum_snap
     let metadata = fs::metadata(&archive_path)?;
     fs::rename(&archive_path, &snapshot_package.tar_output_file)?;
 
-    purge_old_snapshot_archives(snapshot_package.tar_output_file.parent().unwrap(), maximum_snapshots_to_retain);
+    purge_old_snapshot_archives(
+        snapshot_package.tar_output_file.parent().unwrap(),
+        maximum_snapshots_to_retain,
+    );
 
     timer.stop();
     info!(
@@ -718,8 +724,15 @@ pub fn get_highest_snapshot_archive_path<P: AsRef<Path>>(
     archives.into_iter().next()
 }
 
-pub fn purge_old_snapshot_archives<P: AsRef<Path>>(snapshot_output_dir: P, maximum_snapshots_to_retain: usize) {
-    info!("Purging old snapshots in {:?}, retaining {}", snapshot_output_dir.as_ref(), maximum_snapshots_to_retain);
+pub fn purge_old_snapshot_archives<P: AsRef<Path>>(
+    snapshot_output_dir: P,
+    maximum_snapshots_to_retain: usize,
+) {
+    info!(
+        "Purging old snapshots in {:?}, retaining {}",
+        snapshot_output_dir.as_ref(),
+        maximum_snapshots_to_retain
+    );
     let mut archives = get_snapshot_archives(snapshot_output_dir);
     // Keep the oldest snapshot so we can always play the ledger from it.
     archives.pop();
@@ -1145,8 +1158,11 @@ mod tests {
         assert!(snapshot_hash_of("invalid").is_none());
     }
 
-    fn common_test_urge_old_snapshot_archives(snapshot_names: &[&String], maximum_snapshots_to_retain: usize,
-        expected_snapshots: &[&String]) {
+    fn common_test_urge_old_snapshot_archives(
+        snapshot_names: &[&String],
+        maximum_snapshots_to_retain: usize,
+        expected_snapshots: &[&String],
+    ) {
         let temp_snap_dir = tempfile::TempDir::new().unwrap();
 
         for snap_name in snapshot_names {
@@ -1159,7 +1175,12 @@ mod tests {
         for entry in fs::read_dir(temp_snap_dir.path()).unwrap() {
             let entry_path_buf = entry.unwrap().path();
             let entry_path = entry_path_buf.as_path();
-            let snapshot_name = entry_path.file_name().unwrap().to_str().unwrap().to_string();
+            let snapshot_name = entry_path
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_string();
             retainted_snaps.insert(snapshot_name);
         }
 

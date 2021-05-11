@@ -1167,7 +1167,7 @@ fn new_banks_from_ledger(
             &snapshot_config.snapshot_package_output_path,
             snapshot_config.archive_format,
             Some(&bank_forks.root_bank().get_thread_pool()),
-            snapshot_config.maximum_snapshots_to_retain
+            snapshot_config.maximum_snapshots_to_retain,
         )
         .unwrap_or_else(|err| {
             error!("Unable to create snapshot: {}", err);

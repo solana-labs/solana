@@ -1857,7 +1857,8 @@ fn main() {
                         })
                     });
 
-            let maximum_snapshots_to_retain = value_t_or_exit!(arg_matches, "maximum_snapshots_to_retain", usize);
+            let maximum_snapshots_to_retain =
+                value_t_or_exit!(arg_matches, "maximum_snapshots_to_retain", usize);
             let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
             let blockstore = open_blockstore(
                 &ledger_path,

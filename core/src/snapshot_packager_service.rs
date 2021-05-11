@@ -42,9 +42,10 @@ impl SnapshotPackagerService {
 
                     let snapshot_package = pending_snapshot_package.lock().unwrap().take();
                     if let Some(snapshot_package) = snapshot_package {
-                        if let Err(err) =
-                            snapshot_utils::archive_snapshot_package(&snapshot_package, maximum_snapshots_to_retain)
-                        {
+                        if let Err(err) = snapshot_utils::archive_snapshot_package(
+                            &snapshot_package,
+                            maximum_snapshots_to_retain,
+                        ) {
                             warn!("Failed to create snapshot archive: {}", err);
                         } else {
                             hashes.push((snapshot_package.slot, snapshot_package.hash));

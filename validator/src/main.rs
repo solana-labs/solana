@@ -940,12 +940,13 @@ fn rpc_bootstrap(
                                 gossip.take().unwrap();
                             cluster_info.save_contact_info();
                             gossip_exit_flag.store(true, Ordering::Relaxed);
-                            let maximum_snapshots_to_retain =
-                                if let Some(snapshot_config) = validator_config.snapshot_config.as_ref() {
-                                    snapshot_config.maximum_snapshots_to_retain
-                                } else {
-                                    2
-                                };
+                            let maximum_snapshots_to_retain = if let Some(snapshot_config) =
+                                validator_config.snapshot_config.as_ref()
+                            {
+                                snapshot_config.maximum_snapshots_to_retain
+                            } else {
+                                2
+                            };
                             let ret = download_snapshot(
                                 &rpc_contact_info.rpc,
                                 &snapshot_output_dir,
@@ -2225,7 +2226,8 @@ pub fn main() {
 
     let snapshot_interval_slots = value_t_or_exit!(matches, "snapshot_interval_slots", u64);
     let maximum_local_snapshot_age = value_t_or_exit!(matches, "maximum_local_snapshot_age", u64);
-    let maximum_snapshots_to_retain = value_t_or_exit!(matches, "maximum_snapshots_to_retain", usize);
+    let maximum_snapshots_to_retain =
+        value_t_or_exit!(matches, "maximum_snapshots_to_retain", usize);
     let snapshot_output_dir = if matches.is_present("snapshots") {
         PathBuf::from(matches.value_of("snapshots").unwrap())
     } else {
