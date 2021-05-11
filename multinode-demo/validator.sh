@@ -225,6 +225,7 @@ default_arg --vote-account "$vote_account"
 default_arg --ledger "$ledger_dir"
 default_arg --log -
 default_arg --require-tower
+default_arg --rocksdb-compression-mode lz4
 
 if [[ -n $SOLANA_CUDA ]]; then
   program=$solana_validator_cuda
