@@ -159,7 +159,7 @@ fn postprocess_dump(program_dump: &Path) {
         return;
     }
     let postprocessed_dump = program_dump.with_extension("postprocessed");
-    let head_re = Regex::new(r"(^[0-9a-f]{16}) (.+)").unwrap();
+    let head_re = Regex::new(r"^([0-9a-f]{16}) (.+)").unwrap();
     let insn_re = Regex::new(r"^ +([0-9]+)((\s[0-9a-f]{2})+)\s.+").unwrap();
     let call_re = Regex::new(r"^ +([0-9]+)(\s[0-9a-f]{2})+\scall (-?)0x([0-9a-f]+)").unwrap();
     let relo_re = Regex::new(r"^([0-9a-f]{16})  [0-9a-f]{16} R_BPF_64_32 +0{16} (.+)").unwrap();
