@@ -308,7 +308,9 @@ impl CachedExecutors {
         for (key, (count, last_epoch, executor)) in self.executors.iter() {
             let last_used = last_epoch.load(Relaxed) as Epoch;
 
-            if last_used + self.max_epoch >= epoch {
+            // If executor was used at least max_epoch Epochs ago
+            // we add it to the new cloned cache
+            if !(last_used + self.max_epoch < epoch) {
                 executors.insert(
                     *key,
                     (
