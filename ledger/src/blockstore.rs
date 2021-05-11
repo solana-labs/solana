@@ -549,8 +549,7 @@ impl Blockstore {
         (set_index..set_index + erasure_meta.config.num_data() as u64).for_each(|i| {
             if index.data().is_present(i) {
                 if let Some(shred) = prev_inserted_datas.remove(&(slot, i)).or_else(|| {
-                    let some_data = data_cf
-                        .get_bytes((slot, i))
+                    let some_data = Self::fetch_data_shred(slot, i, &data_cf)
                         .expect("Database failure, could not fetch data shred");
                     if let Some(data) = some_data {
                         Shred::new_from_serialized_shred(data).ok()
@@ -1471,9 +1470,13 @@ impl Blockstore {
         Ok(newly_completed_data_sets)
     }
 
-    pub fn get_data_shred(&self, slot: Slot, index: u64) -> Result<Option<Vec<u8>>> {
+    fn fetch_data_shred(
+        slot: Slot,
+        index: u64,
+        data_cf: &LedgerColumn<cf::ShredData>,
+    ) -> Result<Option<Vec<u8>>> {
         use crate::shred::SHRED_PAYLOAD_SIZE;
-        self.data_shred_cf.get_bytes((slot, index)).map(|data| {
+        data_cf.get_bytes((slot, index)).map(|data| {
             data.map(|mut d| {
                 // Only data_header.size bytes stored in the blockstore so
                 // pad the payload out to SHRED_PAYLOAD_SIZE so that the
@@ -1484,11 +1487,16 @@ impl Blockstore {
         })
     }
 
+    pub fn get_data_shred(&self, slot: Slot, index: u64) -> Result<Option<Vec<u8>>> {
+        Self::fetch_data_shred(slot, index, &self.data_shred_cf)
+    }
+
     pub fn get_data_shreds_for_slot(
         &self,
         slot: Slot,
         start_index: u64,
     ) -> ShredResult<Vec<Shred>> {
+        use crate::shred::SHRED_PAYLOAD_SIZE;
         self.slot_data_iterator(slot, start_index)
             .expect("blockstore couldn't fetch iterator")
             .map(|data| Shred::new_from_serialized_shred(data.1.to_vec()))
@@ -2652,9 +2660,8 @@ impl Blockstore {
         // Short circuit on first error
         let data_shreds: Result<Vec<Shred>> = (start_index..=end_index)
             .map(|i| {
-                data_shred_cf
-                    .get_bytes((slot, u64::from(i)))
-                    .and_then(|serialized_shred| {
+                Self::fetch_data_shred(slot, u64::from(i), &data_shred_cf).and_then(
+                    |serialized_shred| {
                         if serialized_shred.is_none() {
                             if let Some(slot_meta) = slot_meta {
                                 panic!(
@@ -2689,7 +2696,8 @@ impl Blockstore {
                                 ),
                             )))
                         })
-                    })
+                    },
+                )
             })
             .collect();
 

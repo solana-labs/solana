@@ -314,7 +314,7 @@ impl Shred {
         }
     }
 
-    pub fn new_from_serialized_shred(mut payload: Vec<u8>) -> Result<Self> {
+    pub fn new_from_serialized_shred(payload: Vec<u8>) -> Result<Self> {
         let mut start = 0;
         let common_header: ShredCommonHeader =
             Self::deserialize_obj(&mut start, SIZE_OF_COMMON_SHRED_HEADER, &payload)?;
@@ -322,8 +322,7 @@ impl Shred {
         let slot = common_header.slot;
         // Shreds should be padded out to SHRED_PAYLOAD_SIZE
         // so that erasure generation/recovery works correctly
-        // But only the data_header.size is stored in blockstore.
-        payload.resize(SHRED_PAYLOAD_SIZE, 0);
+        assert!(payload.len() == SHRED_PAYLOAD_SIZE);
         let shred = if common_header.shred_type == ShredType(CODING_SHRED) {
             let coding_header: CodingShredHeader =
                 Self::deserialize_obj(&mut start, SIZE_OF_CODING_SHRED_HEADER, &payload)?;
