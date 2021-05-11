@@ -175,7 +175,11 @@ mod tests {
         );
 
         // Make tarball from packageable snapshot
-        snapshot_utils::archive_snapshot_package(&snapshot_package, 2).unwrap();
+        snapshot_utils::archive_snapshot_package(
+            &snapshot_package,
+            snapshot_utils::DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
+        )
+        .unwrap();
 
         // before we compare, stick an empty status_cache in this dir so that the package comparison works
         // This is needed since the status_cache is added by the packager and is not collected from

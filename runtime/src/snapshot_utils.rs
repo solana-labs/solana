@@ -45,6 +45,7 @@ const MAX_SNAPSHOT_DATA_FILE_SIZE: u64 = 32 * 1024 * 1024 * 1024; // 32 GiB
 const VERSION_STRING_V1_2_0: &str = "1.2.0";
 const DEFAULT_SNAPSHOT_VERSION: SnapshotVersion = SnapshotVersion::V1_2_0;
 const TMP_SNAPSHOT_PREFIX: &str = "tmp-snapshot-";
+pub const DEFAULT_MAX_SNAPSHOTS_TO_RETAIN: usize = 2;
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum SnapshotVersion {
@@ -1171,7 +1172,7 @@ mod tests {
         }
         purge_old_snapshot_archives(temp_snap_dir.path(), maximum_snapshots_to_retain);
 
-        let mut retainted_snaps: HashSet<String> = HashSet::new();
+        let mut retainted_snaps = HashSet::new();
         for entry in fs::read_dir(temp_snap_dir.path()).unwrap() {
             let entry_path_buf = entry.unwrap().path();
             let entry_path = entry_path_buf.as_path();

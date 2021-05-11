@@ -42,7 +42,7 @@ use {
         accounts_index::AccountIndex,
         bank_forks::{ArchiveFormat, SnapshotConfig, SnapshotVersion},
         hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
-        snapshot_utils::get_highest_snapshot_archive_path,
+        snapshot_utils::{get_highest_snapshot_archive_path, DEFAULT_MAX_SNAPSHOTS_TO_RETAIN},
     },
     solana_sdk::{
         clock::{Slot, DEFAULT_S_PER_SLOT},
@@ -945,7 +945,7 @@ fn rpc_bootstrap(
                             {
                                 snapshot_config.maximum_snapshots_to_retain
                             } else {
-                                2
+                                DEFAULT_MAX_SNAPSHOTS_TO_RETAIN
                             };
                             let ret = download_snapshot(
                                 &rpc_contact_info.rpc,
@@ -1031,6 +1031,7 @@ pub fn main() {
         .send_transaction_leader_forward_count
         .to_string();
     let default_rpc_threads = num_cpus::get().to_string();
+    let default_max_snapshot_to_retain = &DEFAULT_MAX_SNAPSHOTS_TO_RETAIN.to_string();
 
     let matches = App::new(crate_name!()).about(crate_description!())
         .version(solana_version::version!())
@@ -1331,7 +1332,7 @@ pub fn main() {
                 .long("maximum-snapshots-to-retain")
                 .value_name("MAXIMUM_SNAPSHOTS_TO_RETAIN")
                 .takes_value(true)
-                .default_value("2")
+                .default_value(default_max_snapshot_to_retain)
                 .help("The maximum number of snapshots to hold on to when purging older snapshots.")
         )
         .arg(
