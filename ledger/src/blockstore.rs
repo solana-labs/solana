@@ -2060,7 +2060,7 @@ impl Blockstore {
     fn ensure_lowest_cleanup_slot(&self) -> (std::sync::RwLockReadGuard<Slot>, Slot) {
         // Ensures consistent result by using lowest_cleanup_slot as the lower bound
         // for reading columns that do not employ strong read consistency with slot-based
-        // delete_range 
+        // delete_range
         let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
         let lowest_available_slot = (*lowest_cleanup_slot)
             .checked_add(1)
@@ -6833,7 +6833,7 @@ pub mod tests {
             assert_existing_always();
 
             if simulate_compaction {
-                blockstore.expire_upto_slot_for_compaction_filter(lowest_cleanup_slot);
+                blockstore.set_max_expired_slot(lowest_cleanup_slot);
                 // force compaction filters to run across whole key range.
                 blockstore
                     .compact_storage(Slot::min_value(), Slot::max_value())

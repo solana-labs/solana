@@ -226,7 +226,7 @@ impl LedgerCleanupService {
                     // Also, we passed the PurgeType::CompactionFilter, meaning no delete_range
                     // for transaction_status and address_signatures CFs. These are fine because
                     // they don't require strong consistent view for their operation.
-                    blockstore.expire_upto_slot_for_compaction_filter(lowest_cleanup_slot);
+                    blockstore.set_max_expired_slot(lowest_cleanup_slot);
 
                     purge_time.stop();
                     info!("{}", purge_time);
