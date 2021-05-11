@@ -310,7 +310,7 @@ impl CachedExecutors {
 
             // If executor was used at least max_epoch Epochs ago
             // we add it to the new cloned cache
-            if !(last_used + self.max_epoch < epoch) {
+            if last_used + self.max_epoch >= epoch {
                 executors.insert(
                     *key,
                     (
