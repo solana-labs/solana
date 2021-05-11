@@ -21,11 +21,7 @@ pub mod fee_calculator;
 pub mod hash;
 pub mod incinerator;
 pub mod instruction;
-<<<<<<< HEAD
-=======
 pub mod keccak;
-pub mod lamports;
->>>>>>> 8eb05d6ed... Add Keccak256 syscall and sdk support (#16498)
 pub mod loader_instruction;
 pub mod loader_upgradeable_instruction;
 pub mod log;

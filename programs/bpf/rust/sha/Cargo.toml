@@ -1,11 +1,6 @@
 [package]
-<<<<<<< HEAD:programs/bpf/rust/sha256/Cargo.toml
-name = "solana-bpf-rust-sha256"
-version = "1.6.9"
-=======
 name = "solana-bpf-rust-sha"
-version = "1.7.0"
->>>>>>> 8eb05d6ed... Add Keccak256 syscall and sdk support (#16498):programs/bpf/rust/sha/Cargo.toml
+version = "1.6.9"
 description = "Solana BPF test program written in Rust"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"

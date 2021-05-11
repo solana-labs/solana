@@ -171,11 +171,8 @@ lazy_static! {
         (check_duplicates_by_hash::id(), "use transaction message hash for duplicate check"),
         (enforce_aligned_host_addrs::id(), "enforce aligned host addresses"),
         (update_data_on_realloc::id(), "Retain updated data values modified after realloc via CPI"),
-<<<<<<< HEAD
         (set_upgrade_authority_via_cpi_enabled::id(), "set upgrade authority instruction via cpi calls for upgradable programs"),
-=======
         (keccak256_syscall_enabled::id(), "keccak256 syscall"),
->>>>>>> 8eb05d6ed... Add Keccak256 syscall and sdk support (#16498)
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
