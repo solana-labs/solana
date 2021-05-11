@@ -589,7 +589,7 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
             }
 
             let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
-            let keypair = keypair_from_seed_phrase("recover", skip_validation, true, None)?;
+            let keypair = keypair_from_seed_phrase("recover", skip_validation, true, None, true)?;
             output_keypair(&keypair, &outfile, "recovered")?;
         }
         ("grind", Some(matches)) => {

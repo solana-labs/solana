@@ -91,7 +91,7 @@ to use your seed phrase (and a passphrase if you chose to use one) as a signer
 with the solana command-line tools using the `ask` uri scheme.
 
 ```bash
-solana-keygen pubkey ask://
+solana-keygen pubkey prompt://
 ```
 
 > Note that you could potentially use different passphrases for the same seed phrase. Each unique passphrase will yield a different keypair.
@@ -103,10 +103,10 @@ will need to pass the `--skip-seed-phrase-validation` argument and forego this
 validation.
 
 ```bash
-solana-keygen pubkey ask:// --skip-seed-phrase-validation
+solana-keygen pubkey prompt:// --skip-seed-phrase-validation
 ```
 
-After entering your seed phrase with `solana-keygen pubkey ask://` the console
+After entering your seed phrase with `solana-keygen pubkey prompt://` the console
 will display a string of base-58 character. This is the base _wallet address_
 associated with your seed phrase.
 
@@ -128,17 +128,17 @@ The solana-cli supports
 hierarchical derivation of private keys from your seed phrase and passphrase by
 adding either the `?key=` query string or the `?full-path=` query string.
 
-To use solana's BIP44 derivation path `m/44'/501'`, supply the `?key=m` query
-string, or `?key=<ACCOUNT>/<CHANGE>`.
+By default, `prompt:` will derive solana's base derivation path `m/44'/501'`. To
+derive a child key, supply the `?key=<ACCOUNT>/<CHANGE>` query string.
 
 ```bash
-solana-keygen pubkey ask://?key=0/1
+solana-keygen pubkey prompt://?key=0/1
 ```
 
 To use a derivation path other than solana's standard BIP44, you can supply `?full-path=m/<PURPOSE>/<COIN_TYPE>/<ACCOUNT>/<CHANGE>`.
 
 ```bash
-solana-keygen pubkey ask://?full-path=m/44/2017/0/1
+solana-keygen pubkey prompt://?full-path=m/44/2017/0/1
 ```
 
 Because Solana uses Ed25519 keypairs, as per
@@ -153,10 +153,10 @@ To verify you control the private key of a paper wallet address, use
 `solana-keygen verify`:
 
 ```bash
-solana-keygen verify <PUBKEY> ask://
+solana-keygen verify <PUBKEY> prompt://
 ```
 
-where `<PUBKEY>` is replaced with the wallet address and they keyword `ask://`
+where `<PUBKEY>` is replaced with the wallet address and the keyword `prompt://`
 tells the command to prompt you for the keypair's seed phrase; `key` and
 `full-path` query-strings accepted. Note that for security reasons, your seed
 phrase will not be displayed as you type. After entering your seed phrase, the
