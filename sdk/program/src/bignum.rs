@@ -20,65 +20,6 @@ use std::fmt;
 
 pub struct BigNumber(u64);
 
-// Syscall interfaces
-#[cfg(target_arch = "bpf")]
-extern "C" {
-    fn sol_bignum_new(bignum_ptr: *mut u64) -> u64;
-    fn sol_bignum_from_u32(bignum_ptr: *mut u64, val: u64) -> u64;
-    fn sol_bignum_from_bytes(bignum_ptr: *mut u64, bytes_ptr: *const u64, bytes_len: u64) -> u64;
-    fn sol_bignum_to_bytes(bignum_ptr: *const u64, bytes_ptr: *mut u8, bytes_len: *mut u64) -> u64;
-    fn sol_bignum_add(self_ptr: *const u64, rhs_ptr: *const u64, return_ptr: *mut u64) -> u64;
-    fn sol_bignum_sub(self_ptr: *const u64, rhs_ptr: *const u64, return_ptr: *mut u64) -> u64;
-    fn sol_bignum_mul(self_ptr: *const u64, rhs_ptr: *const u64, return_ptr: *mut u64) -> u64;
-    fn sol_bignum_div(self_ptr: *const u64, rhs_ptr: *const u64, return_ptr: *mut u64) -> u64;
-    fn sol_bignum_sqr(self_ptr: *const u64, bignum_ptr: *mut u64) -> u64;
-    fn sol_bignum_exp(self_ptr: *const u64, exponent_ptr: *const u64, bignum_ptr: *mut u64) -> u64;
-    fn sol_bignum_mod_sqr(
-        self_ptr: *const u64,
-        modulus_ptr: *const u64,
-        bignum_ptr: *mut u64,
-    ) -> u64;
-    fn sol_bignum_mod_mul(
-        self_ptr: *const u64,
-        multiplier_ptr: *const u64,
-        modulus_ptr: *const u64,
-        bignum_ptr: *mut u64,
-    ) -> u64;
-    fn sol_bignum_mod_inv(
-        self_ptr: *const u64,
-        modulus_ptr: *const u64,
-        bignum_ptr: *mut u64,
-    ) -> u64;
-    fn sol_bignum_mod_exp(
-        bignum_ptr: *mut u64,
-        self_ptr: *const u64,
-        exponent_ptr: *const u64,
-        modulus_ptr: *const u64,
-    ) -> u64;
-    fn sol_bignum_hashed_generator(
-        self_ptr: *const u64,
-        a: *const u64,
-        n: *const u64,
-        nonce: *const u64,
-        hg_ptr: *mut u64,
-    ) -> u64;
-    fn sol_bignum_hash_to_prime(
-        u: *const u64,
-        a: *const u64,
-        z: *const u64,
-        nonce: *const u64,
-        htp_ptr: *mut u64,
-    ) -> u64;
-    fn sol_log_bignum(bignum_addr: *const u64) -> u64;
-    fn sol_bignum_drop(bignum_ptr: *mut u64) -> u64;
-    fn sol_blake3_digest(
-        data_ptr: *const u8,
-        data_len: *const u64,
-        digest_ptr: *mut u8,
-        digest_len: *mut u64,
-    ) -> u64;
-}
-
 impl BigNumber {
     /// Returns a BigNumber with initial value of 0
     pub fn new() -> Self {
@@ -92,6 +33,9 @@ impl BigNumber {
         }
         #[cfg(target_arch = "bpf")]
         {
+            extern "C" {
+                fn sol_bignum_new(bignum_ptr: *mut u64) -> u64;
+            }
             let mut bignum_ptr = 0u64;
             unsafe {
                 sol_bignum_new(&mut bignum_ptr as *mut _ as *mut u64);
@@ -99,6 +43,7 @@ impl BigNumber {
             BigNumber::from(bignum_ptr)
         }
     }
+
     /// Returns a BigNumber with initial value set to a u32 value
     pub fn from_u32(val: u32) -> Self {
         #[cfg(not(target_arch = "bpf"))]
@@ -111,6 +56,9 @@ impl BigNumber {
         }
         #[cfg(target_arch = "bpf")]
         {
+            extern "C" {
+                fn sol_bignum_from_u32(bignum_ptr: *mut u64, val: u64) -> u64;
+            }
             let mut bignum_ptr = 0u64;
             unsafe {
                 sol_bignum_from_u32(&mut bignum_ptr as *mut _ as *mut u64, val as u64);
@@ -118,6 +66,7 @@ impl BigNumber {
             BigNumber::from(bignum_ptr)
         }
     }
+
     /// Returns a BigNumber with value set to big endian array of bytes
     pub fn from_bytes(val: &[u8]) -> Self {
         #[cfg(not(target_arch = "bpf"))]
@@ -130,6 +79,13 @@ impl BigNumber {
         }
         #[cfg(target_arch = "bpf")]
         {
+            extern "C" {
+                fn sol_bignum_from_bytes(
+                    bignum_ptr: *mut u64,
+                    bytes_ptr: *const u64,
+                    bytes_len: u64,
+                ) -> u64;
+            }
             let mut bignum_ptr = 0u64;
             unsafe {
                 sol_bignum_from_bytes(
@@ -141,6 +97,7 @@ impl BigNumber {
             BigNumber::from(bignum_ptr)
         }
     }
+
     /// Returns an array of bytes (big endian) of self
     pub fn to_bytes(&self) -> Vec<u8> {
         #[cfg(not(target_arch = "bpf"))]
@@ -151,6 +108,13 @@ impl BigNumber {
         }
         #[cfg(target_arch = "bpf")]
         {
+            extern "C" {
+                fn sol_bignum_to_bytes(
+                    bignum_ptr: *const u64,
+                    bytes_ptr: *mut u8,
+                    bytes_len: *mut u64,
+                ) -> u64;
+            }
             let mut my_buffer = [0u8; 256];
             let mut my_buffer_len = my_buffer.len();
             unsafe {
@@ -163,6 +127,7 @@ impl BigNumber {
             my_buffer[0..my_buffer_len].to_vec()
         }
     }
+
     /// Add BigNumbers
     pub fn add(&self, rhs: &BigNumber) -> Self {
         #[cfg(not(target_arch = "bpf"))]
@@ -173,10 +138,17 @@ impl BigNumber {
             let rhs_ptr: &BigNum = unsafe { &*(rhs.0 as *const BigNum) };
             BigNumRef::checked_add(&mut bbox, my_raw, rhs_ptr).unwrap();
             let rwptr = Box::into_raw(bbox);
-            Self(rwptr as u64)            
+            Self(rwptr as u64)
         }
         #[cfg(target_arch = "bpf")]
         {
+            extern "C" {
+                fn sol_bignum_add(
+                    self_ptr: *const u64,
+                    rhs_ptr: *const u64,
+                    return_ptr: *mut u64,
+                ) -> u64;
+            }
             let mut bignum_ptr = 0u64;
             unsafe {
                 sol_bignum_add(
@@ -188,6 +160,7 @@ impl BigNumber {
             Self(bignum_ptr)
         }
     }
+
     /// Subtract BigNumbers
     pub fn sub(&self, rhs: &BigNumber) -> Self {
         #[cfg(not(target_arch = "bpf"))]
@@ -202,6 +175,13 @@ impl BigNumber {
         }
         #[cfg(target_arch = "bpf")]
         {
+            extern "C" {
+                fn sol_bignum_sub(
+                    self_ptr: *const u64,
+                    rhs_ptr: *const u64,
+                    return_ptr: *mut u64,
+                ) -> u64;
+            }
             let mut bignum_ptr = 0u64;
             unsafe {
                 sol_bignum_sub(
@@ -213,6 +193,7 @@ impl BigNumber {
             Self(bignum_ptr)
         }
     }
+
     /// Multiple BigNumbers
     pub fn mul(&self, rhs: &BigNumber) -> Self {
         #[cfg(not(target_arch = "bpf"))]
@@ -233,6 +214,13 @@ impl BigNumber {
         }
         #[cfg(target_arch = "bpf")]
         {
+            extern "C" {
+                fn sol_bignum_mul(
+                    self_ptr: *const u64,
+                    rhs_ptr: *const u64,
+                    return_ptr: *mut u64,
+                ) -> u64;
+            }
             let mut bignum_ptr = 0u64;
             unsafe {
                 sol_bignum_mul(
@@ -267,6 +255,14 @@ impl BigNumber {
         }
         #[cfg(target_arch = "bpf")]
         {
+            extern "C" {
+                fn sol_bignum_mod_mul(
+                    self_ptr: *const u64,
+                    multiplier_ptr: *const u64,
+                    modulus_ptr: *const u64,
+                    bignum_ptr: *mut u64,
+                ) -> u64;
+            }
             let mut bignum_ptr = 0u64;
             unsafe {
                 sol_bignum_mod_mul(
@@ -279,6 +275,7 @@ impl BigNumber {
             Self(bignum_ptr)
         }
     }
+
     /// Finds the inverse of modulus on self
     pub fn mod_inv(&self, modulus: &BigNumber) -> Self {
         #[cfg(not(target_arch = "bpf"))]
@@ -295,6 +292,13 @@ impl BigNumber {
         }
         #[cfg(target_arch = "bpf")]
         {
+            extern "C" {
+                fn sol_bignum_mod_inv(
+                    self_ptr: *const u64,
+                    modulus_ptr: *const u64,
+                    bignum_ptr: *mut u64,
+                ) -> u64;
+            }
             let mut bignum_ptr = 0u64;
             unsafe {
                 sol_bignum_mod_inv(
@@ -327,6 +331,13 @@ impl BigNumber {
         }
         #[cfg(target_arch = "bpf")]
         {
+            extern "C" {
+                fn sol_bignum_div(
+                    self_ptr: *const u64,
+                    rhs_ptr: *const u64,
+                    return_ptr: *mut u64,
+                ) -> u64;
+            }
             let mut bignum_ptr = 0u64;
             unsafe {
                 sol_bignum_div(
@@ -338,6 +349,7 @@ impl BigNumber {
             Self(bignum_ptr)
         }
     }
+
     /// Square BigNumbers
     pub fn sqr(&self) -> Self {
         #[cfg(not(target_arch = "bpf"))]
@@ -351,6 +363,12 @@ impl BigNumber {
         }
         #[cfg(target_arch = "bpf")]
         {
+            extern "C" {
+                fn sol_bignum_sqr(
+                    self_ptr: *const u64,
+                    modulus_ptr: *const u64,
+                ) -> u64;
+            }
             let mut bignum_ptr = 0u64;
             unsafe {
                 sol_bignum_sqr(
@@ -361,6 +379,7 @@ impl BigNumber {
             Self(bignum_ptr)
         }
     }
+
     /// Square BigNumbers
     pub fn mod_sqr(&self, modulus: &BigNumber) -> Self {
         #[cfg(not(target_arch = "bpf"))]
@@ -381,6 +400,13 @@ impl BigNumber {
         }
         #[cfg(target_arch = "bpf")]
         {
+            extern "C" {
+                fn sol_bignum_mod_sqr(
+                    self_ptr: *const u64,
+                    modulus_ptr: *const u64,
+                    bignum_ptr: *mut u64,
+                ) -> u64;
+            }
             let mut bignum_ptr = 0u64;
             unsafe {
                 sol_bignum_mod_sqr(
@@ -392,6 +418,7 @@ impl BigNumber {
             Self(bignum_ptr)
         }
     }
+
     /// Square BigNumbers
     pub fn exp(&self, exponent: &BigNumber) -> Self {
         #[cfg(not(target_arch = "bpf"))]
@@ -412,6 +439,13 @@ impl BigNumber {
         }
         #[cfg(target_arch = "bpf")]
         {
+            extern "C" {
+                fn sol_bignum_exp(
+                    self_ptr: *const u64,
+                    exponent_ptr: *const u64,
+                    bignum_ptr: *mut u64,
+                ) -> u64;
+            }
             let mut bignum_ptr = 0u64;
             unsafe {
                 sol_bignum_exp(
@@ -446,6 +480,14 @@ impl BigNumber {
         }
         #[cfg(target_arch = "bpf")]
         {
+            extern "C" {
+                fn sol_bignum_mod_exp(
+                    bignum_ptr: *mut u64,
+                    self_ptr: *const u64,
+                    exponent_ptr: *const u64,
+                    modulus_ptr: *const u64,
+                ) -> u64;
+            }
             let bignum_ptr = &mut 0u64;
             unsafe {
                 sol_bignum_mod_exp(
@@ -458,7 +500,6 @@ impl BigNumber {
             Self(*bignum_ptr)
         }
     }
-
     /// Hashed Generator
     pub fn hashed_generator(&self, a: &BigNumber, n: &BigNumber, nonce: &[u8]) -> Self {
         #[cfg(not(target_arch = "bpf"))]
@@ -501,6 +542,15 @@ impl BigNumber {
         }
         #[cfg(target_arch = "bpf")]
         {
+            extern "C" {
+                fn sol_bignum_hashed_generator(
+                    self_ptr: *const u64,
+                    a: *const u64,
+                    n: *const u64,
+                    nonce: *const u64,
+                    hg_ptr: *mut u64,
+                ) -> u64;
+            }
             let mut bignum_ptr = nonce.len() as u64;
             unsafe {
                 sol_bignum_hashed_generator(
@@ -515,7 +565,7 @@ impl BigNumber {
         }
     }
 
-    /// Hashed Generator
+    /// Hash to Prime
     pub fn hash_to_prime(u: &BigNumber, a: &BigNumber, z: &BigNumber, nonce: &[u8]) -> Self {
         #[cfg(not(target_arch = "bpf"))]
         {
@@ -561,6 +611,15 @@ impl BigNumber {
         }
         #[cfg(target_arch = "bpf")]
         {
+            extern "C" {
+                fn sol_bignum_hash_to_prime(
+                    u: *const u64,
+                    a: *const u64,
+                    z: *const u64,
+                    nonce: *const u64,
+                    htp_ptr: *mut u64,
+                ) -> u64;
+            }
             let mut bignum_ptr = nonce.len() as u64;
             unsafe {
                 sol_bignum_hash_to_prime(
@@ -581,6 +640,9 @@ impl BigNumber {
         crate::program_stubs::sol_log(&self.to_string());
         #[cfg(target_arch = "bpf")]
         {
+            extern "C" {
+                fn sol_log_bignum(bignum_addr: *const u64) -> u64;
+            }
             unsafe { sol_log_bignum(&self.0 as *const _ as *const u64) };
         }
     }
@@ -638,6 +700,9 @@ impl Drop for BigNumber {
         }
         #[cfg(target_arch = "bpf")]
         {
+            extern "C" {
+                fn sol_bignum_drop(bignum_ptr: *mut u64) -> u64;
+            }
             unsafe {
                 sol_bignum_drop(&mut self.0 as *mut _ as *mut u64);
             }
@@ -660,6 +725,14 @@ pub fn blake3_digest(data: &[u8]) -> Vec<u8> {
     }
     #[cfg(target_arch = "bpf")]
     {
+        extern "C" {
+            fn sol_blake3_digest(
+                data_ptr: *const u8,
+                data_len: *const u64,
+                digest_ptr: *mut u8,
+                digest_len: *mut u64,
+            ) -> u64;
+        }
         let data_len = data.len();
         let mut digest = [0u8; 32];
         let mut digest_len = digest.len();

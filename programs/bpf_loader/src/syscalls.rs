@@ -1162,7 +1162,7 @@ macro_rules! calc_bignum_cost {
 }
 
 /// BIGNUM sol_bignum_new
-pub struct SyscallBigNumNew<'a> {
+struct SyscallBigNumNew<'a> {
     cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     loader_id: &'a Pubkey,
@@ -1178,6 +1178,8 @@ impl<'a> SyscallObject<BpfError> for SyscallBigNumNew<'a> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
+        question_mark!(self.compute_meter.consume(self.cost), result);
+
         let big_number = question_mark!(
             translate_type_mut::<u64>(memory_mapping, bn_addr, self.loader_id, true),
             result
@@ -1186,12 +1188,11 @@ impl<'a> SyscallObject<BpfError> for SyscallBigNumNew<'a> {
         let rwptr = Box::into_raw(bbox);
         let bignum_ptr = rwptr as u64;
         *big_number = bignum_ptr;
-        question_mark!(self.compute_meter.consume(self.cost), result);
         *result = Ok(0)
     }
 }
 
-pub struct SyscallBigNumFromU32<'a> {
+struct SyscallBigNumFromU32<'a> {
     cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     loader_id: &'a Pubkey,
@@ -1213,18 +1214,18 @@ impl<'a> SyscallObject<BpfError> for SyscallBigNumFromU32<'a> {
         );
         let bbox = Box::new(BigNum::from_u32(u32_val as u32).unwrap());
         let bytes = bbox.num_bytes() as f64;
-        let rwptr = Box::into_raw(bbox);
-        let bignum_ptr = rwptr as u64;
-        *big_number = bignum_ptr;
         question_mark!(
             self.compute_meter
                 .consume(self.cost + calc_bignum_cost!(bytes)),
             result
         );
+        let rwptr = Box::into_raw(bbox);
+        let bignum_ptr = rwptr as u64;
+        *big_number = bignum_ptr;
         *result = Ok(0)
     }
 }
-pub struct SyscallBigNumFromBytes<'a> {
+struct SyscallBigNumFromBytes<'a> {
     cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     loader_id: &'a Pubkey,
@@ -1249,19 +1250,19 @@ impl<'a> SyscallObject<BpfError> for SyscallBigNumFromBytes<'a> {
             result
         );
         let bytes: f64 = byte_slice.len() as f64;
-        let bbox = Box::new(BigNum::from_slice(byte_slice).unwrap());
-        let rwptr = Box::into_raw(bbox);
-        let bignum_ptr = rwptr as u64;
-        *big_number = bignum_ptr;
         question_mark!(
             self.compute_meter
                 .consume(self.cost + calc_bignum_cost!(bytes)),
             result
         );
+        let bbox = Box::new(BigNum::from_slice(byte_slice).unwrap());
+        let rwptr = Box::into_raw(bbox);
+        let bignum_ptr = rwptr as u64;
+        *big_number = bignum_ptr;
         *result = Ok(0)
     }
 }
-pub struct SyscallBigNumToBytes<'a> {
+struct SyscallBigNumToBytes<'a> {
     cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     loader_id: &'a Pubkey,
@@ -1292,23 +1293,23 @@ impl<'a> SyscallObject<BpfError> for SyscallBigNumToBytes<'a> {
         let bn_self = unsafe { &*(*self_bignum_address as *mut BigNum) };
         let bn_bytes = bn_self.as_ref().to_vec();
         let bytes = bn_bytes.len() as f64;
+        question_mark!(
+            self.compute_meter
+                .consume(self.cost + calc_bignum_cost!(bytes)),
+            result
+        );
         let mut index = 0;
         for byte in bn_bytes.iter() {
             bytes_buffer[index] = *byte;
             index += 1;
         }
         *bytes_len = index as u64;
-        question_mark!(
-            self.compute_meter
-                .consume(self.cost + calc_bignum_cost!(bytes)),
-            result
-        );
         *result = Ok(0)
     }
 }
 
 /// BIGNUM sol_bignum_mod_exp
-pub struct SyscallBigNumModExp<'a> {
+struct SyscallBigNumModExp<'a> {
     cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     loader_id: &'a Pubkey,
@@ -1346,6 +1347,11 @@ impl<'a> SyscallObject<BpfError> for SyscallBigNumModExp<'a> {
         let bn_exponent = unsafe { &*(*exponent_bignum_address as *const BigNum) }.as_ref();
         let bn_modulus = (unsafe { &*(*modulus_bignum_address as *const BigNum) }).as_ref();
         let bytes = (bn_self.num_bytes() + bn_exponent.num_bytes() + bn_modulus.num_bytes()) as f64;
+        question_mark!(
+            self.compute_meter
+                .consume(self.cost + calc_bignum_cost!(bytes)),
+            result
+        );
         let ctx = &mut BigNumContext::new().unwrap();
         match mod_exp_bn.mod_exp(bn_self, bn_exponent, bn_modulus, ctx) {
             Ok(()) => {
@@ -1356,15 +1362,10 @@ impl<'a> SyscallObject<BpfError> for SyscallBigNumModExp<'a> {
             }
             Err(_) => *result = Err(SyscallError::BigNumberModExpError.into()),
         }
-        question_mark!(
-            self.compute_meter
-                .consume(self.cost + calc_bignum_cost!(bytes)),
-            result
-        );
     }
 }
 /// Add BigNums
-pub struct SyscallBigNumAdd<'a> {
+struct SyscallBigNumAdd<'a> {
     cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     loader_id: &'a Pubkey,
@@ -1416,7 +1417,7 @@ impl<'a> SyscallObject<BpfError> for SyscallBigNumAdd<'a> {
 }
 
 /// Subtract BigNums
-pub struct SyscallBigNumSub<'a> {
+struct SyscallBigNumSub<'a> {
     cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     loader_id: &'a Pubkey,
@@ -1466,7 +1467,7 @@ impl<'a> SyscallObject<BpfError> for SyscallBigNumSub<'a> {
     }
 }
 /// Subtract BigNums
-pub struct SyscallBigNumMul<'a> {
+struct SyscallBigNumMul<'a> {
     cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     loader_id: &'a Pubkey,
@@ -1521,7 +1522,7 @@ impl<'a> SyscallObject<BpfError> for SyscallBigNumMul<'a> {
         };
     }
 }
-pub struct SyscallBigNumDiv<'a> {
+struct SyscallBigNumDiv<'a> {
     cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     loader_id: &'a Pubkey,
@@ -1576,7 +1577,7 @@ impl<'a> SyscallObject<BpfError> for SyscallBigNumDiv<'a> {
         };
     }
 }
-pub struct SyscallBigNumExp<'a> {
+struct SyscallBigNumExp<'a> {
     cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     loader_id: &'a Pubkey,
@@ -1631,7 +1632,7 @@ impl<'a> SyscallObject<BpfError> for SyscallBigNumExp<'a> {
         };
     }
 }
-pub struct SyscallBigNumSqr<'a> {
+struct SyscallBigNumSqr<'a> {
     cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     loader_id: &'a Pubkey,
@@ -1676,7 +1677,7 @@ impl<'a> SyscallObject<BpfError> for SyscallBigNumSqr<'a> {
         };
     }
 }
-pub struct SyscallBigNumModSqr<'a> {
+struct SyscallBigNumModSqr<'a> {
     cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     loader_id: &'a Pubkey,
@@ -1732,7 +1733,7 @@ impl<'a> SyscallObject<BpfError> for SyscallBigNumModSqr<'a> {
     }
 }
 
-pub struct SyscallBigNumModMul<'a> {
+struct SyscallBigNumModMul<'a> {
     cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     loader_id: &'a Pubkey,
@@ -1794,7 +1795,7 @@ impl<'a> SyscallObject<BpfError> for SyscallBigNumModMul<'a> {
     }
 }
 
-pub struct SyscallBigNumModInv<'a> {
+struct SyscallBigNumModInv<'a> {
     cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     loader_id: &'a Pubkey,
@@ -1845,12 +1846,12 @@ impl<'a> SyscallObject<BpfError> for SyscallBigNumModInv<'a> {
             Err(_e) => {
                 // println!("{}", e);
                 *result = Err(SyscallError::BigNumberModInvError.into())
-            },
+            }
         };
     }
 }
 
-pub struct SyscallBigNumHg<'a> {
+struct SyscallBigNumHg<'a> {
     cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     loader_id: &'a Pubkey,
@@ -1899,10 +1900,6 @@ impl<'a> SyscallObject<BpfError> for SyscallBigNumHg<'a> {
             result
         );
 
-        // println!("u:{}",u_bn);
-        // println!("a:{}",a_bn);
-        // println!("n:{}",n_bn);
-
         // hash_generator
         let mut transcript = u_bn.as_ref().to_vec();
         transcript.append(&mut a_bn.as_ref().to_vec());
@@ -1931,7 +1928,7 @@ impl<'a> SyscallObject<BpfError> for SyscallBigNumHg<'a> {
     }
 }
 /// BIGNUM sol_bignum_drop
-pub struct SyscallBigNumDrop<'a> {
+struct SyscallBigNumDrop<'a> {
     cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     loader_id: &'a Pubkey,
@@ -1947,19 +1944,19 @@ impl<'a> SyscallObject<BpfError> for SyscallBigNumDrop<'a> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
+        question_mark!(self.compute_meter.consume(self.cost), result);
         let big_number = question_mark!(
             translate_type_mut::<u64>(memory_mapping, bn_addr, self.loader_id, true),
             result
         );
         drop(unsafe { Box::from_raw(*big_number as *mut BigNum) });
         *big_number = 0u64;
-        question_mark!(self.compute_meter.consume(self.cost), result);
         *result = Ok(0)
     }
 }
 
 /// Log BigNum values
-pub struct SyscallLogBigNum<'a> {
+struct SyscallLogBigNum<'a> {
     cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     logger: Rc<RefCell<dyn Logger>>,
@@ -1993,7 +1990,7 @@ impl<'a> SyscallObject<BpfError> for SyscallLogBigNum<'a> {
     }
 }
 
-pub struct SyscallBlake3Digest<'a> {
+struct SyscallBlake3Digest<'a> {
     cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     loader_id: &'a Pubkey,
@@ -2052,7 +2049,7 @@ impl<'a> SyscallObject<BpfError> for SyscallBlake3Digest<'a> {
 }
 
 /// Finds a valid prime from hash of u, a, z, nonce
-pub struct SyscallBigNumberHashToPrime<'a> {
+struct SyscallBigNumberHashToPrime<'a> {
     cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     loader_id: &'a Pubkey,
@@ -2122,11 +2119,8 @@ impl<'a> SyscallObject<BpfError> for SyscallBigNumberHashToPrime<'a> {
             // Only need 256 bits just borrow the bottom 32 bytes
             // There should be plenty of primes below 2^256
             // and we want this to be reasonably fast
-            //num = BigNumber::from_bytes(&hash[32..]);
             num = BigNum::from_slice(&hash).unwrap();
             if num.is_prime(15, ctx).unwrap() {
-                // msg!("num_bytes:{:?}",num.to_bytes().to_vec());
-                // msg!("i:{}",i);
                 break;
             }
             i += 1;
@@ -4878,7 +4872,7 @@ mod tests {
         // println!("(3 * 3) % 7 =  {:?}", braw);
     }
     #[test]
-    #[should_panic(expected="UserError(SyscallError(BigNumberModInvError))")]
+    #[should_panic(expected = "UserError(SyscallError(BigNumberModInvError))")]
     fn test_syscall_bignum_mod_inv() {
         let mut mod_inv = 0u64;
         let mod_inv_addr = &mut mod_inv as *mut _ as u64;
