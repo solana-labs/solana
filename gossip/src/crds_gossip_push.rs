@@ -31,21 +31,21 @@ use {
     },
 };
 
-pub const CRDS_GOSSIP_NUM_ACTIVE: usize = 30;
-pub const CRDS_GOSSIP_PUSH_FANOUT: usize = 6;
+pub(crate) const CRDS_GOSSIP_NUM_ACTIVE: usize = 60;
+const CRDS_GOSSIP_PUSH_FANOUT: usize = 12;
 // With a fanout of 6, a 1000 node cluster should only take ~4 hops to converge.
 // However since pushes are stake weighed, some trailing nodes
 // might need more time to receive values. 30 seconds should be plenty.
 pub const CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS: u64 = 30000;
-pub const CRDS_GOSSIP_PRUNE_MSG_TIMEOUT_MS: u64 = 500;
-pub const CRDS_GOSSIP_PRUNE_STAKE_THRESHOLD_PCT: f64 = 0.15;
-pub const CRDS_GOSSIP_PRUNE_MIN_INGRESS_NODES: usize = 3;
+const CRDS_GOSSIP_PRUNE_MSG_TIMEOUT_MS: u64 = 500;
+const CRDS_GOSSIP_PRUNE_STAKE_THRESHOLD_PCT: f64 = 0.15;
+const CRDS_GOSSIP_PRUNE_MIN_INGRESS_NODES: usize = 6;
 // Do not push to peers which have not been updated for this long.
 const PUSH_ACTIVE_TIMEOUT_MS: u64 = 60_000;
 
 pub struct CrdsGossipPush {
     /// max bytes per message
-    pub max_bytes: usize,
+    max_bytes: usize,
     /// active set of validators for push
     active_set: IndexMap<Pubkey, AtomicBloom<Pubkey>>,
     /// Cursor into the crds table for values to push.
@@ -59,8 +59,8 @@ pub struct CrdsGossipPush {
         HashMap</*gossip peer:*/ Pubkey, (/*pruned:*/ bool, /*timestamp:*/ u64)>,
     >,
     last_pushed_to: LruCache<Pubkey, u64>,
-    pub num_active: usize,
-    pub push_fanout: usize,
+    num_active: usize,
+    push_fanout: usize,
     pub msg_timeout: u64,
     pub prune_timeout: u64,
     pub num_total: usize,
@@ -71,8 +71,8 @@ pub struct CrdsGossipPush {
 impl Default for CrdsGossipPush {
     fn default() -> Self {
         Self {
-            // Allow upto 64 Crds Values per PUSH
-            max_bytes: PACKET_DATA_SIZE * 64,
+            // Allow upto 128 Crds Values per PUSH
+            max_bytes: PACKET_DATA_SIZE * 128,
             active_set: IndexMap::new(),
             crds_cursor: Cursor::default(),
             received_cache: HashMap::new(),
