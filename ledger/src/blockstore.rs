@@ -2058,18 +2058,17 @@ impl Blockstore {
     }
 
     fn ensure_lowest_cleanup_slot(&self) -> (std::sync::RwLockReadGuard<Slot>, Slot) {
-        // transaction_status_cf/address_signatures_cf doesn't employ strong read consistency with slot-based
-        // delete_range via LedgerCleanupService, because of inefficiency.
-        // so, ensure consistent result by using lowest_cleanup_slot as the lower bound
-        // for reading
+        // Ensures consistent result by using lowest_cleanup_slot as the lower bound
+        // for reading columns that do not employ strong read consistency with slot-based
+        // delete_range 
         let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
         let lowest_available_slot = (*lowest_cleanup_slot)
             .checked_add(1)
             .expect("overflow from trusted value");
 
-        // make caller to hold this lock properly; otherwise LedgerCleanupService can purge/compact
-        // needed slots here at any given moment....
-        // also note that rpc can process concurrent queries because this is a read lock
+        // Make caller hold this lock properly; otherwise LedgerCleanupService can purge/compact
+        // needed slots here at any given moment.
+        // Blockstore callers, like rpc, can process concurrent read queries
         (lowest_cleanup_slot, lowest_available_slot)
     }
 
@@ -6829,13 +6828,13 @@ pub mod tests {
             };
 
             let are_missing = check_for_missing();
-            // should never missing before the conditional compaction & simulation...
+            // should never be missing before the conditional compaction & simulation...
             assert_eq!(are_missing, (false, false, false));
             assert_existing_always();
 
             if simulate_compaction {
                 blockstore.expire_upto_slot_for_compaction_filter(lowest_cleanup_slot);
-                // force to run compaction filters across whole key range.
+                // force compaction filters to run across whole key range.
                 blockstore
                     .compact_storage(Slot::min_value(), Slot::max_value())
                     .unwrap();
