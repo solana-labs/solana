@@ -1145,8 +1145,8 @@ mod tests {
         assert!(snapshot_hash_of("invalid").is_none());
     }
 
-    fn common_test_urge_old_snapshot_archives(snapshot_names: &Vec<&String>, maximum_snapshots_to_retain: usize,
-        expected_snapshots: &Vec<&String>) {
+    fn common_test_urge_old_snapshot_archives(snapshot_names: &[&String], maximum_snapshots_to_retain: usize,
+        expected_snapshots: &[&String]) {
         let temp_snap_dir = tempfile::TempDir::new().unwrap();
 
         for snap_name in snapshot_names {
