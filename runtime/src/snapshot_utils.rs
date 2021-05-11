@@ -1172,7 +1172,7 @@ mod tests {
         }
         purge_old_snapshot_archives(temp_snap_dir.path(), maximum_snapshots_to_retain);
 
-        let mut retainted_snaps = HashSet::new();
+        let mut retained_snaps = HashSet::new();
         for entry in fs::read_dir(temp_snap_dir.path()).unwrap() {
             let entry_path_buf = entry.unwrap().path();
             let entry_path = entry_path_buf.as_path();
@@ -1182,13 +1182,13 @@ mod tests {
                 .to_str()
                 .unwrap()
                 .to_string();
-            retainted_snaps.insert(snapshot_name);
+            retained_snaps.insert(snapshot_name);
         }
 
         for snap_name in expected_snapshots {
-            assert!(retainted_snaps.contains(snap_name.as_str()));
+            assert!(retained_snaps.contains(snap_name.as_str()));
         }
-        assert!(retainted_snaps.len() == expected_snapshots.len());
+        assert!(retained_snaps.len() == expected_snapshots.len());
     }
 
     #[test]
