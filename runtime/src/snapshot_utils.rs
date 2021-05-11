@@ -1158,7 +1158,7 @@ mod tests {
         assert!(snapshot_hash_of("invalid").is_none());
     }
 
-    fn common_test_urge_old_snapshot_archives(
+    fn common_test_purge_old_snapshot_archives(
         snapshot_names: &[&String],
         maximum_snapshots_to_retain: usize,
         expected_snapshots: &[&String],
@@ -1199,13 +1199,13 @@ mod tests {
         let snap3_name = format!("snapshot-50-{}.tar.zst", Hash::default());
         let snapshot_names = vec![&snap1_name, &snap2_name, &snap3_name];
         let expected_snapshots = vec![&snap1_name, &snap3_name];
-        common_test_urge_old_snapshot_archives(&snapshot_names, 1, &expected_snapshots);
+        common_test_purge_old_snapshot_archives(&snapshot_names, 1, &expected_snapshots);
 
         // retaining 0, the expectation is the same as for 1, as at least 1 newest is expected to be retainted
-        common_test_urge_old_snapshot_archives(&snapshot_names, 0, &expected_snapshots);
+        common_test_purge_old_snapshot_archives(&snapshot_names, 0, &expected_snapshots);
 
         // retaining 2, all three should be retained
         let expected_snapshots = vec![&snap1_name, &snap2_name, &snap3_name];
-        common_test_urge_old_snapshot_archives(&snapshot_names, 2, &expected_snapshots);
+        common_test_purge_old_snapshot_archives(&snapshot_names, 2, &expected_snapshots);
     }
 }
