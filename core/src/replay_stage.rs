@@ -8,6 +8,7 @@ use crate::{
     },
     cluster_slot_state_verifier::*,
     cluster_slots::ClusterSlots,
+    cluster_slots_service::ClusterSlotsUpdateSender,
     commitment_service::{AggregateCommitmentService, CommitmentAggregationData},
     consensus::{
         ComputedBankState, Stake, SwitchForkDecision, Tower, VotedStakes, SWITCH_FORK_THRESHOLD,
@@ -292,6 +293,7 @@ impl ReplayStage {
         replay_vote_sender: ReplayVoteSender,
         gossip_duplicate_confirmed_slots_receiver: GossipDuplicateConfirmedSlotsReceiver,
         gossip_verified_vote_hash_receiver: GossipVerifiedVoteHashReceiver,
+        cluster_slots_update_sender: ClusterSlotsUpdateSender,
     ) -> Self {
         let ReplayStageConfig {
             my_pubkey,
@@ -387,6 +389,7 @@ impl ReplayStage {
                         &descendants,
                         &mut unfrozen_gossip_verified_vote_hashes,
                         &mut latest_validator_votes_for_frozen_banks,
+                        &cluster_slots_update_sender,
                     );
                     replay_active_banks_time.stop();
 
@@ -1156,9 +1159,8 @@ impl ReplayStage {
                 // Signal retransmit
                 if Self::should_retransmit(poh_slot, &mut skipped_slots_info.last_retransmit_slot) {
                     datapoint_info!("replay_stage-retransmit", ("slot", bank.slot(), i64),);
-                    retransmit_slots_sender
-                        .send(vec![(bank.slot(), bank.clone())].into_iter().collect())
-                        .unwrap();
+                    let _ = retransmit_slots_sender
+                        .send(vec![(bank.slot(), bank.clone())].into_iter().collect());
                 }
                 return;
             }
@@ -1638,6 +1640,7 @@ impl ReplayStage {
         descendants: &HashMap<Slot, HashSet<Slot>>,
         unfrozen_gossip_verified_vote_hashes: &mut UnfrozenGossipVerifiedVoteHashes,
         latest_validator_votes_for_frozen_banks: &mut LatestValidatorVotesForFrozenBanks,
+        cluster_slots_update_sender: &ClusterSlotsUpdateSender,
     ) -> bool {
         let mut did_complete_bank = false;
         let mut tx_count = 0;
@@ -1725,6 +1728,7 @@ impl ReplayStage {
                 );
                 did_complete_bank = true;
                 info!("bank frozen: {}", bank.slot());
+                let _ = cluster_slots_update_sender.send(vec![*bank_slot]);
                 if let Some(transaction_status_sender) = transaction_status_sender {
                     transaction_status_sender.send_transaction_status_freeze_message(&bank);
                 }
