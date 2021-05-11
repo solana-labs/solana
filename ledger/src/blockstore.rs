@@ -1499,7 +1499,14 @@ impl Blockstore {
         use crate::shred::SHRED_PAYLOAD_SIZE;
         self.slot_data_iterator(slot, start_index)
             .expect("blockstore couldn't fetch iterator")
-            .map(|data| Shred::new_from_serialized_shred(data.1.to_vec()))
+            .map(|data| {
+                let mut payload = data.1.to_vec();
+                // Only data_header.size bytes stored in the blockstore so
+                // pad the payload out to SHRED_PAYLOAD_SIZE so that the
+                // erasure recovery works properly.
+                payload.resize(cmp::max(payload.len(), SHRED_PAYLOAD_SIZE), 0);
+                Shred::new_from_serialized_shred(payload)
+            })
             .collect()
     }
 
@@ -3779,6 +3786,7 @@ pub mod tests {
 
     #[test]
     fn test_insert_get_bytes() {
+        solana_logger::setup();
         // Create enough entries to ensure there are at least two shreds created
         let num_entries = max_ticks_per_n_shreds(1, None) + 1;
         assert!(num_entries > 1);
@@ -3795,14 +3803,24 @@ pub mod tests {
             .insert_shreds(vec![last_shred.clone()], None, false)
             .unwrap();
 
-        let serialized_shred = ledger
+        let mut serialized_shred = ledger
             .data_shred_cf
             .get_bytes((0, last_shred.index() as u64))
             .unwrap()
             .unwrap();
+        // Resize is done automatically by get_data_shred() so that method should be used by
+        // clients instead of using data_shred_cf directly
+        serialized_shred.resize(crate::shred::SHRED_PAYLOAD_SIZE, 0);
         let deserialized_shred = Shred::new_from_serialized_shred(serialized_shred).unwrap();
-
         assert_eq!(last_shred, deserialized_shred);
+
+        let serialized_shred = ledger
+            .get_data_shred(0, last_shred.index() as u64)
+            .unwrap()
+            .unwrap();
+        let deserialized_shred = Shred::new_from_serialized_shred(serialized_shred).unwrap();
+        assert_eq!(last_shred, deserialized_shred);
+
         // Destroying database without closing it first is undefined behavior
         drop(ledger);
         Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
@@ -5708,7 +5726,13 @@ pub mod tests {
         // Test that the iterator for slot 8 contains what was inserted earlier
         let shred_iter = blockstore.slot_data_iterator(8, 0).unwrap();
         let result: Vec<Shred> = shred_iter
-            .filter_map(|(_, bytes)| Shred::new_from_serialized_shred(bytes.to_vec()).ok())
+            .filter_map(|(_, bytes)| {
+                let mut payload = bytes.to_vec();
+                // Resize is done automatically by get_data_shreds_for_slot() so that method
+                // should be used by clients instead of using slot_data_iterator directly
+                payload.resize(crate::shred::SHRED_PAYLOAD_SIZE, 0);
+                Shred::new_from_serialized_shred(payload).ok()
+            })
             .collect();
         assert_eq!(result.len(), slot_8_shreds.len());
         assert_eq!(result, slot_8_shreds);

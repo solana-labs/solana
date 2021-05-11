@@ -320,9 +320,10 @@ impl Shred {
             Self::deserialize_obj(&mut start, SIZE_OF_COMMON_SHRED_HEADER, &payload)?;
 
         let slot = common_header.slot;
-        // Shreds should be padded out to SHRED_PAYLOAD_SIZE
-        // so that erasure generation/recovery works correctly
-        assert!(payload.len() == SHRED_PAYLOAD_SIZE);
+        // Data hreds should be padded out to SHRED_PAYLOAD_SIZE so that erasure
+        // generation/recovery works correctly. Check uses >= because a full packet
+        // payload (including the nonce) could be passed in
+        assert!(payload.len() >= SHRED_PAYLOAD_SIZE);
         let shred = if common_header.shred_type == ShredType(CODING_SHRED) {
             let coding_header: CodingShredHeader =
                 Self::deserialize_obj(&mut start, SIZE_OF_CODING_SHRED_HEADER, &payload)?;
