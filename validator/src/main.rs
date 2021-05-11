@@ -39,7 +39,9 @@ use {
     solana_ledger::blockstore_db::BlockstoreRecoveryMode,
     solana_perf::recycler::enable_recycler_warming,
     solana_runtime::{
-        accounts_index::AccountIndex,
+        accounts_index::{
+            AccountIndex, AccountSecondaryIndexes, AccountSecondaryIndexesIncludeExclude,
+        },
         bank_forks::{ArchiveFormat, SnapshotConfig, SnapshotVersion},
         hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
         snapshot_utils::get_highest_snapshot_archive_path,
@@ -78,6 +80,9 @@ enum Operation {
     Initialize,
     Run,
 }
+
+const EXCLUDE_KEY: &str = "account-index-exclude-key";
+const INCLUDE_KEY: &str = "account-index-include-key";
 
 fn monitor_validator(ledger_path: &Path) {
     let dashboard = Dashboard::new(ledger_path, None, None).unwrap_or_else(|err| {
@@ -1708,6 +1713,25 @@ pub fn main() {
                 .help("Enable an accounts index, indexed by the selected account field"),
         )
         .arg(
+            Arg::with_name("account_index_exclude_key")
+                .long(EXCLUDE_KEY)
+                .takes_value(true)
+                .validator(is_pubkey)
+                .multiple(true)
+                .value_name("KEY")
+                .help("When account indexes are enabled, exclude this key from the index."),
+        )
+        .arg(
+            Arg::with_name("account_index_include_key")
+                .long(INCLUDE_KEY)
+                .takes_value(true)
+                .validator(is_pubkey)
+                .conflicts_with("account_index_exclude_key")
+                .multiple(true)
+                .value_name("KEY")
+                .help("When account indexes are enabled, only include specific keys in the index. This overrides --account-index-exclude-key."),
+        )
+        .arg(
             Arg::with_name("no_accounts_db_caching")
                 .long("no-accounts-db-caching")
                 .help("Disables accounts caching"),
@@ -2033,16 +2057,7 @@ pub fn main() {
 
     let contact_debug_interval = value_t_or_exit!(matches, "contact_debug_interval", u64);
 
-    let account_indexes: HashSet<AccountIndex> = matches
-        .values_of("account_indexes")
-        .unwrap_or_default()
-        .map(|value| match value {
-            "program-id" => AccountIndex::ProgramId,
-            "spl-token-mint" => AccountIndex::SplTokenMint,
-            "spl-token-owner" => AccountIndex::SplTokenOwner,
-            _ => unreachable!(),
-        })
-        .collect();
+    let account_indexes = process_account_indexes(&matches);
 
     let restricted_repair_only_mode = matches.is_present("restricted_repair_only_mode");
     let mut validator_config = ValidatorConfig {
@@ -2084,7 +2099,7 @@ pub fn main() {
             rpc_bigtable_timeout: value_t!(matches, "rpc_bigtable_timeout", u64)
                 .ok()
                 .map(Duration::from_secs),
-            account_indexes: account_indexes.clone(),
+            account_indexes: account_indexes.indexes.clone(),
         },
         rpc_addrs: value_t!(matches, "rpc_port", u16).ok().map(|rpc_port| {
             (
@@ -2498,4 +2513,53 @@ pub fn main() {
     info!("Validator initialized");
     validator.join();
     info!("Validator exiting..");
+}
+
+fn process_account_indexes(matches: &ArgMatches) -> AccountSecondaryIndexes {
+    let account_indexes: HashSet<AccountIndex> = matches
+        .values_of("account_indexes")
+        .unwrap_or_default()
+        .map(|value| match value {
+            "program-id" => AccountIndex::ProgramId,
+            "spl-token-mint" => AccountIndex::SplTokenMint,
+            "spl-token-owner" => AccountIndex::SplTokenOwner,
+            _ => unreachable!(),
+        })
+        .collect();
+
+    let account_indexes_include_keys: HashSet<Pubkey> =
+        values_t!(matches, "account_index_include_key", Pubkey)
+            .unwrap_or_default()
+            .iter()
+            .cloned()
+            .collect();
+
+    let account_indexes_exclude_keys: HashSet<Pubkey> =
+        values_t!(matches, "account_index_exclude_key", Pubkey)
+            .unwrap_or_default()
+            .iter()
+            .cloned()
+            .collect();
+
+    let exclude_keys = !account_indexes_exclude_keys.is_empty();
+    let include_keys = !account_indexes_include_keys.is_empty();
+
+    let keys = if !account_indexes.is_empty() && (exclude_keys || include_keys) {
+        let account_indexes_keys = AccountSecondaryIndexesIncludeExclude {
+            exclude: exclude_keys,
+            keys: if exclude_keys {
+                account_indexes_exclude_keys
+            } else {
+                account_indexes_include_keys
+            },
+        };
+        Some(account_indexes_keys)
+    } else {
+        None
+    };
+
+    AccountSecondaryIndexes {
+        keys,
+        indexes: account_indexes,
+    }
 }

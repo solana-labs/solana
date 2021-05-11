@@ -74,7 +74,32 @@ pub enum AccountIndex {
     SplTokenOwner,
 }
 
-pub type AccountSecondaryIndexes = HashSet<AccountIndex>;
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct AccountSecondaryIndexesIncludeExclude {
+    pub exclude: bool,
+    pub keys: HashSet<Pubkey>,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct AccountSecondaryIndexes {
+    pub keys: Option<AccountSecondaryIndexesIncludeExclude>,
+    pub indexes: HashSet<AccountIndex>,
+}
+
+impl AccountSecondaryIndexes {
+    pub fn is_empty(&self) -> bool {
+        self.indexes.is_empty()
+    }
+    pub fn contains(&self, index: &AccountIndex) -> bool {
+        self.indexes.contains(index)
+    }
+    pub fn include_key(&self, key: &Pubkey) -> bool {
+        match &self.keys {
+            Some(options) => options.exclude ^ options.keys.contains(key),
+            None => true, // include all keys
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct AccountMapEntryInner<T> {
@@ -1063,7 +1088,9 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
             return;
         }
 
-        if account_indexes.contains(&AccountIndex::ProgramId) {
+        if account_indexes.contains(&AccountIndex::ProgramId)
+            && account_indexes.include_key(account_owner)
+        {
             self.program_id_index.insert(account_owner, pubkey, slot);
         }
         // Note because of the below check below on the account data length, when an
@@ -1087,7 +1114,9 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
                     &account_data[SPL_TOKEN_ACCOUNT_OWNER_OFFSET
                         ..SPL_TOKEN_ACCOUNT_OWNER_OFFSET + PUBKEY_BYTES],
                 );
-                self.spl_token_owner_index.insert(&owner_key, pubkey, slot);
+                if account_indexes.include_key(&owner_key) {
+                    self.spl_token_owner_index.insert(&owner_key, pubkey, slot);
+                }
             }
 
             if account_indexes.contains(&AccountIndex::SplTokenMint) {
@@ -1095,7 +1124,9 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
                     &account_data[SPL_TOKEN_ACCOUNT_MINT_OFFSET
                         ..SPL_TOKEN_ACCOUNT_MINT_OFFSET + PUBKEY_BYTES],
                 );
-                self.spl_token_mint_index.insert(&mint_key, pubkey, slot);
+                if account_indexes.include_key(&mint_key) {
+                    self.spl_token_mint_index.insert(&mint_key, pubkey, slot);
+                }
             }
         }
     }
@@ -1447,13 +1478,19 @@ pub mod tests {
     pub fn spl_token_mint_index_enabled() -> AccountSecondaryIndexes {
         let mut account_indexes = HashSet::new();
         account_indexes.insert(AccountIndex::SplTokenMint);
-        account_indexes
+        AccountSecondaryIndexes {
+            indexes: account_indexes,
+            keys: None,
+        }
     }
 
     pub fn spl_token_owner_index_enabled() -> AccountSecondaryIndexes {
         let mut account_indexes = HashSet::new();
         account_indexes.insert(AccountIndex::SplTokenOwner);
-        account_indexes
+        AccountSecondaryIndexes {
+            indexes: account_indexes,
+            keys: None,
+        }
     }
 
     impl<'a, T: 'static, U> AccountIndexGetResult<'a, T, U> {
@@ -2068,6 +2105,51 @@ pub mod tests {
         let mut num = 0;
         index.unchecked_scan_accounts("", &ancestors, |_pubkey, _index| num += 1);
         assert_eq!(num, 0);
+    }
+
+    #[test]
+    fn test_secondary_index_include_exclude() {
+        let pk1 = Pubkey::new_unique();
+        let pk2 = Pubkey::new_unique();
+        let mut index = AccountSecondaryIndexes::default();
+
+        assert!(!index.contains(&AccountIndex::ProgramId));
+        index.indexes.insert(AccountIndex::ProgramId);
+        assert!(index.contains(&AccountIndex::ProgramId));
+        assert!(index.include_key(&pk1));
+        assert!(index.include_key(&pk2));
+
+        let exclude = false;
+        index.keys = Some(AccountSecondaryIndexesIncludeExclude {
+            keys: [pk1].iter().cloned().collect::<HashSet<_>>(),
+            exclude,
+        });
+        assert!(index.include_key(&pk1));
+        assert!(!index.include_key(&pk2));
+
+        let exclude = true;
+        index.keys = Some(AccountSecondaryIndexesIncludeExclude {
+            keys: [pk1].iter().cloned().collect::<HashSet<_>>(),
+            exclude,
+        });
+        assert!(!index.include_key(&pk1));
+        assert!(index.include_key(&pk2));
+
+        let exclude = true;
+        index.keys = Some(AccountSecondaryIndexesIncludeExclude {
+            keys: [pk1, pk2].iter().cloned().collect::<HashSet<_>>(),
+            exclude,
+        });
+        assert!(!index.include_key(&pk1));
+        assert!(!index.include_key(&pk2));
+
+        let exclude = false;
+        index.keys = Some(AccountSecondaryIndexesIncludeExclude {
+            keys: [pk1, pk2].iter().cloned().collect::<HashSet<_>>(),
+            exclude,
+        });
+        assert!(index.include_key(&pk1));
+        assert!(index.include_key(&pk2));
     }
 
     #[test]
@@ -2902,6 +2984,7 @@ pub mod tests {
         key_end: usize,
         account_index: &AccountSecondaryIndexes,
     ) {
+        let mut account_index = account_index.clone();
         let account_key = Pubkey::new_unique();
         let index_key = Pubkey::new_unique();
         let slot = 1;
@@ -2914,7 +2997,7 @@ pub mod tests {
             &account_key,
             &Pubkey::default(),
             &account_data,
-            account_index,
+            &account_index,
             true,
             &mut vec![],
         );
@@ -2927,12 +3010,48 @@ pub mod tests {
             &account_key,
             &inline_spl_token_v2_0::id(),
             &account_data[1..],
-            account_index,
+            &account_index,
             true,
             &mut vec![],
         );
         assert!(secondary_index.index.is_empty());
         assert!(secondary_index.reverse_index.is_empty());
+
+        // excluded key
+        account_index.keys = Some(AccountSecondaryIndexesIncludeExclude {
+            keys: [index_key].iter().cloned().collect::<HashSet<_>>(),
+            exclude: true,
+        });
+        index.upsert(
+            0,
+            &account_key,
+            &inline_spl_token_v2_0::id(),
+            &account_data[1..],
+            &account_index,
+            true,
+            &mut vec![],
+        );
+        assert!(secondary_index.index.is_empty());
+        assert!(secondary_index.reverse_index.is_empty());
+
+        // not-included key
+        account_index.keys = Some(AccountSecondaryIndexesIncludeExclude {
+            keys: [account_key].iter().cloned().collect::<HashSet<_>>(),
+            exclude: false,
+        });
+        index.upsert(
+            0,
+            &account_key,
+            &inline_spl_token_v2_0::id(),
+            &account_data[1..],
+            &account_index,
+            true,
+            &mut vec![],
+        );
+        assert!(secondary_index.index.is_empty());
+        assert!(secondary_index.reverse_index.is_empty());
+
+        account_index.keys = None;
 
         // Just right. Inserting the same index multiple times should be ok
         for _ in 0..2 {
@@ -2941,7 +3060,7 @@ pub mod tests {
                 slot,
                 &inline_spl_token_v2_0::id(),
                 &account_data,
-                account_index,
+                &account_index,
             );
             check_secondary_index_unique(secondary_index, slot, &index_key, &account_key);
         }
@@ -2949,6 +3068,43 @@ pub mod tests {
         // included
         assert!(!secondary_index.index.is_empty());
         assert!(!secondary_index.reverse_index.is_empty());
+
+        account_index.keys = Some(AccountSecondaryIndexesIncludeExclude {
+            keys: [index_key].iter().cloned().collect::<HashSet<_>>(),
+            exclude: false,
+        });
+        secondary_index.index.clear();
+        secondary_index.reverse_index.clear();
+        index.update_secondary_indexes(
+            &account_key,
+            slot,
+            &inline_spl_token_v2_0::id(),
+            &account_data,
+            &account_index,
+        );
+        assert!(!secondary_index.index.is_empty());
+        assert!(!secondary_index.reverse_index.is_empty());
+        check_secondary_index_unique(secondary_index, slot, &index_key, &account_key);
+
+        // not-excluded
+        account_index.keys = Some(AccountSecondaryIndexesIncludeExclude {
+            keys: [].iter().cloned().collect::<HashSet<_>>(),
+            exclude: true,
+        });
+        secondary_index.index.clear();
+        secondary_index.reverse_index.clear();
+        index.update_secondary_indexes(
+            &account_key,
+            slot,
+            &inline_spl_token_v2_0::id(),
+            &account_data,
+            &account_index,
+        );
+        assert!(!secondary_index.index.is_empty());
+        assert!(!secondary_index.reverse_index.is_empty());
+        check_secondary_index_unique(secondary_index, slot, &index_key, &account_key);
+
+        account_index.keys = None;
 
         index
             .get_account_write_entry(&account_key)

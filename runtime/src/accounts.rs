@@ -702,13 +702,17 @@ impl Accounts {
         index_key: &IndexKey,
         filter: F,
     ) -> Vec<(Pubkey, AccountSharedData)> {
-        self.accounts_db.index_scan_accounts(
-            ancestors,
-            *index_key,
-            |collector: &mut Vec<(Pubkey, AccountSharedData)>, some_account_tuple| {
-                Self::load_while_filtering(collector, some_account_tuple, |account| filter(account))
-            },
-        )
+        self.accounts_db
+            .index_scan_accounts(
+                ancestors,
+                *index_key,
+                |collector: &mut Vec<(Pubkey, AccountSharedData)>, some_account_tuple| {
+                    Self::load_while_filtering(collector, some_account_tuple, |account| {
+                        filter(account)
+                    })
+                },
+            )
+            .0
     }
 
     pub fn load_all(&self, ancestors: &Ancestors) -> Vec<(Pubkey, AccountSharedData, Slot)> {

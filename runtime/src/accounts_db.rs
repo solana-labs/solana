@@ -2270,11 +2270,22 @@ impl AccountsDb {
         ancestors: &Ancestors,
         index_key: IndexKey,
         scan_func: F,
-    ) -> A
+    ) -> (A, bool)
     where
         F: Fn(&mut A, Option<(&Pubkey, AccountSharedData, Slot)>),
         A: Default,
     {
+        let key = match &index_key {
+            IndexKey::ProgramId(key) => key,
+            IndexKey::SplTokenMint(key) => key,
+            IndexKey::SplTokenOwner(key) => key,
+        };
+        if !self.account_indexes.include_key(key) {
+            // the requested key was not indexed in the secondary index, so do a normal scan
+            let used_index = false;
+            return (self.scan_accounts(ancestors, scan_func), used_index);
+        }
+
         let mut collector = A::default();
         self.accounts_index.index_scan_accounts(
             ancestors,
@@ -2287,7 +2298,8 @@ impl AccountsDb {
                 scan_func(&mut collector, account_slot)
             },
         );
-        collector
+        let used_index = true;
+        (collector, used_index)
     }
 
     /// Scan a specific slot through all the account storage in parallel
@@ -5533,8 +5545,11 @@ impl AccountsDb {
 pub mod tests {
     use super::*;
     use crate::{
-        accounts_hash::MERKLE_FANOUT, accounts_index::tests::*, accounts_index::RefCount,
-        append_vec::AccountMeta, inline_spl_token_v2_0,
+        accounts_hash::MERKLE_FANOUT,
+        accounts_index::RefCount,
+        accounts_index::{tests::*, AccountSecondaryIndexesIncludeExclude},
+        append_vec::AccountMeta,
+        inline_spl_token_v2_0,
     };
     use assert_matches::assert_matches;
     use rand::{thread_rng, Rng};
@@ -6853,7 +6868,7 @@ pub mod tests {
     fn test_clean_old_with_both_normal_and_zero_lamport_accounts() {
         solana_logger::setup();
 
-        let accounts = AccountsDb::new_with_config(
+        let mut accounts = AccountsDb::new_with_config(
             Vec::new(),
             &ClusterType::Development,
             spl_token_mint_index_enabled(),
@@ -6897,16 +6912,51 @@ pub mod tests {
 
         // Secondary index should still find both pubkeys
         let mut found_accounts = HashSet::new();
-        accounts.accounts_index.index_scan_accounts(
-            &Ancestors::default(),
-            IndexKey::SplTokenMint(mint_key),
-            |key, _| {
+        let index_key = IndexKey::SplTokenMint(mint_key);
+        accounts
+            .accounts_index
+            .index_scan_accounts(&Ancestors::default(), index_key, |key, _| {
                 found_accounts.insert(*key);
-            },
-        );
+            });
         assert_eq!(found_accounts.len(), 2);
         assert!(found_accounts.contains(&pubkey1));
         assert!(found_accounts.contains(&pubkey2));
+
+        {
+            accounts.account_indexes.keys = Some(AccountSecondaryIndexesIncludeExclude {
+                exclude: true,
+                keys: [mint_key].iter().cloned().collect::<HashSet<Pubkey>>(),
+            });
+            // Secondary index can't be used - do normal scan: should still find both pubkeys
+            let found_accounts = accounts.index_scan_accounts(
+                &Ancestors::default(),
+                index_key,
+                |collection: &mut HashSet<Pubkey>, account| {
+                    collection.insert(*account.unwrap().0);
+                },
+            );
+            assert!(!found_accounts.1);
+            assert_eq!(found_accounts.0.len(), 2);
+            assert!(found_accounts.0.contains(&pubkey1));
+            assert!(found_accounts.0.contains(&pubkey2));
+
+            accounts.account_indexes.keys = None;
+
+            // Secondary index can now be used since it isn't marked as excluded
+            let found_accounts = accounts.index_scan_accounts(
+                &Ancestors::default(),
+                index_key,
+                |collection: &mut HashSet<Pubkey>, account| {
+                    collection.insert(*account.unwrap().0);
+                },
+            );
+            assert!(found_accounts.1);
+            assert_eq!(found_accounts.0.len(), 2);
+            assert!(found_accounts.0.contains(&pubkey1));
+            assert!(found_accounts.0.contains(&pubkey2));
+
+            accounts.account_indexes.keys = None;
+        }
 
         accounts.clean_accounts(None);
 
