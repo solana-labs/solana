@@ -217,14 +217,14 @@ impl Clone for CowCachedExecutors {
 }
 impl CowCachedExecutors {
     fn clone_with_epoch(&self, epoch: u64) -> Self {
-        let exec = self.read().unwrap();
-        if exec.current_epoch() == epoch {
-            return self.clone();
+        let executors_raw = self.read().unwrap();
+        if executors_raw.current_epoch() == epoch {
+            self.clone()
         } else {
-            return Self {
+            Self {
                 shared: false,
-                executors: Arc::new(RwLock::new(exec.clone_with_epoch(epoch))),
-            };
+                executors: Arc::new(RwLock::new(executors_raw.clone_with_epoch(epoch))),
+            }
         }
     }
     fn new(executors: Arc<RwLock<CachedExecutors>>) -> Self {
