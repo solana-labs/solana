@@ -360,11 +360,11 @@ impl JsonRpcRequestProcessor {
         check_slice_and_encoding(&encoding, data_slice_config.is_some())?;
         let keyed_accounts = {
             if let Some(owner) = get_spl_token_owner_filter(program_id, &filters) {
-                self.get_filtered_spl_token_accounts_by_owner(&bank, &owner, filters)
+                self.get_filtered_spl_token_accounts_by_owner(&bank, &owner, filters)?
             } else if let Some(mint) = get_spl_token_mint_filter(program_id, &filters) {
-                self.get_filtered_spl_token_accounts_by_mint(&bank, &mint, filters)
+                self.get_filtered_spl_token_accounts_by_mint(&bank, &mint, filters)?
             } else {
-                self.get_filtered_program_accounts(&bank, program_id, filters)
+                self.get_filtered_program_accounts(&bank, program_id, filters)?
             }
         };
         let result =
@@ -1559,7 +1559,7 @@ impl JsonRpcRequestProcessor {
             ));
         }
         let mut token_balances: Vec<RpcTokenAccountBalance> = self
-            .get_filtered_spl_token_accounts_by_mint(&bank, &mint, vec![])
+            .get_filtered_spl_token_accounts_by_mint(&bank, &mint, vec![])?
             .into_iter()
             .map(|(address, account)| {
                 let amount = TokenAccount::unpack(&account.data())
@@ -1607,7 +1607,8 @@ impl JsonRpcRequestProcessor {
             }));
         }
 
-        let keyed_accounts = self.get_filtered_spl_token_accounts_by_owner(&bank, owner, filters);
+        let keyed_accounts =
+            self.get_filtered_spl_token_accounts_by_owner(&bank, owner, filters)?;
         let accounts = if encoding == UiAccountEncoding::JsonParsed {
             get_parsed_token_accounts(bank.clone(), keyed_accounts.into_iter()).collect()
         } else {
@@ -1659,13 +1660,13 @@ impl JsonRpcRequestProcessor {
         ];
         // Optional filter on Mint address, uses mint account index for scan
         let keyed_accounts = if let Some(mint) = mint {
-            self.get_filtered_spl_token_accounts_by_mint(&bank, &mint, filters)
+            self.get_filtered_spl_token_accounts_by_mint(&bank, &mint, filters)?
         } else {
             // Filter on Token Account state
             filters.push(RpcFilterType::DataSize(
                 TokenAccount::get_packed_len() as u64
             ));
-            self.get_filtered_program_accounts(&bank, &token_program_id, filters)
+            self.get_filtered_program_accounts(&bank, &token_program_id, filters)?
         };
         let accounts = if encoding == UiAccountEncoding::JsonParsed {
             get_parsed_token_accounts(bank.clone(), keyed_accounts.into_iter()).collect()
@@ -1693,7 +1694,7 @@ impl JsonRpcRequestProcessor {
         bank: &Arc<Bank>,
         program_id: &Pubkey,
         filters: Vec<RpcFilterType>,
-    ) -> Vec<(Pubkey, AccountSharedData)> {
+    ) -> Result<Vec<(Pubkey, AccountSharedData)>> {
         let filter_closure = |account: &AccountSharedData| {
             filters.iter().all(|filter_type| match filter_type {
                 RpcFilterType::DataSize(size) => account.data().len() as u64 == *size,
@@ -1705,16 +1706,24 @@ impl JsonRpcRequestProcessor {
             .account_indexes
             .contains(&AccountIndex::ProgramId)
         {
-            bank.get_filtered_indexed_accounts(&IndexKey::ProgramId(*program_id), |account| {
-                // The program-id account index checks for Account owner on inclusion. However, due
-                // to the current AccountsDb implementation, an account may remain in storage as a
-                // zero-lamport AccountSharedData::Default() after being wiped and reinitialized in later
-                // updates. We include the redundant filters here to avoid returning these
-                // accounts.
-                account.owner() == program_id && filter_closure(account)
-            })
+            if !bank.account_indexes_include_key(program_id) {
+                return Err(RpcCustomError::KeyExcludedFromSecondaryIndex {
+                    index_key: program_id.to_string(),
+                }
+                .into());
+            }
+            Ok(
+                bank.get_filtered_indexed_accounts(&IndexKey::ProgramId(*program_id), |account| {
+                    // The program-id account index checks for Account owner on inclusion. However, due
+                    // to the current AccountsDb implementation, an account may remain in storage as a
+                    // zero-lamport AccountSharedData::Default() after being wiped and reinitialized in later
+                    // updates. We include the redundant filters here to avoid returning these
+                    // accounts.
+                    account.owner() == program_id && filter_closure(account)
+                }),
+            )
         } else {
-            bank.get_filtered_program_accounts(program_id, filter_closure)
+            Ok(bank.get_filtered_program_accounts(program_id, filter_closure))
         }
     }
 
@@ -1724,7 +1733,7 @@ impl JsonRpcRequestProcessor {
         bank: &Arc<Bank>,
         owner_key: &Pubkey,
         mut filters: Vec<RpcFilterType>,
-    ) -> Vec<(Pubkey, AccountSharedData)> {
+    ) -> Result<Vec<(Pubkey, AccountSharedData)>> {
         // The by-owner accounts index checks for Token Account state and Owner address on
         // inclusion. However, due to the current AccountsDb implementation, an account may remain
         // in storage as a zero-lamport AccountSharedData::Default() after being wiped and reinitialized in
@@ -1746,13 +1755,22 @@ impl JsonRpcRequestProcessor {
             .account_indexes
             .contains(&AccountIndex::SplTokenOwner)
         {
-            bank.get_filtered_indexed_accounts(&IndexKey::SplTokenOwner(*owner_key), |account| {
-                account.owner() == &spl_token_id_v2_0()
-                    && filters.iter().all(|filter_type| match filter_type {
-                        RpcFilterType::DataSize(size) => account.data().len() as u64 == *size,
-                        RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data()),
-                    })
-            })
+            if !bank.account_indexes_include_key(owner_key) {
+                return Err(RpcCustomError::KeyExcludedFromSecondaryIndex {
+                    index_key: owner_key.to_string(),
+                }
+                .into());
+            }
+            Ok(bank.get_filtered_indexed_accounts(
+                &IndexKey::SplTokenOwner(*owner_key),
+                |account| {
+                    account.owner() == &spl_token_id_v2_0()
+                        && filters.iter().all(|filter_type| match filter_type {
+                            RpcFilterType::DataSize(size) => account.data().len() as u64 == *size,
+                            RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data()),
+                        })
+                },
+            ))
         } else {
             self.get_filtered_program_accounts(bank, &spl_token_id_v2_0(), filters)
         }
@@ -1764,7 +1782,7 @@ impl JsonRpcRequestProcessor {
         bank: &Arc<Bank>,
         mint_key: &Pubkey,
         mut filters: Vec<RpcFilterType>,
-    ) -> Vec<(Pubkey, AccountSharedData)> {
+    ) -> Result<Vec<(Pubkey, AccountSharedData)>> {
         // The by-mint accounts index checks for Token Account state and Mint address on inclusion.
         // However, due to the current AccountsDb implementation, an account may remain in storage
         // as be zero-lamport AccountSharedData::Default() after being wiped and reinitialized in later
@@ -1785,13 +1803,21 @@ impl JsonRpcRequestProcessor {
             .account_indexes
             .contains(&AccountIndex::SplTokenMint)
         {
-            bank.get_filtered_indexed_accounts(&IndexKey::SplTokenMint(*mint_key), |account| {
-                account.owner() == &spl_token_id_v2_0()
-                    && filters.iter().all(|filter_type| match filter_type {
-                        RpcFilterType::DataSize(size) => account.data().len() as u64 == *size,
-                        RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data()),
-                    })
-            })
+            if !bank.account_indexes_include_key(mint_key) {
+                return Err(RpcCustomError::KeyExcludedFromSecondaryIndex {
+                    index_key: mint_key.to_string(),
+                }
+                .into());
+            }
+            Ok(
+                bank.get_filtered_indexed_accounts(&IndexKey::SplTokenMint(*mint_key), |account| {
+                    account.owner() == &spl_token_id_v2_0()
+                        && filters.iter().all(|filter_type| match filter_type {
+                            RpcFilterType::DataSize(size) => account.data().len() as u64 == *size,
+                            RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data()),
+                        })
+                }),
+            )
         } else {
             self.get_filtered_program_accounts(bank, &spl_token_id_v2_0(), filters)
         }
