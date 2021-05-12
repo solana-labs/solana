@@ -3,9 +3,10 @@ import clsx from "clsx";
 import Layout from "@theme/Layout";
 import Link from "@docusaurus/Link";
 import useDocusaurusContext from "@docusaurus/useDocusaurusContext";
-import useBaseUrl from "@docusaurus/useBaseUrl";
+// import useBaseUrl from "@docusaurus/useBaseUrl";
 import styles from "./styles.module.css";
-import Translate, { translate } from "@docusaurus/Translate";
+import Translate from "@docusaurus/Translate";
+// import { translate } from "@docusaurus/Translate";
 
 function Home() {
   const context = useDocusaurusContext();
