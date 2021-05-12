@@ -7498,7 +7498,7 @@ pub mod tests {
                             db.store_uncached(slot, &[(&pubkey, &account)]);
 
                             let (account, slot) = db
-                                .load_without_fixed_root(&Ancestors::new(), &pubkey)
+                                .load_without_fixed_root(&Ancestors::default(), &pubkey)
                                 .unwrap_or_else(|| {
                                     panic!("Could not fetch stored account {}, iter {}", pubkey, i)
                                 });
@@ -8928,7 +8928,7 @@ pub mod tests {
 
         // Should still be able to find zero lamport account in slot 1
         assert_eq!(
-            db.load_without_fixed_root(&Ancestors::new(), &account_key),
+            db.load_without_fixed_root(&Ancestors::default(), &account_key),
             Some((zero_lamport_account, 1))
         );
     }
@@ -8944,7 +8944,7 @@ pub mod tests {
 
         // Load with no ancestors and no root will return nothing
         assert!(db
-            .load_without_fixed_root(&Ancestors::new(), &key)
+            .load_without_fixed_root(&Ancestors::default(), &key)
             .is_none());
 
         // Load with ancestors not equal to `slot` will return nothing
@@ -8961,7 +8961,7 @@ pub mod tests {
         // Adding root will return the account even without ancestors
         db.add_root(slot);
         assert_eq!(
-            db.load_without_fixed_root(&Ancestors::new(), &key),
+            db.load_without_fixed_root(&Ancestors::default(), &key),
             Some((account0, slot))
         );
     }
@@ -8989,7 +8989,7 @@ pub mod tests {
         db.add_root(slot);
         db.flush_accounts_cache(true, None);
         assert_eq!(
-            db.load_without_fixed_root(&Ancestors::new(), &key),
+            db.load_without_fixed_root(&Ancestors::default(), &key),
             Some((account0, slot))
         );
     }
@@ -9034,11 +9034,11 @@ pub mod tests {
         assert_eq!(db.accounts_cache.num_slots(), 1);
         assert!(db.accounts_cache.slot_cache(unrooted_slot).is_some());
         assert_eq!(
-            db.load_without_fixed_root(&Ancestors::new(), &key5),
+            db.load_without_fixed_root(&Ancestors::default(), &key5),
             Some((account0.clone(), root5))
         );
         assert_eq!(
-            db.load_without_fixed_root(&Ancestors::new(), &key6),
+            db.load_without_fixed_root(&Ancestors::default(), &key6),
             Some((account0, root6))
         );
     }
