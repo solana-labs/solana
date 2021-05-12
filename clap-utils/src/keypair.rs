@@ -162,6 +162,12 @@ impl SignerSource {
     }
 }
 
+const SIGNER_SOURCE_PROMPT: &str = "prompt";
+const SIGNER_SOURCE_FILEPATH: &str = "file";
+const SIGNER_SOURCE_USB: &str = "usb";
+const SIGNER_SOURCE_STDIN: &str = "stdin";
+const SIGNER_SOURCE_PUBKEY: &str = "pubkey";
+
 pub(crate) enum SignerSourceKind {
     Prompt,
     Filepath(String),
@@ -170,16 +176,22 @@ pub(crate) enum SignerSourceKind {
     Pubkey(Pubkey),
 }
 
+impl AsRef<str> for SignerSourceKind {
+    fn as_ref(&self) -> &str {
+        match self {
+            Self::Prompt => SIGNER_SOURCE_PROMPT,
+            Self::Filepath(_) => SIGNER_SOURCE_FILEPATH,
+            Self::Usb(_) => SIGNER_SOURCE_USB,
+            Self::Stdin => SIGNER_SOURCE_STDIN,
+            Self::Pubkey(_) => SIGNER_SOURCE_PUBKEY,
+        }
+    }
+}
+
 impl std::fmt::Debug for SignerSourceKind {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let source = match self {
-            SignerSourceKind::Prompt => "prompt",
-            SignerSourceKind::Filepath(_) => "filepath",
-            SignerSourceKind::Usb(_) => "usb",
-            SignerSourceKind::Stdin => "stdin",
-            SignerSourceKind::Pubkey(_) => "pubkey",
-        };
-        write!(fmt, "{}", source)
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let s: &str = self.as_ref();
+        write!(f, "{}", s)
     }
 }
 
@@ -205,20 +217,20 @@ pub(crate) fn parse_signer_source<S: AsRef<str>>(
             if let Some(scheme) = uri.scheme() {
                 let scheme = scheme.as_str().to_ascii_lowercase();
                 match scheme.as_str() {
-                    "prompt" => Ok(SignerSource {
+                    SIGNER_SOURCE_PROMPT => Ok(SignerSource {
                         kind: SignerSourceKind::Prompt,
                         derivation_path: DerivationPath::from_uri_any_query(&uri)?,
                         legacy: false,
                     }),
-                    "file" => Ok(SignerSource::new(SignerSourceKind::Filepath(
+                    SIGNER_SOURCE_FILEPATH => Ok(SignerSource::new(SignerSourceKind::Filepath(
                         uri.path().to_string(),
                     ))),
-                    "stdin" => Ok(SignerSource::new(SignerSourceKind::Stdin)),
-                    "usb" => Ok(SignerSource {
+                    SIGNER_SOURCE_USB => Ok(SignerSource {
                         kind: SignerSourceKind::Usb(RemoteWalletLocator::new_from_uri(&uri)?),
                         derivation_path: DerivationPath::from_uri_key_query(&uri)?,
                         legacy: false,
                     }),
+                    SIGNER_SOURCE_STDIN => Ok(SignerSource::new(SignerSourceKind::Stdin)),
                     _ => Err(SignerSourceError::UnrecognizedSource),
                 }
             } else {
@@ -470,7 +482,11 @@ pub fn keypair_from_path(
         SignerSourceKind::Filepath(path) => match read_keypair_file(&path) {
             Err(e) => Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                format!("could not read keypair file \"{}\". Run \"solana-keygen new\" to create a keypair file: {}", path, e),
+                format!(
+                    "could not read keypair file \"{}\". \
+                    Run \"solana-keygen new\" to create a keypair file: {}",
+                    path, e
+                ),
             )
             .into()),
             Ok(file) => Ok(file),
@@ -481,9 +497,12 @@ pub fn keypair_from_path(
         }
         _ => Err(std::io::Error::new(
             std::io::ErrorKind::Other,
-            format!("signer of type `{:?}` does not support Keypair output", kind),
+            format!(
+                "signer of type `{:?}` does not support Keypair output",
+                kind
+            ),
         )
-        .into())
+        .into()),
     }
 }
 
