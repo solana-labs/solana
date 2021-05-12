@@ -6072,17 +6072,10 @@ pub mod tests {
 
         // Secondary index should still find both pubkeys
         let mut found_accounts = HashSet::new();
-<<<<<<< HEAD
-        accounts.accounts_index.index_scan_accounts(
-            &HashMap::new(),
-            IndexKey::SplTokenMint(mint_key),
-            |key, _| {
-=======
         let index_key = IndexKey::SplTokenMint(mint_key);
         accounts
             .accounts_index
-            .index_scan_accounts(&Ancestors::default(), index_key, |key, _| {
->>>>>>> 7d96f7882... include/exclude keys on account secondary index (#17110)
+            .index_scan_accounts(&HashMap::new(), index_key, |key, _| {
                 found_accounts.insert(*key);
             });
         assert_eq!(found_accounts.len(), 2);

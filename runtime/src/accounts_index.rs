@@ -2208,8 +2208,6 @@ pub mod tests {
             check_secondary_index_unique(secondary_index, slot, &index_key, &account_key);
         }
 
-<<<<<<< HEAD
-=======
         // included
         assert!(!secondary_index.index.is_empty());
         assert!(!secondary_index.reverse_index.is_empty());
@@ -2251,14 +2249,13 @@ pub mod tests {
 
         account_index.keys = None;
 
->>>>>>> 7d96f7882... include/exclude keys on account secondary index (#17110)
         index
             .get_account_write_entry(&account_key)
             .unwrap()
             .slot_list_mut(|slot_list| slot_list.clear());
 
         // Everything should be deleted
-        index.handle_dead_keys(&[&account_key], account_index);
+        index.handle_dead_keys(&[&account_key], &account_index);
         assert!(index.spl_token_mint_index.index.is_empty());
         assert!(index.spl_token_mint_index.reverse_index.is_empty());
     }
