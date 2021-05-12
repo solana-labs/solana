@@ -1335,7 +1335,6 @@ impl AccountsDb {
                         &pubkey,
                         &mut reclaims,
                         max_clean_root,
-                        &self.account_indexes,
                     );
                 }
                 reclaims
@@ -1476,12 +1475,9 @@ impl AccountsDb {
         let mut dead_keys = Vec::new();
 
         for (pubkey, slots_set) in pubkey_to_slot_set {
-            let is_empty = self.accounts_index.purge_exact(
-                &pubkey,
-                slots_set,
-                &mut reclaims,
-                &self.account_indexes,
-            );
+            let is_empty = self
+                .accounts_index
+                .purge_exact(&pubkey, slots_set, &mut reclaims);
             if is_empty {
                 dead_keys.push(pubkey);
             }
@@ -3264,22 +3260,14 @@ impl AccountsDb {
         match scan_result {
             ScanStorageResult::Cached(cached_keys) => {
                 for pubkey in cached_keys.iter() {
-                    self.accounts_index.purge_exact(
-                        pubkey,
-                        &purge_slot,
-                        &mut reclaims,
-                        &self.account_indexes,
-                    );
+                    self.accounts_index
+                        .purge_exact(pubkey, &purge_slot, &mut reclaims);
                 }
             }
             ScanStorageResult::Stored(stored_keys) => {
                 for set_ref in stored_keys.iter() {
-                    self.accounts_index.purge_exact(
-                        set_ref.key(),
-                        &purge_slot,
-                        &mut reclaims,
-                        &self.account_indexes,
-                    );
+                    self.accounts_index
+                        .purge_exact(set_ref.key(), &purge_slot, &mut reclaims);
                 }
             }
         }
